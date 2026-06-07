@@ -163,6 +163,9 @@ interface SyncPreviewSummary {
   remoteValueBundleMergeSimulationReadyPreviewOnly: number;
   remoteValueBundleMergeSimulationManualReview: number;
   remoteValueBundleMergeSimulationUnavailable: number;
+  remoteValueBundleMergeSimulationReadyPreviewOnlyResultKeyTotal: number;
+  remoteValueBundleMergeSimulationManualReviewResultKeyTotal: number;
+  remoteValueBundleMergeSimulationUnavailableResultKeyTotal: number;
   remoteValueBundleCandidateMergesBlockedSameTimestamp: number;
   remoteValueBundleCandidateMergesBlockedUnknownTimestamp: number;
   remoteValueBundleCandidateMergesBlockedOneSidedTimestamp: number;
@@ -705,6 +708,9 @@ function countRemoteValueBundlesApplyReady(
   candidateMergeReady: number;
   candidateMergeManualReview: number;
   candidateMergeUnavailable: number;
+  mergeSimulationReadyPreviewOnlyResultKeyTotal: number;
+  mergeSimulationManualReviewResultKeyTotal: number;
+  mergeSimulationUnavailableResultKeyTotal: number;
   candidateMergeBlockedSameTimestamp: number;
   candidateMergeBlockedUnknownTimestamp: number;
   candidateMergeBlockedOneSidedTimestamp: number;
@@ -720,6 +726,9 @@ function countRemoteValueBundlesApplyReady(
   let candidateMergeReady = 0;
   let candidateMergeManualReview = 0;
   let candidateMergeUnavailable = 0;
+  let mergeSimulationReadyPreviewOnlyResultKeyTotal = 0;
+  let mergeSimulationManualReviewResultKeyTotal = 0;
+  let mergeSimulationUnavailableResultKeyTotal = 0;
   let candidateMergeBlockedSameTimestamp = 0;
   let candidateMergeBlockedUnknownTimestamp = 0;
   let candidateMergeBlockedOneSidedTimestamp = 0;
@@ -742,17 +751,24 @@ function countRemoteValueBundlesApplyReady(
   ) => {
     conflictBlocked += 1;
     const preview = buildValueBundleConflictPreview(reason, remoteBundle, localBundle);
-    if (preview.candidateMergeGate === 'ready') {
+    const candidateResultKeyCount = preview.candidateResultKeyCount ?? 0;
+    if (preview.candidateMergeSimulation === 'ready-preview-only') {
       candidateMergeReady += 1;
-      candidateAcceptedResultKeyTotal += preview.candidateResultKeyCount ?? 0;
-    } else if (preview.candidateMergeGate === 'unavailable') candidateMergeUnavailable += 1;
-    else candidateMergeManualReview += 1;
+      candidateAcceptedResultKeyTotal += candidateResultKeyCount;
+      mergeSimulationReadyPreviewOnlyResultKeyTotal += candidateResultKeyCount;
+    } else if (preview.candidateMergeSimulation === 'unavailable') {
+      candidateMergeUnavailable += 1;
+      mergeSimulationUnavailableResultKeyTotal += candidateResultKeyCount;
+    } else {
+      candidateMergeManualReview += 1;
+      mergeSimulationManualReviewResultKeyTotal += candidateResultKeyCount;
+    }
     if (preview.candidateMergeBlockReason === 'same-timestamp') candidateMergeBlockedSameTimestamp += 1;
     else if (preview.candidateMergeBlockReason === 'unknown-timestamp') candidateMergeBlockedUnknownTimestamp += 1;
     else if (preview.candidateMergeBlockReason === 'one-sided-timestamp') candidateMergeBlockedOneSidedTimestamp += 1;
     else if (preview.candidateMergeBlockReason === 'local-bundle-unavailable') candidateMergeBlockedUnavailable += 1;
     else if (preview.candidateMergeBlockReason === 'no-candidate-keys') candidateMergeBlockedNoCandidateKeys += 1;
-    candidateResultKeyTotal += preview.candidateResultKeyCount ?? 0;
+    candidateResultKeyTotal += candidateResultKeyCount;
     candidateAutoSelectedKeyTotal += preview.candidateAutoSelectedKeyCount ?? 0;
     candidateReviewKeyTotal += preview.candidateReviewKeyCount ?? 0;
     if (conflicts.length < 20) {
@@ -778,6 +794,9 @@ function countRemoteValueBundlesApplyReady(
     candidateMergeReady,
     candidateMergeManualReview,
     candidateMergeUnavailable,
+    mergeSimulationReadyPreviewOnlyResultKeyTotal,
+    mergeSimulationManualReviewResultKeyTotal,
+    mergeSimulationUnavailableResultKeyTotal,
     candidateMergeBlockedSameTimestamp,
     candidateMergeBlockedUnknownTimestamp,
     candidateMergeBlockedOneSidedTimestamp,
@@ -1355,6 +1374,9 @@ export const CloudSync = {
       remoteValueBundleMergeSimulationReadyPreviewOnly: remoteValueBundleApplyReadiness.candidateMergeReady,
       remoteValueBundleMergeSimulationManualReview: remoteValueBundleApplyReadiness.candidateMergeManualReview,
       remoteValueBundleMergeSimulationUnavailable: remoteValueBundleApplyReadiness.candidateMergeUnavailable,
+      remoteValueBundleMergeSimulationReadyPreviewOnlyResultKeyTotal: remoteValueBundleApplyReadiness.mergeSimulationReadyPreviewOnlyResultKeyTotal,
+      remoteValueBundleMergeSimulationManualReviewResultKeyTotal: remoteValueBundleApplyReadiness.mergeSimulationManualReviewResultKeyTotal,
+      remoteValueBundleMergeSimulationUnavailableResultKeyTotal: remoteValueBundleApplyReadiness.mergeSimulationUnavailableResultKeyTotal,
       remoteValueBundleCandidateMergesBlockedSameTimestamp: remoteValueBundleApplyReadiness.candidateMergeBlockedSameTimestamp,
       remoteValueBundleCandidateMergesBlockedUnknownTimestamp: remoteValueBundleApplyReadiness.candidateMergeBlockedUnknownTimestamp,
       remoteValueBundleCandidateMergesBlockedOneSidedTimestamp: remoteValueBundleApplyReadiness.candidateMergeBlockedOneSidedTimestamp,

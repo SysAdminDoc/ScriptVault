@@ -4013,6 +4013,9 @@
             'remoteValueBundleMergeSimulationReadyPreviewOnly',
             'remoteValueBundleMergeSimulationManualReview',
             'remoteValueBundleMergeSimulationUnavailable',
+            'remoteValueBundleMergeSimulationReadyPreviewOnlyResultKeyTotal',
+            'remoteValueBundleMergeSimulationManualReviewResultKeyTotal',
+            'remoteValueBundleMergeSimulationUnavailableResultKeyTotal',
             'remoteValueBundleCandidateMergesBlockedSameTimestamp',
             'remoteValueBundleCandidateMergesBlockedUnknownTimestamp',
             'remoteValueBundleCandidateMergesBlockedOneSidedTimestamp',
@@ -4127,6 +4130,7 @@
             lines.push(`GM value timestamps: ${summary.localValueBundlesWithTimestamps || 0} local timestamped, ${summary.localValueBundlesMissingTimestamps || 0} local missing, ${summary.remoteValueBundlesWithTimestamps || 0} remote timestamped, ${summary.remoteValueBundlesMissingTimestamps || 0} remote missing; older than last sync ${summary.localValueBundlesOlderThanLastSync || 0} local/${summary.remoteValueBundlesOlderThanLastSync || 0} remote, newer ${summary.localValueBundlesNewerThanLastSync || 0} local/${summary.remoteValueBundlesNewerThanLastSync || 0} remote.`);
             lines.push(`GM value candidate merge gate: ${summary.remoteValueBundleCandidateMergesReady || 0} ready, ${summary.remoteValueBundleCandidateMergesManualReview || 0} manual review, ${summary.remoteValueBundleCandidateMergesUnavailable || 0} unavailable.`);
             lines.push(`GM value merge simulation: ${summary.remoteValueBundleMergeSimulationReadyPreviewOnly || 0} ready-preview-only, ${summary.remoteValueBundleMergeSimulationManualReview || 0} manual review, ${summary.remoteValueBundleMergeSimulationUnavailable || 0} unavailable.`);
+            lines.push(`GM value merge simulation result keys: ${summary.remoteValueBundleMergeSimulationReadyPreviewOnlyResultKeyTotal || 0} ready-preview-only, ${summary.remoteValueBundleMergeSimulationManualReviewResultKeyTotal || 0} manual review, ${summary.remoteValueBundleMergeSimulationUnavailableResultKeyTotal || 0} unavailable.`);
             lines.push(`GM value manual review reasons: ${summary.remoteValueBundleCandidateMergesBlockedSameTimestamp || 0} same timestamp, ${summary.remoteValueBundleCandidateMergesBlockedUnknownTimestamp || 0} unknown timestamp, ${summary.remoteValueBundleCandidateMergesBlockedOneSidedTimestamp || 0} one-sided timestamp, ${summary.remoteValueBundleCandidateMergesBlockedUnavailable || 0} unavailable local snapshot, ${summary.remoteValueBundleCandidateMergesBlockedNoCandidateKeys || 0} no candidate keys.`);
             lines.push(`GM value candidate result keys: ${summary.remoteValueBundleCandidateResultKeyTotal || 0} total, ${summary.remoteValueBundleCandidateAutoSelectedKeyTotal || 0} auto-selected, ${summary.remoteValueBundleCandidateReviewKeyTotal || 0} needing review, ${summary.remoteValueBundleCandidateAcceptedResultKeyTotal || 0} accepted ready.`);
         }

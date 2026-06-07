@@ -314,6 +314,9 @@ function countRemoteValueBundlesApplyReady(selection, local) {
   let candidateMergeReady = 0;
   let candidateMergeManualReview = 0;
   let candidateMergeUnavailable = 0;
+  let mergeSimulationReadyPreviewOnlyResultKeyTotal = 0;
+  let mergeSimulationManualReviewResultKeyTotal = 0;
+  let mergeSimulationUnavailableResultKeyTotal = 0;
   let candidateMergeBlockedSameTimestamp = 0;
   let candidateMergeBlockedUnknownTimestamp = 0;
   let candidateMergeBlockedOneSidedTimestamp = 0;
@@ -332,17 +335,24 @@ function countRemoteValueBundlesApplyReady(selection, local) {
   const addConflict = (reason, remoteBundle, localBundle) => {
     conflictBlocked++;
     const preview = buildValueBundleConflictPreview(reason, remoteBundle, localBundle);
-    if (preview.candidateMergeGate === 'ready') {
+    const candidateResultKeyCount = preview.candidateResultKeyCount ?? 0;
+    if (preview.candidateMergeSimulation === 'ready-preview-only') {
       candidateMergeReady++;
-      candidateAcceptedResultKeyTotal += preview.candidateResultKeyCount ?? 0;
-    } else if (preview.candidateMergeGate === 'unavailable') candidateMergeUnavailable++;
-    else candidateMergeManualReview++;
+      candidateAcceptedResultKeyTotal += candidateResultKeyCount;
+      mergeSimulationReadyPreviewOnlyResultKeyTotal += candidateResultKeyCount;
+    } else if (preview.candidateMergeSimulation === 'unavailable') {
+      candidateMergeUnavailable++;
+      mergeSimulationUnavailableResultKeyTotal += candidateResultKeyCount;
+    } else {
+      candidateMergeManualReview++;
+      mergeSimulationManualReviewResultKeyTotal += candidateResultKeyCount;
+    }
     if (preview.candidateMergeBlockReason === 'same-timestamp') candidateMergeBlockedSameTimestamp++;
     else if (preview.candidateMergeBlockReason === 'unknown-timestamp') candidateMergeBlockedUnknownTimestamp++;
     else if (preview.candidateMergeBlockReason === 'one-sided-timestamp') candidateMergeBlockedOneSidedTimestamp++;
     else if (preview.candidateMergeBlockReason === 'local-bundle-unavailable') candidateMergeBlockedUnavailable++;
     else if (preview.candidateMergeBlockReason === 'no-candidate-keys') candidateMergeBlockedNoCandidateKeys++;
-    candidateResultKeyTotal += preview.candidateResultKeyCount ?? 0;
+    candidateResultKeyTotal += candidateResultKeyCount;
     candidateAutoSelectedKeyTotal += preview.candidateAutoSelectedKeyCount ?? 0;
     candidateReviewKeyTotal += preview.candidateReviewKeyCount ?? 0;
     if (conflicts.length < 20) {
@@ -368,6 +378,9 @@ function countRemoteValueBundlesApplyReady(selection, local) {
     candidateMergeReady,
     candidateMergeManualReview,
     candidateMergeUnavailable,
+    mergeSimulationReadyPreviewOnlyResultKeyTotal,
+    mergeSimulationManualReviewResultKeyTotal,
+    mergeSimulationUnavailableResultKeyTotal,
     candidateMergeBlockedSameTimestamp,
     candidateMergeBlockedUnknownTimestamp,
     candidateMergeBlockedOneSidedTimestamp,
@@ -3545,6 +3558,9 @@ const CloudSync = {
       remoteValueBundleMergeSimulationReadyPreviewOnly: remoteValueBundleApplyReadiness.candidateMergeReady,
       remoteValueBundleMergeSimulationManualReview: remoteValueBundleApplyReadiness.candidateMergeManualReview,
       remoteValueBundleMergeSimulationUnavailable: remoteValueBundleApplyReadiness.candidateMergeUnavailable,
+      remoteValueBundleMergeSimulationReadyPreviewOnlyResultKeyTotal: remoteValueBundleApplyReadiness.mergeSimulationReadyPreviewOnlyResultKeyTotal,
+      remoteValueBundleMergeSimulationManualReviewResultKeyTotal: remoteValueBundleApplyReadiness.mergeSimulationManualReviewResultKeyTotal,
+      remoteValueBundleMergeSimulationUnavailableResultKeyTotal: remoteValueBundleApplyReadiness.mergeSimulationUnavailableResultKeyTotal,
       remoteValueBundleCandidateMergesBlockedSameTimestamp: remoteValueBundleApplyReadiness.candidateMergeBlockedSameTimestamp,
       remoteValueBundleCandidateMergesBlockedUnknownTimestamp: remoteValueBundleApplyReadiness.candidateMergeBlockedUnknownTimestamp,
       remoteValueBundleCandidateMergesBlockedOneSidedTimestamp: remoteValueBundleApplyReadiness.candidateMergeBlockedOneSidedTimestamp,

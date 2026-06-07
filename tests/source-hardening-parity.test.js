@@ -243,6 +243,9 @@ describe('source hardening parity guards', () => {
       expect(text).toContain('remoteValueBundleMergeSimulationReadyPreviewOnly');
       expect(text).toContain('remoteValueBundleMergeSimulationManualReview');
       expect(text).toContain('remoteValueBundleMergeSimulationUnavailable');
+      expect(text).toContain('remoteValueBundleMergeSimulationReadyPreviewOnlyResultKeyTotal');
+      expect(text).toContain('remoteValueBundleMergeSimulationManualReviewResultKeyTotal');
+      expect(text).toContain('remoteValueBundleMergeSimulationUnavailableResultKeyTotal');
       expect(text).toContain('remoteValueBundleCandidateMergesBlockedUnknownTimestamp');
       expect(text).toContain('remoteValueBundleCandidateResultKeyTotal');
       expect(text).toContain('remoteValueBundleCandidateAcceptedResultKeyTotal');
