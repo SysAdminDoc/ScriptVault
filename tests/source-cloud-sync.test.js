@@ -154,6 +154,16 @@ function expectPreservedCandidateSummaryInvariants(valueBundleSync) {
     .toBeLessThanOrEqual(valueBundleSync.preservedCandidateAutoSelectedKeyTotal);
 }
 
+function expectUnavailablePreservedCandidateResultInvariants(valueBundleSync) {
+  expect(valueBundleSync.preservedCandidateMergeUnavailable).toBeGreaterThan(0);
+  expect(valueBundleSync.preservedCandidateBlockedUnavailable)
+    .toBe(valueBundleSync.preservedCandidateMergeUnavailable);
+  expect(valueBundleSync.preservedCandidateResultKeyTotal).toBe(0);
+  expect(valueBundleSync.preservedCandidateAutoSelectedKeyTotal).toBe(0);
+  expect(valueBundleSync.preservedCandidateReviewKeyTotal).toBe(0);
+  expect(valueBundleSync.preservedCandidateAcceptedResultKeyTotal).toBe(0);
+}
+
 beforeEach(() => {
   globalThis.__resetStorageMock();
   Object.defineProperty(globalThis, 'crypto', { value: webcrypto, configurable: true });
@@ -1353,6 +1363,7 @@ describe('source cloud sync module', () => {
       },
     });
     expectPreservedCandidateSummaryInvariants(result.valueBundleSync);
+    expectUnavailablePreservedCandidateResultInvariants(result.valueBundleSync);
 
     expect(ScriptValues.setAll).not.toHaveBeenCalled();
     expect(scriptState[0].code).toContain('// remote');

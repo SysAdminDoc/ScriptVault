@@ -2,7 +2,7 @@
 
 Project: ScriptVault
 Assigned path: `\\vmware-host\Shared Folders\repos\ScriptVault`
-Last cycle: Cycle 132 - 2026-06-07
+Last cycle: Cycle 133 - 2026-06-07
 
 ## Latest Result
 
@@ -848,13 +848,24 @@ Last cycle: Cycle 132 - 2026-06-07
   typecheck, the full check suite with 1517 Vitest cases, high-severity audit,
   CWS remote-code scan, Monaco ESM scan, TS runtime check, forbidden-reference
   grep, and `git diff --check`.
+  Cycle 133 added source-side unavailable preserved-candidate result invariants
+  for L-8 real sync results: a named CloudSync assertion helper now proves
+  unavailable preserves map to the unavailable block reason and carry zero
+  result, auto-selected, review, or accepted-ready key totals. The evidence
+  remains aggregate only and omits script IDs, script names, value key names,
+  values, URLs, local workspace handles, local paths, sync credentials, provider
+  account data, and raw `keyMetadata` maps. Non-empty writes remain disabled.
+  Verification used focused source CloudSync tests, typecheck, the full check
+  suite with 1517 Vitest cases, high-severity audit, CWS remote-code scan,
+  Monaco ESM scan, TS runtime check, forbidden-reference grep, and
+  `git diff --check`.
 
 ## Next Cycle Focus
 
-Continue from `ROADMAP.md` Round 74. Cycle 132 added GM value sync failure log
-safeguards. The next best local cycle is Cycle 133: add unavailable
-preserved-candidate result invariants, failure-only source coverage, or the next
-L-8 safeguard needed before broader bidirectional GM value merges.
+Continue from `ROADMAP.md` Round 75. Cycle 133 added GM value sync unavailable
+result invariants. The next best local cycle is Cycle 134: add failure-only
+source coverage, result-summary parity guards, or the next L-8 safeguard needed
+before broader bidirectional GM value merges.
 The live two-tab
 `GM_addValueChangeListener` smoke remains browser-profile gated until
 `chrome.userScripts` is enabled for the unpacked extension, AMO submission
@@ -863,9 +874,9 @@ automation remain credential/listing gated.
 
 ## Loop Pointer
 
-- Status: ScriptVault Cycle 132 complete for 2026-06-07; roadmap continuation
-  points to Cycle 133 GM value sync unavailable preserved-candidate result
-  invariants, failure-only source coverage, or the next available non-credential-gated L-8
+- Status: ScriptVault Cycle 133 complete for 2026-06-07; roadmap continuation
+  points to Cycle 134 GM value sync failure-only source coverage,
+  result-summary parity guards, or the next available non-credential-gated L-8
   safeguard.
 - Next project pointer: ScriptVault (continuity override for this dedicated chat;
   continue the next cycle in this same assigned project).
