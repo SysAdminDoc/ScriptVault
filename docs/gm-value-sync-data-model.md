@@ -489,6 +489,15 @@ Cycle 136 adds ready result parity guards:
 - This is regression coverage only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
-The next implementation slice should add timestamp parity guards,
-write-failure retry diagnostics, or another durable safeguard before non-empty
+Cycle 137 adds unknown timestamp parity guards:
+
+- A source CloudSync assertion helper now pins no-timestamp preserved paths.
+- Every preserved bundle in those fixtures must count as unknown timestamp
+  evidence, while remote-newer, local-newer, same, remote-only, and local-only
+  timestamp buckets remain zero.
+- This is regression coverage only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
+The next implementation slice should add write-failure retry diagnostics,
+timestamp dashboard log coverage, or another durable safeguard before non-empty
 local and remote value bags can be merged bidirectionally.
