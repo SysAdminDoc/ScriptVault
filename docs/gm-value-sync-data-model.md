@@ -980,7 +980,16 @@ Cycle 179 pins retry-resolution timestamp range hardening:
 - This is diagnostic hardening only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
+Cycle 180 pins retry-resolution age-bucket gating:
+
+- Support snapshot retry-resolution export now returns `unknown` when injected
+  resolution-age minutes are absent.
+- Support-snapshot redaction tests pin the gated bucket path so unsupported age
+  buckets cannot survive without retained age-minute evidence.
+- This is diagnostic hardening only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
 The next implementation slice should add support summary warning-count nested
-coverage, retry-resolution age-bucket gating coverage, or another durable
+coverage, retry-resolution latest-retry timestamp gating coverage, or another durable
 safeguard before non-empty local and remote value bags can be merged
 bidirectionally.
