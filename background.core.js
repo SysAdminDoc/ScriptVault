@@ -2284,6 +2284,8 @@ const LOCAL_WORKSPACE_REFRESH_STALE_MS = 30 * 24 * 60 * 60 * 1000;
 const GM_VALUE_SYNC_SCHEMA = 'scriptvault-gm-value-sync/v1';
 const GM_VALUE_SYNC_RETRY_HISTORY_SCHEMA = 'scriptvault-gm-value-sync-retry-history/v1';
 const GM_VALUE_SYNC_RETRY_HISTORY_LIMIT = 5;
+const GM_VALUE_SYNC_RETRY_HISTORY_RETENTION_DAYS = 7;
+const GM_VALUE_SYNC_RETRY_HISTORY_RETENTION_MS = GM_VALUE_SYNC_RETRY_HISTORY_RETENTION_DAYS * 24 * 60 * 60 * 1000;
 const GM_VALUE_SYNC_MAX_SCRIPT_BYTES = 64 * 1024;
 const GM_VALUE_SYNC_MAX_KEYS = 128;
 const GM_VALUE_SYNC_MAX_KEY_BYTES = 256;
@@ -2414,13 +2416,28 @@ function buildGmValueSyncRetryHistoryEntry(record = {}) {
   });
 }
 
-function sanitizeGmValueSyncRetryHistoryEntries(history) {
+function _gmValueSyncRetryHistoryCutoff(now = Date.now()) {
+  const numeric = Number(now);
+  const safeNow = Number.isFinite(numeric) && numeric > 0 ? Math.floor(numeric) : Date.now();
+  return Math.max(0, safeNow - GM_VALUE_SYNC_RETRY_HISTORY_RETENTION_MS);
+}
+
+function _isGmValueSyncRetryHistoryEntryStale(entry, now = Date.now()) {
+  const timestamp = Number(entry?.timestamp);
+  return Number.isFinite(timestamp) && timestamp > 0 && timestamp < _gmValueSyncRetryHistoryCutoff(now);
+}
+
+function sanitizeGmValueSyncRetryHistoryEntries(history, options = {}) {
   if (!Array.isArray(history)) return [];
+  const includeStale = options.includeStale === true;
+  const now = Number.isFinite(Number(options.now)) ? Math.max(0, Math.floor(Number(options.now))) : Date.now();
+  const limit = options.limit === false ? Number.MAX_SAFE_INTEGER : GM_VALUE_SYNC_RETRY_HISTORY_LIMIT;
   return history
     .map(sanitizeGmValueSyncRetryHistoryEntry)
     .filter(Boolean)
+    .filter(entry => includeStale || !_isGmValueSyncRetryHistoryEntryStale(entry, now))
     .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
-    .slice(0, GM_VALUE_SYNC_RETRY_HISTORY_LIMIT);
+    .slice(0, limit);
 }
 
 function updateGmValueSyncRetryHistory(history, record) {
@@ -2686,9 +2703,11 @@ function createEmptyGmValueSyncHealthSummary(overrides = {}) {
     retryHistory: {
       schema: GM_VALUE_SYNC_RETRY_HISTORY_SCHEMA,
       limit: GM_VALUE_SYNC_RETRY_HISTORY_LIMIT,
+      retentionDays: GM_VALUE_SYNC_RETRY_HISTORY_RETENTION_DAYS,
       entries: 0,
       retryReadyEntries: 0,
       failedNoRetryEntries: 0,
+      staleEntriesPruned: 0,
       totalWriteFailureRetryReady: 0,
       latestTimestamp: null,
       oldestTimestamp: null,
@@ -2900,7 +2919,12 @@ async function readGmValueSyncLastResultForHealth() {
 }
 
 function summarizeGmValueSyncRetryHistoryForHealth(history) {
-  const entries = sanitizeGmValueSyncRetryHistoryEntries(history);
+  const now = Date.now();
+  const allEntries = sanitizeGmValueSyncRetryHistoryEntries(history, { includeStale: true, limit: false, now });
+  const staleEntriesPruned = allEntries.filter(entry => _isGmValueSyncRetryHistoryEntryStale(entry, now)).length;
+  const entries = allEntries
+    .filter(entry => !_isGmValueSyncRetryHistoryEntryStale(entry, now))
+    .slice(0, GM_VALUE_SYNC_RETRY_HISTORY_LIMIT);
   let retryReadyEntries = 0;
   let failedNoRetryEntries = 0;
   let totalWriteFailureRetryReady = 0;
@@ -2912,9 +2936,11 @@ function summarizeGmValueSyncRetryHistoryForHealth(history) {
   return {
     schema: GM_VALUE_SYNC_RETRY_HISTORY_SCHEMA,
     limit: GM_VALUE_SYNC_RETRY_HISTORY_LIMIT,
+    retentionDays: GM_VALUE_SYNC_RETRY_HISTORY_RETENTION_DAYS,
     entries: entries.length,
     retryReadyEntries,
     failedNoRetryEntries,
+    staleEntriesPruned,
     totalWriteFailureRetryReady,
     latestTimestamp: entries[0]?.timestamp || null,
     oldestTimestamp: entries.length ? entries[entries.length - 1].timestamp : null,

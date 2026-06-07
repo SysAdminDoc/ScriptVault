@@ -4906,6 +4906,9 @@
         if (gmValueSync.retryHistory?.retryReadyEntries > 0) {
             parts.push(`${numberFormatter.format(gmValueSync.retryHistory.retryReadyEntries)} recent retry histor${gmValueSync.retryHistory.retryReadyEntries === 1 ? 'y event' : 'y events'}`);
         }
+        if (gmValueSync.retryHistory?.staleEntriesPruned > 0) {
+            parts.push(`${numberFormatter.format(gmValueSync.retryHistory.staleEntriesPruned)} stale retry histor${gmValueSync.retryHistory.staleEntriesPruned === 1 ? 'y event' : 'y events'} excluded`);
+        }
         if (warningTotal > 0) {
             parts.push(`${numberFormatter.format(warningTotal)} capped or excluded value${warningTotal === 1 ? '' : 's'}`);
         }
@@ -5506,15 +5509,18 @@
     function sanitizeGmValueSyncRetryHistoryForSupportSnapshot(retryHistory) {
         if (!retryHistory || typeof retryHistory !== 'object' || retryHistory.schema !== 'scriptvault-gm-value-sync-retry-history/v1') return undefined;
         const limit = Math.min(Math.max(1, sanitizeSupportSnapshotCount(retryHistory.limit) || 5), 5);
+        const retentionDays = Math.min(Math.max(1, sanitizeSupportSnapshotCount(retryHistory.retentionDays) || 7), 365);
         const entries = Math.min(sanitizeSupportSnapshotCount(retryHistory.entries), limit);
         const retryReadyEntries = Math.min(sanitizeSupportSnapshotCount(retryHistory.retryReadyEntries), entries);
         const failedNoRetryEntries = Math.min(sanitizeSupportSnapshotCount(retryHistory.failedNoRetryEntries), entries - retryReadyEntries);
         return {
             schema: 'scriptvault-gm-value-sync-retry-history/v1',
             limit,
+            retentionDays,
             entries,
             retryReadyEntries,
             failedNoRetryEntries,
+            staleEntriesPruned: sanitizeSupportSnapshotCount(retryHistory.staleEntriesPruned),
             totalWriteFailureRetryReady: sanitizeSupportSnapshotCount(retryHistory.totalWriteFailureRetryReady),
             latestTimestamp: Number.isFinite(Number(retryHistory.latestTimestamp)) ? Math.max(0, Math.floor(Number(retryHistory.latestTimestamp))) : null,
             oldestTimestamp: Number.isFinite(Number(retryHistory.oldestTimestamp)) ? Math.max(0, Math.floor(Number(retryHistory.oldestTimestamp))) : null,

@@ -378,9 +378,11 @@ interface LocalHealthReportResponse {
     retryHistory: {
       schema: 'scriptvault-gm-value-sync-retry-history/v1';
       limit: number;
+      retentionDays: number;
       entries: number;
       retryReadyEntries: number;
       failedNoRetryEntries: number;
+      staleEntriesPruned: number;
       totalWriteFailureRetryReady: number;
       latestTimestamp: number | null;
       oldestTimestamp: number | null;

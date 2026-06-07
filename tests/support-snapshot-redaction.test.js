@@ -138,6 +138,8 @@ describe('exportSupportSnapshot modal flow', () => {
     const historyBlock = dashboardJs.match(/function sanitizeGmValueSyncRetryHistoryForSupportSnapshot\(retryHistory\) \{[\s\S]*?function sanitizeGmValueSyncLastResultForSupportSnapshot/);
     expect(historyBlock).toBeTruthy();
     expect(historyBlock[0]).toContain("schema: 'scriptvault-gm-value-sync-retry-history/v1'");
+    expect(historyBlock[0]).toContain('retentionDays');
+    expect(historyBlock[0]).toContain('staleEntriesPruned');
     expect(historyBlock[0]).toContain('totalWriteFailureRetryReady');
     expect(historyBlock[0]).toContain('latestTimestamp');
     expect(historyBlock[0]).toContain('oldestTimestamp');
@@ -156,6 +158,7 @@ describe('exportSupportSnapshot modal flow', () => {
     expect(summaryBlock[0]).toContain('retry-ready preserved write');
     expect(summaryBlock[0]).toContain('formatGmValueRetryAgeBucket');
     expect(summaryBlock[0]).toContain('retryHistory');
+    expect(summaryBlock[0]).toContain('staleEntriesPruned');
     expect(summaryBlock[0]).toContain('warningCounts');
     expect(summaryBlock[0]).not.toMatch(/scriptId|scriptName|valueKeyName|providerAccount|credential|rawKeyMetadata|error:/);
   });
