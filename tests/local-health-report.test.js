@@ -264,6 +264,46 @@ describe('local health report background action', () => {
     expect(retryHistoryTypeBlock[0]).not.toMatch(/scriptId|scriptName|valueKeyName|providerAccount|credential|rawKeyMetadata|error:/);
   });
 
+  it('pins GM value sync typed privacy schema', () => {
+    const gmValueSyncTypeBlock = messagesTs.match(/gmValueSync:\s*\{[\s\S]*?localWorkspace:\s*\{/);
+    expect(gmValueSyncTypeBlock).toBeTruthy();
+    const fieldKeys = [...gmValueSyncTypeBlock[0].matchAll(/^\s{4}([A-Za-z0-9_]+):/gm)].map((match) => match[1]);
+    expect(fieldKeys).toEqual([
+      'schema',
+      'available',
+      'providerWritesEnabled',
+      'optInScripts',
+      'readyBundles',
+      'emptyBundles',
+      'scriptsWithWarnings',
+      'valueReadFailures',
+      'totalKeys',
+      'totalBytes',
+      'maxScriptBytes',
+      'maxKeys',
+      'maxKeyBytes',
+      'lastResult',
+      'retryResolution',
+      'retryResolutionHistory',
+      'retryHistory',
+      'warningCounts',
+      'privacy'
+    ]);
+    const mainPrivacyBlock = gmValueSyncTypeBlock[0].match(/warningCounts: Record<string, number>;\s+privacy:\s*\{([\s\S]*?)^\s{4}\};/m);
+    expect(mainPrivacyBlock).toBeTruthy();
+    const privacyKeys = [...mainPrivacyBlock[1].matchAll(/^\s{6}([A-Za-z0-9_]+): boolean;/gm)].map((match) => match[1]);
+    expect(privacyKeys).toEqual([
+      'includesValues',
+      'includesValueKeys',
+      'includesScriptIds',
+      'includesScriptNames',
+      'includesUrls',
+      'includesFileHandles',
+      'includesLocalPaths'
+    ]);
+    expect(gmValueSyncTypeBlock[0]).not.toMatch(/scriptId|scriptName|valueKeyName|providerAccount|credential|rawKeyMetadata|error:/);
+  });
+
   it('summarizes local workspace bindings without file handles, paths, or script identifiers', () => {
     const block = backgroundCoreTs.match(/function buildLocalWorkspaceHealthSummary\(bindings = \[\]\) \{[\s\S]*?\n\}/);
     expect(block).toBeTruthy();
