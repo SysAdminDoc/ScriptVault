@@ -372,6 +372,8 @@ interface LocalHealthReportResponse {
       skippedUnavailable: number;
       failures: number;
       writeFailureRetryReady: number;
+      retryAgeMinutes: number | null;
+      retryAgeBucket: 'none' | 'fresh' | 'recent' | 'stale' | 'old' | 'unknown';
     };
     warningCounts: Record<string, number>;
     privacy: {

@@ -4893,6 +4893,7 @@
         if (!gmValueSync) return 'GM values unchecked';
         if (!gmValueSync.available) return 'GM value diagnostics unavailable';
         const retryReady = gmValueSync.lastResult?.writeFailureRetryReady || 0;
+        const retryAgeLabel = formatGmValueRetryAgeBucket(gmValueSync.lastResult?.retryAgeBucket);
         const warningTotal = Object.values(gmValueSync.warningCounts || {}).reduce((sum, count) => sum + sanitizeSupportSnapshotCount(count), 0);
         const parts = [
             `${numberFormatter.format(gmValueSync.optInScripts)} opt-in script${gmValueSync.optInScripts === 1 ? '' : 's'}`,
@@ -4900,7 +4901,7 @@
             `${numberFormatter.format(gmValueSync.totalKeys)} key${gmValueSync.totalKeys === 1 ? '' : 's'} / ${formatBytes(gmValueSync.totalBytes)}`
         ];
         if (retryReady > 0) {
-            parts.push(`${numberFormatter.format(retryReady)} retry-ready preserved write${retryReady === 1 ? '' : 's'}`);
+            parts.push(`${numberFormatter.format(retryReady)} retry-ready preserved write${retryReady === 1 ? '' : 's'}${retryAgeLabel ? ` (${retryAgeLabel})` : ''}`);
         }
         if (warningTotal > 0) {
             parts.push(`${numberFormatter.format(warningTotal)} capped or excluded value${warningTotal === 1 ? '' : 's'}`);
@@ -5468,6 +5469,21 @@
         return Math.floor(Math.max(0, count));
     }
 
+    function sanitizeGmValueRetryAgeBucketForSupportSnapshot(value) {
+        const allowed = new Set(['none', 'fresh', 'recent', 'stale', 'old', 'unknown']);
+        return allowed.has(value) ? value : 'unknown';
+    }
+
+    function formatGmValueRetryAgeBucket(value) {
+        const bucket = sanitizeGmValueRetryAgeBucketForSupportSnapshot(value);
+        if (bucket === 'fresh') return 'fresh retry age';
+        if (bucket === 'recent') return 'recent retry age';
+        if (bucket === 'stale') return 'stale retry age';
+        if (bucket === 'old') return 'old retry age';
+        if (bucket === 'unknown') return 'retry age unknown';
+        return '';
+    }
+
     function sanitizeGmValueSyncWarningCountsForSupportSnapshot(warningCounts) {
         const allowedWarningIds = new Set([
             'maxKeysExceeded',
@@ -5489,6 +5505,14 @@
         const applied = sanitizeSupportSnapshotCount(lastResult.applied);
         const preserved = sanitizeSupportSnapshotCount(lastResult.preserved);
         const failures = sanitizeSupportSnapshotCount(lastResult.failures);
+        const writeFailureRetryReady = Math.min(
+            sanitizeSupportSnapshotCount(lastResult.writeFailureRetryReady),
+            failures,
+            preserved
+        );
+        const retryAgeMinutes = writeFailureRetryReady > 0 && lastResult.retryAgeMinutes != null
+            ? sanitizeSupportSnapshotCount(lastResult.retryAgeMinutes)
+            : null;
         return {
             schema: 'scriptvault-gm-value-sync-result/v1',
             timestamp: Number.isFinite(Number(lastResult.timestamp)) ? Math.max(0, Math.floor(Number(lastResult.timestamp))) : null,
@@ -5500,11 +5524,11 @@
             conflictBlocked: sanitizeSupportSnapshotCount(lastResult.conflictBlocked),
             skippedUnavailable: sanitizeSupportSnapshotCount(lastResult.skippedUnavailable),
             failures,
-            writeFailureRetryReady: Math.min(
-                sanitizeSupportSnapshotCount(lastResult.writeFailureRetryReady),
-                failures,
-                preserved
-            )
+            writeFailureRetryReady,
+            retryAgeMinutes,
+            retryAgeBucket: writeFailureRetryReady > 0
+                ? sanitizeGmValueRetryAgeBucketForSupportSnapshot(lastResult.retryAgeBucket)
+                : 'none'
         };
     }
 
