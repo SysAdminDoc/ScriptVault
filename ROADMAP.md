@@ -5,12 +5,12 @@
 > planning map lives in [`RESEARCH_REPORT.md`](RESEARCH_REPORT.md). Legacy
 > planning passes (Rounds 1-14, Cycles 1-20) are archived under `docs/archive/`.
 >
-> **Roadmap version:** Round 79 - GM value sync timestamp parity guards 2026-06-07.
+> **Roadmap version:** Round 80 - GM value sync timestamp log clamp 2026-06-07.
 > **Shipped baseline:** v3.11.0 (2026-05-19, tag pushed). `main` has additional unreleased hardening, TS promotion, Firefox validation, and release-trust commits through 2026-06-06.
-> **Test suite:** 1519 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 28/28 TS-promoted runtime entries; 0 mirrored; 0 divergent.
+> **Test suite:** 1520 Vitest cases green; `npm audit --audit-level=high --omit=optional` clean; 28/28 TS-promoted runtime entries; 0 mirrored; 0 divergent.
 > **Source floor:** 400+ external URLs across Rounds 1-40. Every Now/Next item carries source IDs from the Appendix.
 >
-> Last researched: Round 79 - 2026-06-07.
+> Last researched: Round 80 - 2026-06-07.
 
 ---
 
@@ -265,6 +265,10 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
   proving no-timestamp preserved paths count every preserved bundle as unknown
   while keeping remote-newer, local-newer, same, and one-sided timestamp buckets
   at zero.
+- **Cycle 138 update:** Hardened dashboard real-sync timestamp logs so
+  preserved timestamp buckets spend the aggregate preserved count budget and
+  cannot render impossible remote-newer, local-newer, same, one-sided, or
+  unknown evidence from injected summary counts.
 
 ### L-9. WebSocket Support in GM API
 - **Priority:** P3 | **Effort:** M | **Source:** [S38]
@@ -348,8 +352,8 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 
 ## Continuation State
 
-- **Current cycle:** Round 79 Cycle 137 added GM value sync timestamp parity guards.
-- **Next implementation angle:** Cycle 138 should continue L-8 with write-failure retry diagnostics, timestamp dashboard log coverage, or the next non-credential-gated safeguard before enabling non-empty bidirectional value merges.
+- **Current cycle:** Round 80 Cycle 138 added GM value sync timestamp log clamping.
+- **Next implementation angle:** Cycle 139 should continue L-8 with write-failure retry diagnostics, accepted-write retry preview evidence, or the next non-credential-gated safeguard before enabling non-empty bidirectional value merges.
 - **Follow-up source checks:** Re-check Greasy Fork prefilled update behavior and browser SameSite/top-level form behavior before changing the form submission path or making stronger claims about live submission success.
 - **Suggested verification before implementation:** Run focused tests for enterprise provisioning, local health reports, install-source/trust receipts, support snapshot redaction, export/sync local-metadata redaction, and `reregisterScript()` behavior after code changes touching L-1, N-7, N-8, X-8, or X-9.
 
