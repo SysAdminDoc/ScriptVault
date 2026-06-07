@@ -520,6 +520,16 @@ Cycle 139 adds write retry-ready diagnostics:
 - This is diagnostic hardening only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
-The next implementation slice should add accepted-write retry preview evidence,
-write-retry history hardening, or another durable safeguard before non-empty
-local and remote value bags can be merged bidirectionally.
+Cycle 140 adds retry preview evidence:
+
+- The write-failure source fixture now runs a follow-up dry-run preview after
+  the failed empty-local write preserves the remote value bundle.
+- That preview must report the preserved remote bundle as applicable and
+  apply-ready, keep `wouldApplyValues: true`, avoid provider uploads and value
+  writes, and omit script IDs, value keys, and values from preview output.
+- This is regression coverage only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
+The next implementation slice should add write-retry history hardening,
+retry-ready support snapshot summaries, or another durable safeguard before
+non-empty local and remote value bags can be merged bidirectionally.

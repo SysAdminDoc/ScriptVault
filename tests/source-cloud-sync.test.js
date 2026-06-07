@@ -1536,7 +1536,7 @@ describe('source cloud sync module', () => {
         script_values: {},
       },
     );
-    const { CloudSync, ScriptValues, getRemoteData, scriptState, valueState } = harness;
+    const { CloudSync, ScriptValues, getRemoteData, provider, scriptState, valueState } = harness;
     ScriptValues.setAll.mockRejectedValueOnce(new Error('value write failed'));
 
     const result = await CloudSync.sync();
@@ -1582,6 +1582,27 @@ describe('source cloud sync module', () => {
     expect(getRemoteData().valueBundles.script_values.values).toEqual({
       token: 'remote-token',
     });
+
+    const retryPreview = await CloudSync.preview('googledrive');
+    expect(retryPreview.summary).toEqual(expect.objectContaining({
+      localValueBundles: 1,
+      remoteValueBundles: 1,
+      remoteValueBundlesApplicable: 1,
+      remoteValueBundlesApplyReady: 1,
+      remoteValueBundlesConflictBlocked: 0,
+      remoteValueBundlesIgnored: 0,
+      remoteValueBundleWarnings: 0,
+      valueBundleApplyEnabled: true,
+      valueBundleApplyMode: 'empty-local-only',
+      wouldApplyValues: true,
+    }));
+    expect(retryPreview.valueBundleConflicts).toEqual([]);
+    const serializedRetryPreview = JSON.stringify(retryPreview);
+    expect(serializedRetryPreview).not.toContain('script_values');
+    expect(serializedRetryPreview).not.toContain('token');
+    expect(serializedRetryPreview).not.toContain('remote-token');
+    expect(provider.upload).toHaveBeenCalledTimes(1);
+    expect(ScriptValues.setAll).toHaveBeenCalledTimes(1);
   });
 
   it('uploads encrypted v2 envelopes when sync encryption is enabled', async () => {
