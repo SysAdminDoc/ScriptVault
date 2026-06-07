@@ -912,7 +912,19 @@ Cycle 172 pins support unavailable-state wording coverage:
 - This is diagnostic hardening only. It does not enable non-empty local/remote
   merge writes or change the empty-local-only apply rule.
 
-The next implementation slice should add last-result support export schema
-coverage, support summary unchecked-state wording coverage, or another durable
+Cycle 173 pins last-result support export clamp coverage:
+
+- Support-snapshot redaction tests now pin support-export last-result
+  retry-ready evidence to sanitized applied, preserved, failure, and retry-ready
+  counts.
+- `writeFailureRetryReady` remains clamped to the sanitized failure and
+  preserved budgets before export.
+- Retry-age minutes and buckets are exported only when retry-ready evidence
+  remains after clamping.
+- This is diagnostic hardening only. It does not enable non-empty local/remote
+  merge writes or change the empty-local-only apply rule.
+
+The next implementation slice should add support summary unchecked-state wording
+coverage, last-result timestamp sanitization coverage, or another durable
 safeguard before non-empty local and remote value bags can be merged
 bidirectionally.

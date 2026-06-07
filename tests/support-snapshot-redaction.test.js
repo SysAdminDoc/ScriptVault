@@ -333,6 +333,16 @@ describe('exportSupportSnapshot modal flow', () => {
     expect(dashboardJs).toContain('resolutionAgeBucket: sanitizeGmValueRetryAgeBucketForSupportSnapshot(retryResolution.resolutionAgeBucket)');
   });
 
+  it('GM value sync last-result support export clamps retry-ready evidence', () => {
+    const lastResultBlock = getFunctionBlock('sanitizeGmValueSyncLastResultForSupportSnapshot', 'sanitizeGmValueSyncForSupportSnapshot');
+    expect(lastResultBlock).toContain('const applied = sanitizeSupportSnapshotCount(lastResult.applied);');
+    expect(lastResultBlock).toContain('const preserved = sanitizeSupportSnapshotCount(lastResult.preserved);');
+    expect(lastResultBlock).toContain('const failures = sanitizeSupportSnapshotCount(lastResult.failures);');
+    expect(lastResultBlock).toContain('const writeFailureRetryReady = Math.min(\n            sanitizeSupportSnapshotCount(lastResult.writeFailureRetryReady),\n            failures,\n            preserved\n        );');
+    expect(lastResultBlock).toContain('const retryAgeMinutes = writeFailureRetryReady > 0 && lastResult.retryAgeMinutes != null');
+    expect(lastResultBlock).toContain("retryAgeBucket: writeFailureRetryReady > 0\n                ? sanitizeGmValueRetryAgeBucketForSupportSnapshot(lastResult.retryAgeBucket)\n                : 'none'");
+  });
+
   it('GM value sync retry resolution is summarized before support snapshot export', () => {
     const resolutionBlock = dashboardJs.match(/function sanitizeGmValueSyncRetryResolutionForSupportSnapshot\(retryResolution\) \{[\s\S]*?function sanitizeGmValueSyncRetryHistoryForSupportSnapshot/);
     expect(resolutionBlock).toBeTruthy();
