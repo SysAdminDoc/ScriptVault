@@ -54,3 +54,7 @@ AGENTS.md
 .claude/
 CODEX_CHANGELOG.md
 CODEX_*.md
+
+# Markdown files local-only (except README)
+*.md
+!README.md
