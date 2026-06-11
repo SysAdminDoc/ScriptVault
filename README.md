@@ -98,6 +98,7 @@ create a broad passthrough policy just to bypass CSP.
 - **Auto-updates** &mdash; Configurable update intervals that default to notify-only queued review
 - **Update inbox** &mdash; Review pending updates with diff, permission, source, and rollback context before install
 - **Per-script update check** &mdash; Check and queue updates for individual scripts inline
+- **Run on Tab** &mdash; Run any script once from the popup or dashboard without changing permanent registration (Chromium 135+)
 - **Version tracking** &mdash; Installed vs. available version comparison
 - **Tags & search** &mdash; Organize and filter scripts by name, description, or metadata
 - **Popup quick-edit** &mdash; Click any script in the toolbar popup to jump straight into the editor

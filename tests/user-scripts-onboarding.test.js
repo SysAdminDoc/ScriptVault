@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 
 const backgroundCore = readFileSync(resolve(process.cwd(), 'background.core.js'), 'utf8');
 const popupJs = readFileSync(resolve(process.cwd(), 'pages/popup.js'), 'utf8');
+const dashboardHtml = readFileSync(resolve(process.cwd(), 'pages/dashboard.html'), 'utf8');
 const dashboardJs = readFileSync(resolve(process.cwd(), 'pages/dashboard.js'), 'utf8');
 const messagesTs = readFileSync(resolve(process.cwd(), 'src/types/messages.ts'), 'utf8');
 
@@ -52,5 +53,30 @@ describe('Chrome userScripts onboarding diagnostics', () => {
     expect(messagesTs).toContain("'developer-mode-disabled'");
     expect(messagesTs).toContain('setupState: UserScriptsSetupState;');
     expect(messagesTs).toContain('repairRuntimeState: SuccessOrError<ExtensionStatusResponse>;');
+  });
+
+  it('keeps one-shot run messages typed and wired through popup and dashboard', () => {
+    expect(backgroundCore).toContain("case 'runScriptNow':");
+    expect(backgroundCore).toContain('await chrome.userScripts.execute({');
+    expect(backgroundCore).toContain("return { success: true, mode: 'userScripts.execute' };");
+    expect(backgroundCore).toContain("return { success: true, mode: 'scripting.executeScript' };");
+
+    expect(popupJs).toContain("action: 'runScriptNow', scriptId, tabId: tab.id");
+    expect(dashboardHtml).toContain('id="btnEditorRunNow"');
+    expect(dashboardHtml).toContain('Run on Tab');
+    expect(dashboardJs).toContain('function supportsOneShotRunNow()');
+    expect(dashboardJs).toContain("state.runtimeDescriptor?.browserName === 'firefox'");
+    expect(dashboardJs).toContain('version >= 135');
+    expect(dashboardJs).toContain('async function getRunNowTargetTab()');
+    expect(dashboardJs).toContain("protocol === 'http:' || protocol === 'https:' || protocol === 'file:'");
+    expect(dashboardJs).toContain("action: 'runScriptNow'");
+    expect(dashboardJs).toContain('scriptId,');
+    expect(dashboardJs).toContain('tabId: targetTab.id');
+    expect(dashboardJs).toContain('runButtonTask(event.currentTarget, () => runScriptOnceOnTab(), { busyLabel: \'Running...\' })');
+    expect(dashboardJs).toContain('[data-action="runNow"]');
+    expect(messagesTs).toContain("interface RunScriptNow");
+    expect(messagesTs).toContain("action: 'runScriptNow';");
+    expect(messagesTs).toContain('| ToggleScript | RunScriptNow | DuplicateScript');
+    expect(messagesTs).toContain("runScriptNow: SuccessOrError<{ mode: 'userScripts.execute' | 'scripting.executeScript' }>;");
   });
 });
