@@ -36,6 +36,8 @@ describe('GM_download service-worker restart recovery', () => {
     expect(core).toContain('handlePendingDownloadDelta(delta);');
     expect(core).toContain('await SessionState.hydrate();');
     expect(core).toContain("await reconcilePendingDownloads('startup');");
+    expect(core).toContain('_schedulePendingDownloadAlarms(id, tracker);');
+    expect(core).toContain('_schedulePendingDownloadTimer(id, tracker);');
     expect(core).toContain('await chrome.downloads.search({ id });');
   });
 
