@@ -14,6 +14,7 @@ const SCRIPT = resolve(ROOT, 'scripts/check-settings-schema.mjs');
 function makeFixture({
   schemaKeys = ['theme', 'debugMode', 'customCss'],
   metadata,
+  dashboardJs,
   dashboardHtml,
 } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'scriptvault-settings-schema-'));
@@ -67,7 +68,7 @@ export interface Settings {
   debugMode: boolean;
 }
 `);
-  writeFileSync(resolve(root, 'pages/dashboard.js'), `
+  writeFileSync(resolve(root, 'pages/dashboard.js'), dashboardJs ?? `
 const settingMap = {
   settingsDebugMode: ['debugMode', 'checked'],
 };
@@ -92,6 +93,7 @@ describe('settings schema gate', () => {
     expect(report.counts.dashboardSaveKeys).toBeGreaterThan(70);
     expect(report.counts.classified).toBeGreaterThanOrEqual(report.counts.dashboardSaveKeys);
     expect(report.counts.metadata).toBeGreaterThan(100);
+    expect(report.counts.schemaDrivenSettings).toBeGreaterThanOrEqual(5);
     expect(formatSettingsSchemaReport(report)).toContain('[settings-schema] OK');
   });
 
@@ -427,6 +429,55 @@ describe('settings schema gate', () => {
 
     expect(report.ok).toBe(false);
     expect(report.errors).toContain('Setting "badgeColor" validation metadata requires a dashboard setting-error element');
+  });
+
+  it('fails when schema-driven dashboard metadata drifts', () => {
+    const root = makeFixture({
+      metadata: {
+        theme: {
+          type: 'string',
+          control: 'select',
+          label: 'Theme',
+          help: 'Controls the dashboard theme.',
+          elementId: 'settingsTheme',
+          default: 'dark',
+          options: [{ value: 'dark', label: 'Dark' }],
+        },
+        debugMode: {
+          type: 'boolean',
+          control: 'checkbox',
+          label: 'Debug mode',
+          help: 'Controls verbose diagnostics.',
+          default: false,
+        },
+        customCss: {
+          type: 'string',
+          control: 'textarea',
+          label: 'Custom CSS',
+          help: 'Stores custom dashboard CSS.',
+          defaultSource: 'runtime',
+        },
+      },
+      dashboardJs: `
+const DASHBOARD_SCHEMA_DRIVEN_SETTING_SECTIONS = Object.freeze({
+  appearance: Object.freeze([
+    { key: 'theme', elementId: 'settingsWrongTheme', property: 'value', fallback: 'dark', event: 'change' }
+  ])
+});
+const settingMap = {
+  settingsDebugMode: ['debugMode', 'checked'],
+};
+function wire() {
+  saveSetting('customCss', '');
+}
+`,
+    });
+    const report = analyzeSettingsSchema({ rootDir: root });
+
+    expect(report.ok).toBe(false);
+    expect(report.errors).toContain(
+      'Dashboard schema-driven setting "theme" elementId "settingsWrongTheme" does not match settings-schema metadata'
+    );
   });
 
   it('returns a non-zero CLI exit code when schema coverage drifts', () => {
