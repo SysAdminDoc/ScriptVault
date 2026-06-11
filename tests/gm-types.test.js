@@ -45,6 +45,8 @@ describe('GM ambient declarations', () => {
     expect(declaration).toContain('declare const GM: GMAsyncApi;');
     expect(declaration).toContain('declare const GM_cookie: GMCookieCallbackApi;');
     expect(declaration).toContain('cookie: GMCookiePromiseApi;');
+    expect(declaration).toContain('interface GMCookiePartitionKey');
+    expect(declaration).toContain('partitionKey?: GMCookiePartitionKey;');
     expect(declaration).toContain('audio: GMAudioPromiseApi;');
     expect(declaration).toContain('webRequest(rules: GMWebRequestRule | GMWebRequestRule[], listener?: GMWebRequestListener): Promise<void>;');
     expect(declaration).toContain('fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;');
@@ -122,10 +124,12 @@ async function main() {
   await GM.loadScript('https://cdn.example.com/lib.js');
 
   GM_cookie.list({ domain: 'example.com' }, (cookies, error) => {
-    console.log(cookies.at(0)?.name, error?.message);
+    console.log(cookies.at(0)?.name, cookies.at(0)?.partitionKey?.topLevelSite, error?.message);
   });
-  await GM.cookies.list({ domain: 'example.com' });
-  await GM.cookie.list({ domain: 'example.com' });
+  await GM.cookies.list({ domain: 'example.com', partitionKey: {} });
+  await GM.cookie.list({ domain: 'example.com', partitionKey: { topLevelSite: 'https://example.com', hasCrossSiteAncestor: false } });
+  await GM.cookie.set({ url: 'https://example.com', name: 'sv', value: '1', partitionKey: { topLevelSite: 'https://example.com' } });
+  await GM.cookie.delete({ url: 'https://example.com', name: 'sv', partitionKey: {} });
 
   GM_audio.setMute({ mute: true }, error => console.log(error?.message));
   GM_audio.getState(state => {

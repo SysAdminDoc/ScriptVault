@@ -25,8 +25,11 @@ function extractFunction(src, name) {
 }
 
 const isHttpCookieUrlSrc = extractFunction(source, 'isHttpCookieUrl');
+const normalizeCookiePartitionKeySrc = extractFunction(source, 'normalizeCookiePartitionKey');
 // eslint-disable-next-line @typescript-eslint/no-implied-eval
 const isHttpCookieUrl = new Function(`${isHttpCookieUrlSrc}\nreturn isHttpCookieUrl;`)();
+// eslint-disable-next-line @typescript-eslint/no-implied-eval
+const normalizeCookiePartitionKey = new Function(`${isHttpCookieUrlSrc}\n${normalizeCookiePartitionKeySrc}\nreturn normalizeCookiePartitionKey;`)();
 
 describe('isHttpCookieUrl', () => {
   it('accepts http and https URLs', () => {
@@ -62,6 +65,36 @@ describe('isHttpCookieUrl', () => {
   });
 });
 
+describe('normalizeCookiePartitionKey', () => {
+  it('accepts empty partition keys for Chrome current-partition lookup', () => {
+    expect(normalizeCookiePartitionKey({})).toEqual({ partitionKey: {} });
+  });
+
+  it('normalizes topLevelSite to an http(s) origin', () => {
+    expect(normalizeCookiePartitionKey({
+      topLevelSite: 'https://example.com/path?q=1',
+      hasCrossSiteAncestor: false,
+    })).toEqual({
+      partitionKey: {
+        topLevelSite: 'https://example.com',
+        hasCrossSiteAncestor: false,
+      },
+    });
+  });
+
+  it('rejects invalid partition key shapes before chrome.cookies sees them', () => {
+    expect(normalizeCookiePartitionKey('https://example.com/')).toMatchObject({
+      error: 'partitionKey must be an object',
+    });
+    expect(normalizeCookiePartitionKey({ topLevelSite: 'file:///tmp/a' })).toMatchObject({
+      error: 'partitionKey.topLevelSite must be http(s)://',
+    });
+    expect(normalizeCookiePartitionKey({ hasCrossSiteAncestor: 'yes' })).toMatchObject({
+      error: 'partitionKey.hasCrossSiteAncestor must be boolean',
+    });
+  });
+});
+
 describe('GM_cookie handlers wire the validator', () => {
   // Source-level check so a future refactor that drops the scheme guard fails
   // loudly instead of silently re-introducing the bypass.
@@ -70,7 +103,7 @@ describe('GM_cookie handlers wire the validator', () => {
       /case 'GM_cookie_set':[\s\S]*?return\s*\{\s*success:\s*true/
     );
     const delMatch = source.match(
-      /case 'GM_cookie_delete':[\s\S]*?await chrome\.cookies\.remove/
+      /case 'GM_cookie_delete':[\s\S]*?return\s*\{\s*success:\s*true/
     );
     const listMatch = source.match(
       /case 'GM_cookie_list':[\s\S]*?await chrome\.cookies\.getAll/
@@ -82,5 +115,11 @@ describe('GM_cookie handlers wire the validator', () => {
     expect(delMatch?.[0]).toContain('evaluateScriptHostScopePolicy');
     expect(listMatch?.[0]).toContain('evaluateScriptHostScopePolicy');
     expect(listMatch?.[0]).toContain('resolveCookiePolicyTarget');
+    expect(setMatch?.[0]).toContain('normalizeCookiePartitionKey(data.partitionKey)');
+    expect(delMatch?.[0]).toContain('normalizeCookiePartitionKey(data.partitionKey)');
+    expect(listMatch?.[0]).toContain('normalizeCookiePartitionKey(data.partitionKey)');
+    expect(setMatch?.[0]).toContain('partitionKey: partition.partitionKey');
+    expect(delMatch?.[0]).toContain('partitionKey: partition.partitionKey');
+    expect(listMatch?.[0]).toContain('details.partitionKey = partition.partitionKey');
   });
 });
