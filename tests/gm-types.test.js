@@ -144,6 +144,20 @@ async function main() {
   await GM.webRequest([{ selector: { url: '*://example.com/*' }, action: { cancel: true } }]);
   GM_head('https://example.com', response => console.log(response.status));
   await GM.head('https://example.com', response => console.log(response.status));
+  GM_download(new Blob(['hello'], { type: 'text/plain' }), 'hello.txt');
+  GM_download({
+    url: new File(['hello'], 'hello.txt', { type: 'text/plain' }),
+    headers: { Authorization: 'Bearer token' },
+    anonymous: true,
+    partitionKey: { topLevelSite: 'https://example.com' },
+  });
+  await GM.download({
+    url: 'https://example.com/report.csv',
+    name: 'report.csv',
+    noCache: true,
+    redirect: 'follow',
+    cookiePartition: { topLevelSite: 'https://example.com', hasCrossSiteAncestor: false },
+  });
   await GM.log('typed log');
   await GM.focusTab();
   const commands = await GM.getMenuCommands();

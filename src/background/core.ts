@@ -4791,6 +4791,82 @@ const GM_DOWNLOAD_TIMEOUT_ALARM_PREFIX = 'gm_download_timeout_';
 const GM_DOWNLOAD_SAFETY_ALARM_PREFIX = 'gm_download_safety_';
 const GM_DOWNLOAD_TRACKING_TTL_MS = 5 * 60 * 1000;
 const GM_DOWNLOAD_PENDING_CAP = 500;
+const GM_DOWNLOAD_FETCH_MAX_BYTES = 50 * 1024 * 1024;
+
+function hasPartitionCookieOptions(data = {}) {
+  return data.partitionKey !== undefined
+    || data.cookiePartition !== undefined
+    || data.cookieStoreId !== undefined
+    || data.cookieStore !== undefined;
+}
+
+function partitionCookieUnsupportedError(apiName) {
+  return `${apiName} partitioned-cookie options are not supported in ScriptVault's MV3 fetch/download bridge yet`;
+}
+
+function downloadNeedsFetchBridge(data = {}) {
+  const headers = data.headers && typeof data.headers === 'object' ? data.headers : null;
+  const hasHeaders = !!headers && Object.keys(headers).some((key) => headers[key] != null);
+  return hasHeaders
+    || data.anonymous === true
+    || data.noCache === true
+    || data.nocache === true
+    || data.redirect === 'follow'
+    || data.redirect === 'error'
+    || data.redirect === 'manual';
+}
+
+function _downloadNameFromUrl(url) {
+  if (!url || typeof url !== 'string') return '';
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol === 'data:' || parsed.protocol === 'blob:') return '';
+    const last = parsed.pathname.split('/').filter(Boolean).pop();
+    return last ? decodeURIComponent(last) : '';
+  } catch (_) {
+    const clean = url.split(/[?#]/)[0];
+    return clean.split('/').filter(Boolean).pop() || '';
+  }
+}
+
+function normalizeDownloadFilename(name, url, sourceName) {
+  if (typeof name === 'string' && name.trim()) return name.trim();
+  if (typeof sourceName === 'string' && sourceName.trim()) return sourceName.trim();
+  const fromUrl = _downloadNameFromUrl(url);
+  return fromUrl || 'download';
+}
+
+function _bytesToBase64(bytes) {
+  let binary = '';
+  const chunk = 32768;
+  for (let offset = 0; offset < bytes.length; offset += chunk) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(offset, offset + chunk));
+  }
+  return btoa(binary);
+}
+
+function _safeDownloadMimeType(mimeType) {
+  const value = typeof mimeType === 'string' ? mimeType.trim() : '';
+  return /^[A-Za-z0-9!#$&^_.+-]+\/[A-Za-z0-9!#$&^_.+-]+(?:\s*;\s*[A-Za-z0-9!#$&^_.+-]+=[A-Za-z0-9!#$&^_.+-]+)*$/.test(value)
+    ? value
+    : 'application/octet-stream';
+}
+
+function downloadBytesToDataUrl(bytes, mimeType) {
+  return `data:${_safeDownloadMimeType(mimeType)};base64,${_bytesToBase64(bytes)}`;
+}
+
+async function responseToDownloadDataUrl(response) {
+  const declaredLen = parseInt(response.headers?.get?.('content-length') || '0', 10);
+  if (Number.isFinite(declaredLen) && declaredLen > GM_DOWNLOAD_FETCH_MAX_BYTES) {
+    throw new Error(`Download too large (${formatBytes(declaredLen)}). Maximum is ${formatBytes(GM_DOWNLOAD_FETCH_MAX_BYTES)} when headers/anonymous mode requires a fetch bridge.`);
+  }
+  const buffer = await response.arrayBuffer();
+  if (buffer.byteLength > GM_DOWNLOAD_FETCH_MAX_BYTES) {
+    throw new Error(`Download too large (${formatBytes(buffer.byteLength)}). Maximum is ${formatBytes(GM_DOWNLOAD_FETCH_MAX_BYTES)} when headers/anonymous mode requires a fetch bridge.`);
+  }
+  return downloadBytesToDataUrl(new Uint8Array(buffer), response.headers?.get?.('content-type') || 'application/octet-stream');
+}
 
 function _normalizeDownloadId(downloadId) {
   const id = Number(downloadId);
@@ -7808,6 +7884,9 @@ async function handleMessage(message, sender) {
           if (!xhrScript) {
             return { error: 'Script context not found', type: 'error' };
           }
+          if (hasPartitionCookieOptions(data)) {
+            return { error: partitionCookieUnsupportedError('GM_xmlhttpRequest'), type: 'error' };
+          }
 
           // @connect enforcement
           const connectPolicy = evaluateConnectPolicy(xhrScript, data.url);
@@ -8156,8 +8235,10 @@ async function handleMessage(message, sender) {
           if (!data.scriptId) return { error: 'Missing script context' };
           const downloadScript = await ScriptStorage.get(data.scriptId);
           if (!downloadScript) return { error: 'Script context not found' };
+          if (hasPartitionCookieOptions(data)) return { error: partitionCookieUnsupportedError('GM_download') };
           let downloadProtocol = '';
           try { downloadProtocol = new URL(data.url).protocol; } catch (_) { return { error: 'Invalid URL' }; }
+          let downloadUrl = data.url;
           if (downloadProtocol === 'http:' || downloadProtocol === 'https:') {
             const downloadPolicy = evaluateConnectPolicy(downloadScript, data.url);
             if (!downloadPolicy.allowed) return { error: downloadPolicy.error };
@@ -8166,10 +8247,24 @@ async function handleMessage(message, sender) {
             if (!downloadPreCheck.ok && !shouldAllowInternalXhr(downloadScript, data.url, downloadSettings, downloadPreCheck)) {
               return { error: internalXhrError('GM_download URL rejected', downloadPreCheck) };
             }
+            if (downloadNeedsFetchBridge(data)) {
+              const fetchOptions = XhrManager.buildFetchOptions({
+                ...data,
+                method: 'GET',
+                noCache: data.noCache === true || data.nocache === true
+              });
+              const response = await fetch(data.url, fetchOptions);
+              const downloadPostCheck = InternalHostGuard.classifyResponseUrl(response, ['http:', 'https:']);
+              if (!downloadPostCheck.ok && !shouldAllowInternalXhr(downloadScript, response.url || data.url, downloadSettings, downloadPostCheck)) {
+                return { error: internalXhrError('GM_download redirected to internal host', downloadPostCheck) };
+              }
+              if (!response.ok) return { error: `HTTP ${response.status}` };
+              downloadUrl = await responseToDownloadDataUrl(response);
+            }
           }
           const downloadOpts = {
-            url: data.url,
-            filename: data.name,
+            url: downloadUrl,
+            filename: normalizeDownloadFilename(data.name, data.url, data.sourceName),
             saveAs: data.saveAs || false,
             conflictAction: data.conflictAction || 'uniquify'
           };
@@ -13483,6 +13578,10 @@ ${req.code}
         password: details.password,
         context: details.context,
         anonymous: details.anonymous,
+        partitionKey: details.partitionKey,
+        cookiePartition: details.cookiePartition,
+        cookieStoreId: details.cookieStoreId,
+        cookieStore: details.cookieStore,
         // VM #2168 / TM noCache: bypass intermediate caches.
         // Accept both noCache (VM camelCase) and nocache (TM lowercase).
         noCache: details.noCache === true || details.nocache === true,
@@ -13921,24 +14020,83 @@ ${req.code}
   const _downloadCallbacks = new Map();
   const _DOWNLOAD_CALLBACKS_CAP = 200;
   let _downloadCallbacksEvicted = 0;
+  function _isDownloadBlobSource(value) {
+    return typeof Blob !== 'undefined' && value instanceof Blob;
+  }
+  function _downloadNameFromUrl(url) {
+    if (typeof url !== 'string' || !url) return '';
+    try {
+      const parsed = new URL(url, location.href);
+      if (parsed.protocol === 'data:' || parsed.protocol === 'blob:') return '';
+      const last = parsed.pathname.split('/').filter(Boolean).pop();
+      return last ? decodeURIComponent(last) : '';
+    } catch (e) {
+      return url.split(/[?#]/)[0].split('/').filter(Boolean).pop() || '';
+    }
+  }
+  function _safeDownloadMimeType(type) {
+    const value = typeof type === 'string' ? type.trim() : '';
+    const slash = value.indexOf('/');
+    return value
+      && slash > 0
+      && slash < value.length - 1
+      && !value.includes(String.fromCharCode(13))
+      && !value.includes(String.fromCharCode(10))
+      && !value.includes(',')
+      ? value
+      : 'application/octet-stream';
+  }
+  async function _downloadBlobToDataUrl(blob) {
+    const buffer = await blob.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    const chunk = 32768;
+    let binary = '';
+    for (let offset = 0; offset < bytes.length; offset += chunk) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(offset, offset + chunk));
+    }
+    const type = _safeDownloadMimeType(blob.type);
+    return 'data:' + type + ';base64,' + btoa(binary);
+  }
+  async function _normalizeDownloadDetails(details, nameArg) {
+    if (_isDownloadBlobSource(details)) {
+      const sourceName = (typeof File !== 'undefined' && details instanceof File) ? details.name : '';
+      return {
+        url: await _downloadBlobToDataUrl(details),
+        name: nameArg || sourceName || 'download',
+        sourceName
+      };
+    }
+    const opts = typeof details === 'string'
+      ? { url: details, name: nameArg || _downloadNameFromUrl(details) }
+      : { ...details };
+    if (_isDownloadBlobSource(opts.url)) {
+      const blob = opts.url;
+      const sourceName = (typeof File !== 'undefined' && blob instanceof File) ? blob.name : '';
+      opts.url = await _downloadBlobToDataUrl(blob);
+      opts.sourceName = opts.sourceName || sourceName;
+      opts.name = opts.name || nameArg || sourceName || 'download';
+    } else if (!opts.name) {
+      opts.name = nameArg || _downloadNameFromUrl(opts.url) || 'download';
+    }
+    return opts;
+  }
   function GM_download(details) {
     if (!hasGrant('GM_download') && !hasGrant('GM.download')) return;
-    let opts;
-    if (typeof details === 'string') {
-      opts = { url: details, name: arguments[1] || details.split('/').pop() };
-    } else {
-      opts = { ...details };
-    }
+    const nameArg = arguments[1];
     const callbacks = {
-      onload: opts.onload, onerror: opts.onerror,
-      onprogress: opts.onprogress, ontimeout: opts.ontimeout
+      onload: details && typeof details === 'object' ? details.onload : undefined,
+      onerror: details && typeof details === 'object' ? details.onerror : undefined,
+      onprogress: details && typeof details === 'object' ? details.onprogress : undefined,
+      ontimeout: details && typeof details === 'object' ? details.ontimeout : undefined
     };
-    delete opts.onload; delete opts.onerror;
-    delete opts.onprogress; delete opts.ontimeout;
-    opts.scriptId = scriptId;
-    opts.hasCallbacks = !!(callbacks.onload || callbacks.onerror || callbacks.onprogress || callbacks.ontimeout);
-    sendToBackground('GM_download', opts).then(result => {
-      if (result && result.downloadId) {
+    (async () => {
+      const opts = await _normalizeDownloadDetails(details, nameArg);
+      delete opts.onload; delete opts.onerror;
+      delete opts.onprogress; delete opts.ontimeout;
+      opts.scriptId = scriptId;
+      opts.hasCallbacks = !!(callbacks.onload || callbacks.onerror || callbacks.onprogress || callbacks.ontimeout);
+      const result = await sendToBackground('GM_download', opts);
+      if (result && result.downloadId && opts.hasCallbacks) {
         if (_downloadCallbacks.size >= _DOWNLOAD_CALLBACKS_CAP) {
           const oldest = _downloadCallbacks.keys().next().value;
           if (oldest !== undefined) _downloadCallbacks.delete(oldest);
@@ -13953,7 +14111,7 @@ ${req.code}
         if (callbacks.onerror) try { callbacks.onerror({ error: result.error }); } catch(e) {}
         if (result.downloadId) _downloadCallbacks.delete(result.downloadId);
       }
-    }).catch(e => {
+    })().catch(e => {
       if (callbacks.onerror) try { callbacks.onerror({ error: e.message || 'Download failed' }); } catch(ex) {}
     });
   }

@@ -814,6 +814,10 @@ ${req.code}
         password: details.password,
         context: details.context,
         anonymous: details.anonymous,
+        partitionKey: details.partitionKey,
+        cookiePartition: details.cookiePartition,
+        cookieStoreId: details.cookieStoreId,
+        cookieStore: details.cookieStore,
         // VM #2168 / TM noCache: bypass intermediate caches.
         // Accept both noCache (VM camelCase) and nocache (TM lowercase).
         noCache: details.noCache === true || details.nocache === true,
@@ -1167,24 +1171,83 @@ ${req.code}
   const _downloadCallbacks = new Map();
   const _DOWNLOAD_CALLBACKS_CAP = 200;
   let _downloadCallbacksEvicted = 0;
+  function _isDownloadBlobSource(value) {
+    return typeof Blob !== 'undefined' && value instanceof Blob;
+  }
+  function _downloadNameFromUrl(url) {
+    if (typeof url !== 'string' || !url) return '';
+    try {
+      const parsed = new URL(url, location.href);
+      if (parsed.protocol === 'data:' || parsed.protocol === 'blob:') return '';
+      const last = parsed.pathname.split('/').filter(Boolean).pop();
+      return last ? decodeURIComponent(last) : '';
+    } catch (e) {
+      return url.split(/[?#]/)[0].split('/').filter(Boolean).pop() || '';
+    }
+  }
+  function _safeDownloadMimeType(type) {
+    const value = typeof type === 'string' ? type.trim() : '';
+    const slash = value.indexOf('/');
+    return value
+      && slash > 0
+      && slash < value.length - 1
+      && !value.includes(String.fromCharCode(13))
+      && !value.includes(String.fromCharCode(10))
+      && !value.includes(',')
+      ? value
+      : 'application/octet-stream';
+  }
+  async function _downloadBlobToDataUrl(blob) {
+    const buffer = await blob.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    const chunk = 32768;
+    let binary = '';
+    for (let offset = 0; offset < bytes.length; offset += chunk) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(offset, offset + chunk));
+    }
+    const type = _safeDownloadMimeType(blob.type);
+    return 'data:' + type + ';base64,' + btoa(binary);
+  }
+  async function _normalizeDownloadDetails(details, nameArg) {
+    if (_isDownloadBlobSource(details)) {
+      const sourceName = (typeof File !== 'undefined' && details instanceof File) ? details.name : '';
+      return {
+        url: await _downloadBlobToDataUrl(details),
+        name: nameArg || sourceName || 'download',
+        sourceName
+      };
+    }
+    const opts = typeof details === 'string'
+      ? { url: details, name: nameArg || _downloadNameFromUrl(details) }
+      : { ...details };
+    if (_isDownloadBlobSource(opts.url)) {
+      const blob = opts.url;
+      const sourceName = (typeof File !== 'undefined' && blob instanceof File) ? blob.name : '';
+      opts.url = await _downloadBlobToDataUrl(blob);
+      opts.sourceName = opts.sourceName || sourceName;
+      opts.name = opts.name || nameArg || sourceName || 'download';
+    } else if (!opts.name) {
+      opts.name = nameArg || _downloadNameFromUrl(opts.url) || 'download';
+    }
+    return opts;
+  }
   function GM_download(details) {
     if (!hasGrant('GM_download') && !hasGrant('GM.download')) return;
-    let opts;
-    if (typeof details === 'string') {
-      opts = { url: details, name: arguments[1] || details.split('/').pop() };
-    } else {
-      opts = { ...details };
-    }
+    const nameArg = arguments[1];
     const callbacks = {
-      onload: opts.onload, onerror: opts.onerror,
-      onprogress: opts.onprogress, ontimeout: opts.ontimeout
+      onload: details && typeof details === 'object' ? details.onload : undefined,
+      onerror: details && typeof details === 'object' ? details.onerror : undefined,
+      onprogress: details && typeof details === 'object' ? details.onprogress : undefined,
+      ontimeout: details && typeof details === 'object' ? details.ontimeout : undefined
     };
-    delete opts.onload; delete opts.onerror;
-    delete opts.onprogress; delete opts.ontimeout;
-    opts.scriptId = scriptId;
-    opts.hasCallbacks = !!(callbacks.onload || callbacks.onerror || callbacks.onprogress || callbacks.ontimeout);
-    sendToBackground('GM_download', opts).then(result => {
-      if (result && result.downloadId) {
+    (async () => {
+      const opts = await _normalizeDownloadDetails(details, nameArg);
+      delete opts.onload; delete opts.onerror;
+      delete opts.onprogress; delete opts.ontimeout;
+      opts.scriptId = scriptId;
+      opts.hasCallbacks = !!(callbacks.onload || callbacks.onerror || callbacks.onprogress || callbacks.ontimeout);
+      const result = await sendToBackground('GM_download', opts);
+      if (result && result.downloadId && opts.hasCallbacks) {
         if (_downloadCallbacks.size >= _DOWNLOAD_CALLBACKS_CAP) {
           const oldest = _downloadCallbacks.keys().next().value;
           if (oldest !== undefined) _downloadCallbacks.delete(oldest);
@@ -1198,7 +1261,7 @@ ${req.code}
       if (result && result.error && callbacks.onerror) {
         try { callbacks.onerror({ error: result.error }); } catch(e) {}
       }
-    }).catch(e => {
+    })().catch(e => {
       if (callbacks.onerror) try { callbacks.onerror({ error: e.message || 'Download failed' }); } catch(ex) {}
     });
   }
