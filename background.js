@@ -21400,6 +21400,8 @@ async function reconcilePendingDownload(downloadId, tracker, now = Date.now()) {
     cleanupPendingDownload(id);
     return;
   }
+  _schedulePendingDownloadAlarms(id, tracker);
+  _schedulePendingDownloadTimer(id, tracker);
   if (!chrome?.downloads?.search) return;
   let items = [];
   try {
