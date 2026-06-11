@@ -31,6 +31,8 @@ describe('Microsoft Edge sideload smoke wiring', () => {
   });
 
   it('records Edge smoke evidence in the Edge readiness report and support matrix', () => {
+    expect(packageJson.scripts['support:matrix']).toContain('npm run build:edge:check');
+    expect(packageJson.scripts['support:matrix:check']).toContain('npm run build:edge:check');
     expect(edgeBuilder).toContain("browserSmokeCommand: 'npm run smoke:edge'");
     expect(edgeBuilder).toContain('browserSmokeEvidence: `edge-artifacts/edge-smoke-${version}.json`');
     expect(matrixGenerator).toContain('docs/audit/edge-smoke-${version}.json');
