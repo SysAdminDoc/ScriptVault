@@ -1162,6 +1162,28 @@ function _clearLocalSaveCoalescingForScript(scriptId) {
   }
 }
 
+function _getScriptOperationLocks() {
+  if (!self._toggleLocks) self._toggleLocks = new Map();
+  return self._toggleLocks;
+}
+
+async function _runExclusiveScriptOperation(scriptId, operation) {
+  if (!scriptId) return await operation();
+  const locks = _getScriptOperationLocks();
+  const previous = locks.get(scriptId) || Promise.resolve();
+  let operationPromise;
+  operationPromise = previous
+    .catch(() => {})
+    .then(operation)
+    .finally(() => {
+      if (locks.get(scriptId) === operationPromise) {
+        locks.delete(scriptId);
+      }
+    });
+  locks.set(scriptId, operationPromise);
+  return await operationPromise;
+}
+
 function _receiptLineCount(code) {
   if (!code) return 0;
   return code.split(/\r\n|\r|\n/).length;
@@ -5978,6 +6000,7 @@ async function handleMessage(message, sender) {
         if (parsed.error) return { error: parsed.error };
         
         const id = data.id || data.scriptId || generateId();
+        return await _runExclusiveScriptOperation(id, async () => {
         const existing = await ScriptStorage.get(id);
         
         const scriptSettings = { ...(existing?.settings || {}) };
@@ -6145,6 +6168,7 @@ async function handleMessage(message, sender) {
         
         // Return with metadata property for dashboard compatibility
         return { success: true, scriptId: id, script: { ...script, metadata: script.meta } };
+        });
       }
       
       case 'createScript': {
@@ -6286,11 +6310,9 @@ async function handleMessage(message, sender) {
         
       case 'toggleScript': {
         const scriptId = data.id || data.scriptId;
-        // Per-script chained lock to prevent rapid toggle race conditions
-        // Each toggle chains onto the previous one, ensuring serial execution
-        if (!self._toggleLocks) self._toggleLocks = new Map();
-        const prev = self._toggleLocks.get(scriptId) || Promise.resolve();
-        const togglePromise = prev.then(async () => {
+        // Per-script chained lock prevents toggle/save races from corrupting
+        // registration state when users act quickly from multiple surfaces.
+        return await _runExclusiveScriptOperation(scriptId, async () => {
           const script = await ScriptStorage.get(scriptId);
           if (!script) {
             return { error: 'Script not found' };
@@ -6332,14 +6354,7 @@ async function handleMessage(message, sender) {
         }).catch(e => {
           debugLog('Toggle error:', e);
           return { error: e?.message || 'Failed to update script' };
-        }).finally(() => {
-          // Clean up if this is still the latest promise (not superseded by a newer toggle)
-          if (self._toggleLocks.get(scriptId) === togglePromise) {
-            self._toggleLocks.delete(scriptId);
-          }
         });
-        self._toggleLocks.set(scriptId, togglePromise);
-        return await togglePromise;
       }
 
       case 'importScript': {

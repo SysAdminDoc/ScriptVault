@@ -45,14 +45,32 @@ describe('reregisterScript helper presence', () => {
   });
 
   it('toggle path (setScriptSettings) routes through reregisterScript', () => {
-    // Find the toggle block (the one with the _toggleLocks comment) and
-    // confirm it now calls reregisterScript instead of the unregister+
-    // register dance.
-    const start = bgCore.indexOf('self._toggleLocks');
+    // Find the toggle block and confirm it now calls reregisterScript instead
+    // of the unregister+register dance.
+    const start = bgCore.indexOf("case 'toggleScript'");
     expect(start).toBeGreaterThan(0);
-    // Walk forward ~1200 chars to capture the registration call site.
-    const window = bgCore.slice(start, start + 1200);
+    const end = bgCore.indexOf("case 'importScript'", start);
+    const window = bgCore.slice(start, end);
     expect(window).toMatch(/await reregisterScript\(script\)/);
+  });
+
+  it('saveScript and toggleScript share the per-script operation lock', () => {
+    expect(bgCore).toMatch(/async function _runExclusiveScriptOperation\(scriptId, operation\)/);
+    expect(bgCore).toContain('if (!self._toggleLocks) self._toggleLocks = new Map()');
+
+    const saveStart = bgCore.indexOf("case 'saveScript'");
+    const createStart = bgCore.indexOf("case 'createScript'");
+    const saveBlock = bgCore.slice(saveStart, createStart);
+    expect(saveBlock).toContain('return await _runExclusiveScriptOperation(id, async () => {');
+    expect(saveBlock.indexOf('ScriptStorage.get(id)')).toBeGreaterThan(saveBlock.indexOf('_runExclusiveScriptOperation'));
+    expect(saveBlock).toContain('await reregisterScript(script)');
+
+    const toggleStart = bgCore.indexOf("case 'toggleScript'");
+    const importStart = bgCore.indexOf("case 'importScript'");
+    const toggleBlock = bgCore.slice(toggleStart, importStart);
+    expect(toggleBlock).toContain('return await _runExclusiveScriptOperation(scriptId, async () => {');
+    expect(toggleBlock).toContain('await reregisterScript(script)');
+    expect(toggleBlock).not.toContain('const prev = self._toggleLocks.get(scriptId)');
   });
 
   it('registerScript honours useUpdate option in runtime', () => {
