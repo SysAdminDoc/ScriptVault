@@ -18,6 +18,32 @@ function compareVersions(v1, v2) {
   }
   if (preRelease1 && !preRelease2) return -1;
   if (!preRelease1 && preRelease2) return 1;
+  if (preRelease1 && preRelease2) {
+    const pre1 = v1.replace(/^[^-]*-/, '').split('.');
+    const pre2 = v2.replace(/^[^-]*-/, '').split('.');
+    for (let i = 0; i < Math.max(pre1.length, pre2.length); i++) {
+      const hasA = i < pre1.length;
+      const hasB = i < pre2.length;
+      if (!hasA && hasB) return -1;
+      if (hasA && !hasB) return 1;
+
+      const a = pre1[i] ?? '';
+      const b = pre2[i] ?? '';
+      const aNum = /^\d+$/.test(a) ? parseInt(a, 10) : NaN;
+      const bNum = /^\d+$/.test(b) ? parseInt(b, 10) : NaN;
+      if (!Number.isNaN(aNum) && !Number.isNaN(bNum)) {
+        if (aNum > bNum) return 1;
+        if (aNum < bNum) return -1;
+      } else if (!Number.isNaN(aNum)) {
+        return -1;
+      } else if (!Number.isNaN(bNum)) {
+        return 1;
+      } else {
+        if (a > b) return 1;
+        if (a < b) return -1;
+      }
+    }
+  }
   return 0;
 }
 
@@ -93,8 +119,24 @@ describe('compareVersions', () => {
     expect(compareVersions('1.2.0', '1.2.0-beta.1')).toBe(1);
   });
 
-  it('both pre-release with same numeric are equal', () => {
-    expect(compareVersions('1.2.0-alpha', '1.2.0-beta')).toBe(0);
+  it('orders pre-release identifiers lexicographically', () => {
+    expect(compareVersions('1.2.0-alpha', '1.2.0-beta')).toBe(-1);
+    expect(compareVersions('1.2.0-beta', '1.2.0-alpha')).toBe(1);
+  });
+
+  it('orders numeric pre-release identifiers numerically', () => {
+    expect(compareVersions('1.2.0-alpha.1', '1.2.0-alpha.2')).toBe(-1);
+    expect(compareVersions('1.2.0-alpha.10', '1.2.0-alpha.2')).toBe(1);
+  });
+
+  it('treats numeric pre-release identifiers as lower than non-numeric identifiers', () => {
+    expect(compareVersions('1.2.0-alpha.1', '1.2.0-alpha.beta')).toBe(-1);
+    expect(compareVersions('1.2.0-alpha.beta', '1.2.0-alpha.1')).toBe(1);
+  });
+
+  it('orders longer pre-release identifier sets after matching prefixes', () => {
+    expect(compareVersions('1.2.0-alpha', '1.2.0-alpha.1')).toBe(-1);
+    expect(compareVersions('1.2.0-alpha.1', '1.2.0-alpha')).toBe(1);
   });
 
   it('pre-release with higher numeric version still wins', () => {
