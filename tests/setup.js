@@ -166,7 +166,9 @@ globalThis.chrome = {
   },
   downloads: {
     download: vi.fn(),
-    onChanged: { addListener: vi.fn() },
+    search: vi.fn().mockResolvedValue([]),
+    cancel: vi.fn().mockResolvedValue(),
+    onChanged: { addListener: vi.fn(), removeListener: vi.fn() },
   },
   i18n: {
     getMessage: vi.fn((key) => ''),
