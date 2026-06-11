@@ -177,6 +177,10 @@ describe('Greasy Fork publish handoff preflight', () => {
     expect(submitFn).toContain('input.name = GREASY_FORK_PREFILL_CODE_FIELD');
     expect(submitFn).toContain('form.submit()');
     expect(submitFn).toContain("form.setAttribute('rel', 'noopener noreferrer')");
+    expect(submitFn).toContain('try {');
+    expect(submitFn).toContain("console.warn('[ScriptVault] Greasy Fork publish handoff failed:', error)");
+    expect(submitFn).toMatch(/catch \(error\) \{\s*form\.remove\(\);\s*console\.warn/);
+    expect(submitFn).toMatch(/catch \(error\) \{[\s\S]*return false;/);
     expect(previewFn).toContain('downloadGreasyForkPublishCode(preflight)');
     expect(previewFn).toContain('navigator.clipboard.writeText(preflight.code)');
     expect(previewFn).toContain('openGreasyForkSessionCheck()');

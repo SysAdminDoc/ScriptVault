@@ -7989,9 +7989,15 @@
         form.appendChild(input);
 
         document.body.appendChild(form);
-        form.submit();
-        setTimeout(() => form.remove(), 1000);
-        return true;
+        try {
+            form.submit();
+            setTimeout(() => form.remove(), 1000);
+            return true;
+        } catch (error) {
+            form.remove();
+            console.warn('[ScriptVault] Greasy Fork publish handoff failed:', error);
+            return false;
+        }
     }
 
     function downloadGreasyForkPublishCode(preflight) {
