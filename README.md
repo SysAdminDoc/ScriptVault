@@ -28,13 +28,11 @@
 
 ## Project Planning And Research
 
-See [ROADMAP.md](ROADMAP.md) for planned work.
+Project planning is kept in local-only markdown files in the working checkout.
 
-- [ROADMAP.md](ROADMAP.md) - single source of truth for planned work (active queue + research-driven additions + Round 14 history).
-- [RESEARCH_FEATURE_PLAN.md](RESEARCH_FEATURE_PLAN.md) - current comprehensive research-backed feature context; active checkboxes stay in ROADMAP.
-- [RESEARCH_REPORT.md](RESEARCH_REPORT.md) - research and planning map.
-- [COMPLETED.md](COMPLETED.md) - completed-work navigator.
-- [CHANGELOG.md](CHANGELOG.md) - shipped release ledger.
+- `ROADMAP.md` - single source of truth for incomplete planned work.
+- `RESEARCH.md` - consolidated research conclusions and evidence.
+- `CHANGELOG.md` - shipped release ledger.
 
 ## Features
 

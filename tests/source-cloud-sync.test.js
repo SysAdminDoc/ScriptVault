@@ -207,6 +207,102 @@ afterEach(() => {
 });
 
 describe('source cloud sync module', () => {
+  it('includes syncBaseCode in first-sync upload envelopes', async () => {
+    await chrome.storage.local.set({ syncTombstones: {} });
+
+    const harness = await loadFreshCloudSync(
+      [
+        {
+          id: 'script_base',
+          code: '// ==UserScript==\n// @name Base\n// ==/UserScript==\n// local edit',
+          enabled: true,
+          position: 0,
+          meta: { name: 'Base' },
+          settings: {},
+          syncBaseCode: '// ==UserScript==\n// @name Base\n// ==/UserScript==\n// base',
+          createdAt: 1,
+          updatedAt: 2,
+        },
+      ],
+      null,
+    );
+    const { CloudSync, getRemoteData } = harness;
+
+    await expect(CloudSync.sync()).resolves.toEqual({ success: true });
+
+    expect(getRemoteData().scripts).toEqual([
+      expect.objectContaining({
+        id: 'script_base',
+        code: '// ==UserScript==\n// @name Base\n// ==/UserScript==\n// local edit',
+        syncBaseCode: '// ==UserScript==\n// @name Base\n// ==/UserScript==\n// base',
+      }),
+    ]);
+  });
+
+  it('uploads post-merge script state and preserves the new sync base through a round trip', async () => {
+    await chrome.storage.local.set({ syncTombstones: {} });
+
+    const firstHarness = await loadFreshCloudSync(
+      [
+        {
+          id: 'script_roundtrip',
+          code: '// ==UserScript==\n// @name Round Trip\n// ==/UserScript==\n// local old',
+          enabled: true,
+          position: 0,
+          meta: { name: 'Round Trip' },
+          settings: {},
+          syncBaseCode: '// ==UserScript==\n// @name Round Trip\n// ==/UserScript==\n// base',
+          createdAt: 1,
+          updatedAt: 10,
+        },
+      ],
+      {
+        version: 1,
+        timestamp: 20,
+        scripts: [
+          {
+            id: 'script_roundtrip',
+            code: '// ==UserScript==\n// @name Round Trip\n// ==/UserScript==\n// remote merged',
+            enabled: true,
+            position: 0,
+            settings: {},
+            syncBaseCode: '// ==UserScript==\n// @name Round Trip\n// ==/UserScript==\n// base',
+            updatedAt: 20,
+          },
+        ],
+        tombstones: {},
+      },
+    );
+
+    await expect(firstHarness.CloudSync.sync()).resolves.toEqual({ success: true });
+    const uploadedAfterMerge = firstHarness.getRemoteData();
+    expect(uploadedAfterMerge.scripts).toEqual([
+      expect.objectContaining({
+        id: 'script_roundtrip',
+        code: '// ==UserScript==\n// @name Round Trip\n// ==/UserScript==\n// remote merged',
+        syncBaseCode: '// ==UserScript==\n// @name Round Trip\n// ==/UserScript==\n// remote merged',
+      }),
+    ]);
+
+    await chrome.storage.local.set({ syncTombstones: {} });
+    const secondHarness = await loadFreshCloudSync([], uploadedAfterMerge);
+
+    await expect(secondHarness.CloudSync.sync()).resolves.toEqual({ success: true });
+    expect(secondHarness.scriptState).toEqual([
+      expect.objectContaining({
+        id: 'script_roundtrip',
+        code: '// ==UserScript==\n// @name Round Trip\n// ==/UserScript==\n// remote merged',
+        syncBaseCode: '// ==UserScript==\n// @name Round Trip\n// ==/UserScript==\n// remote merged',
+      }),
+    ]);
+    expect(secondHarness.getRemoteData().scripts).toEqual([
+      expect.objectContaining({
+        id: 'script_roundtrip',
+        syncBaseCode: '// ==UserScript==\n// @name Round Trip\n// ==/UserScript==\n// remote merged',
+      }),
+    ]);
+  });
+
   it('does not resurrect a deleted script after local state is wiped and resynced from a remote tombstone', async () => {
     await chrome.storage.local.set({ syncTombstones: {} });
 

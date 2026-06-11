@@ -1494,7 +1494,8 @@ export const CloudSync = {
       enabled: s.enabled,
       position: s.position,
       settings: cloneSyncSafeScriptSettings(s.settings),
-      updatedAt: s.updatedAt
+      updatedAt: s.updatedAt,
+      syncBaseCode: s.syncBaseCode ?? null,
     }));
     const localValueBundleData = await buildValueBundlesForScripts(localSyncScripts);
     const localData: SyncEnvelope = {
@@ -1609,8 +1610,8 @@ export const CloudSync = {
         await updateBadgeIfAvailable();
       }
 
-      // Rebuild the upload envelope from current local state so value bundles
-      // reflect post-merge opt-ins and current GM storage.
+      // Rebuild the upload envelope from the current post-merge ScriptStorage
+      // state so remote devices receive merged code and the new sync base.
       const postMergeScripts = await ScriptStorage.getAll();
       const remoteValueApplyResult = await applyRemoteValueBundlesWhenLocalEmpty(
         remoteValueBundleSelection,
@@ -1659,7 +1660,11 @@ export const CloudSync = {
       };
       await provider.upload(await prepareSyncEnvelopeForRemoteUpload(uploadData, settings), settings);
     } else {
-      // First sync, just upload (include tombstones so remote gets deletion info)
+      // First sync, just upload (include tombstones and syncBaseCode)
+      localData.scripts = localData.scripts.map((s): SyncScript => ({
+        ...s,
+        syncBaseCode: s.syncBaseCode ?? null,
+      }));
       await provider.upload(await prepareSyncEnvelopeForRemoteUpload(localData, settings), settings);
     }
 

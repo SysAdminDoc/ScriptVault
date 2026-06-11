@@ -20561,7 +20561,8 @@ const CloudSync = {
       enabled: s.enabled,
       position: s.position,
       settings: cloneSyncSafeScriptSettings(s.settings),
-      updatedAt: s.updatedAt
+      updatedAt: s.updatedAt,
+      syncBaseCode: s.syncBaseCode ?? null
     }));
     const localValueBundleData = await buildValueBundlesForScripts(localSyncScripts);
     const localData = {
