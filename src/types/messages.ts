@@ -76,6 +76,13 @@ interface ToggleScript {
   enabled: boolean;
 }
 
+interface RunScriptNow {
+  action: 'runScriptNow';
+  scriptId?: string;
+  id?: string;
+  tabId?: number;
+}
+
 interface DuplicateScript {
   action: 'duplicateScript';
   id: string;
@@ -1367,7 +1374,7 @@ interface RenameScriptValue {
 export type BackgroundMessage =
   // Script management
   | GetScripts | GetScript | SaveScript | CreateScript | DeleteScript
-  | ToggleScript | DuplicateScript | SearchScripts | ReorderScripts
+  | ToggleScript | RunScriptNow | DuplicateScript | SearchScripts | ReorderScripts
   // Trash
   | GetTrash | RestoreFromTrash | EmptyTrash | PermanentlyDelete
   // Script values
@@ -1512,6 +1519,7 @@ export interface ResponseMap {
   createScript: SaveScriptResponse | ErrorResponse;
   deleteScript: SuccessResponse | ErrorResponse;
   toggleScript: SuccessResponse;
+  runScriptNow: SuccessOrError<{ mode: 'userScripts.execute' | 'scripting.executeScript' }>;
   duplicateScript: { success: true; script: Script } | ErrorResponse;
   searchScripts: { scripts: Script[] };
   reorderScripts: SuccessResponse;

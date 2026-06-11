@@ -1123,7 +1123,7 @@
         const isButton = button instanceof HTMLButtonElement;
         if (isButton && button.disabled) return null;
 
-        const originalLabel = isButton ? button.textContent : '';
+        const originalContent = isButton ? button.innerHTML : '';
         const previousDisabled = isButton ? button.disabled : false;
         const previousAriaBusy = isButton ? button.getAttribute('aria-busy') : null;
 
@@ -1148,7 +1148,7 @@
             } else {
                 button.setAttribute('aria-busy', previousAriaBusy);
             }
-            if (busyLabel) button.textContent = originalLabel;
+            if (busyLabel) button.innerHTML = originalContent;
         }
     }
 
@@ -1488,6 +1488,7 @@
         };
         elements.btnEditorSave = document.getElementById('btnEditorSave');
         elements.btnEditorSaveLabel = document.getElementById('btnEditorSaveLabel');
+        elements.btnEditorRunNow = document.getElementById('btnEditorRunNow');
         elements.btnEditorToggle = document.getElementById('btnEditorToggle');
         elements.btnEditorToggleLabel = document.getElementById('btnEditorToggleLabel');
         elements.btnEditorDuplicate = document.getElementById('btnEditorDuplicate');
@@ -7461,6 +7462,9 @@
                     <button type="button" class="action-icon" title="Edit" aria-label="Edit ${escapeHtml(name)}" data-action="edit" data-id="${scriptIdAttr}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                     </button>
+                    ${supportsOneShotRunNow() ? `<button type="button" class="action-icon" title="Run on this tab" aria-label="Run ${escapeHtml(name)} on this tab" data-action="runNow" data-id="${scriptIdAttr}">
+                        <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 5v14l11-7z"/></svg>
+                    </button>` : ''}
                     <button type="button" class="action-icon" title="Check for update (right-click: force update)" aria-label="Check for updates for ${escapeHtml(name)}" data-action="updateScript" data-id="${scriptIdAttr}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
                     </button>
@@ -7509,6 +7513,9 @@
         });
         tr.querySelector('.script-name-button')?.addEventListener('click', () => openEditorForScript(script.id));
         tr.querySelector('[data-action="edit"]')?.addEventListener('click', () => openEditorForScript(script.id));
+        tr.querySelector('[data-action="runNow"]')?.addEventListener('click', async e => {
+            await runButtonTask(e.currentTarget, () => runScriptOnceOnTab(script.id), { busyLabel: 'Running...' });
+        });
         tr.querySelector('[data-action="delete"]')?.addEventListener('click', async () => {
             const name = script.metadata?.name || script.id;
             if (await showConfirmModal(`Delete "${name}"?`, 'This action cannot be undone.')) {
@@ -9379,6 +9386,15 @@
             elements.btnEditorSaveLabel.textContent = saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Retry Save' : 'Save';
         }
 
+        if (elements.btnEditorRunNow) {
+            const runNowSupported = supportsOneShotRunNow();
+            elements.btnEditorRunNow.hidden = !runNowSupported;
+            elements.btnEditorRunNow.disabled = !runNowSupported || !script;
+            elements.btnEditorRunNow.title = runNowSupported
+                ? 'Run this script once on the active tab'
+                : 'Run on Tab requires Chrome 135 or newer';
+        }
+
         if (elements.btnEditorToggleLabel) {
             elements.btnEditorToggleLabel.textContent = script.enabled !== false ? 'Disable' : 'Enable';
         } else if (elements.btnEditorToggle) {
@@ -10440,6 +10456,31 @@
 
     function isBroadMatch(patterns) {
         return patterns.some(p => p === '<all_urls>' || p === '*://*/*' || p === 'http://*/*' || p === 'https://*/*' || /^\*:\/\/\*\//.test(p));
+    }
+
+    function supportsOneShotRunNow() {
+        if (state.runtimeDescriptor?.browserName === 'firefox') return false;
+        const version = parseInt(state.runtimeDescriptor?.browserVersion || '0', 10);
+        return !version || version >= 135;
+    }
+
+    function isRunnableTabUrl(url = '') {
+        try {
+            const protocol = new URL(url).protocol;
+            return protocol === 'http:' || protocol === 'https:' || protocol === 'file:';
+        } catch (_) {
+            return false;
+        }
+    }
+
+    async function getRunNowTargetTab() {
+        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (activeTab?.id && isRunnableTabUrl(activeTab.url)) return activeTab;
+
+        const tabs = await chrome.tabs.query({ currentWindow: true });
+        return tabs
+            .filter(tab => typeof tab.id === 'number' && isRunnableTabUrl(tab.url))
+            .sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0))[0] || null;
     }
 
     let _creatingScript = false;
@@ -12365,6 +12406,39 @@
         }
     }
 
+    async function runScriptOnceOnTab(scriptId = state.currentScriptId) {
+        if (!supportsOneShotRunNow()) {
+            showToast('Run on Tab requires Chrome 135 or newer', 'warning');
+            return false;
+        }
+
+        if (!scriptId) {
+            showToast('Open a script before running it on a tab', 'info');
+            return false;
+        }
+
+        const targetTab = await getRunNowTargetTab();
+        if (!targetTab?.id) {
+            showToast('Open a web page tab in this window, then run again', 'warning');
+            return false;
+        }
+
+        const result = await chrome.runtime.sendMessage({
+            action: 'runScriptNow',
+            scriptId,
+            tabId: targetTab.id
+        });
+
+        if (result?.success) {
+            const usedFallback = result.mode === 'scripting.executeScript';
+            showToast(usedFallback ? 'Script ran with fallback injection' : 'Script ran on this tab', 'success');
+            return true;
+        }
+
+        showToast(result?.error || 'Run failed', 'error');
+        return false;
+    }
+
     async function openTemplateManager() {
         await ensureEditorModulesLoaded();
         if (typeof TemplateManager === 'undefined') {
@@ -12752,6 +12826,9 @@
         });
         elements.tbtnPublishGreasyFork?.addEventListener('click', event => {
             runButtonTask(event.currentTarget, openGreasyForkPublishHandoff, { busyLabel: 'Preparing...' });
+        });
+        elements.btnEditorRunNow?.addEventListener('click', event => {
+            runButtonTask(event.currentTarget, () => runScriptOnceOnTab(), { busyLabel: 'Running...' });
         });
         elements.btnEditorToggle?.addEventListener('click', () => {
             const script = state.scripts.find(s => s.id === state.currentScriptId);
