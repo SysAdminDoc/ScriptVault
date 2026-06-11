@@ -721,19 +721,20 @@ async function prepareSyncEnvelopeForRemoteUpload(envelope, settings) {
 // onclose / onclick / onclose callbacks survive MV3 service-worker termination.
 // chrome.storage.session is in-memory but persists across SW restarts within
 // the browser session, which is exactly the GM_openInTab / GM_notification
-// callback lifetime.
+// / GM_download callback lifetime.
 // ============================================================================
 const SessionState = {
   _NC_KEY: 'sessionNotifCallbacks',
   _OTT_KEY: 'sessionOpenTabTrackers',
   _AWT_KEY: 'sessionAudioWatchedTabs',
+  _PD_KEY: 'sessionPendingDownloads',
   _hydrated: false,
   async hydrate() {
     if (this._hydrated) return;
     this._hydrated = true;
     if (!chrome?.storage?.session) return;
     try {
-      const data = await chrome.storage.session.get([this._NC_KEY, this._OTT_KEY, this._AWT_KEY]);
+      const data = await chrome.storage.session.get([this._NC_KEY, this._OTT_KEY, this._AWT_KEY, this._PD_KEY]);
       const nc = data[this._NC_KEY];
       if (nc && typeof nc === 'object') {
         if (!self._notifCallbacks) self._notifCallbacks = new Map();
@@ -749,6 +750,16 @@ const SessionState = {
         if (!self._audioWatchedTabs) self._audioWatchedTabs = new Set();
         for (const id of awt) self._audioWatchedTabs.add(id);
       }
+      const pd = data[this._PD_KEY];
+      if (pd && typeof pd === 'object') {
+        if (!self._pendingDownloads) self._pendingDownloads = new Map();
+        for (const [k, v] of Object.entries(pd)) {
+          const id = Number(k);
+          if (Number.isFinite(id) && v && typeof v === 'object') {
+            self._pendingDownloads.set(id, v);
+          }
+        }
+      }
     } catch (_) { /* session storage unavailable */ }
   },
   _persist(key, source) {
@@ -762,6 +773,7 @@ const SessionState = {
   persistNotifCallbacks() { this._persist(this._NC_KEY, self._notifCallbacks); },
   persistOpenTabTrackers() { this._persist(this._OTT_KEY, self._openTabTrackers); },
   persistAudioWatchedTabs() { this._persist(this._AWT_KEY, self._audioWatchedTabs); },
+  persistPendingDownloads() { this._persist(this._PD_KEY, self._pendingDownloads); },
 };
 self.SessionState = SessionState;
 
@@ -4775,6 +4787,197 @@ function _withTimeout(promise, ms, label) {
   ]);
 }
 
+const GM_DOWNLOAD_TIMEOUT_ALARM_PREFIX = 'gm_download_timeout_';
+const GM_DOWNLOAD_SAFETY_ALARM_PREFIX = 'gm_download_safety_';
+const GM_DOWNLOAD_TRACKING_TTL_MS = 5 * 60 * 1000;
+const GM_DOWNLOAD_PENDING_CAP = 500;
+
+function _normalizeDownloadId(downloadId) {
+  const id = Number(downloadId);
+  return Number.isFinite(id) && id > 0 ? id : null;
+}
+
+function _getPendingDownloads() {
+  if (!self._pendingDownloads) self._pendingDownloads = new Map();
+  return self._pendingDownloads;
+}
+
+function _persistPendingDownloads() {
+  SessionState.persistPendingDownloads();
+}
+
+function _clearPendingDownloadTimer(downloadId) {
+  const id = _normalizeDownloadId(downloadId);
+  if (id == null || !self._pendingDownloadTimers) return;
+  const timerId = self._pendingDownloadTimers.get(id);
+  if (timerId) clearTimeout(timerId);
+  self._pendingDownloadTimers.delete(id);
+}
+
+function _clearPendingDownloadAlarms(downloadId) {
+  const id = _normalizeDownloadId(downloadId);
+  if (id == null || !chrome?.alarms?.clear) return;
+  chrome.alarms.clear(`${GM_DOWNLOAD_TIMEOUT_ALARM_PREFIX}${id}`).catch(() => {});
+  chrome.alarms.clear(`${GM_DOWNLOAD_SAFETY_ALARM_PREFIX}${id}`).catch(() => {});
+}
+
+function cleanupPendingDownload(downloadId, { clearAlarms = true } = {}) {
+  const id = _normalizeDownloadId(downloadId);
+  if (id == null) return;
+  _getPendingDownloads().delete(id);
+  _clearPendingDownloadTimer(id);
+  if (clearAlarms) _clearPendingDownloadAlarms(id);
+  _persistPendingDownloads();
+}
+
+function _downloadAlarmWhen(timestamp) {
+  const value = Number(timestamp || 0);
+  return Number.isFinite(value) && value > Date.now() ? value : Date.now() + 1;
+}
+
+function _schedulePendingDownloadAlarms(downloadId, tracker) {
+  if (!chrome?.alarms?.create) return;
+  if (tracker.timeoutAt) {
+    chrome.alarms.create(`${GM_DOWNLOAD_TIMEOUT_ALARM_PREFIX}${downloadId}`, {
+      when: _downloadAlarmWhen(tracker.timeoutAt)
+    });
+  }
+  if (tracker.expiresAt) {
+    chrome.alarms.create(`${GM_DOWNLOAD_SAFETY_ALARM_PREFIX}${downloadId}`, {
+      when: _downloadAlarmWhen(tracker.expiresAt)
+    });
+  }
+}
+
+function _schedulePendingDownloadTimer(downloadId, tracker) {
+  if (!tracker.timeoutAt) return;
+  const delay = Math.max(0, Number(tracker.timeoutAt) - Date.now());
+  if (!self._pendingDownloadTimers) self._pendingDownloadTimers = new Map();
+  _clearPendingDownloadTimer(downloadId);
+  const timerId = setTimeout(() => {
+    handlePendingDownloadTimeoutAlarm(downloadId).catch(() => {});
+  }, delay);
+  self._pendingDownloadTimers.set(downloadId, timerId);
+}
+
+function trackPendingDownload(downloadId, tracker = {}) {
+  const id = _normalizeDownloadId(downloadId);
+  const tabId = Number(tracker.tabId);
+  if (id == null || !Number.isFinite(tabId)) return null;
+  const pending = _getPendingDownloads();
+  while (pending.size >= GM_DOWNLOAD_PENDING_CAP) {
+    const oldest = pending.keys().next().value;
+    if (oldest === undefined) break;
+    cleanupPendingDownload(oldest);
+  }
+  const now = Date.now();
+  const timeoutMs = Number(tracker.timeoutMs || 0);
+  const entry = {
+    tabId,
+    scriptId: String(tracker.scriptId || ''),
+    url: String(tracker.url || ''),
+    createdAt: now,
+    expiresAt: now + GM_DOWNLOAD_TRACKING_TTL_MS,
+    timeoutAt: Number.isFinite(timeoutMs) && timeoutMs > 0 ? now + timeoutMs : 0
+  };
+  pending.set(id, entry);
+  _schedulePendingDownloadAlarms(id, entry);
+  _schedulePendingDownloadTimer(id, entry);
+  _persistPendingDownloads();
+  return entry;
+}
+
+function sendPendingDownloadEvent(downloadId, tracker, type, eventData = {}) {
+  const id = _normalizeDownloadId(downloadId);
+  const tabId = Number(tracker?.tabId);
+  if (id == null || !Number.isFinite(tabId) || !tracker?.scriptId) return;
+  chrome.tabs.sendMessage(tabId, {
+    action: 'downloadEvent',
+    data: { downloadId: id, scriptId: tracker.scriptId, type, ...eventData }
+  }).catch(() => {});
+}
+
+function handlePendingDownloadDelta(delta = {}) {
+  const id = _normalizeDownloadId(delta.id);
+  if (id == null) return;
+  const tracker = _getPendingDownloads().get(id);
+  if (!tracker) return;
+  if (delta.state) {
+    if (delta.state.current === 'complete') {
+      sendPendingDownloadEvent(id, tracker, 'load', { url: tracker.url || '' });
+      cleanupPendingDownload(id);
+      return;
+    }
+    if (delta.state.current === 'interrupted') {
+      sendPendingDownloadEvent(id, tracker, 'error', { error: delta.error?.current || 'Download interrupted' });
+      cleanupPendingDownload(id);
+      return;
+    }
+  }
+  if (delta.bytesReceived) {
+    sendPendingDownloadEvent(id, tracker, 'progress', {
+      loaded: delta.bytesReceived.current,
+      total: delta.totalBytes?.current || 0
+    });
+  }
+}
+
+async function handlePendingDownloadTimeoutAlarm(downloadId) {
+  const id = _normalizeDownloadId(downloadId);
+  if (id == null) return;
+  const tracker = _getPendingDownloads().get(id);
+  if (!tracker) return;
+  try { await chrome.downloads.cancel(id); } catch (_) {}
+  sendPendingDownloadEvent(id, tracker, 'timeout');
+  cleanupPendingDownload(id);
+}
+
+async function reconcilePendingDownload(downloadId, tracker, now = Date.now()) {
+  const id = _normalizeDownloadId(downloadId);
+  if (id == null || !tracker) return;
+  if (tracker.timeoutAt && Number(tracker.timeoutAt) <= now) {
+    await handlePendingDownloadTimeoutAlarm(id);
+    return;
+  }
+  if (tracker.expiresAt && Number(tracker.expiresAt) <= now) {
+    cleanupPendingDownload(id);
+    return;
+  }
+  if (!chrome?.downloads?.search) return;
+  let items = [];
+  try {
+    items = await chrome.downloads.search({ id });
+  } catch (_) {
+    return;
+  }
+  const item = Array.isArray(items) ? items[0] : null;
+  if (!item) {
+    cleanupPendingDownload(id);
+    return;
+  }
+  if (item.state === 'complete') {
+    sendPendingDownloadEvent(id, tracker, 'load', { url: tracker.url || item.url || '' });
+    cleanupPendingDownload(id);
+  } else if (item.state === 'interrupted') {
+    sendPendingDownloadEvent(id, tracker, 'error', { error: item.error || 'Download interrupted' });
+    cleanupPendingDownload(id);
+  } else if (typeof item.bytesReceived === 'number') {
+    sendPendingDownloadEvent(id, tracker, 'progress', {
+      loaded: item.bytesReceived,
+      total: item.totalBytes || 0
+    });
+  }
+}
+
+async function reconcilePendingDownloads(reason = 'startup') {
+  const pending = _getPendingDownloads();
+  if (!pending.size) return;
+  const now = Date.now();
+  for (const [downloadId, tracker] of [...pending.entries()]) {
+    await reconcilePendingDownload(downloadId, tracker, now);
+  }
+}
+
 // Stream-read a fetch Response body up to `maxBytes`, throwing if exceeded.
 //
 // The naive pattern `await response.text(); if (text.length > N) throw` buffers
@@ -7949,52 +8152,18 @@ async function handleMessage(message, sender) {
           };
           const downloadId = await chrome.downloads.download(downloadOpts);
           const tabId = sender.tab?.id;
-          // Track download for event callbacks
+          // Track download callbacks in chrome.storage.session so terminal
+          // events can be reconciled after MV3 service-worker restart.
           if (tabId && data.hasCallbacks) {
-            const sendDlEvent = (type, eventData = {}) => {
-              chrome.tabs.sendMessage(tabId, {
-                action: 'downloadEvent',
-                data: { downloadId, scriptId: data.scriptId, type, ...eventData }
-              }).catch(() => {});
-            };
-            let dlTimeoutId = null;
-            let dlSafetyId = null;
-            // Remove listener and clear all associated timers
-            const cleanupDlListener = () => {
-              chrome.downloads.onChanged.removeListener(dlListener);
-              if (dlTimeoutId) clearTimeout(dlTimeoutId);
-              if (dlSafetyId) clearTimeout(dlSafetyId);
-            };
-            // Monitor download state changes
-            const dlListener = (delta) => {
-              if (delta.id !== downloadId) return;
-              if (delta.state) {
-                if (delta.state.current === 'complete') {
-                  sendDlEvent('load', { url: data.url });
-                  cleanupDlListener();
-                } else if (delta.state.current === 'interrupted') {
-                  sendDlEvent('error', { error: delta.error?.current || 'Download interrupted' });
-                  cleanupDlListener();
-                }
-              }
-              if (delta.bytesReceived) {
-                sendDlEvent('progress', {
-                  loaded: delta.bytesReceived.current,
-                  total: delta.totalBytes?.current || 0
-                });
-              }
-            };
-            chrome.downloads.onChanged.addListener(dlListener);
-            // Timeout
-            if (data.timeout) {
-              dlTimeoutId = setTimeout(() => {
-                chrome.downloads.cancel(downloadId).catch(() => {});
-                sendDlEvent('timeout');
-                cleanupDlListener();
-              }, data.timeout);
+            const tracker = trackPendingDownload(downloadId, {
+              tabId,
+              scriptId: data.scriptId,
+              url: data.url,
+              timeoutMs: data.timeout
+            });
+            if (tracker) {
+              await reconcilePendingDownload(downloadId, tracker, Date.now());
             }
-            // Safety: remove listener after 5 minutes max to prevent leaks
-            dlSafetyId = setTimeout(cleanupDlListener, 300000);
           }
           return { success: true, downloadId };
         } catch (e) {
@@ -9588,6 +9757,18 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     return;
   }
 
+  if (alarm.name.startsWith(GM_DOWNLOAD_TIMEOUT_ALARM_PREFIX)) {
+    const downloadId = alarm.name.slice(GM_DOWNLOAD_TIMEOUT_ALARM_PREFIX.length);
+    await handlePendingDownloadTimeoutAlarm(downloadId);
+    return;
+  }
+
+  if (alarm.name.startsWith(GM_DOWNLOAD_SAFETY_ALARM_PREFIX)) {
+    const downloadId = alarm.name.slice(GM_DOWNLOAD_SAFETY_ALARM_PREFIX.length);
+    cleanupPendingDownload(downloadId, { clearAlarms: false });
+    return;
+  }
+
   // Handle @crontab script execution alarms (independent of the update/sync mutex)
   if (alarm.name.startsWith('crontab_')) {
     const scriptId = alarm.name.slice('crontab_'.length);
@@ -9975,6 +10156,13 @@ if (chrome.permissions?.onRemoved?.addListener) {
   });
 }
 
+if (chrome.downloads?.onChanged?.addListener) {
+  chrome.downloads.onChanged.addListener(async (delta) => {
+    try { await ensureInitialized(); } catch (_) { /* logged in init() */ }
+    handlePendingDownloadDelta(delta);
+  });
+}
+
 // GM_openInTab onclose: fire callback when tracked tab closes
 chrome.tabs.onRemoved.addListener(async (tabId) => {
   try { await ensureInitialized(); } catch (_) { /* logged in init() */ }
@@ -10345,9 +10533,10 @@ async function init() {
   await SettingsManager.init();
 
   // Rehydrate ephemeral runtime maps (notification callbacks, opened-tab
-  // trackers, audio-watched tabs) from chrome.storage.session so callbacks
-  // registered before the SW was killed still fire after wake.
+  // trackers, download callbacks, audio-watched tabs) from chrome.storage.session
+  // so callbacks registered before the SW was killed still fire after wake.
   await SessionState.hydrate();
+  await reconcilePendingDownloads('startup');
 
   // v2.0: Run migration BEFORE ScriptStorage.init() so that any migration-driven
   // rewrites of `userscripts` storage are visible to the in-memory cache. Running
