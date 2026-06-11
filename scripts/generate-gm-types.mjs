@@ -86,6 +86,10 @@ interface GMXmlhttpRequestDetails<T = unknown> {
   user?: string;
   password?: string;
   context?: unknown;
+  partitionKey?: GMCookiePartitionKey;
+  cookiePartition?: GMCookiePartitionKey;
+  cookieStoreId?: string;
+  cookieStore?: string;
   upload?: GMXmlhttpRequestUploadHandlers<T>;
   onloadstart?: (response: GMXmlhttpRequestResponse<T>) => void;
   onload?: (response: GMXmlhttpRequestResponse<T>) => void;
@@ -106,11 +110,20 @@ interface GMXmlhttpRequestPromise<T = unknown> extends Promise<GMXmlhttpRequestR
 }
 
 interface GMDownloadDetails {
-  url: string;
+  url: string | Blob | File;
   name?: string;
   saveAs?: boolean;
   conflictAction?: 'uniquify' | 'overwrite' | 'prompt';
   timeout?: number;
+  headers?: Record<string, string>;
+  anonymous?: boolean;
+  noCache?: boolean;
+  nocache?: boolean;
+  redirect?: 'follow' | 'error' | 'manual';
+  partitionKey?: GMCookiePartitionKey;
+  cookiePartition?: GMCookiePartitionKey;
+  cookieStoreId?: string;
+  cookieStore?: string;
   onload?: (response?: { url?: string }) => void;
   onerror?: (error?: { error?: string }) => void;
   onprogress?: (event?: { loaded?: number; total?: number }) => void;
@@ -302,7 +315,7 @@ interface GMAsyncApi {
   setClipboard(data: string, type?: string): Promise<void>;
   openInTab(url: string, options?: boolean | GMOpenInTabOptions): Promise<GMTabHandle | null>;
   focusTab(): Promise<void>;
-  download(details: string | GMDownloadDetails, name?: string): Promise<void>;
+  download(details: string | Blob | File | GMDownloadDetails, name?: string): Promise<void>;
   log(...args: unknown[]): Promise<void>;
   getResourceText(name: string): Promise<string | null>;
   getResourceUrl(name: string, isBlobUrl?: boolean): Promise<string | null>;
@@ -353,7 +366,7 @@ declare function GM_notification(
 declare function GM_updateNotification(notificationId: string, details: GMNotificationDetails): void;
 declare function GM_closeNotification(notificationId: string): void;
 declare function GM_openInTab(url: string, options?: boolean | GMOpenInTabOptions): GMTabHandle | null;
-declare function GM_download(details: string | GMDownloadDetails, name?: string): void;
+declare function GM_download(details: string | Blob | File | GMDownloadDetails, name?: string): void;
 declare function GM_log(...args: unknown[]): void;
 declare function GM_registerMenuCommand(caption: string, commandFunc: () => void, options?: string | GMMenuCommandOptions): string | null;
 declare function GM_unregisterMenuCommand(commandId: string): void;

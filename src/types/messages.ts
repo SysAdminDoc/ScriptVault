@@ -882,6 +882,10 @@ interface GMXmlhttpRequest {
   responseType?: string;
   timeout?: number;
   anonymous?: boolean;
+  partitionKey?: chrome.cookies.CookiePartitionKey;
+  cookiePartition?: chrome.cookies.CookiePartitionKey;
+  cookieStoreId?: string;
+  cookieStore?: string;
 }
 
 interface GMXmlhttpRequestAbort {
@@ -896,6 +900,16 @@ interface GMDownload {
   saveAs?: boolean;
   conflictAction?: string;
   timeout?: number;
+  headers?: Record<string, string>;
+  anonymous?: boolean;
+  noCache?: boolean;
+  nocache?: boolean;
+  redirect?: string;
+  partitionKey?: chrome.cookies.CookiePartitionKey;
+  cookiePartition?: chrome.cookies.CookiePartitionKey;
+  cookieStoreId?: string;
+  cookieStore?: string;
+  sourceName?: string;
   hasCallbacks?: boolean;
   scriptId?: string;
 }
