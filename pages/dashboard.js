@@ -163,6 +163,15 @@
         experimental: 'security',
         reset: 'recovery'
     };
+    const DASHBOARD_SCHEMA_DRIVEN_SETTING_SECTIONS = Object.freeze({
+        actionMenu: Object.freeze([
+            { key: 'hideDisabledPopup', elementId: 'settingsHideDisabledPopup', property: 'checked', fallback: false, event: 'change' },
+            { key: 'popupColumns', elementId: 'settingsPopupColumns', property: 'value', fallback: '1', event: 'change' },
+            { key: 'scriptOrder', elementId: 'settingsScriptOrder', property: 'value', fallback: 'auto', event: 'change' },
+            { key: 'badgeInfo', elementId: 'settingsBadgeInfo', property: 'value', fallback: 'running', event: 'change' },
+            { key: 'badgeColor', elementId: 'settingsBadgeColor', property: 'value', fallback: '#22c55e', event: 'blur', previewElementId: 'badgeColorPreview' }
+        ])
+    });
     const UTILITIES_SECTION_GROUPS = {
         general: 'backup',
         cloud: 'cloud',
@@ -3131,16 +3140,7 @@
         if (elements.settingsEnableTags) elements.settingsEnableTags.checked = s.enableTags || false;
         
         // Action Menu
-        if (elements.settingsHideDisabledPopup) elements.settingsHideDisabledPopup.checked = s.hideDisabledPopup || false;
-        if (elements.settingsPopupColumns) elements.settingsPopupColumns.value = s.popupColumns || '1';
-        if (elements.settingsScriptOrder) elements.settingsScriptOrder.value = s.scriptOrder || 'auto';
-        if (elements.settingsBadgeInfo) elements.settingsBadgeInfo.value = s.badgeInfo || 'running';
-        if (elements.settingsBadgeColor) {
-            elements.settingsBadgeColor.value = s.badgeColor || '#ee3131';
-            if (elements.badgeColorPreview) {
-                elements.badgeColorPreview.style.backgroundColor = s.badgeColor || '#ee3131';
-            }
-        }
+        applySchemaDrivenSettingsSection('actionMenu', s);
         
         // Context Menu
         if (elements.settingsEnableContextMenu) elements.settingsEnableContextMenu.checked = s.enableContextMenu !== false;
@@ -3265,6 +3265,47 @@
             customStyle.remove();
         }
         updateSupportSnapshotSummary();
+    }
+
+    function getSchemaDrivenSettingEntries(sectionName) {
+        return DASHBOARD_SCHEMA_DRIVEN_SETTING_SECTIONS[sectionName] || [];
+    }
+
+    function getSchemaDrivenSettingValue(settings, entry) {
+        if (Object.prototype.hasOwnProperty.call(settings || {}, entry.key)) {
+            return settings[entry.key];
+        }
+        return entry.fallback;
+    }
+
+    function applySchemaDrivenSettingsSection(sectionName, settings) {
+        for (const entry of getSchemaDrivenSettingEntries(sectionName)) {
+            const input = elements[entry.elementId];
+            if (!input) continue;
+            const value = getSchemaDrivenSettingValue(settings, entry);
+            if (entry.property === 'checked') {
+                input.checked = value === true;
+            } else {
+                input.value = String(value ?? '');
+            }
+            if (entry.previewElementId && elements[entry.previewElementId]) {
+                elements[entry.previewElementId].style.backgroundColor = String(value ?? entry.fallback ?? '');
+            }
+        }
+    }
+
+    function getSchemaDrivenInputValue(entry, input) {
+        return entry.property === 'checked' ? !!input.checked : input.value;
+    }
+
+    function bindSchemaDrivenSettingsSection(sectionName) {
+        for (const entry of getSchemaDrivenSettingEntries(sectionName)) {
+            const input = elements[entry.elementId];
+            if (!input || !entry.event) continue;
+            input.addEventListener(entry.event, event => {
+                saveSetting(entry.key, getSchemaDrivenInputValue(entry, event.target));
+            });
+        }
     }
 
     function getSettingsInputForKey(key) {
@@ -13216,6 +13257,7 @@
         });
 
         // Settings listeners - comprehensive settings map
+        bindSchemaDrivenSettingsSection('actionMenu');
         const settingMap = {
             // General
             settingsConfigMode: ['configMode', 'value'],
@@ -13228,12 +13270,6 @@
             
             // Tags
             settingsEnableTags: ['enableTags', 'checked'],
-            
-            // Action Menu
-            settingsHideDisabledPopup: ['hideDisabledPopup', 'checked'],
-            settingsPopupColumns: ['popupColumns', 'value'],
-            settingsScriptOrder: ['scriptOrder', 'value'],
-            settingsBadgeInfo: ['badgeInfo', 'value'],
             
             // Context Menu
             settingsEnableContextMenu: ['enableContextMenu', 'checked'],
@@ -13336,9 +13372,6 @@
                 elements.badgeColorPreview.style.backgroundColor = e.target.value;
             }
         });
-        elements.settingsBadgeColor?.addEventListener('blur', e => {
-            saveSetting('badgeColor', e.target.value);
-        });
 
         // Sync Type with provider toggle
         elements.settingsSyncType?.addEventListener('change', e => {
@@ -13388,7 +13421,7 @@
         
         elements.btnSaveActionMenu?.addEventListener('click', async event => {
             await runButtonTask(event.currentTarget, async () => {
-                await saveSettingOrThrow('badgeColor', elements.settingsBadgeColor?.value || '#ee3131');
+                await saveSettingOrThrow('badgeColor', elements.settingsBadgeColor?.value || '#22c55e');
                 showToast('Action menu settings saved', 'success');
             }, { busyLabel: 'Saving…', errorMessage: 'Failed to save action menu settings' });
         });

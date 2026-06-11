@@ -298,6 +298,127 @@ function validateDashboardMetadata(metadata, dashboardHtml) {
   return errors;
 }
 
+function parseDashboardSettingFallback(raw) {
+  const value = String(raw || '').trim();
+  if (/^['"][\s\S]*['"]$/.test(value)) return value.slice(1, -1);
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  if (/^-?\d+(?:\.\d+)?$/.test(value)) return Number(value);
+  return { unsupportedLiteral: value };
+}
+
+function parseDashboardSchemaDrivenSections(source) {
+  const sections = new Map();
+  const errors = [];
+  if (!source.includes('DASHBOARD_SCHEMA_DRIVEN_SETTING_SECTIONS')) {
+    return { sections, errors };
+  }
+
+  const declaration = source.match(/const DASHBOARD_SCHEMA_DRIVEN_SETTING_SECTIONS = Object\.freeze\(\{([\s\S]*?)\n\s*\}\);/);
+  if (!declaration) {
+    return {
+      sections,
+      errors: ['Dashboard schema-driven setting sections could not be parsed'],
+    };
+  }
+
+  for (const sectionMatch of declaration[1].matchAll(/([A-Za-z_$][\w$]*):\s*Object\.freeze\(\[([\s\S]*?)\]\)/g)) {
+    const sectionName = sectionMatch[1];
+    const entriesSource = sectionMatch[2];
+    const entries = [];
+    const entryPattern = /\{\s*key:\s*'([^']+)'\s*,\s*elementId:\s*'([^']+)'\s*,\s*property:\s*'([^']+)'\s*,\s*fallback:\s*([^,}]+)\s*,\s*event:\s*'([^']+)'(?:\s*,\s*previewElementId:\s*'([^']+)')?\s*\}/g;
+    for (const entryMatch of entriesSource.matchAll(entryPattern)) {
+      entries.push({
+        key: entryMatch[1],
+        elementId: entryMatch[2],
+        property: entryMatch[3],
+        fallback: parseDashboardSettingFallback(entryMatch[4]),
+        event: entryMatch[5],
+        previewElementId: entryMatch[6] || '',
+      });
+    }
+
+    const unmatchedEntry = entriesSource.replace(entryPattern, '').includes('{');
+    if (unmatchedEntry) {
+      errors.push(`Dashboard schema-driven section "${sectionName}" contains an unparsable setting entry`);
+    }
+    if (entries.length === 0) {
+      errors.push(`Dashboard schema-driven section "${sectionName}" does not declare any setting entries`);
+    }
+    sections.set(sectionName, entries);
+  }
+
+  if (sections.size === 0) {
+    errors.push('Dashboard schema-driven setting sections declaration does not contain any sections');
+  }
+
+  return { sections, errors };
+}
+
+function expectedDashboardPropertyForControl(control) {
+  return control === 'checkbox' ? 'checked' : 'value';
+}
+
+function validateDashboardSchemaDrivenSections(metadata, dashboardHtml, dashboardSource) {
+  const errors = [];
+  const { sections, errors: parseErrors } = parseDashboardSchemaDrivenSections(dashboardSource);
+  errors.push(...parseErrors);
+
+  for (const [sectionName, entries] of sections.entries()) {
+    const seenKeys = new Set();
+    for (const entry of entries) {
+      if (seenKeys.has(entry.key)) {
+        errors.push(`Dashboard schema-driven section "${sectionName}" duplicates setting "${entry.key}"`);
+        continue;
+      }
+      seenKeys.add(entry.key);
+
+      const schemaEntry = metadata[entry.key];
+      if (!schemaEntry) {
+        errors.push(`Dashboard schema-driven setting "${entry.key}" is missing settings-schema metadata`);
+        continue;
+      }
+      if (schemaEntry.elementId !== entry.elementId) {
+        errors.push(`Dashboard schema-driven setting "${entry.key}" elementId "${entry.elementId}" does not match settings-schema metadata`);
+      }
+      const expectedProperty = expectedDashboardPropertyForControl(schemaEntry.control);
+      if (entry.property !== expectedProperty) {
+        errors.push(`Dashboard schema-driven setting "${entry.key}" property "${entry.property}" should be "${expectedProperty}" for ${schemaEntry.control} controls`);
+      }
+      if (!['blur', 'change'].includes(entry.event)) {
+        errors.push(`Dashboard schema-driven setting "${entry.key}" event "${entry.event}" is not supported`);
+      }
+      if (entry.fallback && typeof entry.fallback === 'object' && entry.fallback.unsupportedLiteral) {
+        errors.push(`Dashboard schema-driven setting "${entry.key}" uses unsupported fallback literal "${entry.fallback.unsupportedLiteral}"`);
+      }
+      if (Object.prototype.hasOwnProperty.call(schemaEntry, 'default')) {
+        const expectedFallback = schemaEntry.default;
+        if (JSON.stringify(entry.fallback) !== JSON.stringify(expectedFallback)) {
+          errors.push(`Dashboard schema-driven setting "${entry.key}" fallback does not match settings-schema default`);
+        }
+      }
+      if (schemaEntry.control === 'select') {
+        const values = new Set((schemaEntry.options || []).map(option => String(option.value)));
+        if (!values.has(String(entry.fallback))) {
+          errors.push(`Dashboard schema-driven setting "${entry.key}" fallback is not a listed schema option`);
+        }
+      }
+      const element = findDashboardElement(dashboardHtml, entry.elementId);
+      if (!element) {
+        errors.push(`Dashboard schema-driven setting "${entry.key}" elementId "${entry.elementId}" was not found in pages/dashboard.html`);
+      }
+      if (entry.previewElementId && !findDashboardElement(dashboardHtml, entry.previewElementId)) {
+        errors.push(`Dashboard schema-driven setting "${entry.key}" previewElementId "${entry.previewElementId}" was not found in pages/dashboard.html`);
+      }
+    }
+  }
+
+  return {
+    errors,
+    count: [...sections.values()].reduce((sum, entries) => sum + entries.length, 0),
+  };
+}
+
 export function analyzeSettingsSchema({ rootDir = process.cwd() } = {}) {
   const paths = {
     defaults: resolve(rootDir, 'src/config/settings-defaults.json'),
@@ -324,7 +445,15 @@ export function analyzeSettingsSchema({ rootDir = process.cwd() } = {}) {
   const defaults = readJson(paths.defaults);
   const schema = readJson(paths.schema);
   const typeKeys = extractSettingsTypeKeys(readFileSync(paths.types, 'utf8'));
-  const dashboardSaveKeys = extractDashboardSaveKeys(readFileSync(paths.dashboard, 'utf8'));
+  const dashboardSource = readFileSync(paths.dashboard, 'utf8');
+  const { sections: schemaDrivenDashboardSections } = parseDashboardSchemaDrivenSections(dashboardSource);
+  const schemaDrivenDashboardKeys = [...schemaDrivenDashboardSections.values()]
+    .flat()
+    .map(entry => entry.key);
+  const dashboardSaveKeys = [...new Set([
+    ...extractDashboardSaveKeys(dashboardSource),
+    ...schemaDrivenDashboardKeys,
+  ])].sort();
   const dashboardHtml = readFileSync(paths.dashboardHtml, 'utf8');
   const defaultKeys = Object.keys(defaults).sort();
   const { classified, errors: classificationErrors } = buildClassificationMap(schema);
@@ -345,6 +474,8 @@ export function analyzeSettingsSchema({ rootDir = process.cwd() } = {}) {
   const { metadata, errors: metadataErrors } = validateMetadata(schema, classified, defaultKeys, defaults, dashboardSaveKeys);
   errors.push(...metadataErrors);
   errors.push(...validateDashboardMetadata(metadata, dashboardHtml));
+  const schemaDrivenSections = validateDashboardSchemaDrivenSections(metadata, dashboardHtml, dashboardSource);
+  errors.push(...schemaDrivenSections.errors);
 
   return {
     ok: errors.length === 0,
@@ -355,6 +486,7 @@ export function analyzeSettingsSchema({ rootDir = process.cwd() } = {}) {
       dashboardSaveKeys: dashboardSaveKeys.length,
       classified: classified.size,
       metadata: Object.keys(metadata).length,
+      schemaDrivenSettings: schemaDrivenSections.count,
     },
     defaultKeys,
     typeKeys,
@@ -363,7 +495,7 @@ export function analyzeSettingsSchema({ rootDir = process.cwd() } = {}) {
 }
 
 export function formatSettingsSchemaReport(report) {
-  const summary = `${report.counts.defaults} defaults, ${report.counts.typeKeys} typed keys, ${report.counts.dashboardSaveKeys} dashboard-save keys, ${report.counts.classified} classified keys, ${report.counts.metadata} metadata entries`;
+  const summary = `${report.counts.defaults} defaults, ${report.counts.typeKeys} typed keys, ${report.counts.dashboardSaveKeys} dashboard-save keys, ${report.counts.classified} classified keys, ${report.counts.metadata} metadata entries, ${report.counts.schemaDrivenSettings || 0} schema-driven dashboard settings`;
   if (report.ok) {
     return `[settings-schema] OK: ${summary}.`;
   }

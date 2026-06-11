@@ -595,7 +595,10 @@ describe("dashboard accessibility markup", () => {
     expect(dashboardJs).toMatch(/case 'blacklistSource':\s*return validateSelectOptionValue\('blacklistSource', value, 'blacklist source mode'\)/);
     expect(dashboardJs).toMatch(/case 'downloadMode':\s*return validateSelectOptionValue\('downloadMode', value, 'download mode'\)/);
     expect(dashboardJs).toMatch(/settingsBlockSeverity: \['blockSeverity', 'value'\]/);
-    expect(dashboardJs).toMatch(/settingsPopupColumns: \['popupColumns', 'value'\]/);
+    expect(dashboardJs).toMatch(/const DASHBOARD_SCHEMA_DRIVEN_SETTING_SECTIONS = Object\.freeze/);
+    expect(dashboardJs).toMatch(/actionMenu: Object\.freeze/);
+    expect(dashboardJs).toMatch(/function bindSchemaDrivenSettingsSection/);
+    expect(dashboardJs).toMatch(/bindSchemaDrivenSettingsSection\('actionMenu'\)/);
     expect(dashboardJs).toContain("Use an http or https URL.");
     expect(dashboardJs).toContain("WebDAV URL is required.");
     expect(dashboardJs).toContain("label: 'Sync encryption passphrase'");
