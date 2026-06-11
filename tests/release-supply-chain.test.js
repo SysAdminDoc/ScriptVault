@@ -1,0 +1,102 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { vi } from 'vitest';
+import { verifyReleaseTag } from '../scripts/check-release-artifacts.mjs';
+
+const packageJson = JSON.parse(readFileSync(resolve(process.cwd(), 'package.json'), 'utf8'));
+const packageLock = JSON.parse(readFileSync(resolve(process.cwd(), 'package-lock.json'), 'utf8'));
+const cwsCheck = readFileSync(resolve(process.cwd(), 'scripts/check-cws-publish-tooling.mjs'), 'utf8');
+const releaseCheck = readFileSync(resolve(process.cwd(), 'scripts/check-release-artifacts.mjs'), 'utf8');
+const reproducibleBuildCheck = readFileSync(resolve(process.cwd(), 'scripts/check-reproducible-build.mjs'), 'utf8');
+const ciWorkflow = readFileSync(resolve(process.cwd(), '.github/workflows/ci.yml'), 'utf8');
+
+function makeTagVerifierFailure(stderr) {
+  const error = new Error('git tag verification failed');
+  error.stderr = stderr;
+  return error;
+}
+
+function createGitExecForTagVerification(stderr) {
+  return vi.fn((_command, args) => {
+    if (args[0] === 'rev-parse') return '';
+    if (args[0] === 'tag' && args[1] === '--verify') throw makeTagVerifierFailure(stderr);
+    throw new Error(`unexpected git call: ${args.join(' ')}`);
+  });
+}
+
+describe('release supply-chain gates', () => {
+  it('pins the CWS publish CLI to an exact reviewed tarball', () => {
+    const lockRoot = packageLock.packages[''].devDependencies['chrome-webstore-upload-cli'];
+    const lockPackage = packageLock.packages['node_modules/chrome-webstore-upload-cli'];
+
+    expect(packageJson.devDependencies['chrome-webstore-upload-cli']).toBe('4.0.0');
+    expect(lockRoot).toBe('4.0.0');
+    expect(lockPackage.version).toBe('4.0.0');
+    expect(lockPackage.integrity).toBe('sha512-6MjMTLeGswORVNMS/Wa40s0HHWJdQG7MX1hVRzpg5RaqyjoFWp/tdqgHANTcwSPftT9HVOZOibKvd+k2XOvQCg==');
+  });
+
+  it('keeps CWS tooling checks tied to the exact version and lock integrity', () => {
+    expect(cwsCheck).toContain("const REQUIRED_CWS_CLI_VERSION = '4.0.0'");
+    expect(cwsCheck).toContain('const REQUIRED_CWS_CLI_INTEGRITY =');
+    expect(cwsCheck).toContain('expected exact ${REQUIRED_CWS_CLI_VERSION}');
+    expect(cwsCheck).toContain('package-lock.json integrity for ${CWS_CLI_PACKAGE_NAME} changed');
+  });
+
+  it('verifies release tags through git tag --verify', () => {
+    expect(releaseCheck).toContain("['tag', '--verify', tag]");
+    expect(releaseCheck).toContain("LEGACY_UNSIGNED_RELEASE_TAGS = new Set(['v3.11.0'])");
+  });
+
+  it('wires an independently runnable reproducible Chrome ZIP check', () => {
+    expect(packageJson.scripts['release:reproducible-build:check']).toBe('node scripts/check-reproducible-build.mjs');
+    expect(ciWorkflow).toContain('npm run release:reproducible-build:check');
+    expect(reproducibleBuildCheck).toContain("comparison: 'normalized-zip-entry-sha256'");
+    expect(reproducibleBuildCheck).toContain("['scripts/run-bash.mjs', 'build.sh']");
+    expect(reproducibleBuildCheck).toContain('zipContentDigest(backupPath)');
+    expect(reproducibleBuildCheck).toContain('zipContentDigest(artifactPath)');
+  });
+
+  it('allows the existing legacy unsigned tag only outside the public release gate', () => {
+    const legacy = verifyReleaseTag({
+      tag: 'v3.11.0',
+      checkPublic: false,
+      execFileSyncImpl: createGitExecForTagVerification('error: no signature found'),
+    });
+    expect(legacy.failures).toEqual([]);
+    expect(legacy.warnings.join('\n')).toContain('legacy pre-RD-13 tag');
+
+    const publicLegacy = verifyReleaseTag({
+      tag: 'v3.11.0',
+      checkPublic: true,
+      execFileSyncImpl: createGitExecForTagVerification('error: no signature found'),
+    });
+    expect(publicLegacy.failures.join('\n')).toContain('git tag v3.11.0 is unsigned');
+  });
+
+  it('fails future unsigned release tags', () => {
+    const result = verifyReleaseTag({
+      tag: 'v3.12.0',
+      checkPublic: false,
+      execFileSyncImpl: createGitExecForTagVerification('error: no signature found'),
+    });
+    expect(result.failures.join('\n')).toContain('git tag v3.12.0 is unsigned');
+  });
+
+  it('warns on missing verifier keys before public release and fails in public mode', () => {
+    const missingKey = "gpg: Signature made Thu Jun 11 12:00:00 2026 EDT\ngpg: Can't check signature: No public key";
+    const local = verifyReleaseTag({
+      tag: 'v3.12.0',
+      checkPublic: false,
+      execFileSyncImpl: createGitExecForTagVerification(missingKey),
+    });
+    expect(local.failures).toEqual([]);
+    expect(local.warnings.join('\n')).toContain('import the release signing public key before public release');
+
+    const publicResult = verifyReleaseTag({
+      tag: 'v3.12.0',
+      checkPublic: true,
+      execFileSyncImpl: createGitExecForTagVerification(missingKey),
+    });
+    expect(publicResult.failures.join('\n')).toContain('cannot be cryptographically verified');
+  });
+});

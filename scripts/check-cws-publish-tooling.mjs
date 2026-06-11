@@ -8,6 +8,9 @@ const scriptDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(scriptDir, '..');
 const failures = [];
 const warnings = [];
+const CWS_CLI_PACKAGE_NAME = 'chrome-webstore-upload-cli';
+const REQUIRED_CWS_CLI_VERSION = '4.0.0';
+const REQUIRED_CWS_CLI_INTEGRITY = 'sha512-6MjMTLeGswORVNMS/Wa40s0HHWJdQG7MX1hVRzpg5RaqyjoFWp/tdqgHANTcwSPftT9HVOZOibKvd+k2XOvQCg==';
 
 function readText(path) {
   return readFileSync(join(projectRoot, path), 'utf8');
@@ -53,11 +56,29 @@ function minimumVersionFromRange(range) {
 }
 
 const pkg = readJson('package.json');
-const cliRange = pkg.devDependencies?.['chrome-webstore-upload-cli'];
+const packageLock = readJson('package-lock.json');
+const cliRange = pkg.devDependencies?.[CWS_CLI_PACKAGE_NAME];
 if (!cliRange) {
-  fail('package.json is missing devDependency chrome-webstore-upload-cli');
-} else if (!/(^|[^\d])4\./.test(cliRange)) {
-  fail(`package.json pins chrome-webstore-upload-cli to ${cliRange}, expected v4.x for CWS API v2`);
+  fail(`package.json is missing devDependency ${CWS_CLI_PACKAGE_NAME}`);
+} else if (cliRange !== REQUIRED_CWS_CLI_VERSION) {
+  fail(`package.json pins ${CWS_CLI_PACKAGE_NAME} to ${cliRange}, expected exact ${REQUIRED_CWS_CLI_VERSION}`);
+}
+
+const lockRootRange = packageLock.packages?.['']?.devDependencies?.[CWS_CLI_PACKAGE_NAME];
+if (lockRootRange !== REQUIRED_CWS_CLI_VERSION) {
+  fail(`package-lock.json root pins ${CWS_CLI_PACKAGE_NAME} to ${lockRootRange || '<missing>'}, expected exact ${REQUIRED_CWS_CLI_VERSION}`);
+}
+
+const lockPackage = packageLock.packages?.[`node_modules/${CWS_CLI_PACKAGE_NAME}`];
+if (!lockPackage) {
+  fail(`package-lock.json is missing node_modules/${CWS_CLI_PACKAGE_NAME}`);
+} else {
+  if (lockPackage.version !== REQUIRED_CWS_CLI_VERSION) {
+    fail(`package-lock.json resolves ${CWS_CLI_PACKAGE_NAME} ${lockPackage.version || '<missing>'}, expected ${REQUIRED_CWS_CLI_VERSION}`);
+  }
+  if (lockPackage.integrity !== REQUIRED_CWS_CLI_INTEGRITY) {
+    fail(`package-lock.json integrity for ${CWS_CLI_PACKAGE_NAME} changed; review the package before updating REQUIRED_CWS_CLI_INTEGRITY`);
+  }
 }
 
 const projectNodeFloor = minimumVersionFromRange(pkg.engines?.node);
@@ -68,17 +89,16 @@ if (!projectNodeFloor || !currentNodeVersion) {
   fail(`Node ${process.versions.node} is too old; ScriptVault requires ${pkg.engines.node}`);
 }
 
-const cliPackagePath = join(projectRoot, 'node_modules', 'chrome-webstore-upload-cli', 'package.json');
+const cliPackagePath = join(projectRoot, 'node_modules', CWS_CLI_PACKAGE_NAME, 'package.json');
 let cliBinPath = '';
 if (!existsSync(cliPackagePath)) {
-  fail('node_modules/chrome-webstore-upload-cli is missing; run npm ci before npm run cws:check');
+  fail(`node_modules/${CWS_CLI_PACKAGE_NAME} is missing; run npm ci before npm run cws:check`);
 } else {
   const cliPkg = JSON.parse(readFileSync(cliPackagePath, 'utf8'));
   const bin = typeof cliPkg.bin === 'string' ? cliPkg.bin : cliPkg.bin?.['chrome-webstore-upload'];
-  if (bin) cliBinPath = join(projectRoot, 'node_modules', 'chrome-webstore-upload-cli', bin);
-  const cliMajor = Number(String(cliPkg.version || '').split('.')[0]);
-  if (cliMajor !== 4) {
-    fail(`installed chrome-webstore-upload-cli is ${cliPkg.version || '<unknown>'}, expected v4.x`);
+  if (bin) cliBinPath = join(projectRoot, 'node_modules', CWS_CLI_PACKAGE_NAME, bin);
+  if (cliPkg.version !== REQUIRED_CWS_CLI_VERSION) {
+    fail(`installed ${CWS_CLI_PACKAGE_NAME} is ${cliPkg.version || '<unknown>'}, expected ${REQUIRED_CWS_CLI_VERSION}`);
   }
   if (cliPkg.engines?.node && projectNodeFloor) {
     const cliNodeFloor = minimumVersionFromRange(cliPkg.engines.node);

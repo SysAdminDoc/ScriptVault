@@ -109,6 +109,9 @@ jobs:
       - name: Package Chrome extension
         run: bash build.sh
 
+      - name: Reproducible Chrome package check
+        run: npm run release:reproducible-build:check
+
       - name: CWS remote-code package scan
         run: npm run cws:remote-code:check -- --target ScriptVault-v${{ steps.package.outputs.version }}.zip
 
