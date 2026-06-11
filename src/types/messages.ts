@@ -1223,6 +1223,7 @@ interface GMCookieList {
   domain?: string;
   name?: string;
   path?: string;
+  partitionKey?: chrome.cookies.CookiePartitionKey;
 }
 
 interface GMCookieSet {
@@ -1236,12 +1237,14 @@ interface GMCookieSet {
   httpOnly?: boolean;
   expirationDate?: number;
   sameSite?: string;
+  partitionKey?: chrome.cookies.CookiePartitionKey;
 }
 
 interface GMCookieDelete {
   action: 'GM_cookie_delete';
   url: string;
   name: string;
+  partitionKey?: chrome.cookies.CookiePartitionKey;
 }
 
 // ─── Web Request ─────────────────────────────────────────────────────

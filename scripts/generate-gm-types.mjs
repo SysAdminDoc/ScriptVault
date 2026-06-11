@@ -188,11 +188,17 @@ interface GMLoadScriptOptions {
   force?: boolean;
 }
 
+interface GMCookiePartitionKey {
+  topLevelSite?: string;
+  hasCrossSiteAncestor?: boolean;
+}
+
 interface GMCookieListDetails {
   url?: string;
   domain?: string;
   name?: string;
   path?: string;
+  partitionKey?: GMCookiePartitionKey;
 }
 
 interface GMCookieSetDetails {
@@ -205,11 +211,13 @@ interface GMCookieSetDetails {
   httpOnly?: boolean;
   expirationDate?: number;
   sameSite?: string;
+  partitionKey?: GMCookiePartitionKey;
 }
 
 interface GMCookieDeleteDetails {
   url: string;
   name: string;
+  partitionKey?: GMCookiePartitionKey;
 }
 
 interface GMCookie {
@@ -224,6 +232,7 @@ interface GMCookie {
   session?: boolean;
   expirationDate?: number;
   storeId?: string;
+  partitionKey?: GMCookiePartitionKey;
 }
 
 interface GMCookieCallbackApi {

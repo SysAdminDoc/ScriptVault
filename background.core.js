@@ -5069,6 +5069,27 @@ function isHttpCookieUrl(url) {
   }
 }
 
+function normalizeCookiePartitionKey(value) {
+  if (value == null) return { partitionKey: null };
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return { error: 'partitionKey must be an object' };
+  }
+  const partitionKey = {};
+  if (Object.prototype.hasOwnProperty.call(value, 'topLevelSite') && value.topLevelSite != null && value.topLevelSite !== '') {
+    if (typeof value.topLevelSite !== 'string' || !isHttpCookieUrl(value.topLevelSite)) {
+      return { error: 'partitionKey.topLevelSite must be http(s)://' };
+    }
+    partitionKey.topLevelSite = new URL(value.topLevelSite).origin;
+  }
+  if (Object.prototype.hasOwnProperty.call(value, 'hasCrossSiteAncestor')) {
+    if (typeof value.hasCrossSiteAncestor !== 'boolean') {
+      return { error: 'partitionKey.hasCrossSiteAncestor must be boolean' };
+    }
+    partitionKey.hasCrossSiteAncestor = value.hasCrossSiteAncestor;
+  }
+  return { partitionKey };
+}
+
 const RESERVED_IMPORT_SCRIPT_IDS = new Set(['__proto__', 'prototype', 'constructor']);
 function isSafeImportedScriptId(id) {
   return (
@@ -8568,6 +8589,9 @@ async function handleMessage(message, sender) {
           if (data.domain) details.domain = data.domain;
           if (data.name) details.name = data.name;
           if (data.path) details.path = data.path;
+          const partition = normalizeCookiePartitionKey(data.partitionKey);
+          if (partition.error) return { error: partition.error };
+          if (partition.partitionKey) details.partitionKey = partition.partitionKey;
           const cookieTargetUrl = resolveCookiePolicyTarget(data, sender);
           if (!cookieTargetUrl) return { error: 'url or domain is required for cookie list' };
           if (!isHttpCookieUrl(cookieTargetUrl)) return { error: 'url must be http(s)://' };
@@ -8594,6 +8618,8 @@ async function handleMessage(message, sender) {
           const cookieSettings = await SettingsManager.get();
           const cookiePolicy = evaluateScriptHostScopePolicy(cookieScript, data.url, 'Cookie access', cookieSettings);
           if (!cookiePolicy.allowed) return { error: cookiePolicy.error };
+          const partition = normalizeCookiePartitionKey(data.partitionKey);
+          if (partition.error) return { error: partition.error };
           const cookie = await chrome.cookies.set({
             url: data.url,
             name: data.name,
@@ -8603,7 +8629,8 @@ async function handleMessage(message, sender) {
             secure: data.secure || false,
             httpOnly: data.httpOnly || false,
             expirationDate: data.expirationDate,
-            sameSite: data.sameSite || 'unspecified'
+            sameSite: data.sameSite || 'unspecified',
+            ...(partition.partitionKey ? { partitionKey: partition.partitionKey } : {})
           });
           return { success: true, cookie };
         } catch (e) {
@@ -8622,9 +8649,12 @@ async function handleMessage(message, sender) {
           const cookieSettings = await SettingsManager.get();
           const cookiePolicy = evaluateScriptHostScopePolicy(cookieScript, data.url, 'Cookie access', cookieSettings);
           if (!cookiePolicy.allowed) return { error: cookiePolicy.error };
+          const partition = normalizeCookiePartitionKey(data.partitionKey);
+          if (partition.error) return { error: partition.error };
           await chrome.cookies.remove({
             url: data.url,
-            name: data.name
+            name: data.name,
+            ...(partition.partitionKey ? { partitionKey: partition.partitionKey } : {})
           });
           return { success: true };
         } catch (e) {
