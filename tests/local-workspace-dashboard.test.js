@@ -37,16 +37,19 @@ describe('dashboard local workspace binding', () => {
     expect(button?.getAttribute('title')).toMatch(/Bind local file/);
     expect(button?.getAttribute('aria-describedby')).toBe('editorLocalWorkspaceStatus');
     expect(button?.textContent.replace(/\s+/g, ' ').trim()).toContain('Bind File');
+    expect(button?.hasAttribute('hidden')).toBe(true);
 
     expect(refreshButton).not.toBeNull();
     expect(refreshButton?.getAttribute('type')).toBe('button');
     expect(refreshButton?.getAttribute('aria-describedby')).toBe('editorLocalWorkspaceStatus');
     expect(refreshButton?.hasAttribute('disabled')).toBe(true);
+    expect(refreshButton?.hasAttribute('hidden')).toBe(true);
 
     expect(unbindButton).not.toBeNull();
     expect(unbindButton?.getAttribute('type')).toBe('button');
     expect(unbindButton?.getAttribute('aria-describedby')).toBe('editorLocalWorkspaceStatus');
     expect(unbindButton?.hasAttribute('disabled')).toBe(true);
+    expect(unbindButton?.hasAttribute('hidden')).toBe(true);
 
     expect(status).not.toBeNull();
     expect(status?.getAttribute('role')).toBe('status');
@@ -60,6 +63,19 @@ describe('dashboard local workspace binding', () => {
     expect(dashboardJs).toContain("runButtonTask(event.currentTarget, refreshCurrentScriptFromLocalFile");
     expect(dashboardJs).toContain("runButtonTask(event.currentTarget, unbindCurrentScriptLocalFile");
     expect(dashboardJs).toContain('void refreshLocalWorkspaceBindingForScript(scriptId)');
+  });
+
+  it('keeps unsupported File System Access controls hidden while manual import stays available', () => {
+    const doc = parseDashboard();
+    const controlsFn = extractFunction(dashboardJs, 'refreshLocalWorkspaceControls');
+
+    expect(controlsFn).toContain('elements.tbtnBindLocalFile.hidden = !supported');
+    expect(controlsFn).toContain('elements.tbtnRefreshLocalFile.hidden = !supported');
+    expect(controlsFn).toContain('elements.tbtnUnbindLocalFile.hidden = !supported');
+    expect(doc.getElementById('btnInstallFromFile')).not.toBeNull();
+    expect(doc.getElementById('installFileInput')?.getAttribute('accept')).toContain('.user.js');
+    expect(doc.getElementById('btnChooseFile')).not.toBeNull();
+    expect(doc.getElementById('importFileInput')?.getAttribute('accept')).toContain('.user.js');
   });
 
   it('feature-detects File System Access and stores bindings in the local IDB store', () => {

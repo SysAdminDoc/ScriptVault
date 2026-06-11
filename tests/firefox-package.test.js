@@ -161,6 +161,17 @@ describe('Firefox AMO validation gate', () => {
     expect(popupHtml).toContain('html[data-theme="light"]');
   });
 
+  it('keeps Chromium-only local workspace controls hidden until feature detection', () => {
+    expect(dashboardHtml).toMatch(/id="tbtnBindLocalFile"[^>]*hidden/);
+    expect(dashboardHtml).toMatch(/id="tbtnRefreshLocalFile"[^>]*hidden/);
+    expect(dashboardHtml).toMatch(/id="tbtnUnbindLocalFile"[^>]*hidden/);
+    expect(dashboardHtml).toContain('id="btnInstallFromFile"');
+    expect(dashboardHtml).toContain('id="btnChooseFile"');
+    expect(dashboardJs).toContain('elements.tbtnBindLocalFile.hidden = !supported');
+    expect(dashboardJs).toContain('elements.tbtnRefreshLocalFile.hidden = !supported');
+    expect(dashboardJs).toContain('elements.tbtnUnbindLocalFile.hidden = !supported');
+  });
+
   it('includes AMO source-review instructions and privacy rationale', () => {
     expect(amoSourceReadme).toContain('Reviewer Build Instructions');
     expect(amoSourceReadme).toContain('npm run firefox:package');
