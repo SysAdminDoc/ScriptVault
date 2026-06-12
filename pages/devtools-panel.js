@@ -154,7 +154,7 @@
       filterInput.placeholder = 'Filter requests, URLs, or scripts…';
       filterInput.setAttribute('aria-label', 'Filter network requests');
       clearButton.hidden = false;
-      clearButton.textContent = 'Clear Requests';
+      clearButton.textContent = 'Clear';
       clearButton.setAttribute('aria-label', 'Clear recorded network requests');
       clearButton.disabled = netLog.length === 0;
       return;
@@ -164,7 +164,7 @@
       filterInput.placeholder = 'Filter scripts in execution stats…';
       filterInput.setAttribute('aria-label', 'Filter execution statistics');
       clearButton.hidden = false;
-      clearButton.textContent = 'Reset Filter';
+      clearButton.textContent = 'Reset';
       clearButton.setAttribute('aria-label', 'Reset execution filter');
       clearButton.disabled = !filterText;
       return;
@@ -316,14 +316,16 @@
     $('netTotal').textContent = filtered.length;
     $('netErrors').textContent = errors;
     $('netBytes').textContent = formatBytes(bytes);
-    setToolbarStatus(
-      filtered.length
-        ? `${filtered.length} request${filtered.length === 1 ? '' : 's'} visible • ${errors} error${errors === 1 ? '' : 's'} • ${formatBytes(bytes)} transferred`
-        : (filterText
-            ? `No requests match “${filterText}”.`
-            : 'No network requests yet. Open a page that runs userscripts to capture activity.')
-    );
-    $('btnClear').disabled = netLog.length === 0;
+    if (activeTab === 'network') {
+      setToolbarStatus(
+        filtered.length
+          ? `${filtered.length} request${filtered.length === 1 ? '' : 's'} visible • ${errors} error${errors === 1 ? '' : 's'} • ${formatBytes(bytes)} transferred`
+          : (filterText
+              ? `No requests match “${filterText}”.`
+              : 'No network requests yet. Open a page that runs userscripts to capture activity.')
+      );
+      $('btnClear').disabled = netLog.length === 0;
+    }
 
     // Table
     const tbody = $('netTableBody');
@@ -334,10 +336,11 @@
         $('filterInput').focus({ preventScroll: true });
       }
       const tr = document.createElement('tr');
-      const message = filterText
-        ? `No requests match "${filterText}".`
-        : 'No network requests yet. Open a page that runs userscripts to capture activity.';
-      tr.innerHTML = `<td colspan="6" class="table-empty-cell">${escapeHtml(message)}</td>`;
+      const title = filterText ? 'No requests match this filter' : 'No network requests yet';
+      const detail = filterText
+        ? `No requests match "${filterText}". Clear the filter or try a script, host, or method name.`
+        : 'Open a page that runs userscripts to capture activity.';
+      tr.innerHTML = `<td colspan="6" class="table-empty-cell">${tableEmptyMarkup(title, detail, 'NET')}</td>`;
       tbody.appendChild(tr);
       return;
     }
@@ -456,21 +459,24 @@
     });
     withStats.sort((a, b) => (b.stats.totalTime || 0) - (a.stats.totalTime || 0));
     const maxTotal = withStats.reduce((m, s) => Math.max(m, s.stats.totalTime || 0), 1);
-    setToolbarStatus(
-      withStats.length
-        ? `Showing ${withStats.length} script${withStats.length === 1 ? '' : 's'} with execution data`
-        : (filterText && executionScripts.length
-            ? `No scripts match “${filterText}”.`
-            : 'No execution data yet. Scripts will appear here after they run.')
-    );
-    $('btnClear').disabled = !filterText;
+    if (activeTab === 'execution') {
+      setToolbarStatus(
+        withStats.length
+          ? `Showing ${withStats.length} script${withStats.length === 1 ? '' : 's'} with execution data`
+          : (filterText && executionScripts.length
+              ? `No scripts match “${filterText}”.`
+              : 'No execution data yet. Scripts will appear here after they run.')
+      );
+      $('btnClear').disabled = !filterText;
+    }
 
     if (!withStats.length) {
       const tr = document.createElement('tr');
-      const message = filterText && executionScripts.length
-        ? `No scripts match "${filterText}".`
-        : 'No execution data yet. Scripts will appear here after they run.';
-      tr.innerHTML = `<td colspan="6" class="table-empty-cell">${escapeHtml(message)}</td>`;
+      const title = filterText && executionScripts.length ? 'No scripts match this filter' : 'No execution data yet';
+      const detail = filterText && executionScripts.length
+        ? `No scripts match "${filterText}". Reset the filter to return to execution stats.`
+        : 'Scripts will appear here after they run.';
+      tr.innerHTML = `<td colspan="6" class="table-empty-cell">${tableEmptyMarkup(title, detail, 'RUN')}</td>`;
       tbody.appendChild(tr);
       return;
     }
@@ -497,6 +503,16 @@
 
   function renderConsoleState() {
     setToolbarStatus('Console capture isn’t available here yet. Use Network or Execution for current insight.');
+  }
+
+  function tableEmptyMarkup(title, detail, mark = 'SV') {
+    return `
+      <div class="table-empty-state">
+        <span class="table-empty-mark" aria-hidden="true">${escapeHtml(mark)}</span>
+        <strong class="table-empty-title">${escapeHtml(title)}</strong>
+        <span class="table-empty-detail">${escapeHtml(detail)}</span>
+      </div>
+    `;
   }
 
   // ── HAR Export ────────────────────────────────────────────────────────────

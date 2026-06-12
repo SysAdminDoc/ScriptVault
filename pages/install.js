@@ -488,7 +488,7 @@ async function init() {
     const data = await chrome.storage.local.get('pendingInstall');
 
     if (!data.pendingInstall) {
-      showError('No script to install', 'Please try downloading the script again.');
+      showError('No userscript was found', 'ScriptVault could not find a pending install request. Download the userscript again from its source page.');
       return;
     }
 
@@ -1904,7 +1904,7 @@ function showError(title, message) {
       <div class="error-title" id="installTerminalTitle">${escapeHtml(title)}</div>
       <div class="error-message" id="installTerminalMessage">${escapeHtml(message)}</div>
       <div class="error-actions actions">
-        <button class="btn btn-secondary" id="btnCloseError" type="button">Close Review</button>
+        <button class="btn btn-secondary" id="btnCloseError" type="button">Close review</button>
       </div>
     </div>
   `;
@@ -1942,7 +1942,7 @@ function showSuccess(name, action, scriptId) {
       <div class="success-next-step">${escapeHtml(nextStepCopy)}</div>
       <div class="success-actions">
         <button class="btn btn-primary" id="btnOpenDashboard" type="button">Open Dashboard</button>
-        <button class="btn btn-secondary" id="btnSuccessClose" type="button">Close Review</button>
+        <button class="btn btn-secondary" id="btnSuccessClose" type="button">Close review</button>
       </div>
     </div>
   `;
