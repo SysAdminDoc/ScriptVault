@@ -1586,7 +1586,6 @@
         // Settings - General
         elements.settingsConfigMode = document.getElementById('settingsConfigMode');
         elements.settingsAutoReload = document.getElementById('settingsAutoReload');
-        elements.settingsAnonymousStats = document.getElementById('settingsAnonymousStats');
         elements.settingsDebugMode = document.getElementById('settingsDebugMode');
         elements.settingsShowFixedSource = document.getElementById('settingsShowFixedSource');
         elements.settingsLoggingLevel = document.getElementById('settingsLoggingLevel');
@@ -3122,7 +3121,6 @@
         // General settings
         if (elements.settingsConfigMode) elements.settingsConfigMode.value = s.configMode || 'advanced';
         if (elements.settingsAutoReload) elements.settingsAutoReload.checked = s.autoReload !== false;
-        if (elements.settingsAnonymousStats) elements.settingsAnonymousStats.checked = s.anonymousStats || false;
         if (elements.settingsDebugMode) elements.settingsDebugMode.checked = s.debugMode || false;
         if (elements.settingsShowFixedSource) elements.settingsShowFixedSource.checked = s.showFixedSource || false;
         if (elements.settingsLoggingLevel) elements.settingsLoggingLevel.value = s.loggingLevel || 'error';
@@ -13268,7 +13266,6 @@
             // General
             settingsConfigMode: ['configMode', 'value'],
             settingsAutoReload: ['autoReload', 'checked'],
-            settingsAnonymousStats: ['anonymousStats', 'checked'],
             settingsDebugMode: ['debugMode', 'checked'],
             settingsShowFixedSource: ['showFixedSource', 'checked'],
             settingsLoggingLevel: ['loggingLevel', 'value'],
