@@ -41,6 +41,20 @@ test('install review updates an existing script and keeps rollback history', asy
     expect(saved.enabled).toBe(false);
     expect(saved.versionHistory?.at(-1)).toMatchObject({ version: '1.0.0', code: v1 });
     expect(saved.trustReceipt.operation).toBe('update');
+
+    await expect(sendRuntimeMessage(installPage, {
+      action: 'rollbackScript',
+      scriptId: seeded.scriptId,
+      index: saved.versionHistory.length - 1,
+    })).resolves.toMatchObject({
+      success: true,
+      script: {
+        metadata: { version: '1.0.0' },
+        code: v1,
+      },
+    });
+    await expect(sendRuntimeMessage(installPage, { action: 'getScript', id: seeded.scriptId }))
+      .resolves.toMatchObject({ metadata: { version: '1.0.0' }, code: v1 });
   } finally {
     await app.close();
   }
