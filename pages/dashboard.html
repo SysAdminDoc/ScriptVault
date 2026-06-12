@@ -6022,21 +6022,21 @@
             <div class="settings-shell">
             <div class="settings-hero">
                 <div class="settings-hero-copy">
-                    <div class="settings-eyebrow">Preferences</div>
-                    <h2>Settings</h2>
-                    <p>Autosaved controls for ScriptVault itself. Filter the workspace to focus on interface, automation, security, or recovery without losing the advanced depth underneath.</p>
+                    <div class="settings-eyebrow" data-i18n="settingsPreferences">Preferences</div>
+                    <h2 data-i18n="tabSettings">Settings</h2>
+                    <p data-i18n="settingsHeroDescription">Autosaved controls for ScriptVault itself. Filter the workspace to focus on interface, automation, security, or recovery without losing the advanced depth underneath.</p>
                 </div>
                 <div class="settings-overview">
                     <div class="settings-summary">
-                        <span class="settings-summary-label">Mode</span>
-                        <strong id="settingsModeSummary">Advanced</strong>
+                        <span class="settings-summary-label" data-i18n="settingsModeLabel">Mode</span>
+                        <strong id="settingsModeSummary" data-i18n="settingsModeAdvanced">Advanced</strong>
                     </div>
                     <div class="settings-summary">
-                        <span class="settings-summary-label">Visible</span>
+                        <span class="settings-summary-label" data-i18n="settingsVisibleLabel">Visible</span>
                         <strong id="settingsVisibleSummary">0 sections</strong>
                     </div>
                     <div class="settings-summary">
-                        <span class="settings-summary-label">Advanced</span>
+                        <span class="settings-summary-label" data-i18n="settingsAdvanced">Advanced</span>
                         <strong id="settingsAdvancedSummary">0 shown</strong>
                     </div>
                 </div>
@@ -6044,15 +6044,15 @@
             <div class="settings-toolbar">
                 <label class="settings-search" for="settingsQuickFilter">
                     <span class="settings-search-icon">⌕</span>
-                    <input type="search" class="settings-search-input" id="settingsQuickFilter" name="settings_search" placeholder="Search settings, sync, editor, CSP…" autocomplete="off" spellcheck="false">
+                    <input type="search" class="settings-search-input" id="settingsQuickFilter" name="settings_search" placeholder="Search settings, sync, editor, CSP..." data-i18n-placeholder="settingsSearchPlaceholder" autocomplete="off" spellcheck="false">
                 </label>
-                <div class="settings-filter-row" id="settingsCategoryFilters" role="group" aria-label="Settings category filters">
-                    <button type="button" class="settings-filter active" data-settings-filter="all">All</button>
-                    <button type="button" class="settings-filter" data-settings-filter="core">Core</button>
-                    <button type="button" class="settings-filter" data-settings-filter="workspace">Workspace</button>
-                    <button type="button" class="settings-filter" data-settings-filter="automation">Automation</button>
-                    <button type="button" class="settings-filter" data-settings-filter="security">Security</button>
-                    <button type="button" class="settings-filter" data-settings-filter="recovery">Recovery</button>
+                <div class="settings-filter-row" id="settingsCategoryFilters" role="group" aria-label="Settings category filters" data-i18n-aria-label="settingsCategoryFilters">
+                    <button type="button" class="settings-filter active" data-settings-filter="all" data-i18n="settingsFilterAll">All</button>
+                    <button type="button" class="settings-filter" data-settings-filter="core" data-i18n="settingsFilterCore">Core</button>
+                    <button type="button" class="settings-filter" data-settings-filter="workspace" data-i18n="settingsFilterWorkspace">Workspace</button>
+                    <button type="button" class="settings-filter" data-settings-filter="automation" data-i18n="settingsFilterAutomation">Automation</button>
+                    <button type="button" class="settings-filter" data-settings-filter="security" data-i18n="settingsFilterSecurity">Security</button>
+                    <button type="button" class="settings-filter" data-settings-filter="recovery" data-i18n="settingsFilterRecovery">Recovery</button>
                 </div>
             </div>
             <div class="settings-filter-status" id="settingsFilterStatus">Showing all sections</div>

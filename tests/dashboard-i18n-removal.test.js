@@ -42,4 +42,15 @@ describe('dashboard i18n-v2 removal', () => {
     expect(dashboardJs).toContain("'queuedUpdatesSummary'");
     expect(dashboardJs).toContain("button.dataset.sortLabel = label");
   });
+
+  it('translates the settings hero, filters, and dynamic summary copy through the runtime dictionary', () => {
+    expect(dashboardHtml).toContain('data-i18n="settingsPreferences"');
+    expect(dashboardHtml).toContain('data-i18n-placeholder="settingsSearchPlaceholder"');
+    expect(dashboardHtml).toContain('data-i18n-aria-label="settingsCategoryFilters"');
+    expect(dashboardHtml).toContain('data-i18n="settingsFilterSecurity"');
+    expect(dashboardJs).toContain("'settingsSectionsCount'");
+    expect(dashboardJs).toContain("'settingsAdvancedShownCount'");
+    expect(dashboardJs).toContain("'settingsShowingFilterMode'");
+    expect(dashboardJs).toContain('function getSettingsFilterLabel(filter)');
+  });
 });
