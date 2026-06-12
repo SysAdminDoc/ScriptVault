@@ -1996,6 +1996,12 @@
         btnImportScript: 'importScript',
         btnCheckUpdates: 'checkUpdates',
         btnExportAll: 'exportAll',
+        btnNewFolder: 'folder',
+        btnFindScripts: 'find',
+        btnBulkApply: 'apply',
+        btnRefreshPendingUpdates: 'checkNow',
+        btnApplySafePendingUpdates: 'applySafe',
+        btnClearPendingUpdates: 'clearQueue',
     });
 
     function getDashboardI18n() {
@@ -2004,6 +2010,11 @@
         } catch (_) {
             return null;
         }
+    }
+
+    function tDashboard(key, fallback = key, placeholders = {}) {
+        const i18n = getDashboardI18n();
+        return i18n?.getMessage ? i18n.getMessage(key, placeholders) : fallback;
     }
 
     function setLabelPreservingDecor(el, label) {
@@ -2033,6 +2044,15 @@
         Object.entries(DASHBOARD_I18N_TEXT_TARGETS).forEach(([id, key]) => {
             const el = document.getElementById(id);
             if (el) setLabelPreservingDecor(el, i18n.getMessage(key));
+        });
+
+        document.querySelectorAll('[data-sort-i18n]').forEach(button => {
+            const key = button.getAttribute('data-sort-i18n');
+            if (!key) return;
+            const label = i18n.getMessage(key);
+            button.dataset.sortLabel = label;
+            const labelNode = button.querySelector('[data-sort-label-text]');
+            if (labelNode) labelNode.textContent = label;
         });
 
         const newScriptLabel = i18n.getMessage('newScript');
@@ -2870,9 +2890,15 @@
         if (elements.pendingUpdatesSafeCount) elements.pendingUpdatesSafeCount.textContent = numberFormatter.format(counts.safe);
         if (elements.pendingUpdatesReviewCount) elements.pendingUpdatesReviewCount.textContent = numberFormatter.format(counts.review);
         if (elements.pendingUpdatesSummary) {
+            const safeCount = numberFormatter.format(counts.safe);
+            const reviewCount = numberFormatter.format(counts.review);
             elements.pendingUpdatesSummary.textContent = counts.queued === 0
-                ? 'No queued updates.'
-                : `${numberFormatter.format(counts.safe)} safe, ${numberFormatter.format(counts.review)} requiring review.`;
+                ? tDashboard('noQueuedUpdates', 'No queued updates.')
+                : tDashboard(
+                    'queuedUpdatesSummary',
+                    `${safeCount} safe, ${reviewCount} requiring review.`,
+                    { safe: safeCount, review: reviewCount }
+                );
         }
         if (elements.btnApplySafePendingUpdates) {
             elements.btnApplySafePendingUpdates.disabled = counts.safe === 0;
@@ -2882,7 +2908,7 @@
         }
         if (!elements.pendingUpdatesList) return;
         if (counts.queued === 0) {
-            elements.pendingUpdatesList.innerHTML = '<div class="pending-updates-empty">No queued updates.</div>';
+            elements.pendingUpdatesList.innerHTML = `<div class="pending-updates-empty">${escapeHtml(tDashboard('noQueuedUpdates', 'No queued updates.'))}</div>`;
             return;
         }
 
@@ -2908,6 +2934,7 @@
             update.subscriptionName ? `Subscription: ${update.subscriptionName}` : '',
             sourceHost ? `Source: ${sourceHost}` : ''
         ].filter(Boolean).join(' · ');
+        const statusLabel = tDashboard(safe ? 'safe' : 'review', safe ? 'Safe' : 'Review');
         return `
             <article class="pending-update-card${safe ? '' : ' review-required'}" data-update-id="${escapeHtml(update.id)}">
                 <div class="pending-update-head">
@@ -2915,7 +2942,7 @@
                         <strong>${escapeHtml(update.name || update.id || 'Unnamed script')}</strong>
                         <div class="pending-update-meta">${versionLabel}</div>
                     </div>
-                    <span class="pending-update-status${safe ? '' : ' review'}">${safe ? 'Safe' : 'Review'}</span>
+                    <span class="pending-update-status${safe ? '' : ' review'}">${escapeHtml(statusLabel)}</span>
                 </div>
                 <div class="pending-update-reasons">${escapeHtml(reasons)}</div>
                 <div class="pending-update-source">${sourceLabel ? escapeHtml(sourceLabel) : 'Source unavailable'}</div>
@@ -7163,33 +7190,45 @@
         const hasFilter = filterValue !== 'all';
 
         if (!hasScripts) {
-            if (elements.emptyStateTitle) elements.emptyStateTitle.textContent = 'Your vault is empty';
+            if (elements.emptyStateTitle) elements.emptyStateTitle.textContent = tDashboard('emptyVaultTitle', 'Your vault is empty');
             if (elements.emptyStateDescription) {
-                elements.emptyStateDescription.textContent = 'Create a script or import an existing userscript. ScriptVault keeps scripts local unless you enable sync or backups.';
+                elements.emptyStateDescription.textContent = tDashboard(
+                    'emptyVaultDescription',
+                    'Create a script or import an existing userscript. ScriptVault keeps scripts local unless you enable sync or backups.'
+                );
             }
             if (elements.emptyStatePrimaryAction) {
                 elements.emptyStatePrimaryAction.hidden = false;
-                elements.emptyStatePrimaryAction.textContent = 'Create Script';
+                elements.emptyStatePrimaryAction.textContent = tDashboard('emptyCreateScript', 'Create Script');
                 elements.emptyStatePrimaryAction.onclick = () => createNewScript();
             }
             if (elements.emptyStateSecondaryAction) {
                 elements.emptyStateSecondaryAction.hidden = false;
-                elements.emptyStateSecondaryAction.textContent = 'Import Script';
+                elements.emptyStateSecondaryAction.textContent = tDashboard('emptyImportScript', 'Import Script');
                 elements.emptyStateSecondaryAction.onclick = () => importScript();
             }
             return;
         }
 
         if (filteredCount === 0 && (hasSearch || hasFilter)) {
-            if (elements.emptyStateTitle) elements.emptyStateTitle.textContent = 'No scripts match this view';
+            if (elements.emptyStateTitle) elements.emptyStateTitle.textContent = tDashboard('emptyNoMatchesTitle', 'No scripts match this view');
             if (elements.emptyStateDescription) {
                 const searchDetail = hasSearch ? ` for "${searchQuery}"` : '';
                 const filterDetail = hasFilter ? ` under the "${filterValue}" filter` : '';
-                elements.emptyStateDescription.textContent = `No scripts matched${searchDetail}${filterDetail}. Adjust the search or filters to return to the full workspace.`;
+                const details = `${searchDetail}${filterDetail}`;
+                elements.emptyStateDescription.textContent = tDashboard(
+                    'emptyNoMatchesDescription',
+                    `No scripts matched${details}. Adjust the search or filters to return to the full workspace.`,
+                    { details }
+                );
             }
             if (elements.emptyStatePrimaryAction) {
                 elements.emptyStatePrimaryAction.hidden = false;
-                elements.emptyStatePrimaryAction.textContent = hasSearch && hasFilter ? 'Reset Search & Filter' : hasSearch ? 'Clear Search' : 'Clear Filter';
+                elements.emptyStatePrimaryAction.textContent = hasSearch && hasFilter
+                    ? tDashboard('emptyResetSearchFilter', 'Reset Search & Filter')
+                    : hasSearch
+                        ? tDashboard('emptyClearSearch', 'Clear Search')
+                        : tDashboard('emptyClearFilter', 'Clear Filter');
                 elements.emptyStatePrimaryAction.onclick = () => {
                     if (elements.scriptSearch) elements.scriptSearch.value = '';
                     if (elements.filterSelect) elements.filterSelect.value = 'all';
@@ -7203,13 +7242,16 @@
             return;
         }
 
-        if (elements.emptyStateTitle) elements.emptyStateTitle.textContent = 'This view is empty';
+        if (elements.emptyStateTitle) elements.emptyStateTitle.textContent = tDashboard('emptyViewTitle', 'This view is empty');
         if (elements.emptyStateDescription) {
-            elements.emptyStateDescription.textContent = 'Try another filter, refresh the workspace, or show all scripts.';
+            elements.emptyStateDescription.textContent = tDashboard(
+                'emptyViewDescription',
+                'Try another filter, refresh the workspace, or show all scripts.'
+            );
         }
         if (elements.emptyStatePrimaryAction) {
             elements.emptyStatePrimaryAction.hidden = false;
-            elements.emptyStatePrimaryAction.textContent = 'Show All Scripts';
+            elements.emptyStatePrimaryAction.textContent = tDashboard('emptyShowAllScripts', 'Show All Scripts');
             elements.emptyStatePrimaryAction.onclick = () => {
                 if (elements.scriptSearch) elements.scriptSearch.value = '';
                 if (elements.filterSelect) elements.filterSelect.value = 'all';
