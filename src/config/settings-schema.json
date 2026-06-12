@@ -9,7 +9,6 @@
       "allowInternalSyncEndpoints",
       "allowInternalXhr",
       "allowLocalFiles",
-      "anonymousStats",
       "autoReload",
       "autoSave",
       "autoUpdate",
@@ -258,14 +257,6 @@
           "label": "None"
         }
       ]
-    },
-    "anonymousStats": {
-      "type": "boolean",
-      "control": "checkbox",
-      "label": "Anonymous Stats",
-      "help": "Controls anonymous stats.",
-      "elementId": "settingsAnonymousStats",
-      "defaultSource": "runtime"
     },
     "autoReload": {
       "type": "boolean",
