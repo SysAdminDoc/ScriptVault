@@ -4798,15 +4798,129 @@ const GM_DOWNLOAD_TRACKING_TTL_MS = 5 * 60 * 1000;
 const GM_DOWNLOAD_PENDING_CAP = 500;
 const GM_DOWNLOAD_FETCH_MAX_BYTES = 50 * 1024 * 1024;
 
-function hasPartitionCookieOptions(data = {}) {
+function hasCookieRoutingOptions(data = {}) {
   return data.partitionKey !== undefined
     || data.cookiePartition !== undefined
     || data.cookieStoreId !== undefined
     || data.cookieStore !== undefined;
 }
 
-function partitionCookieUnsupportedError(apiName) {
-  return `${apiName} partitioned-cookie options are not supported in ScriptVault's MV3 fetch/download bridge yet`;
+function normalizeNetworkCookieRouting(data = {}, apiName = 'GM_xmlhttpRequest') {
+  if (!hasCookieRoutingOptions(data)) return { applies: false };
+  if (data.anonymous === true) {
+    return { error: apiName + ' cookie routing cannot be combined with anonymous requests' };
+  }
+
+  const hasPartitionKey = Object.prototype.hasOwnProperty.call(data, 'partitionKey');
+  const hasCookiePartition = Object.prototype.hasOwnProperty.call(data, 'cookiePartition');
+  if (hasPartitionKey && hasCookiePartition) {
+    const partitionJson = JSON.stringify(data.partitionKey ?? null);
+    const aliasJson = JSON.stringify(data.cookiePartition ?? null);
+    if (partitionJson !== aliasJson) {
+      return { error: apiName + ' partitionKey and cookiePartition must match when both are provided' };
+    }
+  }
+
+  const partitionInput = hasPartitionKey ? data.partitionKey : data.cookiePartition;
+  const partition = normalizeCookiePartitionKey(partitionInput);
+  if (partition.error) return { error: partition.error };
+
+  const rawStoreId = data.cookieStoreId ?? data.cookieStore;
+  let storeId = '';
+  if (rawStoreId != null && rawStoreId !== '') {
+    if (typeof rawStoreId !== 'string') return { error: apiName + ' cookieStoreId must be a string' };
+    storeId = rawStoreId.trim();
+    if (!storeId) return { error: apiName + ' cookieStoreId must not be empty' };
+  }
+
+  return {
+    applies: true,
+    partitionKey: partition.partitionKey,
+    storeId
+  };
+}
+
+function cookieHeaderFromCookies(cookies = []) {
+  return [...cookies]
+    .filter((cookie) => cookie && typeof cookie.name === 'string' && cookie.name && !/[;\r\n=]/.test(cookie.name))
+    .sort((a, b) => String(b.path || '').length - String(a.path || '').length)
+    .map((cookie) => cookie.name + '=' + (cookie.value ?? ''))
+    .join('; ');
+}
+
+async function prepareCookieRoutingForFetch(data = {}, apiName = 'GM_xmlhttpRequest') {
+  const routing = normalizeNetworkCookieRouting(data, apiName);
+  if (routing.error || !routing.applies) return routing;
+  if (!isHttpCookieUrl(data.url)) return { error: apiName + ' cookie routing requires an http(s) URL' };
+  if (!chrome.cookies || typeof chrome.cookies.getAll !== 'function') {
+    return { error: apiName + ' cookie routing requires the optional cookies permission' };
+  }
+
+  const details = { url: data.url };
+  if (routing.partitionKey) details.partitionKey = routing.partitionKey;
+  if (routing.storeId) details.storeId = routing.storeId;
+
+  try {
+    const cookies = await chrome.cookies.getAll(details);
+    return {
+      applies: true,
+      cookieHeader: cookieHeaderFromCookies(cookies),
+      partitionKey: routing.partitionKey,
+      storeId: routing.storeId
+    };
+  } catch (e) {
+    return { error: apiName + ' cookie routing failed: ' + (e?.message || e) };
+  }
+}
+
+let _cookieRoutingRuleSeq = 0;
+function nextCookieRoutingRuleId() {
+  _cookieRoutingRuleSeq = (_cookieRoutingRuleSeq + 1) % 100000;
+  return 1500000000 + _cookieRoutingRuleSeq;
+}
+
+function exactDnrRegexForUrl(url) {
+  const regex = '^' + String(url).replace(/[\\^$.*+?()[\]{}|]/g, '\\$&') + '$';
+  if (regex.length > 1900) {
+    return { error: 'cookie-routed request URL is too long for an exact DNR guard' };
+  }
+  return { regex };
+}
+
+async function withCookieHeaderSessionRule(url, cookieHeader, fetcher) {
+  if (!cookieHeader) return fetcher();
+  if (!chrome.declarativeNetRequest || typeof chrome.declarativeNetRequest.updateSessionRules !== 'function') {
+    throw new Error('Cookie-routed requests require declarativeNetRequest session rules');
+  }
+  const regex = exactDnrRegexForUrl(url);
+  if (regex.error) throw new Error(regex.error);
+  const ruleId = nextCookieRoutingRuleId();
+  const rule = {
+    id: ruleId,
+    priority: 1,
+    action: {
+      type: 'modifyHeaders',
+      requestHeaders: [{ header: 'Cookie', operation: 'set', value: cookieHeader }]
+    },
+    condition: {
+      regexFilter: regex.regex,
+      resourceTypes: ['xmlhttprequest']
+    }
+  };
+
+  await chrome.declarativeNetRequest.updateSessionRules({
+    removeRuleIds: [ruleId],
+    addRules: [rule]
+  });
+  try {
+    return await fetcher();
+  } finally {
+    try {
+      await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: [ruleId] });
+    } catch (e) {
+      console.warn('[ScriptVault] Failed to remove cookie-routing DNR session rule:', e?.message || e);
+    }
+  }
 }
 
 function downloadNeedsFetchBridge(data = {}) {
@@ -7889,9 +8003,6 @@ async function handleMessage(message, sender) {
           if (!xhrScript) {
             return { error: 'Script context not found', type: 'error' };
           }
-          if (hasPartitionCookieOptions(data)) {
-            return { error: partitionCookieUnsupportedError('GM_xmlhttpRequest'), type: 'error' };
-          }
 
           // @connect enforcement
           const connectPolicy = evaluateConnectPolicy(xhrScript, data.url);
@@ -7907,6 +8018,8 @@ async function handleMessage(message, sender) {
           if (!xhrPreCheck.ok && !shouldAllowInternalXhr(xhrScript, data.url, settings, xhrPreCheck)) {
             return { error: internalXhrError('GM_xmlhttpRequest URL rejected', xhrPreCheck), type: 'error' };
           }
+          const cookieRouting = await prepareCookieRoutingForFetch(data, 'GM_xmlhttpRequest');
+          if (cookieRouting.error) return { error: cookieRouting.error, type: 'error' };
 
           const tabId = sender.tab?.id;
           const request = XhrManager.create(tabId, data.scriptId, data);
@@ -7958,6 +8071,7 @@ async function handleMessage(message, sender) {
           // (e.g. localhost with null CORS).
           const method = String(data.method || 'GET').toUpperCase();
           const fetchOptions = XhrManager.buildFetchOptions(data);
+          if (cookieRouting.applies) fetchOptions.credentials = 'omit';
           fetchOptions.signal = controller.signal;
 
           // Add body for non-GET/HEAD requests; deserialize tagged body objects
@@ -8017,7 +8131,7 @@ async function handleMessage(message, sender) {
           // Execute the fetch
           (async () => {
             try {
-              const response = await fetch(data.url, fetchOptions);
+              const response = await withCookieHeaderSessionRule(data.url, cookieRouting.cookieHeader, () => fetch(data.url, fetchOptions));
               
               if (request.aborted) return;
               const xhrPostCheck = InternalHostGuard.classifyResponseUrl(response, ['http:', 'https:']);
@@ -8240,10 +8354,10 @@ async function handleMessage(message, sender) {
           if (!data.scriptId) return { error: 'Missing script context' };
           const downloadScript = await ScriptStorage.get(data.scriptId);
           if (!downloadScript) return { error: 'Script context not found' };
-          if (hasPartitionCookieOptions(data)) return { error: partitionCookieUnsupportedError('GM_download') };
           let downloadProtocol = '';
           try { downloadProtocol = new URL(data.url).protocol; } catch (_) { return { error: 'Invalid URL' }; }
           let downloadUrl = data.url;
+          let cookieRouting = { applies: false, cookieHeader: '' };
           if (downloadProtocol === 'http:' || downloadProtocol === 'https:') {
             const downloadPolicy = evaluateConnectPolicy(downloadScript, data.url);
             if (!downloadPolicy.allowed) return { error: downloadPolicy.error };
@@ -8252,13 +8366,16 @@ async function handleMessage(message, sender) {
             if (!downloadPreCheck.ok && !shouldAllowInternalXhr(downloadScript, data.url, downloadSettings, downloadPreCheck)) {
               return { error: internalXhrError('GM_download URL rejected', downloadPreCheck) };
             }
-            if (downloadNeedsFetchBridge(data)) {
+            cookieRouting = await prepareCookieRoutingForFetch(data, 'GM_download');
+            if (cookieRouting.error) return { error: cookieRouting.error };
+            if (downloadNeedsFetchBridge(data) || cookieRouting.applies) {
               const fetchOptions = XhrManager.buildFetchOptions({
                 ...data,
                 method: 'GET',
                 noCache: data.noCache === true || data.nocache === true
               });
-              const response = await fetch(data.url, fetchOptions);
+              if (cookieRouting.applies) fetchOptions.credentials = 'omit';
+              const response = await withCookieHeaderSessionRule(data.url, cookieRouting.cookieHeader, () => fetch(data.url, fetchOptions));
               const downloadPostCheck = InternalHostGuard.classifyResponseUrl(response, ['http:', 'https:']);
               if (!downloadPostCheck.ok && !shouldAllowInternalXhr(downloadScript, response.url || data.url, downloadSettings, downloadPostCheck)) {
                 return { error: internalXhrError('GM_download redirected to internal host', downloadPostCheck) };

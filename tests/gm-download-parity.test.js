@@ -84,21 +84,27 @@ describe('GM_download parity surface', () => {
     expect(core).toContain('async function responseToDownloadDataUrl(response)');
     expect(gmDownloadBlock?.[0]).toContain('downloadNeedsFetchBridge(data)');
     expect(gmDownloadBlock?.[0]).toContain('XhrManager.buildFetchOptions');
-    expect(gmDownloadBlock?.[0]).toContain('await fetch(data.url, fetchOptions)');
+    expect(gmDownloadBlock?.[0]).toContain('withCookieHeaderSessionRule(data.url, cookieRouting.cookieHeader');
     expect(gmDownloadBlock?.[0]).toContain('downloadUrl = await responseToDownloadDataUrl(response);');
     expect(gmDownloadBlock?.[0]).toContain('filename: normalizeDownloadFilename(data.name, data.url, data.sourceName)');
   });
 
-  it('does not silently ignore partition-cookie options on XHR or download', () => {
+  it('routes partition-cookie options through the explicit fetch cookie bridge', () => {
     const core = source('src/background/core.ts');
     const wrapper = source('src/background/wrapper-builder.ts');
     const xhrBlock = core.match(/case 'GM_xmlhttpRequest': \{[\s\S]*?case 'GM_xmlhttpRequest_abort': \{/);
     const gmDownloadBlock = core.match(/case 'GM_download': \{[\s\S]*?case 'GM_notification': \{/);
 
-    expect(core).toContain('function hasPartitionCookieOptions(data = {})');
-    expect(core).toContain('function partitionCookieUnsupportedError(apiName)');
-    expect(xhrBlock?.[0]).toContain("partitionCookieUnsupportedError('GM_xmlhttpRequest')");
-    expect(gmDownloadBlock?.[0]).toContain("partitionCookieUnsupportedError('GM_download')");
+    expect(core).toContain('function hasCookieRoutingOptions(data = {})');
+    expect(core).toContain('async function prepareCookieRoutingForFetch(data = {}, apiName =');
+    expect(core).toContain('chrome.cookies.getAll(details)');
+    expect(core).toContain('chrome.declarativeNetRequest.updateSessionRules');
+    expect(xhrBlock?.[0]).toContain("prepareCookieRoutingForFetch(data, 'GM_xmlhttpRequest')");
+    expect(xhrBlock?.[0]).toContain("fetchOptions.credentials = 'omit'");
+    expect(xhrBlock?.[0]).toContain('withCookieHeaderSessionRule(data.url, cookieRouting.cookieHeader');
+    expect(gmDownloadBlock?.[0]).toContain("prepareCookieRoutingForFetch(data, 'GM_download')");
+    expect(gmDownloadBlock?.[0]).toContain('downloadNeedsFetchBridge(data) || cookieRouting.applies');
+    expect(gmDownloadBlock?.[0]).toContain("fetchOptions.credentials = 'omit'");
     expect(wrapper).toContain('partitionKey: details.partitionKey');
     expect(wrapper).toContain('cookiePartition: details.cookiePartition');
     expect(wrapper).toContain('cookieStoreId: details.cookieStoreId');

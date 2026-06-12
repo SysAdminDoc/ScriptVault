@@ -11,8 +11,21 @@ function extractFunction(src, name) {
   const marker = `function ${name}(`;
   const start = src.indexOf(marker);
   if (start === -1) throw new Error(`function ${name} not found`);
-  // Find the opening brace of the function body
-  const braceStart = src.indexOf('{', start);
+  // Find the opening brace of the function body, not a default parameter like `data = {}`.
+  let parenDepth = 0;
+  let paramsEnd = -1;
+  for (let i = src.indexOf('(', start); i < src.length; i += 1) {
+    if (src[i] === '(') parenDepth += 1;
+    if (src[i] === ')') {
+      parenDepth -= 1;
+      if (parenDepth === 0) {
+        paramsEnd = i;
+        break;
+      }
+    }
+  }
+  if (paramsEnd === -1) throw new Error(`function ${name} params did not close`);
+  const braceStart = src.indexOf('{', paramsEnd);
   let depth = 0;
   for (let i = braceStart; i < src.length; i += 1) {
     if (src[i] === '{') depth += 1;
@@ -26,10 +39,20 @@ function extractFunction(src, name) {
 
 const isHttpCookieUrlSrc = extractFunction(source, 'isHttpCookieUrl');
 const normalizeCookiePartitionKeySrc = extractFunction(source, 'normalizeCookiePartitionKey');
+const hasCookieRoutingOptionsSrc = extractFunction(source, 'hasCookieRoutingOptions');
+const normalizeNetworkCookieRoutingSrc = extractFunction(source, 'normalizeNetworkCookieRouting');
+const cookieHeaderFromCookiesSrc = extractFunction(source, 'cookieHeaderFromCookies');
+const exactDnrRegexForUrlSrc = extractFunction(source, 'exactDnrRegexForUrl');
 // eslint-disable-next-line @typescript-eslint/no-implied-eval
 const isHttpCookieUrl = new Function(`${isHttpCookieUrlSrc}\nreturn isHttpCookieUrl;`)();
 // eslint-disable-next-line @typescript-eslint/no-implied-eval
 const normalizeCookiePartitionKey = new Function(`${isHttpCookieUrlSrc}\n${normalizeCookiePartitionKeySrc}\nreturn normalizeCookiePartitionKey;`)();
+// eslint-disable-next-line @typescript-eslint/no-implied-eval
+const normalizeNetworkCookieRouting = new Function(`${isHttpCookieUrlSrc}\n${normalizeCookiePartitionKeySrc}\n${hasCookieRoutingOptionsSrc}\n${normalizeNetworkCookieRoutingSrc}\nreturn normalizeNetworkCookieRouting;`)();
+// eslint-disable-next-line @typescript-eslint/no-implied-eval
+const cookieHeaderFromCookies = new Function(`${cookieHeaderFromCookiesSrc}\nreturn cookieHeaderFromCookies;`)();
+// eslint-disable-next-line @typescript-eslint/no-implied-eval
+const exactDnrRegexForUrl = new Function(`${exactDnrRegexForUrlSrc}\nreturn exactDnrRegexForUrl;`)();
 
 describe('isHttpCookieUrl', () => {
   it('accepts http and https URLs', () => {
@@ -91,6 +114,58 @@ describe('normalizeCookiePartitionKey', () => {
     });
     expect(normalizeCookiePartitionKey({ hasCrossSiteAncestor: 'yes' })).toMatchObject({
       error: 'partitionKey.hasCrossSiteAncestor must be boolean',
+    });
+  });
+});
+
+describe('partition-aware network cookie routing helpers', () => {
+  it('accepts partition aliases and cookie-store IDs for XHR/download routing', () => {
+    expect(normalizeNetworkCookieRouting({
+      partitionKey: { topLevelSite: 'https://top.example/path' },
+      cookiePartition: { topLevelSite: 'https://top.example/path' },
+      cookieStoreId: '1'
+    }, 'GM_xmlhttpRequest')).toEqual({
+      applies: true,
+      partitionKey: { topLevelSite: 'https://top.example' },
+      storeId: '1',
+    });
+  });
+
+  it('rejects ambiguous or unsafe cookie-routing option combinations', () => {
+    expect(normalizeNetworkCookieRouting({
+      partitionKey: { topLevelSite: 'https://one.example' },
+      cookiePartition: { topLevelSite: 'https://two.example' },
+    }, 'GM_download')).toMatchObject({
+      error: 'GM_download partitionKey and cookiePartition must match when both are provided',
+    });
+    expect(normalizeNetworkCookieRouting({
+      partitionKey: { topLevelSite: 'https://one.example' },
+      anonymous: true,
+    }, 'GM_download')).toMatchObject({
+      error: 'GM_download cookie routing cannot be combined with anonymous requests',
+    });
+    expect(normalizeNetworkCookieRouting({
+      partitionKey: { topLevelSite: 'https://one.example' },
+      cookieStoreId: 7,
+    }, 'GM_xmlhttpRequest')).toMatchObject({
+      error: 'GM_xmlhttpRequest cookieStoreId must be a string',
+    });
+  });
+
+  it('builds a deterministic cookie header without unsafe cookie names', () => {
+    expect(cookieHeaderFromCookies([
+      { name: 'short', value: '1', path: '/' },
+      { name: 'deep', value: '2', path: '/account/settings' },
+      { name: 'bad;name', value: '3', path: '/account/settings' },
+    ])).toBe('deep=2; short=1');
+  });
+
+  it('builds exact DNR regex filters and rejects overlong URLs', () => {
+    expect(exactDnrRegexForUrl('https://example.com/a.b?q=(x)')).toEqual({
+      regex: '^https://example\\.com/a\\.b\\?q=\\(x\\)$',
+    });
+    expect(exactDnrRegexForUrl(`https://example.com/${'a'.repeat(1900)}`)).toMatchObject({
+      error: 'cookie-routed request URL is too long for an exact DNR guard',
     });
   });
 });
