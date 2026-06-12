@@ -108,6 +108,13 @@ export const TS_RUNTIME_MODULES = [
     selfExportName: 'ScriptConfig',
   },
   {
+    id: 'user-scripts-setup',
+    source: 'src/modules/user-scripts-setup.ts',
+    output: 'modules/user-scripts-setup.js',
+    exportName: 'UserScriptsSetupDoctor',
+    selfExportName: 'UserScriptsSetupDoctor',
+  },
+  {
     id: 'userstyles',
     source: 'src/modules/userstyles.ts',
     output: 'modules/userstyles.js',

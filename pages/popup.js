@@ -5,6 +5,7 @@
     'use strict';
 
     const numberFormatter = new Intl.NumberFormat();
+    const setupDoctor = globalThis.UserScriptsSetupDoctor;
 
     // Event delegation for favicon error handling (CSP-compliant)
     document.addEventListener('error', function(e) {
@@ -385,44 +386,49 @@
         return /Firefox\//.test(navigator.userAgent || '');
     }
 
-    function buildPopupSetupFallback(message = '') {
-        const chromeVersion = getPopupChromeVersion();
-        if (isPopupFirefox()) {
-            return {
-                setupState: 'firefox-user-scripts-permission',
-                setupTitle: 'Firefox permission required',
-                setupMessage: message || 'Grant ScriptVault the optional Firefox userScripts permission, then reopen the popup.',
-                setupAction: 'Grant Permission',
-                setupUrl: '',
-                chromeVersion
-            };
-        }
-        if (chromeVersion >= 138) {
-            return {
-                setupState: 'allow-user-scripts-disabled',
-                setupTitle: 'Allow User Scripts is off',
-                setupMessage: message || 'Open Extension Details, enable "Allow User Scripts" for ScriptVault, then reopen the popup; reload the extension if this banner remains.',
-                setupAction: 'Open Extension Details',
-                setupUrl: `chrome://extensions/?id=${chrome.runtime.id}`,
-                chromeVersion
-            };
-        }
-        if (chromeVersion >= 120) {
-            return {
-                setupState: 'developer-mode-disabled',
-                setupTitle: 'Developer Mode required',
-                setupMessage: message || 'Open chrome://extensions and enable Developer Mode to run userscripts.',
-                setupAction: 'Open Extensions Page',
-                setupUrl: 'chrome://extensions',
-                chromeVersion
-            };
+    function buildPopupSetupDoctorView(status = {}) {
+        if (setupDoctor?.buildSetupDoctorView) {
+            return setupDoctor.buildSetupDoctorView(status, {
+                browserName: isPopupFirefox() ? 'firefox' : 'chromium',
+                chromeVersion: getPopupChromeVersion(),
+                extensionId: chrome.runtime?.id || '',
+                surface: 'popup'
+            });
         }
         return {
-            setupState: 'unsupported-browser',
-            setupTitle: 'Unsupported browser',
-            setupMessage: message || 'ScriptVault userscripts require Chrome 120 or newer.',
-            setupAction: 'Open Extensions Page',
-            setupUrl: 'chrome://extensions',
+            setupState: status.setupState || 'unsupported-browser',
+            title: status.setupTitle || 'Setup Required',
+            message: status.setupMessage || 'Runtime setup is required before scripts can run.',
+            bannerText: status.setupMessage || 'Runtime setup is required before scripts can run.',
+            actionLabel: status.setupAction || 'Open Extension Details',
+            actionKind: 'open-extension-details',
+            setupUrl: status.setupUrl || `chrome://extensions/?id=${chrome.runtime?.id || ''}`
+        };
+    }
+
+    function buildPopupSetupFallback(message = '') {
+        const chromeVersion = getPopupChromeVersion();
+        let setupState = 'unsupported-browser';
+        if (isPopupFirefox()) {
+            setupState = 'firefox-user-scripts-permission';
+        } else if (chromeVersion >= 138) {
+            setupState = 'allow-user-scripts-disabled';
+        } else if (chromeVersion >= 120) {
+            setupState = 'developer-mode-disabled';
+        }
+        const view = buildPopupSetupDoctorView({
+            userScriptsAvailable: false,
+            setupState,
+            setupMessage: message || '',
+            chromeVersion
+        });
+        return {
+            setupState: view.setupState,
+            setupTitle: view.title,
+            setupMessage: view.message,
+            setupAction: view.actionLabel,
+            setupActionKind: view.actionKind,
+            setupUrl: view.setupUrl,
             chromeVersion
         };
     }
@@ -571,16 +577,25 @@
             const status = typeof statusOrMessage === 'string'
                 ? buildPopupSetupFallback(statusOrMessage)
                 : (statusOrMessage || buildPopupSetupFallback());
-            setupStatus = status;
+            const setupView = buildPopupSetupDoctorView(status);
+            setupStatus = {
+                ...status,
+                setupState: setupView.setupState,
+                setupTitle: setupView.title,
+                setupMessage: setupView.message,
+                setupAction: setupView.actionLabel,
+                setupActionKind: setupView.actionKind,
+                setupUrl: setupView.setupUrl
+            };
             elements.setupWarning.classList.add('visible');
-            elements.setupWarning.dataset.setupState = status.setupState || 'unknown';
+            elements.setupWarning.dataset.setupState = setupStatus.setupState || 'unknown';
             const titleEl = elements.setupWarning.querySelector('.setup-warning-title-text');
-            if (titleEl && status.setupTitle) titleEl.textContent = status.setupTitle;
+            if (titleEl && setupStatus.setupTitle) titleEl.textContent = setupStatus.setupTitle;
             // Keep the warning title/icon intact and update only the explanatory text.
             const msgEl = elements.setupWarning.querySelector('.setup-warning-text');
-            if (msgEl && status.setupMessage) msgEl.textContent = status.setupMessage;
-            if (elements.btnOpenExtSettings && status.setupAction) {
-                elements.btnOpenExtSettings.textContent = status.setupAction;
+            if (msgEl && setupStatus.setupMessage) msgEl.textContent = setupStatus.setupMessage;
+            if (elements.btnOpenExtSettings && setupStatus.setupAction) {
+                elements.btnOpenExtSettings.textContent = setupStatus.setupAction;
             }
         }
     }
