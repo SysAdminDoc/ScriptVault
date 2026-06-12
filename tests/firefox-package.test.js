@@ -14,6 +14,7 @@ const dashboardJs = readFileSync(resolve(process.cwd(), 'pages/dashboard.js'), '
 const popupHtml = readFileSync(resolve(process.cwd(), 'pages/popup.html'), 'utf8');
 const amoSourceReadme = readFileSync(resolve(process.cwd(), 'AMO-SOURCE-README.md'), 'utf8');
 const storeCopyCheck = readFileSync(resolve(process.cwd(), 'scripts/check-permission-copy.mjs'), 'utf8');
+const readme = readFileSync(resolve(process.cwd(), 'README.md'), 'utf8');
 
 function readPngDimensions(file) {
   const png = readFileSync(resolve(process.cwd(), file));
@@ -185,5 +186,15 @@ describe('Firefox AMO validation gate', () => {
     expect(amoSourceReadme).toContain('unlisted');
     expect(storeCopyCheck).toContain("const amoSourceReadmePath = 'AMO-SOURCE-README.md'");
     expect(storeCopyCheck).toContain('amoSourceReadmeNeedles');
+  });
+
+  it('positions Firefox v1 as textarea-first instead of claiming Monaco parity', () => {
+    expect(readme).toContain('Firefox v1 is intentionally textarea-first');
+    expect(readme).toContain('Monaco is omitted from the Firefox package until a pruned local editor bundle has AMO lint proof');
+    expect(readme).toContain('the editor falls back to the textarea adapter');
+    expect(amoSourceReadme).toContain('The Firefox package intentionally omits Monaco because the AMO package uses');
+    expect(amoSourceReadme).toContain('Monaco is omitted from the AMO package; the dashboard falls back to the');
+    expect(buildFirefox).not.toContain('lib/monaco');
+    expect(buildFirefox).not.toContain('lib/monaco-esm');
   });
 });
