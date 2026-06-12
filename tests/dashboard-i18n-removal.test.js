@@ -22,10 +22,12 @@ describe('dashboard i18n-v2 removal', () => {
     expect(dashboardJs).not.toContain('settingsLanguage');
   });
 
-  it('keeps locale claims scoped to manifest and runtime messages', () => {
-    expect(readme).toContain('Manifest and browser-facing extension messages are localized');
-    expect(readme).toContain('dashboard interface is currently English-only');
+  it('keeps locale claims scoped to active runtime surfaces', () => {
+    expect(readme).toContain('Manifest, browser-facing extension messages, and core dashboard shell controls');
+    expect(readme).toContain('Deep dashboard content is still being migrated to DOM translation coverage');
     expect(localeDocs).not.toContain('dashboard-i18n-v2.js');
-    expect(localeDocs).toContain('two active surfaces');
+    expect(dashboardHtml).toContain('<script src="../modules/i18n.js"></script>');
+    expect(dashboardJs).toContain('function applyDashboardI18n()');
+    expect(dashboardJs).toContain('i18n.applyToDOM(document)');
   });
 });
