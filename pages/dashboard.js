@@ -82,6 +82,14 @@
         security: 'security settings',
         recovery: 'recovery settings'
     };
+    const SETTINGS_FILTER_LABEL_KEYS = {
+        all: 'settingsFilterAllSections',
+        core: 'settingsFilterCoreSettings',
+        workspace: 'settingsFilterWorkspaceSettings',
+        automation: 'settingsFilterAutomationSettings',
+        security: 'settingsFilterSecuritySettings',
+        recovery: 'settingsFilterRecoverySettings'
+    };
     const UTILITIES_FILTER_LABELS = {
         all: 'all utilities',
         backup: 'backup utilities',
@@ -2015,6 +2023,11 @@
     function tDashboard(key, fallback = key, placeholders = {}) {
         const i18n = getDashboardI18n();
         return i18n?.getMessage ? i18n.getMessage(key, placeholders) : fallback;
+    }
+
+    function getSettingsFilterLabel(filter) {
+        const labelKey = SETTINGS_FILTER_LABEL_KEYS[filter] || SETTINGS_FILTER_LABEL_KEYS.all;
+        return tDashboard(labelKey, SETTINGS_FILTER_LABELS[filter] || SETTINGS_FILTER_LABELS.all);
     }
 
     function setLabelPreservingDecor(el, label) {
@@ -4787,22 +4800,56 @@
             button => (button.dataset.settingsFilter || 'all') === state.settingsPanelFilter
         );
 
+        const modeLabel = mode === 'advanced'
+            ? tDashboard('settingsModeAdvanced', 'Advanced')
+            : tDashboard('settingsModeBeginner', 'Beginner');
         if (elements.settingsModeSummary) {
-            elements.settingsModeSummary.textContent = mode === 'advanced' ? 'Advanced' : 'Beginner';
+            elements.settingsModeSummary.textContent = modeLabel;
         }
         if (elements.settingsVisibleSummary) {
-            elements.settingsVisibleSummary.textContent = `${numberFormatter.format(visibleCount)} section${visibleCount === 1 ? '' : 's'}`;
+            const count = numberFormatter.format(visibleCount);
+            elements.settingsVisibleSummary.textContent = tDashboard(
+                'settingsSectionsCount',
+                `${count} section${visibleCount === 1 ? '' : 's'}`,
+                { count, plural: visibleCount === 1 ? '' : 's' }
+            );
         }
         if (elements.settingsAdvancedSummary) {
+            const visibleAdvanced = numberFormatter.format(visibleAdvancedCount);
+            const totalAdvanced = numberFormatter.format(totalAdvancedCount);
             elements.settingsAdvancedSummary.textContent = mode === 'advanced'
-                ? `${numberFormatter.format(visibleAdvancedCount)}/${numberFormatter.format(totalAdvancedCount)} shown`
-                : `${numberFormatter.format(totalAdvancedCount)} hidden`;
+                ? tDashboard(
+                    'settingsAdvancedShownCount',
+                    `${visibleAdvanced}/${totalAdvanced} shown`,
+                    { visible: visibleAdvanced, total: totalAdvanced }
+                )
+                : tDashboard(
+                    'settingsAdvancedHiddenCount',
+                    `${totalAdvanced} hidden`,
+                    { total: totalAdvanced }
+                );
         }
         if (elements.settingsFilterStatus) {
             if (query) {
-                elements.settingsFilterStatus.textContent = `Showing ${numberFormatter.format(visibleCount)} result${visibleCount === 1 ? '' : 's'} for "${elements.settingsQuickFilter?.value?.trim() || ''}".`;
+                const count = numberFormatter.format(visibleCount);
+                elements.settingsFilterStatus.textContent = tDashboard(
+                    'settingsShowingResults',
+                    `Showing ${count} result${visibleCount === 1 ? '' : 's'} for "${elements.settingsQuickFilter?.value?.trim() || ''}".`,
+                    {
+                        count,
+                        plural: visibleCount === 1 ? '' : 's',
+                        query: elements.settingsQuickFilter?.value?.trim() || ''
+                    }
+                );
             } else {
-                elements.settingsFilterStatus.textContent = `Showing ${SETTINGS_FILTER_LABELS[state.settingsPanelFilter] || 'all sections'} in ${mode} mode.`;
+                elements.settingsFilterStatus.textContent = tDashboard(
+                    'settingsShowingFilterMode',
+                    `Showing ${getSettingsFilterLabel(state.settingsPanelFilter)} in ${mode} mode.`,
+                    {
+                        filter: getSettingsFilterLabel(state.settingsPanelFilter),
+                        mode: modeLabel
+                    }
+                );
             }
         }
         if (elements.settingsEmptyState) {
