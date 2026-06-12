@@ -58,6 +58,12 @@
       "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for the user-script message allowlist."
     },
     {
+      "runtime": "modules/connect-policy.js",
+      "sources": ["src/background/connect-policy.ts"],
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for GM network and script host-scope policy helpers."
+    },
+    {
       "runtime": "modules/resources.js",
       "sources": ["src/modules/resources.ts", "src/background/resource-loader.ts"],
       "status": "promoted",

@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 
 const contentBridgeCode = readFileSync(resolve(process.cwd(), 'content.js'), 'utf8');
 const backgroundCoreCode = readFileSync(resolve(process.cwd(), 'background.core.js'), 'utf8');
+const connectPolicyCode = readFileSync(resolve(process.cwd(), 'modules/connect-policy.js'), 'utf8');
 const userScriptMessagePolicyCode = readFileSync(resolve(process.cwd(), 'modules/user-script-message-policy.js'), 'utf8');
 const wrapperBuilderCode = readFileSync(resolve(process.cwd(), 'src/background/wrapper-builder.ts'), 'utf8');
 
@@ -87,13 +88,7 @@ function waitForBridgeResponse(win, id) {
 }
 
 function loadConnectPolicyHelpers() {
-  const start = backgroundCoreCode.indexOf('function normalizeConnectHost');
-  const end = backgroundCoreCode.indexOf('if (chrome.runtime.onUserScriptMessage)', start);
-  if (start === -1 || end === -1) {
-    throw new Error('Unable to locate @connect helper functions in background.core.js');
-  }
-  const helperCode = backgroundCoreCode.slice(start, end);
-  return new Function(`${helperCode}; return { evaluateConnectPolicy, normalizeConnectHost, shouldAllowInternalXhr, isScriptHostScopeAllowed, evaluateScriptHostScopePolicy };`)();
+  return new Function(`${connectPolicyCode}; return ConnectPolicy;`)();
 }
 
 function loadUserScriptMessagePolicy() {
@@ -147,12 +142,13 @@ function loadUserScriptMessagingGate({ hasUserScriptMessage = true } = {}) {
   };
   const debugLog = () => {};
   const UserScriptMessagePolicy = loadUserScriptMessagePolicy();
+  const ConnectPolicy = loadConnectPolicyHelpers();
 
   const factory = new Function(
-    'chrome', 'handleMessage', 'debugLog', 'UserScriptMessagePolicy',
+    'chrome', 'handleMessage', 'debugLog', 'UserScriptMessagePolicy', 'ConnectPolicy',
     `${sliceCode}\nreturn { isExtensionSurfaceSender, isUserScriptAllowedAction, USER_SCRIPT_MESSAGING_AVAILABLE };`
   );
-  const exports = factory(chromeMock, handleMessage, debugLog, UserScriptMessagePolicy);
+  const exports = factory(chromeMock, handleMessage, debugLog, UserScriptMessagePolicy, ConnectPolicy);
 
   return {
     chromeMock,

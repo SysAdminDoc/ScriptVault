@@ -84,11 +84,13 @@ describe('source hardening parity guards', () => {
 
   it('keeps privileged GM network, cookie, and DNR APIs behind script host-scope policy', () => {
     const core = source('src/background/core.ts');
+    const connectPolicy = source('src/background/connect-policy.ts');
     const dnr = source('src/background/dnr-rules.ts');
     const wrapper = source('src/background/wrapper-builder.ts');
 
-    expect(core).toContain('function isScriptHostScopeAllowed(script, requestUrl)');
-    expect(core).toContain('Connection to ${hostname} blocked by script host scope');
+    expect(core).toContain('const isScriptHostScopeAllowed = ConnectPolicy.isScriptHostScopeAllowed;');
+    expect(connectPolicy).toContain('export function isScriptHostScopeAllowed(script: ScriptLike | null | undefined, requestUrl: string)');
+    expect(connectPolicy).toContain('Connection to ${hostname} blocked by script host scope');
     expect(core).toContain("GM_download URL rejected");
     expect(core).toContain('evaluateScriptHostScopePolicy(cookieScript, data.url,');
     expect(core).toContain('_validateWebRequestRulesForScript(script, rules, settings)');

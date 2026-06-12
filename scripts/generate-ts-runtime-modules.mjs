@@ -145,6 +145,12 @@ export const TS_RUNTIME_MODULES = [
     exportName: 'UserScriptMessagePolicy',
   },
   {
+    id: 'connect-policy',
+    source: 'src/background/connect-policy.ts',
+    output: 'modules/connect-policy.js',
+    exportName: 'ConnectPolicy',
+  },
+  {
     id: 'resources',
     source: 'src/modules/resources.ts',
     output: 'modules/resources.js',
