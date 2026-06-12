@@ -182,7 +182,7 @@
            ============================================ */
         :root {
             --ui-scale: 1;
-            --base-font: 13px;
+            --base-font: 100%;
             --density-toolbar-padding-y: 10px;
             --density-toolbar-padding-x: 12px;
             --density-toolbar-cluster-gap: 7px;
@@ -197,13 +197,14 @@
             --density-table-cell-padding-x: 9px;
             --density-view-pill-height: 28px;
             --density-view-pill-padding-x: 11px;
+            font-size: var(--base-font);
         }
-        [data-ui-scale="0.85"] { --ui-scale: 0.85; --base-font: 11px; }
-        [data-ui-scale="0.9"]  { --ui-scale: 0.9;  --base-font: 12px; }
-        [data-ui-scale="1"]    { --ui-scale: 1;     --base-font: 13px; }
-        [data-ui-scale="1.1"]  { --ui-scale: 1.1;   --base-font: 14px; }
-        [data-ui-scale="1.25"] { --ui-scale: 1.25;  --base-font: 16px; }
-        [data-ui-scale="1.5"]  { --ui-scale: 1.5;   --base-font: 19px; }
+        [data-ui-scale="0.85"] { --ui-scale: 0.85; --base-font: 85%; }
+        [data-ui-scale="0.9"]  { --ui-scale: 0.9;  --base-font: 90%; }
+        [data-ui-scale="1"]    { --ui-scale: 1;     --base-font: 100%; }
+        [data-ui-scale="1.1"]  { --ui-scale: 1.1;   --base-font: 110%; }
+        [data-ui-scale="1.25"] { --ui-scale: 1.25;  --base-font: 125%; }
+        [data-ui-scale="1.5"]  { --ui-scale: 1.5;   --base-font: 150%; }
 
         :root,
         [data-density="comfortable"] {
@@ -269,7 +270,7 @@
 
         body {
             font-family: 'Aptos', 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-            font-size: var(--base-font);
+            font-size: 0.8125rem;
             background:
                 radial-gradient(circle at top left, rgba(34, 197, 94, 0.16), transparent 24%),
                 radial-gradient(circle at top right, rgba(96, 165, 250, 0.14), transparent 22%),
@@ -322,7 +323,7 @@
             color: #fff;
             padding: 8px 16px;
             z-index: 10001;
-            font-size: 14px;
+            font-size: 0.875rem;
             border-radius: 0 0 8px 0;
             transition: top 0.2s ease;
         }
@@ -418,7 +419,7 @@
         }
 
         .tm-logo-text h1 {
-            font-size: 14px;
+            font-size: 0.875rem;
             font-weight: 700;
             color: var(--text-primary);
             letter-spacing: -0.02em;
@@ -426,7 +427,7 @@
         }
 
         .tm-logo-text h1 sup {
-            font-size: 9px;
+            font-size: 0.5625rem;
             color: var(--accent-primary);
             margin-left: 6px;
             background: rgba(34, 197, 94, 0.12);
@@ -475,7 +476,7 @@
         .header-zoom-select {
             height: 28px;
             padding: 0 8px;
-            font-size: 11px;
+            font-size: 0.6875rem;
             background: rgba(255, 255, 255, 0.02);
             color: var(--text-secondary);
             border: 1px solid rgba(127, 127, 127, 0.18);
@@ -499,7 +500,7 @@
             height: 24px;
             min-width: 26px;
             padding: 0 6px;
-            font-size: 10px;
+            font-size: 0.625rem;
             font-weight: 600;
             background: transparent;
             color: var(--text-muted);
@@ -537,12 +538,12 @@
         }
         
         .setup-warning-icon {
-            font-size: 20px;
+            font-size: 1.25rem;
         }
         
         .setup-warning-text {
             flex: 1;
-            font-size: 13px;
+            font-size: 0.8125rem;
             line-height: 1.4;
         }
         
@@ -553,7 +554,7 @@
             padding: 6px 12px;
             border-radius: 4px;
             cursor: pointer;
-            font-size: 12px;
+            font-size: 0.75rem;
             white-space: nowrap;
         }
         
@@ -565,7 +566,7 @@
             background: none;
             border: none;
             color: rgba(255,255,255,0.7);
-            font-size: 20px;
+            font-size: 1.25rem;
             cursor: pointer;
             padding: 0 4px;
             line-height: 1;
@@ -635,7 +636,7 @@
             border: 1px solid transparent;
             border-radius: 8px;
             color: var(--text-secondary);
-            font-size: 11px;
+            font-size: 0.6875rem;
             font-weight: 600;
             letter-spacing: 0.08em;
             text-transform: uppercase;
@@ -654,7 +655,7 @@
             min-width: 42px;
             padding: 0 14px;
             justify-content: center;
-            font-size: 14px;
+            font-size: 0.875rem;
             font-weight: 700;
             color: #d1fae5;
             text-transform: none;
@@ -698,7 +699,7 @@
             height: 14px;
             line-height: 14px;
             text-align: center;
-            font-size: 14px;
+            font-size: 0.875rem;
             border-radius: 3px;
             opacity: 0.5;
             transition: opacity 0.15s, background 0.15s;
@@ -769,7 +770,7 @@
             border: 1px solid rgba(34, 197, 94, 0.2);
             background: rgba(34, 197, 94, 0.08);
             color: var(--accent-primary);
-            font-size: 11px;
+            font-size: 0.6875rem;
             font-weight: 700;
             letter-spacing: 0.08em;
             text-transform: uppercase;
@@ -777,7 +778,7 @@
 
         .scripts-shell-copy h2 {
             margin-top: 12px;
-            font-size: clamp(24px, 3vw, 32px);
+            font-size: clamp(1.5rem, 3vw, 2rem);
             font-weight: 750;
             letter-spacing: -0.04em;
             text-wrap: balance;
@@ -811,7 +812,7 @@
         .scripts-shell-stat span {
             display: block;
             color: var(--text-muted);
-            font-size: 10px;
+            font-size: 0.625rem;
             font-weight: 700;
             letter-spacing: 0.08em;
             text-transform: uppercase;
@@ -821,7 +822,7 @@
             display: block;
             margin-top: 6px;
             color: var(--text-primary);
-            font-size: 18px;
+            font-size: 1.125rem;
             font-weight: 700;
             font-variant-numeric: tabular-nums;
         }
@@ -908,7 +909,7 @@
         }
 
         .bulk-toggle-label {
-            font-size: 11px;
+            font-size: 0.6875rem;
             font-weight: 600;
             letter-spacing: 0.01em;
             white-space: nowrap;
@@ -917,17 +918,17 @@
         .bulk-select {
             padding: 3px 6px;
             min-width: 0;
-            font-size: 11px;
+            font-size: 0.6875rem;
         }
 
         .bulk-btn {
             padding: 3px 10px;
-            font-size: 11px;
+            font-size: 0.6875rem;
         }
 
         .script-counter {
             color: var(--accent-primary);
-            font-size: 11px;
+            font-size: 0.6875rem;
             font-weight: 600;
             padding: 7px 11px;
             background: rgba(34, 197, 94, 0.1);
@@ -949,7 +950,7 @@
             border: 1px solid rgba(127, 127, 127, 0.22);
             border-radius: 12px;
             color: var(--text-primary);
-            font-size: 12px;
+            font-size: 0.75rem;
             font-weight: 500;
             cursor: pointer;
             transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
@@ -981,7 +982,7 @@
             border: 1px solid rgba(127, 127, 127, 0.24);
             border-radius: 12px;
             color: var(--text-primary);
-            font-size: 12px;
+            font-size: 0.75rem;
             transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
         }
 
@@ -1009,7 +1010,7 @@
             background: rgba(255, 255, 255, 0.06);
             color: var(--text-muted);
             font: inherit;
-            font-size: 15px;
+            font-size: 0.9375rem;
             line-height: 1;
             cursor: pointer;
             transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease;
@@ -1061,7 +1062,7 @@
             padding: var(--density-table-cell-padding-y) var(--density-table-cell-padding-x);
             text-align: left;
             font-weight: 600;
-            font-size: 11px;
+            font-size: 0.6875rem;
             text-transform: uppercase;
             letter-spacing: 0.05em;
             color: var(--text-muted);
@@ -1118,7 +1119,7 @@
         }
 
         .sort-indicator {
-            font-size: 10px;
+            font-size: 0.625rem;
             opacity: 0.4;
         }
 
@@ -1132,7 +1133,7 @@
         .scripts-table td {
             padding: var(--density-table-cell-padding-y) var(--density-table-cell-padding-x);
             border-bottom: 1px solid rgba(127, 127, 127, 0.12);
-            font-size: 12px;
+            font-size: 0.75rem;
             vertical-align: middle;
         }
 
@@ -1233,7 +1234,7 @@
             justify-content: center;
             width: 18px; height: 18px;
             border-radius: 4px;
-            font-size: 9px;
+            font-size: 0.5625rem;
             font-weight: 700;
             color: #fff;
             letter-spacing: 0.02em;
@@ -1289,7 +1290,7 @@
                 transparent;
         }
         .empty-state svg { width: 64px; height: 64px; margin-bottom: 15px; opacity: 0.3; color: var(--accent-primary); }
-        .empty-state h3 { font-size: 20px; margin-bottom: 10px; color: var(--text-primary); font-weight: 650; text-wrap: balance; }
+        .empty-state h3 { font-size: 1.25rem; margin-bottom: 10px; color: var(--text-primary); font-weight: 650; text-wrap: balance; }
         .empty-state p { max-width: 460px; margin: 0 auto; line-height: 1.55; }
         .empty-state-actions {
             display: flex;
@@ -1307,7 +1308,7 @@
             border: 1px solid var(--border-color);
             border-radius: 6px;
             color: var(--text-primary);
-            font-size: 12px;
+            font-size: 0.75rem;
             transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
         }
 
@@ -1327,7 +1328,7 @@
             border: 1px solid var(--border-color);
             border-radius: 6px;
             color: var(--text-primary);
-            font-size: 12px;
+            font-size: 0.75rem;
             font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
             resize: vertical;
             transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
@@ -1347,7 +1348,7 @@
             height: 16px;
             border: 1px solid var(--text-muted);
             border-radius: 50%;
-            font-size: 10px;
+            font-size: 0.625rem;
             color: var(--text-muted);
             cursor: help;
             transition: border-color 0.2s ease, color 0.2s ease, background-color 0.2s ease;
@@ -1360,7 +1361,7 @@
             border: 1px solid var(--border-color);
             border-radius: 6px;
             color: var(--text-primary);
-            font-size: 12px;
+            font-size: 0.75rem;
             font-weight: 500;
             cursor: pointer;
             transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
@@ -1406,7 +1407,7 @@
         }
 
         .settings-eyebrow {
-            font-size: 10px;
+            font-size: 0.625rem;
             font-weight: 700;
             letter-spacing: 0.12em;
             text-transform: uppercase;
@@ -1415,7 +1416,7 @@
 
         .settings-hero-copy h2 {
             margin-top: 10px;
-            font-size: 24px;
+            font-size: 1.5rem;
             font-weight: 700;
             letter-spacing: -0.04em;
             color: var(--text-primary);
@@ -1424,7 +1425,7 @@
         .settings-hero-copy p {
             margin-top: 8px;
             max-width: 640px;
-            font-size: 13px;
+            font-size: 0.8125rem;
             line-height: 1.6;
             color: var(--text-secondary);
         }
@@ -1445,7 +1446,7 @@
 
         .settings-summary-label {
             display: block;
-            font-size: 10px;
+            font-size: 0.625rem;
             font-weight: 700;
             letter-spacing: 0.08em;
             text-transform: uppercase;
@@ -1455,7 +1456,7 @@
         .settings-summary strong {
             display: block;
             margin-top: 8px;
-            font-size: 16px;
+            font-size: 1rem;
             font-weight: 700;
             letter-spacing: -0.03em;
             color: var(--text-primary);
@@ -1483,7 +1484,7 @@
 
         .settings-search-icon {
             color: var(--text-muted);
-            font-size: 13px;
+            font-size: 0.8125rem;
         }
 
         .settings-search-input {
@@ -1519,7 +1520,7 @@
             color: var(--text-secondary);
             border-radius: 8px;
             padding: 8px 12px;
-            font-size: 12px;
+            font-size: 0.75rem;
             font-weight: 600;
             cursor: pointer;
             transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, outline-color 0.2s ease;
@@ -1592,7 +1593,7 @@
         .utilities-filter-status,
         .trash-filter-status,
         .help-filter-status {
-            font-size: 12px;
+            font-size: 0.75rem;
             color: var(--text-muted);
             line-height: 1.5;
         }
@@ -1622,7 +1623,7 @@
             min-width: 200px;
             padding: 15px 20px;
             font-weight: 600;
-            font-size: 14px;
+            font-size: 0.875rem;
             font-style: italic;
             color: var(--text-secondary);
             background: var(--bg-section-header);
@@ -1711,7 +1712,7 @@
             border: 1px solid rgba(96, 165, 250, 0.24);
             background: rgba(96, 165, 250, 0.12);
             color: var(--accent-secondary);
-            font-size: 10px;
+            font-size: 0.625rem;
             font-weight: 700;
             letter-spacing: 0.04em;
             text-transform: uppercase;
@@ -1737,7 +1738,7 @@
             margin-left: 230px;
             margin-top: 6px;
             color: var(--accent-red);
-            font-size: 12px;
+            font-size: 0.75rem;
             line-height: 1.4;
         }
 
@@ -1779,7 +1780,7 @@
         }
 
         .utilities-eyebrow {
-            font-size: 10px;
+            font-size: 0.625rem;
             font-weight: 700;
             letter-spacing: 0.12em;
             text-transform: uppercase;
@@ -1788,7 +1789,7 @@
 
         .utilities-hero-copy h2 {
             margin-top: 10px;
-            font-size: 24px;
+            font-size: 1.5rem;
             font-weight: 700;
             letter-spacing: -0.04em;
             color: var(--text-primary);
@@ -1797,7 +1798,7 @@
         .utilities-hero-copy p {
             margin-top: 8px;
             max-width: 640px;
-            font-size: 13px;
+            font-size: 0.8125rem;
             line-height: 1.6;
             color: var(--text-secondary);
         }
@@ -1818,7 +1819,7 @@
 
         .utilities-summary-label {
             display: block;
-            font-size: 10px;
+            font-size: 0.625rem;
             font-weight: 700;
             letter-spacing: 0.08em;
             text-transform: uppercase;
@@ -1828,7 +1829,7 @@
         .utilities-summary strong {
             display: block;
             margin-top: 8px;
-            font-size: 16px;
+            font-size: 1rem;
             font-weight: 700;
             letter-spacing: -0.03em;
             color: var(--text-primary);
@@ -1856,7 +1857,7 @@
 
         .utilities-search-icon {
             color: var(--text-muted);
-            font-size: 13px;
+            font-size: 0.8125rem;
         }
 
         .utilities-search-input {
@@ -1927,14 +1928,14 @@
         }
 
         .utility-note {
-            font-size: 12px;
+            font-size: 0.75rem;
             color: var(--text-muted);
             line-height: 1.6;
         }
 
         .utility-inline-status {
             color: var(--text-muted);
-            font-size: 12px;
+            font-size: 0.75rem;
         }
 
         .utility-surface {
@@ -1985,7 +1986,7 @@
             flex-wrap: wrap;
             gap: 8px;
             color: var(--text-muted);
-            font-size: 12px;
+            font-size: 0.75rem;
         }
 
         .subscription-health {
@@ -2004,7 +2005,7 @@
             justify-content: flex-end;
         }
 
-        @media (max-width: 900px) {
+        @media (max-width: 56.25rem) {
             .subscription-form,
             .subscription-item {
                 grid-template-columns: 1fr;
@@ -2044,7 +2045,7 @@
 
         .backup-browser-group-header strong {
             color: var(--text-primary);
-            font-size: 12px;
+            font-size: 0.75rem;
             letter-spacing: 0.06em;
             text-transform: uppercase;
         }
@@ -2076,7 +2077,7 @@
             flex-wrap: wrap;
             gap: 8px;
             color: var(--text-muted);
-            font-size: 11px;
+            font-size: 0.6875rem;
         }
 
         .backup-browser-actions,
@@ -2109,7 +2110,7 @@
 
         .restore-preview-card strong {
             color: var(--text-primary);
-            font-size: 18px;
+            font-size: 1.125rem;
             line-height: 1.2;
         }
 
@@ -2141,7 +2142,7 @@
         }
 
         .trash-eyebrow {
-            font-size: 10px;
+            font-size: 0.625rem;
             font-weight: 700;
             letter-spacing: 0.12em;
             text-transform: uppercase;
@@ -2150,7 +2151,7 @@
 
         .trash-hero-copy h2 {
             margin-top: 10px;
-            font-size: 24px;
+            font-size: 1.5rem;
             font-weight: 700;
             letter-spacing: -0.04em;
             color: var(--text-primary);
@@ -2159,7 +2160,7 @@
         .trash-hero-copy p {
             margin-top: 8px;
             max-width: 620px;
-            font-size: 13px;
+            font-size: 0.8125rem;
             line-height: 1.6;
             color: var(--text-secondary);
         }
@@ -2176,7 +2177,7 @@
             border-radius: 8px;
             background: rgba(251, 191, 36, 0.08);
             color: var(--text-secondary);
-            font-size: 13px;
+            font-size: 0.8125rem;
             line-height: 1.5;
         }
 
@@ -2190,7 +2191,7 @@
 
         .trash-summary-label {
             display: block;
-            font-size: 10px;
+            font-size: 0.625rem;
             font-weight: 700;
             letter-spacing: 0.08em;
             text-transform: uppercase;
@@ -2200,7 +2201,7 @@
         .trash-summary strong {
             display: block;
             margin-top: 8px;
-            font-size: 16px;
+            font-size: 1rem;
             font-weight: 700;
             letter-spacing: -0.03em;
             color: var(--text-primary);
@@ -2228,7 +2229,7 @@
 
         .trash-search-icon {
             color: var(--text-muted);
-            font-size: 13px;
+            font-size: 0.8125rem;
         }
 
         .trash-search input {
@@ -2296,7 +2297,7 @@
         }
 
         .trash-item-name {
-            font-size: 15px;
+            font-size: 0.9375rem;
             font-weight: 700;
             letter-spacing: -0.02em;
             color: var(--text-primary);
@@ -2310,12 +2311,12 @@
             border: 1px solid rgba(127, 127, 127, 0.16);
             background: rgba(255, 255, 255, 0.03);
             color: var(--text-secondary);
-            font-size: 11px;
+            font-size: 0.6875rem;
             font-weight: 600;
         }
 
         .trash-item-description {
-            font-size: 13px;
+            font-size: 0.8125rem;
             line-height: 1.6;
             color: var(--text-secondary);
         }
@@ -2333,7 +2334,7 @@
             border-radius: 8px;
             background: rgba(255, 255, 255, 0.04);
             color: var(--text-muted);
-            font-size: 11px;
+            font-size: 0.6875rem;
             font-weight: 600;
             letter-spacing: 0.01em;
         }
@@ -2387,7 +2388,7 @@
             content: 'No custom patterns defined';
             color: var(--text-muted);
             font-style: italic;
-            font-size: 11px;
+            font-size: 0.6875rem;
         }
         
         .url-pattern-editable .pattern-tag {
@@ -2400,7 +2401,7 @@
             border: 1px solid rgba(34, 197, 94, 0.3);
             border-radius: 4px;
             font-family: monospace;
-            font-size: 11px;
+            font-size: 0.6875rem;
             color: var(--text-primary);
         }
         
@@ -2434,7 +2435,7 @@
             width: 120px;
             height: 24px;
             padding: 2px 8px;
-            font-size: 11px;
+            font-size: 0.6875rem;
             /* Square-ish input, 6px corners per project no-stadium rule. */
             border-radius: 6px;
         }
@@ -2448,7 +2449,7 @@
             display: none;
             margin-top: 8px;
             font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
-            font-size: 12px;
+            font-size: 0.75rem;
         }
         
         .url-pattern-input.visible {
@@ -2457,11 +2458,11 @@
         
         .btn-sm {
             padding: 3px 8px;
-            font-size: 11px;
+            font-size: 0.6875rem;
             border-radius: 3px;
         }
 
-        @media (max-width: 900px) {
+        @media (max-width: 56.25rem) {
             .settings-shell {
                 padding: 16px;
             }
@@ -2623,7 +2624,7 @@
         }
 
         .help-eyebrow {
-            font-size: 10px;
+            font-size: 0.625rem;
             font-weight: 700;
             letter-spacing: 0.12em;
             text-transform: uppercase;
@@ -2632,7 +2633,7 @@
 
         .help-hero-copy h2 {
             margin-top: 10px;
-            font-size: 24px;
+            font-size: 1.5rem;
             font-weight: 700;
             letter-spacing: -0.04em;
             color: var(--text-primary);
@@ -2641,7 +2642,7 @@
         .help-hero-copy p {
             margin-top: 8px;
             max-width: 640px;
-            font-size: 13px;
+            font-size: 0.8125rem;
             line-height: 1.6;
             color: var(--text-secondary);
         }
@@ -2662,7 +2663,7 @@
 
         .help-summary-label {
             display: block;
-            font-size: 10px;
+            font-size: 0.625rem;
             font-weight: 700;
             letter-spacing: 0.08em;
             text-transform: uppercase;
@@ -2672,7 +2673,7 @@
         .help-summary strong {
             display: block;
             margin-top: 8px;
-            font-size: 16px;
+            font-size: 1rem;
             font-weight: 700;
             letter-spacing: -0.03em;
             color: var(--text-primary);
@@ -2700,7 +2701,7 @@
 
         .help-search-icon {
             color: var(--text-muted);
-            font-size: 13px;
+            font-size: 0.8125rem;
         }
 
         .help-search-input {
@@ -2751,7 +2752,7 @@
         }
 
         .help-section-eyebrow {
-            font-size: 10px;
+            font-size: 0.625rem;
             font-weight: 700;
             letter-spacing: 0.1em;
             text-transform: uppercase;
@@ -2760,7 +2761,7 @@
 
         .help-section-head h3 {
             margin-top: 8px;
-            font-size: 18px;
+            font-size: 1.125rem;
             font-weight: 700;
             letter-spacing: -0.03em;
             color: var(--text-primary);
@@ -2769,7 +2770,7 @@
         .help-section-head p {
             margin-top: 6px;
             max-width: 720px;
-            font-size: 13px;
+            font-size: 0.8125rem;
             line-height: 1.55;
             color: var(--text-secondary);
         }
@@ -2780,7 +2781,7 @@
 
         .shortcuts-title {
             padding: 18px 20px;
-            font-size: 15px;
+            font-size: 0.9375rem;
             font-weight: 700;
             letter-spacing: -0.02em;
             color: var(--text-primary);
@@ -2802,7 +2803,7 @@
             border-radius: 8px;
             border: 1px solid rgba(127, 127, 127, 0.12);
             background: rgba(255, 255, 255, 0.03);
-            font-size: 13px;
+            font-size: 0.8125rem;
             line-height: 1.6;
             color: var(--text-secondary);
         }
@@ -2842,13 +2843,13 @@
         }
 
         .help-action-card strong {
-            font-size: 14px;
+            font-size: 0.875rem;
             font-weight: 700;
             letter-spacing: -0.02em;
         }
 
         .help-action-card span {
-            font-size: 12px;
+            font-size: 0.75rem;
             line-height: 1.5;
             color: var(--text-muted);
         }
@@ -2863,7 +2864,7 @@
             border-radius: 8px;
             border: 1px solid rgba(127, 127, 127, 0.12);
             background: rgba(255, 255, 255, 0.03);
-            font-size: 13px;
+            font-size: 0.8125rem;
             line-height: 1.6;
             color: var(--text-secondary);
         }
@@ -2905,12 +2906,12 @@
         }
 
         .help-api-group code {
-            font-size: 11px;
+            font-size: 0.6875rem;
             line-height: 1.5;
         }
 
         .help-api-category {
-            font-size: 11px;
+            font-size: 0.6875rem;
             font-weight: 700;
             letter-spacing: 0.08em;
             text-transform: uppercase;
@@ -2919,7 +2920,7 @@
 
         .help-inline-note {
             padding: 0 20px 18px;
-            font-size: 12px;
+            font-size: 0.75rem;
             color: var(--text-muted);
             line-height: 1.5;
         }
@@ -2931,7 +2932,7 @@
         }
 
         .help-pattern-results {
-            font-size: 12px;
+            font-size: 0.75rem;
             color: var(--text-muted);
             line-height: 1.6;
         }
@@ -2965,7 +2966,7 @@
         }
 
         .about-brand h2 {
-            font-size: 20px;
+            font-size: 1.25rem;
             margin: 0;
             color: var(--text-primary);
         }
@@ -2973,7 +2974,7 @@
         .about-brand-copy p {
             margin-top: 6px;
             max-width: 420px;
-            font-size: 13px;
+            font-size: 0.8125rem;
             line-height: 1.6;
             color: var(--text-secondary);
         }
@@ -2981,7 +2982,7 @@
         .about-section .version {
             margin-top: 4px;
             color: var(--text-muted);
-            font-size: 12px;
+            font-size: 0.75rem;
         }
 
         .about-stats {
@@ -3001,7 +3002,7 @@
         }
 
         .stat-value {
-            font-size: 24px;
+            font-size: 1.5rem;
             font-weight: 700;
             color: var(--text-primary);
             font-variant-numeric: tabular-nums;
@@ -3009,7 +3010,7 @@
         }
 
         .stat-label {
-            font-size: 11px;
+            font-size: 0.6875rem;
             color: var(--text-muted);
             margin-top: 6px;
             text-transform: uppercase;
@@ -3048,7 +3049,7 @@
         }
 
         .quota-bar-text {
-            font-size: 12px;
+            font-size: 0.75rem;
             color: var(--text-muted);
         }
 
@@ -3113,7 +3114,7 @@
             border: 1px solid rgba(34, 197, 94, 0.18);
             background: rgba(34, 197, 94, 0.08);
             color: var(--accent-primary);
-            font-size: 10px;
+            font-size: 0.625rem;
             font-weight: 700;
             letter-spacing: 0.08em;
             text-transform: uppercase;
@@ -3129,7 +3130,7 @@
 
         .editor-title {
             margin: 0;
-            font-size: 22px;
+            font-size: 1.375rem;
             font-weight: 700;
             letter-spacing: -0.03em;
             text-wrap: balance;
@@ -3144,7 +3145,7 @@
             border: 1px solid rgba(127, 127, 127, 0.22);
             background: rgba(255, 255, 255, 0.04);
             color: var(--text-secondary);
-            font-size: 11px;
+            font-size: 0.6875rem;
             font-weight: 700;
             letter-spacing: 0.04em;
             text-transform: uppercase;
@@ -3179,7 +3180,7 @@
             display: block;
             margin: 8px 0 0;
             color: var(--text-secondary);
-            font-size: 12px;
+            font-size: 0.75rem;
             line-height: 1.5;
         }
 
@@ -3201,7 +3202,7 @@
             border: 1px solid rgba(127, 127, 127, 0.18);
             background: rgba(255, 255, 255, 0.03);
             color: var(--text-muted);
-            font-size: 11px;
+            font-size: 0.6875rem;
             font-weight: 500;
             font-variant-numeric: tabular-nums;
         }
@@ -3249,7 +3250,7 @@
             background: transparent;
             border: none;
             color: var(--text-muted);
-            font-size: 12px;
+            font-size: 0.75rem;
             font-weight: 500;
             cursor: pointer;
             border-bottom: 2px solid transparent;
@@ -3282,7 +3283,7 @@
             border: 1px solid rgba(127, 127, 127, 0.16);
             border-radius: 10px;
             color: var(--text-secondary);
-            font-size: 11px;
+            font-size: 0.6875rem;
             cursor: pointer;
             gap: 4px;
             transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
@@ -3326,7 +3327,7 @@
         .editor-panel.active { display: flex; flex-direction: column; }
 
         .code-editor-wrapper { flex: 1; overflow: hidden; }
-        .CodeMirror { height: 100% !important; font-family: 'Cascadia Code', 'Fira Code', Consolas, Monaco, monospace; font-size: 13px; }
+        .CodeMirror { height: 100% !important; font-family: 'Cascadia Code', 'Fira Code', Consolas, Monaco, monospace; font-size: 0.8125rem; }
 
         .editor-panel-shell {
             display: flex;
@@ -3345,7 +3346,7 @@
         }
 
         .editor-panel-headline h3 {
-            font-size: 19px;
+            font-size: 1.1875rem;
             font-weight: 700;
             letter-spacing: -0.03em;
         }
@@ -3354,7 +3355,7 @@
             margin-top: 8px;
             max-width: 720px;
             color: var(--text-secondary);
-            font-size: 12px;
+            font-size: 0.75rem;
             line-height: 1.6;
         }
 
@@ -3381,19 +3382,19 @@
             border-radius: 8px;
             background: rgba(255, 255, 255, 0.02);
             color: var(--text-muted);
-            font-size: 12px;
+            font-size: 0.75rem;
             line-height: 1.6;
         }
 
         .panel-empty strong {
             color: var(--text-primary);
-            font-size: 13px;
+            font-size: 0.8125rem;
             font-weight: 600;
         }
 
         .panel-empty-inline {
             color: var(--text-muted);
-            font-size: 12px;
+            font-size: 0.75rem;
         }
 
         /* Script Info Panel */
@@ -3427,7 +3428,7 @@
         .info-label {
             display: block;
             color: var(--text-muted);
-            font-size: 10px;
+            font-size: 0.625rem;
             font-weight: 700;
             letter-spacing: 0.08em;
             text-transform: uppercase;
@@ -3460,7 +3461,7 @@
             background: rgba(255, 255, 255, 0.04);
             border: 1px solid rgba(127, 127, 127, 0.18);
             border-radius: 8px;
-            font-size: 11px;
+            font-size: 0.6875rem;
             font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
         }
 
@@ -3514,7 +3515,7 @@
         .info-resource-row {
             justify-content: flex-start;
             font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
-            font-size: 11px;
+            font-size: 0.6875rem;
             word-break: break-all;
         }
 
@@ -3530,7 +3531,7 @@
 
         .version-history-date {
             color: var(--text-muted);
-            font-size: 11px;
+            font-size: 0.6875rem;
             font-variant-numeric: tabular-nums;
             margin-right: auto;
         }
@@ -3544,13 +3545,13 @@
 
         .perf-label {
             color: var(--text-muted);
-            font-size: 11px;
+            font-size: 0.6875rem;
             font-weight: 600;
         }
 
         .perf-value {
             color: var(--text-primary);
-            font-size: 12px;
+            font-size: 0.75rem;
             word-break: break-word;
         }
 
@@ -3667,7 +3668,7 @@
 
         .script-config-label {
             color: var(--text-secondary);
-            font-size: 12px;
+            font-size: 0.75rem;
             line-height: 1.4;
         }
 
@@ -3686,7 +3687,7 @@
             width: min(320px, 100%);
         }
 
-        @media (max-width: 700px) {
+        @media (max-width: 43.75rem) {
             .script-config-row {
                 grid-template-columns: 1fr;
                 align-items: stretch;
@@ -3695,7 +3696,7 @@
 
         .editor-panel-note {
             color: var(--text-secondary);
-            font-size: 12px;
+            font-size: 0.75rem;
             line-height: 1.6;
             max-width: 760px;
         }
@@ -3707,7 +3708,7 @@
         .panel-status-inline {
             padding-left: 22px;
             color: var(--text-secondary);
-            font-size: 12px;
+            font-size: 0.75rem;
             line-height: 1.6;
         }
 
@@ -3752,7 +3753,7 @@
             max-height: 110px;
             overflow-y: auto;
             font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
-            font-size: 11px;
+            font-size: 0.6875rem;
             color: var(--text-secondary);
         }
 
@@ -3814,14 +3815,14 @@
 
         .lib-result-version {
             color: var(--text-muted);
-            font-size: 11px;
+            font-size: 0.6875rem;
             margin-left: 8px;
         }
 
         .lib-result-desc {
             margin-top: 4px;
             color: var(--text-secondary);
-            font-size: 12px;
+            font-size: 0.75rem;
             line-height: 1.5;
         }
 
@@ -3848,14 +3849,14 @@
         .external-item-name {
             color: var(--text-primary);
             font-weight: 600;
-            font-size: 12px;
+            font-size: 0.75rem;
         }
 
         .external-item-url {
             margin-top: 4px;
             color: var(--text-secondary);
             font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
-            font-size: 11px;
+            font-size: 0.6875rem;
             line-height: 1.55;
             word-break: break-all;
         }
@@ -3887,7 +3888,7 @@
             display: flex;
             align-items: center;
             gap: 8px;
-            font-size: 14px;
+            font-size: 0.875rem;
             font-weight: 600;
             color: var(--text-primary);
         }
@@ -3895,14 +3896,14 @@
             display: block;
             margin-top: 2px;
             color: var(--text-secondary);
-            font-size: 11px;
+            font-size: 0.6875rem;
             font-weight: 500;
         }
         .find-scripts-close {
             background: none;
             border: none;
             color: var(--text-muted);
-            font-size: 22px;
+            font-size: 1.375rem;
             cursor: pointer;
             padding: 0 4px;
             line-height: 1;
@@ -3929,14 +3930,14 @@
             text-align: center;
             color: var(--text-muted);
             padding: 42px 20px;
-            font-size: 13px;
+            font-size: 0.8125rem;
             border: 1px solid rgba(127, 127, 127, 0.14);
             border-radius: 8px;
             background: rgba(255, 255, 255, 0.025);
         }
         .find-scripts-empty strong {
             color: var(--text-primary);
-            font-size: 14px;
+            font-size: 0.875rem;
             font-weight: 650;
         }
         .find-scripts-empty span {
@@ -3952,7 +3953,7 @@
             gap: 8px;
             color: var(--text-secondary);
             padding: 16px 0;
-            font-size: 13px;
+            font-size: 0.8125rem;
         }
         .find-scripts-loading::before,
         .find-scripts-loading::after {
@@ -3986,7 +3987,7 @@
         }
         .find-script-info { flex: 1; min-width: 0; }
         .find-script-name {
-            font-size: 13px;
+            font-size: 0.8125rem;
             font-weight: 600;
             color: var(--text-primary);
             margin-bottom: 2px;
@@ -4000,14 +4001,14 @@
         }
         .find-script-name a:hover { text-decoration: underline; }
         .find-script-version {
-            font-size: 10px;
+            font-size: 0.625rem;
             color: var(--text-muted);
             background: var(--bg-button);
             padding: 1px 5px;
             border-radius: 4px;
         }
         .find-script-desc {
-            font-size: 11px;
+            font-size: 0.6875rem;
             color: var(--text-secondary);
             margin-bottom: 4px;
             overflow: hidden;
@@ -4017,7 +4018,7 @@
         .find-script-meta {
             display: flex;
             gap: 12px;
-            font-size: 10px;
+            font-size: 0.625rem;
             color: var(--text-muted);
         }
         .find-script-meta span { display: flex; align-items: center; gap: 3px; }
@@ -4027,7 +4028,7 @@
             gap: 4px;
             flex-shrink: 0;
         }
-        .find-script-actions .toolbar-btn { font-size: 11px; padding: 3px 10px; }
+        .find-script-actions .toolbar-btn { font-size: 0.6875rem; padding: 3px 10px; }
         .find-script-preview {
             display: none;
             grid-column: 1 / -1;
@@ -4039,7 +4040,7 @@
             margin-top: 8px;
             padding: 8px 12px;
             font-family: 'Courier New', monospace;
-            font-size: 11px;
+            font-size: 0.6875rem;
             line-height: 1.4;
             white-space: pre;
             color: var(--text-secondary);
@@ -4058,9 +4059,9 @@
             gap: 8px;
             padding: 10px;
         }
-        .find-scripts-pagination .toolbar-btn { font-size: 11px; }
+        .find-scripts-pagination .toolbar-btn { font-size: 0.6875rem; }
         .find-scripts-count {
-            font-size: 11px;
+            font-size: 0.6875rem;
             color: var(--text-secondary);
             display: flex;
             align-items: center;
@@ -4114,14 +4115,14 @@
             border-bottom: 1px solid var(--border-color);
         }
 
-        .modal-title { font-size: 14px; font-weight: bold; }
-        .modal-close { background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer; }
+        .modal-title { font-size: 0.875rem; font-weight: bold; }
+        .modal-close { background: none; border: none; color: var(--text-muted); font-size: 1.25rem; cursor: pointer; }
         .modal-close:hover { color: var(--text-primary); }
         .modal-body { padding: 16px; }
         .modal-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border-color); }
 
         .form-group { margin-bottom: 12px; }
-        .form-group label { display: block; margin-bottom: 4px; color: var(--text-secondary); font-size: 12px; }
+        .form-group label { display: block; margin-bottom: 4px; color: var(--text-secondary); font-size: 0.75rem; }
         .form-group .input-field { width: 100%; }
 
         /* ============================================
@@ -4161,8 +4162,8 @@
         .toast-error { border-left: 4px solid var(--accent-error); }
         .toast-info { border-left: 4px solid var(--accent-secondary); }
         .toast-warning { border-left: 4px solid var(--accent-yellow); }
-        .toast-icon { font-size: 16px; }
-        .toast-message { font-size: 13px; }
+        .toast-icon { font-size: 1rem; }
+        .toast-message { font-size: 0.8125rem; }
         .toast-action {
             border: 1px solid rgba(127, 127, 127, 0.28);
             border-radius: 8px;
@@ -4170,7 +4171,7 @@
             color: var(--text-primary);
             cursor: pointer;
             font: inherit;
-            font-size: 12px;
+            font-size: 0.75rem;
             padding: 4px 9px;
             white-space: nowrap;
         }
@@ -4192,7 +4193,7 @@
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            font-size: 12px;
+            font-size: 0.75rem;
         }
         .sync-status::before {
             content: '';
@@ -4205,7 +4206,7 @@
         .sync-status.connected::before { background: var(--accent-primary); }
         .sync-status.disconnected { color: var(--text-muted); }
         .sync-status.disconnected::before { background: var(--accent-error); }
-        .sync-user { color: var(--text-secondary); font-size: 12px; }
+        .sync-user { color: var(--text-secondary); font-size: 0.75rem; }
         .sync-provider-settings { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-color); }
 
         /* Script Name with Favicon */
@@ -4240,7 +4241,7 @@
             background: none;
             color: var(--text-primary);
             font: inherit;
-            font-size: 13px;
+            font-size: 0.8125rem;
             font-weight: 650;
             letter-spacing: 0.01em;
             text-align: left;
@@ -4280,7 +4281,7 @@
 
         .script-author {
             color: var(--text-muted);
-            font-size: 11px;
+            font-size: 0.6875rem;
             white-space: nowrap;
         }
 
@@ -4300,7 +4301,7 @@
             max-width: 100%;
             padding: 3px 8px;
             border-radius: 8px;
-            font-size: 10px;
+            font-size: 0.625rem;
             font-weight: 700;
             letter-spacing: 0.03em;
             line-height: 1;
@@ -4373,7 +4374,7 @@
                     hsla(calc(var(--marker-hue, 145) + 34), 72%, 60%, 0.12));
             border: 1px solid hsla(var(--marker-hue, 145), 72%, 58%, 0.24);
             color: hsl(var(--marker-hue, 145), 88%, 78%);
-            font-size: 8px;
+            font-size: 0.5rem;
             font-weight: 700;
             letter-spacing: 0.04em;
             text-transform: uppercase;
@@ -4382,7 +4383,7 @@
         }
         .script-favicon.compact,
         .site-icon.compact {
-            font-size: 9px;
+            font-size: 0.5625rem;
             letter-spacing: 0;
         }
         .script-favicon.minimal,
@@ -4424,7 +4425,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 9px;
+            font-size: 0.5625rem;
             font-weight: bold;
             color: var(--text-muted);
             cursor: help;
@@ -4457,7 +4458,7 @@
             text-align: center;
         }
         .progress-title {
-            font-size: 14px;
+            font-size: 0.875rem;
             font-weight: 600;
             color: var(--text-primary);
             margin: 0 0 16px;
@@ -4478,7 +4479,7 @@
             transition: width 0.15s ease;
         }
         .progress-status {
-            font-size: 11px;
+            font-size: 0.6875rem;
             color: var(--text-secondary);
             margin: 0;
         }
@@ -4491,7 +4492,7 @@
             justify-content: center;
             padding: 60px 20px;
             color: var(--text-muted);
-            font-size: 13px;
+            font-size: 0.8125rem;
             gap: 12px;
         }
         .lazy-spinner {
@@ -4534,7 +4535,7 @@
            ============================================ */
 
         /* Tablet landscape / small laptop */
-        @media (max-width: 1280px) {
+        @media (max-width: 80rem) {
             .scripts-table .col-perf,
             .scripts-table .col-lines,
             .scripts-table .col-size { display: none; }
@@ -4542,7 +4543,7 @@
         }
 
         /* Tablet */
-        @media (max-width: 1024px) {
+        @media (max-width: 64rem) {
             .scripts-table .col-updated,
             .scripts-table .col-version { display: none; }
             .scripts-toolbar { flex-wrap: wrap; gap: 6px; }
@@ -4554,12 +4555,12 @@
         }
 
         /* Small tablet / large phone */
-        @media (max-width: 768px) {
+        @media (max-width: 48rem) {
             .tm-header { padding: 6px 10px 2px 10px; }
             .tm-tablist { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-            .tm-tab { padding: 4px 10px; font-size: 11px; }
+            .tm-tab { padding: 4px 10px; font-size: 0.6875rem; }
             #scriptsPanel { padding: 16px 10px 0; }
-            .scripts-shell-copy h2 { font-size: 24px; }
+            .scripts-shell-copy h2 { font-size: 1.5rem; }
             .scripts-toolbar { padding: 10px; border-radius: 8px; }
             .scripts-table-container { border-radius: 8px; overflow-x: auto; overflow-y: hidden; }
             .scripts-table .col-source,
@@ -4578,11 +4579,11 @@
         }
 
         /* Phone */
-        @media (max-width: 600px) {
+        @media (max-width: 37.5rem) {
             .tm-header { padding: 4px 8px 2px 8px; }
             .tm-logo img { width: 20px; height: 20px; }
-            .tm-logo-text h1 { font-size: 13px; }
-            .scripts-table { font-size: 12px; }
+            .tm-logo-text h1 { font-size: 0.8125rem; }
+            .scripts-table { font-size: 0.75rem; }
             .scripts-shell-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); width: 100%; }
             .scripts-table .col-actions { min-width: 70px; }
             .scripts-table .col-name { min-width: 120px; }
@@ -4626,13 +4627,13 @@
             outline-offset: -2px;
         }
         .template-name {
-            font-size: 13px;
+            font-size: 0.8125rem;
             font-weight: 600;
             color: var(--text-primary);
             margin-bottom: 4px;
         }
         .template-desc {
-            font-size: 11px;
+            font-size: 0.6875rem;
             color: var(--text-muted);
         }
 
@@ -4649,14 +4650,14 @@
             padding: 10px 20px 0;
             background: transparent;
             border-bottom: none;
-            font-size: 11px;
+            font-size: 0.6875rem;
             color: var(--text-muted);
         }
         .view-settings-bar label { font-weight: 500; white-space: nowrap; }
         .view-settings-bar select {
             min-height: 30px;
             padding: 0 10px;
-            font-size: 11px;
+            font-size: 0.6875rem;
             background: var(--bg-input);
             color: var(--text-primary);
             border: 1px solid rgba(127, 127, 127, 0.24);
@@ -4665,7 +4666,7 @@
         .view-settings-bar .density-btn {
             min-height: 30px;
             padding: 0 12px;
-            font-size: 10px;
+            font-size: 0.625rem;
             background: var(--bg-button);
             color: var(--text-secondary);
             border: 1px solid rgba(127, 127, 127, 0.22);
@@ -4757,7 +4758,7 @@
         .trash-hero-copy h2,
         .help-hero-copy h2 {
             margin-top: 14px;
-            font-size: clamp(28px, 3.2vw, 38px);
+            font-size: clamp(1.75rem, 3.2vw, 2.375rem);
             font-weight: 760;
             letter-spacing: -0.05em;
             text-wrap: balance;
@@ -4769,7 +4770,7 @@
         .trash-hero-copy p,
         .help-hero-copy p {
             max-width: 700px;
-            font-size: 13px;
+            font-size: 0.8125rem;
             line-height: 1.7;
             color: var(--text-secondary);
         }
@@ -4820,7 +4821,7 @@
         }
 
         .view-settings-bar label {
-            font-size: 10px;
+            font-size: 0.625rem;
             font-weight: 700;
             letter-spacing: 0.1em;
             text-transform: uppercase;
@@ -4949,7 +4950,7 @@
             min-height: calc(42px * var(--ui-scale));
             padding: calc(var(--density-tab-padding-y) * var(--ui-scale)) calc(var(--density-tab-padding-x) * var(--ui-scale));
             border-radius: calc(8px * var(--ui-scale));
-            font-size: max(11px, calc(11px * var(--ui-scale)));
+            font-size: 0.6875rem;
         }
 
         .scripts-shell-copy h2,
@@ -4957,7 +4958,7 @@
         .utilities-hero-copy h2,
         .trash-hero-copy h2,
         .help-hero-copy h2 {
-            font-size: clamp(24px, calc(14px + 18px * var(--ui-scale)), 46px);
+            font-size: 2rem;
         }
 
         .scripts-shell-copy p,
@@ -4965,7 +4966,7 @@
         .utilities-hero-copy p,
         .trash-hero-copy p,
         .help-hero-copy p {
-            font-size: max(12px, calc(13px * var(--ui-scale)));
+            font-size: 0.8125rem;
         }
 
         .scripts-shell-kicker,
@@ -4978,7 +4979,7 @@
         .utilities-summary-label,
         .trash-summary-label,
         .help-summary-label {
-            font-size: max(10px, calc(10px * var(--ui-scale)));
+            font-size: 0.625rem;
         }
 
         .scripts-shell-stat strong,
@@ -4986,7 +4987,7 @@
         .utilities-summary strong,
         .trash-summary strong,
         .help-summary strong {
-            font-size: calc(18px * var(--ui-scale));
+            font-size: 1.125rem;
         }
 
         .scripts-shell-stat,
@@ -5031,7 +5032,7 @@
             min-height: calc(var(--density-control-height) * var(--ui-scale));
             padding: 0 calc(var(--density-control-padding-x) * var(--ui-scale));
             border-radius: calc(8px * var(--ui-scale));
-            font-size: max(12px, calc(12px * var(--ui-scale)));
+            font-size: 0.75rem;
         }
 
         .btn-sm {
@@ -5047,25 +5048,25 @@
             min-height: calc(var(--density-control-height) * var(--ui-scale));
             padding: 0 calc(var(--density-control-padding-x) * var(--ui-scale));
             border-radius: calc(8px * var(--ui-scale));
-            font-size: max(12px, calc(12px * var(--ui-scale)));
+            font-size: 0.75rem;
         }
 
         .textarea-field {
             border-radius: calc(8px * var(--ui-scale));
-            font-size: max(12px, calc(12px * var(--ui-scale)));
+            font-size: 0.75rem;
         }
 
         .view-settings-bar {
             gap: calc(10px * var(--ui-scale));
             padding: calc(8px * var(--ui-scale)) calc(16px * var(--ui-scale)) 0;
-            font-size: max(11px, calc(11px * var(--ui-scale)));
+            font-size: 0.6875rem;
         }
 
         .view-settings-bar select,
         .view-settings-bar .density-btn {
             min-height: calc(var(--density-view-pill-height) * var(--ui-scale));
             padding: 0 calc(var(--density-view-pill-padding-x) * var(--ui-scale));
-            font-size: max(10px, calc(10px * var(--ui-scale)));
+            font-size: 0.625rem;
         }
 
         .scripts-table-container {
@@ -5184,7 +5185,7 @@
                 var(--bg-input);
         }
 
-        @media (max-width: 1024px) {
+        @media (max-width: 64rem) {
             .tm-tabs-bar {
                 padding: 10px;
                 border-radius: 8px;
@@ -5207,7 +5208,7 @@
             }
         }
 
-        @media (max-width: 768px) {
+        @media (max-width: 48rem) {
             .tm-header {
                 padding: 12px 10px 8px 10px;
             }
@@ -5255,7 +5256,7 @@
             }
         }
 
-        @media (max-width: 600px) {
+        @media (max-width: 37.5rem) {
             .tm-header {
                 padding: 10px 8px 8px 8px;
             }
@@ -6361,7 +6362,7 @@
                             <input type="text" id="settingsS3ObjectKey" placeholder="scriptvault-backup.json" class="input-field" aria-label="S3 object key override" autocomplete="off" maxlength="1024" aria-describedby="settingsS3ObjectKeyError">
                             <span class="setting-error" id="settingsS3ObjectKeyError" hidden></span>
                         </div>
-                        <div class="setting-row" style="font-size:11px;color:var(--text-muted);line-height:1.4">
+                        <div class="setting-row" style="font-size:0.6875rem;color:var(--text-muted);line-height:1.4">
                             Credentials are AWS SigV4-signed and sent only to the configured endpoint. Cloudflare R2 uses region "auto"; MinIO and Backblaze B2 use path-style addressing (default for non-AWS endpoints).
                         </div>
                     </div>
@@ -6428,7 +6429,7 @@
                         <span class="label-text">Recent Sync Log:</span>
                     </div>
                     <div class="setting-row">
-                        <textarea class="textarea-field" id="syncLog" readonly style="min-height: 80px; font-family: monospace; font-size: 11px;"></textarea>
+                        <textarea class="textarea-field" id="syncLog" readonly style="min-height: 80px; font-family: monospace; font-size: 0.6875rem;"></textarea>
                     </div>
                     <div class="setting-row">
                         <button type="button" class="btn" id="btnSaveSync">Save Provider Settings</button>
@@ -7182,7 +7183,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 <div class="section-label">Batch Install from URLs</div>
                 <div class="section-content">
                     <div class="setting-row">
-                        <textarea class="textarea-field" id="batchUrlInput" name="batch_install_urls" aria-label="Batch install script URLs" spellcheck="false" rows="4" placeholder="Paste one .user.js URL per line…" style="width:100%;font-size:12px;resize:vertical"></textarea>
+                        <textarea class="textarea-field" id="batchUrlInput" name="batch_install_urls" aria-label="Batch install script URLs" spellcheck="false" rows="4" placeholder="Paste one .user.js URL per line…" style="width:100%;font-size:0.75rem;resize:vertical"></textarea>
                     </div>
                     <div class="setting-row">
                         <button type="button" class="btn" id="btnBatchInstall">Install All</button>
@@ -7279,7 +7280,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
             <div class="settings-section">
                 <div class="section-label">Network Request Log</div>
                 <div class="section-content">
-                    <div id="networkLogContainer" class="utility-surface" style="max-height:250px;overflow-y:auto;font-size:12px">
+                    <div id="networkLogContainer" class="utility-surface" style="max-height:250px;overflow-y:auto;font-size:0.75rem">
                         <div class="panel-empty-inline">No network requests logged yet. GM_xmlhttpRequest calls will appear here.</div>
                     </div>
                     <div class="setting-row" style="margin-top:8px;gap:8px">
@@ -7299,7 +7300,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                         <input type="number" class="input-field" id="perfBudgetDefault" value="200" style="width:80px" min="10" max="10000">
                         <button type="button" class="btn" id="btnSavePerfBudget" style="margin-left:8px">Save</button>
                     </div>
-                    <div id="perfBudgetOverrides" style="margin-top:8px;font-size:12px"></div>
+                    <div id="perfBudgetOverrides" style="margin-top:8px;font-size:0.75rem"></div>
                 </div>
             </div>
 
@@ -7347,7 +7348,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                     <div class="setting-row">
                         <span class="label-text">Trusted origins</span>
                     </div>
-                    <textarea class="textarea-field" id="publicApiTrustedOrigins" rows="4" placeholder="https://example.com" style="width:100%;font-size:12px;resize:vertical"></textarea>
+                    <textarea class="textarea-field" id="publicApiTrustedOrigins" rows="4" placeholder="https://example.com" style="width:100%;font-size:0.75rem;resize:vertical"></textarea>
                     <div class="utility-inline-status" id="publicApiPermissionsSummary" style="display:block;margin-top:8px">Loading permission policy…</div>
                     <div class="utility-inline-status" id="publicApiTrustStatus" style="display:block;margin-top:4px">Loading trusted origins…</div>
                     <div class="setting-row" style="margin-top:8px;gap:8px">
@@ -7355,7 +7356,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                         <button type="button" class="btn" id="btnSavePublicApiOrigins">Save Origins</button>
                         <button type="button" class="btn" id="btnClearPublicApiAudit">Clear Audit</button>
                     </div>
-                    <div id="publicApiAuditLog" class="utility-surface" style="margin-top:8px;max-height:220px;overflow-y:auto;font-size:12px">
+                    <div id="publicApiAuditLog" class="utility-surface" style="margin-top:8px;max-height:220px;overflow-y:auto;font-size:0.75rem">
                         <div class="panel-empty-inline">No external API activity yet.</div>
                     </div>
                 </div>
@@ -7366,7 +7367,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 <div class="section-content">
                     <div class="utility-note" style="margin-bottom:8px">Manage the trusted signing keys used during install and verification flows.</div>
                     <div class="utility-inline-status" id="signingTrustSummary" style="display:block;margin-bottom:8px">Loading trusted signing keys…</div>
-                    <div id="signingKeysList" class="utility-surface" style="max-height:220px;overflow-y:auto;font-size:12px">
+                    <div id="signingKeysList" class="utility-surface" style="max-height:220px;overflow-y:auto;font-size:0.75rem">
                         <div class="panel-empty-inline">No trusted signing keys saved.</div>
                     </div>
                     <div class="setting-row" style="margin-top:8px;gap:8px">
@@ -7378,7 +7379,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
             <div class="settings-section">
                 <div class="section-label">Activity Log</div>
                 <div class="section-content">
-                    <div id="activityLog" class="activity-log utility-surface" style="max-height:200px;overflow-y:auto;font-size:12px;color:var(--text-muted)">No activity yet</div>
+                    <div id="activityLog" class="activity-log utility-surface" style="max-height:200px;overflow-y:auto;font-size:0.75rem;color:var(--text-muted)">No activity yet</div>
                     <div class="setting-row" style="margin-top:8px">
                         <button type="button" class="btn" id="btnClearLog">Clear Log</button>
                     </div>
@@ -7907,7 +7908,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                                 style="width:100%;height:100%;border:none;display:block;"
                                 title="Monaco Editor"></iframe>
                         <!-- Fallback textarea shown while Monaco loads or if iframe fails -->
-                        <textarea id="editorTextarea" style="display:none;width:100%;height:100%;background:#1a1a1a;color:#e0e0e0;font-family:monospace;font-size:13px;border:none;resize:none;padding:8px;box-sizing:border-box;"></textarea>
+                        <textarea id="editorTextarea" style="display:none;width:100%;height:100%;background:#1a1a1a;color:#e0e0e0;font-family:monospace;font-size:0.8125rem;border:none;resize:none;padding:8px;box-sizing:border-box;"></textarea>
                     </div>
                 </div>
                 <div id="infoPanel" class="editor-panel" role="tabpanel" aria-labelledby="editorTabInfo" hidden>

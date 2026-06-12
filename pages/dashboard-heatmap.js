@@ -73,7 +73,7 @@ const ActivityHeatmap = (() => {
   flex-wrap: wrap;
 }
 .sv-heatmap-title {
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 600;
   color: var(--text-primary, #e0e0e0);
   margin-right: auto;
@@ -84,7 +84,7 @@ const ActivityHeatmap = (() => {
   border-radius: 6px;
   background: var(--bg-input, #333);
   color: var(--text-primary, #e0e0e0);
-  font-size: 12px;
+  font-size: 0.75rem;
   outline: none;
   min-width: 160px;
 }
@@ -106,7 +106,7 @@ const ActivityHeatmap = (() => {
   background: var(--bg-header, #252525);
   border: 1px solid var(--border-color, #404040);
   border-radius: 6px;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-primary, #e0e0e0);
   pointer-events: none;
   z-index: 9999;
@@ -123,7 +123,7 @@ const ActivityHeatmap = (() => {
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-secondary, #a0a0a0);
 }
 .sv-heatmap-legend {
@@ -131,7 +131,7 @@ const ActivityHeatmap = (() => {
   align-items: center;
   gap: 4px;
   margin-top: 10px;
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-muted, #707070);
 }
 .sv-heatmap-legend-cell {
@@ -152,17 +152,17 @@ const ActivityHeatmap = (() => {
   padding: 12px 16px;
 }
 .sv-heatmap-stat-value {
-  font-size: 22px;
+  font-size: 1.375rem;
   font-weight: 700;
   color: var(--accent-green, #4ade80);
 }
 .sv-heatmap-stat-label {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary, #a0a0a0);
   margin-top: 2px;
 }
 .sv-heatmap-stat-trend {
-  font-size: 11px;
+  font-size: 0.6875rem;
   margin-top: 4px;
 }
 .sv-heatmap-stat-trend-up { color: var(--accent-green, #4ade80); }

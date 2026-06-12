@@ -51,7 +51,7 @@ const ScriptSharing = (() => {
     display: flex;
     flex-direction: column;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    font-size: 13px;
+    font-size: 0.8125rem;
     box-shadow: 0 8px 32px rgba(0,0,0,0.5);
     animation: ss-slidein 0.2s ease;
 }
@@ -68,14 +68,14 @@ const ScriptSharing = (() => {
 }
 .ss-modal-header h3 {
     margin: 0;
-    font-size: 15px;
+    font-size: 0.9375rem;
     font-weight: 600;
 }
 .ss-modal-close {
     background: none;
     border: none;
     color: var(--text-secondary, #a0a0a0);
-    font-size: 20px;
+    font-size: 1.25rem;
     cursor: pointer;
     padding: 2px 6px;
     border-radius: 4px;
@@ -106,17 +106,17 @@ const ScriptSharing = (() => {
 }
 .ss-script-info .ss-name {
     font-weight: 600;
-    font-size: 14px;
+    font-size: 0.875rem;
     color: var(--text-primary, #e0e0e0);
 }
 .ss-script-info .ss-version {
     color: var(--text-secondary, #a0a0a0);
-    font-size: 12px;
+    font-size: 0.75rem;
     margin-left: 6px;
 }
 .ss-script-info .ss-desc {
     color: var(--text-muted, #707070);
-    font-size: 12px;
+    font-size: 0.75rem;
     margin-top: 4px;
 }
 .ss-qr-section {
@@ -130,7 +130,7 @@ const ScriptSharing = (() => {
     display: block;
 }
 .ss-qr-note {
-    font-size: 11px;
+    font-size: 0.6875rem;
     color: var(--text-muted, #707070);
     margin-top: 6px;
 }
@@ -148,7 +148,7 @@ const ScriptSharing = (() => {
     border: 1px solid var(--border-color, #404040);
     border-radius: 6px;
     color: var(--text-primary, #e0e0e0);
-    font-size: 13px;
+    font-size: 0.8125rem;
     cursor: pointer;
     transition: background 0.15s;
     text-align: left;
@@ -159,7 +159,7 @@ const ScriptSharing = (() => {
     background: var(--bg-row-hover, #333);
 }
 .ss-share-btn .ss-icon {
-    font-size: 16px;
+    font-size: 1rem;
     width: 24px;
     text-align: center;
     flex-shrink: 0;
@@ -168,7 +168,7 @@ const ScriptSharing = (() => {
     flex: 1;
 }
 .ss-share-btn .ss-sublabel {
-    font-size: 11px;
+    font-size: 0.6875rem;
     color: var(--text-muted, #707070);
 }
 .ss-input-group {
@@ -183,7 +183,7 @@ const ScriptSharing = (() => {
     border: 1px solid var(--border-color, #404040);
     border-radius: 4px;
     padding: 8px 10px;
-    font-size: 12px;
+    font-size: 0.75rem;
     font-family: 'Consolas', monospace;
 }
 .ss-input-group button {
@@ -192,7 +192,7 @@ const ScriptSharing = (() => {
     border: none;
     border-radius: 4px;
     padding: 8px 14px;
-    font-size: 12px;
+    font-size: 0.75rem;
     font-weight: 600;
     cursor: pointer;
     white-space: nowrap;
@@ -202,7 +202,7 @@ const ScriptSharing = (() => {
     background: var(--accent-green, #4ade80);
 }
 .ss-section-title {
-    font-size: 11px;
+    font-size: 0.6875rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     color: var(--text-muted, #707070);
@@ -216,7 +216,7 @@ const ScriptSharing = (() => {
     border: 1px solid var(--border-color, #404040);
     border-radius: 6px;
     padding: 10px;
-    font-size: 12px;
+    font-size: 0.75rem;
     font-family: 'Consolas', monospace;
     resize: vertical;
 }
@@ -229,17 +229,17 @@ const ScriptSharing = (() => {
 }
 .ss-preview-box .ss-name {
     font-weight: 600;
-    font-size: 14px;
+    font-size: 0.875rem;
 }
 .ss-preview-box .ss-meta {
     color: var(--text-secondary, #a0a0a0);
-    font-size: 12px;
+    font-size: 0.75rem;
     margin-top: 4px;
 }
 .ss-preview-box .ss-code-preview {
     margin-top: 8px;
     font-family: 'Consolas', monospace;
-    font-size: 11px;
+    font-size: 0.6875rem;
     color: var(--text-muted, #707070);
     max-height: 100px;
     overflow: hidden;
@@ -254,7 +254,7 @@ const ScriptSharing = (() => {
     color: #fff;
     border: none;
     border-radius: 4px;
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 600;
     cursor: pointer;
     transition: background 0.15s;
@@ -270,7 +270,7 @@ const ScriptSharing = (() => {
 }
 .ss-tab {
     padding: 8px 16px;
-    font-size: 12px;
+    font-size: 0.75rem;
     font-weight: 500;
     color: var(--text-secondary, #a0a0a0);
     background: none;
@@ -306,7 +306,7 @@ const ScriptSharing = (() => {
     gap: 8px;
     padding: 6px 8px;
     border-bottom: 1px solid var(--bg-row, #2a2a2a);
-    font-size: 12px;
+    font-size: 0.75rem;
 }
 .ss-batch-list li label {
     flex: 1;
@@ -321,7 +321,7 @@ const ScriptSharing = (() => {
     color: #fff;
     padding: 8px 20px;
     border-radius: 6px;
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 500;
     z-index: 10001;
     pointer-events: none;

@@ -308,7 +308,7 @@ const TemplateManager = (() => {
             media.dataset.dlBtn = '1';
             const btn = document.createElement('button');
             btn.textContent = 'Download';
-            btn.style.cssText = 'position:absolute;top:4px;right:4px;padding:4px 8px;background:#333;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;z-index:100;';
+            btn.style.cssText = 'position:absolute;top:4px;right:4px;padding:4px 8px;background:#333;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:0.6875rem;z-index:100;';
             btn.onclick = (e) => {
                 e.stopPropagation();
                 const url = media.src || media.querySelector('source')?.src;
@@ -470,7 +470,7 @@ const TemplateManager = (() => {
     background: var(--bg-body, #1a1a1a);
     color: var(--text-primary, #e0e0e0);
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    font-size: 13px;
+    font-size: 0.8125rem;
 }
 .tm-header {
     display: flex;
@@ -481,7 +481,7 @@ const TemplateManager = (() => {
     border-bottom: 1px solid var(--border-color, #404040);
 }
 .tm-header-title {
-    font-size: 15px;
+    font-size: 0.9375rem;
     font-weight: 600;
     color: var(--text-primary, #e0e0e0);
     flex: 1;
@@ -501,7 +501,7 @@ const TemplateManager = (() => {
     border: 1px solid var(--border-color, #404040);
     border-radius: 6px;
     color: var(--text-primary, #e0e0e0);
-    font-size: 13px;
+    font-size: 0.8125rem;
     outline: none;
     transition: border-color 0.15s;
 }
@@ -525,7 +525,7 @@ const TemplateManager = (() => {
     border: 1px solid transparent;
     border-radius: 8px;
     color: var(--text-secondary, #a0a0a0);
-    font-size: 11px;
+    font-size: 0.6875rem;
     font-weight: 500;
     cursor: pointer;
     white-space: nowrap;
@@ -565,18 +565,18 @@ const TemplateManager = (() => {
     transform: translateY(-1px);
 }
 .tm-card-icon {
-    font-size: 24px;
+    font-size: 1.5rem;
     margin-bottom: 8px;
     line-height: 1;
 }
 .tm-card-name {
     font-weight: 600;
-    font-size: 13px;
+    font-size: 0.8125rem;
     color: var(--text-primary, #e0e0e0);
     margin-bottom: 4px;
 }
 .tm-card-desc {
-    font-size: 11px;
+    font-size: 0.6875rem;
     color: var(--text-secondary, #a0a0a0);
     line-height: 1.4;
     flex: 1;
@@ -588,7 +588,7 @@ const TemplateManager = (() => {
     justify-content: space-between;
 }
 .tm-card-cat {
-    font-size: 10px;
+    font-size: 0.625rem;
     padding: 2px 8px;
     border-radius: 4px;
     background: rgba(96, 165, 250, 0.12);
@@ -604,7 +604,7 @@ const TemplateManager = (() => {
     padding: 7px 14px;
     border: none;
     border-radius: 6px;
-    font-size: 12px;
+    font-size: 0.75rem;
     font-weight: 500;
     cursor: pointer;
     transition: background 0.15s, opacity 0.15s;
@@ -639,7 +639,7 @@ const TemplateManager = (() => {
 }
 .tm-btn-sm {
     padding: 4px 8px;
-    font-size: 11px;
+    font-size: 0.6875rem;
 }
 .tm-btn-icon {
     background: none;
@@ -647,7 +647,7 @@ const TemplateManager = (() => {
     color: var(--text-muted, #707070);
     cursor: pointer;
     padding: 4px;
-    font-size: 14px;
+    font-size: 0.875rem;
     line-height: 1;
     border-radius: 4px;
     transition: color 0.15s, background 0.15s;
@@ -690,7 +690,7 @@ const TemplateManager = (() => {
     border-bottom: 1px solid var(--border-color, #404040);
 }
 .tm-modal-header h3 {
-    font-size: 14px;
+    font-size: 0.875rem;
     font-weight: 600;
     margin: 0;
 }
@@ -699,7 +699,7 @@ const TemplateManager = (() => {
     border: none;
     color: var(--text-secondary, #a0a0a0);
     cursor: pointer;
-    font-size: 18px;
+    font-size: 1.125rem;
     padding: 4px;
     line-height: 1;
 }
@@ -723,7 +723,7 @@ const TemplateManager = (() => {
 }
 .tm-form-label {
     display: block;
-    font-size: 12px;
+    font-size: 0.75rem;
     font-weight: 500;
     color: var(--text-secondary, #a0a0a0);
     margin-bottom: 4px;
@@ -735,7 +735,7 @@ const TemplateManager = (() => {
     border: 1px solid var(--border-color, #404040);
     border-radius: 6px;
     color: var(--text-primary, #e0e0e0);
-    font-size: 13px;
+    font-size: 0.8125rem;
     outline: none;
     transition: border-color 0.15s;
 }
@@ -752,7 +752,7 @@ const TemplateManager = (() => {
     border: 1px solid var(--border-color, #404040);
     border-radius: 6px;
     color: var(--text-primary, #e0e0e0);
-    font-size: 13px;
+    font-size: 0.8125rem;
     outline: none;
     appearance: none;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23a0a0a0' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
@@ -767,7 +767,7 @@ const TemplateManager = (() => {
     border: 1px solid var(--border-color, #404040);
     border-radius: 6px;
     color: var(--text-primary, #e0e0e0);
-    font-size: 12px;
+    font-size: 0.75rem;
     font-family: 'Fira Code', 'Cascadia Code', Consolas, monospace;
     outline: none;
     resize: vertical;
@@ -784,7 +784,7 @@ const TemplateManager = (() => {
     right: 20px;
     padding: 10px 18px;
     border-radius: 8px;
-    font-size: 13px;
+    font-size: 0.8125rem;
     color: #fff;
     z-index: 10001;
     animation: tm-toast-in 0.25s ease, tm-toast-out 0.25s ease 2.5s forwards;
@@ -805,7 +805,7 @@ const TemplateManager = (() => {
     text-align: center;
     padding: 40px 16px;
     color: var(--text-muted, #707070);
-    font-size: 13px;
+    font-size: 0.8125rem;
 }
 .tm-code-preview {
     background: var(--bg-body, #1a1a1a);
@@ -813,7 +813,7 @@ const TemplateManager = (() => {
     border-radius: 6px;
     padding: 12px;
     font-family: 'Fira Code', 'Cascadia Code', Consolas, monospace;
-    font-size: 12px;
+    font-size: 0.75rem;
     line-height: 1.5;
     white-space: pre-wrap;
     word-break: break-all;
@@ -830,7 +830,7 @@ const TemplateManager = (() => {
 }
 .tm-var-label {
     min-width: 120px;
-    font-size: 12px;
+    font-size: 0.75rem;
     color: var(--text-secondary, #a0a0a0);
     font-weight: 500;
 }
@@ -841,7 +841,7 @@ const TemplateManager = (() => {
     border: 1px solid var(--border-color, #404040);
     border-radius: 6px;
     color: var(--text-primary, #e0e0e0);
-    font-size: 13px;
+    font-size: 0.8125rem;
     outline: none;
 }
 .tm-var-input:focus {
@@ -854,7 +854,7 @@ const TemplateManager = (() => {
     border: 1px solid var(--border-color, #404040);
     border-radius: 6px;
     color: var(--accent-blue, #60a5fa);
-    font-size: 11px;
+    font-size: 0.6875rem;
     font-family: monospace;
     word-break: break-all;
     margin-top: 8px;
@@ -1114,7 +1114,7 @@ const TemplateManager = (() => {
                 const section = document.createElement('div');
                 section.style.marginBottom = '16px';
                 const title = document.createElement('div');
-                title.style.cssText = 'font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px;';
+                title.style.cssText = 'font-size:0.75rem;font-weight:600;color:var(--text-secondary);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px;';
                 title.textContent = 'Template Variables';
                 section.appendChild(title);
 
@@ -1143,7 +1143,7 @@ const TemplateManager = (() => {
             }
 
             const previewLabel = document.createElement('div');
-            previewLabel.style.cssText = 'font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;';
+            previewLabel.style.cssText = 'font-size:0.75rem;font-weight:600;color:var(--text-secondary);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;';
             previewLabel.textContent = 'Preview';
             body.appendChild(previewLabel);
 
@@ -1405,7 +1405,7 @@ const TemplateManager = (() => {
 
         createModal('Export Template', (body) => {
             const jsonLabel = document.createElement('div');
-            jsonLabel.style.cssText = 'font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;';
+            jsonLabel.style.cssText = 'font-size:0.75rem;font-weight:600;color:var(--text-secondary);margin-bottom:6px;';
             jsonLabel.textContent = 'JSON';
             body.appendChild(jsonLabel);
 
@@ -1416,7 +1416,7 @@ const TemplateManager = (() => {
             body.appendChild(pre);
 
             const urlLabel = document.createElement('div');
-            urlLabel.style.cssText = 'font-size:12px;font-weight:600;color:var(--text-secondary);margin-top:14px;margin-bottom:6px;';
+            urlLabel.style.cssText = 'font-size:0.75rem;font-weight:600;color:var(--text-secondary);margin-top:14px;margin-bottom:6px;';
             urlLabel.textContent = 'Shareable Data URL';
             body.appendChild(urlLabel);
 
@@ -1466,7 +1466,7 @@ const TemplateManager = (() => {
     function showImportDialog() {
         createModal('Import Template', (body) => {
             const label = document.createElement('div');
-            label.style.cssText = 'font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;';
+            label.style.cssText = 'font-size:0.75rem;font-weight:600;color:var(--text-secondary);margin-bottom:8px;';
             label.textContent = 'Paste JSON or load a file';
             body.appendChild(label);
 
@@ -1478,14 +1478,14 @@ const TemplateManager = (() => {
             body.appendChild(textarea);
 
             const orLabel = document.createElement('div');
-            orLabel.style.cssText = 'text-align:center;color:var(--text-muted);font-size:12px;margin:10px 0;';
+            orLabel.style.cssText = 'text-align:center;color:var(--text-muted);font-size:0.75rem;margin:10px 0;';
             orLabel.textContent = '- or -';
             body.appendChild(orLabel);
 
             const fileInput = document.createElement('input');
             fileInput.type = 'file';
             fileInput.accept = '.json';
-            fileInput.style.cssText = 'font-size:12px;color:var(--text-secondary);';
+            fileInput.style.cssText = 'font-size:0.75rem;color:var(--text-secondary);';
             fileInput.onchange = () => {
                 const file = fileInput.files[0];
                 if (!file) return;

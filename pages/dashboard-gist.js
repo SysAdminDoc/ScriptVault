@@ -411,7 +411,7 @@ const GistIntegration = (() => {
     background: var(--bg-body, #1a1a1a);
     color: var(--text-primary, #e0e0e0);
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    font-size: 13px;
+    font-size: 0.8125rem;
 }
 .gi-header {
     display: flex;
@@ -422,7 +422,7 @@ const GistIntegration = (() => {
     border-bottom: 1px solid var(--border-color, #404040);
 }
 .gi-header-title {
-    font-size: 15px;
+    font-size: 0.9375rem;
     font-weight: 600;
     color: var(--text-primary, #e0e0e0);
     flex: 1;
@@ -444,7 +444,7 @@ const GistIntegration = (() => {
     border: none;
     color: var(--text-secondary, #a0a0a0);
     cursor: pointer;
-    font-size: 12px;
+    font-size: 0.75rem;
     font-weight: 500;
     border-bottom: 2px solid transparent;
     transition: color 0.15s, border-color 0.15s;
@@ -465,7 +465,7 @@ const GistIntegration = (() => {
     margin-bottom: 20px;
 }
 .gi-section-title {
-    font-size: 12px;
+    font-size: 0.75rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -484,7 +484,7 @@ const GistIntegration = (() => {
     border: 1px solid var(--border-color, #404040);
     border-radius: 6px;
     color: var(--text-primary, #e0e0e0);
-    font-size: 13px;
+    font-size: 0.8125rem;
     outline: none;
     transition: border-color 0.15s;
 }
@@ -498,7 +498,7 @@ const GistIntegration = (() => {
     padding: 8px 16px;
     border: none;
     border-radius: 6px;
-    font-size: 12px;
+    font-size: 0.75rem;
     font-weight: 500;
     cursor: pointer;
     transition: background 0.15s, opacity 0.15s;
@@ -533,7 +533,7 @@ const GistIntegration = (() => {
 }
 .gi-btn-sm {
     padding: 5px 10px;
-    font-size: 11px;
+    font-size: 0.6875rem;
 }
 .gi-gist-list {
     display: flex;
@@ -559,10 +559,10 @@ const GistIntegration = (() => {
 .gi-gist-card-name {
     font-weight: 600;
     color: var(--accent-blue, #60a5fa);
-    font-size: 13px;
+    font-size: 0.8125rem;
 }
 .gi-gist-card-badge {
-    font-size: 10px;
+    font-size: 0.625rem;
     padding: 2px 6px;
     border-radius: 4px;
     font-weight: 500;
@@ -577,7 +577,7 @@ const GistIntegration = (() => {
 }
 .gi-gist-card-desc {
     color: var(--text-secondary, #a0a0a0);
-    font-size: 12px;
+    font-size: 0.75rem;
     margin-bottom: 8px;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -587,7 +587,7 @@ const GistIntegration = (() => {
     display: flex;
     align-items: center;
     gap: 12px;
-    font-size: 11px;
+    font-size: 0.6875rem;
     color: var(--text-muted, #707070);
 }
 .gi-gist-card-actions {
@@ -599,7 +599,7 @@ const GistIntegration = (() => {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    font-size: 11px;
+    font-size: 0.6875rem;
     padding: 3px 8px;
     border-radius: 4px;
 }
@@ -627,11 +627,11 @@ const GistIntegration = (() => {
 }
 .gi-toggle-label {
     color: var(--text-primary, #e0e0e0);
-    font-size: 13px;
+    font-size: 0.8125rem;
 }
 .gi-toggle-desc {
     color: var(--text-secondary, #a0a0a0);
-    font-size: 11px;
+    font-size: 0.6875rem;
     margin-top: 2px;
 }
 .gi-toggle {
@@ -668,7 +668,7 @@ const GistIntegration = (() => {
     right: 20px;
     padding: 10px 18px;
     border-radius: 8px;
-    font-size: 13px;
+    font-size: 0.8125rem;
     color: #fff;
     z-index: 10001;
     animation: gi-toast-in 0.25s ease, gi-toast-out 0.25s ease 2.5s forwards;
@@ -719,7 +719,7 @@ const GistIntegration = (() => {
     border-bottom: 1px solid var(--border-color, #404040);
 }
 .gi-preview-header h3 {
-    font-size: 14px;
+    font-size: 0.875rem;
     font-weight: 600;
     margin: 0;
 }
@@ -728,7 +728,7 @@ const GistIntegration = (() => {
     border: none;
     color: var(--text-secondary, #a0a0a0);
     cursor: pointer;
-    font-size: 18px;
+    font-size: 1.125rem;
     padding: 4px;
     line-height: 1;
 }
@@ -746,7 +746,7 @@ const GistIntegration = (() => {
     border-radius: 6px;
     padding: 12px;
     font-family: 'Fira Code', 'Cascadia Code', Consolas, monospace;
-    font-size: 12px;
+    font-size: 0.75rem;
     line-height: 1.5;
     white-space: pre-wrap;
     word-break: break-all;
@@ -759,7 +759,7 @@ const GistIntegration = (() => {
     grid-template-columns: auto 1fr;
     gap: 6px 12px;
     margin-bottom: 12px;
-    font-size: 12px;
+    font-size: 0.75rem;
 }
 .gi-preview-meta dt {
     color: var(--text-secondary, #a0a0a0);
@@ -807,7 +807,7 @@ const GistIntegration = (() => {
     justify-content: center;
     padding: 40px;
     color: var(--text-secondary, #a0a0a0);
-    font-size: 13px;
+    font-size: 0.8125rem;
 }
 `;
         document.head.appendChild(style);
@@ -927,7 +927,7 @@ const GistIntegration = (() => {
         section.appendChild(row);
 
         const hint = document.createElement('div');
-        hint.style.cssText = 'font-size:11px;color:var(--text-muted,#707070);margin-top:-4px;';
+        hint.style.cssText = 'font-size:0.6875rem;color:var(--text-muted,#707070);margin-top:-4px;';
         hint.textContent = 'Supports gist.github.com URLs, API URLs, or raw Gist IDs';
         section.appendChild(hint);
 
@@ -1206,7 +1206,7 @@ const GistIntegration = (() => {
             tokenSection.appendChild(maskedRow);
 
             const disclosure = document.createElement('div');
-            disclosure.style.cssText = 'font-size:11px;color:var(--text-muted,#707070);line-height:1.5;margin-bottom:12px;';
+            disclosure.style.cssText = 'font-size:0.6875rem;color:var(--text-muted,#707070);line-height:1.5;margin-bottom:12px;';
             disclosure.textContent = 'Token storage: gist_pat in chrome.storage.local. ScriptVault can clear the local copy here; revoke the token itself in GitHub settings if it should stop working everywhere.';
             tokenSection.appendChild(disclosure);
         } else {
@@ -1242,7 +1242,7 @@ const GistIntegration = (() => {
             tokenSection.appendChild(inputRow);
 
             const hint = document.createElement('div');
-            hint.style.cssText = 'font-size:11px;color:var(--text-muted,#707070);';
+            hint.style.cssText = 'font-size:0.6875rem;color:var(--text-muted,#707070);';
             hint.innerHTML = 'Generate a token at <a href="https://github.com/settings/tokens/new?scopes=gist&description=ScriptVault" target="_blank" style="color:var(--accent-blue,#60a5fa)">GitHub Settings</a> with the <strong>gist</strong> scope. Stored in <code>chrome.storage.local</code>, sandboxed by Chrome — readable only by ScriptVault.';
             tokenSection.appendChild(hint);
         }
@@ -1327,7 +1327,7 @@ const GistIntegration = (() => {
         const linkedGistId = script.settings?.gistId;
         if (linkedGistId) {
             const note = document.createElement('div');
-            note.style.cssText = 'font-size:11px;color:var(--accent-yellow,#fbbf24);margin-bottom:8px;';
+            note.style.cssText = 'font-size:0.6875rem;color:var(--accent-yellow,#fbbf24);margin-bottom:8px;';
             note.textContent = `This script is linked to Gist ${linkedGistId.slice(0, 8)}... and will be updated.`;
             body.appendChild(note);
         }

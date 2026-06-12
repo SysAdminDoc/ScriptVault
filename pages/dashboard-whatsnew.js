@@ -97,25 +97,25 @@ const WhatsNew = (() => {
       .sv-wn-modal { background:var(--bg-content,#242424); border:1px solid var(--border-color,#444); border-radius:12px; width:640px; max-width:90vw; max-height:85vh; overflow:hidden; display:flex; flex-direction:column; box-shadow:0 20px 60px rgba(0,0,0,0.5); animation:svWnSlideUp 0.3s ease; }
       @keyframes svWnSlideUp { from { transform:translateY(20px); opacity:0 } to { transform:translateY(0); opacity:1 } }
       .sv-wn-header { padding:20px 24px 16px; border-bottom:1px solid var(--border-color,#444); }
-      .sv-wn-header h2 { font-size:18px; color:var(--text-primary,#e0e0e0); margin-bottom:4px; }
-      .sv-wn-header .sv-wn-version { font-size:12px; color:var(--accent-primary,#22c55e); font-weight:600; }
-      .sv-wn-header .sv-wn-date { font-size:11px; color:var(--text-muted,#666); margin-left:8px; }
+      .sv-wn-header h2 { font-size:1.125rem; color:var(--text-primary,#e0e0e0); margin-bottom:4px; }
+      .sv-wn-header .sv-wn-version { font-size:0.75rem; color:var(--accent-primary,#22c55e); font-weight:600; }
+      .sv-wn-header .sv-wn-date { font-size:0.6875rem; color:var(--text-muted,#666); margin-left:8px; }
       .sv-wn-body { flex:1; overflow-y:auto; padding:16px 24px 20px; }
       .sv-wn-highlights { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:20px; }
-      @media (max-width:500px) { .sv-wn-highlights { grid-template-columns:1fr; } }
+      @media (max-width:31.25rem) { .sv-wn-highlights { grid-template-columns:1fr; } }
       .sv-wn-card { display:flex; gap:10px; padding:10px 12px; background:var(--bg-input,#1a1a1a); border:1px solid var(--border-color,#444); border-radius:8px; transition:border-color 0.15s; }
       .sv-wn-card:hover { border-color:var(--accent-primary,#22c55e); }
-      .sv-wn-card-icon { font-size:20px; flex-shrink:0; line-height:1.2; }
-      .sv-wn-card-title { font-size:12px; font-weight:600; color:var(--text-primary,#e0e0e0); margin-bottom:2px; }
-      .sv-wn-card-desc { font-size:11px; color:var(--text-secondary,#a0a0a0); line-height:1.4; }
-      .sv-wn-section-title { font-size:13px; font-weight:600; color:var(--text-primary,#e0e0e0); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.05em; }
+      .sv-wn-card-icon { font-size:1.25rem; flex-shrink:0; line-height:1.2; }
+      .sv-wn-card-title { font-size:0.75rem; font-weight:600; color:var(--text-primary,#e0e0e0); margin-bottom:2px; }
+      .sv-wn-card-desc { font-size:0.6875rem; color:var(--text-secondary,#a0a0a0); line-height:1.4; }
+      .sv-wn-section-title { font-size:0.8125rem; font-weight:600; color:var(--text-primary,#e0e0e0); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.05em; }
       .sv-wn-improvements { list-style:none; padding:0; }
-      .sv-wn-improvements li { font-size:12px; color:var(--text-secondary,#a0a0a0); padding:3px 0; padding-left:16px; position:relative; }
+      .sv-wn-improvements li { font-size:0.75rem; color:var(--text-secondary,#a0a0a0); padding:3px 0; padding-left:16px; position:relative; }
       .sv-wn-improvements li::before { content:'\\2713'; position:absolute; left:0; color:var(--accent-primary,#22c55e); font-weight:bold; }
       .sv-wn-footer { padding:12px 24px; border-top:1px solid var(--border-color,#444); display:flex; justify-content:space-between; align-items:center; }
-      .sv-wn-dismiss { padding:8px 20px; background:var(--accent-primary,#22c55e); border:none; border-radius:6px; color:#fff; font-weight:600; font-size:13px; cursor:pointer; transition:background 0.15s; }
+      .sv-wn-dismiss { padding:8px 20px; background:var(--accent-primary,#22c55e); border:none; border-radius:6px; color:#fff; font-weight:600; font-size:0.8125rem; cursor:pointer; transition:background 0.15s; }
       .sv-wn-dismiss:hover { filter:brightness(1.1); }
-      .sv-wn-skip { color:var(--text-muted,#666); font-size:12px; cursor:pointer; text-decoration:underline; }
+      .sv-wn-skip { color:var(--text-muted,#666); font-size:0.75rem; cursor:pointer; text-decoration:underline; }
       .sv-wn-skip:hover { color:var(--text-secondary,#a0a0a0); }
     `;
     document.head.appendChild(style);

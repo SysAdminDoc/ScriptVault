@@ -1933,7 +1933,6 @@
 
         if (savedZoom) {
             root.setAttribute('data-ui-scale', savedZoom);
-            root.style.fontSize = `var(--base-font, 13px)`;
             if (zoomSelect) zoomSelect.value = savedZoom;
         }
         if (savedDensity) {
@@ -2101,8 +2100,8 @@
         const container = document.getElementById(containerId);
         if (container) {
             container.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-muted)">
-                <div style="font-size:16px;margin-bottom:4px">Module Error</div>
-                <div style="font-size:12px">${name} failed to load: ${escapeHtml(e?.message || String(e))}</div>
+                <div style="font-size:1rem;margin-bottom:4px">Module Error</div>
+                <div style="font-size:0.75rem">${name} failed to load: ${escapeHtml(e?.message || String(e))}</div>
             </div>`;
         }
     }
@@ -2294,7 +2293,7 @@
                     });
                 } else {
                     const c = document.getElementById('storeContainer');
-                    if (c) c.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-muted)"><div style="font-size:16px;margin-bottom:8px">Script Store failed to load</div><div style="font-size:12px">Check the browser console for errors. The module file may be missing.</div></div>';
+                    if (c) c.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-muted)"><div style="font-size:1rem;margin-bottom:8px">Script Store failed to load</div><div style="font-size:0.75rem">Check the browser console for errors. The module file may be missing.</div></div>';
                 }
                 break;
             case 'settings':
@@ -2552,11 +2551,11 @@
                     <div style="display:flex;align-items:center;gap:12px;padding:12px 20px;background:linear-gradient(135deg,rgba(34,197,94,0.1),rgba(96,165,250,0.1));border:1px solid rgba(34,197,94,0.2);border-radius:8px;margin:8px 12px">
                         <div style="flex:1">
                             <div style="font-weight:600;color:var(--text-primary);margin-bottom:2px">Enjoying ScriptVault?</div>
-                            <div style="font-size:12px;color:var(--text-secondary)">A review on the Chrome Web Store helps others discover us!</div>
+                            <div style="font-size:0.75rem;color:var(--text-secondary)">A review on the Chrome Web Store helps others discover us!</div>
                         </div>
                         <button id="btnReviewYes" class="toolbar-btn primary" style="white-space:nowrap">Leave a Review</button>
                         <button id="btnReviewLater" class="toolbar-btn" style="white-space:nowrap">Maybe Later</button>
-                        <button id="btnReviewDismiss" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:18px;padding:4px">&times;</button>
+                        <button id="btnReviewDismiss" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1.125rem;padding:4px">&times;</button>
                     </div>
                 `;
                 const panel = document.getElementById('scriptsPanel');
@@ -2602,13 +2601,13 @@
             banner.className = 'recent-updates-banner';
             const hasReviewableChanges = updates.some(hasRecentUpdateTrustChanges);
             banner.innerHTML = `
-                <div style="display:flex;align-items:center;gap:12px;padding:10px 16px;background:linear-gradient(135deg,rgba(34,197,94,0.12),rgba(96,165,250,0.12));border:1px solid rgba(34,197,94,0.25);border-radius:8px;margin:8px 12px;font-size:13px">
+                <div style="display:flex;align-items:center;gap:12px;padding:10px 16px;background:linear-gradient(135deg,rgba(34,197,94,0.12),rgba(96,165,250,0.12));border:1px solid rgba(34,197,94,0.25);border-radius:8px;margin:8px 12px;font-size:0.8125rem">
                     <div style="flex:1;min-width:0;color:var(--text-primary)">
                         <strong>${updates.length === 1 ? 'Script updated' : `${updates.length} scripts updated`}:</strong>
                         ${list}
                     </div>
                     ${hasReviewableChanges ? '<button id="btnRecentUpdatesReview" type="button" class="toolbar-btn">Review changes</button>' : ''}
-                    <button id="btnRecentUpdatesDismiss" type="button" aria-label="Dismiss" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:18px;padding:4px;line-height:1">&times;</button>
+                    <button id="btnRecentUpdatesDismiss" type="button" aria-label="Dismiss" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1.125rem;padding:4px;line-height:1">&times;</button>
                 </div>
             `;
             panel.insertBefore(banner, panel.firstChild);
@@ -12195,7 +12194,7 @@
                 <div style="display:flex;flex-direction:column;gap:10px">
                     <label for="${inputId}" style="font-weight:600;color:var(--text-primary)">${escapeHtml(label)}</label>
                     <input id="${inputId}" class="input-field" type="text" value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder)}" aria-describedby="${errorId}">
-                    <div id="${errorId}" style="min-height:18px;font-size:12px;color:var(--accent-error)"></div>
+                    <div id="${errorId}" style="min-height:18px;font-size:0.75rem;color:var(--accent-error)"></div>
                 </div>
             `, [
                 { label: 'Cancel', class: '', callback: () => finish(null) },
@@ -14342,7 +14341,7 @@
                     'background:rgba(11,16,27,0.78)',
                     'border:3px dashed var(--accent, #58a6ff)',
                     'color:#fff',
-                    'font:600 18px/1.3 system-ui,sans-serif',
+                    'font:600 1.125rem/1.3 system-ui,sans-serif',
                     'display:none',
                     'align-items:center',
                     'justify-content:center',
@@ -15545,7 +15544,7 @@
             const { active, list } = res || {};
             state.workspaces = Array.isArray(list) ? list : [];
             if (!list || list.length === 0) {
-                container.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:4px 0">No workspaces saved</div>';
+                container.innerHTML = '<div style="color:var(--text-muted);font-size:0.75rem;padding:4px 0">No workspaces saved</div>';
                 updateUtilitiesOverview();
                 return;
             }
@@ -15622,7 +15621,7 @@
             updateUtilitiesOverview();
         } catch (e) {
             state.workspaces = [];
-            container.innerHTML = '<div style="color:var(--text-muted);font-size:12px">Failed to load workspaces</div>';
+            container.innerHTML = '<div style="color:var(--text-muted);font-size:0.75rem">Failed to load workspaces</div>';
             updateUtilitiesOverview();
         }
     }

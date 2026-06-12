@@ -49,24 +49,24 @@
             color-scheme: light;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif; font-size: 12px; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+        body { font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif; font-size: 0.75rem; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
         .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
         :focus-visible { outline: none; box-shadow: var(--focus-ring); }
 
         /* Toolbar */
         .toolbar { display: flex; align-items: center; gap: 8px; padding: 4px 8px; background: var(--bg-raised); border-bottom: 1px solid var(--border); flex-shrink: 0; min-height: 32px; }
-        .toolbar-title { font-weight: 600; color: var(--accent); font-size: 12px; }
+        .toolbar-title { font-weight: 600; color: var(--accent); font-size: 0.75rem; }
         .toolbar-sep { width: 1px; height: 16px; background: var(--border); }
         .toolbar-tabs { display: inline-flex; align-items: center; gap: 4px; }
-        .tab-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 3px 8px; border-radius: var(--radius-control); font-size: 12px; transition: color 0.15s, background-color 0.15s; }
+        .tab-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 3px 8px; border-radius: var(--radius-control); font-size: 0.75rem; transition: color 0.15s, background-color 0.15s; }
         .tab-btn:hover { color: var(--text); background: var(--bg-hover); }
         .tab-btn.active { color: var(--accent); background: var(--bg-hover); }
         .spacer { flex: 1; }
-        .toolbar-btn { background: none; border: 1px solid var(--border); color: var(--text-muted); cursor: pointer; padding: 2px 8px; border-radius: var(--radius-control); font-size: 11px; transition: border-color 0.15s, color 0.15s, background-color 0.15s; }
+        .toolbar-btn { background: none; border: 1px solid var(--border); color: var(--text-muted); cursor: pointer; padding: 2px 8px; border-radius: var(--radius-control); font-size: 0.6875rem; transition: border-color 0.15s, color 0.15s, background-color 0.15s; }
         .toolbar-btn:hover { color: var(--text); border-color: var(--text-muted); }
         .toolbar-btn:disabled { opacity: 0.55; cursor: not-allowed; }
-        .toolbar-status { min-width: 0; max-width: 240px; color: var(--text-muted); font-size: 11px; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .filter-input { background: var(--bg-row); border: 1px solid var(--border); color: var(--text); padding: 2px 6px; border-radius: var(--radius-control); font-size: 11px; width: 180px; }
+        .toolbar-status { min-width: 0; max-width: 240px; color: var(--text-muted); font-size: 0.6875rem; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .filter-input { background: var(--bg-row); border: 1px solid var(--border); color: var(--text); padding: 2px 6px; border-radius: var(--radius-control); font-size: 0.6875rem; width: 180px; }
         .filter-input:focus,
         .filter-input:focus-visible { outline: none; border-color: var(--accent); box-shadow: var(--focus-ring); }
 
@@ -75,20 +75,20 @@
         .panel.active { display: flex; }
 
         /* ── Network panel ─────────────────────────────────────────────── */
-        .net-stats { display: flex; gap: 12px; padding: 4px 8px; background: var(--bg-raised); border-bottom: 1px solid var(--border); flex-shrink: 0; font-size: 11px; color: var(--text-muted); }
+        .net-stats { display: flex; gap: 12px; padding: 4px 8px; background: var(--bg-raised); border-bottom: 1px solid var(--border); flex-shrink: 0; font-size: 0.6875rem; color: var(--text-muted); }
         .net-stat { display: flex; align-items: center; gap: 4px; }
         .net-stat-val { font-weight: 600; color: var(--text); }
         .net-stat-err { color: var(--danger); }
 
         .net-table-wrap { flex: 1; overflow: auto; min-height: 0; }
-        .net-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        .net-table { width: 100%; border-collapse: collapse; font-size: 0.6875rem; }
         .net-table th { position: sticky; top: 0; background: var(--bg-raised); color: var(--text-muted); font-weight: 500; text-align: left; padding: 3px 6px; border-bottom: 1px solid var(--border); white-space: nowrap; user-select: none; }
         .net-table td { padding: 3px 6px; border-bottom: 1px solid var(--border); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; vertical-align: middle; }
         .net-table tr:hover td { background: var(--bg-hover); }
         .net-table tr.selected td { background: var(--bg-hover); outline: 1px solid var(--accent); }
         .net-table tr:focus-visible td { background: var(--bg-hover); outline: 1px solid rgba(76, 175, 80, 0.45); }
 
-        .method-badge { font-size: 10px; font-weight: 700; padding: 1px 4px; border-radius: 2px; }
+        .method-badge { font-size: 0.625rem; font-weight: 700; padding: 1px 4px; border-radius: 2px; }
         .method-GET { color: var(--method-get); }
         .method-POST { color: var(--method-post); }
         .method-PUT { color: var(--method-put); }
@@ -103,20 +103,20 @@
         /* Detail pane */
         .net-detail { display: none; width: 320px; border-left: 1px solid var(--border); overflow-y: auto; flex-shrink: 0; background: var(--bg-raised); }
         .net-detail.open { display: block; }
-        .net-detail-header { padding: 6px 8px; font-weight: 600; font-size: 11px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
-        .net-detail-close { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 14px; line-height: 1; }
+        .net-detail-header { padding: 6px 8px; font-weight: 600; font-size: 0.6875rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        .net-detail-close { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.875rem; line-height: 1; }
         .net-detail-section { padding: 6px 8px; border-bottom: 1px solid var(--border); }
-        .net-detail-section-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 4px; }
-        .net-detail-row { display: flex; gap: 4px; margin-bottom: 2px; font-size: 11px; }
+        .net-detail-section-title { font-size: 0.625rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 4px; }
+        .net-detail-row { display: flex; gap: 4px; margin-bottom: 2px; font-size: 0.6875rem; }
         .net-detail-key { color: var(--text-muted); flex-shrink: 0; min-width: 80px; }
         .net-detail-val { word-break: break-all; }
-        .net-body-pre { font-family: 'Consolas', monospace; font-size: 10px; white-space: pre-wrap; word-break: break-all; background: var(--bg); padding: 6px; border-radius: var(--radius-control); margin-top: 4px; max-height: 200px; overflow-y: auto; color: var(--text); }
+        .net-body-pre { font-family: 'Consolas', monospace; font-size: 0.625rem; white-space: pre-wrap; word-break: break-all; background: var(--bg); padding: 6px; border-radius: var(--radius-control); margin-top: 4px; max-height: 200px; overflow-y: auto; color: var(--text); }
 
         .net-split { display: flex; flex: 1; overflow: hidden; min-height: 0; }
 
         /* ── Execution panel ───────────────────────────────────────────── */
         .exec-table-wrap { flex: 1; overflow: auto; }
-        .exec-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        .exec-table { width: 100%; border-collapse: collapse; font-size: 0.6875rem; }
         .exec-table th { position: sticky; top: 0; background: var(--bg-raised); color: var(--text-muted); font-weight: 500; text-align: left; padding: 3px 8px; border-bottom: 1px solid var(--border); }
         .exec-table td { padding: 4px 8px; border-bottom: 1px solid var(--border); }
         .exec-table tr:hover td { background: var(--bg-hover); }
@@ -128,11 +128,11 @@
 
         /* ── Console panel ─────────────────────────────────────────────── */
         .console-wrap { flex: 1; overflow-y: auto; padding: 4px 0; }
-        .console-entry { display: flex; gap: 8px; padding: 2px 8px; border-bottom: 1px solid var(--border); font-family: 'Consolas', monospace; font-size: 11px; }
+        .console-entry { display: flex; gap: 8px; padding: 2px 8px; border-bottom: 1px solid var(--border); font-family: 'Consolas', monospace; font-size: 0.6875rem; }
         .console-entry:hover { background: var(--bg-hover); }
-        .console-ts { color: var(--text-dim); flex-shrink: 0; font-size: 10px; padding-top: 1px; }
+        .console-ts { color: var(--text-dim); flex-shrink: 0; font-size: 0.625rem; padding-top: 1px; }
         .console-script { color: var(--accent); flex-shrink: 0; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .console-level { flex-shrink: 0; font-size: 10px; font-weight: 700; padding: 1px 4px; border-radius: 2px; }
+        .console-level { flex-shrink: 0; font-size: 0.625rem; font-weight: 700; padding: 1px 4px; border-radius: 2px; }
         .console-level.log { color: var(--text-muted); }
         .console-level.warn { color: var(--warning); background: rgba(245,158,11,0.1); }
         .console-level.error { color: var(--danger); background: rgba(239,68,68,0.1); }
@@ -141,9 +141,9 @@
 
         /* Empty state */
         .empty-state { flex: 1; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 7px; color: var(--text-muted); text-align: center; padding: 24px; }
-        .empty-icon { min-width: 36px; min-height: 28px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: var(--radius-panel); color: var(--accent); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; background: var(--bg-row); }
+        .empty-icon { min-width: 36px; min-height: 28px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: var(--radius-panel); color: var(--accent); font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.08em; background: var(--bg-row); }
         .empty-actions { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; justify-content: center; }
-        .empty-action { background: none; border: 1px solid var(--border); color: var(--text); cursor: pointer; padding: 5px 10px; border-radius: var(--radius-control); font-size: 11px; font-weight: 600; transition: border-color 0.15s, background-color 0.15s, color 0.15s, transform 0.15s; }
+        .empty-action { background: none; border: 1px solid var(--border); color: var(--text); cursor: pointer; padding: 5px 10px; border-radius: var(--radius-control); font-size: 0.6875rem; font-weight: 600; transition: border-color 0.15s, background-color 0.15s, color 0.15s, transform 0.15s; }
         .empty-action:hover { border-color: var(--accent); background: var(--bg-hover); color: var(--accent); transform: translateY(-1px); }
         .table-empty-cell { text-align: center; padding: 22px 20px; color: var(--text-muted); background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent); }
         @media (prefers-reduced-motion: reduce) {
@@ -227,7 +227,7 @@
             <div class="empty-state" id="consoleEmpty">
                 <div class="empty-icon" aria-hidden="true">SV</div>
                 <div>Console messages from user scripts will appear here when capture is available</div>
-                <div style="font-size:10px;margin-top:4px">This panel currently focuses on network and execution insight first.</div>
+                <div style="font-size:0.625rem;margin-top:4px">This panel currently focuses on network and execution insight first.</div>
                 <div class="empty-actions">
                     <button class="empty-action" id="btnConsoleToNetwork" type="button">Open Network</button>
                     <button class="empty-action" id="btnConsoleToExecution" type="button">Open Execution</button>

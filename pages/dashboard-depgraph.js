@@ -56,7 +56,7 @@ const DependencyGraph = (() => {
     background: var(--bg-body);
     color: var(--text-primary);
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    font-size: 13px;
+    font-size: 0.8125rem;
     position: relative;
     overflow: hidden;
 }
@@ -88,7 +88,7 @@ const DependencyGraph = (() => {
     border: 1px solid var(--border-color);
     border-radius: 4px;
     padding: 5px 10px;
-    font-size: 12px;
+    font-size: 0.75rem;
     cursor: pointer;
     transition: background 0.15s;
 }
@@ -110,7 +110,7 @@ const DependencyGraph = (() => {
     padding: 8px 12px;
     display: flex;
     gap: 14px;
-    font-size: 11px;
+    font-size: 0.6875rem;
     color: var(--text-secondary);
     z-index: 5;
 }
@@ -143,7 +143,7 @@ const DependencyGraph = (() => {
 .dg-sidebar-header {
     padding: 12px;
     font-weight: 600;
-    font-size: 14px;
+    font-size: 0.875rem;
     border-bottom: 1px solid var(--border-color);
     display: flex;
     align-items: center;
@@ -154,7 +154,7 @@ const DependencyGraph = (() => {
     border: none;
     color: var(--text-secondary);
     cursor: pointer;
-    font-size: 16px;
+    font-size: 1rem;
     padding: 2px 6px;
     border-radius: 3px;
 }
@@ -178,7 +178,7 @@ const DependencyGraph = (() => {
     margin-bottom: 14px;
 }
 .dg-detail-section h4 {
-    font-size: 11px;
+    font-size: 0.6875rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     color: var(--text-muted);
@@ -186,7 +186,7 @@ const DependencyGraph = (() => {
 }
 .dg-detail-section .dg-value {
     color: var(--text-primary);
-    font-size: 13px;
+    font-size: 0.8125rem;
     word-break: break-all;
 }
 .dg-dep-list {
@@ -196,7 +196,7 @@ const DependencyGraph = (() => {
 }
 .dg-dep-list li {
     padding: 3px 0;
-    font-size: 12px;
+    font-size: 0.75rem;
     color: var(--text-secondary);
     border-bottom: 1px solid var(--bg-row);
 }
@@ -223,7 +223,7 @@ const DependencyGraph = (() => {
     color: #fff;
     border: none;
     border-radius: 4px;
-    font-size: 12px;
+    font-size: 0.75rem;
     font-weight: 600;
     cursor: pointer;
     text-align: center;
@@ -236,7 +236,7 @@ const DependencyGraph = (() => {
     display: inline-block;
     background: var(--accent-red);
     color: #fff;
-    font-size: 10px;
+    font-size: 0.625rem;
     font-weight: 700;
     padding: 1px 6px;
     border-radius: 8px;
@@ -248,7 +248,7 @@ const DependencyGraph = (() => {
     justify-content: center;
     height: 100%;
     color: var(--text-muted);
-    font-size: 14px;
+    font-size: 0.875rem;
     text-align: center;
     padding: 20px;
 }
@@ -259,7 +259,7 @@ const DependencyGraph = (() => {
     border: 1px solid var(--border-color);
     border-radius: 4px;
     padding: 6px 10px;
-    font-size: 11px;
+    font-size: 0.6875rem;
     pointer-events: none;
     z-index: 100;
     max-width: 240px;
@@ -872,11 +872,11 @@ const DependencyGraph = (() => {
         // Script info
         html += `<div class="dg-detail-section">
             <h4>Script Info</h4>
-            <div class="dg-value" style="font-weight:600;font-size:14px;">${escapeHtml(meta.name)}</div>`;
+            <div class="dg-value" style="font-weight:600;font-size:0.875rem;">${escapeHtml(meta.name)}</div>`;
         if (meta.version) html += `<div class="dg-value" style="color:var(--text-secondary);margin-top:2px;">v${escapeHtml(meta.version)}</div>`;
         if (meta.author) html += `<div class="dg-value" style="color:var(--text-secondary);margin-top:2px;">by ${escapeHtml(meta.author)}</div>`;
-        if (meta.description) html += `<div class="dg-value" style="color:var(--text-muted);margin-top:4px;font-size:12px;">${escapeHtml(meta.description)}</div>`;
-        html += `<div class="dg-value" style="color:var(--text-muted);margin-top:4px;font-size:11px;">${meta.lineCount} lines</div>`;
+        if (meta.description) html += `<div class="dg-value" style="color:var(--text-muted);margin-top:4px;font-size:0.75rem;">${escapeHtml(meta.description)}</div>`;
+        html += `<div class="dg-value" style="color:var(--text-muted);margin-top:4px;font-size:0.6875rem;">${meta.lineCount} lines</div>`;
         html += `</div>`;
 
         // Conflicts

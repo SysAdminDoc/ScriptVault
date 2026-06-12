@@ -40,14 +40,14 @@ const PatternBuilder = (() => {
   const CSS = `
     .pb-root{font-family:system-ui,-apple-system,sans-serif;color:var(--text-primary,#e0e0e0);display:flex;flex-direction:column;gap:12px}
     .pb-section{background:var(--bg-row,#2a2a2a);border:1px solid var(--border-color,#404040);border-radius:8px;padding:14px}
-    .pb-section-title{font-size:13px;font-weight:600;color:var(--accent-green,#4ade80);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px}
+    .pb-section-title{font-size:0.8125rem;font-weight:600;color:var(--accent-green,#4ade80);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px}
     .pb-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
-    .pb-label{font-size:12px;color:var(--text-secondary,#a0a0a0);min-width:70px}
-    .pb-input,.pb-select{background:var(--bg-input,#333);border:1px solid var(--border-color,#404040);border-radius:4px;color:var(--text-primary,#e0e0e0);padding:6px 10px;font-size:13px;transition:border-color .2s,box-shadow .2s}
+    .pb-label{font-size:0.75rem;color:var(--text-secondary,#a0a0a0);min-width:70px}
+    .pb-input,.pb-select{background:var(--bg-input,#333);border:1px solid var(--border-color,#404040);border-radius:4px;color:var(--text-primary,#e0e0e0);padding:6px 10px;font-size:0.8125rem;transition:border-color .2s,box-shadow .2s}
     .pb-input{flex:1;min-width:120px}
     .pb-input:focus-visible,.pb-select:focus-visible,.pb-segment select:focus-visible,.pb-segment input:focus-visible,.pb-path-seg input:focus-visible,.pb-path-seg select:focus-visible{border-color:var(--accent-green,#4ade80);box-shadow:0 0 0 3px rgba(74,222,128,0.12);outline:none}
     .pb-select{padding:6px 8px;cursor:pointer}
-    .pb-btn{background:var(--bg-input,#333);border:1px solid var(--border-color,#404040);border-radius:4px;color:var(--text-primary,#e0e0e0);padding:6px 14px;font-size:12px;cursor:pointer;transition:background .15s,border-color .15s;white-space:nowrap}
+    .pb-btn{background:var(--bg-input,#333);border:1px solid var(--border-color,#404040);border-radius:4px;color:var(--text-primary,#e0e0e0);padding:6px 14px;font-size:0.75rem;cursor:pointer;transition:background .15s,border-color .15s;white-space:nowrap}
     .pb-btn:hover{background:var(--bg-row-hover,#333);border-color:var(--accent-green,#4ade80)}
     .pb-btn:focus-visible,.pb-toggle:focus-visible,.pb-preset-chip:focus-visible,.pb-remove-btn:focus-visible{outline:2px solid var(--accent-green,#4ade80);outline-offset:2px}
     .pb-btn-primary{background:var(--accent-green-dark,#22c55e);border-color:var(--accent-green-dark,#22c55e);color:#fff;font-weight:600}
@@ -56,25 +56,25 @@ const PatternBuilder = (() => {
     .pb-toggle.active{background:var(--toggle-on,#22c55e)}
     .pb-toggle::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .2s}
     .pb-toggle.active::after{transform:translateX(16px)}
-    .pb-preview{background:var(--bg-body,#1a1a1a);border:1px solid var(--border-color,#404040);border-radius:6px;padding:12px 14px;font-family:'Cascadia Code','Fira Code',monospace;font-size:13px;word-break:break-all;color:var(--accent-blue,#60a5fa);line-height:1.6;min-height:36px;user-select:all}
-    .pb-segment{display:inline-flex;align-items:center;background:var(--bg-input,#333);border:1px solid var(--border-color,#404040);border-radius:4px;padding:4px 8px;font-size:12px;gap:6px;cursor:default}
+    .pb-preview{background:var(--bg-body,#1a1a1a);border:1px solid var(--border-color,#404040);border-radius:6px;padding:12px 14px;font-family:'Cascadia Code','Fira Code',monospace;font-size:0.8125rem;word-break:break-all;color:var(--accent-blue,#60a5fa);line-height:1.6;min-height:36px;user-select:all}
+    .pb-segment{display:inline-flex;align-items:center;background:var(--bg-input,#333);border:1px solid var(--border-color,#404040);border-radius:4px;padding:4px 8px;font-size:0.75rem;gap:6px;cursor:default}
     .pb-segment .seg-sep{color:var(--text-muted,#707070);font-weight:700}
-    .pb-segment select,.pb-segment input{background:transparent;border:1px solid transparent;color:var(--text-primary,#e0e0e0);font-size:12px;padding:0;min-width:40px;font-family:inherit;border-radius:3px}
+    .pb-segment select,.pb-segment input{background:transparent;border:1px solid transparent;color:var(--text-primary,#e0e0e0);font-size:0.75rem;padding:0;min-width:40px;font-family:inherit;border-radius:3px}
     .pb-test-row{display:flex;align-items:center;gap:8px;margin-top:4px}
     .pb-test-badge{width:14px;height:14px;border-radius:50%;flex-shrink:0}
     .pb-test-badge.match{background:var(--accent-green,#4ade80)}
     .pb-test-badge.no-match{background:var(--accent-red,#f87171)}
-    .pb-test-url{font-size:12px;color:var(--text-secondary,#a0a0a0);word-break:break-all}
+    .pb-test-url{font-size:0.75rem;color:var(--text-secondary,#a0a0a0);word-break:break-all}
     .pb-presets{display:flex;flex-wrap:wrap;gap:6px}
-    .pb-preset-chip{background:var(--bg-input,#333);border:1px solid var(--border-color,#404040);border-radius: 8px;padding:4px 12px;font-size:11px;color:var(--text-secondary,#a0a0a0);cursor:pointer;transition:border-color .15s,color .15s,background .15s}
+    .pb-preset-chip{background:var(--bg-input,#333);border:1px solid var(--border-color,#404040);border-radius: 8px;padding:4px 12px;font-size:0.6875rem;color:var(--text-secondary,#a0a0a0);cursor:pointer;transition:border-color .15s,color .15s,background .15s}
     .pb-preset-chip:hover{border-color:var(--accent-green,#4ade80);color:var(--text-primary,#e0e0e0)}
     .pb-actions{display:flex;gap:8px;justify-content:flex-end}
     .pb-path-segments{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
-    .pb-path-seg{display:inline-flex;align-items:center;gap:4px;background:var(--bg-input,#333);border:1px solid var(--border-color,#404040);border-radius:4px;padding:3px 6px;font-size:12px}
-    .pb-path-seg input{background:transparent;border:1px solid transparent;color:var(--text-primary);font-size:12px;width:80px;font-family:inherit;border-radius:3px}
-    .pb-path-seg select{background:transparent;border:1px solid transparent;color:var(--text-primary);font-size:12px;cursor:pointer;font-family:inherit;border-radius:3px}
-    .pb-remove-btn{padding:0;border:none;background:none;color:var(--accent-red,#f87171);cursor:pointer;font-size:14px;line-height:1}
-    .pb-slash{color:var(--text-muted,#707070);font-weight:700;font-size:14px}
+    .pb-path-seg{display:inline-flex;align-items:center;gap:4px;background:var(--bg-input,#333);border:1px solid var(--border-color,#404040);border-radius:4px;padding:3px 6px;font-size:0.75rem}
+    .pb-path-seg input{background:transparent;border:1px solid transparent;color:var(--text-primary);font-size:0.75rem;width:80px;font-family:inherit;border-radius:3px}
+    .pb-path-seg select{background:transparent;border:1px solid transparent;color:var(--text-primary);font-size:0.75rem;cursor:pointer;font-family:inherit;border-radius:3px}
+    .pb-remove-btn{padding:0;border:none;background:none;color:var(--accent-red,#f87171);cursor:pointer;font-size:0.875rem;line-height:1}
+    .pb-slash{color:var(--text-muted,#707070);font-weight:700;font-size:0.875rem}
   `;
 
   /* ── Helpers ────────────────────────────────────────────────────── */
@@ -229,7 +229,7 @@ const PatternBuilder = (() => {
       _state.protocol,
       v => { _state.protocol = v; render(); }
     ));
-    protoRow.appendChild(el('span', { class: 'seg-sep', text: '://', style: 'color:var(--text-muted);font-weight:700;font-size:14px' }));
+    protoRow.appendChild(el('span', { class: 'seg-sep', text: '://', style: 'color:var(--text-muted);font-weight:700;font-size:0.875rem' }));
     sec.appendChild(protoRow);
 
     // Host
@@ -247,7 +247,7 @@ const PatternBuilder = (() => {
       render();
     });
     hostRow.appendChild(wildcardToggle);
-    hostRow.appendChild(el('span', { style: 'font-size:11px;color:var(--text-secondary)', text: '*. prefix' }));
+    hostRow.appendChild(el('span', { style: 'font-size:0.6875rem;color:var(--text-secondary)', text: '*. prefix' }));
 
     const hostInput = el('input', {
       class: 'pb-input',
@@ -300,7 +300,7 @@ const PatternBuilder = (() => {
       }
     });
 
-    const addSegBtn = el('button', { class: 'pb-btn', text: '+ Segment', style: 'font-size:11px;padding:3px 8px' });
+    const addSegBtn = el('button', { class: 'pb-btn', text: '+ Segment', style: 'font-size:0.6875rem;padding:3px 8px' });
     addSegBtn.addEventListener('click', () => {
       _state.pathSegments.push({ value: '*', mode: 'wildcard' });
       render();

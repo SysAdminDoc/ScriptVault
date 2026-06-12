@@ -51,7 +51,7 @@ const DiffTool = (() => {
   flex-wrap: wrap;
 }
 .sv-diff-toolbar-title {
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
   color: var(--text-primary, #e0e0e0);
   margin-right: auto;
@@ -62,7 +62,7 @@ const DiffTool = (() => {
   border-radius: 6px;
   background: var(--bg-input, #333);
   color: var(--text-primary, #e0e0e0);
-  font-size: 12px;
+  font-size: 0.75rem;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
 }
@@ -83,7 +83,7 @@ const DiffTool = (() => {
   color: #1a1a1a;
 }
 .sv-diff-stats {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary, #a0a0a0);
 }
 .sv-diff-stats-add { color: var(--accent-green, #4ade80); }
@@ -107,7 +107,7 @@ const DiffTool = (() => {
 .sv-diff-side-col:last-child { border-right: none; }
 .sv-diff-side-header {
   padding: 6px 12px;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--text-secondary, #a0a0a0);
   background: var(--bg-header, #252525);
@@ -119,7 +119,7 @@ const DiffTool = (() => {
 .sv-diff-line {
   display: flex;
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.6;
   min-height: 20px;
 }
@@ -158,7 +158,7 @@ const DiffTool = (() => {
 }
 .sv-diff-unified-header {
   padding: 6px 12px;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary, #a0a0a0);
   background: var(--bg-header, #252525);
   border-bottom: 1px solid var(--border-color, #404040);
@@ -180,7 +180,7 @@ const DiffTool = (() => {
 /* Collapsible */
 .sv-diff-collapse {
   padding: 4px 12px;
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--accent-blue, #60a5fa);
   background: var(--bg-row, #2a2a2a);
   cursor: pointer;
@@ -204,7 +204,7 @@ const DiffTool = (() => {
 }
 .sv-diff-hunk-btn {
   padding: 2px 8px;
-  font-size: 11px;
+  font-size: 0.6875rem;
   border-radius: 4px;
   border: 1px solid var(--border-color, #404040);
   background: var(--bg-input, #333);
@@ -236,7 +236,7 @@ const DiffTool = (() => {
   border: 1px solid var(--border-color, #404040);
   background: var(--bg-input, #333);
   color: var(--text-primary, #e0e0e0);
-  font-size: 14px;
+  font-size: 0.875rem;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -271,7 +271,7 @@ const DiffTool = (() => {
   padding: 12px 16px;
   border-bottom: 1px solid var(--border-color, #404040);
   font-weight: 600;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 .sv-diff-merge-body {
   flex: 1;
@@ -287,7 +287,7 @@ const DiffTool = (() => {
   border: none;
   padding: 12px;
   font-family: 'Consolas', 'Monaco', monospace;
-  font-size: 12px;
+  font-size: 0.75rem;
   resize: none;
   outline: none;
 }
@@ -693,7 +693,7 @@ const DiffTool = (() => {
         const grp = document.createElement('div');
         grp.style.cssText = 'display:flex;gap:2px;';
         const lbl = document.createElement('span');
-        lbl.style.cssText = 'font-size:11px;color:var(--text-secondary);padding:2px 4px;';
+        lbl.style.cssText = 'font-size:0.6875rem;color:var(--text-secondary);padding:2px 4px;';
         lbl.textContent = `#${h + 1}:`;
         const leftBtn = document.createElement('button');
         leftBtn.className = 'sv-diff-hunk-btn chosen';

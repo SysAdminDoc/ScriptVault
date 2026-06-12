@@ -37,7 +37,7 @@ const A11y = (() => {
   padding: 8px 16px;
   border: 2px solid var(--accent-blue);
   border-radius: 6px;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   text-decoration: none;
   transition: top 150ms ease;

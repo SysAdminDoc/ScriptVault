@@ -47,7 +47,7 @@ const StandaloneExport = (() => {
     padding: 24px;
 }
 .se-modal h3 { margin: 0 0 16px; color: var(--accent-green, #4ade80); }
-.se-modal p { color: var(--text-secondary, #a0a0a0); font-size: 13px; margin-bottom: 12px; }
+.se-modal p { color: var(--text-secondary, #a0a0a0); font-size: 0.8125rem; margin-bottom: 12px; }
 .se-btn {
     appearance: none;
     padding: 8px 18px;
@@ -56,16 +56,16 @@ const StandaloneExport = (() => {
     background: var(--bg-input, #333);
     color: var(--text-primary, #e0e0e0);
     cursor: pointer;
-    font-size: 13px;
+    font-size: 0.8125rem;
     transition: border-color 0.15s, background 0.15s, filter 0.15s;
 }
 .se-btn:hover { border-color: var(--accent-green, #4ade80); }
 .se-btn.primary { background: var(--accent-green-dark, #22c55e); border-color: var(--accent-green-dark, #22c55e); color: #fff; }
 .se-btn.primary:hover { filter: brightness(1.1); }
 .se-btn-row { display: flex; gap: 8px; margin-top: 16px; justify-content: flex-end; }
-.se-preview { background: var(--bg-body, #1a1a1a); border: 1px solid var(--border-color, #404040); border-radius: 6px; padding: 12px; margin-top: 12px; max-height: 200px; overflow: auto; font-family: monospace; font-size: 11px; color: var(--text-secondary, #a0a0a0); white-space: pre-wrap; word-break: break-all; }
+.se-preview { background: var(--bg-body, #1a1a1a); border: 1px solid var(--border-color, #404040); border-radius: 6px; padding: 12px; margin-top: 12px; max-height: 200px; overflow: auto; font-family: monospace; font-size: 0.6875rem; color: var(--text-secondary, #a0a0a0); white-space: pre-wrap; word-break: break-all; }
 .se-bookmarklet-link { display: inline-block; padding: 10px 24px; background: var(--accent-blue, #60a5fa); color: #fff; border-radius: 8px; text-decoration: none; font-weight: 600; cursor: grab; margin: 12px 0; }
-.se-warning { color: var(--accent-yellow, #fbbf24); font-size: 12px; margin-top: 8px; }
+.se-warning { color: var(--accent-yellow, #fbbf24); font-size: 0.75rem; margin-top: 8px; }
 `;
         document.head.appendChild(style);
         _state.styleEl = style;
@@ -242,38 +242,38 @@ function svSetToggleState(button, expanded, showLabel, hideLabel) {
 body{background:#1a1a1a;color:#e0e0e0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;line-height:1.6;min-height:100vh}
 a{color:#60a5fa;text-decoration:none}a:hover{text-decoration:underline}
 .container{max-width:960px;margin:0 auto;padding:32px 24px}
-h1{font-size:24px;color:#4ade80;margin-bottom:8px}
-h2{font-size:18px;color:#e0e0e0;margin-bottom:12px}
-h3{font-size:15px;color:#a0a0a0;margin-bottom:8px}
-.subtitle{color:#a0a0a0;font-size:14px;margin-bottom:24px}
-.badge{display:inline-block;padding:2px 10px;border-radius:10px;font-size:11px;font-weight:600;margin-right:6px}
+h1{font-size:1.5rem;color:#4ade80;margin-bottom:8px}
+h2{font-size:1.125rem;color:#e0e0e0;margin-bottom:12px}
+h3{font-size:0.9375rem;color:#a0a0a0;margin-bottom:8px}
+.subtitle{color:#a0a0a0;font-size:0.875rem;margin-bottom:24px}
+.badge{display:inline-block;padding:2px 10px;border-radius:10px;font-size:0.6875rem;font-weight:600;margin-right:6px}
 .badge-green{background:#22c55e22;color:#4ade80;border:1px solid #22c55e44}
 .badge-blue{background:#60a5fa22;color:#60a5fa;border:1px solid #60a5fa44}
 .badge-purple{background:#c084fc22;color:#c084fc;border:1px solid #c084fc44}
 .card{background:#2a2a2a;border:1px solid #404040;border-radius:10px;padding:20px;margin-bottom:16px;transition:border-color 0.15s}
 .card:hover{border-color:#4ade8066}
 .card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
-.card-title{font-size:16px;font-weight:600}
-.card-desc{color:#a0a0a0;font-size:13px;margin-bottom:12px}
-.code-block{background:#1a1a1a;border:1px solid #404040;border-radius:8px;padding:16px;font-family:'Cascadia Code','Fira Code',Consolas,monospace;font-size:12px;line-height:1.6;overflow-x:auto;position:relative;white-space:pre;color:#a0a0a0;max-height:400px;overflow-y:auto}
+.card-title{font-size:1rem;font-weight:600}
+.card-desc{color:#a0a0a0;font-size:0.8125rem;margin-bottom:12px}
+.code-block{background:#1a1a1a;border:1px solid #404040;border-radius:8px;padding:16px;font-family:'Cascadia Code','Fira Code',Consolas,monospace;font-size:0.75rem;line-height:1.6;overflow-x:auto;position:relative;white-space:pre;color:#a0a0a0;max-height:400px;overflow-y:auto}
 .code-block.expanded{max-height:none}
-.btn{appearance:none;display:inline-flex;align-items:center;justify-content:center;padding:8px 20px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;transition:background 0.15s,border-color 0.15s,filter 0.15s,color 0.15s}
+.btn{appearance:none;display:inline-flex;align-items:center;justify-content:center;padding:8px 20px;border:none;border-radius:6px;cursor:pointer;font-size:0.8125rem;font-weight:600;transition:background 0.15s,border-color 0.15s,filter 0.15s,color 0.15s}
 .btn-green{background:#22c55e;color:#fff}.btn-green:hover{filter:brightness(1.1)}
 .btn-blue{background:#3b82f6;color:#fff}.btn-blue:hover{filter:brightness(1.1)}
 .btn-outline{background:transparent;border:1px solid #404040;color:#e0e0e0}.btn-outline:hover{border-color:#4ade80}
 .btn-row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
 .meta-table{width:100%;border-collapse:collapse;margin-bottom:16px}
-.meta-table td{padding:6px 12px;border-bottom:1px solid #333;font-size:13px}
+.meta-table td{padding:6px 12px;border-bottom:1px solid #333;font-size:0.8125rem}
 .meta-table td:first-child{color:#a0a0a0;width:120px;white-space:nowrap}
-.search-box{width:100%;padding:10px 16px;background:#333;border:1px solid #404040;border-radius:8px;color:#e0e0e0;font-size:14px;outline:none;margin-bottom:16px}
+.search-box{width:100%;padding:10px 16px;background:#333;border:1px solid #404040;border-radius:8px;color:#e0e0e0;font-size:0.875rem;outline:none;margin-bottom:16px}
 .search-box:focus{border-color:#4ade80}
 .search-box::placeholder{color:#707070}
 .header-bar{background:#252525;border-bottom:1px solid #404040;padding:16px 24px;margin-bottom:32px}
 .header-bar h1{margin:0}
-.toggle-btn{appearance:none;background:none;border:1px solid #404040;color:#a0a0a0;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px;transition:border-color 0.15s,color 0.15s,background 0.15s}
+.toggle-btn{appearance:none;background:none;border:1px solid #404040;color:#a0a0a0;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:0.75rem;transition:border-color 0.15s,color 0.15s,background 0.15s}
 .toggle-btn:hover{border-color:#4ade80;color:#e0e0e0}
-.footer{text-align:center;padding:32px 24px;color:#707070;font-size:12px;border-top:1px solid #333;margin-top:32px}
-.copy-toast{position:fixed;bottom:24px;right:24px;background:#333;color:#4ade80;padding:10px 20px;border-radius:8px;font-size:13px;opacity:0;transition:opacity 0.3s;pointer-events:none;z-index:9999}
+.footer{text-align:center;padding:32px 24px;color:#707070;font-size:0.75rem;border-top:1px solid #333;margin-top:32px}
+.copy-toast{position:fixed;bottom:24px;right:24px;background:#333;color:#4ade80;padding:10px 20px;border-radius:8px;font-size:0.8125rem;opacity:0;transition:opacity 0.3s;pointer-events:none;z-index:9999}
 .copy-toast.show{opacity:1}
 ${inlineCSS}
 </style>
@@ -353,7 +353,7 @@ ${inlineJS ? `<script>${inlineJS.replace(/<\/(script)/gi, '<\\/$1')}<\/script>` 
 
     <div class="card">
         <h2>Install Instructions</h2>
-        <ol style="padding-left:20px;color:#a0a0a0;font-size:13px;line-height:2">
+        <ol style="padding-left:20px;color:#a0a0a0;font-size:0.8125rem;line-height:2">
             <li>Install a userscript manager: <a href="https://www.tampermonkey.net/" target="_blank" rel="noopener noreferrer">Tampermonkey</a> or <a href="https://violentmonkey.github.io/" target="_blank" rel="noopener noreferrer">Violentmonkey</a></li>
             <li>Click the "Copy Code" button above</li>
             <li>Open your userscript manager dashboard</li>
@@ -570,10 +570,10 @@ document.addEventListener('DOMContentLoaded', function() {
     <div style="text-align:center">
         <a class="se-bookmarklet-link" href="${escapeHTML(result.code)}" title="Drag me to your bookmarks bar">${escapeHTML(result.name)}</a>
     </div>
-    <p style="font-size:12px;color:var(--text-muted,#707070)">Size: ${result.size} characters</p>
+    <p style="font-size:0.75rem;color:var(--text-muted,#707070)">Size: ${result.size} characters</p>
     ${result.isTooLarge ? `<p class="se-warning">Warning: ${escapeHTML(result.warning)}</p>` : ''}
     <details style="margin-top:12px">
-        <summary style="cursor:pointer;color:var(--accent-blue,#60a5fa);font-size:13px">View bookmarklet code</summary>
+        <summary style="cursor:pointer;color:var(--accent-blue,#60a5fa);font-size:0.8125rem">View bookmarklet code</summary>
         <div class="se-preview" style="margin-top:8px">${escapeHTML(result.code)}</div>
     </details>
     <div class="se-btn-row">
@@ -622,7 +622,7 @@ document.addEventListener('DOMContentLoaded', function() {
     <div class="card" style="text-align:center;padding:32px">
         <h2 style="margin-bottom:16px">One-Click Install</h2>
         <p style="margin-bottom:20px">Click the button below to install this userscript. You need a userscript manager like <a href="https://www.tampermonkey.net/" target="_blank" rel="noopener noreferrer">Tampermonkey</a> installed first.</p>
-        <button type="button" class="btn btn-green" style="font-size:16px;padding:14px 40px" data-action="install-script">Install Script</button>
+        <button type="button" class="btn btn-green" style="font-size:1rem;padding:14px 40px" data-action="install-script">Install Script</button>
     </div>
 
     <div class="card">
@@ -638,7 +638,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     <div class="card" style="text-align:center">
         <h2 style="margin-bottom:12px">Share</h2>
-        <p style="margin-bottom:16px;color:#a0a0a0;font-size:13px">Scan the QR code to open this page on another device</p>
+        <p style="margin-bottom:16px;color:#a0a0a0;font-size:0.8125rem">Scan the QR code to open this page on another device</p>
         <canvas id="qrCanvas" width="200" height="200" style="border:4px solid #fff;border-radius:8px"></canvas>
     </div>
 

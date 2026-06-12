@@ -109,7 +109,7 @@ const CSPReporter = (() => {
   flex-wrap: wrap;
 }
 .sv-csp-toolbar-title {
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 600;
   color: var(--text-primary, #e0e0e0);
   margin-right: auto;
@@ -120,7 +120,7 @@ const CSPReporter = (() => {
   border-radius: 6px;
   background: var(--bg-input, #333);
   color: var(--text-primary, #e0e0e0);
-  font-size: 12px;
+  font-size: 0.75rem;
   width: 200px;
   outline: none;
   transition: border-color 0.15s;
@@ -134,7 +134,7 @@ const CSPReporter = (() => {
   border-radius: 6px;
   background: var(--bg-input, #333);
   color: var(--text-primary, #e0e0e0);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 500;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
@@ -174,12 +174,12 @@ const CSPReporter = (() => {
   text-align: center;
 }
 .sv-csp-stat-value {
-  font-size: 24px;
+  font-size: 1.5rem;
   font-weight: 700;
   color: var(--text-primary, #e0e0e0);
 }
 .sv-csp-stat-label {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-muted, #707070);
   margin-top: 2px;
   text-transform: uppercase;
@@ -195,13 +195,13 @@ const CSPReporter = (() => {
 .sv-csp-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .sv-csp-table th {
   background: var(--bg-header, #252525);
   color: var(--text-secondary, #a0a0a0);
   font-weight: 600;
-  font-size: 11px;
+  font-size: 0.6875rem;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   padding: 10px 12px;
@@ -220,7 +220,7 @@ const CSPReporter = (() => {
 }
 .sv-csp-table th .sort-arrow {
   margin-left: 4px;
-  font-size: 10px;
+  font-size: 0.625rem;
 }
 .sv-csp-table td {
   padding: 8px 12px;
@@ -240,7 +240,7 @@ const CSPReporter = (() => {
   display: inline-block;
   padding: 2px 8px;
   border-radius: 4px;
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.3px;
@@ -249,7 +249,7 @@ const CSPReporter = (() => {
 /* Directive pill */
 .sv-csp-directive {
   font-family: 'SFMono-Regular', Consolas, monospace;
-  font-size: 11px;
+  font-size: 0.6875rem;
   background: rgba(255,255,255,0.06);
   padding: 2px 6px;
   border-radius: 3px;
@@ -278,12 +278,12 @@ const CSPReporter = (() => {
 }
 .sv-csp-suggestion-title {
   font-weight: 600;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--accent-blue, #60a5fa);
   margin-bottom: 4px;
 }
 .sv-csp-suggestion-desc {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary, #a0a0a0);
   margin-bottom: 8px;
   line-height: 1.4;
@@ -294,7 +294,7 @@ const CSPReporter = (() => {
   border-radius: 4px;
   padding: 8px 10px;
   font-family: 'SFMono-Regular', Consolas, monospace;
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--accent-green, #4ade80);
   white-space: pre-wrap;
   overflow-x: auto;
@@ -323,7 +323,7 @@ const CSPReporter = (() => {
   user-select: none;
 }
 .sv-csp-bypass-header h4 {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--text-primary, #e0e0e0);
   margin: 0;
@@ -344,7 +344,7 @@ const CSPReporter = (() => {
   border-radius: 6px;
   padding: 10px 12px;
   margin-bottom: 12px;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--accent-yellow, #fbbf24);
   line-height: 1.4;
 }
@@ -357,7 +357,7 @@ const CSPReporter = (() => {
   justify-content: center;
   border: 1px solid rgba(251, 191, 36, 0.48);
   border-radius: 4px;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 800;
   line-height: 1;
 }
@@ -367,7 +367,7 @@ const CSPReporter = (() => {
   gap: 10px;
   padding: 8px 0;
   border-bottom: 1px solid rgba(255,255,255,0.04);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .sv-csp-bypass-row:last-child {
   border-bottom: none;
@@ -376,7 +376,7 @@ const CSPReporter = (() => {
   flex: 1;
   color: var(--text-primary, #e0e0e0);
   font-family: 'SFMono-Regular', Consolas, monospace;
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 .sv-csp-bypass-toggle {
   position: relative;
@@ -413,7 +413,7 @@ const CSPReporter = (() => {
 }
 .sv-csp-empty-inline {
   color: var(--text-muted, #707070);
-  font-size: 12px;
+  font-size: 0.75rem;
   text-align: center;
   padding: 16px;
 }
@@ -425,11 +425,11 @@ const CSPReporter = (() => {
   color: var(--text-muted, #707070);
 }
 .sv-csp-empty-icon {
-  font-size: 48px;
+  font-size: 3rem;
   margin-bottom: 12px;
 }
 .sv-csp-empty-text {
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 /* Toast */
@@ -442,7 +442,7 @@ const CSPReporter = (() => {
   border: 1px solid var(--accent-green-dark, #22c55e);
   border-radius: 8px;
   padding: 10px 16px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   z-index: 10001;
   box-shadow: 0 4px 16px rgba(0,0,0,0.4);
   animation: sv-csp-fadein 0.2s ease;
@@ -736,7 +736,7 @@ const CSPReporter = (() => {
           <td>${escapeHtml(row.scriptNames)}</td>
           <td>${row.count}</td>
           <td>${formatDate(row.lastSeen)}</td>
-          <td><button class="sv-csp-btn" data-show-fix="${escapeHtml(row.directive)}" data-row="${escapeHtml(row.key)}" style="padding:3px 8px;font-size:10px">View Fix</button></td>
+          <td><button class="sv-csp-btn" data-show-fix="${escapeHtml(row.directive)}" data-row="${escapeHtml(row.key)}" style="padding:3px 8px;font-size:0.625rem">View Fix</button></td>
         </tr>
         <tr class="sv-csp-suggestion-row" data-suggestion-for="${escapeHtml(row.key)}">
           <td colspan="7">${renderSuggestions(row.directive)}</td>
@@ -805,7 +805,7 @@ const CSPReporter = (() => {
   function renderSuggestions(directive) {
     const suggestions = getSuggestions(directive);
     if (suggestions.length === 0) {
-      return '<div style="color:var(--text-muted);font-size:12px">No specific workarounds available for this directive.</div>';
+      return '<div style="color:var(--text-muted);font-size:0.75rem">No specific workarounds available for this directive.</div>';
     }
     return suggestions.map(s => `
       <div class="sv-csp-suggestion-card">
@@ -833,7 +833,7 @@ const CSPReporter = (() => {
     headerEl.setAttribute('aria-controls', 'svCspBypassBody');
     headerEl.innerHTML = `
       <h4>CSP Bypass Settings</h4>
-      <span class="sv-csp-bypass-caret" style="color:var(--text-muted);font-size:11px" aria-hidden="true">\u25BC</span>
+      <span class="sv-csp-bypass-caret" style="color:var(--text-muted);font-size:0.6875rem" aria-hidden="true">\u25BC</span>
     `;
     panel.appendChild(headerEl);
 
@@ -857,7 +857,7 @@ const CSPReporter = (() => {
         row.className = 'sv-csp-bypass-row';
         row.innerHTML = `
           <span class="sv-csp-bypass-host">${escapeHtml(host)}</span>
-          <span class="sv-csp-bypass-state" style="font-size:11px;color:var(--text-muted)">${isEnabled ? 'Bypass ON' : 'Bypass OFF'}</span>
+          <span class="sv-csp-bypass-state" style="font-size:0.6875rem;color:var(--text-muted)">${isEnabled ? 'Bypass ON' : 'Bypass OFF'}</span>
           <button type="button" class="sv-csp-bypass-toggle ${isEnabled ? 'on' : ''}" data-bypass-host="${escapeHtml(host)}" role="switch" aria-checked="${isEnabled ? 'true' : 'false'}" aria-label="${isEnabled ? 'Disable' : 'Enable'} CSP bypass for ${escapeHtml(host)}"></button>
         `;
         body.appendChild(row);
