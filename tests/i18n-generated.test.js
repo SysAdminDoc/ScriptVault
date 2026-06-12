@@ -34,6 +34,7 @@ describe('generated I18n runtime', () => {
       <button data-i18n="save"></button>
       <input data-i18n-placeholder="searchScripts">
       <div data-i18n-title="refresh"></div>
+      <button data-i18n-aria-label="clearScriptSearch"></button>
     `;
 
     I18n.applyToDOM(document);
@@ -41,5 +42,6 @@ describe('generated I18n runtime', () => {
     expect(document.querySelector('[data-i18n="save"]')?.textContent).toBe('保存');
     expect(document.querySelector('[data-i18n-placeholder="searchScripts"]')?.getAttribute('placeholder')).toBe('搜索脚本...');
     expect(document.querySelector('[data-i18n-title="refresh"]')?.getAttribute('title')).toBe('刷新');
+    expect(document.querySelector('[data-i18n-aria-label="clearScriptSearch"]')?.getAttribute('aria-label')).toBe('Clear script search');
   });
 });

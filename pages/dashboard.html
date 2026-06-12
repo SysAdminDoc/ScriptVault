@@ -5780,10 +5780,10 @@
                     <button type="button" class="density-btn" data-density="spacious" title="Spacious" aria-pressed="false">S</button>
                 </div>
             </div>
-            <div class="tm-tabs-scripts" id="scriptTabsGroup" role="group" aria-label="Open script editors"></div>
+            <div class="tm-tabs-scripts" id="scriptTabsGroup" role="group" aria-label="Open script editors" data-i18n-aria-label="openScriptEditors"></div>
             <div class="tm-tabs">
                 <button type="button" class="tm-tab" data-tab="newscript" id="tabNewScript" title="Create a new script" aria-label="Create a new script">+</button>
-                <div class="tm-tablist" role="tablist" aria-label="Dashboard sections">
+                <div class="tm-tablist" role="tablist" aria-label="Dashboard sections" data-i18n-aria-label="dashboardSections">
                     <button type="button" class="tm-tab active" id="dashboardTabScripts" role="tab" aria-selected="true" aria-controls="scriptsPanel" tabindex="0" data-tab="scripts">Installed Userscripts</button>
                     <button type="button" class="tm-tab" id="dashboardTabUpdates" role="tab" aria-selected="false" aria-controls="updatesPanel" tabindex="-1" data-tab="updates">Updates <span class="tab-count" id="dashboardUpdatesBadge" hidden>0</span></button>
                     <button type="button" class="tm-tab" id="dashboardTabSettings" role="tab" aria-selected="false" aria-controls="settingsPanel" tabindex="-1" data-tab="settings">Settings</button>
@@ -5818,27 +5818,27 @@
         <div id="scriptsPanel" class="tm-panel active" role="tabpanel" aria-labelledby="dashboardTabScripts">
             <div class="scripts-shell-header">
                 <div class="scripts-shell-copy">
-                    <span class="scripts-shell-kicker">Workspace</span>
-                    <h2>Installed Userscripts</h2>
-                    <p>Install, organize, and inspect scripts without slowing down the control surface.</p>
+                    <span class="scripts-shell-kicker" data-i18n="scriptsWorkspaceKicker">Workspace</span>
+                    <h2 data-i18n="tabScripts">Installed Userscripts</h2>
+                    <p data-i18n="scriptsWorkspaceDescription">Install, organize, and inspect scripts without slowing down the control surface.</p>
                 </div>
-                <div class="scripts-shell-stats" aria-label="Workspace stats">
+                <div class="scripts-shell-stats" aria-label="Workspace stats" data-i18n-aria-label="workspaceStats">
                     <div class="scripts-shell-stat">
-                        <span>Installed</span>
+                        <span data-i18n="installed">Installed</span>
                         <strong id="workspaceInstalledStat">0</strong>
                     </div>
                     <div class="scripts-shell-stat">
-                        <span>Active</span>
+                        <span data-i18n="active">Active</span>
                         <strong id="workspaceActiveStat">0</strong>
                     </div>
                     <div class="scripts-shell-stat">
-                        <span>Storage</span>
+                        <span data-i18n="storage">Storage</span>
                         <strong id="workspaceStorageStat">0 B</strong>
                     </div>
                 </div>
             </div>
             <!-- Combined Toolbar -->
-            <div class="scripts-toolbar" role="toolbar" aria-label="Script controls">
+            <div class="scripts-toolbar" role="toolbar" aria-label="Script controls" data-i18n-aria-label="scriptControls">
                 <div class="scripts-toolbar-left">
                     <button type="button" class="toolbar-btn primary" id="btnNewScript">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -5856,7 +5856,7 @@
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                         Export
                     </button>
-                    <button type="button" class="toolbar-btn" id="btnNewFolder" title="Create a new folder">
+                    <button type="button" class="toolbar-btn" id="btnNewFolder" title="Create a new folder" data-i18n-title="createFolder">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
                         Folder
                     </button>
@@ -5865,13 +5865,13 @@
                         Find
                     </button>
                     <div class="toolbar-divider"></div>
-                    <div class="bulk-action-cluster" role="group" aria-label="Bulk actions">
+                    <div class="bulk-action-cluster" role="group" aria-label="Bulk actions" data-i18n-aria-label="bulkActions">
                         <label class="bulk-toggle" for="bulkSelectAll">
-                            <input type="checkbox" id="bulkSelectAll" class="bulk-checkbox" title="Select all shown scripts" aria-label="Select all shown scripts">
-                            <span class="bulk-toggle-label">Select Shown</span>
+                            <input type="checkbox" id="bulkSelectAll" class="bulk-checkbox" title="Select all shown scripts" aria-label="Select all shown scripts" data-i18n-title="selectAllShownScripts" data-i18n-aria-label="selectAllShownScripts">
+                            <span class="bulk-toggle-label" data-i18n="selectAllShownScripts">Select Shown</span>
                         </label>
-                        <select id="bulkActionSelect" class="select-field bulk-select" title="Bulk action" aria-label="Bulk action" disabled>
-                            <option value="">Choose Action</option>
+                        <select id="bulkActionSelect" class="select-field bulk-select" title="Bulk action" aria-label="Bulk action" data-i18n-title="bulkAction" data-i18n-aria-label="bulkAction" disabled>
+                            <option value="" data-i18n="chooseAction">Choose Action</option>
                             <option value="enable">Enable</option>
                             <option value="disable">Disable</option>
                             <option value="export">Export</option>
@@ -5882,7 +5882,7 @@
                         <button type="button" class="btn bulk-btn" id="btnBulkApply" disabled>Apply</button>
                     </div>
                     <div class="toolbar-divider"></div>
-                    <select id="filterSelect" class="select-field bulk-select" title="Filter scripts" aria-label="Filter scripts">
+                    <select id="filterSelect" class="select-field bulk-select" title="Filter scripts" aria-label="Filter scripts" data-i18n-title="filterScripts" data-i18n-aria-label="filterScripts">
                         <option value="all">All</option>
                         <option value="enabled">Enabled</option>
                         <option value="disabled">Disabled</option>
@@ -5904,15 +5904,15 @@
                         <option value="scope:single">Single Site</option>
                     </select>
                     <span class="script-counter" id="scriptCounter">0 scripts</span>
-                    <div class="search-box" role="search" aria-label="Search installed scripts">
+                    <div class="search-box" role="search" aria-label="Search installed scripts" data-i18n-aria-label="searchScripts">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                        <input type="text" id="scriptSearch" name="script_search" placeholder="Search scripts or code:fetch" title="Search by script name, domain, tag, or code:fetch" aria-label="Search scripts by name, domain, tag, or code:fetch" aria-describedby="scriptCounter" autocomplete="off" spellcheck="false">
-                        <button type="button" class="search-box-clear" id="btnClearScriptSearch" aria-label="Clear script search" hidden>×</button>
+                        <input type="text" id="scriptSearch" name="script_search" placeholder="Search scripts or code:fetch" title="Search by script name, domain, tag, or code:fetch" aria-label="Search scripts by name, domain, tag, or code:fetch" data-i18n-placeholder="searchScriptsCode" data-i18n-title="searchScriptsCodeTitle" data-i18n-aria-label="searchScriptsCodeAria" aria-describedby="scriptCounter" autocomplete="off" spellcheck="false">
+                        <button type="button" class="search-box-clear" id="btnClearScriptSearch" aria-label="Clear script search" data-i18n-aria-label="clearScriptSearch" hidden>×</button>
                     </div>
-                    <button type="button" class="toolbar-btn compact" id="btnViewToggle" title="Toggle table/card view" aria-label="Toggle table or card view" aria-pressed="false">
+                    <button type="button" class="toolbar-btn compact" id="btnViewToggle" title="Toggle table/card view" aria-label="Toggle table or card view" data-i18n-title="toggleScriptView" data-i18n-aria-label="toggleScriptView" aria-pressed="false">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px" id="viewToggleIcon"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
                     </button>
-                    <button type="button" class="toolbar-btn compact" id="btnColumnToggle" title="Show/hide columns" aria-label="Show or hide columns" aria-haspopup="dialog">
+                    <button type="button" class="toolbar-btn compact" id="btnColumnToggle" title="Show/hide columns" aria-label="Show or hide columns" data-i18n-title="toggleColumns" data-i18n-aria-label="toggleColumns" aria-haspopup="dialog">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M12 3v18M3 12h18M3 6h18M3 18h18"/></svg>
                     </button>
                 </div>
@@ -5922,62 +5922,62 @@
                 <table class="scripts-table">
                     <thead>
                         <tr>
-                            <th class="center" style="width:30px"><input type="checkbox" id="selectAllScripts" aria-label="Select all shown scripts in table" title="Select all shown scripts in table"></th>
+                            <th class="center" style="width:30px"><input type="checkbox" id="selectAllScripts" aria-label="Select all shown scripts in table" title="Select all shown scripts in table" data-i18n-title="selectAllShownScriptsTable" data-i18n-aria-label="selectAllShownScriptsTable"></th>
                             <th class="center sortable" style="width:40px">
-                                <button type="button" class="table-sort-button centered" data-sort="order" data-sort-label="Order">
+                                <button type="button" class="table-sort-button centered" data-sort="order" data-sort-label="Order" data-sort-i18n="scriptOrder">
                                     # <span class="sort-indicator" aria-hidden="true"></span>
                                 </button>
                             </th>
                             <th class="center sortable" style="width:50px">
-                                <button type="button" class="table-sort-button centered" data-sort="enabled" data-sort-label="Enabled">
-                                    Enabled <span class="sort-indicator" aria-hidden="true"></span>
+                                <button type="button" class="table-sort-button centered" data-sort="enabled" data-sort-label="Enabled" data-sort-i18n="enabled">
+                                    <span data-sort-label-text data-i18n="enabled">Enabled</span> <span class="sort-indicator" aria-hidden="true"></span>
                                 </button>
                             </th>
                             <th class="sortable" style="min-width:200px">
-                                <button type="button" class="table-sort-button" data-sort="name" data-sort-label="Name">
-                                    Name <span class="sort-indicator" aria-hidden="true"></span>
+                                <button type="button" class="table-sort-button" data-sort="name" data-sort-label="Name" data-sort-i18n="scriptName">
+                                    <span data-sort-label-text data-i18n="scriptName">Name</span> <span class="sort-indicator" aria-hidden="true"></span>
                                 </button>
                             </th>
                             <th class="center sortable" style="width:70px" data-col="version">
-                                <button type="button" class="table-sort-button centered" data-sort="version" data-sort-label="Version">
-                                    Version <span class="sort-indicator" aria-hidden="true"></span>
+                                <button type="button" class="table-sort-button centered" data-sort="version" data-sort-label="Version" data-sort-i18n="scriptVersion">
+                                    <span data-sort-label-text data-i18n="scriptVersion">Version</span> <span class="sort-indicator" aria-hidden="true"></span>
                                 </button>
                             </th>
                             <th class="center sortable" style="width:60px" data-col="size">
-                                <button type="button" class="table-sort-button centered" data-sort="size" data-sort-label="Size">
-                                    Size <span class="sort-indicator" aria-hidden="true"></span>
+                                <button type="button" class="table-sort-button centered" data-sort="size" data-sort-label="Size" data-sort-i18n="scriptSize">
+                                    <span data-sort-label-text data-i18n="scriptSize">Size</span> <span class="sort-indicator" aria-hidden="true"></span>
                                 </button>
                             </th>
                             <th class="center sortable" style="width:55px" data-col="lines">
-                                <button type="button" class="table-sort-button centered" data-sort="lines" data-sort-label="Lines">
-                                    Lines <span class="sort-indicator" aria-hidden="true"></span>
+                                <button type="button" class="table-sort-button centered" data-sort="lines" data-sort-label="Lines" data-sort-i18n="scriptLines">
+                                    <span data-sort-label-text data-i18n="scriptLines">Lines</span> <span class="sort-indicator" aria-hidden="true"></span>
                                 </button>
                             </th>
-                            <th class="center" style="width:80px" data-col="sites">Sites</th>
-                            <th class="center" style="width:80px" data-col="features">Features</th>
-                            <th class="center" style="width:50px" data-col="home">🏠</th>
+                            <th class="center" style="width:80px" data-col="sites" data-i18n="scriptSites">Sites</th>
+                            <th class="center" style="width:80px" data-col="features" data-i18n="scriptFeatures">Features</th>
+                            <th class="center" style="width:50px" data-col="home" title="Home" data-i18n-title="scriptHome">🏠</th>
                             <th class="center sortable" style="width:80px" data-col="updated">
-                                <button type="button" class="table-sort-button centered" data-sort="updated" data-sort-label="Updated">
-                                    Updated <span class="sort-indicator" aria-hidden="true"></span>
+                                <button type="button" class="table-sort-button centered" data-sort="updated" data-sort-label="Updated" data-sort-i18n="scriptUpdated">
+                                    <span data-sort-label-text data-i18n="scriptUpdated">Updated</span> <span class="sort-indicator" aria-hidden="true"></span>
                                 </button>
                             </th>
                             <th class="center sortable" style="width:65px" data-col="perf">
-                                <button type="button" class="table-sort-button centered" data-sort="perf" data-sort-label="Performance">
+                                <button type="button" class="table-sort-button centered" data-sort="perf" data-sort-label="Performance" data-sort-i18n="scriptPerformance">
                                     Perf <span class="sort-indicator" aria-hidden="true"></span>
                                 </button>
                             </th>
-                            <th class="center" style="width:100px">Actions</th>
+                            <th class="center" style="width:100px" data-i18n="scriptActions">Actions</th>
                         </tr>
                     </thead>
                     <tbody id="scriptTableBody"></tbody>
                 </table>
                 <div id="emptyState" class="empty-state" role="status" aria-live="polite" aria-atomic="true" style="display:none">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
-                    <h3 id="emptyStateTitle">Your vault is empty</h3>
-                    <p id="emptyStateDescription">Create a script or import an existing userscript. ScriptVault keeps scripts local unless you enable sync or backups.</p>
+                    <h3 id="emptyStateTitle" data-i18n="emptyVaultTitle">Your vault is empty</h3>
+                    <p id="emptyStateDescription" data-i18n="emptyVaultDescription">Create a script or import an existing userscript. ScriptVault keeps scripts local unless you enable sync or backups.</p>
                     <div class="empty-state-actions">
-                        <button class="btn btn-primary" id="emptyStatePrimaryAction" type="button">Create Script</button>
-                        <button class="btn" id="emptyStateSecondaryAction" type="button">Import Script</button>
+                        <button class="btn btn-primary" id="emptyStatePrimaryAction" type="button" data-i18n="emptyCreateScript">Create Script</button>
+                        <button class="btn" id="emptyStateSecondaryAction" type="button" data-i18n="emptyImportScript">Import Script</button>
                     </div>
                 </div>
             </div>
@@ -5988,30 +5988,30 @@
             <div class="updates-shell">
                 <div class="updates-hero">
                     <div>
-                        <div class="settings-eyebrow">Update queue</div>
-                        <h2>Updates</h2>
+                        <div class="settings-eyebrow" data-i18n="updatesQueue">Update queue</div>
+                        <h2 data-i18n="tabUpdates">Updates</h2>
                     </div>
-                    <div class="updates-actions" role="toolbar" aria-label="Update queue actions">
-                        <button type="button" class="toolbar-btn" id="btnRefreshPendingUpdates">Check Now</button>
-                        <button type="button" class="toolbar-btn primary" id="btnApplySafePendingUpdates">Apply Safe</button>
-                        <button type="button" class="toolbar-btn" id="btnClearPendingUpdates">Clear Queue</button>
+                    <div class="updates-actions" role="toolbar" aria-label="Update queue actions" data-i18n-aria-label="updateQueueActions">
+                        <button type="button" class="toolbar-btn" id="btnRefreshPendingUpdates" data-i18n="checkNow">Check Now</button>
+                        <button type="button" class="toolbar-btn primary" id="btnApplySafePendingUpdates" data-i18n="applySafe">Apply Safe</button>
+                        <button type="button" class="toolbar-btn" id="btnClearPendingUpdates" data-i18n="clearQueue">Clear Queue</button>
                     </div>
                 </div>
-                <div class="updates-summary-grid" aria-label="Update queue summary">
+                <div class="updates-summary-grid" aria-label="Update queue summary" data-i18n-aria-label="updateQueueSummary">
                     <div class="updates-summary-item">
-                        <span>Queued</span>
+                        <span data-i18n="queued">Queued</span>
                         <strong id="pendingUpdatesCount">0</strong>
                     </div>
                     <div class="updates-summary-item">
-                        <span>Safe</span>
+                        <span data-i18n="safe">Safe</span>
                         <strong id="pendingUpdatesSafeCount">0</strong>
                     </div>
                     <div class="updates-summary-item">
-                        <span>Review</span>
+                        <span data-i18n="review">Review</span>
                         <strong id="pendingUpdatesReviewCount">0</strong>
                     </div>
                 </div>
-                <p class="updates-summary-text" id="pendingUpdatesSummary" role="status" aria-live="polite">No queued updates.</p>
+                <p class="updates-summary-text" id="pendingUpdatesSummary" role="status" aria-live="polite" data-i18n="noQueuedUpdates">No queued updates.</p>
                 <div class="pending-updates-list" id="pendingUpdatesList"></div>
             </div>
         </div>

@@ -30,4 +30,16 @@ describe('dashboard i18n-v2 removal', () => {
     expect(dashboardJs).toContain('function applyDashboardI18n()');
     expect(dashboardJs).toContain('i18n.applyToDOM(document)');
   });
+
+  it('translates the scripts table, empty state, and update queue through the active runtime dictionary', () => {
+    expect(dashboardHtml).toContain('data-sort-i18n="scriptOrder"');
+    expect(dashboardHtml).toContain('data-sort-i18n="scriptPerformance"');
+    expect(dashboardHtml).toContain('data-i18n-aria-label="selectAllShownScriptsTable"');
+    expect(dashboardHtml).toContain('data-i18n="emptyVaultTitle"');
+    expect(dashboardHtml).toContain('data-i18n="updatesQueue"');
+    expect(dashboardHtml).toContain('data-i18n-aria-label="updateQueueActions"');
+    expect(dashboardJs).toContain("tDashboard('emptyVaultTitle'");
+    expect(dashboardJs).toContain("'queuedUpdatesSummary'");
+    expect(dashboardJs).toContain("button.dataset.sortLabel = label");
+  });
 });
