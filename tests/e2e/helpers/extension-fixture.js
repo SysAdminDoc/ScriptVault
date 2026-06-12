@@ -72,6 +72,45 @@ export async function sendRuntimeMessage(page, message) {
   return page.evaluate(payload => chrome.runtime.sendMessage(payload), message);
 }
 
+export async function enableUserScriptsToggle(app) {
+  const page = await app.context.newPage();
+  try {
+    await page.goto(`chrome://extensions/?id=${app.extensionId}`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 20_000,
+    });
+    await page.waitForSelector('#itemAllowUserScripts', { timeout: 10_000 }).catch(() => null);
+    const toggle = await page.$('#itemAllowUserScripts');
+    if (!toggle) {
+      return {
+        present: false,
+        enabledBefore: null,
+        enabledAfter: null,
+        note: 'The browser did not expose an Allow User Scripts toggle.',
+      };
+    }
+
+    const enabledBefore = await page.$eval('#itemAllowUserScripts', input => !!input.checked);
+    if (!enabledBefore) {
+      await page.$eval('#itemAllowUserScripts', input => input.click());
+      await page.waitForFunction(() => document.querySelector('#itemAllowUserScripts')?.checked === true, {
+        timeout: 10_000,
+      });
+    }
+    const enabledAfter = await page.$eval('#itemAllowUserScripts', input => !!input.checked);
+    return {
+      present: true,
+      enabledBefore,
+      enabledAfter,
+      note: enabledBefore
+        ? 'Allow User Scripts was already enabled in the Playwright profile.'
+        : 'Allow User Scripts was enabled through the extension details page.',
+    };
+  } finally {
+    await page.close().catch(() => {});
+  }
+}
+
 export async function seedPendingInstall(page, { code, url }) {
   await page.evaluate(({ nextCode, nextUrl }) => chrome.storage.local.set({
     pendingInstall: {
