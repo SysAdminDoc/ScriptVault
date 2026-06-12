@@ -7572,6 +7572,7 @@ const UserScriptMessagePolicy = (() => {
     USER_SCRIPT_ALLOWED_EXTRAS: () => USER_SCRIPT_ALLOWED_EXTRAS,
     UserScriptMessagePolicy: () => UserScriptMessagePolicy,
     default: () => user_script_message_policy_default,
+    isExtensionSurfaceSender: () => isExtensionSurfaceSender,
     isUserScriptAllowedAction: () => isUserScriptAllowedAction
   });
   module.exports = __toCommonJS(user_script_message_policy_exports);
@@ -7586,8 +7587,18 @@ const UserScriptMessagePolicy = (() => {
     if (action.startsWith("GM_") || action.startsWith("GM.")) return true;
     return USER_SCRIPT_ALLOWED_EXTRA_SET.has(action);
   }
+  function isExtensionSurfaceSender(sender, extensionId) {
+    if (!sender || !extensionId) return false;
+    const ownExtensionPrefix = `chrome-extension://${extensionId}/`;
+    const url = typeof sender.url === "string" ? sender.url : "";
+    const ownFirefoxExtensionPage = sender.id === extensionId && url.startsWith("moz-extension://");
+    if (url.startsWith(ownExtensionPrefix) || ownFirefoxExtensionPage) return true;
+    if (sender.id === extensionId && !sender.tab && !url) return true;
+    return false;
+  }
   var UserScriptMessagePolicy = Object.freeze({
     USER_SCRIPT_ALLOWED_EXTRAS,
+    isExtensionSurfaceSender,
     isUserScriptAllowedAction
   });
   var user_script_message_policy_default = UserScriptMessagePolicy;
@@ -23605,17 +23616,7 @@ const USER_SCRIPT_MESSAGING_AVAILABLE = typeof chrome !== 'undefined'
 // onMessage). Extension surfaces may call any handleMessage action; tab
 // contexts are restricted to the user-script allowlist.
 function isExtensionSurfaceSender(sender) {
-  if (!sender) return false;
-  const extensionId = chrome.runtime?.id;
-  if (!extensionId) return false;
-  const ownExtensionPrefix = 'chrome-extension://' + extensionId + '/';
-  const url = typeof sender.url === 'string' ? sender.url : '';
-  const ownFirefoxExtensionPage = sender.id === extensionId && url.startsWith('moz-extension://');
-  if (url.startsWith(ownExtensionPrefix) || ownFirefoxExtensionPage) return true;
-  // Service-worker → service-worker self-messages have no sender.tab/url; treat
-  // them as trusted since only this extension's own code can originate them.
-  if (sender.id === extensionId && !sender.tab && !url) return true;
-  return false;
+  return UserScriptMessagePolicy.isExtensionSurfaceSender(sender, chrome.runtime?.id);
 }
 
 // Regular message listener (content scripts, popup, dashboard).
