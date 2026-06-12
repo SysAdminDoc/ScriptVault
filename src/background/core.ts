@@ -11653,7 +11653,7 @@ async function reregisterScript(script) {
       // to happen here. applyWebRequestRules() inside registerScript will
       // re-establish the rules for the new metadata.
       await removeWebRequestRules(script.id).catch(() => {});
-      await registerScript(script, { useUpdate: true });
+      await registerScript(script, { useUpdate: true, throwOnError: true });
       return;
     } catch (e) {
       // Fall through to the full cycle. The unregister below is a safety
@@ -11666,7 +11666,7 @@ async function reregisterScript(script) {
 }
 
 // Register a single script
-async function registerScript(script, { useUpdate = false } = {}) {
+async function registerScript(script, { useUpdate = false, throwOnError = false } = {}) {
   try {
     const meta = script.meta;
     const settings = script.settings || {};
@@ -12003,6 +12003,7 @@ async function registerScript(script, { useUpdate = false } = {}) {
       script.settings._registrationError = e.message || 'Registration failed';
       await ScriptStorage.set(script.id, script);
     } catch {}
+    if (throwOnError) throw e;
   }
 }
 

@@ -74,13 +74,13 @@ describe('reregisterScript helper presence', () => {
   });
 
   it('registerScript honours useUpdate option in runtime', () => {
-    expect(bgCore).toMatch(/async function registerScript\(script,\s*\{\s*useUpdate\s*=\s*false/);
+    expect(bgCore).toMatch(/async function registerScript\(script,\s*\{\s*useUpdate\s*=\s*false,\s*throwOnError\s*=\s*false/);
     expect(bgCore).toMatch(/if \(useUpdate && _supportsUserScriptsUpdate\(\)\)/);
     expect(bgCore).toMatch(/chrome\.userScripts\.update\(payload\)/);
   });
 
   it('registerScript honours useUpdate option in TS mirror', () => {
-    expect(tsRegistration).toMatch(/registerScript\(script: Script, options: \{ useUpdate\?: boolean \} = \{\}\)/);
+    expect(tsRegistration).toMatch(/options: \{ useUpdate\?: boolean; throwOnError\?: boolean \} = \{\}/);
     expect(tsRegistration).toMatch(/if \(options\.useUpdate && supportsUserScriptsUpdate\(\)\)/);
   });
 });
@@ -118,12 +118,16 @@ describe('reregisterScript branch behavior', () => {
     // shape but still invokes update/register according to useUpdate.
     const ctx = {
       chrome: fakeChrome,
-      registerScript: vi.fn(async (script, { useUpdate = false } = {}) => {
+      registerScript: vi.fn(async (script, { useUpdate = false, throwOnError = false } = {}) => {
         const payload = [{ id: script.id }];
-        if (useUpdate && typeof fakeChrome.userScripts.update === 'function') {
-          await fakeChrome.userScripts.update(payload);
-        } else {
-          await fakeChrome.userScripts.register(payload);
+        try {
+          if (useUpdate && typeof fakeChrome.userScripts.update === 'function') {
+            await fakeChrome.userScripts.update(payload);
+          } else {
+            await fakeChrome.userScripts.register(payload);
+          }
+        } catch (e) {
+          if (throwOnError) throw e;
         }
       }),
       unregisterScript: vi.fn(async (id) => {
@@ -143,7 +147,7 @@ describe('reregisterScript branch behavior', () => {
       if (ctx._supportsUserScriptsUpdate()) {
         try {
           await ctx.removeWebRequestRules(script.id);
-          await ctx.registerScript(script, { useUpdate: true });
+          await ctx.registerScript(script, { useUpdate: true, throwOnError: true });
           return;
         } catch {
           // fall through
@@ -170,9 +174,30 @@ describe('reregisterScript branch behavior', () => {
   it('Chrome 138+ enabled-script path calls update without unregister', async () => {
     await harness.reregisterScript({ id: 's1', enabled: true });
     expect(harness.mocks.updateMock).toHaveBeenCalledOnce();
+    expect(harness.registerScript).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 's1' }),
+      { useUpdate: true, throwOnError: true },
+    );
     expect(harness.mocks.unregisterMock).not.toHaveBeenCalled();
     expect(harness.mocks.registerMock).not.toHaveBeenCalled();
     expect(harness.mocks.removeWebRequestRulesMock).toHaveBeenCalledWith('s1');
+  });
+
+  it('Chrome 138+ update failure falls back to unregister + register', async () => {
+    harness.mocks.updateMock.mockRejectedValueOnce(new Error('update rejected'));
+    await harness.reregisterScript({ id: 's1', enabled: true });
+    expect(harness.mocks.updateMock).toHaveBeenCalledOnce();
+    expect(harness.mocks.unregisterMock).toHaveBeenCalledWith({ ids: ['s1'] });
+    expect(harness.mocks.registerMock).toHaveBeenCalledOnce();
+    expect(harness.registerScript).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ id: 's1' }),
+      { useUpdate: true, throwOnError: true },
+    );
+    expect(harness.registerScript).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ id: 's1' }),
+    );
   });
 
   it('older Chrome (no update) falls back to unregister + register', async () => {

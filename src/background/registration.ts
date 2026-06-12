@@ -194,7 +194,7 @@ export async function reregisterScript(script: Script): Promise<void> {
   if (supportsUserScriptsUpdate()) {
     try {
       await removeWebRequestRules(script.id).catch(() => undefined);
-      await registerScript(script, { useUpdate: true });
+      await registerScript(script, { useUpdate: true, throwOnError: true });
       return;
     } catch {
       // Fall through to the full unregister + register cycle.
@@ -204,7 +204,10 @@ export async function reregisterScript(script: Script): Promise<void> {
   await registerScript(script);
 }
 
-export async function registerScript(script: Script, options: { useUpdate?: boolean } = {}): Promise<void> {
+export async function registerScript(
+  script: Script,
+  options: { useUpdate?: boolean; throwOnError?: boolean } = {},
+): Promise<void> {
   try {
     if (!chrome.userScripts) return;
 
@@ -533,6 +536,7 @@ export async function registerScript(script: Script, options: { useUpdate?: bool
     } catch {
       // ignore
     }
+    if (options.throwOnError) throw e;
   }
 }
 

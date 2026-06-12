@@ -37,6 +37,9 @@ import { withTransaction } from './transaction';
 // localWorkspaceBindings:
 //   keyPath: 'bindingId'
 //   indexes: by-script (scriptId)
+// publicationReceipts:
+//   keyPath: 'receiptId'
+//   indexes: by-script (scriptId), by-created (createdAt)
 //
 // Stores that shipped in v1 are created under `oldVersion < 1`. New stores
 // bump DB_VERSION and add an `if (oldVersion < N)` block in `upgradeSchema()`.
@@ -130,6 +133,11 @@ function upgradeSchema(
   if (oldVersion < 2 && !db.objectStoreNames.contains(Stores.localWorkspaceBindings)) {
     const bindings = db.createObjectStore(Stores.localWorkspaceBindings, { keyPath: 'bindingId' });
     bindings.createIndex('by-script', 'scriptId', { unique: false });
+  }
+  if (oldVersion < 3 && !db.objectStoreNames.contains(Stores.publicationReceipts)) {
+    const receipts = db.createObjectStore(Stores.publicationReceipts, { keyPath: 'receiptId' });
+    receipts.createIndex('by-script', 'scriptId', { unique: false });
+    receipts.createIndex('by-created', 'createdAt', { unique: false });
   }
 }
 
