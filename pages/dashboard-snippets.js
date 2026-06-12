@@ -323,8 +323,8 @@ $CURSOR$`
     panel.innerHTML = \`
         <div class="fp-header" style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:#333;cursor:move;border-radius:8px 8px 0 0;user-select:none">
             <span style="font-weight:600">\${title}</span>
-            <div><button class="fp-min" style="background:none;border:none;color:#e0e0e0;cursor:pointer;font-size:16px">_</button>
-            <button class="fp-close" style="background:none;border:none;color:#f87171;cursor:pointer;font-size:16px">x</button></div>
+            <div><button class="fp-min" style="background:none;border:none;color:#e0e0e0;cursor:pointer;font-size:1rem">_</button>
+            <button class="fp-close" style="background:none;border:none;color:#f87171;cursor:pointer;font-size:1rem">x</button></div>
         </div>
         <div class="fp-body" style="padding:12px;overflow:auto;height:calc(100% - 40px)">\${content}</div>\`;
     Object.assign(panel.style, {
@@ -788,7 +788,7 @@ $CURSOR$`
     background: var(--bg-body, #1a1a1a);
     color: var(--text-primary, #e0e0e0);
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    font-size: 13px;
+    font-size: 0.8125rem;
 }
 .snip-header {
     display: flex;
@@ -801,7 +801,7 @@ $CURSOR$`
 }
 .snip-header h3 {
     margin: 0;
-    font-size: 15px;
+    font-size: 0.9375rem;
     color: var(--accent-green, #4ade80);
     white-space: nowrap;
 }
@@ -812,7 +812,7 @@ $CURSOR$`
     border: 1px solid var(--border-color, #404040);
     border-radius: 6px;
     color: var(--text-primary, #e0e0e0);
-    font-size: 13px;
+    font-size: 0.8125rem;
     transition: border-color 0.15s, box-shadow 0.15s;
 }
 .snip-search:focus-visible,
@@ -836,7 +836,7 @@ $CURSOR$`
     border: none;
     border-radius: 6px;
     cursor: pointer;
-    font-size: 12px;
+    font-size: 0.75rem;
     font-weight: 600;
     white-space: nowrap;
 }
@@ -858,7 +858,7 @@ $CURSOR$`
     border-radius: 8px;
     color: var(--text-secondary, #a0a0a0);
     cursor: pointer;
-    font-size: 12px;
+    font-size: 0.75rem;
     white-space: nowrap;
     transition: border-color 0.15s, color 0.15s, background 0.15s, box-shadow 0.15s;
 }
@@ -895,7 +895,7 @@ $CURSOR$`
     grid-column: 1 / -1;
 }
 .snip-card-title {
-    font-size: 14px;
+    font-size: 0.875rem;
     font-weight: 600;
     color: var(--text-primary, #e0e0e0);
     margin-bottom: 4px;
@@ -904,14 +904,14 @@ $CURSOR$`
     align-items: center;
 }
 .snip-card-cat {
-    font-size: 10px;
+    font-size: 0.625rem;
     padding: 2px 8px;
     background: var(--bg-input, #333);
     border-radius: 10px;
     color: var(--text-secondary, #a0a0a0);
 }
 .snip-card-desc {
-    font-size: 12px;
+    font-size: 0.75rem;
     color: var(--text-secondary, #a0a0a0);
     margin-bottom: 10px;
     line-height: 1.4;
@@ -922,7 +922,7 @@ $CURSOR$`
     border-radius: 6px;
     padding: 10px;
     font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
-    font-size: 11px;
+    font-size: 0.6875rem;
     line-height: 1.5;
     color: var(--text-secondary, #a0a0a0);
     overflow: hidden;
@@ -949,7 +949,7 @@ $CURSOR$`
     background: var(--bg-input, #333);
     color: var(--text-primary, #e0e0e0);
     cursor: pointer;
-    font-size: 12px;
+    font-size: 0.75rem;
     transition: border-color 0.15s, color 0.15s, background 0.15s, box-shadow 0.15s;
 }
 .snip-action-btn:hover {
@@ -1013,7 +1013,7 @@ $CURSOR$`
 }
 .snip-modal label {
     display: block;
-    font-size: 12px;
+    font-size: 0.75rem;
     color: var(--text-secondary, #a0a0a0);
     margin-bottom: 4px;
     margin-top: 12px;
@@ -1027,7 +1027,7 @@ $CURSOR$`
     border: 1px solid var(--border-color, #404040);
     border-radius: 6px;
     color: var(--text-primary, #e0e0e0);
-    font-size: 13px;
+    font-size: 0.8125rem;
 }
 .snip-modal input:focus,
 .snip-modal select:focus,
@@ -1046,7 +1046,7 @@ $CURSOR$`
     margin-top: 20px;
 }
 .snip-count {
-    font-size: 11px;
+    font-size: 0.6875rem;
     color: var(--text-muted, #707070);
     padding: 4px 16px 0;
 }

@@ -80,7 +80,7 @@ tr.kn-focused td {
   box-shadow: 0 12px 48px rgba(0,0,0,.5);
 }
 .kn-help h2 {
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 700;
   margin-bottom: 16px;
   display: flex;
@@ -91,7 +91,7 @@ tr.kn-focused td {
   background: none;
   border: none;
   color: var(--text-secondary);
-  font-size: 20px;
+  font-size: 1.25rem;
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 4px;
@@ -102,7 +102,7 @@ tr.kn-focused td {
   margin-bottom: 16px;
 }
 .kn-section-title {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -116,7 +116,7 @@ tr.kn-focused td {
   align-items: center;
   justify-content: space-between;
   padding: 4px 0;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 .kn-key {
   display: inline-flex;
@@ -126,7 +126,7 @@ tr.kn-focused td {
 .kn-kbd {
   display: inline-block;
   padding: 2px 7px;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-family: 'SF Mono', 'Consolas', monospace;
   background: var(--bg-input);
   border: 1px solid var(--border-color);
@@ -139,7 +139,7 @@ tr.kn-focused td {
 
 .kn-vim-badge {
   display: inline-block;
-  font-size: 10px;
+  font-size: 0.625rem;
   padding: 2px 6px;
   border-radius: 4px;
   background: rgba(192,132,252,.15);
@@ -602,7 +602,7 @@ tr.kn-focused td {
           <button class="kn-help-close" aria-label="Close">&times;</button>
         </h2>
         ${buildHelpContent()}
-        <div style="text-align:center;margin-top:12px;font-size:11px;color:var(--text-muted)">
+        <div style="text-align:center;margin-top:12px;font-size:0.6875rem;color:var(--text-muted)">
           ${_vimMode ? 'Vim mode is ON' : 'Enable vim mode in settings for additional keybindings'}
         </div>
       </div>

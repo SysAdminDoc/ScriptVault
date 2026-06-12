@@ -236,7 +236,7 @@ const ThemeEditor = (() => {
   background: var(--bg-section-header, #2a2a2a);
 }
 .sv-te-header h3 {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--text-primary, #e0e0e0);
   margin: 0;
@@ -256,7 +256,7 @@ const ThemeEditor = (() => {
 }
 .sv-te-toolbar-btn {
   padding: 5px 12px;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 500;
   border-radius: 6px;
   border: 1px solid var(--border-color, #444);
@@ -314,7 +314,7 @@ const ThemeEditor = (() => {
 }
 .sv-te-preset-swatch span { flex: 1; }
 .sv-te-preset-label {
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 500;
   color: var(--text-secondary, #a0a0a0);
 }
@@ -338,7 +338,7 @@ const ThemeEditor = (() => {
   text-align: left;
 }
 .sv-te-section-header h4 {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--text-primary, #e0e0e0);
   margin: 0;
@@ -346,7 +346,7 @@ const ThemeEditor = (() => {
 .sv-te-section-header .sv-te-chevron {
   color: var(--text-muted, #666);
   transition: transform 0.2s;
-  font-size: 10px;
+  font-size: 0.625rem;
 }
 .sv-te-section.collapsed .sv-te-section-content { display: none; }
 .sv-te-section.collapsed .sv-te-chevron { transform: rotate(-90deg); }
@@ -364,7 +364,7 @@ const ThemeEditor = (() => {
   gap: 10px;
 }
 .sv-te-color-row label {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary, #a0a0a0);
   min-width: 110px;
 }
@@ -393,7 +393,7 @@ const ThemeEditor = (() => {
   border: 1px solid var(--border-color, #444);
   border-radius: 4px;
   color: var(--text-primary, #e0e0e0);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-family: 'Consolas', 'Courier New', monospace;
 }
 .sv-te-color-input input[type="text"]:focus {
@@ -415,7 +415,7 @@ const ThemeEditor = (() => {
   gap: 10px;
 }
 .sv-te-font-row label {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary, #a0a0a0);
   min-width: 90px;
 }
@@ -427,7 +427,7 @@ const ThemeEditor = (() => {
   border: 1px solid var(--border-color, #444);
   border-radius: 4px;
   color: var(--text-primary, #e0e0e0);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .sv-te-font-row input:focus,
 .sv-te-font-row select:focus {
@@ -444,7 +444,7 @@ const ThemeEditor = (() => {
   border: 1px solid var(--border-color, #444);
   border-radius: 6px;
   color: var(--text-primary, #e0e0e0);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-family: 'Consolas', 'Courier New', monospace;
   line-height: 1.6;
   resize: vertical;
@@ -456,7 +456,7 @@ const ThemeEditor = (() => {
   border: 1px solid var(--border-color, #444);
   border-radius: 8px;
   overflow: hidden;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .sv-te-preview-header {
   padding: 10px 14px;
@@ -482,7 +482,7 @@ const ThemeEditor = (() => {
   display: inline-block;
   padding: 2px 8px;
   border-radius: 4px;
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 600;
 }
 .sv-te-preview-toggle {
@@ -515,7 +515,7 @@ const ThemeEditor = (() => {
 .sv-te-btn {
   padding: 7px 14px;
   border-radius: 6px;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 500;
   cursor: pointer;
   border: 1px solid var(--border-color, #444);
@@ -548,13 +548,13 @@ const ThemeEditor = (() => {
   border: 1px solid var(--border-color, #444);
   border-radius: 4px;
   color: var(--text-primary, #e0e0e0);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .sv-te-save-dialog input:focus { outline: none; border-color: var(--accent-primary, #22c55e); }
 
 /* Custom theme list in presets */
 .sv-te-custom-tag {
-  font-size: 9px;
+  font-size: 0.5625rem;
   padding: 1px 5px;
   border-radius: 3px;
   background: var(--accent-secondary, #60a5fa);
@@ -571,7 +571,7 @@ const ThemeEditor = (() => {
   background: var(--accent-error, #ef4444);
   color: #fff;
   border-radius: 50%;
-  font-size: 10px;
+  font-size: 0.625rem;
   line-height: 1;
   cursor: pointer;
   display: none;
@@ -1075,7 +1075,7 @@ const ThemeEditor = (() => {
     const container = el('div');
     const label = el('p', {
       textContent: 'Edit raw CSS variable overrides (one per line: --var-name: value;)',
-      style: 'font-size:12px;color:var(--text-muted);margin-bottom:8px',
+      style: 'font-size:0.75rem;color:var(--text-muted);margin-bottom:8px',
     });
     container.appendChild(label);
 
@@ -1169,11 +1169,11 @@ const ThemeEditor = (() => {
       <div class="sv-te-preview-card" style="border-color:${border}">
         <div class="sv-te-preview-header" style="background:${bgHeader};color:${textPrimary}">
           <span>ScriptVault Preview</span>
-          <span style="color:${accent};font-size:11px;font-weight:600">v2.0</span>
+          <span style="color:${accent};font-size:0.6875rem;font-weight:600">v2.0</span>
         </div>
         <div class="sv-te-preview-body" style="background:${bg}">
           <div class="sv-te-preview-row" style="background:${bgRow};border-radius:4px">
-            <span style="color:${textPrimary};font-size:12px">My Userscript</span>
+            <span style="color:${textPrimary};font-size:0.75rem">My Userscript</span>
             <div style="display:flex;gap:6px;align-items:center">
               <span class="sv-te-preview-badge" style="background:${accent};color:${toggleDot}">Active</span>
               <div class="sv-te-preview-toggle" style="background:${accent}">
@@ -1182,8 +1182,8 @@ const ThemeEditor = (() => {
             </div>
           </div>
           <div class="sv-te-preview-row" style="border-bottom:1px solid ${border}">
-            <span style="color:${textSecondary};font-size:11px">Last updated: Today</span>
-            <span style="color:${accentSecondary};font-size:11px">example.com</span>
+            <span style="color:${textSecondary};font-size:0.6875rem">Last updated: Today</span>
+            <span style="color:${accentSecondary};font-size:0.6875rem">example.com</span>
           </div>
           <div style="display:flex;gap:6px;padding:4px 0">
             <span class="sv-te-preview-badge" style="background:${accent};color:${toggleDot}">GM_API</span>
@@ -1191,8 +1191,8 @@ const ThemeEditor = (() => {
             <span class="sv-te-preview-badge" style="background:${accentError};color:#fff">Error</span>
           </div>
           <div style="display:flex;justify-content:space-between;padding:4px 0">
-            <span style="color:${textMuted};font-size:10px">3 scripts installed</span>
-            <span style="color:${textMuted};font-size:10px">12.4 KB</span>
+            <span style="color:${textMuted};font-size:0.625rem">3 scripts installed</span>
+            <span style="color:${textMuted};font-size:0.625rem">12.4 KB</span>
           </div>
         </div>
       </div>

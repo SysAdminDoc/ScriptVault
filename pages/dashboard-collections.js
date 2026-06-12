@@ -136,7 +136,7 @@ const CollectionManager = (() => {
   z-index: 1;
 }
 .sv-coll-icon {
-  font-size: 30px;
+  font-size: 1.875rem;
   line-height: 1;
   flex-shrink: 0;
   width: 42px;
@@ -149,7 +149,7 @@ const CollectionManager = (() => {
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 12px 18px rgba(0,0,0,0.18);
 }
 .sv-coll-title {
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 700;
   color: var(--text-primary, #e0e0e0);
   flex: 1;
@@ -158,7 +158,7 @@ const CollectionManager = (() => {
   text-overflow: ellipsis;
 }
 .sv-coll-badge {
-  font-size: 10px;
+  font-size: 0.625rem;
   padding: 5px 8px;
   border-radius: 8px;
   background: rgba(52, 211, 153, 0.16);
@@ -170,7 +170,7 @@ const CollectionManager = (() => {
   flex-shrink: 0;
 }
 .sv-coll-desc {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary, #a0a0a0);
   line-height: 1.6;
   margin-bottom: 12px;
@@ -185,7 +185,7 @@ const CollectionManager = (() => {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-muted, #707070);
   position: relative;
   z-index: 1;
@@ -219,7 +219,7 @@ const CollectionManager = (() => {
   gap: 10px;
   padding: 10px 12px;
   border-bottom: 1px solid rgba(255,255,255,0.04);
-  font-size: 12px;
+  font-size: 0.75rem;
   border-radius: 8px;
   background: rgba(255,255,255,0.03);
   border: 1px solid rgba(127,127,127,0.1);
@@ -234,7 +234,7 @@ const CollectionManager = (() => {
   font-weight: 600;
 }
 .sv-coll-script-note {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-muted, #707070);
   font-style: italic;
   max-width: 140px;
@@ -301,7 +301,7 @@ const CollectionManager = (() => {
     linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03)),
     var(--bg-input, #333);
   color: var(--text-primary, #e0e0e0);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
   cursor: pointer;
   text-align: center;
@@ -337,7 +337,7 @@ const CollectionManager = (() => {
   min-height: 30px;
   padding: 0 10px;
   border-radius: 10px;
-  font-size: 10px;
+  font-size: 0.625rem;
 }
 
 /* Toolbar */
@@ -358,7 +358,7 @@ const CollectionManager = (() => {
   backdrop-filter: none;
 }
 .sv-coll-toolbar-title {
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 700;
   color: var(--text-primary, #e0e0e0);
   margin-right: auto;
@@ -371,7 +371,7 @@ const CollectionManager = (() => {
     linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02)),
     var(--bg-input, #333);
   color: var(--text-primary, #e0e0e0);
-  font-size: 12px;
+  font-size: 0.75rem;
   width: 240px;
   outline: none;
   transition: border-color 0.15s, box-shadow 0.15s;
@@ -412,7 +412,7 @@ const CollectionManager = (() => {
   display: flex;
   flex-direction: column;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  font-size: 13px;
+  font-size: 0.8125rem;
   box-shadow: var(--panel-sheen, inset 0 1px 0 rgba(255,255,255,0.08)), var(--panel-shadow-xl, 0 40px 120px rgba(0,0,0,0.34));
   animation: sv-coll-slide 0.2s ease;
 }
@@ -429,7 +429,7 @@ const CollectionManager = (() => {
   background: rgba(255,255,255,0.02);
 }
 .sv-coll-modal-header h3 {
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
   margin: 0;
 }
@@ -437,7 +437,7 @@ const CollectionManager = (() => {
   background: none;
   border: none;
   color: var(--text-secondary, #a0a0a0);
-  font-size: 20px;
+  font-size: 1.25rem;
   cursor: pointer;
   line-height: 1;
   padding: 0 4px;
@@ -463,7 +463,7 @@ const CollectionManager = (() => {
 }
 .sv-coll-field label {
   display: block;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
   color: var(--text-secondary, #a0a0a0);
   text-transform: uppercase;
@@ -480,7 +480,7 @@ const CollectionManager = (() => {
     linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02)),
     var(--bg-input, #333);
   color: var(--text-primary, #e0e0e0);
-  font-size: 13px;
+  font-size: 0.8125rem;
   outline: none;
   font-family: inherit;
   transition: border-color 0.15s, box-shadow 0.15s;
@@ -497,7 +497,7 @@ const CollectionManager = (() => {
 }
 .sv-coll-code-input {
   font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .sv-coll-script-picker {
   max-height: 200px;
@@ -516,7 +516,7 @@ const CollectionManager = (() => {
   padding: 10px 12px;
   cursor: pointer;
   transition: background 0.1s;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .sv-coll-script-pick-row:hover {
   background: rgba(255,255,255,0.04);
@@ -534,7 +534,7 @@ const CollectionManager = (() => {
     linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02)),
     var(--bg-input, #333);
   color: var(--text-secondary, #a0a0a0);
-  font-size: 11px;
+  font-size: 0.6875rem;
   outline: none;
 }
 .sv-coll-script-pick-note:focus {
@@ -554,11 +554,11 @@ const CollectionManager = (() => {
   box-shadow: var(--panel-sheen, inset 0 1px 0 rgba(255,255,255,0.08)), var(--panel-shadow, 0 18px 40px rgba(0,0,0,0.18));
 }
 .sv-coll-empty-icon {
-  font-size: 48px;
+  font-size: 3rem;
   margin-bottom: 12px;
 }
 .sv-coll-empty-text {
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1.6;
   margin-bottom: 18px;
 }
@@ -575,13 +575,13 @@ const CollectionManager = (() => {
   border: 1px solid rgba(52, 211, 153, 0.24);
   border-radius: 8px;
   padding: 12px 16px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   z-index: 10001;
   box-shadow: var(--panel-sheen, inset 0 1px 0 rgba(255,255,255,0.08)), 0 24px 42px rgba(0,0,0,0.28);
   animation: sv-coll-fade 0.2s ease;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 48rem) {
   .sv-coll-grid {
     gap: 14px;
   }
@@ -1225,7 +1225,7 @@ const CollectionManager = (() => {
           <div class="sv-coll-field">
             <label>Or load from file</label>
             <input type="file" id="sv-coll-import-file" accept=".json"
-                   style="font-size:12px;color:var(--text-secondary)">
+                   style="font-size:0.75rem;color:var(--text-secondary)">
           </div>
         </div>
         <div class="sv-coll-modal-footer">

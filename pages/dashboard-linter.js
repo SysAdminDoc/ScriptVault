@@ -47,7 +47,7 @@ const AdvancedLinter = (() => {
   flex-wrap: wrap;
 }
 .sv-lint-toolbar-title {
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
   color: var(--text-primary, #e0e0e0);
   margin-right: auto;
@@ -60,7 +60,7 @@ const AdvancedLinter = (() => {
   height: 22px;
   padding: 0 6px;
   border-radius: 11px;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   color: #fff;
 }
@@ -73,7 +73,7 @@ const AdvancedLinter = (() => {
   border-radius: 6px;
   background: var(--bg-input, #333);
   color: var(--text-primary, #e0e0e0);
-  font-size: 12px;
+  font-size: 0.75rem;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
 }
@@ -131,17 +131,17 @@ const AdvancedLinter = (() => {
   min-width: 0;
 }
 .sv-lint-item-msg {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-primary, #e0e0e0);
   line-height: 1.4;
 }
 .sv-lint-item-loc {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-muted, #707070);
   margin-top: 2px;
 }
 .sv-lint-item-rule {
-  font-size: 10px;
+  font-size: 0.625rem;
   color: var(--text-secondary, #a0a0a0);
   background: var(--bg-input, #333);
   padding: 1px 6px;
@@ -152,7 +152,7 @@ const AdvancedLinter = (() => {
 .sv-lint-item-fix {
   flex-shrink: 0;
   padding: 3px 8px;
-  font-size: 11px;
+  font-size: 0.6875rem;
   border-radius: 4px;
   background: var(--accent-green-dark, #22c55e);
   color: #fff;
@@ -168,11 +168,11 @@ const AdvancedLinter = (() => {
   justify-content: center;
   padding: 40px 20px;
   color: var(--text-muted, #707070);
-  font-size: 13px;
+  font-size: 0.8125rem;
   text-align: center;
 }
 .sv-lint-empty-icon {
-  font-size: 36px;
+  font-size: 2.25rem;
   margin-bottom: 10px;
   opacity: 0.5;
 }
@@ -202,7 +202,7 @@ const AdvancedLinter = (() => {
   justify-content: space-between;
   padding: 12px 16px;
   border-bottom: 1px solid var(--border-color, #404040);
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--text-primary, #e0e0e0);
 }
@@ -211,7 +211,7 @@ const AdvancedLinter = (() => {
   overflow: auto;
   padding: 12px;
   font-family: 'Consolas', 'Monaco', monospace;
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.5;
   white-space: pre-wrap;
 }
@@ -239,7 +239,7 @@ const AdvancedLinter = (() => {
 }
 .sv-lint-filter-btn {
   padding: 3px 8px;
-  font-size: 11px;
+  font-size: 0.6875rem;
   border-radius: 4px;
   border: 1px solid var(--border-color, #404040);
   background: transparent;

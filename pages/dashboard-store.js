@@ -53,7 +53,7 @@ const ScriptStore = (() => {
     background: var(--bg-body);
     color: var(--text-primary);
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    font-size: 13px;
+    font-size: 0.8125rem;
 }
 
 /* Header bar */
@@ -67,7 +67,7 @@ const ScriptStore = (() => {
     flex-shrink: 0;
 }
 .ss-header-title {
-    font-size: 14px;
+    font-size: 0.875rem;
     font-weight: 600;
     color: var(--text-primary);
     margin-right: auto;
@@ -92,7 +92,7 @@ const ScriptStore = (() => {
     border: 1px solid var(--border-color);
     border-radius: 6px;
     padding: 6px 10px;
-    font-size: 12px;
+    font-size: 0.75rem;
     outline: none;
     transition: border-color 0.2s;
 }
@@ -113,7 +113,7 @@ const ScriptStore = (() => {
     color: var(--text-primary);
     border: 1px solid var(--border-color);
     border-radius: 6px;
-    font-size: 11px;
+    font-size: 0.6875rem;
     cursor: pointer;
     white-space: nowrap;
     transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
@@ -146,7 +146,7 @@ const ScriptStore = (() => {
     box-shadow: none;
 }
 .ss-btn.small {
-    font-size: 10px;
+    font-size: 0.625rem;
     padding: 3px 8px;
 }
 
@@ -162,7 +162,7 @@ const ScriptStore = (() => {
     align-items: center;
 }
 .ss-nav-label {
-    font-size: 11px;
+    font-size: 0.6875rem;
     color: var(--text-muted);
     margin-right: 4px;
 }
@@ -176,7 +176,7 @@ const ScriptStore = (() => {
     color: var(--text-secondary);
     border: 1px solid var(--border-color);
     border-radius: 12px;
-    font-size: 11px;
+    font-size: 0.6875rem;
     cursor: pointer;
     transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
@@ -221,7 +221,7 @@ const ScriptStore = (() => {
     text-align: center;
     color: var(--text-muted);
     padding: 40px 20px;
-    font-size: 13px;
+    font-size: 0.8125rem;
 }
 .ss-error { color: var(--accent-error); }
 
@@ -229,7 +229,7 @@ const ScriptStore = (() => {
     text-align: center;
     color: var(--text-secondary);
     padding: 40px 20px;
-    font-size: 13px;
+    font-size: 0.8125rem;
 }
 .ss-loading::after {
     content: '';
@@ -247,7 +247,7 @@ const ScriptStore = (() => {
 
 /* Result count */
 .ss-result-count {
-    font-size: 11px;
+    font-size: 0.6875rem;
     color: var(--text-muted);
     text-align: center;
     padding: 4px 0 8px;
@@ -277,7 +277,7 @@ const ScriptStore = (() => {
     min-width: 0;
 }
 .ss-card-name {
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 600;
     margin-bottom: 2px;
     display: flex;
@@ -291,7 +291,7 @@ const ScriptStore = (() => {
 }
 .ss-card-name a:hover { text-decoration: underline; }
 .ss-card-version {
-    font-size: 10px;
+    font-size: 0.625rem;
     color: var(--text-muted);
     background: var(--bg-button);
     padding: 1px 5px;
@@ -299,7 +299,7 @@ const ScriptStore = (() => {
 }
 .ss-installed-badge {
     display: inline-block;
-    font-size: 10px;
+    font-size: 0.625rem;
     font-weight: 600;
     color: var(--accent-primary);
     background: rgba(34,197,94,0.12);
@@ -308,7 +308,7 @@ const ScriptStore = (() => {
     vertical-align: middle;
 }
 .ss-card-desc {
-    font-size: 11px;
+    font-size: 0.6875rem;
     color: var(--text-secondary);
     margin-bottom: 4px;
     overflow: hidden;
@@ -318,7 +318,7 @@ const ScriptStore = (() => {
 .ss-card-meta {
     display: flex;
     gap: 12px;
-    font-size: 10px;
+    font-size: 0.625rem;
     color: var(--text-muted);
     flex-wrap: wrap;
 }
@@ -346,7 +346,7 @@ const ScriptStore = (() => {
     margin-top: 8px;
     padding: 8px 12px;
     font-family: 'Courier New', monospace;
-    font-size: 11px;
+    font-size: 0.6875rem;
     line-height: 1.4;
     white-space: pre-wrap;
     word-break: break-word;
@@ -363,7 +363,7 @@ const ScriptStore = (() => {
     padding: 12px;
 }
 .ss-pagination-info {
-    font-size: 11px;
+    font-size: 0.6875rem;
     color: var(--text-muted);
 }
 
@@ -372,7 +372,7 @@ const ScriptStore = (() => {
     display: inline-block;
     padding: 1px 6px;
     border-radius: 3px;
-    font-size: 9px;
+    font-size: 0.5625rem;
     font-weight: 600;
     letter-spacing: 0.02em;
     vertical-align: middle;
@@ -382,7 +382,7 @@ const ScriptStore = (() => {
     display: flex;
     gap: 12px;
     padding: 6px 16px;
-    font-size: 11px;
+    font-size: 0.6875rem;
     color: var(--text-muted);
     border-bottom: 1px solid var(--border-color);
     background: var(--bg-section-header);
@@ -407,7 +407,7 @@ const ScriptStore = (() => {
     padding: 6px 16px;
     background: var(--bg-section-header);
     border-top: 1px solid var(--border-color);
-    font-size: 10px;
+    font-size: 0.625rem;
     color: var(--text-muted);
     flex-shrink: 0;
 }
@@ -417,7 +417,7 @@ const ScriptStore = (() => {
     display: block;
     background: transparent;
     font-family: inherit;
-    font-size: 13px;
+    font-size: 0.8125rem;
 }
 .ss-shell {
     padding: 18px;
@@ -459,7 +459,7 @@ const ScriptStore = (() => {
     max-width: 700px;
 }
 .ss-eyebrow {
-    font-size: 10px;
+    font-size: 0.625rem;
     font-weight: 700;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -467,7 +467,7 @@ const ScriptStore = (() => {
 }
 .ss-hero-copy h2 {
     margin-top: 14px;
-    font-size: clamp(28px, 3.2vw, 38px);
+    font-size: clamp(1.75rem, 3.2vw, 2.375rem);
     font-weight: 760;
     letter-spacing: -0.05em;
     color: var(--text-primary);
@@ -476,7 +476,7 @@ const ScriptStore = (() => {
 .ss-hero-copy p {
     margin-top: 8px;
     max-width: 700px;
-    font-size: 13px;
+    font-size: 0.8125rem;
     line-height: 1.55;
     color: var(--text-secondary);
 }
@@ -499,7 +499,7 @@ const ScriptStore = (() => {
 }
 .ss-summary-label {
     display: block;
-    font-size: 10px;
+    font-size: 0.625rem;
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -508,7 +508,7 @@ const ScriptStore = (() => {
 .ss-summary strong {
     display: block;
     margin-top: 6px;
-    font-size: 16px;
+    font-size: 1rem;
     font-weight: 700;
     letter-spacing: -0.03em;
     color: var(--text-primary);
@@ -542,7 +542,7 @@ const ScriptStore = (() => {
 }
 .ss-search-label {
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 0.8125rem;
     white-space: nowrap;
 }
 .ss-search-input {
@@ -550,7 +550,7 @@ const ScriptStore = (() => {
     border: none;
     background: transparent;
     padding: 10px 0;
-    font-size: 13px;
+    font-size: 0.8125rem;
 }
 .ss-toolbar-actions {
     display: flex;
@@ -560,7 +560,7 @@ const ScriptStore = (() => {
 .ss-btn {
     padding: 8px 12px;
     border-radius: 12px;
-    font-size: 12px;
+    font-size: 0.75rem;
     font-weight: 600;
     gap: 6px;
     border-color: var(--panel-border-soft, rgba(148, 163, 184, 0.16));
@@ -570,7 +570,7 @@ const ScriptStore = (() => {
     box-shadow: var(--panel-sheen, inset 0 1px 0 rgba(255,255,255,0.08)), 0 14px 24px rgba(0, 0, 0, 0.14);
 }
 .ss-btn.small {
-    font-size: 11px;
+    font-size: 0.6875rem;
     padding: 6px 10px;
     border-radius: 10px;
 }
@@ -611,7 +611,7 @@ const ScriptStore = (() => {
     backdrop-filter: none;
 }
 .ss-nav-label {
-    font-size: 10px;
+    font-size: 0.625rem;
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -619,7 +619,7 @@ const ScriptStore = (() => {
 .ss-chip {
     padding: 7px 11px;
     border-radius: 8px;
-    font-size: 11px;
+    font-size: 0.6875rem;
     font-weight: 600;
     letter-spacing: 0.02em;
     border-color: rgba(127, 127, 127, 0.14);
@@ -640,7 +640,7 @@ const ScriptStore = (() => {
     gap: 10px;
     flex-wrap: wrap;
     padding: 0 2px;
-    font-size: 12px;
+    font-size: 0.75rem;
     line-height: 1.5;
     color: var(--text-muted);
 }
@@ -684,7 +684,7 @@ const ScriptStore = (() => {
 .ss-error strong,
 .ss-loading strong {
     display: block;
-    font-size: 16px;
+    font-size: 1rem;
     font-weight: 700;
     color: var(--text-primary);
     margin-bottom: 6px;
@@ -697,7 +697,7 @@ const ScriptStore = (() => {
 .ss-result-count {
     padding: 0 2px;
     text-align: left;
-    font-size: 12px;
+    font-size: 0.75rem;
     font-variant-numeric: tabular-nums;
 }
 .ss-source-bar {
@@ -712,7 +712,7 @@ const ScriptStore = (() => {
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(127, 127, 127, 0.14);
     box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
-    font-size: 11px;
+    font-size: 0.6875rem;
 }
 .ss-card {
     grid-template-columns: minmax(0, 1fr) auto;
@@ -760,14 +760,14 @@ const ScriptStore = (() => {
 }
 .ss-card-name a {
     color: var(--text-primary);
-    font-size: 15px;
+    font-size: 0.9375rem;
 }
 .ss-card-version,
 .ss-installed-badge,
 .ss-source-badge {
     padding: 3px 8px;
     border-radius: 8px;
-    font-size: 10px;
+    font-size: 0.625rem;
     font-weight: 700;
     letter-spacing: 0.04em;
     text-transform: uppercase;
@@ -783,7 +783,7 @@ const ScriptStore = (() => {
 }
 .ss-card-desc {
     margin-bottom: 8px;
-    font-size: 12px;
+    font-size: 0.75rem;
     line-height: 1.5;
     white-space: normal;
     display: -webkit-box;
@@ -793,7 +793,7 @@ const ScriptStore = (() => {
 }
 .ss-card-meta {
     gap: 6px;
-    font-size: 11px;
+    font-size: 0.6875rem;
 }
 .ss-card-meta span {
     padding: 5px 8px;
@@ -820,7 +820,7 @@ const ScriptStore = (() => {
         linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255,255,255,0.02)),
         rgba(0, 0, 0, 0.22);
     font-family: Consolas, 'Cascadia Code', monospace;
-    font-size: 11px;
+    font-size: 0.6875rem;
     line-height: 1.55;
     box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
 }
@@ -828,16 +828,16 @@ const ScriptStore = (() => {
     padding: 4px 0 0;
 }
 .ss-pagination-info {
-    font-size: 12px;
+    font-size: 0.75rem;
 }
 .ss-footer {
     padding: 4px 2px 0;
     border-top: none;
     background: transparent;
-    font-size: 11px;
+    font-size: 0.6875rem;
     color: var(--text-muted);
 }
-@media (max-width: 900px) {
+@media (max-width: 56.25rem) {
     .ss-shell {
         padding: 14px;
     }

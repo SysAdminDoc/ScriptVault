@@ -95,14 +95,14 @@ const ScriptChains = (() => {
 }
 .sv-chains-header h3 {
   color: var(--text-primary, #e0e0e0);
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 600;
   display: flex;
   align-items: center;
   gap: 8px;
 }
 .sv-chains-header h3 .icon {
-  font-size: 18px;
+  font-size: 1.125rem;
 }
 .sv-chains-btn {
   padding: 6px 14px;
@@ -111,7 +111,7 @@ const ScriptChains = (() => {
   background: var(--bg-input, #333333);
   color: var(--text-primary, #e0e0e0);
   cursor: pointer;
-  font-size: 12px;
+  font-size: 0.75rem;
   transition: background 0.15s, border-color 0.15s;
 }
 .sv-chains-btn:hover {
@@ -163,14 +163,14 @@ const ScriptChains = (() => {
 .sv-chain-card .chain-name {
   color: var(--text-primary, #e0e0e0);
   font-weight: 500;
-  font-size: 14px;
+  font-size: 0.875rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .sv-chain-card .chain-meta {
   color: var(--text-secondary, #a0a0a0);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .sv-chain-card .chain-trigger-badge {
   display: inline-flex;
@@ -180,7 +180,7 @@ const ScriptChains = (() => {
   border-radius: 10px;
   background: rgba(96, 165, 250, 0.15);
   color: var(--accent-blue, #60a5fa);
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 .sv-chain-card .chain-actions {
   display: flex;
@@ -228,13 +228,13 @@ const ScriptChains = (() => {
 }
 .sv-chain-editor-top h3 {
   color: var(--text-primary, #e0e0e0);
-  font-size: 15px;
+  font-size: 0.9375rem;
 }
 .sv-chain-editor-close {
   background: none;
   border: none;
   color: var(--text-secondary, #a0a0a0);
-  font-size: 20px;
+  font-size: 1.25rem;
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 4px;
@@ -257,7 +257,7 @@ const ScriptChains = (() => {
 .sv-chain-field label {
   display: block;
   color: var(--text-secondary, #a0a0a0);
-  font-size: 12px;
+  font-size: 0.75rem;
   margin-bottom: 5px;
 }
 .sv-chain-field input,
@@ -268,7 +268,7 @@ const ScriptChains = (() => {
   border: 1px solid var(--border-color, #404040);
   border-radius: 5px;
   color: var(--text-primary, #e0e0e0);
-  font-size: 13px;
+  font-size: 0.8125rem;
   outline: none;
   transition: border-color 0.15s;
 }
@@ -317,7 +317,7 @@ const ScriptChains = (() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   flex-shrink: 0;
 }
@@ -332,7 +332,7 @@ const ScriptChains = (() => {
   border: 1px solid var(--border-color, #404040);
   border-radius: 4px;
   color: var(--text-primary, #e0e0e0);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .sv-chain-step .step-controls {
   display: flex;
@@ -346,7 +346,7 @@ const ScriptChains = (() => {
   border: 1px solid var(--border-color, #404040);
   border-radius: 4px;
   color: var(--text-secondary, #a0a0a0);
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 .sv-chain-step .step-controls input[type="number"] {
   width: 55px;
@@ -355,14 +355,14 @@ const ScriptChains = (() => {
   border: 1px solid var(--border-color, #404040);
   border-radius: 4px;
   color: var(--text-secondary, #a0a0a0);
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 .sv-chain-step .step-remove {
   background: none;
   border: none;
   color: var(--text-muted, #707070);
   cursor: pointer;
-  font-size: 16px;
+  font-size: 1rem;
   padding: 2px 6px;
   border-radius: 4px;
 }
@@ -378,11 +378,11 @@ const ScriptChains = (() => {
   justify-content: center;
   padding: 2px 0;
   color: var(--text-muted, #707070);
-  font-size: 14px;
+  font-size: 0.875rem;
   user-select: none;
 }
 .sv-chain-arrow .condition-badge {
-  font-size: 10px;
+  font-size: 0.625rem;
   padding: 1px 6px;
   border-radius: 8px;
   margin-left: 6px;
@@ -415,7 +415,7 @@ const ScriptChains = (() => {
   max-height: 200px;
   overflow-y: auto;
   font-family: 'Consolas', 'Monaco', monospace;
-  font-size: 11px;
+  font-size: 0.6875rem;
   background: var(--bg-body, #1a1a1a);
   border: 1px solid var(--border-color, #404040);
   border-radius: 6px;
@@ -441,10 +441,10 @@ const ScriptChains = (() => {
   text-align: center;
   padding: 40px 20px;
   color: var(--text-muted, #707070);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 .sv-chains-empty .empty-icon {
-  font-size: 32px;
+  font-size: 2rem;
   margin-bottom: 8px;
   opacity: 0.5;
 }
@@ -907,12 +907,12 @@ const ScriptChains = (() => {
             </select>
           </div>
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-            <label style="color:var(--text-secondary,#a0a0a0);font-size:12px;">Pipeline Steps</label>
+            <label style="color:var(--text-secondary,#a0a0a0);font-size:0.75rem;">Pipeline Steps</label>
             <button type="button" class="sv-chains-btn" id="sv-chain-add-step">+ Add Step</button>
           </div>
           <div class="sv-chain-pipeline" id="sv-chain-pipeline"></div>
           <div>
-            <label style="color:var(--text-secondary,#a0a0a0);font-size:12px;">Execution Log</label>
+            <label style="color:var(--text-secondary,#a0a0a0);font-size:0.75rem;">Execution Log</label>
             <div class="sv-chain-log" id="sv-chain-log"></div>
           </div>
         </div>
@@ -1000,7 +1000,7 @@ const ScriptChains = (() => {
     containerEl.innerHTML = '';
 
     if (steps.length === 0) {
-      containerEl.innerHTML = '<div style="color:var(--text-muted,#707070);font-size:12px;text-align:center;padding:16px;">No steps. Click "+ Add Step" to begin.</div>';
+      containerEl.innerHTML = '<div style="color:var(--text-muted,#707070);font-size:0.75rem;text-align:center;padding:16px;">No steps. Click "+ Add Step" to begin.</div>';
       return;
     }
 

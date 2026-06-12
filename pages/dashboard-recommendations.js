@@ -48,7 +48,7 @@ const Recommendations = (() => {
   flex-wrap: wrap;
 }
 .sv-rec-title {
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 600;
   color: var(--text-primary, #e0e0e0);
   margin-right: auto;
@@ -61,7 +61,7 @@ const Recommendations = (() => {
   height: 22px;
   padding: 0 6px;
   border-radius: 11px;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   background: var(--accent-green-dark, #22c55e);
   color: #fff;
@@ -72,7 +72,7 @@ const Recommendations = (() => {
   border-radius: 6px;
   background: var(--bg-input, #333);
   color: var(--text-primary, #e0e0e0);
-  font-size: 12px;
+  font-size: 0.75rem;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
 }
@@ -89,7 +89,7 @@ const Recommendations = (() => {
   color: #1a1a1a;
 }
 .sv-rec-section-title {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--text-secondary, #a0a0a0);
   text-transform: uppercase;
@@ -130,7 +130,7 @@ const Recommendations = (() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
+  font-size: 1.25rem;
   flex-shrink: 0;
   color: var(--accent-green, #4ade80);
 }
@@ -139,7 +139,7 @@ const Recommendations = (() => {
   min-width: 0;
 }
 .sv-rec-card-name {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--text-primary, #e0e0e0);
   line-height: 1.3;
@@ -148,7 +148,7 @@ const Recommendations = (() => {
   white-space: nowrap;
 }
 .sv-rec-card-desc {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary, #a0a0a0);
   line-height: 1.4;
   display: -webkit-box;
@@ -161,7 +161,7 @@ const Recommendations = (() => {
   display: flex;
   align-items: center;
   gap: 12px;
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-muted, #707070);
 }
 .sv-rec-card-meta-item {
@@ -188,7 +188,7 @@ const Recommendations = (() => {
   transition: width 0.3s;
 }
 .sv-rec-card-reason {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--accent-blue, #60a5fa);
   background: rgba(96, 165, 250, 0.1);
   padding: 4px 8px;
@@ -204,10 +204,10 @@ const Recommendations = (() => {
   text-align: center;
   padding: 40px 20px;
   color: var(--text-muted, #707070);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 .sv-rec-empty-icon {
-  font-size: 40px;
+  font-size: 2.5rem;
   margin-bottom: 10px;
   opacity: 0.4;
 }
@@ -234,7 +234,7 @@ const Recommendations = (() => {
   display: inline-block;
   padding: 2px 6px;
   border-radius: 3px;
-  font-size: 10px;
+  font-size: 0.625rem;
   background: var(--bg-input, #333);
   color: var(--text-secondary, #a0a0a0);
   margin-right: 4px;

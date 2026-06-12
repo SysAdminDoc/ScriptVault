@@ -82,7 +82,7 @@ const ScriptScheduler = (() => {
   border-bottom: 1px solid var(--border-color, #444);
 }
 .sv-sched-header h3 {
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
   color: var(--text-primary, #e0e0e0);
   margin: 0;
@@ -128,7 +128,7 @@ const ScriptScheduler = (() => {
   border-radius: 8px;
 }
 .sv-sched-enable-row label {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
   color: var(--text-primary, #e0e0e0);
 }
@@ -182,7 +182,7 @@ const ScriptScheduler = (() => {
 .sv-sched-type-tab {
   flex: 1;
   padding: 7px 6px;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 500;
   text-align: center;
   color: var(--text-muted, #666);
@@ -214,7 +214,7 @@ const ScriptScheduler = (() => {
   gap: 10px;
 }
 .sv-sched-row label {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary, #a0a0a0);
   min-width: 50px;
 }
@@ -229,7 +229,7 @@ const ScriptScheduler = (() => {
   border: 1px solid var(--border-color, #444);
   border-radius: 6px;
   color: var(--text-primary, #e0e0e0);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-family: inherit;
 }
 .sv-sched-row input:focus,
@@ -267,7 +267,7 @@ const ScriptScheduler = (() => {
   align-items: center;
   justify-content: space-between;
   padding: 0 12px;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 500;
   color: var(--text-primary, #e0e0e0);
   pointer-events: none;
@@ -295,7 +295,7 @@ const ScriptScheduler = (() => {
   align-items: center;
   justify-content: center;
   border-radius: 6px;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
   cursor: pointer;
   border: 1px solid var(--border-color, #444);
@@ -321,7 +321,7 @@ const ScriptScheduler = (() => {
   border: 1px solid var(--border-color, #444);
   border-left: 3px solid var(--accent-primary, #22c55e);
   border-radius: 6px;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary, #a0a0a0);
   line-height: 1.5;
 }
@@ -340,7 +340,7 @@ const ScriptScheduler = (() => {
 .sv-sched-btn {
   padding: 8px 18px;
   border-radius: 6px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
   cursor: pointer;
   border: 1px solid var(--border-color, #444);

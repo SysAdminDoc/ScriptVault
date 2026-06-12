@@ -54,12 +54,12 @@ const ProfileManager = (() => {
   background: var(--bg-header, #252525);
   border-bottom: 1px solid var(--border-color, #404040);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  font-size: 13px;
+  font-size: 0.8125rem;
   overflow-x: auto;
 }
 .sv-profile-bar-label {
   color: var(--text-secondary, #a0a0a0);
-  font-size: 11px;
+  font-size: 0.6875rem;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   white-space: nowrap;
@@ -78,7 +78,7 @@ const ProfileManager = (() => {
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: 0.75rem;
   user-select: none;
   font: inherit;
 }
@@ -92,7 +92,7 @@ const ProfileManager = (() => {
   background: var(--bg-row-selected, #2d3a4d);
 }
 .sv-profile-chip .sv-chip-emoji {
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 .sv-profile-add-btn {
   appearance: none;
@@ -107,7 +107,7 @@ const ProfileManager = (() => {
   color: var(--text-secondary, #a0a0a0);
   cursor: pointer;
   transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
-  font-size: 16px;
+  font-size: 1rem;
   flex-shrink: 0;
   font: inherit;
 }
@@ -125,7 +125,7 @@ const ProfileManager = (() => {
   gap: 6px;
   padding: 3px 10px;
   border-radius: 12px;
-  font-size: 12px;
+  font-size: 0.75rem;
   background: none;
   border: none;
   color: var(--text-primary, #e0e0e0);
@@ -172,7 +172,7 @@ const ProfileManager = (() => {
   border: none;
   cursor: pointer;
   color: var(--text-primary, #e0e0e0);
-  font-size: 13px;
+  font-size: 0.8125rem;
   transition: background 0.1s ease;
   text-align: left;
   font: inherit;
@@ -185,7 +185,7 @@ const ProfileManager = (() => {
 }
 .sv-profile-dropdown-item .sv-dd-check {
   color: var(--accent-green, #4ade80);
-  font-size: 12px;
+  font-size: 0.75rem;
   width: 16px;
   text-align: center;
 }
@@ -217,7 +217,7 @@ const ProfileManager = (() => {
   transition: transform 0.2s ease;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   color: var(--text-primary, #e0e0e0);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 .sv-profile-overlay.visible .sv-profile-modal {
   transform: translateY(0);
@@ -231,14 +231,14 @@ const ProfileManager = (() => {
 }
 .sv-profile-modal-header h3 {
   margin: 0;
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
 }
 .sv-profile-modal-close {
   background: none;
   border: none;
   color: var(--text-secondary, #a0a0a0);
-  font-size: 20px;
+  font-size: 1.25rem;
   cursor: pointer;
   padding: 2px 6px;
   border-radius: 4px;
@@ -258,7 +258,7 @@ const ProfileManager = (() => {
 }
 .sv-profile-field label {
   display: block;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary, #a0a0a0);
   margin-bottom: 6px;
   text-transform: uppercase;
@@ -272,7 +272,7 @@ const ProfileManager = (() => {
   border: 1px solid var(--border-color, #404040);
   border-radius: 6px;
   color: var(--text-primary, #e0e0e0);
-  font-size: 13px;
+  font-size: 0.8125rem;
   outline: none;
   transition: border-color 0.15s;
 }
@@ -284,7 +284,7 @@ const ProfileManager = (() => {
   min-height: 60px;
   resize: vertical;
   font-family: monospace;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 /* Color / Emoji selectors */
@@ -318,7 +318,7 @@ const ProfileManager = (() => {
   background: none;
   border: 1px solid transparent;
   cursor: pointer;
-  font-size: 18px;
+  font-size: 1.125rem;
   transition: background 0.1s, border-color 0.15s;
   padding: 0;
   font: inherit;
@@ -349,7 +349,7 @@ const ProfileManager = (() => {
   cursor: pointer;
   text-transform: none;
   letter-spacing: 0;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-primary, #e0e0e0);
 }
 .sv-profile-script-row input[type="checkbox"] {
@@ -372,7 +372,7 @@ const ProfileManager = (() => {
   background: var(--bg-input, #333333);
   color: var(--text-primary, #e0e0e0);
   cursor: pointer;
-  font-size: 13px;
+  font-size: 0.8125rem;
   transition: background 0.15s, border-color 0.15s;
   font: inherit;
 }
@@ -437,13 +437,13 @@ const ProfileManager = (() => {
   align-items: center;
   padding: 6px 0;
   border-bottom: 1px solid var(--border-color, #404040);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .sv-compare-row.header {
   font-weight: 600;
   color: var(--text-secondary, #a0a0a0);
   text-transform: uppercase;
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 .sv-compare-on { color: var(--accent-green, #4ade80); }
 .sv-compare-off { color: var(--accent-red, #f87171); }
@@ -720,7 +720,7 @@ const ProfileManager = (() => {
     indicator.innerHTML = `
       <span class="sv-pi-dot" style="background:${indicatorColor}"></span>
       <span>${_escapeHtml(active.emoji || '')} ${_escapeHtml(active.name)}</span>
-      <span style="font-size:10px;color:var(--text-muted)">\u25BE</span>
+      <span style="font-size:0.625rem;color:var(--text-muted)">\u25BE</span>
     `;
 
     let dropdownOpen = false;
@@ -1046,7 +1046,7 @@ const ProfileManager = (() => {
     overlay.innerHTML = `
       <div class="sv-profile-compare">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-          <h3 style="margin:0;font-size:15px">Profile Comparison</h3>
+          <h3 style="margin:0;font-size:0.9375rem">Profile Comparison</h3>
           <button type="button" class="sv-profile-modal-close" id="svCompareClose" aria-label="Close profile comparison">\u00D7</button>
         </div>
         ${rows}

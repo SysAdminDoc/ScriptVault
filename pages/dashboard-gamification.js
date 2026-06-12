@@ -125,18 +125,18 @@ const Gamification = (() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 30px;
+  font-size: 1.875rem;
   background: linear-gradient(135deg, var(--accent-green-dark, #22c55e), var(--accent-blue, #60a5fa));
   flex-shrink: 0;
 }
 .sv-gam-profile-info { flex: 1; }
 .sv-gam-profile-name {
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 700;
   color: var(--text-primary, #e0e0e0);
 }
 .sv-gam-profile-level {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--accent-green, #4ade80);
   margin-top: 2px;
 }
@@ -144,7 +144,7 @@ const Gamification = (() => {
   display: flex;
   gap: 18px;
   margin-top: 8px;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary, #a0a0a0);
 }
 .sv-gam-profile-stats span { white-space: nowrap; }
@@ -171,7 +171,7 @@ const Gamification = (() => {
   background: var(--bg-input, #333);
   color: var(--text-secondary, #a0a0a0);
   cursor: pointer;
-  font-size: 12px;
+  font-size: 0.75rem;
   flex-shrink: 0;
 }
 .sv-gam-share-btn:hover {
@@ -194,31 +194,31 @@ const Gamification = (() => {
   padding: 14px 16px;
 }
 .sv-gam-streak-label {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary, #a0a0a0);
   margin-bottom: 6px;
 }
 .sv-gam-streak-value {
-  font-size: 28px;
+  font-size: 1.75rem;
   font-weight: 700;
   color: var(--accent-yellow, #fbbf24);
 }
-.sv-gam-streak-value.fire::after { content: ' \uD83D\uDD25'; font-size: 22px; }
+.sv-gam-streak-value.fire::after { content: ' \uD83D\uDD25'; font-size: 1.375rem; }
 .sv-gam-streak-sub {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-muted, #707070);
   margin-top: 4px;
 }
 
 /* Achievement Grid */
 .sv-gam-section-title {
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 700;
   color: var(--text-primary, #e0e0e0);
   margin-bottom: 10px;
 }
 .sv-gam-category-title {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--text-secondary, #a0a0a0);
   margin: 14px 0 8px;
@@ -253,29 +253,29 @@ const Gamification = (() => {
   filter: grayscale(0.5);
 }
 .sv-gam-badge-icon {
-  font-size: 24px;
+  font-size: 1.5rem;
   flex-shrink: 0;
   width: 32px;
   text-align: center;
 }
 .sv-gam-badge-body { flex: 1; min-width: 0; }
 .sv-gam-badge-name {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--text-primary, #e0e0e0);
 }
 .sv-gam-badge-desc {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-secondary, #a0a0a0);
   margin-top: 2px;
 }
 .sv-gam-badge-pts {
-  font-size: 10px;
+  font-size: 0.625rem;
   color: var(--accent-green, #4ade80);
   margin-top: 3px;
 }
 .sv-gam-badge-time {
-  font-size: 10px;
+  font-size: 0.625rem;
   color: var(--text-muted, #707070);
   margin-top: 2px;
 }
@@ -320,15 +320,15 @@ const Gamification = (() => {
 .sv-gam-toast.out {
   animation: sv-gam-toast-out 0.3s ease forwards;
 }
-.sv-gam-toast-icon { font-size: 26px; flex-shrink: 0; }
+.sv-gam-toast-icon { font-size: 1.625rem; flex-shrink: 0; }
 .sv-gam-toast-text { flex: 1; }
 .sv-gam-toast-title {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 700;
   color: var(--accent-green, #4ade80);
 }
 .sv-gam-toast-desc {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-secondary, #a0a0a0);
   margin-top: 2px;
 }

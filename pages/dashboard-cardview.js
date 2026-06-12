@@ -64,9 +64,9 @@ const CardView = (() => {
   padding: 16px;
 }
 
-@media (min-width: 560px)  { .cv-grid { grid-template-columns: repeat(2, 1fr); } }
-@media (min-width: 900px)  { .cv-grid { grid-template-columns: repeat(3, 1fr); } }
-@media (min-width: 1280px) { .cv-grid { grid-template-columns: repeat(4, 1fr); } }
+@media (min-width: 35rem)  { .cv-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 56.25rem)  { .cv-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (min-width: 80rem) { .cv-grid { grid-template-columns: repeat(4, 1fr); } }
 
 /* Card */
 .cv-card {
@@ -232,14 +232,14 @@ const CardView = (() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 700;
   color: #fff;
   box-shadow: 0 12px 18px rgba(0,0,0,0.18);
 }
 
 .cv-name {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 700;
   color: var(--text-primary);
   white-space: nowrap;
@@ -253,7 +253,7 @@ const CardView = (() => {
   align-items: center;
   gap: 5px;
   max-width: fit-content;
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -283,7 +283,7 @@ const CardView = (() => {
   max-width: 100%;
   padding: 4px 8px;
   border-radius: 8px;
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 700;
   letter-spacing: 0.05em;
   line-height: 1;
@@ -344,7 +344,7 @@ const CardView = (() => {
   display: flex;
   flex-wrap: wrap;
   gap: 5px 10px;
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
   position: relative;
@@ -362,7 +362,7 @@ const CardView = (() => {
   border: 1px solid rgba(90, 140, 255, 0.15);
   color: var(--text-secondary);
   font: inherit;
-  font-size: 11px;
+  font-size: 0.6875rem;
   border-radius: 8px;
   padding: 4px 8px;
   cursor: pointer;
@@ -383,7 +383,7 @@ const CardView = (() => {
 
 /* Description */
 .cv-desc {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   line-height: 1.5;
   overflow: hidden;
@@ -396,7 +396,7 @@ const CardView = (() => {
 
 .cv-summary {
   min-width: 0;
-  font-size: 11px;
+  font-size: 0.6875rem;
   line-height: 1.45;
   color: var(--text-secondary);
   overflow: hidden;
@@ -409,7 +409,7 @@ const CardView = (() => {
 /* Performance badge */
 .cv-perf {
   display: inline-block;
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 700;
   padding: 3px 7px;
   border-radius: 8px;
@@ -449,7 +449,7 @@ const CardView = (() => {
   background: rgba(255,255,255,0.05);
   color: var(--text-secondary);
   font: inherit;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -534,7 +534,7 @@ const CardView = (() => {
   cursor: pointer;
   padding: 5px 7px;
   border-radius: 10px;
-  font-size: 16px;
+  font-size: 1rem;
   line-height: 1;
   letter-spacing: 2px;
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
@@ -578,7 +578,7 @@ const CardView = (() => {
   background: none;
   border: none;
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: 0.75rem;
   border-radius: 10px;
   text-align: left;
   cursor: pointer;
@@ -602,13 +602,13 @@ const CardView = (() => {
 }
 .cv-empty h3 {
   margin: 0 0 8px;
-  font-size: 18px;
+  font-size: 1.125rem;
   color: var(--text-primary);
 }
 .cv-empty p {
   margin: 0;
   max-width: 440px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.55;
   color: var(--text-secondary);
 }
@@ -625,7 +625,7 @@ const CardView = (() => {
   border-radius: 8px;
   padding: 7px 10px;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 0.75rem;
   cursor: pointer;
   transition: color 150ms, border-color 150ms, background 150ms, box-shadow 150ms;
   box-shadow: var(--panel-sheen, inset 0 1px 0 rgba(255,255,255,0.08)), 0 14px 24px rgba(0,0,0,0.14);
@@ -649,7 +649,7 @@ const CardView = (() => {
   transition: opacity ${TRANSITION_MS}ms ease !important;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 48rem) {
   .cv-grid {
     gap: 12px;
     padding: 12px;
