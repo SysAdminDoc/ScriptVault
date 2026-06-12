@@ -13,12 +13,12 @@ const WhatsNew = (() => {
       title: 'ScriptVault 3.11.0 — Storage & Runtime Hardening',
       date: '2026-05-19',
       highlights: [
-        { icon: '🧯', title: 'Rollback-Safe Storage', desc: 'Script, settings, folder, workspace, and GM-value writes now restore their prior state if persistence fails.' },
-        { icon: '🔎', title: 'Regex Dashboard Search', desc: 'Search supports re: patterns and slash-delimited regex, with invalid patterns surfaced instead of throwing.' },
-        { icon: '🧭', title: 'Context-Menu Scripts', desc: '@run-at context-menu scripts now appear as direct popup launchers when they match the active tab.' },
-        { icon: '🌐', title: 'SPA URL Change Events', desc: 'window.onurlchange now follows navigation events for single-page apps, with history/hash fallbacks preserved.' },
-        { icon: '🧱', title: 'Safer GM_addElement', desc: 'GM_addElement now returns null on failure paths instead of throwing through script execution.' },
-        { icon: '🛡️', title: 'Chrome 130 Baseline', desc: 'The Chrome floor now aligns with storage.session support and the current extension security baseline.' }
+        { icon: 'DB', title: 'Rollback-Safe Storage', desc: 'Script, settings, folder, workspace, and GM-value writes now restore their prior state if persistence fails.' },
+        { icon: 'RX', title: 'Regex Dashboard Search', desc: 'Search supports re: patterns and slash-delimited regex, with invalid patterns surfaced instead of throwing.' },
+        { icon: 'CM', title: 'Context-Menu Scripts', desc: '@run-at context-menu scripts now appear as direct popup launchers when they match the active tab.' },
+        { icon: 'URL', title: 'SPA URL Change Events', desc: 'window.onurlchange now follows navigation events for single-page apps, with history/hash fallbacks preserved.' },
+        { icon: 'API', title: 'Safer GM_addElement', desc: 'GM_addElement now returns null on failure paths instead of throwing through script execution.' },
+        { icon: '130', title: 'Chrome 130 Baseline', desc: 'The Chrome floor now aligns with storage.session support and the current extension security baseline.' }
       ],
       improvements: [
         'Added a GM_info.script.tag alias for older scripts that expect the singular form',
@@ -92,31 +92,40 @@ const WhatsNew = (() => {
     const style = document.createElement('style');
     style.id = 'sv-whatsnew-css';
     style.textContent = `
-      .sv-wn-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:10000; display:flex; align-items:center; justify-content:center; animation:svWnFadeIn 0.2s ease; }
+      .sv-wn-overlay { position:fixed; inset:0; background:linear-gradient(180deg, rgba(0,0,0,0.74), rgba(0,0,0,0.66)); z-index:10000; display:flex; align-items:center; justify-content:center; padding:24px; animation:svWnFadeIn 0.16s ease; }
       @keyframes svWnFadeIn { from { opacity:0 } to { opacity:1 } }
-      .sv-wn-modal { background:var(--bg-content,#242424); border:1px solid var(--border-color,#444); border-radius:12px; width:640px; max-width:90vw; max-height:85vh; overflow:hidden; display:flex; flex-direction:column; box-shadow:0 20px 60px rgba(0,0,0,0.5); animation:svWnSlideUp 0.3s ease; }
-      @keyframes svWnSlideUp { from { transform:translateY(20px); opacity:0 } to { transform:translateY(0); opacity:1 } }
-      .sv-wn-header { padding:20px 24px 16px; border-bottom:1px solid var(--border-color,#444); }
-      .sv-wn-header h2 { font-size:1.125rem; color:var(--text-primary,#e0e0e0); margin-bottom:4px; }
-      .sv-wn-header .sv-wn-version { font-size:0.75rem; color:var(--accent-primary,#22c55e); font-weight:600; }
-      .sv-wn-header .sv-wn-date { font-size:0.6875rem; color:var(--text-muted,#666); margin-left:8px; }
-      .sv-wn-body { flex:1; overflow-y:auto; padding:16px 24px 20px; }
-      .sv-wn-highlights { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:20px; }
+      .sv-wn-modal { background:linear-gradient(180deg, rgba(255,255,255,0.035), transparent 38%), var(--bg-content,#242424); border:1px solid var(--border-color,#444); border-radius:8px; width:680px; max-width:min(92vw,680px); max-height:min(86vh,720px); overflow:hidden; display:flex; flex-direction:column; box-shadow:0 24px 70px rgba(0,0,0,0.54); animation:svWnSlideUp 0.22s ease; }
+      @keyframes svWnSlideUp { from { transform:translateY(12px); opacity:0 } to { transform:translateY(0); opacity:1 } }
+      .sv-wn-header { padding:22px 24px 17px; border-bottom:1px solid var(--border-color,#444); background:rgba(255,255,255,0.02); }
+      .sv-wn-header h2 { font-size:1.0625rem; line-height:1.25; color:var(--text-primary,#e0e0e0); margin-bottom:8px; letter-spacing:0; }
+      .sv-wn-header .sv-wn-meta { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+      .sv-wn-header .sv-wn-version { font-size:0.75rem; color:var(--accent-primary,#22c55e); font-weight:700; font-variant-numeric:tabular-nums; }
+      .sv-wn-header .sv-wn-date { font-size:0.6875rem; color:var(--text-muted,#666); }
+      .sv-wn-summary { margin-top:10px; max-width:54rem; color:var(--text-secondary,#a0a0a0); font-size:0.75rem; line-height:1.5; }
+      .sv-wn-body { flex:1; overflow-y:auto; padding:17px 24px 20px; }
+      .sv-wn-highlights { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:22px; }
       @media (max-width:31.25rem) { .sv-wn-highlights { grid-template-columns:1fr; } }
-      .sv-wn-card { display:flex; gap:10px; padding:10px 12px; background:var(--bg-input,#1a1a1a); border:1px solid var(--border-color,#444); border-radius:8px; transition:border-color 0.15s; }
-      .sv-wn-card:hover { border-color:var(--accent-primary,#22c55e); }
-      .sv-wn-card-icon { font-size:1.25rem; flex-shrink:0; line-height:1.2; }
-      .sv-wn-card-title { font-size:0.75rem; font-weight:600; color:var(--text-primary,#e0e0e0); margin-bottom:2px; }
-      .sv-wn-card-desc { font-size:0.6875rem; color:var(--text-secondary,#a0a0a0); line-height:1.4; }
-      .sv-wn-section-title { font-size:0.8125rem; font-weight:600; color:var(--text-primary,#e0e0e0); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.05em; }
-      .sv-wn-improvements { list-style:none; padding:0; }
-      .sv-wn-improvements li { font-size:0.75rem; color:var(--text-secondary,#a0a0a0); padding:3px 0; padding-left:16px; position:relative; }
-      .sv-wn-improvements li::before { content:'\\2713'; position:absolute; left:0; color:var(--accent-primary,#22c55e); font-weight:bold; }
-      .sv-wn-footer { padding:12px 24px; border-top:1px solid var(--border-color,#444); display:flex; justify-content:space-between; align-items:center; }
-      .sv-wn-dismiss { padding:8px 20px; background:var(--accent-primary,#22c55e); border:none; border-radius:6px; color:#fff; font-weight:600; font-size:0.8125rem; cursor:pointer; transition:background 0.15s; }
-      .sv-wn-dismiss:hover { filter:brightness(1.1); }
-      .sv-wn-skip { color:var(--text-muted,#666); font-size:0.75rem; cursor:pointer; text-decoration:underline; }
+      .sv-wn-card { display:grid; grid-template-columns:auto minmax(0,1fr); gap:10px; padding:12px 13px; background:rgba(255,255,255,0.025); border:1px solid rgba(127,127,127,0.24); border-radius:8px; transition:border-color 0.15s ease, background 0.15s ease, transform 0.15s ease; }
+      .sv-wn-card:hover { border-color:rgba(34,197,94,0.42); background:rgba(34,197,94,0.055); transform:translateY(-1px); }
+      .sv-wn-card-icon { min-width:32px; height:28px; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; border:1px solid rgba(34,197,94,0.26); border-radius:7px; background:rgba(34,197,94,0.08); color:var(--accent-primary,#22c55e); font-size:0.625rem; font-weight:800; line-height:1; letter-spacing:0.06em; font-variant-numeric:tabular-nums; }
+      .sv-wn-card-title { font-size:0.75rem; font-weight:700; color:var(--text-primary,#e0e0e0); margin-bottom:3px; }
+      .sv-wn-card-desc { font-size:0.6875rem; color:var(--text-secondary,#a0a0a0); line-height:1.45; }
+      .sv-wn-section-title { font-size:0.75rem; font-weight:800; color:var(--text-primary,#e0e0e0); margin-bottom:9px; text-transform:uppercase; letter-spacing:0.06em; }
+      .sv-wn-improvements { list-style:none; padding:0; display:grid; gap:5px; }
+      .sv-wn-improvements li { display:grid; grid-template-columns:16px minmax(0,1fr); gap:7px; align-items:start; font-size:0.75rem; color:var(--text-secondary,#a0a0a0); line-height:1.45; }
+      .sv-wn-improvements li::before { content:'OK'; color:var(--accent-primary,#22c55e); font-size:0.5625rem; font-weight:800; letter-spacing:0.04em; line-height:1.9; }
+      .sv-wn-footer { padding:13px 24px; border-top:1px solid var(--border-color,#444); display:flex; justify-content:space-between; align-items:center; gap:12px; background:rgba(255,255,255,0.02); }
+      .sv-wn-dismiss { min-height:32px; padding:7px 20px; background:var(--accent-primary,#22c55e); border:1px solid var(--accent-primary,#22c55e); border-radius:7px; color:#fff; font-weight:700; font-size:0.8125rem; cursor:pointer; transition:background 0.15s ease, border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease; }
+      .sv-wn-dismiss:hover { filter:brightness(1.08); transform:translateY(-1px); box-shadow:0 10px 20px rgba(34,197,94,0.2); }
+      .sv-wn-skip { min-height:32px; padding:7px 0; border:0; background:transparent; color:var(--text-muted,#666); font:inherit; font-size:0.75rem; cursor:pointer; text-decoration:underline; text-underline-offset:3px; }
       .sv-wn-skip:hover { color:var(--text-secondary,#a0a0a0); }
+      .sv-wn-dismiss:focus-visible,
+      .sv-wn-skip:focus-visible { outline:none; box-shadow:0 0 0 3px rgba(34,197,94,0.2); }
+      @media (prefers-reduced-motion: reduce) {
+        .sv-wn-overlay,
+        .sv-wn-modal,
+        .sv-wn-card { animation:none; transition:none; }
+      }
     `;
     document.head.appendChild(style);
   }
@@ -163,11 +172,14 @@ const WhatsNew = (() => {
       const improvementsHtml = entry.improvements.map(i => `<li>${i}</li>`).join('');
 
       overlay.innerHTML = `
-        <div class="sv-wn-modal">
+        <div class="sv-wn-modal" role="dialog" aria-modal="true" aria-labelledby="svWnTitle" aria-describedby="svWnSummary" tabindex="-1">
           <div class="sv-wn-header">
-            <h2>${entry.title}</h2>
-            <span class="sv-wn-version">v${CURRENT_VERSION}</span>
-            <span class="sv-wn-date">${entry.date}</span>
+            <h2 id="svWnTitle">${entry.title}</h2>
+            <div class="sv-wn-meta">
+              <span class="sv-wn-version">v${CURRENT_VERSION}</span>
+              <span class="sv-wn-date">${entry.date}</span>
+            </div>
+            <p class="sv-wn-summary" id="svWnSummary">This release focuses on safer persistence, clearer script review, and runtime compatibility work that reduces surprise during everyday script management.</p>
           </div>
           <div class="sv-wn-body">
             <div class="sv-wn-highlights">${highlightsHtml}</div>
@@ -175,8 +187,8 @@ const WhatsNew = (() => {
             <ul class="sv-wn-improvements">${improvementsHtml}</ul>
           </div>
           <div class="sv-wn-footer">
-            <span class="sv-wn-skip" id="svWnSkip">Don't show again</span>
-            <button class="sv-wn-dismiss" id="svWnDismiss">Got it!</button>
+            <button class="sv-wn-skip" id="svWnSkip" type="button">Don't show again</button>
+            <button class="sv-wn-dismiss" id="svWnDismiss" type="button">Continue</button>
           </div>
         </div>
       `;
@@ -197,6 +209,7 @@ const WhatsNew = (() => {
       overlay.querySelector('#svWnSkip').addEventListener('click', dismiss);
       overlay.addEventListener('click', (e) => { if (e.target === overlay) dismiss(); });
       document.addEventListener('keydown', escHandler);
+      overlay.querySelector('#svWnDismiss')?.focus({ preventScroll: true });
     },
 
     getEntry: _getChangelogEntry,

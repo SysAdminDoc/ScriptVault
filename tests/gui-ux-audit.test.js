@@ -181,12 +181,14 @@ describe("cross-surface UX audit", () => {
     expect(devtoolsJs).toContain("$('btnCloseDetail').focus({ preventScroll: true });");
     expect(devtoolsJs).toContain("if (selectedEntry && $('netDetail').classList.contains('open')) {");
     expect(devtoolsJs).toContain("renderDetailContent(selectedEntry);");
-    expect(devtoolsJs).toContain("clearButton.textContent = 'Reset Filter'");
+    expect(devtoolsJs).toContain("clearButton.textContent = 'Reset'");
+    expect(devtoolsJs).toContain("clearButton.setAttribute('aria-label', 'Reset execution filter');");
     expect(devtoolsJs).toContain("tr.setAttribute('aria-selected', String(selectedRow === entry.id));");
     expect(devtoolsJs).toContain("Console capture isn’t available here yet. Use Network or Execution for current insight.");
     expect(devtoolsJs).toContain("No requests match");
     expect(devtoolsJs).toContain("No scripts match");
-    expect(devtoolsJs).toContain("clearButton.textContent = 'Clear Requests'");
+    expect(devtoolsJs).toContain("clearButton.textContent = 'Clear'");
+    expect(devtoolsJs).toContain("clearButton.setAttribute('aria-label', 'Clear recorded network requests');");
   });
 
   test("dashboard keeps the updated column on a real button control", () => {

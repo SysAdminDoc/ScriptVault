@@ -468,9 +468,10 @@
       icon.textContent = '!';
       icon.setAttribute('aria-hidden', 'true');
       const msg = document.createElement('div');
+      msg.className = 'sp-empty-title';
       msg.textContent = 'Scripts don’t run on this page.';
       const detail = document.createElement('div');
-      detail.style.marginTop = '4px';
+      detail.className = 'sp-empty-detail';
       detail.textContent = 'Open a regular website or local file to review matching userscripts.';
       empty.append(icon, msg, detail);
       list.replaceChildren(empty);
@@ -493,9 +494,10 @@
       icon.textContent = 'SV';
       icon.setAttribute('aria-hidden', 'true');
       const msg = document.createElement('div');
+      msg.className = 'sp-empty-title';
       msg.textContent = 'No matching scripts on this page.';
       const link = document.createElement('div');
-      link.style.marginTop = '4px';
+      link.className = 'sp-empty-detail';
       if (hostname) {
         const a = document.createElement('button');
         a.className = 'sp-empty-link';
@@ -575,11 +577,12 @@
       icon.textContent = searchQuery ? '\u2315' : 'SV';
       icon.setAttribute('aria-hidden', 'true');
       const msg = document.createElement('div');
+      msg.className = 'sp-empty-title';
       msg.textContent = searchQuery ? `No scripts match "${searchQuery}".` : 'No scripts in your vault yet.';
       empty.append(icon, msg);
       if (!searchQuery) {
         const detail = document.createElement('div');
-        detail.style.marginTop = '4px';
+        detail.className = 'sp-empty-detail';
         detail.textContent = 'Open Dashboard to create or import a userscript.';
         empty.appendChild(detail);
       }
