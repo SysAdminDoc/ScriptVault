@@ -38,14 +38,17 @@ describe('scripts/check-locales.mjs', () => {
     expect(exitCode).toBe(0);
   });
 
-  it('exits 1 in --strict mode because runtime dicts still drift (informational by default)', () => {
+  it('exits 0 in --strict mode after runtime dictionary key parity backfill', () => {
+    const report = runReport();
+    expect(report.drifts.filter(d => d.kind === 'runtime-key-drift')).toEqual([]);
+
     let exitCode = 0;
     try {
       execFileSync('node', [SCRIPT, '--strict'], { encoding: 'utf8', stdio: 'pipe' });
     } catch (err) {
       exitCode = err.status || 1;
     }
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(0);
   });
 
   it('translation-coverage warnings include explicit counts', () => {
