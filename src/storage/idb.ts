@@ -6,7 +6,7 @@
 // ============================================================================
 
 export const DB_NAME = 'scriptvault';
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 
 // Object store names (single source of truth — imported by script-db.ts and
 // transaction.ts so a typo can't desync the schema).
@@ -16,6 +16,7 @@ export const Stores = {
   stats: 'stats',
   backups: 'backups',
   localWorkspaceBindings: 'localWorkspaceBindings',
+  publicationReceipts: 'publicationReceipts',
 } as const;
 
 export type StoreName = (typeof Stores)[keyof typeof Stores];

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 const dashboardHtml = readFileSync(resolve(process.cwd(), 'pages/dashboard.html'), 'utf8');
 const dashboardJs = readFileSync(resolve(process.cwd(), 'pages/dashboard.js'), 'utf8');
+const storageIdbTs = readFileSync(resolve(process.cwd(), 'src/storage/idb.ts'), 'utf8');
 
 function extractFunction(source, name) {
   const marker = source.indexOf(`function ${name}`);
@@ -84,6 +85,9 @@ describe('dashboard local workspace binding', () => {
     expect(dashboardJs).toContain("const LOCAL_WORKSPACE_DB_NAME = 'scriptvault'");
     expect(dashboardJs).toContain('const LOCAL_WORKSPACE_DB_VERSION = 3');
     expect(dashboardJs).toContain("const LOCAL_WORKSPACE_STORE = 'localWorkspaceBindings'");
+    expect(storageIdbTs).toContain('export const DB_VERSION = 3');
+    expect(storageIdbTs).toContain("localWorkspaceBindings: 'localWorkspaceBindings'");
+    expect(storageIdbTs).toContain("publicationReceipts: 'publicationReceipts'");
     expect(dashboardJs).toContain('const LOCAL_WORKSPACE_MAX_SCRIPT_BYTES = 5 * 1024 * 1024');
     expect(dashboardJs).toContain("db.createObjectStore(LOCAL_WORKSPACE_STORE, { keyPath: 'bindingId' })");
     expect(dashboardJs).toContain("bindings.createIndex('by-script', 'scriptId', { unique: false })");

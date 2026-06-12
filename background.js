@@ -4940,13 +4940,14 @@ const StorageModule = (() => {
 
   // src/storage/idb.ts
   var DB_NAME = "scriptvault";
-  var DB_VERSION = 2;
+  var DB_VERSION = 3;
   var Stores = {
     scripts: "scripts",
     values: "values",
     stats: "stats",
     backups: "backups",
-    localWorkspaceBindings: "localWorkspaceBindings"
+    localWorkspaceBindings: "localWorkspaceBindings",
+    publicationReceipts: "publicationReceipts"
   };
   var _db = null;
   var _opening = null;
@@ -5090,6 +5091,11 @@ const StorageModule = (() => {
     if (oldVersion < 2 && !db.objectStoreNames.contains(Stores.localWorkspaceBindings)) {
       const bindings = db.createObjectStore(Stores.localWorkspaceBindings, { keyPath: "bindingId" });
       bindings.createIndex("by-script", "scriptId", { unique: false });
+    }
+    if (oldVersion < 3 && !db.objectStoreNames.contains(Stores.publicationReceipts)) {
+      const receipts = db.createObjectStore(Stores.publicationReceipts, { keyPath: "receiptId" });
+      receipts.createIndex("by-script", "scriptId", { unique: false });
+      receipts.createIndex("by-created", "createdAt", { unique: false });
     }
   }
   async function openScriptDB() {
@@ -28110,7 +28116,7 @@ async function reregisterScript(script) {
       // to happen here. applyWebRequestRules() inside registerScript will
       // re-establish the rules for the new metadata.
       await removeWebRequestRules(script.id).catch(() => {});
-      await registerScript(script, { useUpdate: true });
+      await registerScript(script, { useUpdate: true, throwOnError: true });
       return;
     } catch (e) {
       // Fall through to the full cycle. The unregister below is a safety
@@ -28123,7 +28129,7 @@ async function reregisterScript(script) {
 }
 
 // Register a single script
-async function registerScript(script, { useUpdate = false } = {}) {
+async function registerScript(script, { useUpdate = false, throwOnError = false } = {}) {
   try {
     const meta = script.meta;
     const settings = script.settings || {};
@@ -28460,6 +28466,7 @@ async function registerScript(script, { useUpdate = false } = {}) {
       script.settings._registrationError = e.message || 'Registration failed';
       await ScriptStorage.set(script.id, script);
     } catch {}
+    if (throwOnError) throw e;
   }
 }
 
