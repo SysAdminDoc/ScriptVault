@@ -5735,6 +5735,455 @@
             filter: grayscale(0.2);
             box-shadow: none;
         }
+
+        /* ============================================
+           Premium trust-state pass (v3.13)
+           Calmer setup warning, shared utility states,
+           and denser diagnostic rows for repeated use.
+           ============================================ */
+        .setup-warning-banner {
+            background:
+                linear-gradient(135deg, rgba(245, 158, 11, 0.16), rgba(239, 68, 68, 0.10)),
+                linear-gradient(180deg, rgba(255, 255, 255, 0.07), transparent 120%),
+                var(--bg-header);
+            color: var(--text-primary);
+            border-bottom: 1px solid rgba(245, 158, 11, 0.28);
+            box-shadow: 0 14px 34px rgba(0, 0, 0, 0.18);
+        }
+
+        .setup-warning-content {
+            align-items: flex-start;
+            gap: 14px;
+            min-height: 38px;
+        }
+
+        .setup-warning-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            margin-top: 1px;
+            border: 1px solid rgba(245, 158, 11, 0.36);
+            border-radius: 7px;
+            background: rgba(245, 158, 11, 0.12);
+            color: var(--accent-yellow);
+            font-size: 0.8125rem;
+            font-weight: 800;
+            line-height: 1;
+            box-shadow: var(--premium-state-inset);
+        }
+
+        .setup-warning-text {
+            color: var(--text-secondary);
+            line-height: 1.55;
+        }
+
+        .setup-warning-text strong,
+        .setup-warning-text b {
+            color: var(--text-primary);
+            font-weight: 700;
+        }
+
+        .btn-warning {
+            min-height: 32px;
+            border-color: rgba(245, 158, 11, 0.42);
+            border-radius: 7px;
+            background: rgba(245, 158, 11, 0.13);
+            color: var(--text-primary);
+            font-weight: 700;
+            transition: var(--premium-state-transition);
+        }
+
+        .btn-warning:hover,
+        .btn-warning:focus-visible {
+            background: rgba(245, 158, 11, 0.2);
+            border-color: rgba(245, 158, 11, 0.62);
+            box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.14);
+            outline: none;
+            transform: translateY(-1px);
+        }
+
+        .setup-warning-dismiss {
+            width: 32px;
+            height: 32px;
+            padding: 0;
+            border: 1px solid rgba(127, 127, 127, 0.24);
+            border-radius: 7px;
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text-muted);
+            transition: var(--premium-state-transition);
+        }
+
+        .setup-warning-dismiss:hover,
+        .setup-warning-dismiss:focus-visible {
+            color: var(--text-primary);
+            background: var(--premium-muted-surface-strong);
+            border-color: rgba(127, 127, 127, 0.36);
+            outline: none;
+        }
+
+        .dashboard-state {
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr);
+            align-items: start;
+            gap: 11px;
+            padding: 13px 14px;
+            border: 1px dashed rgba(127, 127, 127, 0.24);
+            border-radius: 8px;
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 120%),
+                var(--premium-muted-surface);
+            color: var(--text-secondary);
+            line-height: 1.5;
+            box-shadow: var(--premium-state-inset);
+        }
+
+        .dashboard-state-mark {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 24px;
+            border: 1px solid rgba(127, 127, 127, 0.22);
+            border-radius: 7px;
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text-muted);
+            font-size: 0.6875rem;
+            font-weight: 800;
+            line-height: 1;
+            box-shadow: var(--premium-state-inset);
+        }
+
+        .dashboard-state-title {
+            display: block;
+            color: var(--text-primary);
+            font-size: 0.8125rem;
+            font-weight: 700;
+            letter-spacing: 0;
+        }
+
+        .dashboard-state-detail {
+            display: block;
+            margin-top: 2px;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+        }
+
+        .dashboard-state-success {
+            border-color: rgba(34, 197, 94, 0.28);
+            background: linear-gradient(var(--tint-green-soft), var(--tint-green-soft)), var(--premium-muted-surface);
+        }
+
+        .dashboard-state-success .dashboard-state-mark {
+            border-color: rgba(34, 197, 94, 0.32);
+            background: var(--tint-green-soft);
+            color: var(--accent-primary);
+        }
+
+        .dashboard-state-warning {
+            border-color: rgba(245, 158, 11, 0.32);
+            background: linear-gradient(var(--tint-yellow-soft), var(--tint-yellow-soft)), var(--premium-muted-surface);
+        }
+
+        .dashboard-state-warning .dashboard-state-mark {
+            border-color: rgba(245, 158, 11, 0.4);
+            background: var(--tint-yellow-soft);
+            color: var(--accent-yellow);
+        }
+
+        .dashboard-state-error {
+            border-style: solid;
+            border-color: rgba(239, 68, 68, 0.34);
+            background: linear-gradient(var(--tint-red-soft), var(--tint-red-soft)), var(--premium-muted-surface);
+        }
+
+        .dashboard-state-error .dashboard-state-mark {
+            border-color: rgba(239, 68, 68, 0.4);
+            background: var(--tint-red-soft);
+            color: var(--accent-error);
+        }
+
+        .dashboard-state-loading .dashboard-state-mark {
+            color: transparent;
+            position: relative;
+        }
+
+        .dashboard-state-loading .dashboard-state-mark::before {
+            content: '';
+            width: 11px;
+            height: 11px;
+            border: 2px solid rgba(96, 165, 250, 0.26);
+            border-top-color: var(--accent-secondary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        .workspace-list {
+            display: grid;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .workspace-item {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            align-items: center;
+            gap: 12px;
+            margin: 0;
+            padding: 12px 13px;
+            border-radius: 8px;
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 120%),
+                rgba(255, 255, 255, 0.02);
+            transition: var(--premium-state-transition);
+        }
+
+        .workspace-item:hover,
+        .workspace-item:focus-within {
+            border-color: rgba(96, 165, 250, 0.32);
+            background: var(--premium-muted-surface-strong);
+            box-shadow: var(--premium-state-inset), 0 10px 20px rgba(0, 0, 0, 0.12);
+        }
+
+        .workspace-item.active {
+            border-color: rgba(34, 197, 94, 0.34);
+            background:
+                linear-gradient(90deg, rgba(34, 197, 94, 0.12), transparent 42%),
+                var(--premium-muted-surface);
+            box-shadow: inset 3px 0 0 var(--accent-primary), var(--premium-state-inset);
+        }
+
+        .workspace-main {
+            min-width: 0;
+            display: grid;
+            gap: 3px;
+        }
+
+        .workspace-name {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            letter-spacing: 0;
+        }
+
+        .workspace-scripts {
+            color: var(--text-muted);
+            font-size: 0.6875rem;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .workspace-actions {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            gap: 6px;
+        }
+
+        .workspace-actions .toolbar-btn {
+            min-height: 28px;
+            justify-content: center;
+        }
+
+        .netlog-stats {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+            padding: 0 0 10px;
+            margin-bottom: 10px;
+            border-bottom-color: rgba(127, 127, 127, 0.16);
+        }
+
+        .netlog-stat {
+            display: grid;
+            gap: 2px;
+            min-width: 0;
+            padding: 9px 10px;
+            border: 1px solid rgba(127, 127, 127, 0.14);
+            border-radius: 8px;
+            background: var(--premium-muted-surface);
+            box-shadow: var(--premium-state-inset);
+        }
+
+        .netlog-stat-label {
+            color: var(--text-muted);
+            font-size: 0.625rem;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+
+        .netlog-stat-value {
+            color: var(--text-primary);
+            font-size: 0.8125rem;
+            font-weight: 800;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .netlog-list {
+            display: grid;
+            gap: 5px;
+        }
+
+        .netlog-entry {
+            display: grid;
+            grid-template-columns: 50px 46px minmax(130px, 1fr) minmax(86px, 150px) 68px 72px;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 10px;
+            border: 1px solid rgba(127, 127, 127, 0.12);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.025);
+            font-size: 0.6875rem;
+            transition: var(--premium-state-transition);
+        }
+
+        .netlog-entry:hover {
+            background: var(--premium-muted-surface-strong);
+            border-color: rgba(96, 165, 250, 0.22);
+        }
+
+        .netlog-method,
+        .netlog-status,
+        .netlog-size,
+        .netlog-time {
+            font-variant-numeric: tabular-nums;
+        }
+
+        .netlog-status {
+            padding: 2px 4px;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .netlog-ok .netlog-status {
+            color: var(--accent-primary);
+            background: var(--tint-green-soft);
+        }
+
+        .netlog-warn .netlog-status {
+            color: var(--accent-yellow);
+            background: var(--tint-yellow-soft);
+        }
+
+        .netlog-error .netlog-status {
+            color: var(--accent-error);
+            background: var(--tint-red-soft);
+        }
+
+        .activity-log {
+            display: grid;
+            align-content: start;
+            gap: 6px;
+        }
+
+        .activity-entry {
+            display: grid;
+            grid-template-columns: 64px 18px minmax(0, 1fr);
+            align-items: start;
+            gap: 7px;
+            padding: 8px 10px;
+            border: 1px solid rgba(127, 127, 127, 0.12);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.025);
+        }
+
+        .activity-time,
+        .activity-icon {
+            font-variant-numeric: tabular-nums;
+        }
+
+        .toast {
+            align-items: flex-start;
+            gap: 12px;
+            padding: 13px 15px 13px 14px;
+        }
+
+        .toast-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 24px;
+            flex: 0 0 24px;
+            border: 1px solid rgba(127, 127, 127, 0.24);
+            border-radius: 7px;
+            background: rgba(255, 255, 255, 0.05);
+            font-size: 0.6875rem;
+            font-weight: 900;
+            line-height: 1;
+            box-shadow: var(--premium-state-inset);
+        }
+
+        .toast-success .toast-icon {
+            border-color: rgba(34, 197, 94, 0.34);
+            background: var(--tint-green-soft);
+            color: var(--accent-primary);
+        }
+
+        .toast-error .toast-icon {
+            border-color: rgba(239, 68, 68, 0.38);
+            background: var(--tint-red-soft);
+            color: var(--accent-error);
+        }
+
+        .toast-info .toast-icon {
+            border-color: rgba(96, 165, 250, 0.34);
+            background: var(--tint-blue-soft);
+            color: var(--accent-secondary);
+        }
+
+        .toast-warning .toast-icon {
+            border-color: rgba(245, 158, 11, 0.4);
+            background: var(--tint-yellow-soft);
+            color: var(--accent-yellow);
+        }
+
+        @media (max-width: 56.25rem) {
+            .workspace-item,
+            .netlog-entry {
+                grid-template-columns: 1fr;
+                align-items: stretch;
+            }
+
+            .workspace-actions {
+                justify-content: flex-start;
+            }
+
+            .netlog-stats {
+                grid-template-columns: 1fr;
+            }
+
+            .netlog-url,
+            .netlog-script,
+            .netlog-size,
+            .netlog-time {
+                max-width: none;
+                text-align: left;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .dashboard-state-loading .dashboard-state-mark::before {
+                animation: none;
+            }
+        }
+
+        @media (forced-colors: active) {
+            .setup-warning-banner,
+            .dashboard-state,
+            .workspace-item,
+            .netlog-stat,
+            .netlog-entry,
+            .activity-entry,
+            .toast-icon {
+                background: Canvas !important;
+                color: CanvasText !important;
+                border-color: CanvasText !important;
+                box-shadow: none !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -7196,7 +7645,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 <div class="section-label">Workspaces</div>
                 <div class="section-content">
                     <div class="utility-note" style="margin-bottom:8px">Save and switch between different sets of enabled and disabled scripts.</div>
-                    <div id="workspaceList" style="margin-bottom:8px"></div>
+                    <div id="workspaceList" class="workspace-list" aria-live="polite" aria-busy="false" style="margin-bottom:8px"></div>
                     <div class="setting-row">
                         <button type="button" class="btn" id="btnCreateWorkspace">Save Current as Workspace</button>
                     </div>
@@ -7281,7 +7730,10 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 <div class="section-label">Network Request Log</div>
                 <div class="section-content">
                     <div id="networkLogContainer" class="utility-surface" style="max-height:250px;overflow-y:auto;font-size:0.75rem">
-                        <div class="panel-empty-inline">No network requests logged yet. GM_xmlhttpRequest calls will appear here.</div>
+                        <div class="dashboard-state dashboard-state-muted" role="status" aria-live="polite">
+                            <span class="dashboard-state-mark" aria-hidden="true">i</span>
+                            <span><strong class="dashboard-state-title">No network requests logged yet</strong> <span class="dashboard-state-detail">GM_xmlhttpRequest calls will appear here with status, size, and timing once scripts make requests.</span></span>
+                        </div>
                     </div>
                     <div class="setting-row" style="margin-top:8px;gap:8px">
                         <button type="button" class="btn" id="btnRefreshNetLog">Refresh</button>
@@ -7379,7 +7831,12 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
             <div class="settings-section">
                 <div class="section-label">Activity Log</div>
                 <div class="section-content">
-                    <div id="activityLog" class="activity-log utility-surface" style="max-height:200px;overflow-y:auto;font-size:0.75rem;color:var(--text-muted)">No activity yet</div>
+                    <div id="activityLog" class="activity-log utility-surface" data-empty="true" style="max-height:200px;overflow-y:auto;font-size:0.75rem;color:var(--text-muted)">
+                        <div class="dashboard-state dashboard-state-muted" role="status" aria-live="polite">
+                            <span class="dashboard-state-mark" aria-hidden="true">i</span>
+                            <span><strong class="dashboard-state-title">No activity yet</strong> <span class="dashboard-state-detail">Recent installs, updates, repairs, and errors will appear here.</span></span>
+                        </div>
+                    </div>
                     <div class="setting-row" style="margin-top:8px">
                         <button type="button" class="btn" id="btnClearLog">Clear Log</button>
                     </div>

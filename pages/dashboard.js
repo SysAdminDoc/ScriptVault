@@ -11670,6 +11670,30 @@
         return 'now';
     }
 
+    function renderDashboardState({ title, detail = '', tone = 'muted', marker = 'i' } = {}) {
+        const safeTitle = escapeHtml(title || '');
+        const safeDetail = detail
+            ? ` <span class="dashboard-state-detail">${escapeHtml(detail)}</span>`
+            : '';
+        const role = tone === 'error' ? 'alert' : 'status';
+        const live = tone === 'error' ? 'assertive' : 'polite';
+        const safeTone = ['muted', 'success', 'warning', 'error', 'loading'].includes(tone) ? tone : 'muted';
+        const safeMarker = safeTone === 'loading' ? '' : escapeHtml(marker || 'i');
+        return `<div class="dashboard-state dashboard-state-${safeTone}" role="${role}" aria-live="${live}">
+            <span class="dashboard-state-mark" aria-hidden="true">${safeMarker}</span>
+            <span><strong class="dashboard-state-title">${safeTitle}</strong>${safeDetail}</span>
+        </div>`;
+    }
+
+    function renderActivityLogEmpty() {
+        return renderDashboardState({
+            title: 'No activity yet',
+            detail: 'Recent installs, updates, repairs, and errors will appear here.',
+            tone: 'muted',
+            marker: 'i'
+        });
+    }
+
     // escapeHtml provided by shared/utils.js
 
     // =========================================
@@ -12058,7 +12082,7 @@
         toast.className = `toast toast-${type}`;
         toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
         toast.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
-        const icons = { success: '✓', error: '✕', info: 'ℹ', warning: '⚠' };
+        const icons = { success: 'OK', error: '!', info: 'i', warning: '!' };
         const icon = document.createElement('span');
         icon.className = 'toast-icon';
         icon.textContent = icons[type] || icons.info;
@@ -12102,12 +12126,15 @@
     function logActivity(msg, type = 'info') {
         const logEl = document.getElementById('activityLog');
         if (!logEl) return;
-        if (logEl.textContent === 'No activity yet') logEl.innerHTML = '';
+        if (logEl.dataset.empty === 'true' || logEl.textContent.trim() === 'No activity yet') {
+            logEl.innerHTML = '';
+            delete logEl.dataset.empty;
+        }
         const time = new Date().toLocaleTimeString();
-        const typeIcons = { success: '✓', error: '✕', info: 'ℹ', warning: '⚠' };
+        const typeIcons = { success: 'OK', error: '!', info: 'i', warning: '!' };
         const entry = document.createElement('div');
         entry.className = `activity-entry activity-${type}`;
-        entry.innerHTML = `<span class="activity-time">${time}</span><span class="activity-icon">${typeIcons[type] || 'ℹ'}</span>${escapeHtml(msg)}`;
+        entry.innerHTML = `<span class="activity-time">${time}</span><span class="activity-icon">${typeIcons[type] || 'i'}</span>${escapeHtml(msg)}`;
         logEl.prepend(entry);
         // Keep only last 50 entries
         while (logEl.children.length > 50) logEl.removeChild(logEl.lastChild);
@@ -14019,7 +14046,10 @@
 
         document.getElementById('btnClearLog')?.addEventListener('click', () => {
             const logEl = document.getElementById('activityLog');
-            if (logEl) logEl.innerHTML = '<div style="color:var(--text-muted)">No activity yet</div>';
+            if (logEl) {
+                logEl.dataset.empty = 'true';
+                logEl.innerHTML = renderActivityLogEmpty();
+            }
         });
 
         elements.btnRefreshRuntimeStatus?.addEventListener('click', async event => {
@@ -14110,7 +14140,7 @@
                 });
                 if (!name) return;
                 const res = await chrome.runtime.sendMessage({ action: 'createWorkspace', name });
-                if (res?.workspace) { showToast('Workspace saved', 'success'); loadWorkspaces(); }
+                if (res?.workspace) { showToast(`Workspace "${res.workspace.name || name}" saved`, 'success'); loadWorkspaces(); }
                 else showToast(res?.error || 'Failed to save workspace', 'error');
             }, { busyLabel: 'Saving…', errorMessage: 'Failed to save workspace' });
         });
@@ -15699,23 +15729,39 @@
     async function loadWorkspaces() {
         const container = document.getElementById('workspaceList');
         if (!container) return;
+        container.classList.add('workspace-list');
+        container.removeAttribute('role');
+        container.setAttribute('aria-busy', 'true');
+        container.innerHTML = renderDashboardState({
+            title: 'Loading workspaces',
+            detail: 'Reading saved script snapshots from local storage.',
+            tone: 'loading'
+        });
         try {
             const res = await chrome.runtime.sendMessage({ action: 'getWorkspaces' });
             const { active, list } = res || {};
             state.workspaces = Array.isArray(list) ? list : [];
             if (!list || list.length === 0) {
-                container.innerHTML = '<div style="color:var(--text-muted);font-size:0.75rem;padding:4px 0">No workspaces saved</div>';
+                container.innerHTML = renderDashboardState({
+                    title: 'No workspaces saved',
+                    detail: 'Save the current enabled and disabled script set to return to it later.',
+                    tone: 'muted',
+                    marker: 'i'
+                });
                 updateUtilitiesOverview();
                 return;
             }
+            container.setAttribute('role', 'list');
             container.innerHTML = list.map(ws => `
-                <div class="workspace-item${ws.id === active ? ' active' : ''}" data-ws-id="${escapeHtml(ws.id)}">
-                    <span class="workspace-name">${escapeHtml(ws.name)}</span>
-                    <span class="workspace-scripts">${Object.keys(ws.snapshot || {}).length} scripts</span>
+                <div class="workspace-item${ws.id === active ? ' active' : ''}" data-ws-id="${escapeHtml(ws.id)}" role="listitem"${ws.id === active ? ' aria-current="true"' : ''}>
+                    <div class="workspace-main">
+                        <span class="workspace-name">${escapeHtml(ws.name || 'Untitled workspace')}</span>
+                        <span class="workspace-scripts">${numberFormatter.format(Object.keys(ws.snapshot || {}).length)} scripts captured</span>
+                    </div>
                     <div class="workspace-actions">
-                        <button type="button" class="toolbar-btn${ws.id === active ? ' primary' : ''}" data-ws-activate="${escapeHtml(ws.id)}"${ws.id === active ? ' disabled aria-current="true" title="Current workspace"' : ' title="Switch to workspace"'}>${ws.id === active ? 'Active' : 'Switch'}</button>
-                        <button type="button" class="toolbar-btn" data-ws-save="${escapeHtml(ws.id)}" title="Update with current state">Save</button>
-                        <button type="button" class="toolbar-btn" data-ws-delete="${escapeHtml(ws.id)}" title="Delete workspace">Delete</button>
+                        <button type="button" class="toolbar-btn${ws.id === active ? ' primary' : ''}" data-ws-activate="${escapeHtml(ws.id)}"${ws.id === active ? ' disabled aria-current="true" title="Current workspace"' : ` title="Switch to ${escapeHtml(ws.name || 'workspace')}"`}>${ws.id === active ? 'Current' : 'Switch'}</button>
+                        <button type="button" class="toolbar-btn" data-ws-save="${escapeHtml(ws.id)}" title="Update ${escapeHtml(ws.name || 'workspace')} with current state">Update</button>
+                        <button type="button" class="toolbar-btn" data-ws-delete="${escapeHtml(ws.id)}" title="Delete ${escapeHtml(ws.name || 'workspace')}">Delete</button>
                     </div>
                 </div>
             `).join('');
@@ -15731,7 +15777,7 @@
                             updateStats();
                             showToast(`Workspace "${res.name}" activated`, 'success');
                         } else {
-                            showToast(res?.error || 'Failed', 'error');
+                            showToast(res?.error || 'Failed to activate workspace', 'error');
                         }
                     }, { busyLabel: 'Switching…' });
                 });
@@ -15781,8 +15827,15 @@
             updateUtilitiesOverview();
         } catch (e) {
             state.workspaces = [];
-            container.innerHTML = '<div style="color:var(--text-muted);font-size:0.75rem">Failed to load workspaces</div>';
+            container.innerHTML = renderDashboardState({
+                title: 'Workspaces could not load',
+                detail: 'Refresh Utilities and try again. Existing scripts were not changed.',
+                tone: 'error',
+                marker: '!'
+            });
             updateUtilitiesOverview();
+        } finally {
+            container.setAttribute('aria-busy', 'false');
         }
     }
 
@@ -15792,40 +15845,65 @@
     async function loadNetworkLog() {
         const container = document.getElementById('networkLogContainer');
         if (!container) return;
+        container.setAttribute('aria-busy', 'true');
+        container.innerHTML = renderDashboardState({
+            title: 'Loading network log',
+            detail: 'Collecting recent GM_xmlhttpRequest activity.',
+            tone: 'loading'
+        });
         try {
             const res = await chrome.runtime.sendMessage({ action: 'getNetworkLog', limit: 50 });
             const log = res?.log || [];
             const stats = res?.stats || {};
 
             if (log.length === 0) {
-            container.innerHTML = '<div class="panel-empty-inline">No network requests logged yet</div>';
+                container.innerHTML = renderDashboardState({
+                    title: 'No network requests logged yet',
+                    detail: 'GM_xmlhttpRequest calls will appear here with status, size, and timing once scripts make requests.',
+                    tone: 'muted',
+                    marker: 'i'
+                });
                 return;
             }
 
             let html = `<div class="netlog-stats">
-                <span>${stats.totalRequests || 0} requests</span>
-                <span>${stats.totalErrors || 0} errors</span>
-                <span>${formatBytes(stats.totalBytes || 0)} transferred</span>
-            </div>`;
+                <span class="netlog-stat"><span class="netlog-stat-label">Requests</span><span class="netlog-stat-value">${numberFormatter.format(stats.totalRequests || log.length || 0)}</span></span>
+                <span class="netlog-stat"><span class="netlog-stat-label">Errors</span><span class="netlog-stat-value">${numberFormatter.format(stats.totalErrors || 0)}</span></span>
+                <span class="netlog-stat"><span class="netlog-stat-label">Transferred</span><span class="netlog-stat-value">${escapeHtml(formatBytes(stats.totalBytes || 0))}</span></span>
+            </div><div class="netlog-list" role="list" aria-label="Recent network requests">`;
 
             html += log.map(e => {
                 const statusClass = e.error ? 'netlog-error' : (e.status >= 400 ? 'netlog-warn' : 'netlog-ok');
                 const time = new Date(e.timestamp).toLocaleTimeString();
-                let domain = '';
-                try { domain = new URL(e.url).hostname; } catch {}
-                return `<div class="netlog-entry ${statusClass}">
+                const rawUrl = String(e.url || '');
+                let domain = rawUrl || 'unknown host';
+                let displayPath = '';
+                try {
+                    const parsed = new URL(rawUrl);
+                    domain = parsed.hostname;
+                    displayPath = parsed.pathname && parsed.pathname !== '/' ? parsed.pathname : '';
+                } catch {}
+                const displayUrl = `${domain}${displayPath}` || rawUrl || 'unknown request';
+                return `<div class="netlog-entry ${statusClass}" role="listitem">
                     <span class="netlog-method">${escapeHtml(e.method || 'GET')}</span>
                     <span class="netlog-status">${e.error ? 'ERR' : e.status || '?'}</span>
-                    <span class="netlog-url" title="${escapeHtml(e.url)}">${escapeHtml(domain)}${e.url.length > 40 ? '...' : ''}</span>
-                    <span class="netlog-script" title="${escapeHtml(e.scriptName || '')}">${escapeHtml((e.scriptName || '').slice(0, 20))}</span>
+                    <span class="netlog-url" title="${escapeHtml(rawUrl)}">${escapeHtml(displayUrl)}</span>
+                    <span class="netlog-script" title="${escapeHtml(e.scriptName || 'Unknown script')}">${escapeHtml(e.scriptName || 'Unknown script')}</span>
                     <span class="netlog-size">${e.responseSize ? formatBytes(e.responseSize) : '-'}</span>
                     <span class="netlog-time">${time}</span>
                 </div>`;
-            }).join('');
+            }).join('') + '</div>';
 
             container.innerHTML = html;
         } catch (e) {
-            container.innerHTML = '<div style="color:var(--text-muted)">Failed to load network log</div>';
+            container.innerHTML = renderDashboardState({
+                title: 'Network log could not load',
+                detail: 'Refresh the log after the current script activity settles.',
+                tone: 'error',
+                marker: '!'
+            });
+        } finally {
+            container.setAttribute('aria-busy', 'false');
         }
     }
 
