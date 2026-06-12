@@ -6,6 +6,10 @@ const popupJs = readFileSync(resolve(process.cwd(), 'pages/popup.js'), 'utf8');
 const dashboardHtml = readFileSync(resolve(process.cwd(), 'pages/dashboard.html'), 'utf8');
 const dashboardJs = readFileSync(resolve(process.cwd(), 'pages/dashboard.js'), 'utf8');
 const messagesTs = readFileSync(resolve(process.cwd(), 'src/types/messages.ts'), 'utf8');
+const setupDoctorTs = readFileSync(resolve(process.cwd(), 'src/modules/user-scripts-setup.ts'), 'utf8');
+const edgeSmoke = readFileSync(resolve(process.cwd(), 'scripts/smoke-edge-sideload.mjs'), 'utf8');
+const firefoxSmoke = readFileSync(resolve(process.cwd(), 'scripts/smoke-firefox-sideload.mjs'), 'utf8');
+const edgeSmokeEvidence = JSON.parse(readFileSync(resolve(process.cwd(), 'docs/audit/edge-smoke-3.11.0.json'), 'utf8'));
 
 describe('Chrome userScripts onboarding diagnostics', () => {
   it('centralizes the live Chrome userScripts probe in the background worker', () => {
@@ -31,19 +35,25 @@ describe('Chrome userScripts onboarding diagnostics', () => {
   });
 
   it('surfaces the canonical setup state in popup and dashboard diagnostics', () => {
+    expect(setupDoctorTs).toContain('export function buildSetupDoctorView');
+    expect(setupDoctorTs).toContain("'host-permission-needed'");
+    expect(dashboardHtml).toContain('../modules/user-scripts-setup.js');
+    expect(popupJs).toContain('const setupDoctor = globalThis.UserScriptsSetupDoctor;');
     expect(popupJs).toContain('function buildPopupSetupFallback(message = \'\')');
+    expect(popupJs).toContain('function buildPopupSetupDoctorView(status = {})');
     expect(popupJs).toContain("chrome.permissions.request({ permissions: ['userScripts'] })");
     expect(popupJs).toContain("if (setupStatus?.setupState === 'firefox-user-scripts-permission')");
     expect(popupJs).toContain('showSetupWarning(status);');
-    expect(popupJs).toContain('elements.setupWarning.dataset.setupState = status.setupState || \'unknown\';');
+    expect(popupJs).toContain('elements.setupWarning.dataset.setupState = setupStatus.setupState || \'unknown\';');
     expect(popupJs).toContain('const targetUrl = setupStatus?.setupUrl ||');
 
     expect(dashboardJs).toContain("chrome.runtime.sendMessage({ action: 'getExtensionStatus' })");
+    expect(dashboardJs).toContain('function buildSetupDoctorView(status = {}, options = {})');
     expect(dashboardJs).toContain("chrome.permissions.request({ permissions: ['userScripts'] })");
-    expect(dashboardJs).toContain("if (status?.setupState === 'firefox-user-scripts-permission')");
-    expect(dashboardJs).toContain("banner.dataset.setupState = status?.setupState || 'unknown';");
-    expect(dashboardJs).toContain("btnDirect.textContent = status?.setupAction || 'Open Extension Details';");
-    expect(dashboardJs).toContain("chrome.tabs.create({ url: status?.setupUrl || 'chrome://extensions/?id=' + chrome.runtime.id });");
+    expect(dashboardJs).toContain("if (setupView.actionKind === 'request-firefox-user-scripts')");
+    expect(dashboardJs).toContain("banner.dataset.setupState = setupView.setupState || status?.setupState || 'unknown';");
+    expect(dashboardJs).toContain("btnDirect.textContent = setupView.actionLabel || status?.setupAction || 'Open Extension Details';");
+    expect(dashboardJs).toContain("chrome.tabs.create({ url: setupView.setupUrl || status?.setupUrl || 'chrome://extensions/?id=' + chrome.runtime.id });");
   });
 
   it('types the richer status response for TS consumers', () => {
@@ -53,6 +63,36 @@ describe('Chrome userScripts onboarding diagnostics', () => {
     expect(messagesTs).toContain("'developer-mode-disabled'");
     expect(messagesTs).toContain('setupState: UserScriptsSetupState;');
     expect(messagesTs).toContain('repairRuntimeState: SuccessOrError<ExtensionStatusResponse>;');
+  });
+
+  it('pins setup doctor smoke, host recovery, update rehydration, and support evidence', () => {
+    expect(edgeSmoke).toContain('enabledBefore');
+    expect(edgeSmoke).toContain('enabledAfter');
+    expect(edgeSmokeEvidence.checks.edgeUserScriptsToggle).toMatchObject({
+      present: true,
+      enabledBefore: false,
+      enabledAfter: true,
+    });
+
+    expect(firefoxSmoke).toContain("initialStatus?.setupState === 'firefox-user-scripts-permission'");
+    expect(firefoxSmoke).toContain('Firefox userScripts permission button');
+    expect(firefoxSmoke).toContain('usedHeadlessPermissionGrant = true');
+    expect(firefoxSmoke).toContain("chrome.runtime.sendMessage({ action: 'repairRuntimeState' })");
+
+    expect(popupJs).toContain("setupState: 'host-permission-needed'");
+    expect(popupJs).toContain("action: 'queueHostAccessRequest'");
+    expect(popupJs).toContain("chrome.permissions.request({ origins: [status.pattern] })");
+    expect(dashboardJs).toContain('requestCurrentHostAccessFromDashboard');
+    expect(dashboardJs).toContain("chrome.permissions.request({ origins: [status.pattern] })");
+
+    expect(backgroundCore).toContain('if (stored._lastRegisteredVersion !== currentVersion)');
+    expect(backgroundCore).toContain('needsForceReregister = true;');
+    expect(backgroundCore).toContain('await registerAllScripts(needsForceReregister);');
+
+    expect(backgroundCore).toContain('registration: _lastRegistrationSweep');
+    expect(backgroundCore).toContain('includesScriptSource: false');
+    expect(backgroundCore).toContain('includesScriptNames: false');
+    expect(backgroundCore).toContain('includesUrls: false');
   });
 
   it('keeps one-shot run messages typed and wired through popup and dashboard', () => {

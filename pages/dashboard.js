@@ -47,6 +47,7 @@
     // DOM Elements
     const elements = {};
     const numberFormatter = new Intl.NumberFormat();
+    const setupDoctor = globalThis.UserScriptsSetupDoctor;
     const bytesFormatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 });
     const fullDateFormatter = new Intl.DateTimeFormat(undefined, {
         month: 'short',
@@ -138,6 +139,42 @@
         shortcuts: 'shortcut references',
         reference: 'API and matcher references'
     };
+
+    function getDashboardBrowserName() {
+        return /Firefox\//.test(navigator.userAgent || '') ? 'firefox' : 'chromium';
+    }
+
+    function getDashboardChromeVersion() {
+        return parseInt(navigator.userAgent.match(/(?:Chrome|Chromium)\/(\d+)/)?.[1] || '0', 10);
+    }
+
+    function buildSetupDoctorView(status = {}, options = {}) {
+        if (setupDoctor?.buildSetupDoctorView) {
+            return setupDoctor.buildSetupDoctorView(status, {
+                browserName: getDashboardBrowserName(),
+                chromeVersion: getDashboardChromeVersion(),
+                extensionId: chrome.runtime?.id || '',
+                surface: 'dashboard',
+                ...options
+            });
+        }
+        return {
+            setupState: status?.setupState || (status?.userScriptsAvailable ? 'available' : 'unsupported-browser'),
+            ready: !!status?.userScriptsAvailable,
+            title: status?.setupTitle || '',
+            message: status?.setupMessage || '',
+            bannerText: status?.setupMessage || '',
+            actionLabel: status?.setupAction || 'Open Extension Details',
+            actionKind: status?.setupState === 'firefox-user-scripts-permission'
+                ? 'request-firefox-user-scripts'
+                : 'open-extension-details',
+            setupUrl: status?.setupUrl || `chrome://extensions/?id=${chrome.runtime?.id || ''}`,
+            detailLines: [],
+            helpTitle: 'Setup Instructions',
+            helpSteps: []
+        };
+    }
+
     const BACKUP_DAY_LABELS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const LOCAL_WORKSPACE_DB_NAME = 'scriptvault';
     const LOCAL_WORKSPACE_DB_VERSION = 3;
@@ -2944,7 +2981,7 @@
 
         if (!banner) return;
 
-        const chromeVersion = parseInt(navigator.userAgent.match(/(?:Chrome|Chromium)\/(\d+)/)?.[1] || '0', 10);
+        const chromeVersion = getDashboardChromeVersion();
         let status = null;
 
         try {
@@ -2986,51 +3023,34 @@
             return;
         }
 
+        const setupView = buildSetupDoctorView(status, { chromeVersion });
+
         // Tailor copy + visibility per state.
         if (text) {
-            if (status?.setupState === 'firefox-user-scripts-permission') {
-                text.innerHTML =
-                    '<strong>Setup required:</strong> Grant the optional ' +
-                    '<strong>userScripts</strong> permission so Firefox can register userscripts.';
-            } else if (status?.setupState === 'allow-user-scripts-disabled') {
-                text.innerHTML =
-                    '<strong>Setup required:</strong> ScriptVault needs the ' +
-                    '<strong>"Allow User Scripts"</strong> toggle for this extension. ' +
-                    'Open Extension Details, enable it, then refresh status; reload the extension if this banner remains.';
-            } else if (status?.setupState === 'developer-mode-disabled') {
-                text.innerHTML =
-                    '<strong>Setup required:</strong> Enable ' +
-                    '<strong>Developer Mode</strong> in <code>chrome://extensions</code> ' +
-                    'so ScriptVault can inject userscripts.';
-            } else {
-                text.innerHTML =
-                    '<strong>Browser unsupported:</strong> the <code>chrome.userScripts</code> ' +
-                    'API is not available. ScriptVault needs Chrome 120+ (or a Chromium ' +
-                    'derivative that exposes it).';
-            }
+            text.textContent = setupView.bannerText || setupView.message || 'Runtime setup is required before scripts can run.';
         }
         banner.style.display = 'block';
-        banner.dataset.setupState = status?.setupState || 'unknown';
+        banner.dataset.setupState = setupView.setupState || status?.setupState || 'unknown';
 
         // The deep-link button is most useful on Chrome 138+ (one click to the
         // toggle). On older Chrome it still helps — same Details page — but
         // the user needs to flip Developer Mode separately. Hide on api-missing
         // where the toggle doesn't exist.
         if (btnDirect) {
-            btnDirect.style.display = status?.setupState === 'unsupported-browser' ? 'none' : '';
-            btnDirect.textContent = status?.setupAction || 'Open Extension Details';
+            btnDirect.style.display = setupView.actionKind ? '' : 'none';
+            btnDirect.textContent = setupView.actionLabel || status?.setupAction || 'Open Extension Details';
         }
 
         if (btnDirect) btnDirect.onclick = async () => {
             try {
-                if (status?.setupState === 'firefox-user-scripts-permission') {
+                if (setupView.actionKind === 'request-firefox-user-scripts') {
                     btnDirect.disabled = true;
                     const granted = await requestFirefoxUserScriptsPermission();
                     await checkUserScriptsAvailability();
                     if (granted) await loadRuntimeStatus({ announce: true });
                     return;
                 }
-                chrome.tabs.create({ url: status?.setupUrl || 'chrome://extensions/?id=' + chrome.runtime.id });
+                chrome.tabs.create({ url: setupView.setupUrl || status?.setupUrl || 'chrome://extensions/?id=' + chrome.runtime.id });
             } catch (error) {
                 showToast(error?.message || 'Failed to open setup action', 'error');
             } finally {
@@ -3046,46 +3066,29 @@
     }
     
     function showSetupInstructions() {
-        const chromeVersion = parseInt(navigator.userAgent.match(/(?:Chrome|Chromium)\/(\d+)/)?.[1] || 0);
-        
-        let instructions = '';
-        if (/Firefox\//.test(navigator.userAgent || '')) {
-            instructions = `
-                <h3 style="margin-bottom: 15px; color: var(--text-primary);">Grant Firefox userScripts Permission</h3>
-                <ol style="line-height: 1.8; color: var(--text-secondary); padding-left: 20px;">
-                    <li>Click <strong>Grant Permission</strong> in the setup banner.</li>
-                    <li>Approve Firefox's permission prompt for ScriptVault.</li>
-                    <li>Refresh runtime status, then reload any open target pages.</li>
-                </ol>
-            `;
-        } else if (chromeVersion >= 138) {
-            instructions = `
-                <h3 style="margin-bottom: 15px; color: var(--text-primary);">Enable User Scripts (Chrome 138+)</h3>
-                <ol style="line-height: 1.8; color: var(--text-secondary); padding-left: 20px;">
-                    <li>Right-click the ScriptVault extension icon in your toolbar</li>
-                    <li>Select <strong>"Manage Extension"</strong></li>
-                    <li>Find and enable the <strong>"Allow User Scripts"</strong> toggle</li>
-                    <li>Reload any open pages for scripts to take effect</li>
-                </ol>
-                <p style="margin-top: 15px; padding: 10px; background: var(--bg-input); border-radius: 4px; font-size: 12px;">
-                    <strong>Note:</strong> This toggle was introduced in Chrome 138 as an additional security measure for extensions that inject user scripts.
-                </p>
-            `;
-        } else {
-            instructions = `
-                <h3 style="margin-bottom: 15px; color: var(--text-primary);">Enable Developer Mode</h3>
-                <ol style="line-height: 1.8; color: var(--text-secondary); padding-left: 20px;">
-                    <li>Open Chrome and go to <strong>chrome://extensions</strong></li>
-                    <li>Enable <strong>"Developer mode"</strong> toggle in the top-right corner</li>
-                    <li>Reload any open pages for scripts to take effect</li>
-                </ol>
-            `;
-        }
-        
+        const chromeVersion = getDashboardChromeVersion();
+        const fallbackState = getDashboardBrowserName() === 'firefox'
+            ? 'firefox-user-scripts-permission'
+            : chromeVersion >= 138
+                ? 'allow-user-scripts-disabled'
+                : chromeVersion >= 120
+                    ? 'developer-mode-disabled'
+                    : 'unsupported-browser';
+        const setupView = buildSetupDoctorView(
+            state.trustCenter.runtimeStatus || { userScriptsAvailable: false, setupState: fallbackState, chromeVersion },
+            { chromeVersion }
+        );
+        let instructions = `
+            <h3 style="margin-bottom: 15px; color: var(--text-primary);">${escapeHtml(setupView.helpTitle || 'Setup Instructions')}</h3>
+            <ol style="line-height: 1.8; color: var(--text-secondary); padding-left: 20px;">
+                ${(setupView.helpSteps || []).map(step => `<li>${escapeHtml(step)}</li>`).join('')}
+            </ol>
+        `;
+
         instructions += `
             <div style="margin-top: 20px; display: flex; gap: 10px;">
                 <button class="btn btn-primary" id="btnOpenExtSettings">
-                    Open Extension Settings
+                    ${escapeHtml(setupView.actionLabel || 'Open Extension Settings')}
                 </button>
             </div>
         `;
@@ -3096,7 +3099,11 @@
         
         // Add event listener after modal is shown (CSP-safe)
         document.getElementById('btnOpenExtSettings')?.addEventListener('click', () => {
-            chrome.tabs.create({url: 'chrome://extensions/?id=' + chrome.runtime.id});
+            if (setupView.actionKind === 'request-firefox-user-scripts') {
+                requestFirefoxUserScriptsPermission().then(() => loadRuntimeStatus({ announce: true })).catch(() => {});
+                return;
+            }
+            chrome.tabs.create({ url: setupView.setupUrl || 'chrome://extensions/?id=' + chrome.runtime.id });
         });
     }
 
@@ -5053,6 +5060,7 @@
     }
 
     function renderRuntimeStatus(status, errorMessage = '') {
+        const setupView = status ? buildSetupDoctorView(status) : null;
         if (elements.runtimeStatusSummary) {
             elements.runtimeStatusSummary.textContent = errorMessage
                 ? 'Unavailable'
@@ -5066,22 +5074,9 @@
             if (errorMessage) {
                 elements.runtimeStatusDetails.textContent = errorMessage;
             } else if (status) {
-                const detailLines = [
-                    `Chrome ${status.chromeVersion || 'unknown'}`,
-                    `Status: ${status.setupState || (status.userScriptsAvailable ? 'available' : 'unavailable')}`,
-                    status.userScriptsAvailable
-                        ? 'userScripts API is available and ready for registrations.'
-                        : 'userScripts API is unavailable in the current browser state.',
-                    status.setupRequired
-                        ? `${status.setupTitle ? `${status.setupTitle}: ` : ''}${status.setupMessage || 'Manual setup is still required before scripts can run.'}`
-                        : 'Runtime looks ready for script injection.'
-                ];
-                if (status.setupRequired && status.setupUrl) {
-                    detailLines.push(`Setup page: ${status.setupUrl}`);
-                }
-                if (status.apiProbeError) {
-                    detailLines.push(`API probe: ${status.apiProbeError}`);
-                }
+                const detailLines = setupView?.detailLines?.length
+                    ? [...setupView.detailLines]
+                    : ['Runtime status unavailable.'];
                 if (state.trustCenter.lastRuntimeRepairAt) {
                     detailLines.push(`Last repair ran ${dateTimeFormatter.format(new Date(state.trustCenter.lastRuntimeRepairAt))}.`);
                 }
