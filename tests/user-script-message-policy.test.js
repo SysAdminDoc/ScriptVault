@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   USER_SCRIPT_ALLOWED_EXTRAS,
+  isExtensionSurfaceSender,
   isUserScriptAllowedAction,
 } from '../src/background/user-script-message-policy.ts';
 
@@ -25,5 +26,37 @@ describe('user-script message policy', () => {
       'reportExecError',
       'reportExecTime',
     ]);
+  });
+
+  it('trusts only extension surfaces and service-worker self-messages', () => {
+    const extensionId = 'abc123';
+
+    expect(isExtensionSurfaceSender({
+      id: extensionId,
+      url: `chrome-extension://${extensionId}/pages/dashboard.html`,
+    }, extensionId)).toBe(true);
+
+    expect(isExtensionSurfaceSender({
+      id: extensionId,
+      url: 'moz-extension://generated-id/pages/popup.html',
+    }, extensionId)).toBe(true);
+
+    expect(isExtensionSurfaceSender({
+      id: extensionId,
+    }, extensionId)).toBe(true);
+
+    expect(isExtensionSurfaceSender({
+      id: extensionId,
+      tab: { id: 1 },
+      url: 'https://example.com/',
+    }, extensionId)).toBe(false);
+
+    expect(isExtensionSurfaceSender({
+      id: 'other-extension',
+      url: 'chrome-extension://other-extension/pages/dashboard.html',
+    }, extensionId)).toBe(false);
+
+    expect(isExtensionSurfaceSender(null, extensionId)).toBe(false);
+    expect(isExtensionSurfaceSender({ id: extensionId }, '')).toBe(false);
   });
 });
