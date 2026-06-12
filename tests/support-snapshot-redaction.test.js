@@ -505,9 +505,27 @@ describe('exportSupportSnapshot modal flow', () => {
     const summaryBlock = dashboardJs.match(/function formatSupportSnapshotGmValueSummary\(localHealthReport\) \{[\s\S]*?function updateSupportSnapshotSummary/);
     expect(summaryBlock).toBeTruthy();
     expect(summaryBlock[0]).toContain('const gmValueSync = sanitized?.gmValueSync;');
-    expect(summaryBlock[0]).toContain('const warningTotal = Object.values(gmValueSync.warningCounts || {}).reduce((sum, count) => sum + sanitizeSupportSnapshotCount(count), 0);');
+    expect(summaryBlock[0]).toContain('const warningCounts = sanitizeGmValueSyncWarningCountsForSupportSnapshot(gmValueSync.warningCounts);');
+    expect(summaryBlock[0]).toContain('const warningTotal = Object.values(warningCounts).reduce((sum, count) => sum + sanitizeSupportSnapshotCount(count), 0);');
     expect(summaryBlock[0]).toContain("parts.push(`${numberFormatter.format(warningTotal)} capped or excluded value${warningTotal === 1 ? '' : 's'}`);");
     expect(summaryBlock[0]).not.toMatch(/Object\.values\(localHealthReport|Object\.keys\(gmValueSync\.warningCounts|Object\.entries\(gmValueSync\.warningCounts/);
+  });
+
+  it('support summary re-sanitizes nested warning counts before totaling', () => {
+    const summaryBlock = dashboardJs.match(/function formatSupportSnapshotGmValueSummary\(localHealthReport\) \{[\s\S]*?function updateSupportSnapshotSummary/);
+    expect(summaryBlock).toBeTruthy();
+    let cursor = -1;
+    for (const marker of [
+      'const gmValueSync = sanitized?.gmValueSync;',
+      'const warningCounts = sanitizeGmValueSyncWarningCountsForSupportSnapshot(gmValueSync.warningCounts);',
+      'const warningTotal = Object.values(warningCounts).reduce((sum, count) => sum + sanitizeSupportSnapshotCount(count), 0);',
+      'if (warningTotal > 0)'
+    ]) {
+      const next = summaryBlock[0].indexOf(marker, cursor + 1);
+      expect(next).toBeGreaterThan(cursor);
+      cursor = next;
+    }
+    expect(summaryBlock[0]).not.toMatch(/Object\.values\(gmValueSync\.warningCounts|warningTotal\s*=\s*gmValueSync\.warningCounts/);
   });
 
   it('support summary fallback states run before GM value count formatting', () => {

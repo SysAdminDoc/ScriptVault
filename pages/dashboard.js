@@ -5089,7 +5089,8 @@
         const totalBytes = sanitizeSupportSnapshotCount(gmValueSync.totalBytes);
         const retryReady = sanitizeSupportSnapshotCount(gmValueSync.lastResult?.writeFailureRetryReady);
         const retryAgeLabel = formatGmValueRetryAgeBucket(gmValueSync.lastResult?.retryAgeBucket);
-        const warningTotal = Object.values(gmValueSync.warningCounts || {}).reduce((sum, count) => sum + sanitizeSupportSnapshotCount(count), 0);
+        const warningCounts = sanitizeGmValueSyncWarningCountsForSupportSnapshot(gmValueSync.warningCounts);
+        const warningTotal = Object.values(warningCounts).reduce((sum, count) => sum + sanitizeSupportSnapshotCount(count), 0);
         const parts = [
             `${numberFormatter.format(optInScripts)} opt-in script${optInScripts === 1 ? '' : 's'}`,
             `${numberFormatter.format(readyBundles)} ready bundle${readyBundles === 1 ? '' : 's'}`,
