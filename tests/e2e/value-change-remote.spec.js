@@ -1,7 +1,12 @@
 import { expect, test } from '@playwright/test';
 import { createServer } from 'node:http';
 
-import { launchScriptVault, openExtensionPage, sendRuntimeMessage } from './helpers/extension-fixture.js';
+import {
+  enableUserScriptsToggle,
+  launchScriptVault,
+  openExtensionPage,
+  sendRuntimeMessage,
+} from './helpers/extension-fixture.js';
 
 async function startTargetServer() {
   const server = createServer((req, res) => {
@@ -47,10 +52,17 @@ test('GM_addValueChangeListener marks other-tab writes as remote', async () => {
   const app = await launchScriptVault();
   try {
     const dashboard = await openExtensionPage(app);
-    const status = await sendRuntimeMessage(dashboard, { action: 'getExtensionStatus' });
+    let status = await sendRuntimeMessage(dashboard, { action: 'getExtensionStatus' });
+    let toggleResult = null;
+    if (status?.setupState === 'allow-user-scripts-disabled' || status?.userScriptsAvailable === false) {
+      toggleResult = await enableUserScriptsToggle(app);
+      if (toggleResult?.enabledAfter) {
+        status = await sendRuntimeMessage(dashboard, { action: 'repairRuntimeState' });
+      }
+    }
     test.skip(
-      status?.setupState === 'allow-user-scripts-disabled' || status?.userScriptsAvailable === false,
-      `chrome.userScripts unavailable in this profile: ${status?.setupState || status?.apiProbeError || 'unknown setup state'}`,
+      !status?.userScriptsAvailable,
+      `chrome.userScripts unavailable in this profile: ${status?.setupState || status?.apiProbeError || toggleResult?.note || 'unknown setup state'}`,
     );
 
     await expect(sendRuntimeMessage(dashboard, {
