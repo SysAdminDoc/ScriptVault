@@ -23,6 +23,9 @@ const projectRoot = resolve(scriptDir, '..');
 const args = new Set(process.argv.slice(2));
 const requireSignature = args.has('--require-signature');
 const outDir = join(projectRoot, 'release-artifacts');
+const projectSupplier = 'SysAdminDoc';
+const projectRepositoryUrl = 'https://github.com/SysAdminDoc/ScriptVault';
+const projectLicense = 'MIT';
 
 const failures = [];
 const warnings = [];
@@ -119,7 +122,8 @@ function readZipEntries(zipPath) {
 }
 
 function packageNameFromLockPath(path) {
-  const parts = path.replace(/^node_modules\//, '').split('/');
+  const suffix = path.split('node_modules/').at(-1);
+  const parts = suffix.split('/');
   if (parts[0]?.startsWith('@')) return `${parts[0]}/${parts[1]}`;
   return parts[0];
 }
@@ -132,26 +136,64 @@ function packagePurl(name, version) {
   return `pkg:npm/${encoded}@${encodeURIComponent(version)}`;
 }
 
+function directDependencyNames(pkg) {
+  return Object.keys({
+    ...(pkg.dependencies || {}),
+    ...(pkg.devDependencies || {}),
+    ...(pkg.optionalDependencies || {}),
+  }).sort();
+}
+
 function buildSbom(lock, pkg, version) {
-  const components = Object.entries(lock.packages || {})
-    .filter(([path, meta]) => path.startsWith('node_modules/') && meta?.version)
-    .map(([path, meta]) => {
-      const name = packageNameFromLockPath(path);
-      const component = {
-        type: 'library',
-        name,
-        version: meta.version,
-        scope: meta.dev ? 'optional' : 'required',
-        purl: packagePurl(name, meta.version),
-      };
-      if (meta.license) component.licenses = [{ expression: String(meta.license) }];
-      if (meta.integrity) component.properties = [{ name: 'npm:integrity', value: meta.integrity }];
-      if (meta.resolved) {
-        component.externalReferences = [{ type: 'distribution', url: meta.resolved }];
-      }
-      return component;
-    })
-    .sort((a, b) => a.name.localeCompare(b.name));
+  const componentByRef = new Map();
+  for (const [path, meta] of Object.entries(lock.packages || {})) {
+    if (!path.startsWith('node_modules/') || !meta?.version) continue;
+    const name = packageNameFromLockPath(path);
+    const purl = packagePurl(name, meta.version);
+    if (componentByRef.has(purl)) continue;
+    const component = {
+      'bom-ref': purl,
+      type: 'library',
+      name,
+      version: meta.version,
+      scope: meta.dev ? 'optional' : 'required',
+      purl,
+    };
+    if (meta.license) component.licenses = [{ expression: String(meta.license) }];
+    if (meta.integrity) component.properties = [{ name: 'npm:integrity', value: meta.integrity }];
+    if (meta.resolved) {
+      component.externalReferences = [{ type: 'distribution', url: meta.resolved }];
+    }
+    componentByRef.set(purl, component);
+  }
+  const components = [...componentByRef.values()]
+    .sort((a, b) => `${a.name}@${a.version}`.localeCompare(`${b.name}@${b.version}`));
+  const componentRefsByName = new Map();
+  for (const component of components) {
+    if (!componentRefsByName.has(component.name)) componentRefsByName.set(component.name, component['bom-ref']);
+  }
+  const rootRef = packagePurl(pkg.name, version);
+  const dependencyMap = new Map([
+    [
+      rootRef,
+      new Set(directDependencyNames(pkg)
+        .map((name) => componentRefsByName.get(name))
+        .filter(Boolean)),
+    ],
+  ]);
+  for (const [path, meta] of Object.entries(lock.packages || {})) {
+    if (!path.startsWith('node_modules/') || !meta?.version) continue;
+    const name = packageNameFromLockPath(path);
+    const ref = packagePurl(name, meta.version);
+    if (!dependencyMap.has(ref)) dependencyMap.set(ref, new Set());
+    for (const depName of Object.keys({ ...(meta.dependencies || {}), ...(meta.optionalDependencies || {}) })) {
+      const depRef = componentRefsByName.get(depName);
+      if (depRef) dependencyMap.get(ref).add(depRef);
+    }
+  }
+  const dependencies = [...dependencyMap.entries()]
+    .map(([ref, dependsOn]) => ({ ref, dependsOn: [...dependsOn].sort() }))
+    .sort((a, b) => a.ref.localeCompare(b.ref));
 
   return {
     bomFormat: 'CycloneDX',
@@ -160,6 +202,9 @@ function buildSbom(lock, pkg, version) {
     version: 1,
     metadata: {
       timestamp: new Date().toISOString(),
+      supplier: {
+        name: projectSupplier,
+      },
       tools: {
         components: [
           {
@@ -170,12 +215,26 @@ function buildSbom(lock, pkg, version) {
         ],
       },
       component: {
+        'bom-ref': rootRef,
         type: 'application',
         name: pkg.name,
         version,
+        supplier: {
+          name: projectSupplier,
+        },
+        purl: rootRef,
+        licenses: [{ expression: pkg.license || projectLicense }],
+        externalReferences: [
+          { type: 'website', url: projectRepositoryUrl },
+          { type: 'vcs', url: `git+${projectRepositoryUrl}.git` },
+        ],
+        properties: [
+          { name: 'scriptvault:product-id', value: 'github.com/SysAdminDoc/ScriptVault' },
+        ],
       },
     },
     components,
+    dependencies,
   };
 }
 

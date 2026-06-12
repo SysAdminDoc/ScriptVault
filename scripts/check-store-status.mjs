@@ -62,6 +62,7 @@ function checkReleaseWiring(rootDir, result) {
   for (const script of [
     'release:rollback-drill',
     'release:trust',
+    'release:trust:cra',
     'release:trust:strict',
     'release:store-status',
     'firefox:package',
