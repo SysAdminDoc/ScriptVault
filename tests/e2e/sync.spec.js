@@ -55,9 +55,10 @@ async function startWebDavServer() {
   };
 }
 
-test('WebDAV sync preview and upload run against a real HTTP endpoint', async () => {
+test('WebDAV sync preview, upload, and second-profile download run against a real HTTP endpoint', async () => {
   const server = await startWebDavServer();
   const app = await launchScriptVault();
+  let secondApp = null;
   try {
     const page = await openExtensionPage(app);
     const saved = await sendRuntimeMessage(page, {
@@ -78,12 +79,14 @@ test('WebDAV sync preview and upload run against a real HTTP endpoint', async ()
           webdavUrl: server.url,
           webdavUsername: 'e2e',
           webdavPassword: 'secret',
+          allowInternalSyncEndpoints: true,
         },
       },
     })).resolves.toMatchObject({
       syncEnabled: true,
       syncProvider: 'webdav',
       webdavUrl: server.url,
+      allowInternalSyncEndpoints: true,
     });
 
     const preview = await sendRuntimeMessage(page, {
@@ -113,7 +116,42 @@ test('WebDAV sync preview and upload run against a real HTTP endpoint', async ()
       code: expect.stringContaining('E2E Sync Flow'),
     });
     expect(server.requests.some(request => request.method === 'PUT')).toBe(true);
+
+    secondApp = await launchScriptVault();
+    const secondPage = await openExtensionPage(secondApp);
+    await expect(sendRuntimeMessage(secondPage, {
+      action: 'setSettings',
+      data: {
+        settings: {
+          syncEnabled: true,
+          syncProvider: 'webdav',
+          webdavUrl: server.url,
+          webdavUsername: 'e2e',
+          webdavPassword: 'secret',
+          allowInternalSyncEndpoints: true,
+        },
+      },
+    })).resolves.toMatchObject({
+      syncEnabled: true,
+      syncProvider: 'webdav',
+      webdavUrl: server.url,
+      allowInternalSyncEndpoints: true,
+    });
+
+    await expect(sendRuntimeMessage(secondPage, { action: 'syncNow' }))
+      .resolves.toMatchObject({ success: true });
+    const { scripts } = await sendRuntimeMessage(secondPage, { action: 'getScripts' });
+    const downloaded = scripts.find(script => script.id === saved.scriptId);
+    expect(downloaded).toMatchObject({
+      enabled: false,
+      metadata: {
+        name: 'E2E Sync Flow',
+        version: '1.0.0',
+      },
+    });
+    expect(downloaded.code).toContain('E2E Sync Flow');
   } finally {
+    await secondApp?.close();
     await app.close();
     await server.close();
   }
