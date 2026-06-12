@@ -107,6 +107,7 @@ async function buildBackground() {
     readFile("modules/storage.js"),
     readFile("modules/xhr.js"),
     readFile("modules/internal-host-guard.js"),
+    readFile("modules/user-script-message-policy.js"),
     readFile("modules/resources.js"),
 
     // v2.0 modules (conditionally included if they exist)

@@ -5892,15 +5892,8 @@ async function importFromZip(zipData, options = {}) {
 // action set the GM_* wrapper actually needs. Without this allowlist a
 // malicious userscript could invoke privileged dashboard actions like
 // factoryReset, deleteScript, importScripts, or setSettings.
-const USER_SCRIPT_ALLOWED_EXTRAS = new Set([
-  'netlog_record',
-  'reportExecError',
-  'reportExecTime'
-]);
 function isUserScriptAllowedAction(action) {
-  if (typeof action !== 'string') return false;
-  if (action.startsWith('GM_') || action.startsWith('GM.')) return true;
-  return USER_SCRIPT_ALLOWED_EXTRAS.has(action);
+  return UserScriptMessagePolicy.isUserScriptAllowedAction(action);
 }
 
 // True when the dedicated user-script messaging API is available (Chrome 131+).

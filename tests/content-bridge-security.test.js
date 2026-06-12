@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 
 const contentBridgeCode = readFileSync(resolve(process.cwd(), 'content.js'), 'utf8');
 const backgroundCoreCode = readFileSync(resolve(process.cwd(), 'background.core.js'), 'utf8');
+const userScriptMessagePolicyCode = readFileSync(resolve(process.cwd(), 'modules/user-script-message-policy.js'), 'utf8');
 const wrapperBuilderCode = readFileSync(resolve(process.cwd(), 'src/background/wrapper-builder.ts'), 'utf8');
 
 function createBridgeWindow() {
@@ -95,6 +96,10 @@ function loadConnectPolicyHelpers() {
   return new Function(`${helperCode}; return { evaluateConnectPolicy, normalizeConnectHost, shouldAllowInternalXhr, isScriptHostScopeAllowed, evaluateScriptHostScopePolicy };`)();
 }
 
+function loadUserScriptMessagePolicy() {
+  return new Function(`${userScriptMessagePolicyCode}\nreturn UserScriptMessagePolicy;`)();
+}
+
 // Pull the user-script messaging gate (constants + helpers + onMessage/onUserScriptMessage
 // listeners) out of background.core.js so we can drive both senders without booting the
 // full SW. The slice runs end-to-end so the listener registrations execute against the
@@ -141,12 +146,13 @@ function loadUserScriptMessagingGate({ hasUserScriptMessage = true } = {}) {
     return { handled: true, action: message?.action };
   };
   const debugLog = () => {};
+  const UserScriptMessagePolicy = loadUserScriptMessagePolicy();
 
   const factory = new Function(
-    'chrome', 'handleMessage', 'debugLog',
+    'chrome', 'handleMessage', 'debugLog', 'UserScriptMessagePolicy',
     `${sliceCode}\nreturn { isExtensionSurfaceSender, isUserScriptAllowedAction, USER_SCRIPT_MESSAGING_AVAILABLE };`
   );
-  const exports = factory(chromeMock, handleMessage, debugLog);
+  const exports = factory(chromeMock, handleMessage, debugLog, UserScriptMessagePolicy);
 
   return {
     chromeMock,

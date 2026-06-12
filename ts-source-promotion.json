@@ -52,6 +52,12 @@
       "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs."
     },
     {
+      "runtime": "modules/user-script-message-policy.js",
+      "sources": ["src/background/user-script-message-policy.ts"],
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for the user-script message allowlist."
+    },
+    {
       "runtime": "modules/resources.js",
       "sources": ["src/modules/resources.ts", "src/background/resource-loader.ts"],
       "status": "promoted",

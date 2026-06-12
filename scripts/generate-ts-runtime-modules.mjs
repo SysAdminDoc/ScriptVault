@@ -139,6 +139,12 @@ export const TS_RUNTIME_MODULES = [
     exportName: 'HostPermissionPatterns',
   },
   {
+    id: 'user-script-message-policy',
+    source: 'src/background/user-script-message-policy.ts',
+    output: 'modules/user-script-message-policy.js',
+    exportName: 'UserScriptMessagePolicy',
+  },
+  {
     id: 'resources',
     source: 'src/modules/resources.ts',
     output: 'modules/resources.js',

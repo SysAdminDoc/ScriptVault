@@ -128,6 +128,12 @@ describe('TS runtime module generator', () => {
         exportName: 'InternalHostGuard',
       }),
       expect.objectContaining({
+        id: 'user-script-message-policy',
+        source: 'src/background/user-script-message-policy.ts',
+        output: 'modules/user-script-message-policy.js',
+        exportName: 'UserScriptMessagePolicy',
+      }),
+      expect.objectContaining({
         id: 'resources',
         source: 'src/modules/resources.ts',
         output: 'modules/resources.js',
