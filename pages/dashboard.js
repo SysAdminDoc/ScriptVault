@@ -1985,6 +1985,76 @@
         root.style.setProperty('--toolbar-bottom', (headerH + toolbarH) + 'px');
     }
 
+    const DASHBOARD_I18N_TEXT_TARGETS = Object.freeze({
+        dashboardTabScripts: 'tabScripts',
+        dashboardTabUpdates: 'tabUpdates',
+        dashboardTabSettings: 'tabSettings',
+        dashboardTabUtilities: 'tabUtilities',
+        dashboardTabTrash: 'tabTrash',
+        dashboardTabStore: 'tabStore',
+        btnNewScript: 'newScript',
+        btnImportScript: 'importScript',
+        btnCheckUpdates: 'checkUpdates',
+        btnExportAll: 'exportAll',
+    });
+
+    function getDashboardI18n() {
+        try {
+            return typeof I18n !== 'undefined' ? I18n : null;
+        } catch (_) {
+            return null;
+        }
+    }
+
+    function setLabelPreservingDecor(el, label) {
+        if (!el || !label) return;
+        const textNode = Array.from(el.childNodes).find(node =>
+            node.nodeType === Node.TEXT_NODE && node.textContent.trim()
+        );
+        if (textNode) {
+            textNode.textContent = ` ${label}`;
+        } else {
+            el.appendChild(document.createTextNode(label));
+        }
+    }
+
+    function applyDashboardI18n() {
+        const i18n = getDashboardI18n();
+        if (!i18n) return;
+
+        const browserLocale =
+            globalThis.chrome?.i18n?.getUILanguage?.() ||
+            navigator.language ||
+            'en';
+        const locale = i18n.init(browserLocale);
+        document.documentElement.lang = locale;
+        i18n.applyToDOM(document);
+
+        Object.entries(DASHBOARD_I18N_TEXT_TARGETS).forEach(([id, key]) => {
+            const el = document.getElementById(id);
+            if (el) setLabelPreservingDecor(el, i18n.getMessage(key));
+        });
+
+        const newScriptLabel = i18n.getMessage('newScript');
+        const newScriptTab = document.getElementById('tabNewScript');
+        if (newScriptTab) {
+            newScriptTab.title = newScriptLabel;
+            newScriptTab.setAttribute('aria-label', newScriptLabel);
+        }
+
+        const helpLabel = i18n.getMessage('tabHelp');
+        if (elements.btnHelpTab) {
+            elements.btnHelpTab.title = helpLabel;
+            elements.btnHelpTab.setAttribute('aria-label', helpLabel);
+        }
+
+        if (elements.scriptSearch) {
+            elements.scriptSearch.placeholder = i18n.getMessage('searchScriptsCode');
+            elements.scriptSearch.title = i18n.getMessage('searchScriptsCodeTitle');
+            elements.scriptSearch.setAttribute('aria-label', i18n.getMessage('searchScriptsCodeAria'));
+        }
+    }
+
     // Initialize
     async function init() {
         state.runtimeDescriptor = getDashboardRuntimeDescriptor();
@@ -2001,6 +2071,7 @@
         if (aboutBrowserBuild) aboutBrowserBuild.textContent = state.runtimeDescriptor.buildIndicator || state.runtimeDescriptor.buildLabel;
 
         cacheElements();
+        applyDashboardI18n();
         applyRuntimeProviderGate();
         initViewSettings();
         initializeSettingsPanelControls();

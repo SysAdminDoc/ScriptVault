@@ -56,8 +56,11 @@ const I18n = (() => {
       refresh: "Refresh",
       // Navigation
       tabScripts: "Installed Userscripts",
+      tabUpdates: "Updates",
       tabSettings: "Settings",
       tabUtilities: "Utilities",
+      tabTrash: "Trash",
+      tabStore: "Script Store",
       tabHelp: "Help",
       tabValues: "Values Editor",
       // Scripts
@@ -65,6 +68,9 @@ const I18n = (() => {
       importScript: "Import",
       checkUpdates: "Check Updates",
       searchScripts: "Search scripts...",
+      searchScriptsCode: "Search scripts or code:fetch",
+      searchScriptsCodeTitle: "Search by script name, domain, tag, or code:fetch",
+      searchScriptsCodeAria: "Search scripts by name, domain, tag, or code:fetch",
       noScripts: "No userscripts installed",
       noScriptsDesc: "Create a new script or import one to get started.",
       scriptName: "Name",
@@ -262,7 +268,13 @@ const I18n = (() => {
       confirmDelete: "Are you sure you want to delete this script?",
       confirmDeleteMultiple: "Delete {count} selected scripts?",
       updateAvailable: "Update available",
-      noUpdates: "All scripts are up to date"
+      noUpdates: "All scripts are up to date",
+      tabUpdates: "Updates",
+      tabTrash: "Trash",
+      tabStore: "Script Store",
+      searchScriptsCode: "Search scripts or code:fetch",
+      searchScriptsCodeTitle: "Search by script name, domain, tag, or code:fetch",
+      searchScriptsCodeAria: "Search scripts by name, domain, tag, or code:fetch"
     },
     fr: {
       appName: "ScriptVault",
@@ -372,7 +384,13 @@ const I18n = (() => {
       confirmDelete: "Are you sure you want to delete this script?",
       confirmDeleteMultiple: "Delete {count} selected scripts?",
       updateAvailable: "Update available",
-      noUpdates: "All scripts are up to date"
+      noUpdates: "All scripts are up to date",
+      tabUpdates: "Updates",
+      tabTrash: "Trash",
+      tabStore: "Script Store",
+      searchScriptsCode: "Search scripts or code:fetch",
+      searchScriptsCodeTitle: "Search by script name, domain, tag, or code:fetch",
+      searchScriptsCodeAria: "Search scripts by name, domain, tag, or code:fetch"
     },
     de: {
       appName: "ScriptVault",
@@ -482,7 +500,13 @@ const I18n = (() => {
       confirmDelete: "Are you sure you want to delete this script?",
       confirmDeleteMultiple: "Delete {count} selected scripts?",
       updateAvailable: "Update available",
-      noUpdates: "All scripts are up to date"
+      noUpdates: "All scripts are up to date",
+      tabUpdates: "Updates",
+      tabTrash: "Trash",
+      tabStore: "Script Store",
+      searchScriptsCode: "Search scripts or code:fetch",
+      searchScriptsCodeTitle: "Search by script name, domain, tag, or code:fetch",
+      searchScriptsCodeAria: "Search scripts by name, domain, tag, or code:fetch"
     },
     zh: {
       appName: "ScriptVault",
@@ -592,7 +616,13 @@ const I18n = (() => {
       confirmDelete: "Are you sure you want to delete this script?",
       confirmDeleteMultiple: "Delete {count} selected scripts?",
       updateAvailable: "Update available",
-      noUpdates: "All scripts are up to date"
+      noUpdates: "All scripts are up to date",
+      tabUpdates: "Updates",
+      tabTrash: "Trash",
+      tabStore: "Script Store",
+      searchScriptsCode: "Search scripts or code:fetch",
+      searchScriptsCodeTitle: "Search by script name, domain, tag, or code:fetch",
+      searchScriptsCodeAria: "Search scripts by name, domain, tag, or code:fetch"
     },
     ja: {
       appName: "ScriptVault",
@@ -702,7 +732,13 @@ const I18n = (() => {
       confirmDelete: "Are you sure you want to delete this script?",
       confirmDeleteMultiple: "Delete {count} selected scripts?",
       updateAvailable: "Update available",
-      noUpdates: "All scripts are up to date"
+      noUpdates: "All scripts are up to date",
+      tabUpdates: "Updates",
+      tabTrash: "Trash",
+      tabStore: "Script Store",
+      searchScriptsCode: "Search scripts or code:fetch",
+      searchScriptsCodeTitle: "Search by script name, domain, tag, or code:fetch",
+      searchScriptsCodeAria: "Search scripts by name, domain, tag, or code:fetch"
     },
     pt: {
       appName: "ScriptVault",
@@ -812,7 +848,13 @@ const I18n = (() => {
       confirmDelete: "Are you sure you want to delete this script?",
       confirmDeleteMultiple: "Delete {count} selected scripts?",
       updateAvailable: "Update available",
-      noUpdates: "All scripts are up to date"
+      noUpdates: "All scripts are up to date",
+      tabUpdates: "Updates",
+      tabTrash: "Trash",
+      tabStore: "Script Store",
+      searchScriptsCode: "Search scripts or code:fetch",
+      searchScriptsCodeTitle: "Search by script name, domain, tag, or code:fetch",
+      searchScriptsCodeAria: "Search scripts by name, domain, tag, or code:fetch"
     },
     ru: {
       appName: "ScriptVault",
@@ -922,7 +964,13 @@ const I18n = (() => {
       confirmDelete: "Are you sure you want to delete this script?",
       confirmDeleteMultiple: "Delete {count} selected scripts?",
       updateAvailable: "Update available",
-      noUpdates: "All scripts are up to date"
+      noUpdates: "All scripts are up to date",
+      tabUpdates: "Updates",
+      tabTrash: "Trash",
+      tabStore: "Script Store",
+      searchScriptsCode: "Search scripts or code:fetch",
+      searchScriptsCodeTitle: "Search by script name, domain, tag, or code:fetch",
+      searchScriptsCodeAria: "Search scripts by name, domain, tag, or code:fetch"
     }
   };
   var localeNames = {
