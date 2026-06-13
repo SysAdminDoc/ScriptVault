@@ -8197,6 +8197,13 @@ async function handleMessage(message, sender) {
               downloadUrl = await responseToDownloadDataUrl(response);
             }
           }
+          let hasDownloadPermission = false;
+          try {
+            hasDownloadPermission = !!chrome.downloads?.download && await chrome.permissions.contains({ permissions: ['downloads'] });
+          } catch (_) { /* treat as not granted */ }
+          if (!hasDownloadPermission) {
+            return { error: 'Downloads permission not granted. Enable it in ScriptVault settings or reinstall the script that uses GM_download.', code: 'PERMISSION_REQUIRED' };
+          }
           const downloadOpts = {
             url: downloadUrl,
             filename: normalizeDownloadFilename(data.name, data.url, data.sourceName),

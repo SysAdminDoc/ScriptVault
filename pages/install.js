@@ -65,6 +65,8 @@ const OPTIONAL_GRANT_PERMISSION_MAP = {
   'GM.cookie': 'cookies',
   'GM_setClipboard': 'clipboardWrite',
   'GM.setClipboard': 'clipboardWrite',
+  'GM_download': 'downloads',
+  'GM.download': 'downloads',
 };
 
 const ANTIFEATURE_LABELS = Object.freeze({

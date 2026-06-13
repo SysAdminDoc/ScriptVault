@@ -7231,6 +7231,12 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 <div class="section-label">Downloads BETA</div>
                 <div class="section-content">
                     <div class="setting-row">
+                        <span class="label-text">Permission:</span>
+                        <span id="downloadsPermissionStatus" class="status-text">checking...</span>
+                        <button type="button" class="btn btn-sm" id="btnGrantDownloads" hidden>Grant</button>
+                        <span class="help-icon" title="GM_download requires the optional downloads permission. Grant it here if it was not requested at script install time.">?</span>
+                    </div>
+                    <div class="setting-row">
                         <span class="label-text">Download Mode:</span>
                         <select class="select-field" id="settingsDownloadMode" aria-describedby="settingsDownloadModeError">
                             <option value="default" selected>Default</option>
