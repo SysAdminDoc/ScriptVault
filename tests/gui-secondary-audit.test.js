@@ -92,3 +92,42 @@ describe("secondary dashboard UX audit", () => {
     expect(gistJs).toMatch(/searchInput\.addEventListener\('input', \(\) => \{/);
   });
 });
+
+describe("pattern builder regex hardening", () => {
+  let PB;
+  beforeAll(() => {
+    const fn = new Function("document", "navigator", "CSS", "setTimeout",
+      patternBuilderJs + "\nreturn PatternBuilder;"
+    );
+    PB = fn(
+      { createElement: () => ({ appendChild() {}, addEventListener() {}, setAttribute() {}, style: {}, dataset: {} }), createTextNode: () => ({}) },
+      { clipboard: { writeText: () => Promise.resolve() } },
+      { escape: v => v },
+      () => {}
+    );
+  });
+
+  test("sanitizeSegmentValue percent-encodes unsafe characters", () => {
+    const s = PB._sanitizeSegmentValue;
+    expect(s("hello")).toBe("hello");
+    expect(s("file(1)")).toBe("file(1)");
+    expect(s("a[0]")).toBe("a%5B0%5D");
+    expect(s("a{b}")).toBe("a%7Bb%7D");
+    expect(s("a b")).toBe("a%20b");
+    expect(s("a<b>")).toBe("a%3Cb%3E");
+    expect(s('a"b')).toBe("a%22b");
+    expect(s("a#b")).toBe("a%23b");
+  });
+
+  test("testUrl matches standard patterns correctly", () => {
+    expect(PB.testUrl("https://example.com/path", "https://example.com/*")).toBe(true);
+    expect(PB.testUrl("https://example.com/", "*://*/*")).toBe(true);
+    expect(PB.testUrl("http://example.com/foo", "https://example.com/*")).toBe(false);
+    expect(PB.testUrl("https://sub.example.com/x", "*://*.example.com/*")).toBe(true);
+  });
+
+  test("testUrl rejects patterns exceeding 500 chars", () => {
+    const longPattern = "https://example.com/" + "a".repeat(500);
+    expect(PB.testUrl("https://example.com/aaa", longPattern)).toBe(false);
+  });
+});
