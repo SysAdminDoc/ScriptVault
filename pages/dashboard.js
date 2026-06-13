@@ -1778,6 +1778,8 @@
         elements.settingsDownloadMode = document.getElementById('settingsDownloadMode');
         elements.settingsDownloadWhitelist = document.getElementById('settingsDownloadWhitelist');
         elements.btnSaveDownloads = document.getElementById('btnSaveDownloads');
+        elements.downloadsPermissionStatus = document.getElementById('downloadsPermissionStatus');
+        elements.btnGrantDownloads = document.getElementById('btnGrantDownloads');
         
         // Settings - Experimental
         elements.settingsStrictMode = document.getElementById('settingsStrictMode');
@@ -3356,6 +3358,7 @@
         // Downloads
         if (elements.settingsDownloadMode) elements.settingsDownloadMode.value = s.downloadMode || 'default';
         if (elements.settingsDownloadWhitelist) elements.settingsDownloadWhitelist.value = s.downloadWhitelist || '';
+        refreshDownloadsPermissionStatus();
         
         // Experimental
         if (elements.settingsStrictMode) elements.settingsStrictMode.value = s.strictMode || 'default';
@@ -6187,6 +6190,16 @@
             }
             showToast(error?.message || 'Failed to export support snapshot', 'error');
         }
+    }
+
+    async function refreshDownloadsPermissionStatus() {
+        if (!elements.downloadsPermissionStatus) return;
+        let granted = false;
+        try {
+            granted = await chrome.permissions.contains({ permissions: ['downloads'] });
+        } catch (_) { /* treat as not granted */ }
+        elements.downloadsPermissionStatus.textContent = granted ? 'granted' : 'not granted (optional)';
+        if (elements.btnGrantDownloads) elements.btnGrantDownloads.hidden = granted;
     }
 
     function applyConfigMode() {
@@ -13709,6 +13722,18 @@
                 await saveSettingOrThrow('downloadWhitelist', elements.settingsDownloadWhitelist?.value || '');
                 showToast('Download settings saved', 'success');
             }, { busyLabel: 'Saving…', errorMessage: 'Failed to save download settings' });
+        });
+
+        elements.btnGrantDownloads?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, async () => {
+                const granted = await chrome.permissions.request({ permissions: ['downloads'] });
+                if (granted) {
+                    showToast('Downloads permission granted', 'success');
+                } else {
+                    showToast('Downloads permission denied', 'warning');
+                }
+                refreshDownloadsPermissionStatus();
+            }, { busyLabel: 'Granting…', errorMessage: 'Failed to request downloads permission' });
         });
 
         // Sync buttons

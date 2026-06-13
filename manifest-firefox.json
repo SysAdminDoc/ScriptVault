@@ -35,7 +35,6 @@
     "webNavigation",
     "unlimitedStorage",
     "alarms",
-    "downloads",
     "declarativeNetRequest",
     "declarativeNetRequestWithHostAccess"
   ],
@@ -43,7 +42,8 @@
     "userScripts",
     "clipboardWrite",
     "clipboardRead",
-    "cookies"
+    "cookies",
+    "downloads"
   ],
   "host_permissions": [
     "<all_urls>"
