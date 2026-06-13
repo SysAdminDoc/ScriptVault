@@ -809,7 +809,7 @@ describe('source public api module', () => {
     });
 
     const PublicAPI = await loadFreshPublicAPI();
-    const result = await PublicAPI.handleExternalMessage({ action: 'getInstalledScripts' }, { id: 'ext-test' });
+    const result = await PublicAPI.handleExternalMessage({ action: 'getInstalledScripts' }, { origin: 'https://ext-test.example' });
 
     expect(result.scripts).toHaveLength(1);
     expect(result.scripts[0]).toMatchObject({
@@ -833,7 +833,7 @@ describe('source public api module', () => {
     await PublicAPI.setPermissions({ toggleScript: 'allow' });
     const result = await PublicAPI.handleExternalMessage(
       { action: 'toggleScript', scriptId: 'script_alpha', enabled: false },
-      { id: 'ext-test' },
+      { origin: 'https://ext-test.example' },
     );
     // v3.0: PublicAPI is loaded as a fresh module (separate ScriptStorage
     // cache); read straight from IDB via the DAO to bypass cache.
@@ -873,7 +873,7 @@ describe('source public api module', () => {
           'console.log("beta");',
         ].join('\n'),
       },
-      { id: 'ext-test' },
+      { origin: 'https://ext-test.example' },
     );
     // v3.0: PublicAPI is loaded as a fresh module (separate ScriptStorage
     // cache); read straight from IDB via the DAO to bypass cache.

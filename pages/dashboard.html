@@ -7796,16 +7796,21 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
             <div class="settings-section">
                 <div class="section-label">Public API Trust</div>
                 <div class="section-content">
-                    <div class="utility-note" style="margin-bottom:8px">Review which web origins are trusted to call the public API and inspect the recent external audit trail.</div>
+                    <div class="utility-note" style="margin-bottom:8px">Review which web origins and extensions are trusted to call the public API. Unknown extensions are denied by default. Inspect the recent external audit trail below.</div>
                     <div class="setting-row">
-                        <span class="label-text">Trusted origins</span>
+                        <span class="label-text">Trusted web origins</span>
                     </div>
                     <textarea class="textarea-field" id="publicApiTrustedOrigins" rows="4" placeholder="https://example.com" style="width:100%;font-size:0.75rem;resize:vertical"></textarea>
+                    <div class="setting-row" style="margin-top:8px">
+                        <span class="label-text">Trusted extension IDs</span>
+                    </div>
+                    <textarea class="textarea-field" id="publicApiTrustedExtensionIds" rows="3" placeholder="abcdefghijklmnopqrstuvwxyzabcdef" style="width:100%;font-size:0.75rem;resize:vertical;font-family:monospace"></textarea>
                     <div class="utility-inline-status" id="publicApiPermissionsSummary" style="display:block;margin-top:8px">Loading permission policy…</div>
-                    <div class="utility-inline-status" id="publicApiTrustStatus" style="display:block;margin-top:4px">Loading trusted origins…</div>
+                    <div class="utility-inline-status" id="publicApiTrustStatus" style="display:block;margin-top:4px">Loading trust state…</div>
                     <div class="setting-row" style="margin-top:8px;gap:8px">
                         <button type="button" class="btn" id="btnRefreshPublicApiTrust">Refresh</button>
                         <button type="button" class="btn" id="btnSavePublicApiOrigins">Save Origins</button>
+                        <button type="button" class="btn" id="btnSavePublicApiExtensionIds">Save Extension IDs</button>
                         <button type="button" class="btn" id="btnClearPublicApiAudit">Clear Audit</button>
                     </div>
                     <div id="publicApiAuditLog" class="utility-surface" style="margin-top:8px;max-height:220px;overflow-y:auto;font-size:0.75rem">
