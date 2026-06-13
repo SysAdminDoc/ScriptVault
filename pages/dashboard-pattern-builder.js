@@ -131,39 +131,45 @@ const PatternBuilder = (() => {
     }
   }
 
+  function sanitizeSegmentValue(raw) {
+    return String(raw).replace(/[^A-Za-z0-9\-._~!$&'()+,;=:@%*]/g, c =>
+      '%' + c.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0')
+    );
+  }
+
   /** Convert current _state to @match pattern string */
   function buildPattern() {
     const proto = _state.protocol === '*' ? '*' : _state.protocol;
     let host = _state.host || '*';
     if (_state.hostWildcard && host !== '*') {
-      host = host.replace(/^\*\./, '');   // clean existing prefix
+      host = host.replace(/^\*\./, '');
       host = '*.' + host;
     }
     let path = '/';
     if (_state.pathSegments.length === 0) {
       path = '/*';
     } else {
-      path += _state.pathSegments.map(s => s.mode === 'wildcard' ? '*' : s.value).join('/');
+      path += _state.pathSegments.map(s => s.mode === 'wildcard' ? '*' : sanitizeSegmentValue(s.value)).join('/');
     }
-    return `${proto}://${host}${path}`;
+    const result = `${proto}://${host}${path}`;
+    if (result.length > 200) return result.slice(0, 200);
+    return result;
   }
 
   /** Test a URL against a @match-style pattern (simplified) */
   function matchUrl(url, pattern) {
     try {
-      if (pattern.length > 500) return false; // ReDoS guard
-      // Convert @match pattern to a regex
-      let re = pattern
-        .replace(/[.+?^${}()|[\]\\]/g, '\\$&')   // escape regex chars EXCEPT *
-        .replace(/\\\*/g, '[^]*?');                 // non-greedy bounded wildcard
-      re = '^' + re.replace(/\[\^]\*\?:\/\//, '(https?|\\*?):\\/\\/') + '$';
-      // Fix the protocol wildcard we just clobbered
+      if (pattern.length > 500) return false;
+      const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const withWildcards = escaped.replace(/\\\*/g, '.*?');
+      let re;
       if (pattern.startsWith('*://')) {
-        re = '^(https?|\\*):\\/\\/' + re.slice('^(https?|\\*?):\\/\\/'.length);
+        re = '^(https?|\\*):\\/\\/' + withWildcards.replace(/^\.\*\?:\/\//, '') + '$';
+      } else {
+        re = '^' + withWildcards + '$';
       }
       return new RegExp(re).test(url);
     } catch {
-      // Fallback: simple string comparison
       return url === pattern;
     }
   }
@@ -536,6 +542,8 @@ const PatternBuilder = (() => {
     onInsert(fn) {
       _onInsert = fn;
     },
+
+    _sanitizeSegmentValue: sanitizeSegmentValue,
 
     /**
      * Tear down the builder and remove DOM.
