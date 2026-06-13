@@ -86,16 +86,21 @@ const PublicAPI = (() => {
   var STORAGE_KEY_AUDIT = "publicapi_audit";
   var STORAGE_KEY_WEBHOOKS = "publicapi_webhooks";
   var STORAGE_KEY_ORIGINS = "publicapi_trusted_origins";
+  var STORAGE_KEY_TRUSTED_EXTENSIONS = "publicapi_trusted_extension_ids";
   var MAX_AUDIT_ENTRIES = 500;
   var RATE_LIMIT_WINDOW = 1e3;
   var RATE_LIMIT_MAX = 10;
   var RATE_LIMIT_SENDER_CAP = 200;
   var MAX_TRUSTED_ORIGINS = 128;
   var MAX_TRUSTED_ORIGIN_LENGTH = 256;
+  var MAX_TRUSTED_EXTENSION_IDS = 64;
+  var MAX_EXTENSION_ID_LENGTH = 128;
+  var HANDSHAKE_ACTIONS = /* @__PURE__ */ new Set(["ping", "getVersion", "getAPISchema"]);
   var _permissions = null;
   var _auditLog = [];
   var _webhooks = {};
   var _trustedOrigins = [];
+  var _trustedExtensionIds = [];
   var _initialized = false;
   var _initPromise = null;
   var _rateLimitMap = /* @__PURE__ */ new Map();
@@ -165,6 +170,53 @@ const PublicAPI = (() => {
     } catch {
       return null;
     }
+  }
+  function normalizeExtensionId(id) {
+    if (typeof id !== "string") throw new Error("Extension ID must be a string");
+    const trimmed = id.trim().toLowerCase();
+    if (!trimmed) throw new Error("Extension ID cannot be empty");
+    if (trimmed.length > MAX_EXTENSION_ID_LENGTH) throw new Error("Extension ID is too long");
+    if (!/^[a-z]{32}$/.test(trimmed)) {
+      throw new Error("Extension ID must be a 32-character lowercase letter string");
+    }
+    return trimmed;
+  }
+  function normalizeTrustedExtensionIds(ids) {
+    if (!Array.isArray(ids)) return [];
+    if (ids.length > MAX_TRUSTED_EXTENSION_IDS) {
+      throw new Error(`Too many trusted extension IDs; maximum is ${MAX_TRUSTED_EXTENSION_IDS}`);
+    }
+    const normalized = [];
+    const seen = /* @__PURE__ */ new Set();
+    for (const id of ids) {
+      const value = normalizeExtensionId(id);
+      if (!seen.has(value)) {
+        seen.add(value);
+        normalized.push(value);
+      }
+    }
+    return normalized;
+  }
+  function normalizeStoredTrustedExtensionIds(ids) {
+    if (!Array.isArray(ids)) return [];
+    const normalized = [];
+    const seen = /* @__PURE__ */ new Set();
+    for (const id of ids.slice(0, MAX_TRUSTED_EXTENSION_IDS)) {
+      try {
+        const value = normalizeExtensionId(id);
+        if (!seen.has(value)) {
+          seen.add(value);
+          normalized.push(value);
+        }
+      } catch {
+      }
+    }
+    return normalized;
+  }
+  function isExtensionSenderTrusted(sender) {
+    if (!sender?.id) return false;
+    if (_trustedExtensionIds.length === 0) return false;
+    return _trustedExtensionIds.includes(sender.id.toLowerCase());
   }
   function validateWebInstallUrl(url) {
     let parsedUrl;
@@ -386,7 +438,8 @@ const PublicAPI = (() => {
         STORAGE_KEY_PERMS,
         STORAGE_KEY_AUDIT,
         STORAGE_KEY_WEBHOOKS,
-        STORAGE_KEY_ORIGINS
+        STORAGE_KEY_ORIGINS,
+        STORAGE_KEY_TRUSTED_EXTENSIONS
       ]);
       _permissions = {
         ...DEFAULT_PERMISSIONS,
@@ -395,11 +448,13 @@ const PublicAPI = (() => {
       _auditLog = result[STORAGE_KEY_AUDIT] ?? [];
       _webhooks = result[STORAGE_KEY_WEBHOOKS] ?? {};
       _trustedOrigins = normalizeStoredTrustedOrigins(result[STORAGE_KEY_ORIGINS]);
+      _trustedExtensionIds = normalizeStoredTrustedExtensionIds(result[STORAGE_KEY_TRUSTED_EXTENSIONS]);
     } catch {
       _permissions = { ...DEFAULT_PERMISSIONS };
       _auditLog = [];
       _webhooks = {};
       _trustedOrigins = [];
+      _trustedExtensionIds = [];
     }
   }
   async function savePermissions() {
@@ -431,6 +486,13 @@ const PublicAPI = (() => {
       await chrome.storage.local.set({ [STORAGE_KEY_ORIGINS]: _trustedOrigins });
     } catch (e) {
       console.warn("[PublicAPI] save origins failed:", e);
+    }
+  }
+  async function saveTrustedExtensionIds() {
+    try {
+      await chrome.storage.local.set({ [STORAGE_KEY_TRUSTED_EXTENSIONS]: _trustedExtensionIds });
+    } catch (e) {
+      console.warn("[PublicAPI] save trusted extension IDs failed:", e);
     }
   }
   function audit(action, sender, details, result) {
@@ -1039,6 +1101,10 @@ const PublicAPI = (() => {
     if (!handler) {
       return { error: `Unknown action: ${action}`, availableActions: Object.keys(HANDLERS) };
     }
+    if (sender?.id && !HANDSHAKE_ACTIONS.has(action) && !isExtensionSenderTrusted(sender)) {
+      audit(action, sender, null, "untrusted_extension");
+      return { error: "Extension not trusted. Add this extension ID to trusted extensions in ScriptVault settings.", extensionId: sender.id };
+    }
     const senderId = describeSender(sender);
     const endpoint = API_SCHEMA.endpoints[action];
     if (endpoint?.rateLimit !== false) {
@@ -1183,6 +1249,19 @@ const PublicAPI = (() => {
      */
     getTrustedOrigins() {
       return _trustedOrigins.slice();
+    },
+    /**
+     * Set trusted extension IDs for external message API access.
+     */
+    async setTrustedExtensionIds(ids) {
+      _trustedExtensionIds = normalizeTrustedExtensionIds(ids);
+      await saveTrustedExtensionIds();
+    },
+    /**
+     * Get trusted extension IDs.
+     */
+    getTrustedExtensionIds() {
+      return _trustedExtensionIds.slice();
     },
     /**
      * Configure a webhook for an event type.

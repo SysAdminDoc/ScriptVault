@@ -155,12 +155,16 @@ const STORAGE_KEY_PERMS = 'publicapi_permissions';
 const STORAGE_KEY_AUDIT = 'publicapi_audit';
 const STORAGE_KEY_WEBHOOKS = 'publicapi_webhooks';
 const STORAGE_KEY_ORIGINS = 'publicapi_trusted_origins';
+const STORAGE_KEY_TRUSTED_EXTENSIONS = 'publicapi_trusted_extension_ids';
 const MAX_AUDIT_ENTRIES = 500;
 const RATE_LIMIT_WINDOW = 1000; // ms
 const RATE_LIMIT_MAX = 10;      // requests per window
 const RATE_LIMIT_SENDER_CAP = 200;
 const MAX_TRUSTED_ORIGINS = 128;
 const MAX_TRUSTED_ORIGIN_LENGTH = 256;
+const MAX_TRUSTED_EXTENSION_IDS = 64;
+const MAX_EXTENSION_ID_LENGTH = 128;
+const HANDSHAKE_ACTIONS = new Set(['ping', 'getVersion', 'getAPISchema']);
 
 /* ------------------------------------------------------------------ */
 /*  State                                                              */
@@ -170,6 +174,7 @@ let _permissions: Record<string, PermissionLevel> | null = null;
 let _auditLog: AuditEntry[] = [];
 let _webhooks: Record<string, WebhookConfig> = {};
 let _trustedOrigins: string[] = [];
+let _trustedExtensionIds: string[] = [];
 let _initialized = false;
 let _initPromise: Promise<void> | null = null;
 const _rateLimitMap = new Map<string, number[]>();
@@ -253,6 +258,62 @@ function normalizeIncomingOrigin(origin: unknown): string | null {
   } catch {
     return null;
   }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Trusted Extension ID Helpers                                       */
+/* ------------------------------------------------------------------ */
+
+function normalizeExtensionId(id: unknown): string {
+  if (typeof id !== 'string') throw new Error('Extension ID must be a string');
+  const trimmed = id.trim().toLowerCase();
+  if (!trimmed) throw new Error('Extension ID cannot be empty');
+  if (trimmed.length > MAX_EXTENSION_ID_LENGTH) throw new Error('Extension ID is too long');
+  if (!/^[a-z]{32}$/.test(trimmed)) {
+    throw new Error('Extension ID must be a 32-character lowercase letter string');
+  }
+  return trimmed;
+}
+
+function normalizeTrustedExtensionIds(ids: unknown): string[] {
+  if (!Array.isArray(ids)) return [];
+  if (ids.length > MAX_TRUSTED_EXTENSION_IDS) {
+    throw new Error(`Too many trusted extension IDs; maximum is ${MAX_TRUSTED_EXTENSION_IDS}`);
+  }
+  const normalized: string[] = [];
+  const seen = new Set<string>();
+  for (const id of ids) {
+    const value = normalizeExtensionId(id);
+    if (!seen.has(value)) {
+      seen.add(value);
+      normalized.push(value);
+    }
+  }
+  return normalized;
+}
+
+function normalizeStoredTrustedExtensionIds(ids: unknown): string[] {
+  if (!Array.isArray(ids)) return [];
+  const normalized: string[] = [];
+  const seen = new Set<string>();
+  for (const id of ids.slice(0, MAX_TRUSTED_EXTENSION_IDS)) {
+    try {
+      const value = normalizeExtensionId(id);
+      if (!seen.has(value)) {
+        seen.add(value);
+        normalized.push(value);
+      }
+    } catch {
+      // Ignore malformed IDs on load
+    }
+  }
+  return normalized;
+}
+
+function isExtensionSenderTrusted(sender: SenderLike | null | undefined): boolean {
+  if (!sender?.id) return false;
+  if (_trustedExtensionIds.length === 0) return false;
+  return _trustedExtensionIds.includes(sender.id.toLowerCase());
 }
 
 function validateWebInstallUrl(url: string): string | null {
@@ -510,7 +571,8 @@ async function loadState(): Promise<void> {
       STORAGE_KEY_PERMS,
       STORAGE_KEY_AUDIT,
       STORAGE_KEY_WEBHOOKS,
-      STORAGE_KEY_ORIGINS
+      STORAGE_KEY_ORIGINS,
+      STORAGE_KEY_TRUSTED_EXTENSIONS
     ]);
     _permissions = {
       ...DEFAULT_PERMISSIONS,
@@ -519,11 +581,13 @@ async function loadState(): Promise<void> {
     _auditLog = (result[STORAGE_KEY_AUDIT] as AuditEntry[] | undefined) ?? [];
     _webhooks = (result[STORAGE_KEY_WEBHOOKS] as Record<string, WebhookConfig> | undefined) ?? {};
     _trustedOrigins = normalizeStoredTrustedOrigins(result[STORAGE_KEY_ORIGINS]);
+    _trustedExtensionIds = normalizeStoredTrustedExtensionIds(result[STORAGE_KEY_TRUSTED_EXTENSIONS]);
   } catch {
     _permissions = { ...DEFAULT_PERMISSIONS };
     _auditLog = [];
     _webhooks = {};
     _trustedOrigins = [];
+    _trustedExtensionIds = [];
   }
 }
 
@@ -560,6 +624,14 @@ async function saveTrustedOrigins(): Promise<void> {
     await chrome.storage.local.set({ [STORAGE_KEY_ORIGINS]: _trustedOrigins });
   } catch (e: unknown) {
     console.warn('[PublicAPI] save origins failed:', e);
+  }
+}
+
+async function saveTrustedExtensionIds(): Promise<void> {
+  try {
+    await chrome.storage.local.set({ [STORAGE_KEY_TRUSTED_EXTENSIONS]: _trustedExtensionIds });
+  } catch (e: unknown) {
+    console.warn('[PublicAPI] save trusted extension IDs failed:', e);
   }
 }
 
@@ -1379,6 +1451,14 @@ async function dispatchExternal(message: ExternalMessage, sender: SenderLike): P
     return { error: `Unknown action: ${action}`, availableActions: Object.keys(HANDLERS) };
   }
 
+  // Extension sender trust gate: non-handshake actions require a trusted
+  // extension ID when the sender is an extension (sender.id is set).
+  // This prevents unknown extensions from reading script inventory.
+  if (sender?.id && !HANDSHAKE_ACTIONS.has(action) && !isExtensionSenderTrusted(sender)) {
+    audit(action, sender, null, 'untrusted_extension');
+    return { error: 'Extension not trusted. Add this extension ID to trusted extensions in ScriptVault settings.', extensionId: sender.id };
+  }
+
   // Rate limit
   const senderId = describeSender(sender);
   const endpoint = API_SCHEMA.endpoints[action];
@@ -1567,6 +1647,21 @@ const PublicAPI = {
    */
   getTrustedOrigins(): string[] {
     return _trustedOrigins.slice();
+  },
+
+  /**
+   * Set trusted extension IDs for external message API access.
+   */
+  async setTrustedExtensionIds(ids: string[]): Promise<void> {
+    _trustedExtensionIds = normalizeTrustedExtensionIds(ids);
+    await saveTrustedExtensionIds();
+  },
+
+  /**
+   * Get trusted extension IDs.
+   */
+  getTrustedExtensionIds(): string[] {
+    return _trustedExtensionIds.slice();
   },
 
   /**

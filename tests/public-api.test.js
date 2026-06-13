@@ -110,11 +110,11 @@ describe('PublicAPI', () => {
     it('rejects arbitrary or oversized external install source before permission checks', async () => {
       const invalid = await PublicAPI.handleExternalMessage(
         { action: 'installScript', code: 'console.log("not a userscript");' },
-        { id: 'test-ext' },
+        { origin: 'https://test.example' },
       );
       const oversized = await PublicAPI.handleExternalMessage(
         { action: 'installScript', code: `${'x'.repeat(5 * 1024 * 1024 + 1)}==UserScript==` },
-        { id: 'test-ext-2' },
+        { origin: 'https://test.example' },
       );
 
       expect(invalid.error).toContain('missing ==UserScript==');
@@ -154,7 +154,7 @@ describe('PublicAPI', () => {
             'console.log("metadata");',
           ].join('\n'),
         },
-        { id: 'metadata-ext' },
+        { origin: 'https://metadata.example' },
       );
       const installed = ScriptStorage.set.mock.calls[0][1];
 
@@ -633,6 +633,98 @@ describe('PublicAPI', () => {
       await PublicAPI.handleExternalMessage({ action: 'ping' }, { id: 'test' });
       await PublicAPI.clearAuditLog();
       expect(PublicAPI.getAuditLog()).toHaveLength(0);
+    });
+  });
+
+  describe('extension trust gate', () => {
+    it('allows handshake actions (ping, getVersion, getAPISchema) from unknown extensions', async () => {
+      await PublicAPI.init();
+      const sender = { id: 'abcdefghijklmnopqrstuvwxyzabcdef' };
+
+      const ping = await PublicAPI.handleExternalMessage({ action: 'ping' }, sender);
+      const version = await PublicAPI.handleExternalMessage({ action: 'getVersion' }, sender);
+      const schema = await PublicAPI.handleExternalMessage({ action: 'getAPISchema' }, sender);
+
+      expect(ping.ok).toBe(true);
+      expect(version.version).toBeTruthy();
+      expect(schema.schema).toBeTruthy();
+    });
+
+    it('blocks getInstalledScripts from unknown extensions by default', async () => {
+      await PublicAPI.init();
+      const sender = { id: 'abcdefghijklmnopqrstuvwxyzabcdef' };
+
+      const result = await PublicAPI.handleExternalMessage({ action: 'getInstalledScripts' }, sender);
+
+      expect(result.error).toContain('not trusted');
+      expect(result.extensionId).toBe(sender.id);
+    });
+
+    it('blocks getScriptStatus from unknown extensions by default', async () => {
+      await PublicAPI.init();
+      const sender = { id: 'abcdefghijklmnopqrstuvwxyzabcdef' };
+
+      const result = await PublicAPI.handleExternalMessage({ action: 'getScriptStatus' }, sender);
+
+      expect(result.error).toContain('not trusted');
+    });
+
+    it('allows getInstalledScripts from a trusted extension ID', async () => {
+      await PublicAPI.init();
+      const extensionId = 'abcdefghijklmnopqrstuvwxyzabcdef';
+      await PublicAPI.setTrustedExtensionIds([extensionId]);
+
+      const result = await PublicAPI.handleExternalMessage(
+        { action: 'getInstalledScripts' },
+        { id: extensionId },
+      );
+
+      expect(result.error).toBeUndefined();
+      expect(result.scripts).toBeDefined();
+    });
+
+    it('records untrusted_extension audit entries for denied callers', async () => {
+      await PublicAPI.init();
+      const sender = { id: 'unknownextensionidplaceholderabc' };
+
+      await PublicAPI.handleExternalMessage({ action: 'getInstalledScripts' }, sender);
+      const log = PublicAPI.getAuditLog();
+      const denied = log.find(e => e.result === 'untrusted_extension');
+
+      expect(denied).toBeTruthy();
+      expect(denied.action).toBe('getInstalledScripts');
+      expect(denied.sender).toContain(sender.id);
+    });
+
+    it('setTrustedExtensionIds validates and deduplicates IDs', async () => {
+      await PublicAPI.init();
+      await PublicAPI.setTrustedExtensionIds([
+        'abcdefghijklmnopqrstuvwxyzabcdef',
+        'ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEF',
+        'abcdefghijklmnopqrstuvwxyzabcdef',
+      ]);
+
+      const ids = PublicAPI.getTrustedExtensionIds();
+      expect(ids).toHaveLength(1);
+      expect(ids[0]).toBe('abcdefghijklmnopqrstuvwxyzabcdef');
+    });
+
+    it('getTrustedExtensionIds returns a defensive copy', async () => {
+      await PublicAPI.init();
+      await PublicAPI.setTrustedExtensionIds(['abcdefghijklmnopqrstuvwxyzabcdef']);
+      const ids = PublicAPI.getTrustedExtensionIds();
+      ids.push('injected');
+      expect(PublicAPI.getTrustedExtensionIds()).toHaveLength(1);
+    });
+
+    it('non-extension senders (web origins) bypass the extension trust gate', async () => {
+      await PublicAPI.init();
+      const sender = { origin: 'https://example.com' };
+
+      const result = await PublicAPI.handleExternalMessage({ action: 'getInstalledScripts' }, sender);
+
+      expect(result.error).toBeUndefined();
+      expect(result.scripts).toBeDefined();
     });
   });
 });

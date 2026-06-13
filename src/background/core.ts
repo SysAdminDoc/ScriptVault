@@ -7656,6 +7656,15 @@ async function handleMessage(message, sender) {
         await PublicAPI.setTrustedOrigins(Array.isArray(data.origins) ? data.origins : []);
         return { success: true, origins: PublicAPI.getTrustedOrigins() };
 
+      case 'publicApi_getTrustedExtensionIds':
+        if (typeof PublicAPI === 'undefined') return { extensionIds: [] };
+        return { extensionIds: PublicAPI.getTrustedExtensionIds() };
+
+      case 'publicApi_setTrustedExtensionIds':
+        if (typeof PublicAPI === 'undefined') return { error: 'Public API controls unavailable' };
+        await PublicAPI.setTrustedExtensionIds(Array.isArray(data.extensionIds) ? data.extensionIds : []);
+        return { success: true, extensionIds: PublicAPI.getTrustedExtensionIds() };
+
       case 'publicApi_getPermissions':
         if (typeof PublicAPI === 'undefined') return { permissions: {} };
         return { permissions: PublicAPI.getPermissions() };

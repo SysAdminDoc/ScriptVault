@@ -1888,6 +1888,7 @@
         elements.supportSnapshotSummary = document.getElementById('supportSnapshotSummary');
         elements.supportSnapshotStatus = document.getElementById('supportSnapshotStatus');
         elements.publicApiTrustedOrigins = document.getElementById('publicApiTrustedOrigins');
+        elements.publicApiTrustedExtensionIds = document.getElementById('publicApiTrustedExtensionIds');
         elements.publicApiPermissionsSummary = document.getElementById('publicApiPermissionsSummary');
         elements.publicApiTrustStatus = document.getElementById('publicApiTrustStatus');
         elements.publicApiAuditLog = document.getElementById('publicApiAuditLog');
@@ -1900,6 +1901,7 @@
         elements.btnExportSupportSnapshot = document.getElementById('btnExportSupportSnapshot');
         elements.btnRefreshPublicApiTrust = document.getElementById('btnRefreshPublicApiTrust');
         elements.btnSavePublicApiOrigins = document.getElementById('btnSavePublicApiOrigins');
+        elements.btnSavePublicApiExtensionIds = document.getElementById('btnSavePublicApiExtensionIds');
         elements.btnClearPublicApiAudit = document.getElementById('btnClearPublicApiAudit');
         elements.btnRefreshSigningTrust = document.getElementById('btnRefreshSigningTrust');
 
@@ -5138,6 +5140,7 @@
             ? (runtime.setupRequired ? 'Needs setup' : 'Ready')
             : 'Unchecked';
         const trustedOriginCount = state.trustCenter.publicApiOrigins?.length || 0;
+        const trustedExtensionIdCount = state.trustCenter.publicApiExtensionIds?.length || 0;
         const trustedKeyCount = Object.keys(state.trustCenter.signingKeys || {}).length;
         const syncProvider = normalizeSyncProvider(state.settings);
         const enabledScriptCount = state.scripts.filter(script => script.enabled !== false).length;
@@ -5154,7 +5157,7 @@
             : 'schedule unavailable';
         const gmValueSummary = formatSupportSnapshotGmValueSummary(state.trustCenter.localHealthReport);
         elements.supportSnapshotSummary.textContent =
-            `Runtime ${runtimeLabel}, ${numberFormatter.format(state.scripts.length)} scripts (${numberFormatter.format(enabledScriptCount)} enabled), ${numberFormatter.format(trustedOriginCount)} trusted origins, ${numberFormatter.format(trustedKeyCount)} trusted signing keys, sync ${syncProvider === 'none' ? 'disabled' : syncProvider}, ${gmValueSummary}, recovery ${backupSummary}, schedule ${backupScheduleLabel}.`;
+            `Runtime ${runtimeLabel}, ${numberFormatter.format(state.scripts.length)} scripts (${numberFormatter.format(enabledScriptCount)} enabled), ${numberFormatter.format(trustedOriginCount)} trusted origins, ${numberFormatter.format(trustedExtensionIdCount)} trusted extensions, ${numberFormatter.format(trustedKeyCount)} trusted signing keys, sync ${syncProvider === 'none' ? 'disabled' : syncProvider}, ${gmValueSummary}, recovery ${backupSummary}, schedule ${backupScheduleLabel}.`;
     }
 
     function normalizeTrustedOriginInput(rawValue) {
@@ -5182,6 +5185,28 @@
                 }
             });
         return { origins, invalid };
+    }
+
+    function normalizeExtensionIdInput(rawValue) {
+        const ids = [];
+        const invalid = [];
+        const seen = new Set();
+        const EXTENSION_ID_RE = /^[a-z]{32}$/;
+        String(rawValue || '')
+            .split(/\r?\n/)
+            .map(line => line.trim().toLowerCase())
+            .filter(Boolean)
+            .forEach(line => {
+                if (!EXTENSION_ID_RE.test(line)) {
+                    invalid.push(line);
+                    return;
+                }
+                if (!seen.has(line)) {
+                    seen.add(line);
+                    ids.push(line);
+                }
+            });
+        return { ids, invalid };
     }
 
     function formatPublicApiPermissionSummary(permissions = {}) {
@@ -5388,36 +5413,47 @@
     async function loadPublicApiTrustState(options = {}) {
         const { announce = false } = options;
         try {
-            const [originsResponse, permissionsResponse, auditResponse] = await Promise.all([
+            const [originsResponse, extensionIdsResponse, permissionsResponse, auditResponse] = await Promise.all([
                 chrome.runtime.sendMessage({ action: 'publicApi_getTrustedOrigins' }),
+                chrome.runtime.sendMessage({ action: 'publicApi_getTrustedExtensionIds' }),
                 chrome.runtime.sendMessage({ action: 'publicApi_getPermissions' }),
                 chrome.runtime.sendMessage({ action: 'publicApi_getAuditLog', data: { limit: 25 } })
             ]);
             const origins = Array.isArray(originsResponse?.origins) ? originsResponse.origins : [];
+            const extensionIds = Array.isArray(extensionIdsResponse?.extensionIds) ? extensionIdsResponse.extensionIds : [];
             const permissions = permissionsResponse?.permissions && typeof permissionsResponse.permissions === 'object'
                 ? permissionsResponse.permissions
                 : {};
             const entries = Array.isArray(auditResponse?.entries) ? auditResponse.entries : [];
 
             state.trustCenter.publicApiOrigins = origins;
+            state.trustCenter.publicApiExtensionIds = extensionIds;
             state.trustCenter.publicApiPermissions = permissions;
             state.trustCenter.publicApiAudit = entries;
 
             if (elements.publicApiTrustedOrigins) {
                 elements.publicApiTrustedOrigins.value = origins.join('\n');
             }
+            if (elements.publicApiTrustedExtensionIds) {
+                elements.publicApiTrustedExtensionIds.value = extensionIds.join('\n');
+            }
             if (elements.publicApiPermissionsSummary) {
                 elements.publicApiPermissionsSummary.textContent = formatPublicApiPermissionSummary(permissions);
             }
             if (elements.publicApiTrustStatus) {
-                elements.publicApiTrustStatus.textContent = origins.length
-                    ? `${numberFormatter.format(origins.length)} trusted origin${origins.length === 1 ? '' : 's'} · ${numberFormatter.format(entries.length)} recent audit entr${entries.length === 1 ? 'y' : 'ies'}`
-                    : 'No trusted origins configured.';
+                const originPart = origins.length
+                    ? `${numberFormatter.format(origins.length)} trusted origin${origins.length === 1 ? '' : 's'}`
+                    : 'no trusted origins';
+                const extensionPart = extensionIds.length
+                    ? `${numberFormatter.format(extensionIds.length)} trusted extension${extensionIds.length === 1 ? '' : 's'}`
+                    : 'no trusted extensions (all denied)';
+                const auditPart = `${numberFormatter.format(entries.length)} recent audit entr${entries.length === 1 ? 'y' : 'ies'}`;
+                elements.publicApiTrustStatus.textContent = `${originPart} · ${extensionPart} · ${auditPart}`;
             }
             renderPublicApiAuditLog(entries);
             updateSupportSnapshotSummary();
             if (announce) showToast('Public API trust state refreshed', 'success');
-            return { origins, permissions, entries };
+            return { origins, extensionIds, permissions, entries };
         } catch (error) {
             const message = error?.message || 'Failed to load public API trust state';
             if (elements.publicApiPermissionsSummary) elements.publicApiPermissionsSummary.textContent = message;
@@ -14108,6 +14144,26 @@
                     showToast(error?.message || 'Failed to save trusted origins', 'error');
                 }
             }, { busyLabel: 'Saving…', errorMessage: 'Failed to save trusted origins' });
+        });
+        elements.btnSavePublicApiExtensionIds?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, async () => {
+                const { ids, invalid } = normalizeExtensionIdInput(elements.publicApiTrustedExtensionIds?.value || '');
+                if (invalid.length) {
+                    showToast(`Invalid extension ID: ${invalid[0]} (must be 32 lowercase letters)`, 'error');
+                    return;
+                }
+                try {
+                    const response = await chrome.runtime.sendMessage({ action: 'publicApi_setTrustedExtensionIds', data: { extensionIds: ids } });
+                    if (response?.error) {
+                        showToast(response.error, 'error');
+                        return;
+                    }
+                    await loadPublicApiTrustState();
+                    showToast(`Saved ${ids.length} trusted extension${ids.length === 1 ? '' : 's'}`, 'success');
+                } catch (error) {
+                    showToast(error?.message || 'Failed to save trusted extension IDs', 'error');
+                }
+            }, { busyLabel: 'Saving…', errorMessage: 'Failed to save trusted extension IDs' });
         });
         elements.btnClearPublicApiAudit?.addEventListener('click', async event => {
             await runButtonTask(event.currentTarget, async () => {
