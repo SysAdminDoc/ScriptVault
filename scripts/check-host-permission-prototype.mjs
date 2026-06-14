@@ -74,7 +74,7 @@ function analyzeTarget(name, manifest) {
 
   const userScriptsReady = permissions.has('userScripts') || optionalPermissions.has('userScripts');
   const dnrReady = permissions.has('declarativeNetRequest') && permissions.has('declarativeNetRequestWithHostAccess');
-  const downloadReady = permissions.has('downloads');
+  const downloadReady = permissions.has('downloads') || optionalPermissions.has('downloads');
   const cookiesReady = permissions.has('cookies') || optionalPermissions.has('cookies');
   if (!userScriptsReady) failures.push(`${name} prototype cannot register userscripts without userScripts permission coverage.`);
   if (!dnrReady) failures.push(`${name} prototype lacks DNR permissions needed for GM_webRequest rules.`);
