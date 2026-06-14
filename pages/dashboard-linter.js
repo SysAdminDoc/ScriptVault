@@ -762,6 +762,42 @@ const AdvancedLinter = (() => {
       },
     },
     {
+      id: 'trusted-types-main-world',
+      name: 'Trusted Types Sink in MAIN World',
+      severity: SEVERITY.WARNING,
+      fixable: false,
+      check(code, meta) {
+        // Trusted Types (`require-trusted-types-for 'script'`) only constrains
+        // the page realm. ScriptVault's default USER_SCRIPT/isolated world is
+        // exempt, so this rule fires only when a script opts into MAIN-world
+        // injection via `@inject-into page`, where these HTML string sinks throw
+        // on sites that enforce Trusted Types.
+        const injectInto = (meta.keys['inject-into'] || [])
+          .map(entry => String(entry.value || '').trim().toLowerCase());
+        if (!injectInto.includes('page')) return [];
+
+        const body = _getScriptBody(code, meta);
+        const lines = body.split('\n');
+        const bodyStart = meta.endLine >= 0 ? meta.endLine + 1 : 0;
+        const issues = [];
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          if (/\.(innerHTML|outerHTML)\b\s*\+?=(?!=)/.test(line)) {
+            issues.push({
+              line: bodyStart + i + 1,
+              message: 'innerHTML/outerHTML assignment throws on pages that enforce Trusted Types (require-trusted-types-for). In @inject-into page scripts use textContent, append(), or GM_addElement() instead.',
+            });
+          } else if (/\bdocument\s*\.\s*write(ln)?\s*\(/.test(line) || /\.insertAdjacentHTML\s*\(/.test(line)) {
+            issues.push({
+              line: bodyStart + i + 1,
+              message: 'This HTML string sink throws on pages that enforce Trusted Types (require-trusted-types-for). In @inject-into page scripts build nodes with DOM methods (append/GM_addElement) instead.',
+            });
+          }
+        }
+        return issues;
+      },
+    },
+    {
       id: 'async-no-catch',
       name: 'Missing Error Handling in Async Functions',
       severity: SEVERITY.WARNING,
