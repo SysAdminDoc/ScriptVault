@@ -1,4 +1,30 @@
+# Enforce LF line endings for all text files on every platform. Windows
+# checkouts with core.autocrlf=true otherwise inject CRLF into the working
+# tree, which breaks source-contract tests that match on `\n` and the
+# byte-for-byte Firefox manifest gate. Committed blobs are already LF; this
+# keeps the working tree consistent with them everywhere.
+* text=auto eol=lf
+
+# Shell scripts must stay LF (executable on POSIX CI runners).
 *.sh text eol=lf
+
+# Binary assets — never normalize or diff as text.
+*.png binary
+*.ico binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.zip binary
+*.crx binary
+*.xpi binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.otf binary
+*.pem binary
 
 # Keep internal planning / research / working docs out of the `git archive`
 # source ZIP that ships to AMO reviewers and release consumers. These are not
