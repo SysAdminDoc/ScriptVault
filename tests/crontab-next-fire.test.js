@@ -139,6 +139,23 @@ describe('@crontab next-fire engine', () => {
     expect(executionSource).not.toContain("world: 'ISOLATED'");
     expect(executionSource).not.toContain('new Function');
   });
+
+  it('blocks MAIN-world crontab fallback unless the script explicitly requests page context', () => {
+    const executionSource = extractCrontabExecutionSource(backgroundCore);
+
+    expect(executionSource).toContain('wantsPageContext');
+    expect(executionSource).toContain('MAIN-world fallback blocked');
+  });
+
+  it('blocks MAIN-world runScriptNow fallback unless the script explicitly requests page context', () => {
+    const runNowStart = backgroundCore.indexOf("case 'runScriptNow':");
+    const runNowEnd = backgroundCore.indexOf("case 'getExtensionInfo':", runNowStart);
+    const runNowSource = backgroundCore.slice(runNowStart, runNowEnd);
+
+    expect(runNowSource).toContain('wantsPageContext');
+    expect(runNowSource).toContain('MAIN-world fallback is not allowed');
+    expect(runNowSource).toContain("inject-into");
+  });
 });
 
 describe('@crontab editor linting', () => {

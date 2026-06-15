@@ -234,6 +234,7 @@ const SCRIPTVAULT_SETTINGS_DEFAULTS = {
   "allowInternalSyncEndpoints": false,
   "allowHighPrivilegeScriptApis": false,
   "modifyCSP": "auto",
+  "statsUrlRetention": "full",
   "blacklist": [],
   "badgeInfo": "running",
   "autoReload": false,
@@ -6111,6 +6112,7 @@ const StorageModule = (() => {
     allowInternalSyncEndpoints: false,
     allowHighPrivilegeScriptApis: false,
     modifyCSP: "auto",
+    statsUrlRetention: "full",
     blacklist: [],
     badgeInfo: "running",
     autoReload: false,
@@ -26500,9 +26502,19 @@ async function handleMessage(message, sender) {
             }
           }
 
-          // Fallback: chrome.scripting.executeScript — runs in MAIN world,
-          // GM_* APIs unavailable but the user-script body still executes.
-          // Acceptable for "Run now" use because the user explicitly opted in.
+          // MAIN-world fallback — only allowed when the script explicitly
+          // requests page context (@inject-into page or @sandbox raw). For
+          // all other scripts, report that the userScripts API is needed
+          // rather than silently downgrading isolation.
+          const injectInto = script.meta?.['inject-into'] || 'auto';
+          const sandbox = script.meta?.sandbox || '';
+          const wantsPageContext = (injectInto === 'page' || sandbox === 'raw');
+          if (!wantsPageContext) {
+            return {
+              success: false,
+              error: 'chrome.userScripts.execute is unavailable and this script does not declare @inject-into page — MAIN-world fallback is not allowed to avoid silently downgrading USER_SCRIPT isolation. Update Chrome to 135+ or set @inject-into page if page context is intended.'
+            };
+          }
           try {
             await chrome.scripting.executeScript({
               target: { tabId: targetTabId },
@@ -26751,7 +26763,8 @@ async function handleMessage(message, sender) {
           script.stats.totalTime += data.time;
           script.stats.avgTime = Math.round(script.stats.totalTime / script.stats.runs * 100) / 100;
           script.stats.lastRun = Date.now();
-          script.stats.lastUrl = data.url;
+          const _statsUrlMode = (SettingsManager.cache && SettingsManager.cache.statsUrlRetention) || 'full';
+          script.stats.lastUrl = _retainStatsUrl(data.url, _statsUrlMode);
           // Update cache only (debounced save to avoid excessive storage writes)
           _debouncedStatsSave();
         }
@@ -27794,6 +27807,20 @@ function escapeOmnibox(s) {
 // production (Chrome enforces a 30s floor for non-development extensions); in
 // dev builds the smaller value below applies.
 const STATS_SAVE_ALARM = 'statsSave';
+
+// Apply the user's execution-stats URL retention setting before a lastUrl is
+// stored. 'full' keeps the whole URL (default, prior behavior), 'origin' keeps
+// only the scheme+host, and 'none' stores nothing. This keeps potentially
+// sensitive browsing history out of local stats in a zero-telemetry product.
+function _retainStatsUrl(url, mode) {
+  if (!url || typeof url !== 'string') return '';
+  if (mode === 'none') return '';
+  if (mode === 'origin') {
+    try { return new URL(url).origin; } catch (_) { return ''; }
+  }
+  return url;
+}
+
 function _debouncedStatsSave() {
   // delayInMinutes 0.1 = 6s in unpacked dev; production extensions clamp to 30s.
   // ScriptStorage.save is idempotent, so creating the alarm repeatedly while
@@ -28041,7 +28068,7 @@ function scheduleCrontabAlarm(script, from = new Date()) {
   return next;
 }
 
-async function executeCrontabScriptInTab(tabId, wrappedCode) {
+async function executeCrontabScriptInTab(tabId, wrappedCode, wantsPageContext) {
   if (typeof chrome.userScripts?.execute === 'function') {
     try {
       await chrome.userScripts.execute({
@@ -28053,6 +28080,10 @@ async function executeCrontabScriptInTab(tabId, wrappedCode) {
     } catch (e) {
       debugLog('crontab userScripts.execute failed, falling back:', e?.message);
     }
+  }
+
+  if (!wantsPageContext) {
+    throw new Error('chrome.userScripts.execute is unavailable and this script does not declare @inject-into page — MAIN-world fallback blocked to preserve USER_SCRIPT isolation');
   }
 
   await chrome.scripting.executeScript({
@@ -28104,13 +28135,16 @@ async function handleCrontabAlarm(scriptId) {
     if (/^\/.*\/$|^\/.*\/[gimsuy]+$/.test(exc)) regexExcludes.push(exc);
   }
   const wrappedCode = buildWrappedScript(script, requireScripts, storedValues, regexIncludes, regexExcludes);
+  const crontabInjectInto = meta['inject-into'] || 'auto';
+  const crontabSandbox = meta.sandbox || '';
+  const crontabWantsPage = (crontabInjectInto === 'page' || crontabSandbox === 'raw');
 
   const tabs = await chrome.tabs.query({ status: 'complete' });
   for (const tab of tabs) {
     if (!tab.url || !tab.id) continue;
     if (!doesScriptMatchUrl(script, tab.url)) continue;
     try {
-      const mode = await executeCrontabScriptInTab(tab.id, wrappedCode);
+      const mode = await executeCrontabScriptInTab(tab.id, wrappedCode, crontabWantsPage);
       debugLog(`@crontab ${meta.name}: executed in tab ${tab.id} via ${mode}`);
     } catch (e) {
       debugLog(`@crontab ${meta.name}: failed in tab ${tab.id}: ${e.message}`);
