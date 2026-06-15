@@ -210,6 +210,29 @@ function check() {
     }
   }
 
+  // 4) Firefox sync provider scope — if the Firefox manifest does not include
+  //    `identity` in its permissions or optional_permissions, the README
+  //    comparison table's Cloud Sync row must carry a footnote qualifying
+  //    Firefox sync scope. This prevents silent drift if someone later removes
+  //    the footnote while Firefox still lacks OAuth provider support.
+  const firefoxManifestPath = join(repoRoot, 'manifest-firefox.json');
+  if (existsSync(firefoxManifestPath)) {
+    const firefoxManifest = JSON.parse(readFileSync(firefoxManifestPath, 'utf8'));
+    const firefoxPerms = [
+      ...(firefoxManifest.permissions || []),
+      ...(firefoxManifest.optional_permissions || []),
+    ];
+    if (!firefoxPerms.includes('identity')) {
+      const hasFootnote = /Cloud Sync.*&sup1;|Cloud Sync.*\*|Firefox.*WebDAV.*OAuth.*deferred/i.test(readme);
+      if (!hasFootnote) {
+        failures.push({
+          check: 'firefox-sync-scope',
+          why: 'Firefox manifest lacks identity permission but the README Cloud Sync comparison row has no footnote qualifying Firefox sync scope (WebDAV only, OAuth deferred)',
+        });
+      }
+    }
+  }
+
   return { failures, registryProviders: [...registry], claimedProviders: [...claimed] };
 }
 
