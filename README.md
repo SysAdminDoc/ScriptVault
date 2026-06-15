@@ -489,7 +489,7 @@ that script in the dashboard editor.
 | Side Panel | Yes | No | No |
 | Script Signing (Ed25519) | Yes | No | No |
 | AST Static Analysis (31 detectors) | Yes | No | No |
-| Cloud Sync (WebDAV, Google Drive, Dropbox, OneDrive, S3) | Yes | Yes | Yes |
+| Cloud Sync (WebDAV, Google Drive, Dropbox, OneDrive, S3) | Yes&sup1; | Yes | Yes |
 | 3-Way Sync Merge | Yes | No | No |
 | Tabbed Multi-Script Editor | Yes | No | No |
 | Built-in Script Search | Yes | No | No |
@@ -512,6 +512,8 @@ that script in the dashboard editor.
 | 4 UI Themes | Yes | No | Yes |
 | Open Source | MIT | No | Yes |
 | Free | Yes | Freemium | Yes |
+
+&sup1; Firefox currently supports WebDAV and import/export sync. OAuth providers (Google Drive, Dropbox, OneDrive) and Easy Cloud require the `identity` permission, which is deferred until a Firefox OAuth validation pass lands. S3-compatible sync works on Firefox (no `identity` dependency).
 
 ---
 
