@@ -89,7 +89,7 @@
     "esbuild": "^0.27.4",
     "fake-indexeddb": "^6.2.5",
     "jsdom": "^29.0.1",
-    "monaco-editor": "^0.52.0",
+    "monaco-editor": "^0.55.1",
     "puppeteer-core": "^24.42.0",
     "typescript": "^6.0.2",
     "vitest": "^4.1.3",
