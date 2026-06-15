@@ -31,7 +31,7 @@ const copyCatalog = [
   ['permission', 'webNavigation', ['document lifecycle', 'frame navigation'], ['document lifecycle', 'frame navigation']],
   ['permission', 'unlimitedStorage', ['cached dependencies', 'backups'], ['cached dependencies', 'backups']],
   ['permission', 'alarms', ['update checks', 'scheduled sync'], ['update checks', 'scheduled sync']],
-  ['permission', 'downloads', ['GM_download', 'export'], ['GM_download', 'export']],
+  ['optional_permission', 'downloads', ['GM_download', 'export'], ['GM_download', 'export']],
   ['permission', 'declarativeNetRequest', ['per-script network rules', 'webRequest metadata'], ['per-script network rules', 'webRequest metadata']],
   ['permission', 'declarativeNetRequestWithHostAccess', ['host-backed DNR', 'matching sites'], ['host-backed DNR', 'matching sites']],
   ['permission', 'sidePanel', ['side panel', 'browser side panel'], ['side panel', 'browser side panel']],
