@@ -112,6 +112,7 @@ const StorageModule = (() => {
     allowInternalSyncEndpoints: false,
     allowHighPrivilegeScriptApis: false,
     modifyCSP: "auto",
+    statsUrlRetention: "full",
     blacklist: [],
     badgeInfo: "running",
     autoReload: false,

@@ -65,6 +65,7 @@ const REQUIRED_VALIDATION_KEYS = new Map([
   ['searchIntegration', 'select-option'],
   ['sri', 'select-option'],
   ['strictMode', 'select-option'],
+  ['statsUrlRetention', 'select-option'],
   ['tabMode', 'select-option'],
   ['tabSize', 'select-option'],
   ['topLevelAwait', 'select-option'],

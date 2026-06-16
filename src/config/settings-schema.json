@@ -84,6 +84,7 @@
       "showBadge",
       "showFixedSource",
       "sri",
+      "statsUrlRetention",
       "strictMode",
       "subscriptionAutoRefresh",
       "subscriptionRefreshInterval",
@@ -1144,6 +1145,31 @@
         {
           "value": "no",
           "label": "No"
+        }
+      ]
+    },
+    "statsUrlRetention": {
+      "type": "string",
+      "control": "select",
+      "label": "Execution stats URL retention",
+      "help": "Controls how much of the last execution URL is kept in per-script stats.",
+      "elementId": "settingsStatsUrlRetention",
+      "default": "full",
+      "validation": {
+        "kind": "select-option"
+      },
+      "options": [
+        {
+          "value": "full",
+          "label": "Full URL"
+        },
+        {
+          "value": "origin",
+          "label": "Origin only"
+        },
+        {
+          "value": "none",
+          "label": "Do not store"
         }
       ]
     },

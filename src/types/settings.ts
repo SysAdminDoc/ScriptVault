@@ -91,6 +91,8 @@ export interface Settings {
   allowInternalSyncEndpoints: boolean;
   allowHighPrivilegeScriptApis: boolean;
   modifyCSP: 'auto' | 'yes' | 'no';
+  // Execution-stats URL retention: full URL, origin-only, or no URL stored.
+  statsUrlRetention: 'full' | 'origin' | 'none';
 
   // Blacklist
   blacklist: string[];
