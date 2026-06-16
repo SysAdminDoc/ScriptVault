@@ -388,6 +388,12 @@
         @media (prefers-reduced-motion: reduce) {
             * { transition: none !important; animation: none !important; }
         }
+
+        /* Panel position data attribute (Chrome 140+ sidePanel.getLayout) */
+        html[data-panel-position="left"][dir="rtl"] .sp-header,
+        html[data-panel-position="left"][dir="rtl"] .sp-controls {
+            flex-direction: row-reverse;
+        }
     </style>
 </head>
 <body>

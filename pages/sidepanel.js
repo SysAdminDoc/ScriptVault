@@ -373,6 +373,7 @@
   async function init() {
     await loadSettings();
     applyTheme();
+    applySidePanelLayout();
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
       const layout = settings.theme || settings.layout || 'dark';
       if (layout === 'auto') applyTheme();
@@ -380,6 +381,16 @@
     await refresh();
     setupEventListeners();
     setupTabListeners();
+  }
+
+  async function applySidePanelLayout() {
+    try {
+      if (typeof chrome.sidePanel?.getLayout !== 'function') return;
+      const layout = await chrome.sidePanel.getLayout();
+      if (layout?.position === 'left' || layout?.position === 'right') {
+        document.documentElement.dataset.panelPosition = layout.position;
+      }
+    } catch (_) { /* sidePanel.getLayout unavailable — Chrome <140 or Firefox */ }
   }
 
   async function loadSettings() {
