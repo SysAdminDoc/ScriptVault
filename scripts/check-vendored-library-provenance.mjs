@@ -15,7 +15,7 @@ const VENDORED_LIBRARIES = [
   {
     label: 'Acorn',
     packageName: 'acorn',
-    expectedVersion: '8.16.0',
+    expectedVersion: '8.17.0',
     expectedLicense: 'MIT',
     packagedPath: 'lib/acorn.min.js',
     sourcePath: 'node_modules/acorn/dist/acorn.js',
