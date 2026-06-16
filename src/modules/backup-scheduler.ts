@@ -60,6 +60,10 @@ declare const SettingsManager: {
   set(settings: Record<string, unknown>): Promise<unknown>;
 };
 
+declare const CloudSyncProviders: Record<string, {
+  upload(data: unknown, settings: Record<string, unknown>): Promise<{ success: boolean; error?: string }>;
+} | undefined> | undefined;
+
 declare const FolderStorage: {
   cache: unknown;
 };
@@ -86,6 +90,7 @@ interface BackupSchedulerSettings {
   notifyOnSuccess: boolean;
   notifyOnFailure: boolean;
   warnOnStorageFull: boolean;
+  cloudBackupEnabled: boolean;
 }
 
 interface BackupSchedulerSettingsResult extends BackupSchedulerSettings {
@@ -333,6 +338,7 @@ const DEFAULT_SETTINGS: BackupSchedulerSettings = {
   notifyOnSuccess: true,
   notifyOnFailure: true,
   warnOnStorageFull: true,
+  cloudBackupEnabled: false,
 };
 
 const GLOBAL_SETTINGS_METADATA_FILE = 'global-settings.metadata.json';
@@ -1081,6 +1087,35 @@ async function _registerAlarms(): Promise<void> {
   // 'onChange' and 'manual' don't need periodic alarms
 }
 
+async function _uploadBackupToCloud(backup: BackupEntry): Promise<void> {
+  if (typeof CloudSyncProviders === 'undefined' || !CloudSyncProviders) return;
+  const globalSettings = await SettingsManager.get();
+  const providerName = String(globalSettings.syncProvider || 'none');
+  if (providerName === 'none') return;
+  const provider = CloudSyncProviders[providerName];
+  if (!provider || typeof provider.upload !== 'function') return;
+
+  const envelope = {
+    schema: 'scriptvault-cloud-backup/v1',
+    backupId: backup.id,
+    timestamp: backup.timestamp,
+    version: backup.version,
+    scriptCount: backup.scriptCount,
+    reason: backup.reason,
+    size: backup.size,
+    data: backup.data,
+  };
+
+  const uploadSettings = Object.assign({}, globalSettings, {
+    syncFilename: 'scriptvault-backup.json',
+  });
+
+  const result = await provider.upload(envelope, uploadSettings);
+  if (!result?.success) {
+    throw new Error(result?.error || 'Cloud backup upload failed');
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -1170,6 +1205,12 @@ export const BackupScheduler = {
           'Backup Complete',
           `${reason.charAt(0).toUpperCase() + reason.slice(1)} backup created with ${scriptCount} scripts (${_formatBytes(sizeBytes)}).`,
         );
+      }
+
+      if (settings.cloudBackupEnabled) {
+        _uploadBackupToCloud(backup).catch((cloudErr: unknown) => {
+          console.error('[BackupScheduler] cloud backup upload failed:', cloudErr);
+        });
       }
 
       return { success: true, backupId: backup.id };

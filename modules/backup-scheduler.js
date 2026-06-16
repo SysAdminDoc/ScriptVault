@@ -58,7 +58,8 @@ const BackupScheduler = (() => {
     includeSettingsCredentials: false,
     notifyOnSuccess: true,
     notifyOnFailure: true,
-    warnOnStorageFull: true
+    warnOnStorageFull: true,
+    cloudBackupEnabled: false
   };
   var GLOBAL_SETTINGS_METADATA_FILE = "global-settings.metadata.json";
   var SETTINGS_CREDENTIAL_KEYS = [
@@ -589,6 +590,31 @@ const BackupScheduler = (() => {
       });
     }
   }
+  async function _uploadBackupToCloud(backup) {
+    if (typeof CloudSyncProviders === "undefined" || !CloudSyncProviders) return;
+    const globalSettings = await SettingsManager.get();
+    const providerName = String(globalSettings.syncProvider || "none");
+    if (providerName === "none") return;
+    const provider = CloudSyncProviders[providerName];
+    if (!provider || typeof provider.upload !== "function") return;
+    const envelope = {
+      schema: "scriptvault-cloud-backup/v1",
+      backupId: backup.id,
+      timestamp: backup.timestamp,
+      version: backup.version,
+      scriptCount: backup.scriptCount,
+      reason: backup.reason,
+      size: backup.size,
+      data: backup.data
+    };
+    const uploadSettings = Object.assign({}, globalSettings, {
+      syncFilename: "scriptvault-backup.json"
+    });
+    const result = await provider.upload(envelope, uploadSettings);
+    if (!result?.success) {
+      throw new Error(result?.error || "Cloud backup upload failed");
+    }
+  }
   var BackupScheduler = {
     /**
      * Initialize the backup scheduler. Call once on service worker start.
@@ -662,6 +688,11 @@ const BackupScheduler = (() => {
             "Backup Complete",
             `${reason.charAt(0).toUpperCase() + reason.slice(1)} backup created with ${scriptCount} scripts (${_formatBytes(sizeBytes)}).`
           );
+        }
+        if (settings.cloudBackupEnabled) {
+          _uploadBackupToCloud(backup).catch((cloudErr) => {
+            console.error("[BackupScheduler] cloud backup upload failed:", cloudErr);
+          });
         }
         return { success: true, backupId: backup.id };
       } catch (err) {
