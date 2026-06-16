@@ -6145,6 +6145,14 @@
             if (enabledCategories.has('publicApiPermissions')) {
                 trustBlock.publicApiOrigins = state.trustCenter.publicApiOrigins;
                 trustBlock.publicApiPermissions = state.trustCenter.publicApiPermissions;
+                const extIds = state.trustCenter.publicApiExtensionIds || [];
+                trustBlock.trustedExtensionCount = extIds.length;
+                const auditEntries = state.trustCenter.publicApiAudit || [];
+                const denials = auditEntries.filter(e => e?.result === 'untrusted_extension');
+                trustBlock.untrustedExtensionDenials = {
+                    count: denials.length,
+                    lastDeniedAt: denials.length > 0 ? denials[denials.length - 1]?.timestamp || null : null
+                };
             }
             if (enabledCategories.has('publicApiAudit')) {
                 trustBlock.publicApiAudit = state.trustCenter.publicApiAudit;
