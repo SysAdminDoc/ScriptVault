@@ -16979,9 +16979,10 @@ const ScriptAnalyzer = (() => {
   }
   function analyzeAST(code) {
     const parser = getAcorn();
+    const hasUseStrict = /^(['"])use strict\1/m.test(code);
     let ast;
     try {
-      ast = parser.parse(code, { ecmaVersion: 2022, sourceType: "script", allowHashBang: true, locations: true });
+      ast = parser.parse(code, { ecmaVersion: 2022, sourceType: "script", allowHashBang: true, locations: true, ...hasUseStrict ? { strict: true } : {} });
     } catch {
       ast = parser.parse(code, { ecmaVersion: 2022, sourceType: "module", allowHashBang: true, locations: true });
     }
