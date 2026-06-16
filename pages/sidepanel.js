@@ -373,6 +373,10 @@
   async function init() {
     await loadSettings();
     applyTheme();
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+      const layout = settings.theme || settings.layout || 'dark';
+      if (layout === 'auto') applyTheme();
+    });
     await refresh();
     setupEventListeners();
     setupTabListeners();
@@ -384,7 +388,11 @@
   }
 
   function applyTheme() {
-    document.documentElement.setAttribute('data-theme', settings.theme || settings.layout || 'dark');
+    const layout = settings.theme || settings.layout || 'dark';
+    const resolved = layout === 'auto'
+      ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+      : layout;
+    document.documentElement.setAttribute('data-theme', resolved);
   }
 
   async function refresh() {

@@ -618,8 +618,18 @@
             settings = { enabled: true };
         }
         // Apply theme from settings
-        const theme = settings.layout || 'dark';
+        const layout = settings.layout || 'dark';
+        const theme = layout === 'auto'
+            ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+            : layout;
         document.documentElement.setAttribute('data-theme', theme);
+        if (layout === 'auto') {
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+                if (settings.layout === 'auto') {
+                    document.documentElement.setAttribute('data-theme', e.matches ? 'dark' : 'light');
+                }
+            });
+        }
     }
 
     // Get current tab
