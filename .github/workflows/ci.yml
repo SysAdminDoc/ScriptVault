@@ -138,32 +138,32 @@ jobs:
 
       - name: Attest Chrome package
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/attest@281a49d4cbb0a72c9575a50d18f6deb515a11deb # v4
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4
         with:
           subject-path: ScriptVault-v${{ steps.package.outputs.version }}.zip
 
       - name: Attest SBOM
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/attest@281a49d4cbb0a72c9575a50d18f6deb515a11deb # v4
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4
         with:
           subject-path: ScriptVault-v${{ steps.package.outputs.version }}.zip
           sbom-path: release-artifacts/ScriptVault-v${{ steps.package.outputs.version }}.sbom.cyclonedx.json
 
       - name: Attest Firefox package
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/attest@281a49d4cbb0a72c9575a50d18f6deb515a11deb # v4
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4
         with:
           subject-path: firefox-artifacts/scriptvault-firefox-v${{ steps.package.outputs.version }}.zip
 
       - name: Attest Firefox source
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/attest@281a49d4cbb0a72c9575a50d18f6deb515a11deb # v4
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4
         with:
           subject-path: firefox-artifacts/scriptvault-firefox-source-v${{ steps.package.outputs.version }}.zip
 
       - name: Attest Edge package
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/attest@281a49d4cbb0a72c9575a50d18f6deb515a11deb # v4
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4
         with:
           subject-path: edge-artifacts/scriptvault-edge-v${{ steps.package.outputs.version }}.zip
 
