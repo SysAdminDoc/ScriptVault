@@ -72,6 +72,7 @@
     "release:check": "node scripts/check-release-artifacts.mjs",
     "release:check:public": "node scripts/check-release-artifacts.mjs --public",
     "release:reproducible-build:check": "node scripts/check-reproducible-build.mjs",
+    "release:asset-integrity": "node scripts/check-asset-integrity.mjs",
     "test:cov": "vitest run --coverage && node scripts/check-coverage-sources.mjs",
     "check": "npm run toolchain:check && npm run actions:pins:check && npm run optional-deps:check && npm run settings:schema:check && npm run monaco:package:check && node scripts/check-readability.mjs --check && npm run dashboard:modules:check && npm run whatsnew:check && tsc --noEmit && vitest run",
     "clean": "node --input-type=commonjs -e \"const fs=require('fs'); fs.rmSync('background.js',{force:true}); fs.rmSync('lib/monaco',{recursive:true,force:true});\"",
