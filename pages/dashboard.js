@@ -11452,9 +11452,49 @@
         showToast('Stats exported to CSV', 'success');
     }
 
+    function convertBookmarkletToUserscript(bookmarkletUrl) {
+        let body = bookmarkletUrl.replace(/^javascript:\s*/i, '');
+        try { body = decodeURIComponent(body); } catch {}
+        body = body.replace(/^\s*void\s*\(\s*0?\s*\)\s*;?\s*$/, '').trim();
+        if (!body) return null;
+        const name = 'Converted Bookmarklet';
+        return [
+            '// ==UserScript==',
+            `// @name        ${name}`,
+            '// @namespace   scriptvault-bookmarklet',
+            '// @version     1.0.0',
+            '// @description Converted from a browser bookmarklet',
+            '// @match       <all_urls>',
+            '// @run-at      document-end',
+            '// @grant       none',
+            '// ==/UserScript==',
+            '',
+            body,
+        ].join('\n');
+    }
+
     async function installFromUrl() {
         const url = elements.importUrlInput?.value?.trim();
         if (!url) return showToast('Enter URL', 'error');
+        if (/^javascript:/i.test(url)) {
+            const converted = convertBookmarkletToUserscript(url);
+            if (!converted) return showToast('Empty bookmarklet', 'error');
+            elements.importUrlInput.value = '';
+            try {
+                const response = await chrome.runtime.sendMessage({ action: 'createScript', code: converted });
+                if (response?.success) {
+                    await loadScripts();
+                    updateStats();
+                    openEditorForScript(response.scriptId);
+                    showToast('Bookmarklet converted — review and save', 'success');
+                } else {
+                    showToast(response?.error || 'Conversion failed', 'error');
+                }
+            } catch (e) {
+                showToast('Conversion failed', 'error');
+            }
+            return;
+        }
         try {
             showToast('Fetching…', 'info');
             const res = await chrome.runtime.sendMessage({ action: 'installFromUrl', url });
