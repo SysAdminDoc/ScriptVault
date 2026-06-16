@@ -480,8 +480,16 @@ async function init() {
   // Load and apply theme
   const settings = await chrome.runtime.sendMessage({ action: 'getSettings' });
   const themeSettings = settings?.settings || settings || {};
-  const theme = themeSettings.layout || 'dark';
+  const layoutPref = themeSettings.layout || 'dark';
+  const theme = layoutPref === 'auto'
+    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+    : layoutPref;
   document.documentElement.setAttribute('data-theme', theme);
+  if (layoutPref === 'auto') {
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+      document.documentElement.setAttribute('data-theme', e.matches ? 'dark' : 'light');
+    });
+  }
 
   const content = document.getElementById('content');
 

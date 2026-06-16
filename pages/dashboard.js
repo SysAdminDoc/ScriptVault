@@ -69,11 +69,19 @@
         minute: '2-digit'
     });
     const THEME_LABELS = {
+        auto: 'Auto',
         dark: 'Dark',
         light: 'Light',
         catppuccin: 'Catppuccin',
         oled: 'OLED'
     };
+
+    function resolveTheme(layout) {
+        if (layout === 'auto') {
+            return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+        return layout || 'dark';
+    }
     const SETTINGS_FILTER_LABELS = {
         all: 'all sections',
         core: 'core settings',
@@ -1747,6 +1755,7 @@
         elements.settingsContentScriptAPI = document.getElementById('settingsContentScriptAPI');
         elements.settingsSandboxMode = document.getElementById('settingsSandboxMode');
         elements.settingsModifyCSP = document.getElementById('settingsModifyCSP');
+        elements.settingsStatsUrlRetention = document.getElementById('settingsStatsUrlRetention');
         elements.settingsAllowHttpHeaders = document.getElementById('settingsAllowHttpHeaders');
         elements.settingsDefaultTabTypes = document.getElementById('settingsDefaultTabTypes');
         elements.settingsAllowLocalFiles = document.getElementById('settingsAllowLocalFiles');
@@ -2147,6 +2156,9 @@
         updateSortIndicators();
         renderScriptTable();
         applyTheme();
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+            if (state.settings.layout === 'auto') applyTheme();
+        });
         updateStats();
         toggleSyncProviderSettings();
         loadSyncProviderStatus();
@@ -3333,6 +3345,7 @@
         if (elements.settingsContentScriptAPI) elements.settingsContentScriptAPI.value = s.contentScriptAPI || 'userscripts';
         if (elements.settingsSandboxMode) elements.settingsSandboxMode.value = s.sandboxMode || 'default';
         if (elements.settingsModifyCSP) elements.settingsModifyCSP.value = s.modifyCSP || 'auto';
+        if (elements.settingsStatsUrlRetention) elements.settingsStatsUrlRetention.value = s.statsUrlRetention || 'full';
         if (elements.settingsAllowHttpHeaders) elements.settingsAllowHttpHeaders.value = s.allowHttpHeaders || 'yes';
         if (elements.settingsDefaultTabTypes) elements.settingsDefaultTabTypes.value = s.defaultTabTypes || 'all';
         if (elements.settingsAllowLocalFiles) elements.settingsAllowLocalFiles.value = s.allowLocalFiles || 'all';
@@ -3365,7 +3378,7 @@
         if (elements.settingsTopLevelAwait) elements.settingsTopLevelAwait.value = s.topLevelAwait || 'default';
         
         // Apply theme
-        document.documentElement.setAttribute('data-theme', s.layout || 'dark');
+        document.documentElement.setAttribute('data-theme', resolveTheme(s.layout));
         if (elements.btnCycleTheme) {
             const labels = { dark: 'Dark', light: 'Light', catppuccin: 'Catppuccin', oled: 'OLED' };
             elements.btnCycleTheme.title = `Theme: ${labels[s.layout] || 'Dark'}`;
@@ -3435,6 +3448,7 @@
             contentScriptAPI: elements.settingsContentScriptAPI,
             sandboxMode: elements.settingsSandboxMode,
             modifyCSP: elements.settingsModifyCSP,
+            statsUrlRetention: elements.settingsStatsUrlRetention,
             allowHttpHeaders: elements.settingsAllowHttpHeaders,
             defaultTabTypes: elements.settingsDefaultTabTypes,
             allowLocalFiles: elements.settingsAllowLocalFiles,
@@ -3750,6 +3764,8 @@
                 return validateSelectOptionValue('sandboxMode', value, 'sandbox mode');
             case 'modifyCSP':
                 return validateSelectOptionValue('modifyCSP', value, 'CSP modification mode');
+            case 'statsUrlRetention':
+                return validateSelectOptionValue('statsUrlRetention', value, 'execution stats URL retention');
             case 'allowHttpHeaders':
                 return validateSelectOptionValue('allowHttpHeaders', value, 'HTTP header modification mode');
             case 'defaultTabTypes':
@@ -3902,7 +3918,7 @@
                     case 'lintOnType': if (!state.editor?.isMonaco) { state.editor.setOption('lint', value ? { getAnnotations: window.lintUserscript, delay: 300, tooltips: true, highlightLines: true } : false); } break;
                 }
             }
-            if (key === 'layout') document.documentElement.setAttribute('data-theme', value);
+            if (key === 'layout') document.documentElement.setAttribute('data-theme', resolveTheme(value));
             if (key === 'configMode') applyConfigMode();
             if (key === 'customCss') applySettingsToUI();
             if (key === 'layout') updateHelpOverview();
@@ -4727,7 +4743,7 @@
     };
 
     function applyTheme() {
-        const layout = state.settings.layout || 'dark';
+        const layout = resolveTheme(state.settings.layout);
         document.documentElement.setAttribute('data-theme', layout);
         // Auto-sync editor theme if user hasn't explicitly chosen one
         if (state.editor && (!state.settings.editorTheme || state.settings.editorTheme === 'default')) {
@@ -9984,7 +10000,7 @@
                     <span class="perf-label">Total Time:</span><span class="perf-value">${numberFormatter.format(Math.round(s.totalTime))}ms</span>
                     <span class="perf-label">Errors:</span><span class="perf-value">${numberFormatter.format(s.errors)}${s.lastError ? ` (${escapeHtml(s.lastError)})` : ''}</span>
                     <span class="perf-label">Last Run:</span><span class="perf-value">${escapeHtml(lastRun)}</span>
-                    ${s.lastUrl ? `<span class="perf-label">Last URL:</span><span class="perf-value">${escapeHtml(s.lastUrl)}</span>` : ''}
+                    ${(() => { const u = retainStatsUrl(s.lastUrl, state.settings && state.settings.statsUrlRetention); return u ? `<span class="perf-label">Last URL:</span><span class="perf-value">${escapeHtml(u)}</span>` : ''; })()}
                 `;
                 if (resetBtn) {
                     resetBtn.style.display = '';
@@ -11383,6 +11399,18 @@
         return '"' + s.replace(/"/g, '""') + '"';
     }
 
+    // Apply the execution-stats URL retention setting to a stored lastUrl when
+    // rendering or exporting. Mirrors the write-time enforcement in the service
+    // worker so existing full URLs are scrubbed at display/export time too.
+    function retainStatsUrl(url, mode) {
+        if (!url) return '';
+        if (mode === 'none') return '';
+        if (mode === 'origin') {
+            try { return new URL(url).origin; } catch (_) { return ''; }
+        }
+        return url;
+    }
+
     function buildStatsCSV(scripts) {
         const rows = [['Name', 'Version', 'Enabled', 'Runs', 'Avg Time (ms)', 'Total Time (ms)', 'Errors', 'Last Run', 'Last URL', 'Size (bytes)', 'Lines', 'Tags', 'Matches']];
         for (const s of scripts || []) {
@@ -11397,7 +11425,7 @@
                 Math.round(st.totalTime || 0),
                 st.errors || 0,
                 st.lastRun ? new Date(st.lastRun).toISOString() : '',
-                st.lastUrl || '',
+                retainStatsUrl(st.lastUrl, state.settings && state.settings.statsUrlRetention),
                 (s.code || '').length,
                 (s.code || '').split('\n').length,
                 (m.tag || []).join('; '),
@@ -12885,8 +12913,8 @@
         });
 
         // Theme cycle button
-        const themes = ['dark', 'light', 'catppuccin', 'oled'];
-        const themeLabels = { dark: 'Dark', light: 'Light', catppuccin: 'Catppuccin', oled: 'OLED' };
+        const themes = ['auto', 'dark', 'light', 'catppuccin', 'oled'];
+        const themeLabels = { auto: 'Auto', dark: 'Dark', light: 'Light', catppuccin: 'Catppuccin', oled: 'OLED' };
         elements.btnCycleTheme?.addEventListener('click', () => {
             const current = state.settings.layout || 'dark';
             const idx = themes.indexOf(current);
@@ -13551,6 +13579,7 @@
             settingsContentScriptAPI: ['contentScriptAPI', 'value'],
             settingsSandboxMode: ['sandboxMode', 'value'],
             settingsModifyCSP: ['modifyCSP', 'value'],
+            settingsStatsUrlRetention: ['statsUrlRetention', 'value'],
             settingsAllowHttpHeaders: ['allowHttpHeaders', 'value'],
             settingsDefaultTabTypes: ['defaultTabTypes', 'value'],
             settingsAllowLocalFiles: ['allowLocalFiles', 'value'],

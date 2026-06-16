@@ -6561,6 +6561,7 @@
                     <div class="setting-row">
                         <span class="label-text">Layout:</span>
                         <select class="select-field" id="settingsLayout">
+                            <option value="auto">Auto (system)</option>
                             <option value="dark" selected>Dark</option>
                             <option value="light">Light</option>
                             <option value="catppuccin">Catppuccin Mocha</option>
@@ -7045,6 +7046,16 @@
                         </select>
                         <span class="setting-error" id="settingsModifyCSPError" hidden></span>
                         <span class="help-icon" title="Allow scripts to bypass CSP restrictions">?</span>
+                    </div>
+                    <div class="setting-row">
+                        <span class="label-text">Execution stats URL retention:</span>
+                        <select class="select-field" id="settingsStatsUrlRetention" aria-describedby="settingsStatsUrlRetentionError">
+                            <option value="full" selected>Full URL</option>
+                            <option value="origin">Origin only</option>
+                            <option value="none">Do not store</option>
+                        </select>
+                        <span class="setting-error" id="settingsStatsUrlRetentionError" hidden></span>
+                        <span class="help-icon" title="How much of the last execution URL to keep in per-script stats">?</span>
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Allow HTTP headers to be modified by scripts:</span>
