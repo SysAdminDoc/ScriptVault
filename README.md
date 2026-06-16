@@ -566,6 +566,31 @@ ScriptVault/
 
 ---
 
+## Migrating from Other Managers
+
+### From Violentmonkey
+
+Violentmonkey is MV2-only and disabled on Chrome 139+. To migrate:
+
+1. Open Violentmonkey &rarr; Settings &rarr; **Export to zip**
+2. Open ScriptVault dashboard &rarr; Utilities tab
+3. Drop the exported `.zip` file onto the dashboard (or use Import &rarr; File)
+4. Review the imported scripts in the quarantine/review flow
+
+ScriptVault reads the VM JSON export format (`scripts[].code`, `scripts[].config.enabled`, `scripts[].props`). Enabled/disabled state is preserved. Scripts with empty code are skipped. `@grant`, `@match`, and other metadata are parsed from the script header.
+
+### From Tampermonkey
+
+1. Open Tampermonkey &rarr; Utilities &rarr; **Export** (ZIP or `.txt` backup)
+2. Drop the exported file onto the ScriptVault dashboard
+
+### From Greasemonkey
+
+1. Export your GM4 backup from Greasemonkey settings
+2. Import through ScriptVault dashboard &rarr; Utilities &rarr; Import
+
+---
+
 ## Contributing
 
 Contributions are welcome. Feel free to open a Pull Request.
