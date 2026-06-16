@@ -79,6 +79,20 @@
         setupEventListeners();
         updateEnabledState();
         updateEmptyStateHint();
+        handlePopupOpenReason();
+    }
+
+    async function handlePopupOpenReason() {
+        try {
+            if (!chrome.storage.session?.get) return;
+            const data = await chrome.storage.session.get('sv_popup_open_reason');
+            const reason = data?.sv_popup_open_reason;
+            if (!reason) return;
+            await chrome.storage.session.remove('sv_popup_open_reason');
+            if (reason === 'pending-updates' && elements.pendingUpdatesBadge && !elements.pendingUpdatesBadge.hidden) {
+                elements.pendingUpdatesBadge.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        } catch (_) { /* session storage unavailable or popup closed early */ }
     }
 
     function setPopupListLoading(isLoading) {
