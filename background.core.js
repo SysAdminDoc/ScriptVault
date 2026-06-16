@@ -2301,6 +2301,9 @@ const UpdateSystem = {
           message
         });
       } catch (_e) { /* notifications may be disabled; non-fatal */ }
+      if (reviewCount > 0) {
+        tryOpenPopup('pending-updates').catch(() => {});
+      }
     }
 
     await SettingsManager.set('lastUpdateCheck', Date.now());
@@ -9822,6 +9825,20 @@ function _debouncedStatsSave() {
 
 let _backgroundTaskRunning = false;
 let _backgroundTaskToken = 0;
+
+async function tryOpenPopup(reason) {
+  if (typeof chrome.action?.openPopup !== 'function') return;
+  try {
+    if (chrome.storage.session?.set) {
+      await chrome.storage.session.set({ sv_popup_open_reason: reason });
+    }
+    await chrome.action.openPopup();
+  } catch (_) {
+    // Chrome requires a user gesture; Firefox 150+ allows this from alarms.
+    // Swallow the error — the notification already informed the user.
+  }
+}
+
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   // Cold-start: an alarm can wake the SW before init() finishes. Wait for it
   // so handlers below see a fully-initialised ScriptStorage / SettingsManager.
