@@ -584,6 +584,15 @@ ScriptVault reads the VM JSON export format (`scripts[].code`, `scripts[].config
 1. Open Tampermonkey &rarr; Utilities &rarr; **Export** (ZIP or `.txt` backup)
 2. Drop the exported file onto the ScriptVault dashboard
 
+### From ScriptCat
+
+ScriptCat exports in Tampermonkey-compatible format:
+
+1. Open ScriptCat &rarr; Settings &rarr; **Export**
+2. Drop the exported file onto the ScriptVault dashboard
+
+Scripts, metadata, and `@crontab` schedules are preserved. ScriptCat `@background` scripts import as dormant until ScriptVault's background runner is enabled.
+
 ### From Greasemonkey
 
 1. Export your GM4 backup from Greasemonkey settings
