@@ -9858,6 +9858,11 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     return;
   }
 
+  if (alarm.name.startsWith('sv_task_safety_')) {
+    _backgroundTaskRunning = false;
+    return;
+  }
+
   // Handle @crontab script execution alarms (independent of the update/sync mutex)
   if (alarm.name.startsWith('crontab_')) {
     const scriptId = alarm.name.slice('crontab_'.length);
@@ -9890,9 +9895,8 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   // the safety timer has already released the mutex for the next task — if so,
   // the stale finally block must NOT clobber the new task's `true` flag.
   const myToken = ++_backgroundTaskToken;
-  const safetyTimer = setTimeout(() => {
-    if (_backgroundTaskToken === myToken) _backgroundTaskRunning = false;
-  }, 300000);
+  const safetyAlarmName = `sv_task_safety_${myToken}`;
+  chrome.alarms.create(safetyAlarmName, { delayInMinutes: 5 });
   try {
     if (alarm.name === 'autoUpdate') {
       await UpdateSystem.autoUpdate();
@@ -9904,7 +9908,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   } catch (e) {
     console.error('[ScriptVault] Alarm handler error:', e);
   } finally {
-    clearTimeout(safetyTimer);
+    chrome.alarms.clear(safetyAlarmName).catch(() => {});
     if (_backgroundTaskToken === myToken) _backgroundTaskRunning = false;
   }
 });
