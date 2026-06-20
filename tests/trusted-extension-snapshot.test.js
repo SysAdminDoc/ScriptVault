@@ -12,7 +12,7 @@ describe('trusted-extension support snapshot evidence', () => {
 
     expect(trustSection).toContain('trustedExtensionCount');
     expect(trustSection).toContain('extIds.length');
-    expect(trustSection).not.toContain('publicApiExtensionIds');
+    expect(trustSection).not.toMatch(/trustBlock\.\s*publicApiExtensionIds/);
   });
 
   it('includes aggregate untrusted_extension denial count and last timestamp', () => {

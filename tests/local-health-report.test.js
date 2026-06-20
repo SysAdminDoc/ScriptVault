@@ -118,6 +118,10 @@ describe('local health report background action', () => {
     expect(resolutionBlock[0]).toContain("const retryReadyEntries = entries.filter(entry => entry.status === 'retry-ready');");
     expect(resolutionBlock[0]).toContain('if (retryReadyEntries.length === 0) return null;');
     expect(resolutionBlock[0]).toContain('priorRetryReadyWrites');
+    expect(resolutionBlock[0]).toContain('const timestamp = Number.isFinite(Number(record.timestamp)) ? Math.max(0, Math.floor(Number(record.timestamp))) : null;');
+    expect(resolutionBlock[0]).toContain('if (!timestamp || priorRetryReadyWrites <= 0) return null;');
+    expect(resolutionBlock[0]).toContain('let latestRetryTimestamp = retryReadyEntries[0]?.timestamp || null;');
+    expect(resolutionBlock[0]).toContain('if (latestRetryTimestamp != null && latestRetryTimestamp > timestamp) latestRetryTimestamp = timestamp;');
 
     expect(historyEntriesBlock[0]).toContain('includeStale = options.includeStale === true');
     expect(historyEntriesBlock[0]).toContain('.filter(entry => includeStale || !_isGmValueSyncRetryHistoryEntryStale(entry, now))');
@@ -149,9 +153,14 @@ describe('local health report background action', () => {
   it('pins retry-resolution history storage entries to aggregate evidence', () => {
     const entryBlock = backgroundCoreTs.match(/function sanitizeGmValueSyncRetryResolutionHistoryEntry\(entry\) \{[\s\S]*?function sanitizeGmValueSyncRetryResolutionHistoryEntries/);
     expect(entryBlock).toBeTruthy();
+    expect(entryBlock[0]).toContain('const priorRetryReadyEntries = _lastSyncResultCount(entry.priorRetryReadyEntries);');
+    expect(entryBlock[0]).toContain('const priorRetryReadyWrites = _lastSyncResultCount(entry.priorRetryReadyWrites);');
+    expect(entryBlock[0]).toContain('if (priorRetryReadyEntries <= 0 || priorRetryReadyWrites <= 0) return null;');
+    expect(entryBlock[0]).toContain('let latestRetryTimestamp = Number.isFinite(Number(entry.latestRetryTimestamp)) ? Math.max(0, Math.floor(Number(entry.latestRetryTimestamp))) : null;');
+    expect(entryBlock[0]).toContain('if (latestRetryTimestamp != null && latestRetryTimestamp > timestamp) latestRetryTimestamp = timestamp;');
     const returnBlock = entryBlock[0].match(/return \{\n([\s\S]*?)\n\s*\};/);
     expect(returnBlock).toBeTruthy();
-    const storedKeys = [...returnBlock[1].matchAll(/^\s*([A-Za-z0-9_]+)(?::|,)/gm)].map((match) => match[1]);
+    const storedKeys = [...returnBlock[1].matchAll(/^\s*([A-Za-z0-9_]+)(?::|,|$)/gm)].map((match) => match[1]);
     expect(storedKeys).toEqual([
       'schema',
       'timestamp',
@@ -161,6 +170,18 @@ describe('local health report background action', () => {
       'latestRetryTimestamp'
     ]);
     expect(returnBlock[0]).not.toMatch(/privacy|includesValues|scriptId|scriptName|valueKeyName|providerAccount|credential|rawKeyMetadata|error:/);
+  });
+
+  it('pins retry-resolution local-health latest retry timestamp gating', () => {
+    const healthBlock = backgroundCoreTs.match(/function sanitizeGmValueSyncRetryResolutionForHealth\(record\) \{[\s\S]*?async function readGmValueSyncRetryResolutionForHealth/);
+    expect(healthBlock).toBeTruthy();
+    expect(healthBlock[0]).toContain('const priorRetryReadyEntries = _lastSyncResultCount(record.priorRetryReadyEntries);');
+    expect(healthBlock[0]).toContain('const priorRetryReadyWrites = _lastSyncResultCount(record.priorRetryReadyWrites);');
+    expect(healthBlock[0]).toContain('if (priorRetryReadyEntries <= 0 || priorRetryReadyWrites <= 0) return null;');
+    expect(healthBlock[0]).toContain('let latestRetryTimestamp = Number.isFinite(Number(record.latestRetryTimestamp)) ? Math.max(0, Math.floor(Number(record.latestRetryTimestamp))) : null;');
+    expect(healthBlock[0]).toContain('if (latestRetryTimestamp != null && latestRetryTimestamp > timestamp) latestRetryTimestamp = timestamp;');
+    expect(healthBlock[0]).toContain('latestRetryTimestamp,');
+    expect(healthBlock[0]).not.toMatch(/scriptId|scriptName|valueKeyName|providerAccount|credential|rawKeyMetadata|error:/);
   });
 
   it('pins retry-resolution stale-history evidence in local health output', () => {

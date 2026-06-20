@@ -27,7 +27,7 @@ describe('cloud backup schedule integration', () => {
     const fnEnd = backupSchedulerJs.indexOf('\n  }', fnStart + 10) + 4;
     const fnBody = backupSchedulerJs.slice(fnStart, fnEnd);
     expect(fnBody).toContain('CloudSyncProviders');
-    expect(fnBody).toContain("providerName === 'none'");
+    expect(fnBody).toMatch(/providerName === ['"]none['"]/)
   });
 
   it('calls cloud upload after successful backup when enabled', () => {
