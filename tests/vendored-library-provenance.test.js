@@ -19,7 +19,7 @@ describe('Firefox vendored library provenance', () => {
     const docs = readFileSync(resolve(ROOT, 'docs/amo-vendored-libraries.md'), 'utf8');
 
     expect(docs).toContain('lib/acorn.min.js');
-    expect(docs).toContain('acorn@8.16.0');
+    expect(docs).toContain('acorn@8.17.0');
     expect(docs).toContain('lib/diff.min.js');
     expect(docs).toContain('diff@9.0.0');
     expect(docs).toContain('npm run vendored:provenance:check');

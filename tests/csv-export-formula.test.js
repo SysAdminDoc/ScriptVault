@@ -25,6 +25,8 @@ function extractFunctionSource(source, name) {
 
 function createStatsCSVHelpers() {
   const fn = new Function(`
+    const state = { settings: { statsUrlRetention: 'full' } };
+    ${extractFunctionSource(dashboardJs, 'retainStatsUrl')}
     ${extractFunctionSource(dashboardJs, 'formatStatsCSVCell')}
     ${extractFunctionSource(dashboardJs, 'buildStatsCSV')}
     return { formatStatsCSVCell, buildStatsCSV };
