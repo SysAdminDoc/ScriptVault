@@ -7722,7 +7722,7 @@
             <td class="center"><button type="button" class="updated-link" data-action="checkUpdate" data-id="${scriptIdAttr}" title="Check for updates" aria-label="Check for updates for ${escapeHtml(name)}">${updated}</button></td>
             <td class="center">${statsHtml}</td>
             <td class="center">
-                <div class="action-icons">
+                <div class="action-icons" role="toolbar" aria-label="${escapeHtml(name)} actions">
                     <button type="button" class="action-icon ${script.settings?.pinned ? 'pinned' : ''}" title="${script.settings?.pinned ? 'Unpin' : 'Pin to top'}" aria-label="${script.settings?.pinned ? 'Unpin' : 'Pin'} ${escapeHtml(name)}" data-action="pin" data-id="${scriptIdAttr}">
                         <svg viewBox="0 0 24 24" fill="${script.settings?.pinned ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M12 2L9.1 8.6 2 9.2l5.5 4.8L5.8 21 12 17.3 18.2 21l-1.7-7 5.5-4.8-7.1-.6z"/></svg>
                     </button>
@@ -7859,6 +7859,27 @@
                 await reorderScripts(draggedId, targetId);
             }
         });
+
+        const toolbar = tr.querySelector('.action-icons[role="toolbar"]');
+        if (toolbar) {
+            const btns = toolbar.querySelectorAll('button');
+            btns.forEach((btn, i) => { btn.setAttribute('tabindex', i === 0 ? '0' : '-1'); });
+            toolbar.addEventListener('keydown', (e) => {
+                if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft' && e.key !== 'Home' && e.key !== 'End') return;
+                const items = [...toolbar.querySelectorAll('button')];
+                const cur = items.indexOf(document.activeElement);
+                if (cur === -1) return;
+                e.preventDefault();
+                let next;
+                if (e.key === 'ArrowRight') next = (cur + 1) % items.length;
+                else if (e.key === 'ArrowLeft') next = (cur - 1 + items.length) % items.length;
+                else if (e.key === 'Home') next = 0;
+                else next = items.length - 1;
+                items[cur].setAttribute('tabindex', '-1');
+                items[next].setAttribute('tabindex', '0');
+                items[next].focus();
+            });
+        }
 
         return tr;
     }

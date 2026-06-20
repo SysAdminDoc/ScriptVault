@@ -901,3 +901,23 @@ describe("dashboard view settings controller", () => {
     expect(document.querySelector('.density-btn[data-density="comfortable"]')?.getAttribute("aria-pressed")).toBe("true");
   });
 });
+
+describe("action-icons toolbar keyboard navigation", () => {
+  test("action-icons containers in dashboard.js use role=toolbar with aria-label", () => {
+    expect(dashboardJs).toContain('role="toolbar"');
+    expect(dashboardJs).toContain('aria-label="');
+    const toolbarMatches = dashboardJs.match(/role="toolbar"/g) || [];
+    expect(toolbarMatches.length).toBeGreaterThan(0);
+  });
+
+  test("roving tabindex is initialized on toolbar buttons", () => {
+    expect(dashboardJs).toContain("tabindex', i === 0 ? '0' : '-1'");
+  });
+
+  test("ArrowRight/ArrowLeft/Home/End keyboard handlers are wired on toolbars", () => {
+    expect(dashboardJs).toContain("'ArrowRight'");
+    expect(dashboardJs).toContain("'ArrowLeft'");
+    expect(dashboardJs).toContain("'Home'");
+    expect(dashboardJs).toContain("'End'");
+  });
+});
