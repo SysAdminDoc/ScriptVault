@@ -171,7 +171,7 @@ Two additional zero-config flows ship as separate modules: **Easy Cloud** for on
 - **Monaco Editor** &mdash; Same editor that powers VS Code, loaded in a sandboxed iframe
 - **Tabbed editing** &mdash; Open multiple scripts simultaneously with browser-style tabs (middle-click to close)
 - **Unsaved indicators** &mdash; Visual dot on tabs with pending changes
-- **4 editor themes** &mdash; Dark, Light, Catppuccin Mocha, OLED
+- **5 editor themes** &mdash; Auto (system), Dark, Light, Catppuccin Mocha, OLED
 - **Status bar** &mdash; Line count and cursor position display
 - **IntelliSense** &mdash; Autocomplete for GM API functions and `@metadata` directives
 - Code folding, bracket matching, bracket pair colorization, auto-close
@@ -294,7 +294,7 @@ Deep dashboard content is still being migrated to DOM translation coverage.
 - **Storage Quota Manager** &mdash; Auto-cleanup when approaching Chrome's 10MB limit
 
 #### Quality & Testing
-- **1100+ Vitest Tests** &mdash; Coverage for parser, utilities, storage, update flows, UI modules, accessibility, and security boundaries
+- **1700+ Vitest Tests** &mdash; Coverage for parser, utilities, storage, update flows, UI modules, accessibility, and security boundaries
 - **JSDoc Type Annotations** &mdash; @ts-check compatible on critical functions
 - **esbuild Build System** &mdash; Modern bundler with minification and source maps
 - **Accessibility (WCAG 2.1 AA)** &mdash; ARIA labels, focus trapping, high contrast, reduced motion
@@ -509,7 +509,7 @@ that script in the dashboard editor.
 | Performance Budgets | Yes | No | No |
 | Storage Quota Monitor | Yes | No | No |
 | Bulk Operations w/ Progress | Yes | Yes | No |
-| 4 UI Themes | Yes | No | Yes |
+| 5 UI Themes | Yes | No | Yes |
 | Open Source | MIT | No | Yes |
 | Free | Yes | Freemium | Yes |
 
