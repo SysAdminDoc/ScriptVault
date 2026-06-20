@@ -9,6 +9,7 @@ const defaultProjectRoot = resolve(scriptDir, '..');
 const REQUIRED_FILES = [
   'package.json',
   'esbuild.config.mjs',
+  'build.sh',
   'build-firefox.sh',
   'pages/editor-sandbox.html',
   'docs/monaco-esm-migration-plan.md',
@@ -60,12 +61,12 @@ function checkPackageJson(files, failures) {
     );
   }
 
-  if (packageJson.scripts?.['build:monaco:esm'] !== 'node esbuild.config.mjs --monaco-esm-only') {
+  if (!packageJson.scripts?.['build:monaco']?.includes('--monaco-esm-only')) {
     addFailure(
       failures,
       path,
-      'package.json must expose npm run build:monaco:esm for the local ESM prototype',
-      '"build:monaco:esm": "node esbuild.config.mjs --monaco-esm-only"',
+      'package.json build:monaco must build the Monaco ESM bundle',
+      '"build:monaco": "node esbuild.config.mjs --monaco-esm-only"',
     );
   }
 
@@ -142,6 +143,22 @@ function checkSandbox(files, failures) {
   }
 }
 
+function checkChromeBuild(files, failures) {
+  const path = 'build.sh';
+  const text = fileText(files, path, failures);
+  if (!text) return;
+
+  if (/^\s*lib\s*$/m.test(text)) {
+    addFailure(failures, path, 'CWS build must not copy the entire lib/ directory (ships dead Monaco AMD bundle); list lib subdirectories explicitly');
+  }
+  if (hasNeedle(text, 'lib/monaco/') || hasNeedle(text, "lib/monaco\n")) {
+    addFailure(failures, path, 'CWS build must not package the deprecated Monaco AMD bundle (lib/monaco/)');
+  }
+  if (!hasNeedle(text, 'lib/monaco-esm')) {
+    addFailure(failures, path, 'CWS build must package lib/monaco-esm');
+  }
+}
+
 function checkFirefoxBuild(files, failures) {
   const path = 'build-firefox.sh';
   const text = fileText(files, path, failures);
@@ -175,7 +192,7 @@ function checkPlan(files, failures) {
     'Do not load Monaco from a CDN',
     'Firefox remains textarea-first',
     'npm run monaco:package:check',
-    'npm run build:monaco:esm',
+    'npm run build:monaco',
     'npm run monaco:esm:check',
     'docs/audit/monaco-esm-prototype-2026-06-06.json',
     'maxTotalBytes: 26000000',
@@ -194,6 +211,7 @@ export function checkMonacoPackageContract(files) {
   checkPackageJson(files, failures);
   checkEsbuild(files, failures);
   checkSandbox(files, failures);
+  checkChromeBuild(files, failures);
   checkFirefoxBuild(files, failures);
   checkPlan(files, failures);
   return { checkedFiles: REQUIRED_FILES.length, failures };

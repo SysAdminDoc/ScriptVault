@@ -8,7 +8,6 @@
  * Usage:
  *   node esbuild.config.mjs            # full build (background + Monaco ESM)
  *   node esbuild.config.mjs --bg-only  # background.js only
- *   node esbuild.config.mjs --monaco-only  # build Monaco ESM only
  *   node esbuild.config.mjs --monaco-esm-only  # build Monaco ESM only
  *   node esbuild.config.mjs --watch    # rebuild background.js on changes
  *   node esbuild.config.mjs --prod     # minified production build
@@ -24,8 +23,7 @@ const ROOT = resolve(import.meta.dirname || ".");
 const args = process.argv.slice(2);
 
 const bgOnly = args.includes("--bg-only");
-const monacoOnly = args.includes("--monaco-only");
-const monacoEsmOnly = args.includes("--monaco-esm-only");
+const monacoEsmOnly = args.includes("--monaco-esm-only") || args.includes("--monaco-only");
 const watchMode = args.includes("--watch");
 const production = args.includes("--prod");
 const typeCheck = args.includes("--typecheck");
@@ -269,9 +267,7 @@ async function main() {
     return;
   }
 
-  if (!monacoOnly) {
-    await buildBackground();
-  }
+  await buildBackground();
 
   if (!bgOnly) {
     await buildMonacoEsm();
