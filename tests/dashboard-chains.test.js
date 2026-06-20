@@ -1,0 +1,101 @@
+import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+const chainsCode = readFileSync(resolve(process.cwd(), 'pages/dashboard-chains.js'), 'utf8');
+
+describe('ScriptChains module', () => {
+  let ScriptChains;
+
+  beforeEach(() => {
+    globalThis.chrome = {
+      storage: {
+        local: {
+          get: vi.fn((keys, cb) => {
+            if (cb) cb({});
+            return Promise.resolve({});
+          }),
+          set: vi.fn((data, cb) => {
+            if (cb) cb();
+            return Promise.resolve();
+          }),
+        },
+      },
+      runtime: {
+        sendMessage: vi.fn(() => Promise.resolve({ success: true })),
+      },
+    };
+    globalThis.ScriptVaultDashboardUI = { toast: vi.fn() };
+    ScriptChains = new Function(chainsCode + '\nreturn ScriptChains;')();
+  });
+
+  it('createChain normalizes step delay to 0..10000', async () => {
+    const id = await ScriptChains.createChain('Test', [
+      { scriptId: 'a', delay: -100 },
+      { scriptId: 'b', delay: 99999 },
+      { scriptId: 'c', delay: 500 },
+    ]);
+    expect(id).toBeTruthy();
+    const chains = ScriptChains.getChains();
+    const chain = chains[id];
+    expect(chain.steps[0].delay).toBe(0);
+    expect(chain.steps[1].delay).toBe(10000);
+    expect(chain.steps[2].delay).toBe(500);
+  });
+
+  it('createChain defaults step condition to always', async () => {
+    const id = await ScriptChains.createChain('Default', [
+      { scriptId: 'x' },
+    ]);
+    const chains = ScriptChains.getChains();
+    expect(chains[id].steps[0].condition).toBe('always');
+  });
+
+  it('createChain uses fallback name when none provided', async () => {
+    const id = await ScriptChains.createChain('', []);
+    const chains = ScriptChains.getChains();
+    expect(chains[id].name).toBe('New Chain');
+  });
+
+  it('deleteChain refuses to delete builtin chains', async () => {
+    const id = await ScriptChains.createChain('Builtin Test', []);
+    const chains = ScriptChains.getChains();
+    chains[id].builtin = true;
+    Object.assign(ScriptChains.getChains(), chains);
+
+    await ScriptChains.deleteChain(id);
+    expect(ScriptChains.getChains()[id]).toBeDefined();
+  });
+
+  it('deleteChain removes non-builtin chains', async () => {
+    const id = await ScriptChains.createChain('Removable', []);
+    expect(ScriptChains.getChains()[id]).toBeDefined();
+    await ScriptChains.deleteChain(id);
+    expect(ScriptChains.getChains()[id]).toBeUndefined();
+  });
+
+  it('executeChain returns error for missing chain', async () => {
+    const result = await ScriptChains.executeChain('nonexistent');
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('not found');
+  });
+
+  it('executeChain prevents concurrent runs of the same chain', async () => {
+    const id = await ScriptChains.createChain('Concurrent', [
+      { scriptId: 'slow', delay: 100 },
+    ]);
+
+    const first = ScriptChains.executeChain(id);
+    const second = await ScriptChains.executeChain(id);
+    expect(second.success).toBe(false);
+    expect(second.alreadyRunning).toBe(true);
+    await first;
+  });
+
+  it('getChains returns a shallow copy', async () => {
+    await ScriptChains.createChain('Copy Test', []);
+    const a = ScriptChains.getChains();
+    const b = ScriptChains.getChains();
+    expect(a).not.toBe(b);
+  });
+});
