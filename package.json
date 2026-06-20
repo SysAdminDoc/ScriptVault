@@ -33,6 +33,7 @@
     "smoke:firefox": "node scripts/smoke-firefox-sideload.mjs",
     "smoke:large-library": "node scripts/smoke-large-library.mjs",
     "smoke:large-library:check": "node scripts/smoke-large-library.mjs --check",
+    "screenshots": "node scripts/capture-store-screenshots.mjs",
     "cws:check": "node scripts/check-cws-publish-tooling.mjs",
     "cws:remote-code:check": "node scripts/check-cws-remote-code.mjs",
     "ts-source:check": "node scripts/check-ts-source-drift.mjs",
