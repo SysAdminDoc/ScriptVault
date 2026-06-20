@@ -112,7 +112,7 @@ const CSPReporter = (() => {
   font-size: 1rem;
   font-weight: 600;
   color: var(--text-primary, #e0e0e0);
-  margin-right: auto;
+  margin-inline-end: auto;
 }
 .sv-csp-search {
   padding: 6px 10px;
@@ -205,7 +205,7 @@ const CSPReporter = (() => {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   padding: 10px 12px;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
   user-select: none;
   white-space: nowrap;
@@ -219,7 +219,7 @@ const CSPReporter = (() => {
   color: var(--accent-green, #4ade80);
 }
 .sv-csp-table th .sort-arrow {
-  margin-left: 4px;
+  margin-inline-start: 4px;
   font-size: 0.625rem;
 }
 .sv-csp-table td {
@@ -319,7 +319,7 @@ const CSPReporter = (() => {
   color: inherit;
   cursor: pointer;
   font: inherit;
-  text-align: left;
+  text-align: start;
   user-select: none;
 }
 .sv-csp-bypass-header h4 {

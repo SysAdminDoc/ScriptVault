@@ -50,7 +50,7 @@ const AdvancedLinter = (() => {
   font-size: 0.9375rem;
   font-weight: 600;
   color: var(--text-primary, #e0e0e0);
-  margin-right: auto;
+  margin-inline-end: auto;
 }
 .sv-lint-badge {
   display: inline-flex;

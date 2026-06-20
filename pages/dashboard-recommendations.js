@@ -51,7 +51,7 @@ const Recommendations = (() => {
   font-size: 1rem;
   font-weight: 600;
   color: var(--text-primary, #e0e0e0);
-  margin-right: auto;
+  margin-inline-end: auto;
 }
 .sv-rec-badge {
   display: inline-flex;
@@ -225,7 +225,7 @@ const Recommendations = (() => {
   border-top-color: var(--accent-green, #4ade80);
   border-radius: 50%;
   animation: sv-rec-spin 0.8s linear infinite;
-  margin-right: 10px;
+  margin-inline-end: 10px;
 }
 @keyframes sv-rec-spin {
   to { transform: rotate(360deg); }
@@ -237,7 +237,7 @@ const Recommendations = (() => {
   font-size: 0.625rem;
   background: var(--bg-input, #333);
   color: var(--text-secondary, #a0a0a0);
-  margin-right: 4px;
+  margin-inline-end: 4px;
 }
 `;
 

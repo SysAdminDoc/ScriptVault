@@ -431,7 +431,7 @@ const GistIntegration = (() => {
     width: 18px;
     height: 18px;
     vertical-align: middle;
-    margin-right: 6px;
+    margin-inline-end: 6px;
 }
 .gi-tabs {
     display: flex;
@@ -795,7 +795,7 @@ const GistIntegration = (() => {
     border-top-color: var(--accent-green, #4ade80);
     border-radius: 50%;
     animation: gi-spin 0.6s linear infinite;
-    margin-right: 6px;
+    margin-inline-end: 6px;
     vertical-align: middle;
 }
 @keyframes gi-spin {

@@ -76,7 +76,7 @@ const ActivityHeatmap = (() => {
   font-size: 1rem;
   font-weight: 600;
   color: var(--text-primary, #e0e0e0);
-  margin-right: auto;
+  margin-inline-end: auto;
 }
 .sv-heatmap-select {
   padding: 5px 10px;

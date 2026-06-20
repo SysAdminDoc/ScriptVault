@@ -54,7 +54,7 @@ const DiffTool = (() => {
   font-size: 0.9375rem;
   font-weight: 600;
   color: var(--text-primary, #e0e0e0);
-  margin-right: auto;
+  margin-inline-end: auto;
 }
 .sv-diff-btn {
   padding: 5px 12px;
@@ -101,10 +101,10 @@ const DiffTool = (() => {
   min-height: 100%;
 }
 .sv-diff-side-col {
-  border-right: 1px solid var(--border-color, #404040);
+  border-inline-end: 1px solid var(--border-color, #404040);
   overflow-x: auto;
 }
-.sv-diff-side-col:last-child { border-right: none; }
+.sv-diff-side-col:last-child { border-inline-end: none; }
 .sv-diff-side-header {
   padding: 6px 12px;
   font-size: 0.75rem;
@@ -126,12 +126,12 @@ const DiffTool = (() => {
 .sv-diff-line-num {
   flex-shrink: 0;
   width: 48px;
-  text-align: right;
-  padding-right: 8px;
+  text-align: end;
+  padding-inline-end: 8px;
   color: var(--text-muted, #707070);
   user-select: none;
   background: var(--bg-header, #252525);
-  border-right: 1px solid var(--border-color, #404040);
+  border-inline-end: 1px solid var(--border-color, #404040);
 }
 .sv-diff-line-content {
   flex: 1;
@@ -173,8 +173,8 @@ const DiffTool = (() => {
 .sv-diff-unified .sv-diff-line-num-a,
 .sv-diff-unified .sv-diff-line-num-b {
   width: 45px;
-  text-align: right;
-  padding-right: 4px;
+  text-align: end;
+  padding-inline-end: 4px;
 }
 
 /* Collapsible */

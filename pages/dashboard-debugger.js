@@ -30,7 +30,7 @@ const ScriptDebugger = (() => {
     .dbg-tab:hover{color:var(--text-primary,#e0e0e0)}
     .dbg-tab.active{color:var(--accent-green,#4ade80);border-bottom-color:var(--accent-green,#4ade80)}
     .dbg-tab:focus-visible,.dbg-btn:focus-visible,.dbg-toggle:focus-visible,.dbg-log-obj:focus-visible,.dbg-json-toggle:focus-visible,.dbg-error-line-link:focus-visible{outline:2px solid var(--accent-green,#4ade80);outline-offset:2px}
-    .dbg-tab .badge{display:inline-block;background:var(--accent-red,#f87171);color:#fff;font-size:0.625rem;border-radius:8px;padding:1px 6px;margin-left:4px;vertical-align:middle}
+    .dbg-tab .badge{display:inline-block;background:var(--accent-red,#f87171);color:#fff;font-size:0.625rem;border-radius:8px;padding:1px 6px;margin-inline-start:4px;vertical-align:middle}
     .dbg-panel{flex:1;overflow:auto;padding:10px}
     .dbg-toolbar{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
     .dbg-btn{background:var(--bg-input,#333);border:1px solid var(--border-color,#404040);border-radius:4px;color:var(--text-primary,#e0e0e0);padding:4px 12px;font-size:0.6875rem;cursor:pointer;transition:background .15s,border-color .15s}
@@ -44,11 +44,11 @@ const ScriptDebugger = (() => {
 
     /* Console */
     .dbg-console{display:flex;flex-direction:column;gap:2px;font-family:'Cascadia Code','Fira Code',monospace;font-size:0.75rem}
-    .dbg-log-entry{display:flex;gap:8px;padding:4px 8px;border-radius:3px;align-items:flex-start;border-left:3px solid transparent}
-    .dbg-log-entry.log{border-left-color:var(--text-muted,#707070);background:transparent}
-    .dbg-log-entry.warn{border-left-color:var(--accent-yellow,#fbbf24);background:rgba(251,191,36,0.05)}
-    .dbg-log-entry.error{border-left-color:var(--accent-red,#f87171);background:rgba(248,113,113,0.05)}
-    .dbg-log-entry.info{border-left-color:var(--accent-blue,#60a5fa);background:transparent}
+    .dbg-log-entry{display:flex;gap:8px;padding:4px 8px;border-radius:3px;align-items:flex-start;border-inline-start:3px solid transparent}
+    .dbg-log-entry.log{border-inline-start-color:var(--text-muted,#707070);background:transparent}
+    .dbg-log-entry.warn{border-inline-start-color:var(--accent-yellow,#fbbf24);background:rgba(251,191,36,0.05)}
+    .dbg-log-entry.error{border-inline-start-color:var(--accent-red,#f87171);background:rgba(248,113,113,0.05)}
+    .dbg-log-entry.info{border-inline-start-color:var(--accent-blue,#60a5fa);background:transparent}
     .dbg-log-time{color:var(--text-muted,#707070);font-size:0.625rem;min-width:70px;flex-shrink:0;padding-top:2px}
     .dbg-log-level{font-size:0.625rem;text-transform:uppercase;min-width:40px;flex-shrink:0;font-weight:600;padding-top:2px}
     .dbg-log-level.log{color:var(--text-muted,#707070)}
@@ -56,7 +56,7 @@ const ScriptDebugger = (() => {
     .dbg-log-level.error{color:var(--accent-red,#f87171)}
     .dbg-log-level.info{color:var(--accent-blue,#60a5fa)}
     .dbg-log-msg{flex:1;word-break:break-word;color:var(--text-primary,#e0e0e0);line-height:1.4}
-    .dbg-log-obj{padding:0;border:none;background:none;cursor:pointer;color:var(--accent-purple,#c084fc);text-decoration:underline dotted;font:inherit;text-align:left}
+    .dbg-log-obj{padding:0;border:none;background:none;cursor:pointer;color:var(--accent-purple,#c084fc);text-decoration:underline dotted;font:inherit;text-align:start}
     .dbg-log-expanded{background:var(--bg-body,#1a1a1a);border:1px solid var(--border-color,#404040);border-radius:4px;padding:6px 8px;margin-top:4px;white-space:pre-wrap;font-size:0.6875rem;color:var(--text-secondary,#a0a0a0);max-height:200px;overflow:auto}
     .dbg-empty{color:var(--text-muted,#707070);font-size:0.75rem;text-align:center;padding:24px}
 
@@ -72,7 +72,7 @@ const ScriptDebugger = (() => {
 
     /* Variable Inspector */
     .dbg-var-table{width:100%;border-collapse:collapse;font-size:0.75rem}
-    .dbg-var-table th{text-align:left;color:var(--text-secondary,#a0a0a0);padding:6px 8px;border-bottom:1px solid var(--border-color,#404040);font-weight:600;font-size:0.6875rem;text-transform:uppercase}
+    .dbg-var-table th{text-align:start;color:var(--text-secondary,#a0a0a0);padding:6px 8px;border-bottom:1px solid var(--border-color,#404040);font-weight:600;font-size:0.6875rem;text-transform:uppercase}
     .dbg-var-table td{padding:6px 8px;border-bottom:1px solid var(--border-color,#404040);vertical-align:top}
     .dbg-var-key{color:var(--accent-blue,#60a5fa);font-family:'Cascadia Code','Fira Code',monospace}
     .dbg-var-val{color:var(--text-primary,#e0e0e0);font-family:'Cascadia Code','Fira Code',monospace;cursor:pointer;word-break:break-word}
@@ -81,7 +81,7 @@ const ScriptDebugger = (() => {
     .dbg-var-delete{color:var(--accent-red,#f87171);cursor:pointer;font-size:0.875rem}
     .dbg-var-delete:hover{color:#ff4444}
     .dbg-var-edit-input{background:var(--bg-input,#333);border:1px solid var(--accent-green,#4ade80);border-radius:3px;color:var(--text-primary);padding:2px 6px;font-size:0.75rem;font-family:'Cascadia Code','Fira Code',monospace;width:100%}
-    .dbg-json-tree{padding-left:16px}
+    .dbg-json-tree{padding-inline-start:16px}
     .dbg-json-key{color:var(--accent-blue,#60a5fa)}
     .dbg-json-string{color:var(--accent-green,#4ade80)}
     .dbg-json-number{color:var(--accent-yellow,#fbbf24)}
@@ -91,7 +91,7 @@ const ScriptDebugger = (() => {
     .dbg-json-toggle:hover{color:var(--text-primary)}
 
     /* Error Timeline */
-    .dbg-error-entry{background:var(--bg-row,#2a2a2a);border:1px solid var(--border-color,#404040);border-left:3px solid var(--accent-red,#f87171);border-radius:4px;padding:10px 12px;margin-bottom:6px;cursor:pointer;transition:border-color .15s}
+    .dbg-error-entry{background:var(--bg-row,#2a2a2a);border:1px solid var(--border-color,#404040);border-inline-start:3px solid var(--accent-red,#f87171);border-radius:4px;padding:10px 12px;margin-bottom:6px;cursor:pointer;transition:border-color .15s}
     .dbg-error-entry:hover{border-color:var(--accent-red,#f87171)}
     .dbg-error-time{font-size:0.625rem;color:var(--text-muted,#707070)}
     .dbg-error-msg{font-size:0.8125rem;color:var(--accent-red,#f87171);margin:4px 0;font-weight:500}

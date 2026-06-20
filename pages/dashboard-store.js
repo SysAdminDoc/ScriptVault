@@ -70,7 +70,7 @@ const ScriptStore = (() => {
     font-size: 0.875rem;
     font-weight: 600;
     color: var(--text-primary);
-    margin-right: auto;
+    margin-inline-end: auto;
     display: flex;
     align-items: center;
     gap: 6px;
@@ -164,7 +164,7 @@ const ScriptStore = (() => {
 .ss-nav-label {
     font-size: 0.6875rem;
     color: var(--text-muted);
-    margin-right: 4px;
+    margin-inline-end: 4px;
 }
 .ss-chip {
     appearance: none;
@@ -240,7 +240,7 @@ const ScriptStore = (() => {
     border-top-color: var(--accent-primary);
     border-radius: 50%;
     animation: ss-spin 0.6s linear infinite;
-    margin-left: 8px;
+    margin-inline-start: 8px;
     vertical-align: middle;
 }
 @keyframes ss-spin { to { transform: rotate(360deg); } }
@@ -271,7 +271,7 @@ const ScriptStore = (() => {
     box-shadow: 0 2px 12px rgba(0,0,0,0.15);
 }
 .ss-card.installed {
-    border-left: 3px solid var(--accent-primary);
+    border-inline-start: 3px solid var(--accent-primary);
 }
 .ss-card-info {
     min-width: 0;
@@ -376,7 +376,7 @@ const ScriptStore = (() => {
     font-weight: 600;
     letter-spacing: 0.02em;
     vertical-align: middle;
-    margin-left: 4px;
+    margin-inline-start: 4px;
 }
 .ss-source-bar {
     display: flex;
@@ -696,7 +696,7 @@ const ScriptStore = (() => {
 }
 .ss-result-count {
     padding: 0 2px;
-    text-align: left;
+    text-align: start;
     font-size: 0.75rem;
     font-variant-numeric: tabular-nums;
 }
@@ -747,7 +747,7 @@ const ScriptStore = (() => {
     transform: none;
 }
 .ss-card.installed {
-    border-left: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
+    border-inline-start: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
     background:
         radial-gradient(circle at top right, rgba(52, 211, 153, 0.1), transparent 36%),
         linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
@@ -1486,7 +1486,7 @@ const ScriptStore = (() => {
                 .filter(([, count]) => count > 0)
                 .map(([key, count]) => {
                     const src = SOURCES[key];
-                    return `<span class="ss-source-stat" style="border-left:3px solid ${src?.color || '#666'};padding-left:6px">${src?.label || key}: ${count}</span>`;
+                    return `<span class="ss-source-stat" style="border-inline-start:3px solid ${src?.color || '#666'};padding-inline-start:6px">${src?.label || key}: ${count}</span>`;
                 }).join('');
             if (statsHtml) {
                 html += `<div class="ss-source-bar">${statsHtml}<span class="ss-source-stat" style="font-weight:600">${scripts.length} total deduplicated</span></div>`;
@@ -1866,7 +1866,7 @@ const ScriptStore = (() => {
         <span class="ss-nav-sep"></span>
         <span class="ss-nav-label">Sources:</span>
         ${Object.entries(SOURCES).map(([key, src]) =>
-            `<button type="button" class="ss-chip ss-source-chip ss-search-control${_activeSources.has(key) ? ' active' : ''}" data-source="${key}" data-label="${src.label}" aria-pressed="${_activeSources.has(key) ? 'true' : 'false'}" style="border-left:3px solid ${src.color}">${src.label}</button>`
+            `<button type="button" class="ss-chip ss-source-chip ss-search-control${_activeSources.has(key) ? ' active' : ''}" data-source="${key}" data-label="${src.label}" aria-pressed="${_activeSources.has(key) ? 'true' : 'false'}" style="border-inline-start:3px solid ${src.color}">${src.label}</button>`
         ).join('')}
     </div>
     <div class="ss-results" aria-busy="true">

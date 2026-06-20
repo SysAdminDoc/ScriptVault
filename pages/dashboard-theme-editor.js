@@ -335,7 +335,7 @@ const ThemeEditor = (() => {
   user-select: none;
   border: none;
   width: 100%;
-  text-align: left;
+  text-align: start;
 }
 .sv-te-section-header h4 {
   font-size: 0.75rem;
@@ -559,7 +559,7 @@ const ThemeEditor = (() => {
   border-radius: 3px;
   background: var(--accent-secondary, #60a5fa);
   color: var(--text-on-accent, #fff);
-  margin-left: 4px;
+  margin-inline-start: 4px;
 }
 .sv-te-delete-custom {
   position: absolute;

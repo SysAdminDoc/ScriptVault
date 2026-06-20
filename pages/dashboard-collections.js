@@ -361,7 +361,7 @@ const CollectionManager = (() => {
   font-size: 1rem;
   font-weight: 700;
   color: var(--text-primary, #e0e0e0);
-  margin-right: auto;
+  margin-inline-end: auto;
 }
 .sv-coll-search {
   padding: 10px 12px;
@@ -525,7 +525,7 @@ const CollectionManager = (() => {
   accent-color: var(--accent-green-dark, #22c55e);
 }
 .sv-coll-script-pick-note {
-  margin-left: auto;
+  margin-inline-start: auto;
   width: 120px;
   padding: 6px 8px;
   border: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
