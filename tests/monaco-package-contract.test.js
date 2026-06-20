@@ -10,6 +10,7 @@ const ROOT = process.cwd();
 const FILES = [
   'package.json',
   'esbuild.config.mjs',
+  'build.sh',
   'build-firefox.sh',
   'pages/editor-sandbox.html',
   'docs/monaco-esm-migration-plan.md',
@@ -37,7 +38,7 @@ describe('Monaco package contract check', () => {
   it('keeps the contract wired into npm run check', () => {
     const packageJson = JSON.parse(read('package.json'));
     expect(packageJson.scripts['monaco:package:check']).toBe('node scripts/check-monaco-package-contract.mjs');
-    expect(packageJson.scripts['build:monaco:esm']).toBe('node esbuild.config.mjs --monaco-esm-only');
+    expect(packageJson.scripts['build:monaco']).toBe('node esbuild.config.mjs --monaco-esm-only');
     expect(packageJson.scripts['monaco:esm:check']).toBe('node scripts/check-monaco-esm-prototype.mjs');
     expect(packageJson.scripts.check).toContain('npm run monaco:package:check');
   });

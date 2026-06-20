@@ -40,7 +40,7 @@ describe('GM ambient declarations', () => {
     expect(packageJson.scripts['gm-types:generate']).toBe('node scripts/generate-gm-types.mjs');
     expect(packageJson.scripts['gm-types:check']).toBe('node scripts/generate-gm-types.mjs --check');
     expect(esbuildConfig).toContain('generateGmTypes');
-    expect(buildScript).toMatch(/^\s+lib\s*$/m);
+    expect(buildScript).toContain('lib/scriptvault.d.ts');
     expect(existsSync(DECLARATION_PATH)).toBe(true);
     expect(declaration).toContain('declare const GM: GMAsyncApi;');
     expect(declaration).toContain('declare const GM_cookie: GMCookieCallbackApi;');
