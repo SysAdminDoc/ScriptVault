@@ -381,6 +381,7 @@
     await refresh();
     setupEventListeners();
     setupTabListeners();
+    setupLifecycleListeners();
   }
 
   async function applySidePanelLayout() {
@@ -975,24 +976,56 @@
     setAllScriptsCollapsed(false);
   }
 
+  let _tabListenersActive = false;
+  let _onActivated = null;
+  let _onUpdated = null;
+  let _onRuntimeMessage = null;
+
   function setupTabListeners() {
-    // Refresh when active tab changes or navigates
-    chrome.tabs.onActivated.addListener(() => {
+    if (_tabListenersActive) return;
+    _onActivated = () => {
       clearTimeout(refreshTimer);
       refreshTimer = setTimeout(refresh, 150);
-    });
-    chrome.tabs.onUpdated.addListener((tabId, info) => {
+    };
+    _onUpdated = (tabId, info) => {
       if (info.status === 'complete' && currentTab && tabId === currentTab.id) {
         clearTimeout(refreshTimer);
         refreshTimer = setTimeout(refresh, 200);
       }
-    });
-    chrome.runtime.onMessage?.addListener((message) => {
+    };
+    _onRuntimeMessage = (message) => {
       if (message?.action === 'runtimeHostPermissionsChanged') {
         clearTimeout(refreshTimer);
         refreshTimer = setTimeout(refresh, 150);
       }
+    };
+    chrome.tabs.onActivated.addListener(_onActivated);
+    chrome.tabs.onUpdated.addListener(_onUpdated);
+    chrome.runtime.onMessage?.addListener(_onRuntimeMessage);
+    _tabListenersActive = true;
+  }
+
+  function teardownTabListeners() {
+    if (!_tabListenersActive) return;
+    if (_onActivated) chrome.tabs.onActivated.removeListener(_onActivated);
+    if (_onUpdated) chrome.tabs.onUpdated.removeListener(_onUpdated);
+    if (_onRuntimeMessage) chrome.runtime.onMessage?.removeListener(_onRuntimeMessage);
+    clearTimeout(refreshTimer);
+    refreshTimer = null;
+    _tabListenersActive = false;
+  }
+
+  function setupLifecycleListeners() {
+    if (typeof chrome.sidePanel?.onOpened?.addListener !== 'function') return;
+    chrome.sidePanel.onOpened.addListener(() => {
+      setupTabListeners();
+      refresh();
     });
+    if (typeof chrome.sidePanel?.onClosed?.addListener === 'function') {
+      chrome.sidePanel.onClosed.addListener(() => {
+        teardownTabListeners();
+      });
+    }
   }
 
   init();
