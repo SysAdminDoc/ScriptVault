@@ -3207,7 +3207,7 @@
         );
         let instructions = `
             <h3 style="margin-bottom: 15px; color: var(--text-primary);">${escapeHtml(setupView.helpTitle || 'Setup Instructions')}</h3>
-            <ol style="line-height: 1.8; color: var(--text-secondary); padding-left: 20px;">
+            <ol style="line-height: 1.8; color: var(--text-secondary); padding-inline-start: 20px;">
                 ${(setupView.helpSteps || []).map(step => `<li>${escapeHtml(step)}</li>`).join('')}
             </ol>
         `;

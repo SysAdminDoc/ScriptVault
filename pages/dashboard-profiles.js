@@ -174,7 +174,7 @@ const ProfileManager = (() => {
   color: var(--text-primary, #e0e0e0);
   font-size: 0.8125rem;
   transition: background 0.1s ease;
-  text-align: left;
+  text-align: start;
   font: inherit;
 }
 .sv-profile-dropdown-item:hover {

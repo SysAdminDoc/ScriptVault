@@ -319,7 +319,7 @@ const ScriptScheduler = (() => {
   padding: 12px 14px;
   background: var(--bg-input, #1a1a1a);
   border: 1px solid var(--border-color, #444);
-  border-left: 3px solid var(--accent-primary, #22c55e);
+  border-inline-start: 3px solid var(--accent-primary, #22c55e);
   border-radius: 6px;
   font-size: 0.75rem;
   color: var(--text-secondary, #a0a0a0);

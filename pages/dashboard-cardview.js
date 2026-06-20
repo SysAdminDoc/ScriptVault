@@ -136,11 +136,11 @@ const CardView = (() => {
 
 /* Status borders */
 .cv-card.cv-enabled  {
-  border-left: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
+  border-inline-start: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
   box-shadow: inset 0 0 0 1px rgba(52, 211, 153, 0.14), 0 18px 40px rgba(0,0,0,0.18);
 }
 .cv-card.cv-disabled {
-  border-left: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
+  border-inline-start: 1px solid var(--panel-border-soft, rgba(148, 163, 184, 0.16));
   opacity: 0.78;
 }
 .cv-card.cv-selected {
@@ -194,7 +194,7 @@ const CardView = (() => {
   background: none;
   color: inherit;
   font: inherit;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
 .cv-open-surface:focus-visible {
@@ -580,7 +580,7 @@ const CardView = (() => {
   color: var(--text-primary);
   font-size: 0.75rem;
   border-radius: 10px;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
   white-space: nowrap;
 }

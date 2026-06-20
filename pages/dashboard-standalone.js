@@ -246,7 +246,7 @@ h1{font-size:1.5rem;color:#4ade80;margin-bottom:8px}
 h2{font-size:1.125rem;color:#e0e0e0;margin-bottom:12px}
 h3{font-size:0.9375rem;color:#a0a0a0;margin-bottom:8px}
 .subtitle{color:#a0a0a0;font-size:0.875rem;margin-bottom:24px}
-.badge{display:inline-block;padding:2px 10px;border-radius:10px;font-size:0.6875rem;font-weight:600;margin-right:6px}
+.badge{display:inline-block;padding:2px 10px;border-radius:10px;font-size:0.6875rem;font-weight:600;margin-inline-end:6px}
 .badge-green{background:#22c55e22;color:#4ade80;border:1px solid #22c55e44}
 .badge-blue{background:#60a5fa22;color:#60a5fa;border:1px solid #60a5fa44}
 .badge-purple{background:#c084fc22;color:#c084fc;border:1px solid #c084fc44}
@@ -353,7 +353,7 @@ ${inlineJS ? `<script>${inlineJS.replace(/<\/(script)/gi, '<\\/$1')}<\/script>` 
 
     <div class="card">
         <h2>Install Instructions</h2>
-        <ol style="padding-left:20px;color:#a0a0a0;font-size:0.8125rem;line-height:2">
+        <ol style="padding-inline-start:20px;color:#a0a0a0;font-size:0.8125rem;line-height:2">
             <li>Install a userscript manager: <a href="https://www.tampermonkey.net/" target="_blank" rel="noopener noreferrer">Tampermonkey</a> or <a href="https://violentmonkey.github.io/" target="_blank" rel="noopener noreferrer">Violentmonkey</a></li>
             <li>Click the "Copy Code" button above</li>
             <li>Open your userscript manager dashboard</li>

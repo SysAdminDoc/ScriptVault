@@ -145,7 +145,7 @@ tr.kn-focused td {
   background: rgba(192,132,252,.15);
   color: var(--accent-purple);
   font-weight: 600;
-  margin-left: 6px;
+  margin-inline-start: 6px;
 }
 `;
 

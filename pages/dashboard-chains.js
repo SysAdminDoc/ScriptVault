@@ -385,7 +385,7 @@ const ScriptChains = (() => {
   font-size: 0.625rem;
   padding: 1px 6px;
   border-radius: 8px;
-  margin-left: 6px;
+  margin-inline-start: 6px;
 }
 .sv-chain-arrow .condition-badge.success {
   background: rgba(74, 222, 128, 0.15);

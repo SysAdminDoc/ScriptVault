@@ -129,7 +129,7 @@ const DependencyGraph = (() => {
     width: 280px;
     min-width: 280px;
     background: var(--bg-header);
-    border-left: 1px solid var(--border-color);
+    border-inline-start: 1px solid var(--border-color);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -138,7 +138,7 @@ const DependencyGraph = (() => {
 .dg-sidebar.dg-collapsed {
     width: 0;
     min-width: 0;
-    border-left: none;
+    border-inline-start: none;
 }
 .dg-sidebar-header {
     padding: 12px;
@@ -240,7 +240,7 @@ const DependencyGraph = (() => {
     font-weight: 700;
     padding: 1px 6px;
     border-radius: 8px;
-    margin-left: 6px;
+    margin-inline-start: 6px;
 }
 .dg-empty {
     display: flex;

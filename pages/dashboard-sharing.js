@@ -112,7 +112,7 @@ const ScriptSharing = (() => {
 .ss-script-info .ss-version {
     color: var(--text-secondary, #a0a0a0);
     font-size: 0.75rem;
-    margin-left: 6px;
+    margin-inline-start: 6px;
 }
 .ss-script-info .ss-desc {
     color: var(--text-muted, #707070);
@@ -151,7 +151,7 @@ const ScriptSharing = (() => {
     font-size: 0.8125rem;
     cursor: pointer;
     transition: background 0.15s;
-    text-align: left;
+    text-align: start;
     font-family: inherit;
     width: 100%;
 }

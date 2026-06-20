@@ -383,7 +383,7 @@ const PatternBuilder = (() => {
       const removeBtn = el('button', {
         class: 'pb-remove-btn',
         text: '\u00d7',
-        style: 'margin-left:4px',
+        style: 'margin-inline-start:4px',
         title: 'Remove',
         'aria-label': `Remove test URL ${i + 1}`,
       });
