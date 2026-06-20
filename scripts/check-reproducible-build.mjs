@@ -166,6 +166,49 @@ function main() {
     copyFileSync(backupPath, artifactPath);
     rmSync(backupPath, { force: true });
   }
+
+  const firefoxArtifactName = `scriptvault-firefox-v${version}.zip`;
+  const firefoxArtifactPath = join(projectRoot, 'firefox-artifacts', firefoxArtifactName);
+  if (existsSync(firefoxArtifactPath)) {
+    const firefoxBackupPath = join(outDir, `${firefoxArtifactName}.reproducible-build-baseline.zip`);
+    const firefoxReportPath = join(outDir, `scriptvault-firefox-v${version}.reproducible-build.json`);
+    copyFileSync(firefoxArtifactPath, firefoxBackupPath);
+    const firefoxExpected = zipContentDigest(firefoxBackupPath);
+
+    try {
+      execFileSync(process.execPath, ['scripts/run-bash.mjs', 'build-firefox.sh', '--lint'], {
+        cwd: projectRoot,
+        stdio: 'inherit',
+      });
+
+      const firefoxActual = zipContentDigest(firefoxArtifactPath);
+      const firefoxFailures = compareDigests(firefoxExpected, firefoxActual);
+      const firefoxReport = {
+        version,
+        artifact: firefoxArtifactName,
+        checkedAt: new Date().toISOString(),
+        comparison: 'normalized-zip-entry-sha256',
+        expectedEntryCount: firefoxExpected.length,
+        rebuiltEntryCount: firefoxActual.length,
+        status: firefoxFailures.length > 0 ? 'failed' : 'passed',
+        failures: firefoxFailures,
+      };
+      writeFileSync(firefoxReportPath, `${JSON.stringify(firefoxReport, null, 2)}\n`);
+
+      if (firefoxFailures.length > 0) {
+        throw new Error(`Firefox reproducible build check failed:\n- ${firefoxFailures.slice(0, 20).join('\n- ')}`);
+      }
+
+      console.log(`Reproducible build check passed for ${firefoxArtifactName}.`);
+      console.log(`Compared ${firefoxActual.length} normalized ZIP entries.`);
+      console.log(`Report: ${relative(projectRoot, firefoxReportPath).replace(/\\/g, '/')}`);
+    } finally {
+      copyFileSync(firefoxBackupPath, firefoxArtifactPath);
+      rmSync(firefoxBackupPath, { force: true });
+    }
+  } else {
+    console.log(`Firefox artifact ${firefoxArtifactName} not found; skipping Firefox reproducible-build check.`);
+  }
 }
 
 try {
