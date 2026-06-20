@@ -55,6 +55,9 @@ AGENTS.md
 CODEX_CHANGELOG.md
 CODEX_*.md
 
+# Store listing screenshots (local capture artifacts)
+assets/screenshots/
+
 # Markdown files local-only (except README)
 *.md
 !README.md
