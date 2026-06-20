@@ -1488,6 +1488,7 @@
         elements.emptyStateDescription = document.getElementById('emptyStateDescription');
         elements.emptyStatePrimaryAction = document.getElementById('emptyStatePrimaryAction');
         elements.emptyStateSecondaryAction = document.getElementById('emptyStateSecondaryAction');
+        elements.emptyStateMigrationHint = document.getElementById('emptyStateMigrationHint');
         elements.selectAllScripts = document.getElementById('selectAllScripts');
         elements.btnNewScript = document.getElementById('btnNewScript');
         elements.btnImportScript = document.getElementById('btnImportScript');
@@ -7327,6 +7328,13 @@
                 elements.emptyStateSecondaryAction.hidden = false;
                 elements.emptyStateSecondaryAction.textContent = tDashboard('emptyImportScript', 'Import Script');
                 elements.emptyStateSecondaryAction.onclick = () => importScript();
+            }
+            if (elements.emptyStateMigrationHint) {
+                elements.emptyStateMigrationHint.textContent = tDashboard(
+                    'emptyMigrationHint',
+                    'Switching from Violentmonkey, Tampermonkey, or ScriptCat? Export your scripts there, then drop the backup file here to import.'
+                );
+                elements.emptyStateMigrationHint.hidden = false;
             }
             return;
         }

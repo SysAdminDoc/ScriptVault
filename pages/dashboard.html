@@ -1292,6 +1292,7 @@
         .empty-state svg { width: 64px; height: 64px; margin-bottom: 15px; opacity: 0.3; color: var(--accent-primary); }
         .empty-state h3 { font-size: 1.25rem; margin-bottom: 10px; color: var(--text-primary); font-weight: 650; text-wrap: balance; }
         .empty-state p { max-width: 460px; margin: 0 auto; line-height: 1.55; }
+        .empty-state-hint { font-size: 0.8125rem; margin-top: 12px; opacity: 0.6; }
         .empty-state-actions {
             display: flex;
             align-items: center;
@@ -6424,6 +6425,7 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
                     <h3 id="emptyStateTitle" data-i18n="emptyVaultTitle">Your vault is empty</h3>
                     <p id="emptyStateDescription" data-i18n="emptyVaultDescription">Create a script or import an existing userscript. ScriptVault keeps scripts local unless you enable sync or backups.</p>
+                    <p id="emptyStateMigrationHint" class="empty-state-hint" style="display:none"></p>
                     <div class="empty-state-actions">
                         <button class="btn btn-primary" id="emptyStatePrimaryAction" type="button" data-i18n="emptyCreateScript">Create Script</button>
                         <button class="btn" id="emptyStateSecondaryAction" type="button" data-i18n="emptyImportScript">Import Script</button>
