@@ -83,7 +83,7 @@
 
         .net-table-wrap { flex: 1; overflow: auto; min-height: 0; }
         .net-table { width: 100%; border-collapse: collapse; font-size: 0.6875rem; }
-        .net-table th { position: sticky; top: 0; background: var(--bg-raised); color: var(--text-muted); font-weight: 700; text-align: left; padding: 5px 6px; border-bottom: 1px solid var(--border); white-space: nowrap; user-select: none; text-transform: uppercase; letter-spacing: 0.05em; }
+        .net-table th { position: sticky; top: 0; background: var(--bg-raised); color: var(--text-muted); font-weight: 700; text-align: start; padding: 5px 6px; border-bottom: 1px solid var(--border); white-space: nowrap; user-select: none; text-transform: uppercase; letter-spacing: 0.05em; }
         .net-table td { padding: 3px 6px; border-bottom: 1px solid var(--border); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; vertical-align: middle; }
         .net-table tr:hover td { background: var(--bg-hover); }
         .net-table tr.selected td { background: var(--bg-hover); outline: 1px solid var(--accent); }
@@ -102,7 +102,7 @@
         .time-slow { color: var(--danger); }
 
         /* Detail pane */
-        .net-detail { display: none; width: 320px; border-left: 1px solid var(--border); overflow-y: auto; flex-shrink: 0; background: var(--bg-raised); }
+        .net-detail { display: none; width: 320px; border-inline-start: 1px solid var(--border); overflow-y: auto; flex-shrink: 0; background: var(--bg-raised); }
         .net-detail.open { display: block; }
         .net-detail-header { padding: 6px 8px; font-weight: 600; font-size: 0.6875rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
         .net-detail-close { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.875rem; line-height: 1; }
@@ -118,7 +118,7 @@
         /* ── Execution panel ───────────────────────────────────────────── */
         .exec-table-wrap { flex: 1; overflow: auto; }
         .exec-table { width: 100%; border-collapse: collapse; font-size: 0.6875rem; }
-        .exec-table th { position: sticky; top: 0; background: var(--bg-raised); color: var(--text-muted); font-weight: 700; text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--border); text-transform: uppercase; letter-spacing: 0.05em; }
+        .exec-table th { position: sticky; top: 0; background: var(--bg-raised); color: var(--text-muted); font-weight: 700; text-align: start; padding: 5px 8px; border-bottom: 1px solid var(--border); text-transform: uppercase; letter-spacing: 0.05em; }
         .exec-table td { padding: 4px 8px; border-bottom: 1px solid var(--border); }
         .exec-table tr:hover td { background: var(--bg-hover); }
         .exec-bar-wrap { width: 80px; height: 6px; background: var(--bg-row); border-radius: 3px; overflow: hidden; }

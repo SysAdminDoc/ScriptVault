@@ -360,8 +360,8 @@
            ============================================ */
         .tm-panel {
             max-width: 1600px;
-            margin-left: auto;
-            margin-right: auto;
+            margin-inline-start: auto;
+            margin-inline-end: auto;
         }
 
         /* Row entrance animation */
@@ -408,7 +408,7 @@
             align-items: center;
             gap: 8px;
             flex-shrink: 0;
-            margin-right: 12px;
+            margin-inline-end: 12px;
         }
 
         .tm-logo img {
@@ -429,7 +429,7 @@
         .tm-logo-text h1 sup {
             font-size: 0.5625rem;
             color: var(--accent-primary);
-            margin-left: 6px;
+            margin-inline-start: 6px;
             background: rgba(34, 197, 94, 0.12);
             padding: 2px 6px;
             border-radius: 4px;
@@ -609,7 +609,7 @@
         .tm-tabs {
             display: flex;
             gap: 10px;
-            margin-left: auto;
+            margin-inline-start: auto;
             flex-shrink: 0;
             align-self: flex-end;
             align-items: flex-end;
@@ -718,7 +718,7 @@
             height: 8px;
             border-radius: 50%;
             background: var(--accent-error);
-            margin-right: 6px;
+            margin-inline-end: 6px;
             flex-shrink: 0;
         }
 
@@ -1060,7 +1060,7 @@
             z-index: 80;
             background: var(--bg-section-header);
             padding: var(--density-table-cell-padding-y) var(--density-table-cell-padding-x);
-            text-align: left;
+            text-align: start;
             font-weight: 600;
             font-size: 0.6875rem;
             text-transform: uppercase;
@@ -1736,7 +1736,7 @@
         #settingsPanel .setting-error {
             display: block;
             flex: 1 1 100%;
-            margin-left: 230px;
+            margin-inline-start: 230px;
             margin-top: 6px;
             color: var(--accent-red);
             font-size: 0.75rem;
@@ -1744,7 +1744,7 @@
         }
 
         #settingsPanel textarea + .setting-error {
-            margin-left: 0;
+            margin-inline-start: 0;
         }
 
         #settingsPanel .setting-error[hidden] {
@@ -2543,7 +2543,7 @@
             }
 
             .shortcut-key {
-                text-align: left;
+                text-align: start;
             }
 
             .help-pattern-row {
@@ -2830,7 +2830,7 @@
             border: 1px solid rgba(127, 127, 127, 0.14);
             background: rgba(255, 255, 255, 0.03);
             color: var(--text-primary);
-            text-align: left;
+            text-align: start;
             cursor: pointer;
             transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
             content-visibility: auto;
@@ -2881,7 +2881,7 @@
         }
 
         .shortcut-key {
-            text-align: right;
+            text-align: end;
             font-weight: 700;
             color: var(--text-secondary);
             font-variant-numeric: tabular-nums;
@@ -2999,7 +2999,7 @@
             border-radius: 8px;
             border: 1px solid rgba(127, 127, 127, 0.12);
             background: rgba(255, 255, 255, 0.03);
-            text-align: left;
+            text-align: start;
         }
 
         .stat-value {
@@ -3191,7 +3191,7 @@
             gap: 8px;
             flex-wrap: wrap;
             justify-content: flex-end;
-            margin-left: auto;
+            margin-inline-start: auto;
         }
 
         .editor-metric {
@@ -3534,7 +3534,7 @@
             color: var(--text-muted);
             font-size: 0.6875rem;
             font-variant-numeric: tabular-nums;
-            margin-right: auto;
+            margin-inline-end: auto;
         }
 
         .perf-stats-grid {
@@ -3616,7 +3616,7 @@
             border: none;
             background: none;
             padding: 0;
-            text-align: left;
+            text-align: start;
             cursor: pointer;
         }
 
@@ -3707,7 +3707,7 @@
         }
 
         .panel-status-inline {
-            padding-left: 22px;
+            padding-inline-start: 22px;
             color: var(--text-secondary);
             font-size: 0.75rem;
             line-height: 1.6;
@@ -3817,7 +3817,7 @@
         .lib-result-version {
             color: var(--text-muted);
             font-size: 0.6875rem;
-            margin-left: 8px;
+            margin-inline-start: 8px;
         }
 
         .lib-result-desc {
@@ -4159,10 +4159,10 @@
         }
 
         .toast.show { transform: translateX(0); }
-        .toast-success { border-left: 4px solid var(--accent-primary); }
-        .toast-error { border-left: 4px solid var(--accent-error); }
-        .toast-info { border-left: 4px solid var(--accent-secondary); }
-        .toast-warning { border-left: 4px solid var(--accent-yellow); }
+        .toast-success { border-inline-start: 4px solid var(--accent-primary); }
+        .toast-error { border-inline-start: 4px solid var(--accent-error); }
+        .toast-info { border-inline-start: 4px solid var(--accent-secondary); }
+        .toast-warning { border-inline-start: 4px solid var(--accent-yellow); }
         .toast-icon { font-size: 1rem; }
         .toast-message { font-size: 0.8125rem; }
         .toast-action {
@@ -4245,7 +4245,7 @@
             font-size: 0.8125rem;
             font-weight: 650;
             letter-spacing: 0.01em;
-            text-align: left;
+            text-align: start;
             cursor: pointer;
         }
 
@@ -4551,7 +4551,7 @@
             .scripts-toolbar-left { flex-wrap: wrap; }
             .scripts-shell-header { align-items: stretch; }
             .scripts-shell-stats { width: 100%; }
-            .tm-logo { margin-right: 8px; }
+            .tm-logo { margin-inline-end: 8px; }
             .tm-logo-text h1 sup { display: none; }
         }
 
@@ -5194,7 +5194,7 @@
 
             .tm-tabs {
                 width: 100%;
-                margin-left: 0;
+                margin-inline-start: 0;
                 justify-content: space-between;
             }
 
@@ -5204,8 +5204,8 @@
             }
 
             .view-settings-bar {
-                margin-left: 10px;
-                margin-right: 10px;
+                margin-inline-start: 10px;
+                margin-inline-end: 10px;
             }
         }
 
@@ -5631,8 +5631,8 @@
         }
 
         .search-box input {
-            padding-left: calc(34px * var(--ui-scale));
-            padding-right: calc(34px * var(--ui-scale));
+            padding-inline-start: calc(34px * var(--ui-scale));
+            padding-inline-end: calc(34px * var(--ui-scale));
         }
 
         .search-box input:focus,
@@ -6161,7 +6161,7 @@
             .netlog-size,
             .netlog-time {
                 max-width: none;
-                text-align: left;
+                text-align: start;
             }
         }
 
@@ -7408,7 +7408,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                     <div class="setting-row" id="cloudStatusRow">
                         <span class="label-text">Status:</span>
                         <span id="cloudStatusText" class="utility-inline-status">Not connected</span>
-                        <span id="cloudUserInfo" class="utility-inline-status" style="margin-left:8px"></span>
+                        <span id="cloudUserInfo" class="utility-inline-status" style="margin-inline-start:8px"></span>
                     </div>
                     <div class="setting-row">
                         <div class="btn-group">
@@ -7434,7 +7434,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                     <div class="setting-row">
                         <input type="file" id="importFileInput" accept=".json,.zip,.user.js,.js" style="display:none">
                         <button type="button" class="btn" id="btnChooseFile">Choose File</button>
-                        <span id="importFileName" class="utility-inline-status" role="status" aria-live="polite" aria-atomic="true" style="margin-left:10px">No file chosen</span>
+                        <span id="importFileName" class="utility-inline-status" role="status" aria-live="polite" aria-atomic="true" style="margin-inline-start:10px">No file chosen</span>
                     </div>
                 </div>
             </div>
@@ -7444,7 +7444,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 <div class="section-content">
                     <div class="setting-row">
                         <button type="button" class="btn" id="btnExportZip">Download ZIP</button>
-                        <span class="utility-inline-status" style="margin-left:8px">Portable script archive. App-wide settings are not included.</span>
+                        <span class="utility-inline-status" style="margin-inline-start:8px">Portable script archive. App-wide settings are not included.</span>
                     </div>
                 </div>
             </div>
@@ -7454,7 +7454,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 <div class="section-content">
                     <div class="setting-row">
                         <button type="button" class="btn" id="btnExportFile">Download JSON</button>
-                        <span class="utility-inline-status" style="margin-left:8px">Exports scripts plus the options enabled above.</span>
+                        <span class="utility-inline-status" style="margin-inline-start:8px">Exports scripts plus the options enabled above.</span>
                     </div>
                 </div>
             </div>
@@ -7569,7 +7569,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 <div class="section-content">
                     <div class="setting-row">
                         <button type="button" class="btn" id="btnExportStats">Export CSV</button>
-                        <span class="utility-inline-status" style="margin-left:8px">Export execution stats for all scripts</span>
+                        <span class="utility-inline-status" style="margin-inline-start:8px">Export execution stats for all scripts</span>
                     </div>
                 </div>
             </div>
@@ -7579,7 +7579,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 <div class="section-content">
                     <div class="setting-row">
                         <button type="button" class="btn" id="btnImportTampermonkey">Import .txt Export</button>
-                        <span class="utility-inline-status" style="margin-left:8px">Import from Tampermonkey's text backup format</span>
+                        <span class="utility-inline-status" style="margin-inline-start:8px">Import from Tampermonkey's text backup format</span>
                     </div>
                 </div>
             </div>
@@ -7604,7 +7604,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 <div class="section-content">
                     <div class="setting-row">
                         <input type="url" class="input-field wide" id="importUrlInput" name="import_script_url" aria-label="Userscript URL" autocomplete="off" spellcheck="false" inputmode="url" placeholder="https://example.com/script.user.js">
-                        <button type="button" class="btn" id="btnInstallFromUrl" style="margin-left:10px">Install</button>
+                        <button type="button" class="btn" id="btnInstallFromUrl" style="margin-inline-start:10px">Install</button>
                     </div>
                 </div>
             </div>
@@ -7642,7 +7642,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                     <div class="setting-row">
                         <input type="file" id="installFileInput" name="install_file" accept=".user.js,.js,text/javascript" aria-label="Userscript file" style="display:none">
                         <button type="button" class="btn" id="btnInstallFromFile">Choose file…</button>
-                        <span class="utility-inline-status" id="installFileStatus" style="margin-left:8px">No file selected</span>
+                        <span class="utility-inline-status" id="installFileStatus" style="margin-inline-start:8px">No file selected</span>
                     </div>
                 </div>
             </div>
@@ -7655,7 +7655,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                     </div>
                     <div class="setting-row">
                         <button type="button" class="btn" id="btnBatchInstall">Install All</button>
-                        <span class="utility-inline-status" style="margin-left:8px">One URL per line</span>
+                        <span class="utility-inline-status" style="margin-inline-start:8px">One URL per line</span>
                     </div>
                 </div>
             </div>
@@ -7769,7 +7769,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                     <div class="setting-row">
                         <span class="label-text">Default budget (ms):</span>
                         <input type="number" class="input-field" id="perfBudgetDefault" value="200" style="width:80px" min="10" max="10000">
-                        <button type="button" class="btn" id="btnSavePerfBudget" style="margin-left:8px">Save</button>
+                        <button type="button" class="btn" id="btnSavePerfBudget" style="margin-inline-start:8px">Save</button>
                     </div>
                     <div id="perfBudgetOverrides" style="margin-top:8px;font-size:0.75rem"></div>
                 </div>
