@@ -188,7 +188,8 @@ const ActivityHeatmap = (() => {
       const result = await chrome.storage.local.get(STORAGE_KEY);
       const raw = result[STORAGE_KEY];
       if (raw) {
-        const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        let parsed;
+        try { parsed = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch { parsed = {}; }
         // Convert scripts arrays back to Sets for internal use
         _data = {};
         for (const [key, val] of Object.entries(parsed)) {

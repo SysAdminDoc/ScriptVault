@@ -1279,7 +1279,8 @@ const CollectionManager = (() => {
   /* ------------------------------------------------------------------ */
 
   function importCollection(json) {
-    const data = typeof json === 'string' ? JSON.parse(json) : json;
+    let data;
+    try { data = typeof json === 'string' ? JSON.parse(json) : json; } catch { throw new Error('Invalid JSON'); }
 
     if (!data.name || !Array.isArray(data.scripts)) {
       throw new Error('Invalid collection manifest: requires "name" and "scripts" array');
