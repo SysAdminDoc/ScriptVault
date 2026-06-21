@@ -857,6 +857,9 @@ const dropbox = {
     const token = await this.getValidToken(settings);
     if (!token) throw new Error('Not authenticated with Dropbox');
 
+    const body = JSON.stringify(data);
+    if (body.length > 150 * 1024 * 1024) throw new Error('Sync data exceeds Dropbox 150 MB upload limit');
+
     const response = await fetchWithTimeout('https://content.dropboxapi.com/2/files/upload', {
       method: 'POST',
       headers: {
@@ -869,7 +872,7 @@ const dropbox = {
         }),
         'Content-Type': 'application/octet-stream',
       },
-      body: JSON.stringify(data),
+      body,
     }, 60_000);
 
     if (response.status === 401) throw new Error('Dropbox token expired. Please reconnect.');
