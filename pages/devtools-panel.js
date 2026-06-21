@@ -4,6 +4,13 @@
 (function () {
   'use strict';
 
+  const _svPolicy = (typeof window.trustedTypes !== 'undefined' && window.trustedTypes.createPolicy)
+      ? window.trustedTypes.createPolicy('sv-devtools', { createHTML: s => s })
+      : null;
+  function safeSetHtml(el, html) {
+      el.innerHTML = _svPolicy ? _svPolicy.createHTML(html) : html;
+  }
+
   const $ = id => {
     const el = document.getElementById(id);
     if (!el) {
@@ -96,7 +103,7 @@
       html += `<div class="net-detail-section"><div class="net-detail-section-title">Response Preview</div><pre class="net-body-pre">${escapeHtml(String(entry.responsePreview).slice(0, 2000))}</pre></div>`;
     }
 
-    $('netDetailBody').innerHTML = html;
+    safeSetHtml($('netDetailBody'), html);
   }
 
   function syncNetworkRowState() {
@@ -329,7 +336,7 @@
 
     // Table
     const tbody = $('netTableBody');
-    tbody.innerHTML = '';
+    tbody.replaceChildren();
     if (!filtered.length) {
       closeDetail();
       if (activeInDetail) {
@@ -340,7 +347,7 @@
       const detail = filterText
         ? `No requests match "${filterText}". Clear the filter or try a script, host, or method name.`
         : 'Open a page that runs userscripts to capture activity.';
-      tr.innerHTML = `<td colspan="6" class="table-empty-cell">${tableEmptyMarkup(title, detail, 'NET')}</td>`;
+      safeSetHtml(tr, `<td colspan="6" class="table-empty-cell">${tableEmptyMarkup(title, detail, 'NET')}</td>`);
       tbody.appendChild(tr);
       return;
     }
@@ -366,14 +373,14 @@
       let hostname = '';
       try { hostname = new URL(entry.url).hostname; } catch {}
 
-      tr.innerHTML = `
+      safeSetHtml(tr, `
         <td><span class="method-badge method-${methodClass}">${method}</span></td>
         <td title="${escapeHtml(entry.url || '')}">${escapeHtml(hostname + (entry.url || '').replace(/^https?:\/\/[^/]+/, '').slice(0, 60))}</td>
         <td class="${statusClass(statusCode)}">${statusCode || '—'}</td>
         <td class="${durationClass(duration)}">${formatDuration(duration)}</td>
         <td>${formatBytes(entry.responseSize)}</td>
         <td title="${escapeHtml(entry.scriptName || '')}">${escapeHtml((entry.scriptName || '').slice(0, 20))}</td>
-      `;
+      `);
 
       tr.addEventListener('focus', () => {
         focusedRow = entry.id;
@@ -450,7 +457,7 @@
   // ── Execution rendering ───────────────────────────────────────────────────
   function renderExecution() {
     const tbody = $('execTableBody');
-    tbody.innerHTML = '';
+    tbody.replaceChildren();
 
     const executionScripts = scripts.filter(s => s.stats && (s.stats.runs > 0));
     const withStats = executionScripts.filter((script) => {
@@ -476,7 +483,7 @@
       const detail = filterText && executionScripts.length
         ? `No scripts match "${filterText}". Reset the filter to return to execution stats.`
         : 'Scripts will appear here after they run.';
-      tr.innerHTML = `<td colspan="6" class="table-empty-cell">${tableEmptyMarkup(title, detail, 'RUN')}</td>`;
+      safeSetHtml(tr, `<td colspan="6" class="table-empty-cell">${tableEmptyMarkup(title, detail, 'RUN')}</td>`);
       tbody.appendChild(tr);
       return;
     }
@@ -487,7 +494,7 @@
       const barPct = Math.round((st.totalTime / maxTotal) * 100);
       const barClass = avg < 50 ? 'fast' : avg < 200 ? 'med' : 'slow';
       const tr = document.createElement('tr');
-      tr.innerHTML = `
+      safeSetHtml(tr, `
         <td title="${escapeHtml(script.meta?.name || script.id)}">${escapeHtml((script.meta?.name || script.id).slice(0, 30))}</td>
         <td>${st.runs || 0}</td>
         <td class="${durationClass(avg)}">${formatDuration(avg)}</td>
@@ -496,7 +503,7 @@
         <td>
           <div class="exec-bar-wrap"><div class="exec-bar ${barClass}" style="width:${barPct}%"></div></div>
         </td>
-      `;
+      `);
       tbody.appendChild(tr);
     }
   }
