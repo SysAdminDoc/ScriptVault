@@ -23,6 +23,10 @@ const TemplateManager = (() => {
 
     const STORAGE_KEY = 'customTemplates';
 
+    const _safeSetHtml = (typeof window.ScriptVaultDashboardUI?.safeSetHtml === 'function')
+        ? window.ScriptVaultDashboardUI.safeSetHtml
+        : (el, html) => { el.innerHTML = html; };
+
     const CATEGORIES = [
         { id: 'all', label: 'All', icon: '&#9776;' },
         { id: 'my', label: 'My Templates', icon: '&#9733;' },
@@ -898,7 +902,7 @@ const TemplateManager = (() => {
         header.appendChild(headerH3);
         const closeBtn = document.createElement('button');
         closeBtn.className = 'tm-modal-close';
-        closeBtn.innerHTML = '&times;';
+        _safeSetHtml(closeBtn, '&times;');
         closeBtn.onclick = closeModal;
         header.appendChild(closeBtn);
         modal.appendChild(header);
@@ -927,7 +931,7 @@ const TemplateManager = (() => {
     function render() {
         if (!_state.container) return;
         const c = _state.container;
-        c.innerHTML = '';
+        c.replaceChildren();
 
         // Panel wrapper
         const panel = document.createElement('div');
@@ -936,7 +940,7 @@ const TemplateManager = (() => {
         // Header
         const header = document.createElement('div');
         header.className = 'tm-header';
-        header.innerHTML = `<div class="tm-header-title">Script Templates</div>`;
+        _safeSetHtml(header, `<div class="tm-header-title">Script Templates</div>`);
 
         const importBtn = document.createElement('button');
         importBtn.className = 'tm-btn tm-btn-secondary tm-btn-sm';
@@ -965,7 +969,7 @@ const TemplateManager = (() => {
         for (const cat of CATEGORIES) {
             const btn = document.createElement('button');
             btn.className = `tm-cat-btn${_state.category === cat.id ? ' active' : ''}`;
-            btn.innerHTML = `${cat.icon} ${cat.label}`;
+            _safeSetHtml(btn, `${cat.icon} ${cat.label}`);
             btn.onclick = () => {
                 _state.category = cat.id;
                 catBar.querySelectorAll('.tm-cat-btn').forEach(b => b.classList.remove('active'));
@@ -989,7 +993,7 @@ const TemplateManager = (() => {
     }
 
     function renderGrid(grid) {
-        grid.innerHTML = '';
+        grid.replaceChildren();
         const all = getAllTemplates();
         const q = _state.filter.toLowerCase();
         const cat = _state.category;
@@ -1007,7 +1011,7 @@ const TemplateManager = (() => {
         });
 
         if (filtered.length === 0) {
-            grid.innerHTML = `<div class="tm-empty" style="grid-column:1/-1;">No templates found.</div>`;
+            _safeSetHtml(grid, `<div class="tm-empty" style="grid-column:1/-1;">No templates found.</div>`);
             return;
         }
 
@@ -1016,15 +1020,15 @@ const TemplateManager = (() => {
             card.className = 'tm-card';
             card.onclick = () => showCreateFromTemplate(tpl);
 
-            card.innerHTML = `
+            _safeSetHtml(card, `
                 <div class="tm-card-icon">${escHtml(tpl.icon || '\u{1F4C4}')}</div>
                 <div class="tm-card-name">${escHtml(tpl.name)}</div>
                 <div class="tm-card-desc">${escHtml(tpl.description || '')}</div>
-            `;
+            `);
 
             const footer = document.createElement('div');
             footer.className = 'tm-card-footer';
-            footer.innerHTML = `<span class="tm-card-cat">${escHtml(tpl.category || 'custom')}</span>`;
+            _safeSetHtml(footer, `<span class="tm-card-cat">${escHtml(tpl.category || 'custom')}</span>`);
 
             const actions = document.createElement('div');
             actions.className = 'tm-card-actions';
@@ -1034,7 +1038,7 @@ const TemplateManager = (() => {
             const exportBtn = document.createElement('button');
             exportBtn.className = 'tm-btn-icon';
             exportBtn.title = 'Export';
-            exportBtn.innerHTML = '&#8599;';
+            _safeSetHtml(exportBtn, '&#8599;');
             exportBtn.onclick = () => showExportDialog(tpl);
             actions.appendChild(exportBtn);
 
@@ -1043,7 +1047,7 @@ const TemplateManager = (() => {
                 const editBtn = document.createElement('button');
                 editBtn.className = 'tm-btn-icon';
                 editBtn.title = 'Edit';
-                editBtn.innerHTML = '&#9998;';
+                _safeSetHtml(editBtn, '&#9998;');
                 editBtn.onclick = () => showEditDialog(tpl);
                 actions.appendChild(editBtn);
 
@@ -1051,7 +1055,7 @@ const TemplateManager = (() => {
                 const dupBtn = document.createElement('button');
                 dupBtn.className = 'tm-btn-icon';
                 dupBtn.title = 'Duplicate';
-                dupBtn.innerHTML = '&#10697;';
+                _safeSetHtml(dupBtn, '&#10697;');
                 dupBtn.onclick = () => {
                     duplicateTemplate(tpl.id);
                     toast('Template duplicated', 'success');
@@ -1063,7 +1067,7 @@ const TemplateManager = (() => {
                 const delBtn = document.createElement('button');
                 delBtn.className = 'tm-btn-icon';
                 delBtn.title = 'Delete';
-                delBtn.innerHTML = '&#10005;';
+                _safeSetHtml(delBtn, '&#10005;');
                 delBtn.onclick = async () => {
                     const confirmed = typeof window.ScriptVaultDashboardUI?.confirm === 'function'
                         ? await window.ScriptVaultDashboardUI.confirm('Delete Template', `Delete template "${tpl.name}"?`)
@@ -1080,7 +1084,7 @@ const TemplateManager = (() => {
                 const dupBtn = document.createElement('button');
                 dupBtn.className = 'tm-btn-icon';
                 dupBtn.title = 'Duplicate as custom';
-                dupBtn.innerHTML = '&#10697;';
+                _safeSetHtml(dupBtn, '&#10697;');
                 dupBtn.onclick = () => {
                     duplicateTemplate(tpl.id);
                     toast('Duplicated as custom template', 'success');
@@ -1210,7 +1214,7 @@ const TemplateManager = (() => {
             for (const f of fields) {
                 const group = document.createElement('div');
                 group.className = 'tm-form-group';
-                group.innerHTML = `<label class="tm-form-label">${f.label}</label>`;
+                _safeSetHtml(group, `<label class="tm-form-label">${f.label}</label>`);
                 const input = document.createElement('input');
                 input.className = 'tm-form-input';
                 input.value = f.value;
@@ -1223,7 +1227,7 @@ const TemplateManager = (() => {
             // Category select
             const catGroup = document.createElement('div');
             catGroup.className = 'tm-form-group';
-            catGroup.innerHTML = `<label class="tm-form-label">Category</label>`;
+            _safeSetHtml(catGroup, `<label class="tm-form-label">Category</label>`);
             const select = document.createElement('select');
             select.className = 'tm-form-select';
             select.dataset.field = 'category';
@@ -1240,7 +1244,7 @@ const TemplateManager = (() => {
             // Icon input
             const iconGroup = document.createElement('div');
             iconGroup.className = 'tm-form-group';
-            iconGroup.innerHTML = `<label class="tm-form-label">Icon (HTML entity or emoji)</label>`;
+            _safeSetHtml(iconGroup, `<label class="tm-form-label">Icon (HTML entity or emoji)</label>`);
             const iconInput = document.createElement('input');
             iconInput.className = 'tm-form-input';
             iconInput.value = tplIcon;
@@ -1251,7 +1255,7 @@ const TemplateManager = (() => {
             // Code textarea
             const codeGroup = document.createElement('div');
             codeGroup.className = 'tm-form-group';
-            codeGroup.innerHTML = `<label class="tm-form-label">Template Code (variables: {{SCRIPT_NAME}}, {{AUTHOR}}, {{MATCH_PATTERN}}, {{DESCRIPTION}})</label>`;
+            _safeSetHtml(codeGroup, `<label class="tm-form-label">Template Code (variables: {{SCRIPT_NAME}}, {{AUTHOR}}, {{MATCH_PATTERN}}, {{DESCRIPTION}})</label>`);
             const textarea = document.createElement('textarea');
             textarea.className = 'tm-form-textarea';
             textarea.value = tplCode;
@@ -1308,7 +1312,7 @@ const TemplateManager = (() => {
             for (const f of fields) {
                 const group = document.createElement('div');
                 group.className = 'tm-form-group';
-                group.innerHTML = `<label class="tm-form-label">${f.label}</label>`;
+                _safeSetHtml(group, `<label class="tm-form-label">${f.label}</label>`);
                 const input = document.createElement('input');
                 input.className = 'tm-form-input';
                 input.value = f.value;
@@ -1319,7 +1323,7 @@ const TemplateManager = (() => {
 
             const catGroup = document.createElement('div');
             catGroup.className = 'tm-form-group';
-            catGroup.innerHTML = `<label class="tm-form-label">Category</label>`;
+            _safeSetHtml(catGroup, `<label class="tm-form-label">Category</label>`);
             const select = document.createElement('select');
             select.className = 'tm-form-select';
             select.dataset.field = 'category';
@@ -1335,7 +1339,7 @@ const TemplateManager = (() => {
 
             const iconGroup = document.createElement('div');
             iconGroup.className = 'tm-form-group';
-            iconGroup.innerHTML = `<label class="tm-form-label">Icon</label>`;
+            _safeSetHtml(iconGroup, `<label class="tm-form-label">Icon</label>`);
             const iconInput = document.createElement('input');
             iconInput.className = 'tm-form-input';
             iconInput.value = tpl.icon || '';
@@ -1345,7 +1349,7 @@ const TemplateManager = (() => {
 
             const codeGroup = document.createElement('div');
             codeGroup.className = 'tm-form-group';
-            codeGroup.innerHTML = `<label class="tm-form-label">Template Code</label>`;
+            _safeSetHtml(codeGroup, `<label class="tm-form-label">Template Code</label>`);
             const textarea = document.createElement('textarea');
             textarea.className = 'tm-form-textarea';
             textarea.value = tpl.code;
@@ -1696,7 +1700,7 @@ const TemplateManager = (() => {
         destroy() {
             if (_state.styleEl) { _state.styleEl.remove(); _state.styleEl = null; }
             if (_state.modalEl) { _state.modalEl.remove(); _state.modalEl = null; }
-            if (_state.container) { _state.container.innerHTML = ''; _state.container = null; }
+            if (_state.container) { _state.container.replaceChildren(); _state.container = null; }
             _state.templates = [];
         }
     };

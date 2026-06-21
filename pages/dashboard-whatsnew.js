@@ -79,6 +79,10 @@ const WhatsNew = (() => {
     }
   };
 
+  const _safeSetHtml = (typeof window.ScriptVaultDashboardUI?.safeSetHtml === 'function')
+      ? window.ScriptVaultDashboardUI.safeSetHtml
+      : (el, html) => { el.innerHTML = html; };
+
   function _hasChangelogEntry(version) {
     return Object.prototype.hasOwnProperty.call(CHANGELOG, version);
   }
@@ -171,7 +175,7 @@ const WhatsNew = (() => {
 
       const improvementsHtml = entry.improvements.map(i => `<li>${i}</li>`).join('');
 
-      overlay.innerHTML = `
+      _safeSetHtml(overlay, `
         <div class="sv-wn-modal" role="dialog" aria-modal="true" aria-labelledby="svWnTitle" aria-describedby="svWnSummary" tabindex="-1">
           <div class="sv-wn-header">
             <h2 id="svWnTitle">${entry.title}</h2>
@@ -191,7 +195,7 @@ const WhatsNew = (() => {
             <button class="sv-wn-dismiss" id="svWnDismiss" type="button">Continue</button>
           </div>
         </div>
-      `;
+      `);
 
       document.body.appendChild(overlay);
 

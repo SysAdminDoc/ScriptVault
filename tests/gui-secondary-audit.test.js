@@ -81,7 +81,7 @@ describe("secondary dashboard UX audit", () => {
     expect(gistJs).toMatch(/input\.spellcheck = false;/);
     expect(gistJs).toMatch(/btn\.type = 'button';/);
     expect(gistJs).toMatch(/btn\.addEventListener\('click', async \(\) => \{/);
-    expect(gistJs).toMatch(/btn\.innerHTML = '<span class="gi-spinner"><\/span>Fetching…';/);
+    expect(gistJs).toMatch(/_safeSetHtml\(btn, '<span class="gi-spinner"><\/span>Fetching…'\);/);
     expect(gistJs).toMatch(/modal\.setAttribute\('role', 'dialog'\);/);
     expect(gistJs).toMatch(/modal\.setAttribute\('aria-modal', 'true'\);/);
     expect(gistJs).toMatch(/closeBtn\.type = 'button';/);

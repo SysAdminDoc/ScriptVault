@@ -16,6 +16,10 @@ const StandaloneExport = (() => {
         getAllScripts: null,    // fn() => scripts[]
     };
 
+    const _safeSetHtml = (typeof window.ScriptVaultDashboardUI?.safeSetHtml === 'function')
+        ? window.ScriptVaultDashboardUI.safeSetHtml
+        : (el, html) => { el.innerHTML = html; };
+
     // =========================================
     // CSS (injected for in-dashboard UI)
     // =========================================
@@ -563,7 +567,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const overlay = document.createElement('div');
         overlay.className = 'se-overlay';
-        overlay.innerHTML = `
+        _safeSetHtml(overlay, `
 <div class="se-modal">
     <h3>Bookmarklet: ${escapeHTML(result.name)}</h3>
     <p>Drag the button below to your bookmarks bar to install:</p>
@@ -580,7 +584,7 @@ document.addEventListener('DOMContentLoaded', function() {
         <button type="button" class="se-btn" id="se-bm-copy">Copy URL</button>
         <button type="button" class="se-btn primary" id="se-bm-close">Close</button>
     </div>
-</div>`;
+</div>`);
         document.body.appendChild(overlay);
         overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
         overlay.querySelector('#se-bm-close').addEventListener('click', () => overlay.remove());

@@ -37,6 +37,10 @@ const ScriptScheduler = (() => {
   let _activeScriptId = null;
   let _initialized = false;
 
+  const _safeSetHtml = (typeof window.ScriptVaultDashboardUI?.safeSetHtml === 'function')
+      ? window.ScriptVaultDashboardUI.safeSetHtml
+      : (el, html) => { el.innerHTML = html; };
+
   /* ------------------------------------------------------------------ */
   /*  CSS                                                                */
   /* ------------------------------------------------------------------ */
@@ -399,7 +403,7 @@ const ScriptScheduler = (() => {
     }
     for (const [k, v] of Object.entries(attrs)) {
       if (k === 'className') e.className = v;
-      else if (k === 'innerHTML') e.innerHTML = v;
+      else if (k === 'innerHTML') _safeSetHtml(e, v);
       else if (k === 'textContent') e.textContent = v;
       else if (k.startsWith('on')) e.addEventListener(k.slice(2).toLowerCase(), v);
       else e.setAttribute(k, v);
@@ -639,13 +643,13 @@ const ScriptScheduler = (() => {
 
     // Enable toggle
     const enableRow = el('div', { className: 'sv-sched-enable-row' });
-    enableRow.innerHTML = `
+    _safeSetHtml(enableRow, `
       <label>Enable schedule</label>
       <label class="sv-sched-toggle">
         <input type="checkbox" id="sv-sched-enabled">
         <span class="sv-sched-toggle-track"></span>
       </label>
-    `;
+    `);
     body.appendChild(enableRow);
 
     // Type tabs
@@ -669,7 +673,7 @@ const ScriptScheduler = (() => {
 
     // Visual time slider
     const slider = el('div', { className: 'sv-sched-time-slider', id: 'sv-sched-slider' });
-    slider.innerHTML = `
+    _safeSetHtml(slider, `
       <div class="sv-sched-time-slider-fill" id="sv-sched-slider-fill"></div>
       <div class="sv-sched-time-slider-fill" id="sv-sched-slider-fill2" style="display:none"></div>
       <div class="sv-sched-time-slider-handle" id="sv-sched-slider-start" style="left:37.5%"></div>
@@ -678,17 +682,17 @@ const ScriptScheduler = (() => {
         <span id="sv-sched-slider-label-start">9:00 AM</span>
         <span id="sv-sched-slider-label-end">5:00 PM</span>
       </div>
-    `;
+    `);
     timeSection.appendChild(slider);
 
     // Time inputs (fallback)
     const timeRow = el('div', { className: 'sv-sched-row' });
-    timeRow.innerHTML = `
+    _safeSetHtml(timeRow, `
       <label>From</label>
       <input type="time" id="sv-sched-time-start" value="09:00">
       <label style="min-width:auto">to</label>
       <input type="time" id="sv-sched-time-end" value="17:00">
-    `;
+    `);
     timeSection.appendChild(timeRow);
 
     // Day selection within time section
@@ -705,7 +709,7 @@ const ScriptScheduler = (() => {
 
     // --- Date Range section ---
     const dateSection = el('div', { className: 'sv-sched-section', 'data-section': 'dateRange', id: 'sv-sched-section-dateRange', role: 'tabpanel', hidden: 'hidden' });
-    dateSection.innerHTML = `
+    _safeSetHtml(dateSection, `
       <div class="sv-sched-row">
         <label>Start</label>
         <input type="date" id="sv-sched-date-start">
@@ -714,12 +718,12 @@ const ScriptScheduler = (() => {
         <label>End</label>
         <input type="date" id="sv-sched-date-end">
       </div>
-    `;
+    `);
     body.appendChild(dateSection);
 
     // --- Interval section ---
     const intervalSection = el('div', { className: 'sv-sched-section', 'data-section': 'interval', id: 'sv-sched-section-interval', role: 'tabpanel', hidden: 'hidden' });
-    intervalSection.innerHTML = `
+    _safeSetHtml(intervalSection, `
       <div class="sv-sched-row">
         <label>Every</label>
         <input type="number" id="sv-sched-interval" min="1" max="1440" value="60" style="max-width:100px">
@@ -728,17 +732,17 @@ const ScriptScheduler = (() => {
           <option value="hours">hours</option>
         </select>
       </div>
-    `;
+    `);
     body.appendChild(intervalSection);
 
     // --- One-Time section ---
     const oneTimeSection = el('div', { className: 'sv-sched-section', 'data-section': 'oneTime', id: 'sv-sched-section-oneTime', role: 'tabpanel', hidden: 'hidden' });
-    oneTimeSection.innerHTML = `
+    _safeSetHtml(oneTimeSection, `
       <div class="sv-sched-row">
         <label>Run at</label>
         <input type="datetime-local" id="sv-sched-onetime">
       </div>
-    `;
+    `);
     body.appendChild(oneTimeSection);
 
     // Preview
@@ -747,11 +751,11 @@ const ScriptScheduler = (() => {
 
     // Footer
     const footer = el('div', { className: 'sv-sched-footer' });
-    footer.innerHTML = `
+    _safeSetHtml(footer, `
       <button class="sv-sched-btn sv-sched-btn-danger" id="sv-sched-clear" type="button">Clear</button>
       <button class="sv-sched-btn" id="sv-sched-cancel" type="button">Cancel</button>
       <button class="sv-sched-btn sv-sched-btn-primary" id="sv-sched-save" type="button">Save Schedule</button>
-    `;
+    `);
 
     modal.appendChild(header);
     modal.appendChild(body);
@@ -965,7 +969,7 @@ const ScriptScheduler = (() => {
   function updatePreview() {
     const sched = collectScheduleFromModal();
     const previewEl = _modalEl.querySelector('#sv-sched-preview');
-    if (previewEl) previewEl.innerHTML = buildPreviewText(sched);
+    if (previewEl) _safeSetHtml(previewEl, buildPreviewText(sched));
   }
 
   function populateModal(schedule) {

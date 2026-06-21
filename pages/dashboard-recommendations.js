@@ -27,6 +27,10 @@ const Recommendations = (() => {
   let _getScripts = null;
   let _initialized = false;
 
+  const _safeSetHtml = (typeof window.ScriptVaultDashboardUI?.safeSetHtml === 'function')
+      ? window.ScriptVaultDashboardUI.safeSetHtml
+      : (el, html) => { el.innerHTML = html; };
+
   /* ------------------------------------------------------------------ */
   /*  CSS                                                                */
   /* ------------------------------------------------------------------ */
@@ -505,7 +509,7 @@ const Recommendations = (() => {
   }
 
   function _buildUI() {
-    _container.innerHTML = '';
+    _container.replaceChildren();
     const root = document.createElement('div');
     root.className = 'sv-rec-root';
 
@@ -746,7 +750,7 @@ const Recommendations = (() => {
   }
 
   function destroy() {
-    if (_container) _container.innerHTML = '';
+    if (_container) _container.replaceChildren();
     if (_styleEl) { _styleEl.remove(); _styleEl = null; }
     _container = null;
     _recommendations = [];

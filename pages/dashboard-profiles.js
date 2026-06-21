@@ -29,6 +29,10 @@ const ProfileManager = (() => {
   /*  Internal state                                                     */
   /* ------------------------------------------------------------------ */
 
+  const _safeSetHtml = (typeof window.ScriptVaultDashboardUI?.safeSetHtml === 'function')
+      ? window.ScriptVaultDashboardUI.safeSetHtml
+      : (el, html) => { el.innerHTML = html; };
+
   let _container = null;
   let _profileBar = null;
   let _modalEl = null;
@@ -659,7 +663,7 @@ const ProfileManager = (() => {
       html += '<button type="button" class="sv-profile-add-btn" title="New profile" aria-label="Create profile">+</button>';
     }
 
-    _profileBar.innerHTML = html;
+    _safeSetHtml(_profileBar, html);
 
     // Click handlers
     _profileBar.querySelectorAll('.sv-profile-chip').forEach(chip => {
@@ -717,11 +721,11 @@ const ProfileManager = (() => {
     // Validate color against a hex/named-color pattern to prevent style-attr
     // breakout, and escape emoji \u2014 both flow in unvalidated via importProfile().
     const indicatorColor = _safeColor(active.color);
-    indicator.innerHTML = `
+    _safeSetHtml(indicator, `
       <span class="sv-pi-dot" style="background:${indicatorColor}"></span>
       <span>${_escapeHtml(active.emoji || '')} ${_escapeHtml(active.name)}</span>
       <span style="font-size:0.625rem;color:var(--text-muted)">\u25BE</span>
-    `;
+    `);
 
     let dropdownOpen = false;
     let closeHandler = null;
@@ -749,11 +753,11 @@ const ProfileManager = (() => {
         item.className = 'sv-profile-dropdown-item' + (p.id === _activeProfileId ? ' active' : '');
         item.setAttribute('role', 'menuitemradio');
         item.setAttribute('aria-checked', p.id === _activeProfileId ? 'true' : 'false');
-        item.innerHTML = `
+        _safeSetHtml(item, `
           <span class="sv-dd-check">${p.id === _activeProfileId ? '\u2713' : ''}</span>
           <span>${_escapeHtml(p.emoji || '')}</span>
           <span style="flex:1">${_escapeHtml(p.name)}</span>
-        `;
+        `);
         item.addEventListener('click', async (e) => {
           e.stopPropagation();
           closeDropdown();
@@ -850,7 +854,7 @@ const ProfileManager = (() => {
     // Build modal
     const overlay = document.createElement('div');
     overlay.className = 'sv-profile-overlay';
-    overlay.innerHTML = `
+    _safeSetHtml(overlay, `
       <div class="sv-profile-modal">
         <div class="sv-profile-modal-header">
           <h3>${isNew ? 'Create Profile' : 'Edit Profile'}</h3>
@@ -908,7 +912,7 @@ const ProfileManager = (() => {
           <button type="button" class="sv-profile-btn sv-profile-btn-primary" id="svProfileSave">${isNew ? 'Create' : 'Save'}</button>
         </div>
       </div>
-    `;
+    `);
 
     document.body.appendChild(overlay);
     requestAnimationFrame(() => overlay.classList.add('visible'));
@@ -1043,7 +1047,7 @@ const ProfileManager = (() => {
         </div>`;
     }
 
-    overlay.innerHTML = `
+    _safeSetHtml(overlay, `
       <div class="sv-profile-compare">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
           <h3 style="margin:0;font-size:0.9375rem">Profile Comparison</h3>
@@ -1051,7 +1055,7 @@ const ProfileManager = (() => {
         </div>
         ${rows}
       </div>
-    `;
+    `);
 
     document.body.appendChild(overlay);
     _comparisonEl = overlay;

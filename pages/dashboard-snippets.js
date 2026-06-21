@@ -760,6 +760,10 @@ $CURSOR$`
         },
     ];
 
+    const _safeSetHtml = (typeof window.ScriptVaultDashboardUI?.safeSetHtml === 'function')
+        ? window.ScriptVaultDashboardUI.safeSetHtml
+        : (el, html) => { el.innerHTML = html; };
+
     const CATEGORIES = {
         all:     { label: 'All',              icon: '\u2726' },
         dom:     { label: 'DOM',              icon: '\u29C9' },
@@ -1180,7 +1184,7 @@ $CURSOR$`
                 </div>`;
             }).join('');
 
-        _state.container.innerHTML = `
+        _safeSetHtml(_state.container, `
             <div class="snip-panel">
                 <div class="snip-header">
                     <h3>Snippets</h3>
@@ -1190,7 +1194,7 @@ $CURSOR$`
                 <div class="snip-categories">${catHTML}</div>
                 <div class="snip-count">${snippets.length} snippet${snippets.length !== 1 ? 's' : ''}</div>
                 <div class="snip-grid">${cardsHTML}</div>
-            </div>`;
+            </div>`);
 
         bindEvents();
     }
@@ -1367,7 +1371,7 @@ $CURSOR$`
             .map(([k, v]) => `<option value="${k}" ${existing?.category === k ? 'selected' : ''}>${v.label}</option>`)
             .join('');
 
-        overlay.innerHTML = `
+        _safeSetHtml(overlay, `
             <div class="snip-modal" role="dialog" aria-modal="true" aria-label="${existing ? 'Edit Custom Snippet' : 'New Custom Snippet'}">
                 <h3>${existing ? 'Edit' : 'New'} Custom Snippet</h3>
                 <label>Name</label>
@@ -1382,7 +1386,7 @@ $CURSOR$`
                     <button class="snip-action-btn" id="snip-edit-cancel" type="button">Cancel</button>
                     <button class="snip-action-btn primary" id="snip-edit-save" type="button">Save</button>
                 </div>
-            </div>`;
+            </div>`);
 
         document.body.appendChild(overlay);
 
@@ -1433,7 +1437,7 @@ $CURSOR$`
 
         const overlay = document.createElement('div');
         overlay.className = 'snip-modal-overlay';
-        overlay.innerHTML = `
+        _safeSetHtml(overlay, `
             <div class="snip-modal" style="width:400px" role="dialog" aria-modal="true" aria-label="Delete Snippet">
                 <h3>Delete Snippet</h3>
                 <p style="margin:12px 0;color:var(--text-secondary,#a0a0a0)">
@@ -1443,7 +1447,7 @@ $CURSOR$`
                     <button class="snip-action-btn" id="snip-del-cancel" type="button">Cancel</button>
                     <button class="snip-action-btn danger" id="snip-del-confirm" type="button">Delete</button>
                 </div>
-            </div>`;
+            </div>`);
 
         document.body.appendChild(overlay);
         overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
@@ -1594,7 +1598,7 @@ $CURSOR$`
         destroy() {
             document.removeEventListener('keydown', handleKeyDown);
             if (_state.styleEl) { _state.styleEl.remove(); _state.styleEl = null; }
-            if (_state.container) { _state.container.innerHTML = ''; }
+            if (_state.container) { _state.container.replaceChildren(); }
             _state.container = null;
             _state.monacoEditor = null;
             _state.expandedSnippet = null;

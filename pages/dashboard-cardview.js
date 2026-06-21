@@ -18,6 +18,10 @@ const CardView = (() => {
   /*  Internal state                                                     */
   /* ------------------------------------------------------------------ */
 
+  const _safeSetHtml = (typeof window.ScriptVaultDashboardUI?.safeSetHtml === 'function')
+      ? window.ScriptVaultDashboardUI.safeSetHtml
+      : (el, html) => { el.innerHTML = html; };
+
   let _container = null;
   let _cardGrid = null;
   let _styleEl = null;
@@ -793,9 +797,9 @@ const CardView = (() => {
     const empty = document.createElement('div');
     const hasScripts = typeof _options.hasScripts === 'function' ? _options.hasScripts() : _scripts.length > 0;
     empty.className = 'cv-empty';
-    empty.innerHTML = hasScripts
+    _safeSetHtml(empty, hasScripts
       ? '<div><h3>Nothing matches this view</h3><p>Adjust the current search or filter to bring scripts back into focus.</p></div>'
-      : '<div><h3>No scripts yet</h3><p>Create or import a script to start building out the vault.</p></div>';
+      : '<div><h3>No scripts yet</h3><p>Create or import a script to start building out the vault.</p></div>');
     return empty;
   }
 
@@ -928,7 +932,7 @@ const CardView = (() => {
       perfHtml = `<span class="cv-perf ${cls}" title="${stats.avgTime}ms avg">${label}</span>`;
     }
 
-    card.innerHTML = `
+    _safeSetHtml(card, `
       <div class="cv-status-dots">${dots.join('')}</div>
       <button type="button" class="cv-open-surface" data-open-id="${scriptIdAttr}" aria-label="Open ${escapeHtml(name)} in the editor" aria-describedby="${cardSummaryId}">
         <div class="cv-header">
@@ -967,7 +971,7 @@ const CardView = (() => {
           <button type="button" class="cv-menu-item danger" data-action="delete" data-id="${scriptIdAttr}">Delete</button>
         </div>
       </div>
-    `;
+    `);
 
     const icon = card.querySelector('.cv-icon[data-favicon-fallback="true"]');
     icon?.addEventListener('error', () => revealCardIconFallback(icon));
@@ -1103,7 +1107,7 @@ const CardView = (() => {
     btn.title = label;
     btn.setAttribute('aria-label', label);
     btn.setAttribute('aria-pressed', _viewMode === 'card' ? 'true' : 'false');
-    btn.innerHTML = compact ? getToggleSvg(nextMode) : `${getToggleSvg(nextMode)} ${nextMode === 'card' ? 'Cards' : 'Table'}`;
+    _safeSetHtml(btn, compact ? getToggleSvg(nextMode) : `${getToggleSvg(nextMode)} ${nextMode === 'card' ? 'Cards' : 'Table'}`);
   }
 
   /* ------------------------------------------------------------------ */
@@ -1213,7 +1217,7 @@ const CardView = (() => {
       _scripts = scripts || [];
       if (!_cardGrid) return;
 
-      _cardGrid.innerHTML = '';
+      _cardGrid.replaceChildren();
       _cardGrid.dataset.listSize = getCardListSize(_scripts.length);
       closeAllMenus();
 
