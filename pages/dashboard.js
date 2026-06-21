@@ -3899,6 +3899,7 @@
         }
         setSettingsFieldError(input, '');
         value = validation.value;
+        const previousValue = state.settings[key];
         try {
             state.settings[key] = value;
             await chrome.runtime.sendMessage({ action: 'setSettings', settings: { [key]: value } });
@@ -3928,6 +3929,7 @@
             if (!options.quiet) showToast('Setting saved', 'success');
             return true;
         } catch (e) {
+            state.settings[key] = previousValue;
             if (!options.quiet) showToast('Failed to save', 'error');
             return false;
         }
