@@ -397,7 +397,7 @@ describe("dashboard accessibility markup", () => {
     expect(dashboardJs).toMatch(/async function runButtonTask/);
     expect(dashboardJs).toMatch(/const originalContent = isButton \? button\.innerHTML : '';/);
     expect(dashboardJs).toMatch(/button\.setAttribute\('aria-busy', 'true'\)/);
-    expect(dashboardJs).toMatch(/if \(busyLabel\) button\.innerHTML = originalContent;/);
+    expect(dashboardJs).toMatch(/if \(busyLabel\) safeSetHtml\(button, originalContent\);/);
     expect(dashboardJs).toMatch(/options\.errorMessage \|\| error\?\.message \|\| 'Action failed'/);
     expect(dashboardJs).toMatch(/async function saveSettingOrThrow/);
     expect(dashboardJs).toMatch(/elements\.btnSaveAppearance\?\.\s*addEventListener\('click', async event =>/);

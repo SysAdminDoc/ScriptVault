@@ -9,6 +9,10 @@ const ScriptSharing = (() => {
     // =========================================
     // State
     // =========================================
+    const _safeSetHtml = (typeof window.ScriptVaultDashboardUI?.safeSetHtml === 'function')
+        ? window.ScriptVaultDashboardUI.safeSetHtml
+        : (el, html) => { el.innerHTML = html; };
+
     const _state = {
         styleEl: null,
         modalEl: null,
@@ -936,7 +940,7 @@ const ScriptSharing = (() => {
         // QR data
         const qrData = QR.encode(qrText);
 
-        modal.innerHTML = `
+        _safeSetHtml(modal, `
             <div class="ss-modal-header">
                 <h3>Share Script</h3>
                 <button class="ss-modal-close" data-action="close" type="button" aria-label="Close share dialog">\u2715</button>
@@ -996,7 +1000,7 @@ const ScriptSharing = (() => {
                     <div id="ss-import-preview"></div>
                 </div>
             </div>
-        `;
+        `);
 
         modal.setAttribute('role', 'dialog');
         modal.setAttribute('aria-modal', 'true');
@@ -1074,17 +1078,17 @@ const ScriptSharing = (() => {
                     if (decoded) {
                         const importMeta = parseMetadata(decoded);
                         const previewCode = decoded.split('\n').slice(0, 8).join('\n');
-                        preview.innerHTML = `
+                        _safeSetHtml(preview, `
                             <div class="ss-preview-box">
                                 <div class="ss-name">${escapeHtml(importMeta.name)}</div>
                                 <div class="ss-meta">${importMeta.version ? `v${escapeHtml(importMeta.version)}` : ''} ${importMeta.author ? `by ${escapeHtml(importMeta.author)}` : ''}</div>
                                 <div class="ss-code-preview">${escapeHtml(previewCode)}</div>
                             </div>
                             <button class="ss-install-btn" data-action="install-decoded" type="button">Install Script</button>
-                        `;
+                        `);
                         preview._decodedCode = decoded;
                     } else {
-                        preview.innerHTML = `<div style="color:var(--accent-red);margin-top:8px;">Invalid data URL or not a valid userscript.</div>`;
+                        _safeSetHtml(preview, `<div style="color:var(--accent-red);margin-top:8px;">Invalid data URL or not a valid userscript.</div>`);
                     }
                     break;
                 }

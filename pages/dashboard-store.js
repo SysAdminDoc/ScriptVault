@@ -29,6 +29,10 @@ const ScriptStore = (() => {
         pendingFocusRestore: null,
     };
 
+    const _safeSetHtml = (typeof window.ScriptVaultDashboardUI?.safeSetHtml === 'function')
+        ? window.ScriptVaultDashboardUI.safeSetHtml
+        : (el, html) => { el.innerHTML = html; };
+
     const CATEGORIES = {
         productivity: { label: 'Productivity', query: 'productivity' },
         entertainment: { label: 'Entertainment', query: 'entertainment' },
@@ -1326,7 +1330,7 @@ const ScriptStore = (() => {
         if (el) {
             el.setAttribute('aria-busy', 'true');
             el.dataset.listSize = 'empty';
-            el.innerHTML = `<div class="ss-loading"><strong>${escapeHtml(message)}</strong><span>Fetching scripts from the active discovery sources.</span></div>`;
+            _safeSetHtml(el, `<div class="ss-loading"><strong>${escapeHtml(message)}</strong><span>Fetching scripts from the active discovery sources.</span></div>`);
         }
     }
 
@@ -1341,7 +1345,7 @@ const ScriptStore = (() => {
         if (el) {
             el.setAttribute('aria-busy', 'false');
             el.dataset.listSize = 'empty';
-            el.innerHTML = `<div class="ss-empty"><strong>No scripts matched</strong><span>${escapeHtml(message)}</span></div>`;
+            _safeSetHtml(el, `<div class="ss-empty"><strong>No scripts matched</strong><span>${escapeHtml(message)}</span></div>`);
         }
         if (focusDescriptor) {
             queueMicrotask(() => restoreStoreFallbackFocus());
@@ -1359,7 +1363,7 @@ const ScriptStore = (() => {
         if (el) {
             el.setAttribute('aria-busy', 'false');
             el.dataset.listSize = 'empty';
-            el.innerHTML = `<div class="ss-error"><strong>Search failed</strong><span>${escapeHtml(message)}</span></div>`;
+            _safeSetHtml(el, `<div class="ss-error"><strong>Search failed</strong><span>${escapeHtml(message)}</span></div>`);
         }
         if (focusDescriptor) {
             queueMicrotask(() => restoreStoreFallbackFocus());
@@ -1567,7 +1571,7 @@ const ScriptStore = (() => {
         html += '</div>';
         html += '</div>';
 
-        el.innerHTML = html;
+        _safeSetHtml(el, html);
         bindCardActions(el);
         updateFooter(`${scripts.length} scripts loaded · ${getActiveSourceSummary()}`);
         if (focusDescriptor) {
@@ -1815,7 +1819,7 @@ const ScriptStore = (() => {
     // Build DOM
     // =========================================
     function buildPanel(container) {
-        container.innerHTML = `
+        _safeSetHtml(container, `
 <div class="ss-panel">
     <div class="ss-shell">
     <div class="ss-hero">
@@ -1877,7 +1881,7 @@ const ScriptStore = (() => {
         <span>Greasy Fork &bull; OpenUserJS</span>
     </div>
     </div>
-</div>`;
+</div>`);
     }
 
     function bindPanelEvents() {
@@ -2089,7 +2093,7 @@ const ScriptStore = (() => {
          * Clean up and remove the store panel.
          */
         destroy() {
-            if (_state.container) _state.container.innerHTML = '';
+            if (_state.container) _state.container.replaceChildren();
             if (_state.styleEl) {
                 _state.styleEl.remove();
                 _state.styleEl = null;

@@ -11,6 +11,10 @@ const DiffTool = (() => {
   /* ------------------------------------------------------------------ */
 
   const STYLE_ID = 'sv-diff-styles';
+  const _safeSetHtml = (typeof window.ScriptVaultDashboardUI?.safeSetHtml === 'function')
+      ? window.ScriptVaultDashboardUI.safeSetHtml
+      : (el, html) => { el.innerHTML = html; };
+
   const COLLAPSE_THRESHOLD = 6; // Collapse unchanged runs longer than this
 
   /* ------------------------------------------------------------------ */
@@ -393,7 +397,7 @@ const DiffTool = (() => {
   /* ------------------------------------------------------------------ */
 
   function _renderSideBySide(viewport) {
-    viewport.innerHTML = '';
+    viewport.replaceChildren();
     const ops = _diff;
     const wrapper = document.createElement('div');
     wrapper.className = 'sv-diff-side';
@@ -498,7 +502,7 @@ const DiffTool = (() => {
   /* ------------------------------------------------------------------ */
 
   function _renderUnified(viewport) {
-    viewport.innerHTML = '';
+    viewport.replaceChildren();
     const wrapper = document.createElement('div');
     wrapper.className = 'sv-diff-unified';
 
@@ -603,11 +607,11 @@ const DiffTool = (() => {
     nav.className = 'sv-diff-nav';
     const upBtn = document.createElement('button');
     upBtn.className = 'sv-diff-nav-btn';
-    upBtn.innerHTML = '&#x25B2;';
+    _safeSetHtml(upBtn, '&#x25B2;');
     upBtn.title = 'Previous change';
     const downBtn = document.createElement('button');
     downBtn.className = 'sv-diff-nav-btn';
-    downBtn.innerHTML = '&#x25BC;';
+    _safeSetHtml(downBtn, '&#x25BC;');
     downBtn.title = 'Next change';
 
     let currentIdx = -1;
@@ -778,7 +782,7 @@ const DiffTool = (() => {
 
   function _render() {
     if (!_container || !_diff) return;
-    _container.innerHTML = '';
+    _container.replaceChildren();
     const root = document.createElement('div');
     root.className = 'sv-diff-root';
 
@@ -795,7 +799,7 @@ const DiffTool = (() => {
     const dels = _diff.filter(o => o.type === 'del').length;
     const stats = document.createElement('span');
     stats.className = 'sv-diff-stats';
-    stats.innerHTML = `<span class="sv-diff-stats-add">+${adds}</span> / <span class="sv-diff-stats-del">-${dels}</span>`;
+    _safeSetHtml(stats, `<span class="sv-diff-stats-add">+${adds}</span> / <span class="sv-diff-stats-del">-${dels}</span>`);
     toolbar.appendChild(stats);
 
     // View mode toggles
@@ -884,7 +888,7 @@ const DiffTool = (() => {
   }
 
   function destroy() {
-    if (_container) _container.innerHTML = '';
+    if (_container) _container.replaceChildren();
     if (_styleEl) { _styleEl.remove(); _styleEl = null; }
     _container = null;
     _diff = null;

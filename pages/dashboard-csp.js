@@ -84,6 +84,10 @@ const CSPReporter = (() => {
   let _filter = '';
   let _initialized = false;
 
+  const _safeSetHtml = (typeof window.ScriptVaultDashboardUI?.safeSetHtml === 'function')
+      ? window.ScriptVaultDashboardUI.safeSetHtml
+      : (el, html) => { el.innerHTML = html; };
+
   // CSP-RULEID — sequential DNR ruleId allocator (replaces the legacy
   // hashCode-based allocation which suffered birthday-paradox collisions
   // at ~20 bypass hostnames within a 100K-ID pool). _ruleIdCounter is
@@ -596,18 +600,18 @@ const CSPReporter = (() => {
 
   function render() {
     if (!_container) return;
-    _container.innerHTML = '';
+    _container.replaceChildren();
 
     // Toolbar
     const toolbar = document.createElement('div');
     toolbar.className = 'sv-csp-toolbar';
-    toolbar.innerHTML = `
+    _safeSetHtml(toolbar, `
       <span class="sv-csp-toolbar-title">CSP Compatibility Report</span>
       <input type="text" class="sv-csp-search" placeholder="Filter by site or script\u2026" value="${escapeHtml(_filter)}">
       <button class="sv-csp-btn" data-action="export-csv">CSV</button>
       <button class="sv-csp-btn" data-action="export-json">JSON</button>
       <button class="sv-csp-btn danger" data-action="clear">Clear All</button>
-    `;
+    `);
     _container.appendChild(toolbar);
 
     const searchInput = toolbar.querySelector('.sv-csp-search');
@@ -645,7 +649,7 @@ const CSPReporter = (() => {
 
     const summary = document.createElement('div');
     summary.className = 'sv-csp-summary';
-    summary.innerHTML = `
+    _safeSetHtml(summary, `
       <div class="sv-csp-stat">
         <div class="sv-csp-stat-value">${_reports.length}</div>
         <div class="sv-csp-stat-label">Total Issues</div>
@@ -666,7 +670,7 @@ const CSPReporter = (() => {
         <div class="sv-csp-stat-value" style="color:var(--accent-orange)">${medium}</div>
         <div class="sv-csp-stat-label">Medium Severity</div>
       </div>
-    `;
+    `);
     _container.appendChild(summary);
   }
 
@@ -700,12 +704,12 @@ const CSPReporter = (() => {
     });
 
     if (filtered.length === 0) {
-      wrap.innerHTML = `
+      _safeSetHtml(wrap, `
         <div class="sv-csp-empty">
           <div class="sv-csp-empty-icon" aria-hidden="true">CSP</div>
           <div class="sv-csp-empty-text">${_filter ? 'No issues match your filter.' : 'No CSP issues recorded yet.'}</div>
         </div>
-      `;
+      `);
       return;
     }
 
@@ -745,7 +749,7 @@ const CSPReporter = (() => {
     }
 
     html += '</tbody></table></div>';
-    wrap.innerHTML = html;
+    _safeSetHtml(wrap, html);
 
     // Sort handlers
     wrap.querySelectorAll('th[data-sort]').forEach(th => {
@@ -831,35 +835,38 @@ const CSPReporter = (() => {
     headerEl.type = 'button';
     headerEl.setAttribute('aria-expanded', 'false');
     headerEl.setAttribute('aria-controls', 'svCspBypassBody');
-    headerEl.innerHTML = `
+    _safeSetHtml(headerEl, `
       <h4>CSP Bypass Settings</h4>
       <span class="sv-csp-bypass-caret" style="color:var(--text-muted);font-size:0.6875rem" aria-hidden="true">\u25BC</span>
-    `;
+    `);
     panel.appendChild(headerEl);
 
     const body = document.createElement('div');
     body.id = 'svCspBypassBody';
     body.className = 'sv-csp-bypass-body';
 
-    body.innerHTML = `
+    _safeSetHtml(body, `
       <div class="sv-csp-bypass-warning" role="alert">
         <span class="sv-csp-warning-mark" aria-hidden="true">!</span>
         <span><strong>Security warning.</strong> Stripping CSP headers removes important browser protections. Only enable bypass for sites where you trust the scripts you are running. ScriptVault uses declarativeNetRequest to remove Content-Security-Policy headers for the selected host.</span>
       </div>
-    `;
+    `);
 
     if (hostnames.length === 0) {
-      body.innerHTML += '<div class="sv-csp-empty-inline">No sites with CSP issues recorded.</div>';
+      const _emptyDiv = document.createElement('div');
+      _emptyDiv.className = 'sv-csp-empty-inline';
+      _emptyDiv.textContent = 'No sites with CSP issues recorded.';
+      body.appendChild(_emptyDiv);
     } else {
       for (const host of hostnames) {
         const isEnabled = _bypassSettings[host] && _bypassSettings[host].enabled;
         const row = document.createElement('div');
         row.className = 'sv-csp-bypass-row';
-        row.innerHTML = `
+        _safeSetHtml(row, `
           <span class="sv-csp-bypass-host">${escapeHtml(host)}</span>
           <span class="sv-csp-bypass-state" style="font-size:0.6875rem;color:var(--text-muted)">${isEnabled ? 'Bypass ON' : 'Bypass OFF'}</span>
           <button type="button" class="sv-csp-bypass-toggle ${isEnabled ? 'on' : ''}" data-bypass-host="${escapeHtml(host)}" role="switch" aria-checked="${isEnabled ? 'true' : 'false'}" aria-label="${isEnabled ? 'Disable' : 'Enable'} CSP bypass for ${escapeHtml(host)}"></button>
-        `;
+        `);
         body.appendChild(row);
 
         row.querySelector('.sv-csp-bypass-toggle').addEventListener('click', () => {

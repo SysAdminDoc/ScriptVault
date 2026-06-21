@@ -74,6 +74,10 @@ const ScriptChains = (() => {
   let _availableScripts = [];
   let _runningChains = new Set();
 
+  const _safeSetHtml = (typeof window.ScriptVaultDashboardUI?.safeSetHtml === 'function')
+      ? window.ScriptVaultDashboardUI.safeSetHtml
+      : (el, html) => { el.innerHTML = html; };
+
   /* ------------------------------------------------------------------ */
   /*  CSS                                                                */
   /* ------------------------------------------------------------------ */
@@ -737,7 +741,7 @@ const ScriptChains = (() => {
 
   function _renderPanel() {
     if (!_containerEl) return;
-    _containerEl.innerHTML = '';
+    _containerEl.replaceChildren();
 
     const panel = document.createElement('div');
     panel.className = 'sv-chains-panel';
@@ -745,9 +749,9 @@ const ScriptChains = (() => {
     // Header
     const header = document.createElement('div');
     header.className = 'sv-chains-header';
-    header.innerHTML = `
+    _safeSetHtml(header, `
       <h3><span class="icon">&#9918;</span> Script Chains</h3>
-    `;
+    `);
     const addBtn = document.createElement('button');
     addBtn.type = 'button';
     addBtn.className = 'sv-chains-btn primary';
@@ -769,16 +773,16 @@ const ScriptChains = (() => {
   function _renderChainList() {
     const listEl = document.getElementById('sv-chains-list');
     if (!listEl) return;
-    listEl.innerHTML = '';
+    listEl.replaceChildren();
 
     const allChains = Object.values(_chains);
     if (allChains.length === 0) {
-      listEl.innerHTML = `
+      _safeSetHtml(listEl, `
         <div class="sv-chains-empty">
           <div class="empty-icon">&#9918;</div>
           No chains defined yet. Create one to automate script execution.
         </div>
-      `;
+      `);
       return;
     }
 
@@ -796,7 +800,7 @@ const ScriptChains = (() => {
 
       const triggerInfo = TRIGGER_TYPES[chain.trigger?.type] || TRIGGER_TYPES.manual;
 
-      card.innerHTML = `
+      _safeSetHtml(card, `
         <div class="chain-info">
           <div>
             <div class="chain-name">${_esc(chain.name)}</div>
@@ -805,7 +809,7 @@ const ScriptChains = (() => {
           <span class="chain-trigger-badge">${triggerInfo.icon} ${triggerInfo.label}</span>
         </div>
         <div class="chain-actions"></div>
-      `;
+      `);
 
       const actions = card.querySelector('.chain-actions');
       const isRunning = _runningChains.has(chain.id);
@@ -873,7 +877,7 @@ const ScriptChains = (() => {
 
     const overlay = document.createElement('div');
     overlay.className = 'sv-chain-editor-overlay';
-    overlay.innerHTML = `
+    _safeSetHtml(overlay, `
       <div class="sv-chain-editor" role="dialog" aria-modal="true" aria-labelledby="sv-chain-editor-title">
         <div class="sv-chain-editor-top">
           <h3 id="sv-chain-editor-title">${chainId ? 'Edit Chain' : 'New Chain'}</h3>
@@ -921,7 +925,7 @@ const ScriptChains = (() => {
           <button type="button" class="sv-chains-btn primary" id="sv-chain-save">Save Chain</button>
         </div>
       </div>
-    `;
+    `);
 
     document.body.appendChild(overlay);
     requestAnimationFrame(() => overlay.classList.add('visible'));
@@ -997,10 +1001,10 @@ const ScriptChains = (() => {
   /* ------------------------------------------------------------------ */
 
   function _renderPipeline(containerEl, steps) {
-    containerEl.innerHTML = '';
+    containerEl.replaceChildren();
 
     if (steps.length === 0) {
-      containerEl.innerHTML = '<div style="color:var(--text-muted,#707070);font-size:0.75rem;text-align:center;padding:16px;">No steps. Click "+ Add Step" to begin.</div>';
+      _safeSetHtml(containerEl, '<div style="color:var(--text-muted,#707070);font-size:0.75rem;text-align:center;padding:16px;">No steps. Click "+ Add Step" to begin.</div>');
       return;
     }
 
@@ -1010,7 +1014,7 @@ const ScriptChains = (() => {
         const arrow = document.createElement('div');
         arrow.className = 'sv-chain-arrow';
         const condClass = step.condition || 'always';
-        arrow.innerHTML = `&#8595; <span class="condition-badge ${condClass}">${CONDITION_TYPES[condClass] || 'Always'}</span>`;
+        _safeSetHtml(arrow, `&#8595; <span class="condition-badge ${condClass}">${CONDITION_TYPES[condClass] || 'Always'}</span>`);
         containerEl.appendChild(arrow);
       }
 
@@ -1030,7 +1034,7 @@ const ScriptChains = (() => {
       bodyEl.className = 'step-body';
       const scriptSelect = document.createElement('select');
       scriptSelect.className = 'step-script-select';
-      scriptSelect.innerHTML = `<option value="">-- Select Script --</option>`;
+      _safeSetHtml(scriptSelect, `<option value="">-- Select Script --</option>`);
       for (const s of _availableScripts) {
         const opt = document.createElement('option');
         opt.value = s.id;
@@ -1083,7 +1087,7 @@ const ScriptChains = (() => {
       const removeBtn = document.createElement('button');
       removeBtn.type = 'button';
       removeBtn.className = 'step-remove';
-      removeBtn.innerHTML = '&times;';
+      _safeSetHtml(removeBtn, '&times;');
       removeBtn.title = 'Remove step';
       removeBtn.addEventListener('click', () => {
         steps.splice(idx, 1);
@@ -1150,7 +1154,7 @@ const ScriptChains = (() => {
     const el = document.createElement('div');
     el.className = `sv-chain-log-entry ${entry.level}`;
     const time = new Date(entry.timestamp).toLocaleTimeString();
-    el.innerHTML = `<span class="log-time">${time}</span><span class="log-msg">${_esc(entry.message)}</span>`;
+    _safeSetHtml(el, `<span class="log-time">${time}</span><span class="log-msg">${_esc(entry.message)}</span>`);
     logEl.appendChild(el);
     logEl.scrollTop = logEl.scrollHeight;
   }
@@ -1194,7 +1198,7 @@ const ScriptChains = (() => {
   function destroy() {
     _removeStyles();
     if (_containerEl) {
-      _containerEl.innerHTML = '';
+      _containerEl.replaceChildren();
       _containerEl = null;
     }
     _chains = {};

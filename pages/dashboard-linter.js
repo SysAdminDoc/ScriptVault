@@ -25,6 +25,10 @@ const AdvancedLinter = (() => {
   let _onJumpToLine = null;
   let _onApplyFix = null;
 
+  const _safeSetHtml = (typeof window.ScriptVaultDashboardUI?.safeSetHtml === 'function')
+      ? window.ScriptVaultDashboardUI.safeSetHtml
+      : (el, html) => { el.innerHTML = html; };
+
   /* ------------------------------------------------------------------ */
   /*  CSS                                                                */
   /* ------------------------------------------------------------------ */
@@ -1122,7 +1126,7 @@ const AdvancedLinter = (() => {
     const infos = _issues.filter(i => i.severity === 'info').length;
     const fixable = _issues.filter(i => i.fixable).length;
 
-    _panelEl.innerHTML = '';
+    _panelEl.replaceChildren();
 
     // Toolbar
     const toolbar = document.createElement('div');
@@ -1206,7 +1210,7 @@ const AdvancedLinter = (() => {
   }
 
   function _renderList(listEl, filter) {
-    listEl.innerHTML = '';
+    listEl.replaceChildren();
     const filtered = filter === 'all' ? _issues : _issues.filter(i => i.severity === filter);
 
     if (!filtered.length) {

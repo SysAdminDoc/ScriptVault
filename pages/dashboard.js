@@ -2,6 +2,13 @@
 (function() {
     'use strict';
 
+    const _svPolicy = (typeof window.trustedTypes !== 'undefined' && window.trustedTypes.createPolicy)
+        ? window.trustedTypes.createPolicy('sv-dashboard', { createHTML: s => s })
+        : null;
+    function safeSetHtml(el, html) {
+        el.innerHTML = _svPolicy ? _svPolicy.createHTML(html) : html;
+    }
+
     // State
     const state = {
         scripts: [],
@@ -1210,7 +1217,7 @@
             } else {
                 button.setAttribute('aria-busy', previousAriaBusy);
             }
-            if (busyLabel) button.innerHTML = originalContent;
+            if (busyLabel) safeSetHtml(button, originalContent);
         }
     }
 
@@ -2220,10 +2227,10 @@
         const containerId = _containerIds[name] || (name.toLowerCase() + 'Container');
         const container = document.getElementById(containerId);
         if (container) {
-            container.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-muted)">
+            safeSetHtml(container, `<div style="padding:20px;text-align:center;color:var(--text-muted)">
                 <div style="font-size:1rem;margin-bottom:4px">Module Error</div>
                 <div style="font-size:0.75rem">${name} failed to load: ${escapeHtml(e?.message || String(e))}</div>
-            </div>`;
+            </div>`);
         }
     }
 
@@ -2277,7 +2284,7 @@
         const select = elements.standaloneScriptSelect;
         if (!select) return;
         const current = select.value || state.currentScriptId || getSelectedScriptIds()[0] || '';
-        select.innerHTML = '';
+        select.replaceChildren();
         for (const script of state.scripts) {
             const option = document.createElement('option');
             option.value = script.id;
@@ -2414,7 +2421,7 @@
                     });
                 } else {
                     const c = document.getElementById('storeContainer');
-                    if (c) c.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-muted)"><div style="font-size:1rem;margin-bottom:8px">Script Store failed to load</div><div style="font-size:0.75rem">Check the browser console for errors. The module file may be missing.</div></div>';
+                    if (c) safeSetHtml(c, '<div style="padding:40px;text-align:center;color:var(--text-muted)"><div style="font-size:1rem;margin-bottom:8px">Script Store failed to load</div><div style="font-size:0.75rem">Check the browser console for errors. The module file may be missing.</div></div>');
                 }
                 break;
             case 'settings':
@@ -2668,7 +2675,7 @@
             setTimeout(() => {
                 const banner = document.createElement('div');
                 banner.className = 'review-prompt';
-                banner.innerHTML = `
+                safeSetHtml(banner, `
                     <div style="display:flex;align-items:center;gap:12px;padding:12px 20px;background:linear-gradient(135deg,rgba(34,197,94,0.1),rgba(96,165,250,0.1));border:1px solid rgba(34,197,94,0.2);border-radius:8px;margin:8px 12px">
                         <div style="flex:1">
                             <div style="font-weight:600;color:var(--text-primary);margin-bottom:2px">Enjoying ScriptVault?</div>
@@ -2678,7 +2685,7 @@
                         <button id="btnReviewLater" class="toolbar-btn" style="white-space:nowrap">Maybe Later</button>
                         <button id="btnReviewDismiss" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1.125rem;padding:4px">&times;</button>
                     </div>
-                `;
+                `);
                 const panel = document.getElementById('scriptsPanel');
                 if (panel) panel.insertBefore(banner, panel.firstChild);
 
@@ -2721,7 +2728,7 @@
             const banner = document.createElement('div');
             banner.className = 'recent-updates-banner';
             const hasReviewableChanges = updates.some(hasRecentUpdateTrustChanges);
-            banner.innerHTML = `
+            safeSetHtml(banner, `
                 <div style="display:flex;align-items:center;gap:12px;padding:10px 16px;background:linear-gradient(135deg,rgba(34,197,94,0.12),rgba(96,165,250,0.12));border:1px solid rgba(34,197,94,0.25);border-radius:8px;margin:8px 12px;font-size:0.8125rem">
                     <div style="flex:1;min-width:0;color:var(--text-primary)">
                         <strong>${updates.length === 1 ? 'Script updated' : `${updates.length} scripts updated`}:</strong>
@@ -2730,7 +2737,7 @@
                     ${hasReviewableChanges ? '<button id="btnRecentUpdatesReview" type="button" class="toolbar-btn">Review changes</button>' : ''}
                     <button id="btnRecentUpdatesDismiss" type="button" aria-label="Dismiss" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1.125rem;padding:4px;line-height:1">&times;</button>
                 </div>
-            `;
+            `);
             panel.insertBefore(banner, panel.firstChild);
 
             document.getElementById('btnRecentUpdatesReview')?.addEventListener('click', () => {
@@ -2938,11 +2945,11 @@
         }
         if (!elements.pendingUpdatesList) return;
         if (counts.queued === 0) {
-            elements.pendingUpdatesList.innerHTML = `<div class="pending-updates-empty">${escapeHtml(tDashboard('noQueuedUpdates', 'No queued updates.'))}</div>`;
+            safeSetHtml(elements.pendingUpdatesList, `<div class="pending-updates-empty">${escapeHtml(tDashboard('noQueuedUpdates', 'No queued updates.'))}</div>`);
             return;
         }
 
-        elements.pendingUpdatesList.innerHTML = state.pendingUpdates.map(renderPendingUpdateCard).join('');
+        safeSetHtml(elements.pendingUpdatesList, state.pendingUpdates.map(renderPendingUpdateCard).join(''));
         elements.pendingUpdatesList.querySelectorAll('[data-update-action]').forEach(button => {
             button.addEventListener('click', () => handlePendingUpdateAction(button));
         });
@@ -4567,13 +4574,13 @@
         if (!el) return;
         
         if (!patterns || patterns.length === 0) {
-            el.innerHTML = '<span class="panel-empty-inline">None defined</span>';
+            safeSetHtml(el, '<span class="panel-empty-inline">None defined</span>');
             return;
         }
-        
-        el.innerHTML = patterns.map(p => 
+
+        safeSetHtml(el, patterns.map(p =>
             `<span class="pattern-item">${escapeHtml(p)}</span>`
-        ).join('');
+        ).join(''));
     }
     
     function renderUserPatterns(elementId, patterns, type) {
@@ -4581,17 +4588,17 @@
         if (!el) return;
         
         if (!patterns || patterns.length === 0) {
-            el.innerHTML = '';
+            el.replaceChildren();
             return;
         }
-        
+
         const isExclude = type === 'exclude';
-        el.innerHTML = patterns.map((p, i) => 
+        safeSetHtml(el, patterns.map((p, i) =>
             `<span class="pattern-tag ${isExclude ? 'exclude' : ''}" data-index="${i}" data-type="${type}">
                 <span class="pattern-text">${escapeHtml(p)}</span>
                 <span class="remove-pattern" title="Remove pattern">×</span>
             </span>`
-        ).join('');
+        ).join(''));
         
         // Add click handlers for remove buttons
         el.querySelectorAll('.remove-pattern').forEach(btn => {
@@ -4652,10 +4659,10 @@
         tag.className = `pattern-tag ${isExclude ? 'exclude' : ''}`;
         tag.dataset.index = index;
         tag.dataset.type = type;
-        tag.innerHTML = `
+        safeSetHtml(tag, `
             <span class="pattern-text">${escapeHtml(pattern)}</span>
             <span class="remove-pattern" title="Remove pattern">×</span>
-        `;
+        `);
         
         tag.querySelector('.remove-pattern').addEventListener('click', () => {
             tag.remove();
@@ -5270,9 +5277,9 @@
                 if (state.trustCenter.lastRuntimeRepairAt) {
                     detailLines.push(`Last repair ran ${dateTimeFormatter.format(new Date(state.trustCenter.lastRuntimeRepairAt))}.`);
                 }
-                elements.runtimeStatusDetails.innerHTML = detailLines
+                safeSetHtml(elements.runtimeStatusDetails, detailLines
                     .map(line => `<div>${escapeHtml(line)}</div>`)
-                    .join('');
+                    .join(''));
             } else {
                 elements.runtimeStatusDetails.textContent = 'Runtime status unavailable.';
             }
@@ -5317,9 +5324,9 @@
                 const blockedSummary = summarizeRuntimeHostPermission(status);
                 if (blockedSummary) lines.push(`Blocked scripts: ${blockedSummary}.`);
                 if (status.requestMethod) lines.push(`Recovery: ${status.requestMethod}.`);
-                elements.runtimeHostPermissionDetails.innerHTML = lines
+                safeSetHtml(elements.runtimeHostPermissionDetails, lines
                     .map(line => `<div>${escapeHtml(line)}</div>`)
-                    .join('');
+                    .join(''));
             }
         }
 
@@ -5406,10 +5413,10 @@
     function renderPublicApiAuditLog(entries = []) {
         if (!elements.publicApiAuditLog) return;
         if (!entries.length) {
-            elements.publicApiAuditLog.innerHTML = '<div class="panel-empty-inline">No external API activity yet.</div>';
+            safeSetHtml(elements.publicApiAuditLog, '<div class="panel-empty-inline">No external API activity yet.</div>');
             return;
         }
-        elements.publicApiAuditLog.innerHTML = entries
+        safeSetHtml(elements.publicApiAuditLog, entries
             .slice()
             .reverse()
             .map(entry => {
@@ -5427,7 +5434,7 @@
                     </div>
                 `;
             })
-            .join('');
+            .join(''));
     }
 
     async function loadPublicApiTrustState(options = {}) {
@@ -5479,7 +5486,7 @@
             if (elements.publicApiPermissionsSummary) elements.publicApiPermissionsSummary.textContent = message;
             if (elements.publicApiTrustStatus) elements.publicApiTrustStatus.textContent = 'Public API trust controls unavailable.';
             if (elements.publicApiAuditLog) {
-                elements.publicApiAuditLog.innerHTML = `<div class="panel-empty-inline">${escapeHtml(message)}</div>`;
+                safeSetHtml(elements.publicApiAuditLog, `<div class="panel-empty-inline">${escapeHtml(message)}</div>`);
             }
             if (announce) showToast(message, 'error');
             return null;
@@ -5490,10 +5497,10 @@
         if (!elements.signingKeysList) return;
         const entries = Object.entries(keys).sort((a, b) => (b[1]?.addedAt || 0) - (a[1]?.addedAt || 0));
         if (!entries.length) {
-            elements.signingKeysList.innerHTML = '<div class="panel-empty-inline">No trusted signing keys saved.</div>';
+            safeSetHtml(elements.signingKeysList, '<div class="panel-empty-inline">No trusted signing keys saved.</div>');
             return;
         }
-        elements.signingKeysList.innerHTML = entries
+        safeSetHtml(elements.signingKeysList, entries
             .map(([publicKey, meta]) => `
                 <div class="setting-row" style="margin:0;padding:10px 0;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;border-bottom:1px solid rgba(127,127,127,0.1)">
                     <div style="min-width:0;display:grid;gap:4px">
@@ -5504,7 +5511,7 @@
                     <button type="button" class="btn btn-sm btn-danger" data-untrust-key="${escapeHtml(publicKey)}">Remove Trust</button>
                 </div>
             `)
-            .join('');
+            .join(''));
 
         elements.signingKeysList.querySelectorAll('[data-untrust-key]').forEach(button => {
             button.addEventListener('click', async () => {
@@ -5549,7 +5556,7 @@
             const message = error?.message || 'Failed to load signing trust';
             if (elements.signingTrustSummary) elements.signingTrustSummary.textContent = message;
             if (elements.signingKeysList) {
-                elements.signingKeysList.innerHTML = `<div class="panel-empty-inline">${escapeHtml(message)}</div>`;
+                safeSetHtml(elements.signingKeysList, `<div class="panel-empty-inline">${escapeHtml(message)}</div>`);
             }
             if (announce) showToast(message, 'error');
             return null;
@@ -6530,7 +6537,7 @@
             const scriptIdAttr = escapeHtml(script.id);
             const item = document.createElement('article');
             item.className = 'trash-item';
-            item.innerHTML = `
+            safeSetHtml(item, `
                 <div class="trash-item-main">
                     <div class="trash-item-heading">
                         <div class="trash-item-name">${escapeHtml(metadata.name)}</div>
@@ -6548,7 +6555,7 @@
                     <button type="button" class="btn" data-trash-restore="${scriptIdAttr}">Restore</button>
                     <button type="button" class="btn btn-danger" data-trash-delete="${scriptIdAttr}">Delete Forever</button>
                 </div>
-            `;
+            `);
 
             item.querySelector('[data-trash-restore]')?.addEventListener('click', async () => {
                 const button = item.querySelector('[data-trash-restore]');
@@ -6603,7 +6610,7 @@
         if (!elements.trashList) return;
         elements.trashList.hidden = false;
         if (elements.trashEmptyState) elements.trashEmptyState.hidden = true;
-        elements.trashList.innerHTML = '<div class="panel-empty-inline">Loading deleted scripts…</div>';
+        safeSetHtml(elements.trashList, '<div class="panel-empty-inline">Loading deleted scripts…</div>');
         try {
             const response = await chrome.runtime.sendMessage({ action: 'getTrash' });
             state.trashItems = Array.isArray(response?.trash) ? response.trash : [];
@@ -7454,7 +7461,7 @@
 
         if (filtered.length === 0) {
             if (typeof DashboardVirtualRows !== 'undefined') DashboardVirtualRows.destroy(elements.scriptTableBody);
-            elements.scriptTableBody.innerHTML = '';
+            elements.scriptTableBody.replaceChildren();
             updateScriptEmptyState(filtered.length);
             if (elements.emptyState) elements.emptyState.style.display = 'block';
             return;
@@ -7491,7 +7498,7 @@
         }
 
         if (typeof DashboardVirtualRows !== 'undefined') DashboardVirtualRows.destroy(elements.scriptTableBody);
-        elements.scriptTableBody.innerHTML = '';
+        elements.scriptTableBody.replaceChildren();
         const fragment = document.createDocumentFragment();
 
         if (folders.length > 0) {
@@ -7510,14 +7517,14 @@
                 folderTr.className = `folder-row${collapsed ? ' collapsed' : ''}`;
                 folderTr.dataset.folderId = folder.id;
                 const folderIdAttr = escapeHtml(folder.id);
-                folderTr.innerHTML = `<td colspan="13">
+                safeSetHtml(folderTr, `<td colspan="13">
                     <span class="folder-icon">\u25BC</span>
                     <span class="folder-color" style="background:${/^(#[0-9a-f]{3,8}|[a-z]+)$/i.test(String(folder.color || '')) ? escapeHtml(folder.color) : '#6b7280'}"></span>
                     ${escapeHtml(folder.name)} <span class="folder-count">(${folderScripts.length})</span>
                     <span class="folder-actions">
                         <button type="button" data-folder-delete="${folderIdAttr}" title="Delete folder" aria-label="Delete folder ${escapeHtml(folder.name)}">Delete</button>
                     </span>
-                </td>`;
+                </td>`);
                 folderTr.addEventListener('click', async (e) => {
                     const deleteButton = e.target.closest('[data-folder-delete]');
                     if (deleteButton) {
@@ -7545,10 +7552,10 @@
             if (unassigned.length > 0 && assignedIds.size > 0) {
                 const headerTr = document.createElement('tr');
                 headerTr.className = 'folder-row';
-                headerTr.innerHTML = `<td colspan="13">
+                safeSetHtml(headerTr, `<td colspan="13">
                     <span class="folder-icon">\u25BC</span>
                     Uncategorized <span class="folder-count">(${unassigned.length})</span>
-                </td>`;
+                </td>`);
                 fragment.appendChild(headerTr);
             }
             for (const script of unassigned) {
@@ -7684,7 +7691,7 @@
         const scriptIdAttr = escapeHtml(String(script.id));
         tr.draggable = true;
         tr.dataset.scriptId = script.id;
-        tr.innerHTML = `
+        safeSetHtml(tr, `
             <td class="center"><input type="checkbox" class="script-checkbox" data-id="${scriptIdAttr}" aria-label="Select ${escapeHtml(name)}"></td>
             <td class="center drag-handle" title="Drag to reorder" style="cursor:grab;color:var(--text-muted)">⠿</td>
             <td class="center">
@@ -7757,7 +7764,7 @@
                     </button>
                 </div>
             </td>
-        `;
+        `);
 
         tr.querySelector('.script-toggle')?.addEventListener('change', e => {
             toggleScriptEnabled(script.id, e.target.checked, { control: e.target });
@@ -8528,7 +8535,7 @@
 
     function renderGreasyForkPublicationReceiptInfo(receipts) {
         if (elements.infoPublicationReceipt) {
-            elements.infoPublicationReceipt.innerHTML = renderGreasyForkPublicationReceiptHtml(receipts);
+            safeSetHtml(elements.infoPublicationReceipt, renderGreasyForkPublicationReceiptHtml(receipts));
             bindGreasyForkPublicationReceiptActions();
         }
     }
@@ -8722,7 +8729,7 @@
         tab.className = 'tm-tab script-tab';
         tab.dataset.tab = 'script_' + scriptId;
         tab.dataset.scriptId = scriptId;
-        tab.innerHTML = `<span class="tab-name">${escapeHtml(name)}</span><span class="tab-close">&times;</span>`;
+        safeSetHtml(tab, `<span class="tab-name">${escapeHtml(name)}</span><span class="tab-close">&times;</span>`);
         tab.classList.toggle('unsaved', !!state.openTabs[scriptId]?.unsaved);
         syncScriptTabAccessibility(tab, {
             name,
@@ -9963,18 +9970,18 @@
         if (elements.infoDescription) elements.infoDescription.textContent = m.description || '-';
 
         const hp = m.homepage || m.homepageURL || deriveHomepageUrl(m.downloadURL) || deriveHomepageUrl(m.updateURL);
-        if (elements.infoHomepage) elements.infoHomepage.innerHTML = renderInfoLink(hp);
+        if (elements.infoHomepage) safeSetHtml(elements.infoHomepage, renderInfoLink(hp));
 
         const updateUrl = m.updateURL || '';
         const downloadUrl = m.downloadURL || '';
-        if (elements.infoUpdateUrl) elements.infoUpdateUrl.innerHTML = renderInfoLink(updateUrl);
-        if (elements.infoDownloadUrl) elements.infoDownloadUrl.innerHTML = renderInfoLink(downloadUrl);
+        if (elements.infoUpdateUrl) safeSetHtml(elements.infoUpdateUrl, renderInfoLink(updateUrl));
+        if (elements.infoDownloadUrl) safeSetHtml(elements.infoDownloadUrl, renderInfoLink(downloadUrl));
         if (elements.infoProvenance) {
             const provenance = describeScriptProvenance(script);
-            elements.infoProvenance.innerHTML = `<strong>${escapeHtml(provenance.label)}</strong>${provenance.detail ? `<div class="panel-empty-inline" style="margin-top:4px">${escapeHtml(provenance.detail)}</div>` : ''}`;
+            safeSetHtml(elements.infoProvenance, `<strong>${escapeHtml(provenance.label)}</strong>${provenance.detail ? `<div class="panel-empty-inline" style="margin-top:4px">${escapeHtml(provenance.detail)}</div>` : ''}`);
         }
         if (elements.infoTrustReceipt) {
-            elements.infoTrustReceipt.innerHTML = renderTrustReceiptInfo(script.trustReceipt);
+            safeSetHtml(elements.infoTrustReceipt, renderTrustReceiptInfo(script.trustReceipt));
         }
         if (elements.infoPublicationReceipt) {
             renderGreasyForkPublicationReceiptInfo(state.openTabs[script.id]?.publicationReceipts || state.openTabs[script.id]?.publicationReceipt || null);
@@ -9985,7 +9992,7 @@
         if (contribEl) {
             const cu = m.contributionURL || '';
             const safeCu = cu ? sanitizeUrl(cu) : null;
-            contribEl.innerHTML = safeCu ? `<a href="${escapeHtml(safeCu)}" target="_blank">${escapeHtml(cu)}</a>` : (cu ? escapeHtml(cu) : '-');
+            safeSetHtml(contribEl, safeCu ? `<a href="${escapeHtml(safeCu)}" target="_blank">${escapeHtml(cu)}</a>` : (cu ? escapeHtml(cu) : '-'));
         }
 
         // @compatible / @incompatible
@@ -9996,9 +10003,9 @@
             if (compat.length || incompat.length) {
                 const compatHtml = compat.map(c => `<span class="info-tag success">✓ ${escapeHtml(c)}</span>`).join('');
                 const incompatHtml = incompat.map(c => `<span class="info-tag error">✗ ${escapeHtml(c)}</span>`).join('');
-                compatEl.innerHTML = compatHtml + incompatHtml;
+                safeSetHtml(compatEl, compatHtml + incompatHtml);
             } else {
-                compatEl.innerHTML = '<span class="panel-empty-inline">Not specified</span>';
+                safeSetHtml(compatEl, '<span class="panel-empty-inline">Not specified</span>');
             }
         }
 
@@ -10007,21 +10014,21 @@
         if (licenseEl) licenseEl.textContent = m.license || m.copyright || '-';
 
         const grants = m.grant || [];
-        if (elements.infoGrants) elements.infoGrants.innerHTML = grants.length ? grants.map(g => `<span class="info-tag grant">${escapeHtml(g)}</span>`).join('') : '<span class="info-tag">none</span>';
+        if (elements.infoGrants) safeSetHtml(elements.infoGrants, grants.length ? grants.map(g => `<span class="info-tag grant">${escapeHtml(g)}</span>`).join('') : '<span class="info-tag">none</span>');
 
         const matches = [...(m.match || []), ...(m.include || [])];
-        if (elements.infoMatches) elements.infoMatches.innerHTML = matches.length ? matches.map(x => `<span class="info-tag">${escapeHtml(x)}</span>`).join('') : '<span class="panel-empty-inline">No match rules</span>';
+        if (elements.infoMatches) safeSetHtml(elements.infoMatches, matches.length ? matches.map(x => `<span class="info-tag">${escapeHtml(x)}</span>`).join('') : '<span class="panel-empty-inline">No match rules</span>');
 
         const res = [...(Array.isArray(m.resource) ? m.resource : []), ...(Array.isArray(m.require) ? m.require : [])];
         if (elements.infoResources) {
-            elements.infoResources.innerHTML = res.length
+            safeSetHtml(elements.infoResources, res.length
                 ? `<div class="info-resource-list">${res.map(r => {
                     const raw = typeof r === 'string' ? r : r.url || r.name || '';
                     const safeUrl = sanitizeUrl(typeof r === 'string' ? (r.split(/\s+/)[1] || r) : (r.url || ''));
                     const display = escapeHtml(raw);
                     return `<div class="info-resource-row">${safeUrl ? `<a href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener">${display}</a>` : display}</div>`;
                 }).join('')}</div>`
-                : '<span class="panel-empty-inline">No external resources declared</span>';
+                : '<span class="panel-empty-inline">No external resources declared</span>');
         }
 
         // Performance stats
@@ -10031,14 +10038,14 @@
             const s = script.stats;
             if (s && s.runs > 0) {
                 const lastRun = s.lastRun ? fullDateFormatter.format(new Date(s.lastRun)) : '-';
-                perfEl.innerHTML = `
+                safeSetHtml(perfEl, `
                     <span class="perf-label">Runs:</span><span class="perf-value">${numberFormatter.format(s.runs)}</span>
                     <span class="perf-label">Avg Time:</span><span class="perf-value">${numberFormatter.format(s.avgTime)}ms</span>
                     <span class="perf-label">Total Time:</span><span class="perf-value">${numberFormatter.format(Math.round(s.totalTime))}ms</span>
                     <span class="perf-label">Errors:</span><span class="perf-value">${numberFormatter.format(s.errors)}${s.lastError ? ` (${escapeHtml(s.lastError)})` : ''}</span>
                     <span class="perf-label">Last Run:</span><span class="perf-value">${escapeHtml(lastRun)}</span>
                     ${(() => { const u = retainStatsUrl(s.lastUrl, state.settings && state.settings.statsUrlRetention); return u ? `<span class="perf-label">Last URL:</span><span class="perf-value">${escapeHtml(u)}</span>` : ''; })()}
-                `;
+                `);
                 if (resetBtn) {
                     resetBtn.style.display = '';
                     resetBtn.onclick = async () => {
@@ -10050,7 +10057,7 @@
                     };
                 }
             } else {
-                perfEl.innerHTML = '<span class="panel-empty-inline">No execution data yet</span>';
+                safeSetHtml(perfEl, '<span class="panel-empty-inline">No execution data yet</span>');
                 if (resetBtn) resetBtn.style.display = 'none';
             }
         }
@@ -10078,9 +10085,9 @@
                 ));
             }
             if (conflictCards.length > 0) {
-                conflictsEl.innerHTML = `<div class="conflict-list">${conflictCards.join('')}</div>`;
+                safeSetHtml(conflictsEl, `<div class="conflict-list">${conflictCards.join('')}</div>`);
             } else {
-                conflictsEl.innerHTML = '<span class="panel-empty-inline">No sync or matcher conflicts detected</span>';
+                safeSetHtml(conflictsEl, '<span class="panel-empty-inline">No sync or matcher conflicts detected</span>');
             }
         }
 
@@ -10089,14 +10096,14 @@
         if (historyEl) {
             const history = script.versionHistory || [];
             if (history.length > 0) {
-                historyEl.innerHTML = `<div class="version-history-list">${history.map((h, idx) =>
+                safeSetHtml(historyEl, `<div class="version-history-list">${history.map((h, idx) =>
                     `<div class="version-history-item">
                         <span class="version-history-ver">v${escapeHtml(h.version)}</span>
                         <span class="version-history-date">${formatTime(h.updatedAt)}</span>
                         <button class="toolbar-btn version-rollback-btn" data-rollback-idx="${idx}" title="Rollback to this version">Rollback</button>
                         <button class="toolbar-btn version-diff-btn" data-diff-idx="${idx}" title="View diff with current code">Diff</button>
                     </div>`
-                ).reverse().join('')}</div>`;
+                ).reverse().join('')}</div>`);
 
                 historyEl.querySelectorAll('.version-rollback-btn').forEach(btn => {
                     btn.addEventListener('click', async () => {
@@ -10134,7 +10141,7 @@
                     });
                 });
             } else {
-                historyEl.innerHTML = '<span class="panel-empty-inline">No previous versions</span>';
+                safeSetHtml(historyEl, '<span class="panel-empty-inline">No previous versions</span>');
             }
         }
     }
@@ -10272,9 +10279,9 @@
 
         if (elements.externalRequireList) {
             if (requires.length === 0) {
-                elements.externalRequireList.innerHTML = '<div class="panel-empty"><strong>No @require directives</strong><span>This script does not import external libraries yet.</span></div>';
+                safeSetHtml(elements.externalRequireList, '<div class="panel-empty"><strong>No @require directives</strong><span>This script does not import external libraries yet.</span></div>');
             } else {
-                elements.externalRequireList.innerHTML = requires.map((url, index) => {
+                safeSetHtml(elements.externalRequireList, requires.map((url, index) => {
                     const safeUrl = sanitizeUrl(typeof url === 'string' ? url : url.url || '');
                     const display = escapeHtml(typeof url === 'string' ? url : url.url || url.name || '');
                     return `<div class="external-item">
@@ -10283,15 +10290,15 @@
                             <div class="external-item-url">${safeUrl ? `<a href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener">${display}</a>` : display}</div>
                         </div>
                     </div>`;
-                }).join('');
+                }).join(''));
             }
         }
 
         if (elements.externalResourceList) {
             if (resources.length === 0) {
-                elements.externalResourceList.innerHTML = '<div class="panel-empty"><strong>No @resource directives</strong><span>There are no named external assets attached to this script.</span></div>';
+                safeSetHtml(elements.externalResourceList, '<div class="panel-empty"><strong>No @resource directives</strong><span>There are no named external assets attached to this script.</span></div>');
             } else {
-                elements.externalResourceList.innerHTML = resources.map(res => {
+                safeSetHtml(elements.externalResourceList, resources.map(res => {
                     const name = typeof res === 'string' ? res.split(/\s+/)[0] : (res.name || '');
                     const url = typeof res === 'string' ? (res.split(/\s+/)[1] || res) : (res.url || '');
                     const safeUrl = sanitizeUrl(url);
@@ -10301,7 +10308,7 @@
                             <div class="external-item-url">${safeUrl ? `<a href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener">${escapeHtml(url)}</a>` : escapeHtml(url)}</div>
                         </div>
                     </div>`;
-                }).join('');
+                }).join(''));
             }
         }
     }
@@ -10313,9 +10320,9 @@
             const values = response?.values || {};
             const keys = Object.keys(values);
 
-            elements.storageList.innerHTML = '';
+            elements.storageList.replaceChildren();
             if (keys.length === 0) {
-                elements.storageList.innerHTML = '<div class="panel-empty"><strong>No stored values</strong><span>This script has not written anything to persistent storage yet.</span></div>';
+                safeSetHtml(elements.storageList, '<div class="panel-empty"><strong>No stored values</strong><span>This script has not written anything to persistent storage yet.</span></div>');
             } else {
                 keys.forEach(key => {
                     const item = createStorageItem(script.id, key, values[key]);
@@ -10335,7 +10342,7 @@
         const valStr = value == null ? '' : (typeof value === 'object' ? JSON.stringify(value) : String(value));
         let currentKey = key;
 
-        item.innerHTML = `
+        safeSetHtml(item, `
             <button type="button" class="storage-key storage-key-button" title="Rename storage key">${escapeHtml(key)}</button>
             <input type="text" class="input-field storage-input" value="${escapeHtml(valStr)}">
             <div class="btn-group storage-item-actions">
@@ -10343,7 +10350,7 @@
                 <button type="button" class="btn btn-sm" title="Rename key">Rename</button>
                 <button type="button" class="btn btn-sm btn-danger" title="Delete value">Delete</button>
             </div>
-        `;
+        `);
 
         const keySpan = item.querySelector('.storage-key');
 
@@ -11567,14 +11574,14 @@
         if (!elements.subscriptionList) return;
         const subscriptions = Array.isArray(state.subscriptions) ? state.subscriptions : [];
         if (subscriptions.length === 0) {
-            elements.subscriptionList.innerHTML = '<div class="panel-empty-inline">No subscriptions saved.</div>';
+            safeSetHtml(elements.subscriptionList, '<div class="panel-empty-inline">No subscriptions saved.</div>');
             setSubscriptionStatus('No feeds loaded');
             return;
         }
 
         const totalScripts = subscriptions.reduce((sum, item) => sum + (Array.isArray(item.scripts) ? item.scripts.length : 0), 0);
         setSubscriptionStatus(`${numberFormatter.format(subscriptions.length)} feed${subscriptions.length === 1 ? '' : 's'}, ${numberFormatter.format(totalScripts)} listed script${totalScripts === 1 ? '' : 's'}`);
-        elements.subscriptionList.innerHTML = subscriptions.map(subscription => {
+        safeSetHtml(elements.subscriptionList, subscriptions.map(subscription => {
             const scripts = Array.isArray(subscription.scripts) ? subscription.scripts.length : 0;
             const lastChecked = subscription.lastCheckedAt
                 ? formatSyncTimestamp(subscription.lastCheckedAt)
@@ -11603,7 +11610,7 @@
                     </div>
                 </article>
             `;
-        }).join('');
+        }).join(''));
         elements.subscriptionList.querySelectorAll('[data-subscription-action]').forEach(button => {
             button.addEventListener('click', () => handleSubscriptionAction(button));
         });
@@ -11952,13 +11959,13 @@
             : '';
         elements.findScriptsResults.setAttribute('role', isError ? 'alert' : 'status');
         elements.findScriptsResults.setAttribute('aria-live', isError ? 'assertive' : 'polite');
-        elements.findScriptsResults.innerHTML = `
+        safeSetHtml(elements.findScriptsResults, `
             <div class="find-scripts-empty${isError ? ' is-error' : ''}">
                 <strong>${safeTitle}</strong>
                 <span>${safeDetail}</span>
                 ${actionHtml}
             </div>
-        `;
+        `);
         elements.findScriptsResults.querySelector('[data-find-scripts-state-action]')?.addEventListener('click', () => {
             if (typeof options.action === 'function') options.action();
         });
@@ -11982,7 +11989,7 @@
         if (elements.findScriptsResults) {
             elements.findScriptsResults.setAttribute('role', 'status');
             elements.findScriptsResults.setAttribute('aria-live', 'polite');
-            elements.findScriptsResults.innerHTML = `<div class="find-scripts-loading" role="status" aria-live="polite">Searching ${escapeHtml(getFindScriptsSourceLabel(source))} for "${escapeHtml(query)}"…</div>`;
+            safeSetHtml(elements.findScriptsResults, `<div class="find-scripts-loading" role="status" aria-live="polite">Searching ${escapeHtml(getFindScriptsSourceLabel(source))} for "${escapeHtml(query)}"…</div>`);
         }
 
         try {
@@ -12130,7 +12137,7 @@
         if (elements.findScriptsResults) {
             elements.findScriptsResults.setAttribute('role', 'status');
             elements.findScriptsResults.setAttribute('aria-live', 'polite');
-            elements.findScriptsResults.innerHTML = countText + html + pagination;
+            safeSetHtml(elements.findScriptsResults, countText + html + pagination);
         }
 
         // Bind install buttons
@@ -12282,14 +12289,14 @@
         const logEl = document.getElementById('activityLog');
         if (!logEl) return;
         if (logEl.dataset.empty === 'true' || logEl.textContent.trim() === 'No activity yet') {
-            logEl.innerHTML = '';
+            logEl.replaceChildren();
             delete logEl.dataset.empty;
         }
         const time = new Date().toLocaleTimeString();
         const typeIcons = { success: 'OK', error: '!', info: 'i', warning: '!' };
         const entry = document.createElement('div');
         entry.className = `activity-entry activity-${type}`;
-        entry.innerHTML = `<span class="activity-time">${time}</span><span class="activity-icon">${typeIcons[type] || 'i'}</span>${escapeHtml(msg)}`;
+        safeSetHtml(entry, `<span class="activity-time">${time}</span><span class="activity-icon">${typeIcons[type] || 'i'}</span>${escapeHtml(msg)}`);
         logEl.prepend(entry);
         // Keep only last 50 entries
         while (logEl.children.length > 50) logEl.removeChild(logEl.lastChild);
@@ -12423,9 +12430,9 @@
         modalLastFocusedElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
         modalDismissHandler = typeof options.onDismiss === 'function' ? options.onDismiss : null;
         if (elements.modalTitle) elements.modalTitle.textContent = title;
-        if (elements.modalBody) elements.modalBody.innerHTML = html;
+        if (elements.modalBody) safeSetHtml(elements.modalBody, html);
         if (elements.modalActions) {
-            elements.modalActions.innerHTML = '';
+            elements.modalActions.replaceChildren();
             actions.forEach(a => {
                 const btn = document.createElement('button');
                 btn.type = 'button';
@@ -12555,7 +12562,8 @@
     window.ScriptVaultDashboardUI = {
         confirm: showConfirmModal,
         input: showInputModal,
-        toast: showToast
+        toast: showToast,
+        safeSetHtml: safeSetHtml
     };
 
     function getEditorLineCount(editor) {
@@ -13273,7 +13281,7 @@
             const query = libSearchInput?.value?.trim();
             if (!query) return;
             if (libSearchResults) {
-                libSearchResults.innerHTML = '<div class="panel-empty"><strong>Searching libraries…</strong><span>Fetching matching packages from cdnjs.</span></div>';
+                safeSetHtml(libSearchResults, '<div class="panel-empty"><strong>Searching libraries…</strong><span>Fetching matching packages from cdnjs.</span></div>');
             }
             try {
                 const resp = await fetch(`https://api.cdnjs.com/libraries?search=${encodeURIComponent(query)}&fields=description,version,filename&limit=10`);
@@ -13281,11 +13289,11 @@
                 const data = await resp.json();
                 if (!data.results || data.results.length === 0) {
                     if (libSearchResults) {
-                        libSearchResults.innerHTML = '<div class="panel-empty"><strong>No libraries found</strong><span>Try a broader package name like jquery, lodash, or react.</span></div>';
+                        safeSetHtml(libSearchResults, '<div class="panel-empty"><strong>No libraries found</strong><span>Try a broader package name like jquery, lodash, or react.</span></div>');
                     }
                     return;
                 }
-                if (libSearchResults) libSearchResults.innerHTML = data.results.filter(lib =>
+                if (libSearchResults) safeSetHtml(libSearchResults, data.results.filter(lib =>
                     lib.name && lib.version && lib.filename &&
                     !/[\/\\]|\.\./.test(lib.name) && !/[\/\\]|\.\./.test(lib.version) && !/\.\./.test(lib.filename)
                 ).map(lib => {
@@ -13298,7 +13306,7 @@
                         </div>
                         <button class="toolbar-btn primary lib-add-btn" data-lib-url="${escapeHtml(cdnUrl)}" title="Insert @require into script header">Add</button>
                     </div>`;
-                }).join('');
+                }).join(''));
 
                 // Bind add buttons
                 libSearchResults?.querySelectorAll('.lib-add-btn').forEach(btn => {
@@ -13323,7 +13331,7 @@
                 });
             } catch (e) {
                 if (libSearchResults) {
-                    libSearchResults.innerHTML = `<div class="panel-empty"><strong>Search failed</strong><span>${escapeHtml(e.message)}</span></div>`;
+                    safeSetHtml(libSearchResults, `<div class="panel-empty"><strong>Search failed</strong><span>${escapeHtml(e.message)}</span></div>`);
                 }
             }
         }
@@ -14216,7 +14224,7 @@
             const logEl = document.getElementById('activityLog');
             if (logEl) {
                 logEl.dataset.empty = 'true';
-                logEl.innerHTML = renderActivityLogEmpty();
+                safeSetHtml(logEl, renderActivityLogEmpty());
             }
         });
 
@@ -15066,7 +15074,7 @@
         try {
             new URL(testUrl); // validate URL
         } catch {
-            resultsEl.innerHTML = '<span style="color:var(--accent-red)">Invalid URL format</span>';
+            safeSetHtml(resultsEl, '<span style="color:var(--accent-red)">Invalid URL format</span>');
             return;
         }
 
@@ -15094,14 +15102,14 @@
         }
 
         if (matching.length === 0) {
-            resultsEl.innerHTML = '<div style="padding:8px;color:var(--text-muted)">No scripts match this URL</div>';
+            safeSetHtml(resultsEl, '<div style="padding:8px;color:var(--text-muted)">No scripts match this URL</div>');
         } else {
-            resultsEl.innerHTML = `<div style="margin-bottom:6px;font-weight:600;color:var(--accent-green)">${matching.length} script${matching.length > 1 ? 's' : ''} would run:</div>` +
+            safeSetHtml(resultsEl, `<div style="margin-bottom:6px;font-weight:600;color:var(--accent-green)">${matching.length} script${matching.length > 1 ? 's' : ''} would run:</div>` +
                 matching.map(s => {
                     const name = s.metadata?.name || 'Unnamed';
                     const enabled = s.enabled !== false;
                     return `<div class="pattern-test-match"><span class="pattern-test-indicator ${enabled ? 'active' : 'inactive'}"></span> ${escapeHtml(name)} ${!enabled ? '<span style="color:var(--text-muted)">(disabled)</span>' : ''}</div>`;
-                }).join('');
+                }).join(''));
         }
     }
 
@@ -15169,15 +15177,15 @@
                 || state.backupBrowserSort !== 'newest'
                 || !!state.backupBrowserQuery.trim()
             );
-            elements.backupList.innerHTML = totalCount > 0
+            safeSetHtml(elements.backupList, totalCount > 0
                 ? `<div class="panel-empty-inline">No backups match the current view.${hasActiveView ? '<div style="margin-top:10px"><button type="button" class="btn btn-sm" data-reset-backup-browser>Reset View</button></div>' : ''}</div>`
-                : '<div class="panel-empty-inline">No backups saved yet. Create one to capture scripts, settings, folders, and workspaces.</div>';
+                : '<div class="panel-empty-inline">No backups saved yet. Create one to capture scripts, settings, folders, and workspaces.</div>');
             elements.backupList.querySelector('[data-reset-backup-browser]')?.addEventListener('click', resetBackupBrowserView);
             return;
         }
 
         const groups = getBackupDisplayGroups(backups);
-        elements.backupList.innerHTML = `<div class="backup-browser-groups">${groups.map(group => `
+        safeSetHtml(elements.backupList, `<div class="backup-browser-groups">${groups.map(group => `
             <section class="backup-browser-group">
                 <div class="backup-browser-group-header">
                     <strong>${escapeHtml(group.label)}</strong>
@@ -15212,7 +15220,7 @@
                     </div>
                 `).join('')}</div>
             </section>
-        `).join('')}</div>`;
+        `).join('')}</div>`);
 
         elements.backupList.querySelectorAll('[data-backup-review]').forEach(button => {
             button.addEventListener('click', async () => {
@@ -15266,7 +15274,7 @@
         } catch (error) {
             const message = error?.message || 'Failed to load backups';
             if (elements.backupBrowserSummary) elements.backupBrowserSummary.textContent = 'Backup browser unavailable';
-            if (elements.backupList) elements.backupList.innerHTML = `<div class="panel-empty-inline">${escapeHtml(message)}</div>`;
+            if (elements.backupList) safeSetHtml(elements.backupList, `<div class="panel-empty-inline">${escapeHtml(message)}</div>`);
             if (elements.backupBrowserStatus) elements.backupBrowserStatus.textContent = 'Backup browser unavailable.';
             updateBackupScheduleSummary(state.backupSettings || {});
             updateSupportSnapshotSummary();
@@ -15920,27 +15928,27 @@
         container.classList.add('workspace-list');
         container.removeAttribute('role');
         container.setAttribute('aria-busy', 'true');
-        container.innerHTML = renderDashboardState({
+        safeSetHtml(container, renderDashboardState({
             title: 'Loading workspaces',
             detail: 'Reading saved script snapshots from local storage.',
             tone: 'loading'
-        });
+        }));
         try {
             const res = await chrome.runtime.sendMessage({ action: 'getWorkspaces' });
             const { active, list } = res || {};
             state.workspaces = Array.isArray(list) ? list : [];
             if (!list || list.length === 0) {
-                container.innerHTML = renderDashboardState({
+                safeSetHtml(container, renderDashboardState({
                     title: 'No workspaces saved',
                     detail: 'Save the current enabled and disabled script set to return to it later.',
                     tone: 'muted',
                     marker: 'i'
-                });
+                }));
                 updateUtilitiesOverview();
                 return;
             }
             container.setAttribute('role', 'list');
-            container.innerHTML = list.map(ws => `
+            safeSetHtml(container, list.map(ws => `
                 <div class="workspace-item${ws.id === active ? ' active' : ''}" data-ws-id="${escapeHtml(ws.id)}" role="listitem"${ws.id === active ? ' aria-current="true"' : ''}>
                     <div class="workspace-main">
                         <span class="workspace-name">${escapeHtml(ws.name || 'Untitled workspace')}</span>
@@ -15952,7 +15960,7 @@
                         <button type="button" class="toolbar-btn" data-ws-delete="${escapeHtml(ws.id)}" title="Delete ${escapeHtml(ws.name || 'workspace')}">Delete</button>
                     </div>
                 </div>
-            `).join('');
+            `).join(''));
 
             container.querySelectorAll('[data-ws-activate]').forEach(btn => {
                 btn.addEventListener('click', async () => {
@@ -16015,12 +16023,12 @@
             updateUtilitiesOverview();
         } catch (e) {
             state.workspaces = [];
-            container.innerHTML = renderDashboardState({
+            safeSetHtml(container, renderDashboardState({
                 title: 'Workspaces could not load',
                 detail: 'Refresh Utilities and try again. Existing scripts were not changed.',
                 tone: 'error',
                 marker: '!'
-            });
+            }));
             updateUtilitiesOverview();
         } finally {
             container.setAttribute('aria-busy', 'false');
@@ -16034,23 +16042,23 @@
         const container = document.getElementById('networkLogContainer');
         if (!container) return;
         container.setAttribute('aria-busy', 'true');
-        container.innerHTML = renderDashboardState({
+        safeSetHtml(container, renderDashboardState({
             title: 'Loading network log',
             detail: 'Collecting recent GM_xmlhttpRequest activity.',
             tone: 'loading'
-        });
+        }));
         try {
             const res = await chrome.runtime.sendMessage({ action: 'getNetworkLog', limit: 50 });
             const log = res?.log || [];
             const stats = res?.stats || {};
 
             if (log.length === 0) {
-                container.innerHTML = renderDashboardState({
+                safeSetHtml(container, renderDashboardState({
                     title: 'No network requests logged yet',
                     detail: 'GM_xmlhttpRequest calls will appear here with status, size, and timing once scripts make requests.',
                     tone: 'muted',
                     marker: 'i'
-                });
+                }));
                 return;
             }
 
@@ -16082,14 +16090,14 @@
                 </div>`;
             }).join('') + '</div>';
 
-            container.innerHTML = html;
+            safeSetHtml(container, html);
         } catch (e) {
-            container.innerHTML = renderDashboardState({
+            safeSetHtml(container, renderDashboardState({
                 title: 'Network log could not load',
                 detail: 'Refresh the log after the current script activity settles.',
                 tone: 'error',
                 marker: '!'
-            });
+            }));
         } finally {
             container.setAttribute('aria-busy', 'false');
         }
@@ -16104,14 +16112,14 @@
         if (!overlay) {
             overlay = document.createElement('div');
             overlay.id = 'commandPalette';
-            overlay.innerHTML = `
+            safeSetHtml(overlay, `
                 <div class="cmd-backdrop"></div>
                 <div class="cmd-dialog" role="dialog" aria-modal="true" aria-labelledby="commandPaletteLabel">
                     <div id="commandPaletteLabel" class="sr-only">Command palette</div>
                     <input type="search" id="commandPaletteInput" class="cmd-input" name="command_palette_query" placeholder="Type a command, script name, or action…" aria-label="Command palette" role="combobox" aria-autocomplete="list" aria-controls="commandPaletteResults" aria-expanded="true" autocomplete="off" spellcheck="false">
                     <div id="commandPaletteResults" class="cmd-results" role="listbox" aria-label="Command results"></div>
                 </div>
-            `;
+            `);
             document.body.appendChild(overlay);
 
             const backdrop = overlay.querySelector('.cmd-backdrop');
@@ -16241,7 +16249,7 @@
         }
 
         if (Object.keys(groups).length === 0) {
-            results.innerHTML = '<div class="cmd-empty" role="status" aria-live="polite">No matching commands</div>';
+            safeSetHtml(results, '<div class="cmd-empty" role="status" aria-live="polite">No matching commands</div>');
             setCommandPaletteActiveItem(overlay, null);
             return;
         }
@@ -16259,7 +16267,7 @@
             }).join('');
         }
 
-        results.innerHTML = html;
+        safeSetHtml(results, html);
         setCommandPaletteActiveItem(overlay, getCommandPaletteItems(overlay)[0] || null);
 
         // Bind clicks
@@ -16320,7 +16328,7 @@
         if (show && !overlay) {
             overlay = document.createElement('div');
             overlay.id = 'dropOverlay';
-            overlay.innerHTML = '<div class="drop-overlay-content"><div class="drop-overlay-icon">📥</div><div class="drop-overlay-text">Drop .user.js or .zip files to install</div></div>';
+            safeSetHtml(overlay, '<div class="drop-overlay-content"><div class="drop-overlay-icon">📥</div><div class="drop-overlay-text">Drop .user.js or .zip files to install</div></div>');
             document.body.appendChild(overlay);
         }
         if (overlay) overlay.classList.toggle('active', show);

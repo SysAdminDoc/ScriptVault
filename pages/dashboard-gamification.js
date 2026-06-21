@@ -86,6 +86,10 @@ const Gamification = (() => {
   /*  State                                                              */
   /* ------------------------------------------------------------------ */
 
+  const _safeSetHtml = (typeof window.ScriptVaultDashboardUI?.safeSetHtml === 'function')
+      ? window.ScriptVaultDashboardUI.safeSetHtml
+      : (el, html) => { el.innerHTML = html; };
+
   let _container = null;
   let _styleEl = null;
   let _data = null;       // persisted gamification state
@@ -467,12 +471,12 @@ const Gamification = (() => {
 
     const el = document.createElement('div');
     el.className = 'sv-gam-toast';
-    el.innerHTML = `
+    _safeSetHtml(el, `
       <span class="sv-gam-toast-icon">${esc(a.icon)}</span>
       <div class="sv-gam-toast-text">
         <div class="sv-gam-toast-title">Achievement Unlocked!</div>
         <div class="sv-gam-toast-desc">${esc(a.name)} &mdash; ${esc(a.desc)}</div>
-      </div>`;
+      </div>`);
     _toastContainer.appendChild(el);
 
     setTimeout(() => {
@@ -571,7 +575,7 @@ const Gamification = (() => {
 
     const el = document.createElement('div');
     el.className = 'sv-gam-profile';
-    el.innerHTML = `
+    _safeSetHtml(el, `
       <div class="sv-gam-profile-badge">${level.icon}</div>
       <div class="sv-gam-profile-info">
         <div class="sv-gam-profile-name">${esc(level.name)}</div>
@@ -583,7 +587,7 @@ const Gamification = (() => {
           <span>Best: <strong>${usage.longest}</strong> days</span>
         </div>
       </div>
-      <button class="sv-gam-share-btn" title="Share profile as image">Share</button>`;
+      <button class="sv-gam-share-btn" title="Share profile as image">Share</button>`);
 
     el.querySelector('.sv-gam-share-btn').addEventListener('click', () => {
       renderProfileImage(level, pts, next, unlocked, total, usage);
@@ -685,7 +689,7 @@ const Gamification = (() => {
 
     const wrap = document.createElement('div');
     wrap.className = 'sv-gam-streaks';
-    wrap.innerHTML = `
+    _safeSetHtml(wrap, `
       <div class="sv-gam-streak-card">
         <div class="sv-gam-streak-label">Daily Usage Streak</div>
         <div class="sv-gam-streak-value${usage.current >= 3 ? ' fire' : ''}">${usage.current}</div>
@@ -700,7 +704,7 @@ const Gamification = (() => {
         <div class="sv-gam-streak-label">Total Active Days</div>
         <div class="sv-gam-streak-value">${computeDaysActive()}</div>
         <div class="sv-gam-streak-sub">Since ${_data.firstSeen || '—'}</div>
-      </div>`;
+      </div>`);
     return wrap;
   }
 
@@ -756,14 +760,14 @@ const Gamification = (() => {
           ? `<div class="sv-gam-badge-time">Unlocked ${new Date(_data.unlocked[a.id]).toLocaleDateString()}</div>`
           : '';
 
-        badge.innerHTML = `
+        _safeSetHtml(badge, `
           <div class="sv-gam-badge-icon">${isHidden ? '\uD83D\uDD12' : esc(a.icon)}</div>
           <div class="sv-gam-badge-body">
             <div class="sv-gam-badge-name">${isHidden ? 'Hidden' : esc(a.name)}</div>
             <div class="sv-gam-badge-desc">${isHidden ? 'Discover this secret achievement' : esc(a.desc)}</div>
             ${progressHTML}
             ${timeHTML}
-          </div>`;
+          </div>`);
 
         grid.appendChild(badge);
       }
@@ -795,7 +799,7 @@ const Gamification = (() => {
 
   function render() {
     if (!_container) return;
-    _container.innerHTML = '';
+    _container.replaceChildren();
 
     const wrap = document.createElement('div');
     wrap.className = 'sv-gam-wrap';

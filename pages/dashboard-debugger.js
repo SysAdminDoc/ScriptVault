@@ -22,6 +22,10 @@ const ScriptDebugger = (() => {
   let _activeScriptId = null;
   let _editingVar = null;      // { key, scriptId } or null
 
+  const _safeSetHtml = (typeof window.ScriptVaultDashboardUI?.safeSetHtml === 'function')
+      ? window.ScriptVaultDashboardUI.safeSetHtml
+      : (el, html) => { el.innerHTML = html; };
+
   /* ── CSS ────────────────────────────────────────────────────────── */
   const CSS = `
     .dbg-root{font-family:system-ui,-apple-system,sans-serif;color:var(--text-primary,#e0e0e0);display:flex;flex-direction:column;height:100%}
@@ -123,7 +127,7 @@ const ScriptDebugger = (() => {
       if (k === 'class') e.className = v;
       else if (k.startsWith('on') && typeof v === 'function') e.addEventListener(k.slice(2).toLowerCase(), v);
       else if (k === 'text') e.textContent = v;
-      else if (k === 'html') e.innerHTML = v;
+      else if (k === 'html') _safeSetHtml(e, v);
       else e.setAttribute(k, v);
     }
     for (const c of children) {
@@ -235,7 +239,7 @@ const ScriptDebugger = (() => {
   function render() {
     const root = _container.querySelector('.dbg-root');
     if (!root) return;
-    root.innerHTML = '';
+    root.replaceChildren();
 
     root.appendChild(renderTabs());
 
@@ -462,7 +466,7 @@ const ScriptDebugger = (() => {
     if (!_container) return;
     const container = _container.querySelector('#dbg-var-container');
     if (!container) return;
-    container.innerHTML = '';
+    container.replaceChildren();
 
     if (!_activeScriptId) {
       container.appendChild(el('div', { class: 'dbg-empty', text: 'Select a script to inspect its GM_getValue store.' }));

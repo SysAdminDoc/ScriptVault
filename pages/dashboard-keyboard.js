@@ -27,6 +27,10 @@ const KeyboardNav = (() => {
   let _boundKeydown = null;
   let _boundFocusin = null;
 
+  const _safeSetHtml = (typeof window.ScriptVaultDashboardUI?.safeSetHtml === 'function')
+      ? window.ScriptVaultDashboardUI.safeSetHtml
+      : (el, html) => { el.innerHTML = html; };
+
   /* ------------------------------------------------------------------ */
   /*  CSS                                                                */
   /* ------------------------------------------------------------------ */
@@ -595,7 +599,7 @@ tr.kn-focused td {
     _helpOverlay.setAttribute('aria-modal', 'true');
     _helpOverlay.setAttribute('aria-label', 'Keyboard shortcuts');
 
-    _helpOverlay.innerHTML = `
+    _safeSetHtml(_helpOverlay, `
       <div class="kn-help">
         <h2>
           Keyboard Shortcuts
@@ -606,7 +610,7 @@ tr.kn-focused td {
           ${_vimMode ? 'Vim mode is ON' : 'Enable vim mode in settings for additional keybindings'}
         </div>
       </div>
-    `;
+    `);
 
     // Close on backdrop click
     _helpOverlay.addEventListener('click', (e) => {

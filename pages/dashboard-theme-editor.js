@@ -210,6 +210,10 @@ const ThemeEditor = (() => {
   let _advancedMode = false;
   let _initialized = false;
 
+  const _safeSetHtml = (typeof window.ScriptVaultDashboardUI?.safeSetHtml === 'function')
+      ? window.ScriptVaultDashboardUI.safeSetHtml
+      : (el, html) => { el.innerHTML = html; };
+
   /* ------------------------------------------------------------------ */
   /*  CSS                                                                */
   /* ------------------------------------------------------------------ */
@@ -602,7 +606,7 @@ const ThemeEditor = (() => {
     }
     for (const [k, v] of Object.entries(attrs)) {
       if (k === 'className') e.className = v;
-      else if (k === 'innerHTML') e.innerHTML = v;
+      else if (k === 'innerHTML') _safeSetHtml(e, v);
       else if (k === 'textContent') e.textContent = v;
       else if (k.startsWith('on') && typeof v === 'function') e.addEventListener(k.slice(2).toLowerCase(), v);
       else e.setAttribute(k, v);
@@ -794,11 +798,11 @@ const ThemeEditor = (() => {
 
     // Save-as dialog (hidden initially)
     const saveDialog = el('div', { className: 'sv-te-save-dialog', id: 'sv-te-save-dialog', style: 'display:none' });
-    saveDialog.innerHTML = `
+    _safeSetHtml(saveDialog, `
       <input type="text" id="sv-te-save-name" name="customThemeName" autocomplete="off" spellcheck="false" placeholder="Custom theme name…">
       <button class="sv-te-btn sv-te-btn-primary" id="sv-te-save-confirm" type="button">Save</button>
       <button class="sv-te-btn" id="sv-te-save-cancel" type="button">Cancel</button>
-    `;
+    `);
     panel.appendChild(saveDialog);
 
     // Footer
@@ -1006,7 +1010,7 @@ const ThemeEditor = (() => {
 
     // Font family
     const familyRow = el('div', { className: 'sv-te-font-row' });
-    familyRow.innerHTML = `<label>Family</label>`;
+    _safeSetHtml(familyRow, `<label>Family</label>`);
     const familySelect = el('select', { id: 'sv-te-font-family' });
     const families = [
       { value: '', label: 'Default (Inter)' },
@@ -1033,7 +1037,7 @@ const ThemeEditor = (() => {
 
     // Font size
     const sizeRow = el('div', { className: 'sv-te-font-row' });
-    sizeRow.innerHTML = '<label>Size</label>';
+    _safeSetHtml(sizeRow, '<label>Size</label>');
     const sizeInput = el('input', {
       type: 'text',
       id: 'sv-te-font-size',
@@ -1049,7 +1053,7 @@ const ThemeEditor = (() => {
 
     // Line height
     const lhRow = el('div', { className: 'sv-te-font-row' });
-    lhRow.innerHTML = '<label>Line Height</label>';
+    _safeSetHtml(lhRow, '<label>Line Height</label>');
     const lhInput = el('input', {
       type: 'text',
       id: 'sv-te-line-height',
@@ -1120,7 +1124,7 @@ const ThemeEditor = (() => {
 
     const container = _panelEl?.querySelector('#sv-te-editor-container');
     if (!container) return;
-    container.innerHTML = '';
+    container.replaceChildren();
 
     if (_advancedMode) {
       container.appendChild(buildRawEditor());
@@ -1165,7 +1169,7 @@ const ThemeEditor = (() => {
     const border = v['--border-color'] || '#444';
     const toggleDot = v['--toggle-dot'] || '#fff';
 
-    container.innerHTML = `
+    _safeSetHtml(container, `
       <div class="sv-te-preview-card" style="border-color:${border}">
         <div class="sv-te-preview-header" style="background:${bgHeader};color:${textPrimary}">
           <span>ScriptVault Preview</span>
@@ -1196,7 +1200,7 @@ const ThemeEditor = (() => {
           </div>
         </div>
       </div>
-    `;
+    `);
   }
 
   /* ------------------------------------------------------------------ */
@@ -1278,7 +1282,7 @@ const ThemeEditor = (() => {
   function rebuildPresets() {
     const grid = _panelEl?.querySelector('#sv-te-presets-grid');
     if (!grid) return;
-    grid.innerHTML = '';
+    grid.replaceChildren();
     for (const [key, preset] of Object.entries(PRESETS)) {
       grid.appendChild(buildPresetCard(key, preset, false));
     }

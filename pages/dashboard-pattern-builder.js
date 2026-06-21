@@ -18,6 +18,10 @@ const PatternBuilder = (() => {
   let _testUrls = [];
   let _onInsert = null;   // callback set externally
 
+  const _safeSetHtml = (typeof window.ScriptVaultDashboardUI?.safeSetHtml === 'function')
+      ? window.ScriptVaultDashboardUI.safeSetHtml
+      : (el, html) => { el.innerHTML = html; };
+
   const PRESETS = [
     { label: 'All sites',           patterns: ['*://*/*'] },
     { label: 'All Google sites',    patterns: ['*://*.google.com/*'] },
@@ -96,7 +100,7 @@ const PatternBuilder = (() => {
       if (k === 'class') e.className = v;
       else if (k.startsWith('on')) e.addEventListener(k.slice(2).toLowerCase(), v);
       else if (k === 'text') e.textContent = v;
-      else if (k === 'html') e.innerHTML = v;
+      else if (k === 'html') _safeSetHtml(e, v);
       else e.setAttribute(k, v);
     }
     for (const c of children) {
@@ -179,7 +183,7 @@ const PatternBuilder = (() => {
   function render() {
     const root = _container.querySelector('.pb-root');
     if (!root) return;
-    root.innerHTML = '';
+    root.replaceChildren();
 
     // 1) URL Input
     root.appendChild(renderUrlInput());

@@ -83,6 +83,10 @@ const CollectionManager = (() => {
   let _onInstall = null;    // callback to install a script
   let _initialized = false;
 
+  const _safeSetHtml = (typeof window.ScriptVaultDashboardUI?.safeSetHtml === 'function')
+      ? window.ScriptVaultDashboardUI.safeSetHtml
+      : (el, html) => { el.innerHTML = html; };
+
   /* ------------------------------------------------------------------ */
   /*  CSS                                                                */
   /* ------------------------------------------------------------------ */
@@ -788,18 +792,18 @@ const CollectionManager = (() => {
 
     const installed = getInstalledScripts();
 
-    _container.innerHTML = '';
+    _container.replaceChildren();
 
     // Toolbar
     const toolbar = document.createElement('div');
     toolbar.className = 'sv-coll-toolbar';
-    toolbar.innerHTML = `
+    _safeSetHtml(toolbar, `
       <span class="sv-coll-toolbar-title">Collections</span>
       <input type="search" name="collectionSearch" class="sv-coll-search" aria-label="Search collections" autocomplete="off" spellcheck="false" placeholder="Search collections\u2026"
              value="${escapeHtml(filter)}">
       <button type="button" class="sv-coll-btn" data-action="import">Import</button>
       <button type="button" class="sv-coll-btn primary" data-action="create">+ New</button>
-    `;
+    `);
     _container.appendChild(toolbar);
 
     const searchInput = toolbar.querySelector('.sv-coll-search');
@@ -813,11 +817,11 @@ const CollectionManager = (() => {
     if (filtered.length === 0) {
       const empty = document.createElement('div');
       empty.className = 'sv-coll-empty';
-      empty.innerHTML = `
+      _safeSetHtml(empty, `
         <div class="sv-coll-empty-icon">\u{1F4E6}</div>
         <div class="sv-coll-empty-text">No collections${filter ? ' match your search' : ' yet'}.</div>
         <button type="button" class="sv-coll-btn primary" data-action="create">Create Collection</button>
-      `;
+      `);
       empty.querySelector('[data-action="create"]').addEventListener('click', () => openCreateModal());
       _container.appendChild(empty);
       return;
@@ -853,7 +857,7 @@ const CollectionManager = (() => {
       return sum;
     }, 0);
 
-    card.innerHTML = `
+    _safeSetHtml(card, `
       <div class="sv-coll-card-header">
         <span class="sv-coll-icon">${escapeHtml(coll.icon || '\u{1F4E6}')}</span>
         <span class="sv-coll-title">${escapeHtml(coll.name)}</span>
@@ -866,7 +870,7 @@ const CollectionManager = (() => {
         ${coll.author ? `<span>\u{1F464} ${escapeHtml(coll.author)}</span>` : ''}
       </div>
       <div class="sv-coll-scripts"></div>
-    `;
+    `);
 
     // Click to toggle expand
     card.querySelector('.sv-coll-card-header').addEventListener('click', () => {
@@ -874,7 +878,7 @@ const CollectionManager = (() => {
       // Collapse all
       _container.querySelectorAll('.sv-coll-card.expanded').forEach(c => {
         c.classList.remove('expanded');
-        c.querySelector('.sv-coll-scripts').innerHTML = '';
+        c.querySelector('.sv-coll-scripts').replaceChildren();
       });
       if (!wasExpanded) {
         card.classList.add('expanded');
@@ -920,7 +924,7 @@ const CollectionManager = (() => {
       </div>
     `;
 
-    container.innerHTML = html;
+    _safeSetHtml(container, html);
 
     // Toggle listeners
     container.querySelectorAll('.sv-coll-script-toggle').forEach(tog => {
@@ -1095,7 +1099,7 @@ const CollectionManager = (() => {
       });
     }
 
-    overlay.innerHTML = `
+    _safeSetHtml(overlay, `
       <div class="sv-coll-modal">
         <div class="sv-coll-modal-header">
           <h3>${isEdit ? 'Edit' : 'Create'} Collection</h3>
@@ -1143,7 +1147,7 @@ const CollectionManager = (() => {
           <button type="button" class="sv-coll-btn primary" data-action="save">${isEdit ? 'Save' : 'Create'}</button>
         </div>
       </div>
-    `;
+    `);
 
     document.body.appendChild(overlay);
 
@@ -1209,7 +1213,7 @@ const CollectionManager = (() => {
   function openImportModal() {
     const overlay = document.createElement('div');
     overlay.className = 'sv-coll-overlay';
-    overlay.innerHTML = `
+    _safeSetHtml(overlay, `
       <div class="sv-coll-modal">
         <div class="sv-coll-modal-header">
           <h3>Import Collection</h3>
@@ -1233,7 +1237,7 @@ const CollectionManager = (() => {
           <button type="button" class="sv-coll-btn primary" data-action="import">Import</button>
         </div>
       </div>
-    `;
+    `);
 
     document.body.appendChild(overlay);
 

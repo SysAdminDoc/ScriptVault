@@ -42,6 +42,10 @@ const ActivityHeatmap = (() => {
   /*  State                                                              */
   /* ------------------------------------------------------------------ */
 
+  const _safeSetHtml = (typeof window.ScriptVaultDashboardUI?.safeSetHtml === 'function')
+      ? window.ScriptVaultDashboardUI.safeSetHtml
+      : (el, html) => { el.innerHTML = html; };
+
   let _container = null;
   let _styleEl = null;
   let _canvas = null;
@@ -388,7 +392,7 @@ const ActivityHeatmap = (() => {
       html += `<div class="sv-heatmap-tooltip-row"><span>No activity</span></div>`;
     }
 
-    _tooltip.innerHTML = html;
+    _safeSetHtml(_tooltip, html);
     _tooltip.style.display = 'block';
     // Clamp to viewport bounds
     let tx = clientX + 12;
@@ -486,7 +490,7 @@ const ActivityHeatmap = (() => {
   }
 
   function _buildUI() {
-    _container.innerHTML = '';
+    _container.replaceChildren();
     const root = document.createElement('div');
     root.className = 'sv-heatmap-root';
 
@@ -554,7 +558,7 @@ const ActivityHeatmap = (() => {
     // Legend
     const legend = document.createElement('div');
     legend.className = 'sv-heatmap-legend';
-    legend.innerHTML = '<span>Less</span>';
+    _safeSetHtml(legend, '<span>Less</span>');
     for (const color of COLOR_LEVELS) {
       const cell = document.createElement('span');
       cell.className = 'sv-heatmap-legend-cell';
@@ -583,7 +587,7 @@ const ActivityHeatmap = (() => {
 
   function _renderStats(container) {
     const stats = getStats();
-    container.innerHTML = '';
+    container.replaceChildren();
 
     const cards = [
       { value: stats.activeDays, label: 'Active Days', trend: null },
@@ -654,7 +658,7 @@ const ActivityHeatmap = (() => {
 
   function destroy() {
     if (_tooltip) { _tooltip.remove(); _tooltip = null; }
-    if (_container) _container.innerHTML = '';
+    if (_container) _container.replaceChildren();
     if (_styleEl) { _styleEl.remove(); _styleEl = null; }
     // Drop the global hook so a post-destroy caller can't re-persist stale,
     // now-cleared activity data through the dangling closure.

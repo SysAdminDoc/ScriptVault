@@ -39,6 +39,10 @@ const GistIntegration = (() => {
     const STORAGE_KEY_AUTOSYNC = 'gist_autosync';
     const CACHE_TTL = 5 * 60 * 1000; // 5 min
 
+    const _safeSetHtml = (typeof window.ScriptVaultDashboardUI?.safeSetHtml === 'function')
+        ? window.ScriptVaultDashboardUI.safeSetHtml
+        : (el, html) => { el.innerHTML = html; };
+
     // =========================================
     // HTML escaping helper
     // =========================================
@@ -842,12 +846,12 @@ const GistIntegration = (() => {
     function render() {
         if (!_state.container) return;
         const c = _state.container;
-        c.innerHTML = '';
+        c.replaceChildren();
 
         // Header
         const header = document.createElement('div');
         header.className = 'gi-header';
-        header.innerHTML = `<div class="gi-header-title">${GITHUB_ICON} GitHub Gist Integration</div>`;
+        _safeSetHtml(header, `<div class="gi-header-title">${GITHUB_ICON} GitHub Gist Integration</div>`);
         if (!isConfigured()) {
             const cfgBtn = document.createElement('button');
             cfgBtn.className = 'gi-btn gi-btn-primary gi-btn-sm';
@@ -889,7 +893,7 @@ const GistIntegration = (() => {
     function renderImportTab(container) {
         const section = document.createElement('div');
         section.className = 'gi-section';
-        section.innerHTML = `<div class="gi-section-title">Import from Gist URL</div>`;
+        _safeSetHtml(section, `<div class="gi-section-title">Import from Gist URL</div>`);
 
         const row = document.createElement('div');
         row.className = 'gi-input-group';
@@ -911,7 +915,7 @@ const GistIntegration = (() => {
             if (!url) return;
             btn.disabled = true;
             btn.setAttribute('aria-busy', 'true');
-            btn.innerHTML = '<span class="gi-spinner"></span>Fetching…';
+            _safeSetHtml(btn, '<span class="gi-spinner"></span>Fetching…');
             try {
                 const scripts = await importFromGist(url);
                 showImportPreview(scripts);
@@ -952,12 +956,12 @@ const GistIntegration = (() => {
         // Header
         const header = document.createElement('div');
         header.className = 'gi-preview-header';
-        header.innerHTML = `<h3>Import Scripts (${scripts.length} found)</h3>`;
+        _safeSetHtml(header, `<h3>Import Scripts (${scripts.length} found)</h3>`);
         const closeBtn = document.createElement('button');
         closeBtn.className = 'gi-preview-close';
         closeBtn.type = 'button';
         closeBtn.setAttribute('aria-label', 'Close import preview');
-        closeBtn.innerHTML = '&times;';
+        _safeSetHtml(closeBtn, '&times;');
         closeBtn.addEventListener('click', closeModal);
         header.appendChild(closeBtn);
         modal.appendChild(header);
@@ -980,9 +984,11 @@ const GistIntegration = (() => {
                 ['Match', Array.isArray(meta.match) ? meta.match.join(', ') : (meta.match || 'N/A')],
                 ['Status', script.installed ? 'Already installed' : 'Not installed']
             ];
+            let _dlHtml = '';
             for (const [k, v] of fields) {
-                dl.innerHTML += `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`;
+                _dlHtml += `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`;
             }
+            _safeSetHtml(dl, _dlHtml);
             card.appendChild(dl);
 
             const code = document.createElement('pre');
@@ -1005,7 +1011,7 @@ const GistIntegration = (() => {
 
                 const originalText = installBtn.textContent;
                 installBtn.disabled = true;
-                installBtn.innerHTML = '<span class="gi-spinner"></span>Installing…';
+                _safeSetHtml(installBtn, '<span class="gi-spinner"></span>Installing…');
 
                 try {
                     const result = await Promise.resolve(_state.onInstallScript(script.code, {
@@ -1054,19 +1060,19 @@ const GistIntegration = (() => {
 
     function renderBrowseTab(container) {
         if (!isConfigured()) {
-            container.innerHTML = `<div class="gi-empty"><p>Configure your GitHub token in Settings to browse your Gists.</p></div>`;
+            _safeSetHtml(container, `<div class="gi-empty"><p>Configure your GitHub token in Settings to browse your Gists.</p></div>`);
             return;
         }
 
         const loading = document.createElement('div');
         loading.className = 'gi-loading';
-        loading.innerHTML = '<span class="gi-spinner"></span> Loading your Gists…';
+        _safeSetHtml(loading, '<span class="gi-spinner"></span> Loading your Gists…');
         container.appendChild(loading);
 
         listUserGists().then(gists => {
-            container.innerHTML = '';
+            container.replaceChildren();
             if (gists.length === 0) {
-                container.innerHTML = `<div class="gi-empty"><p>No .user.js Gists found in your account.</p></div>`;
+                _safeSetHtml(container, `<div class="gi-empty"><p>No .user.js Gists found in your account.</p></div>`);
                 return;
             }
 
@@ -1121,7 +1127,7 @@ const GistIntegration = (() => {
 
                 const metaRow = document.createElement('div');
                 metaRow.className = 'gi-gist-card-meta';
-                metaRow.innerHTML = `<span>Updated ${formatDate(gist.updatedAt)}</span><span>${gist.files.length} file(s)</span>`;
+                _safeSetHtml(metaRow, `<span>Updated ${formatDate(gist.updatedAt)}</span><span>${gist.files.length} file(s)</span>`);
                 card.appendChild(metaRow);
 
                 const actions = document.createElement('div');
@@ -1132,7 +1138,7 @@ const GistIntegration = (() => {
                 importBtn.textContent = 'Import';
                 importBtn.onclick = async () => {
                     importBtn.disabled = true;
-                    importBtn.innerHTML = '<span class="gi-spinner"></span>';
+                    _safeSetHtml(importBtn, '<span class="gi-spinner"></span>');
                     try {
                         const scripts = await importFromGist(gist.id);
                         showImportPreview(scripts);
@@ -1157,7 +1163,7 @@ const GistIntegration = (() => {
 
             container.appendChild(listEl);
         }).catch(e => {
-            container.innerHTML = `<div class="gi-empty"><p style="color:var(--accent-red)">${escapeHtml(e.message)}</p></div>`;
+            _safeSetHtml(container, `<div class="gi-empty"><p style="color:var(--accent-red)">${escapeHtml(e.message)}</p></div>`);
         });
     }
 
@@ -1165,7 +1171,7 @@ const GistIntegration = (() => {
         // Token section
         const tokenSection = document.createElement('div');
         tokenSection.className = 'gi-section';
-        tokenSection.innerHTML = `<div class="gi-section-title">GitHub Personal Access Token</div>`;
+        _safeSetHtml(tokenSection, `<div class="gi-section-title">GitHub Personal Access Token</div>`);
 
         if (isConfigured()) {
             const maskedRow = document.createElement('div');
@@ -1191,7 +1197,7 @@ const GistIntegration = (() => {
             verifyBtn.textContent = 'Verify';
             verifyBtn.onclick = async () => {
                 verifyBtn.disabled = true;
-                verifyBtn.innerHTML = '<span class="gi-spinner"></span>';
+                _safeSetHtml(verifyBtn, '<span class="gi-spinner"></span>');
                 const result = await verifyToken();
                 verifyBtn.disabled = false;
                 verifyBtn.textContent = 'Verify';
@@ -1225,7 +1231,7 @@ const GistIntegration = (() => {
                 const token = input.value.trim();
                 if (!token) return;
                 saveBtn.disabled = true;
-                saveBtn.innerHTML = '<span class="gi-spinner"></span>';
+                _safeSetHtml(saveBtn, '<span class="gi-spinner"></span>');
                 await saveToken(token);
                 const result = await verifyToken();
                 saveBtn.disabled = false;
@@ -1243,7 +1249,7 @@ const GistIntegration = (() => {
 
             const hint = document.createElement('div');
             hint.style.cssText = 'font-size:0.6875rem;color:var(--text-muted,#707070);';
-            hint.innerHTML = 'Generate a token at <a href="https://github.com/settings/tokens/new?scopes=gist&description=ScriptVault" target="_blank" style="color:var(--accent-blue,#60a5fa)">GitHub Settings</a> with the <strong>gist</strong> scope. Stored in <code>chrome.storage.local</code>, sandboxed by Chrome — readable only by ScriptVault.';
+            _safeSetHtml(hint, 'Generate a token at <a href="https://github.com/settings/tokens/new?scopes=gist&description=ScriptVault" target="_blank" style="color:var(--accent-blue,#60a5fa)">GitHub Settings</a> with the <strong>gist</strong> scope. Stored in <code>chrome.storage.local</code>, sandboxed by Chrome — readable only by ScriptVault.');
             tokenSection.appendChild(hint);
         }
         container.appendChild(tokenSection);
@@ -1251,12 +1257,12 @@ const GistIntegration = (() => {
         // Auto-sync toggle
         const syncSection = document.createElement('div');
         syncSection.className = 'gi-section';
-        syncSection.innerHTML = `<div class="gi-section-title">Sync Settings</div>`;
+        _safeSetHtml(syncSection, `<div class="gi-section-title">Sync Settings</div>`);
 
         const toggleRow = document.createElement('div');
         toggleRow.className = 'gi-toggle-row';
         const labelDiv = document.createElement('div');
-        labelDiv.innerHTML = `<div class="gi-toggle-label">Auto-sync on save</div><div class="gi-toggle-desc">Automatically push changes to linked Gists when saving scripts</div>`;
+        _safeSetHtml(labelDiv, `<div class="gi-toggle-label">Auto-sync on save</div><div class="gi-toggle-desc">Automatically push changes to linked Gists when saving scripts</div>`);
         toggleRow.appendChild(labelDiv);
 
         const toggleBtn = document.createElement('button');
@@ -1295,28 +1301,28 @@ const GistIntegration = (() => {
 
         const header = document.createElement('div');
         header.className = 'gi-preview-header';
-        header.innerHTML = `<h3>Export to GitHub Gist</h3>`;
+        _safeSetHtml(header, `<h3>Export to GitHub Gist</h3>`);
         const closeBtn = document.createElement('button');
         closeBtn.className = 'gi-preview-close';
-        closeBtn.innerHTML = '&times;';
+        _safeSetHtml(closeBtn, '&times;');
         closeBtn.onclick = () => overlay.remove();
         header.appendChild(closeBtn);
         modal.appendChild(header);
 
         const body = document.createElement('div');
         body.className = 'gi-preview-body';
-        body.innerHTML = `
+        _safeSetHtml(body, `
             <dl class="gi-preview-meta">
                 <dt>Script</dt><dd>${escapeHtml(meta.name || script.name || 'Untitled')}</dd>
                 <dt>Version</dt><dd>${escapeHtml(meta.version || 'N/A')}</dd>
                 <dt>Filename</dt><dd>${escapeHtml(makeFilename(meta.name || script.name))}</dd>
             </dl>
-        `;
+        `);
 
         const visibilityRow = document.createElement('div');
         visibilityRow.className = 'gi-toggle-row';
         visibilityRow.style.marginBottom = '12px';
-        visibilityRow.innerHTML = `<div class="gi-toggle-label">Public Gist</div>`;
+        _safeSetHtml(visibilityRow, `<div class="gi-toggle-label">Public Gist</div>`);
         let isPublic = false;
         const visToggle = document.createElement('button');
         visToggle.className = 'gi-toggle';
@@ -1348,7 +1354,7 @@ const GistIntegration = (() => {
         exportBtn.textContent = linkedGistId ? 'Update Gist' : 'Create Gist';
         exportBtn.onclick = async () => {
             exportBtn.disabled = true;
-            exportBtn.innerHTML = '<span class="gi-spinner"></span>Exporting...';
+            _safeSetHtml(exportBtn, '<span class="gi-spinner"></span>Exporting...');
             try {
                 const result = await exportToGist(scriptId, isPublic);
                 overlay.remove();
@@ -1441,7 +1447,7 @@ const GistIntegration = (() => {
         destroy() {
             if (_state.styleEl) { _state.styleEl.remove(); _state.styleEl = null; }
             if (_state.modalEl) { _state.modalEl.remove(); _state.modalEl = null; }
-            if (_state.container) { _state.container.innerHTML = ''; _state.container = null; }
+            if (_state.container) { _state.container.replaceChildren(); _state.container = null; }
             if (_state.syncIntervalId) { clearInterval(_state.syncIntervalId); _state.syncIntervalId = null; }
             _state.token = null;
             _state.tokenVerified = false;

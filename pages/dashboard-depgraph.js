@@ -42,6 +42,10 @@ const DependencyGraph = (() => {
         onOpenEditor: null
     };
 
+    const _safeSetHtml = (typeof window.ScriptVaultDashboardUI?.safeSetHtml === 'function')
+        ? window.ScriptVaultDashboardUI.safeSetHtml
+        : (el, html) => { el.innerHTML = html; };
+
     // =========================================
     // CSS
     // =========================================
@@ -850,7 +854,7 @@ const DependencyGraph = (() => {
 
         const node = _state.selectedNode;
         if (!node) {
-            body.innerHTML = '<div class="dg-empty">Select a node to view details</div>';
+            _safeSetHtml(body, '<div class="dg-empty">Select a node to view details</div>');
             return;
         }
 
@@ -927,7 +931,7 @@ const DependencyGraph = (() => {
         // Open in Editor button
         html += `<button class="dg-btn-open" data-action="open-editor" type="button">Open in Editor</button>`;
 
-        body.innerHTML = html;
+        _safeSetHtml(body, html);
 
         // Bind open editor
         const btn = body.querySelector('[data-action="open-editor"]');
@@ -950,7 +954,7 @@ const DependencyGraph = (() => {
     // Build DOM
     // =========================================
     function buildUI(containerEl) {
-        containerEl.innerHTML = '';
+        containerEl.replaceChildren();
 
         const wrapper = document.createElement('div');
         wrapper.className = 'dg-wrapper';
@@ -965,24 +969,24 @@ const DependencyGraph = (() => {
         // Toolbar
         const toolbar = document.createElement('div');
         toolbar.className = 'dg-toolbar';
-        toolbar.innerHTML = `
+        _safeSetHtml(toolbar, `
             <button data-action="reset-zoom" title="Reset view" type="button">Reset View</button>
             <button data-action="reheat" title="Re-run layout" type="button">Re-layout</button>
             <button data-action="export-png" title="Export as PNG" type="button">PNG</button>
             <button data-action="export-svg" title="Export as SVG" type="button">SVG</button>
-        `;
+        `);
         canvasArea.appendChild(toolbar);
 
         // Legend
         const legend = document.createElement('div');
         legend.className = 'dg-legend';
-        legend.innerHTML = `
+        _safeSetHtml(legend, `
             <div class="dg-legend-item"><span class="dg-legend-dot" style="background:#60a5fa"></span>@require</div>
             <div class="dg-legend-item"><span class="dg-legend-dot" style="background:#4ade80"></span>@match</div>
             <div class="dg-legend-item"><span class="dg-legend-dot" style="background:#fb923c"></span>@resource</div>
             <div class="dg-legend-item"><span class="dg-legend-dot" style="background:#c084fc"></span>@connect</div>
             <div class="dg-legend-item"><span class="dg-legend-dot" style="background:#f87171"></span>Conflict</div>
-        `;
+        `);
         canvasArea.appendChild(legend);
 
         wrapper.appendChild(canvasArea);
@@ -990,7 +994,7 @@ const DependencyGraph = (() => {
         // Sidebar
         const sidebar = document.createElement('div');
         sidebar.className = 'dg-sidebar';
-        sidebar.innerHTML = `
+        _safeSetHtml(sidebar, `
             <div class="dg-sidebar-header">
                 <span>Details</span>
                 <button data-action="toggle-sidebar" title="Toggle sidebar" type="button" aria-label="Close details panel">\u2715</button>
@@ -998,7 +1002,7 @@ const DependencyGraph = (() => {
             <div class="dg-sidebar-body">
                 <div class="dg-empty">Select a node to view details</div>
             </div>
-        `;
+        `);
         wrapper.appendChild(sidebar);
 
         containerEl.appendChild(wrapper);
@@ -1232,7 +1236,7 @@ const DependencyGraph = (() => {
             _state.styleEl = null;
         }
         if (_state.container) {
-            _state.container.innerHTML = '';
+            _state.container.replaceChildren();
         }
         _state.container = null;
         _state.canvas = null;
