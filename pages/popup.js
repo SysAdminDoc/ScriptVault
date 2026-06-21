@@ -868,12 +868,18 @@
         configureScriptDropdown(scriptId);
         populateMenuCommands(scriptId);
         const rect = trigger.getBoundingClientRect();
-        dropdown.style.top = rect.bottom + 2 + 'px';
         dropdown.style.right = (document.documentElement.clientWidth - rect.right) + 'px';
         trigger.setAttribute('aria-expanded', 'true');
         dropdown.hidden = false;
         dropdown.setAttribute('aria-hidden', 'false');
         dropdown.classList.add('open');
+        const dropRect = dropdown.getBoundingClientRect();
+        const viewportH = document.documentElement.clientHeight;
+        if (rect.bottom + 2 + dropRect.height > viewportH && rect.top - dropRect.height - 2 >= 0) {
+            dropdown.style.top = (rect.top - dropRect.height - 2) + 'px';
+        } else {
+            dropdown.style.top = Math.min(rect.bottom + 2, viewportH - dropRect.height - 4) + 'px';
+        }
         requestAnimationFrame(() => focusDropdownMenuItem(focusTarget));
     }
 
