@@ -7,16 +7,25 @@
     const numberFormatter = new Intl.NumberFormat();
     const setupDoctor = globalThis.UserScriptsSetupDoctor;
 
+    const _svPolicy = (typeof window.trustedTypes !== 'undefined' && window.trustedTypes.createPolicy)
+        ? window.trustedTypes.createPolicy('sv-popup', { createHTML: s => s })
+        : null;
+    function safeSetHtml(el, html) {
+        el.innerHTML = _svPolicy ? _svPolicy.createHTML(html) : html;
+    }
+
     // Event delegation for favicon error handling (CSP-compliant)
     document.addEventListener('error', function(e) {
         if (e.target.tagName === 'IMG' && e.target.hasAttribute('data-favicon-fallback')) {
             e.target.style.display = 'none';
             if (e.target.parentElement) {
-                e.target.parentElement.innerHTML = buildPopupIconBadgeHtml(
+                const parent = e.target.parentElement;
+                parent.replaceChildren();
+                parent.appendChild(buildPopupIconBadge(
                     e.target.dataset.fallbackLabel || 'SV',
                     e.target.dataset.fallbackHue || '145',
                     e.target.dataset.fallbackMode || 'google'
-                );
+                ));
             }
         }
     }, true);
@@ -389,6 +398,18 @@
         if (mode === 'none') classes.push('minimal');
         const style = mode === 'none' ? '' : ` style="--script-icon-hue:${hue}"`;
         return `<span class="${classes.join(' ')}"${style}>${mode === 'none' ? '' : escapeHtml(label)}</span>`;
+    }
+
+    function buildPopupIconBadge(label, hue, mode = getMarkerMode()) {
+        const span = document.createElement('span');
+        span.className = 'script-icon-badge';
+        if (mode === 'duckduckgo') span.classList.add('compact');
+        if (mode === 'none') span.classList.add('minimal');
+        if (mode !== 'none') {
+            span.style.setProperty('--script-icon-hue', hue);
+            span.textContent = label;
+        }
+        return span;
     }
     
     function getPopupChromeVersion() {
@@ -887,14 +908,14 @@
 
         if (ctxScripts.length === 0) {
             section.hidden = true;
-            list.innerHTML = '';
+            list.replaceChildren();
             count.textContent = '0';
             return;
         }
 
         section.hidden = false;
         count.textContent = String(ctxScripts.length);
-        list.innerHTML = ctxScripts.map((script) => {
+        safeSetHtml(list, ctxScripts.map((script) => {
             const meta = script.metadata || script.meta || {};
             const name = meta.name || 'Unnamed Script';
             const icon = getScriptIcon(script);
@@ -907,7 +928,7 @@
                     <span class="ctx-run-hint" aria-hidden="true">Run</span>
                 </button>
             `;
-        }).join('');
+        }).join(''));
 
         list.querySelectorAll('.context-menu-script-row').forEach((btn) => {
             btn.addEventListener('click', async () => {
@@ -970,7 +991,7 @@
                 elements.scriptList.hidden = true;
                 elements.scriptList.classList.remove('loading');
                 elements.scriptList.setAttribute('aria-busy', 'false');
-                elements.scriptList.innerHTML = '';
+                elements.scriptList.replaceChildren();
             }
             if (emptyState) emptyState.style.display = 'block';
             updateEmptyStateHint();
@@ -985,7 +1006,7 @@
         }
         updatePrimaryActionMenuVisibility();
 
-        elements.scriptList.innerHTML = displayScripts.map((script, i) => {
+        safeSetHtml(elements.scriptList, displayScripts.map((script, i) => {
             const meta = script.metadata || script.meta || {};
             const name = meta.name || 'Unnamed Script';
             const version = meta.version || '';
@@ -1034,7 +1055,7 @@
                     </button>
                 </div>
             `;
-        }).join('');
+        }).join(''));
 
         // Shared dropdown element
         const dropdown = document.getElementById('scriptDropdown');
@@ -1258,7 +1279,7 @@
     async function populateMenuCommands(scriptId) {
         const container = document.getElementById('dropdownMenuCmds');
         if (!container) return;
-        container.innerHTML = '';
+        container.replaceChildren();
         try {
             const data = await chrome.storage.session.get('menuCommands');
             const cmds = data?.menuCommands?.[scriptId] || [];
