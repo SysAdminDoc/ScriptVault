@@ -555,7 +555,8 @@ const googledrive = {
 
   async findFile(token: string): Promise<GoogleDriveFile | null> {
     // Search in root and appDataFolder
-    const query = encodeURIComponent(`name='${this.fileName}' and trashed=false`);
+    const safeName = this.fileName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    const query = encodeURIComponent(`name='${safeName}' and trashed=false`);
     const response = await fetchWithTimeout(
       `https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name,modifiedTime)&spaces=drive`,
       { headers: { 'Authorization': `Bearer ${token}` } },

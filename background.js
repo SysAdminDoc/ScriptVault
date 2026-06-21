@@ -3460,7 +3460,8 @@ const CloudSyncProviders = (() => {
       return { success: true };
     },
     async findFile(token) {
-      const query = encodeURIComponent(`name='${this.fileName}' and trashed=false`);
+      const safeName = this.fileName.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+      const query = encodeURIComponent(`name='${safeName}' and trashed=false`);
       const response = await fetchWithTimeout(
         `https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name,modifiedTime)&spaces=drive`,
         { headers: { "Authorization": `Bearer ${token}` } },
@@ -22158,21 +22159,24 @@ const CloudSync = {
     this._syncInProgress = true;
     this._abortController = new AbortController();
 
-    let _timeoutId;
+    const syncTimeoutAlarm = 'sv_sync_timeout_' + Date.now();
     try {
       const timeoutPromise = new Promise((_, reject) => {
-        _timeoutId = setTimeout(() => {
-          // Cancel any in-flight provider fetches before the race rejects.
+        chrome.alarms.create(syncTimeoutAlarm, { delayInMinutes: 1.5 });
+        const onAlarm = (alarm: chrome.alarms.Alarm) => {
+          if (alarm.name !== syncTimeoutAlarm) return;
+          chrome.alarms.onAlarm.removeListener(onAlarm);
           try { this._abortController.abort(new Error('Sync timed out after 90s')); } catch {}
           reject(new Error('Sync timed out after 90s'));
-        }, 90000);
+        };
+        chrome.alarms.onAlarm.addListener(onAlarm);
       });
       return await Promise.race([this._performSync({ signal: this._abortController.signal }), timeoutPromise]);
     } catch (e) {
       console.error('[ScriptVault] Sync failed:', e);
-      return { error: e.message };
+      return { error: (e as Error).message };
     } finally {
-      clearTimeout(_timeoutId);
+      chrome.alarms.clear(syncTimeoutAlarm).catch(() => {});
       this._syncInProgress = false;
       this._abortController = null;
     }
