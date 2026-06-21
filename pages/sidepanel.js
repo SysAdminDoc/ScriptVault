@@ -441,7 +441,7 @@
       // Show error state instead of blank panel
       const list = $('pageScriptList');
       if (list) {
-        list.innerHTML = '';
+        list.replaceChildren();
         const err = document.createElement('div');
         err.className = 'sp-empty';
         err.textContent = 'Unable to reach the background service. Refresh the panel to reconnect.';
@@ -480,7 +480,7 @@
     if (pageCountEl) pageCountEl.textContent = numberFormatter.format(pageScripts.length);
 
     if (!currentPageCanRunScripts) {
-      list.innerHTML = '';
+      list.replaceChildren();
       const empty = document.createElement('div');
       empty.className = 'sp-empty';
       const icon = document.createElement('div');
@@ -506,7 +506,7 @@
       const url = currentTab?.url || '';
       let hostname = '';
       try { hostname = new URL(url).hostname; } catch {}
-      list.innerHTML = '';
+      list.replaceChildren();
       const empty = document.createElement('div');
       empty.className = 'sp-empty';
       const icon = document.createElement('div');

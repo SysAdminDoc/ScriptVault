@@ -125,7 +125,7 @@ describe("popup UX controller", () => {
     expect(popupJs).toMatch(/if \(e\.key === 'Escape' && document\.getElementById\('scriptDropdown'\)\?\.classList\.contains\('open'\)\)/);
     expect(popupJs).toMatch(/document\.addEventListener\('click', \(e\) => \{/);
     expect(popupJs).toMatch(/showPopupToast\('Checking for updates…'\)/);
-    expect(popupJs).toMatch(/closeScriptDropdown\(\);[\s\S]*?elements\.scriptList\.innerHTML = displayScripts\.map/);
+    expect(popupJs).toMatch(/closeScriptDropdown\(\);[\s\S]*?safeSetHtml\(elements\.scriptList, displayScripts\.map/);
     expect(popupJs).toMatch(/await copyTextToClipboard\(url\);/);
     expect(popupJs).toMatch(/updateBtn\.disabled = !hasUpdateUrl;/);
     expect(popupJs).toMatch(/copyUrlBtn\.disabled = !installUrl;/);
