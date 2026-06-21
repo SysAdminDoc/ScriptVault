@@ -25,6 +25,23 @@
 
   const $ = id => document.getElementById(id); // returns null if not found
 
+  function isContextInvalidated(error) {
+    const msg = String(error?.message || error || '');
+    return msg.includes('Extension context invalidated') || msg.includes('context invalidated');
+  }
+
+  function showContextInvalidatedBanner() {
+    teardownTabListeners();
+    const existing = document.getElementById('sp-context-banner');
+    if (existing) return;
+    const banner = document.createElement('div');
+    banner.id = 'sp-context-banner';
+    banner.style.cssText = 'padding:10px 12px;background:var(--danger,#ef4444);color:#fff;font-size:0.75rem;font-weight:600;border-radius:var(--radius-panel,8px);text-align:center;margin-block-end:4px;cursor:pointer;';
+    banner.textContent = 'Extension restarted — click to reconnect';
+    banner.addEventListener('click', () => location.reload());
+    document.body.prepend(banner);
+  }
+
   function showPanelNotice(message, type = 'success') {
     const notice = document.getElementById('statusMessage');
     if (!notice) return;
@@ -442,7 +459,7 @@
       await refreshPendingUpdatesChip();
     } catch (e) {
       console.error('[SP] refresh error:', e);
-      // Show error state instead of blank panel
+      if (isContextInvalidated(e)) { showContextInvalidatedBanner(); return; }
       const list = $('pageScriptList');
       if (list) {
         list.replaceChildren();
@@ -798,6 +815,7 @@
       renderPageScripts();
       renderAllScripts();
     } catch (error) {
+      if (isContextInvalidated(error)) { showContextInvalidatedBanner(); return; }
       showPanelNotice(error.message || 'Failed to update script', 'error');
       await refresh();
     } finally {
