@@ -543,8 +543,9 @@ const CloudSyncProviders = (() => {
       if (!token) throw new Error("Not authenticated with Google Drive");
       const file = await this.findFile(token);
       if (!file) return null;
+      const safeFileId = String(file.id).replace(/[^a-zA-Z0-9_-]/g, "");
       const response = await fetchWithTimeout(
-        `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`,
+        `https://www.googleapis.com/drive/v3/files/${safeFileId}?alt=media`,
         { headers: { "Authorization": `Bearer ${token}` } },
         6e4
       );

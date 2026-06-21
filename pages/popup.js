@@ -1359,6 +1359,8 @@
             } catch (error) {
                 console.error('Failed to toggle script:', error);
                 showPopupToast(error.message || 'Failed to update script', 'error');
+                updateLocalScriptState(scriptId, !enabled);
+                renderScriptList();
             }
         });
     }

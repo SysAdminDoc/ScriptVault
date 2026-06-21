@@ -3511,8 +3511,9 @@ const CloudSyncProviders = (() => {
       if (!token) throw new Error("Not authenticated with Google Drive");
       const file = await this.findFile(token);
       if (!file) return null;
+      const safeFileId = String(file.id).replace(/[^a-zA-Z0-9_-]/g, "");
       const response = await fetchWithTimeout(
-        `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`,
+        `https://www.googleapis.com/drive/v3/files/${safeFileId}?alt=media`,
         { headers: { "Authorization": `Bearer ${token}` } },
         6e4
       );
@@ -12365,7 +12366,7 @@ const BackupScheduler = (() => {
       const settings = await _loadSettings();
       const backups = await _getBackupList();
       const rawMax = Number(settings.maxBackups);
-      const maxBackups = Number.isFinite(rawMax) && rawMax >= 0 ? Math.floor(rawMax) : 5;
+      const maxBackups = Number.isFinite(rawMax) && rawMax >= 1 ? Math.floor(rawMax) : 5;
       if (backups.length <= maxBackups) return 0;
       const pruned = backups.slice(0, maxBackups);
       await _saveBackupList(pruned);
