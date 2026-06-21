@@ -282,7 +282,7 @@
         'dashboard-linter.js': { surface: 'editor', initializer: 'AdvancedLinter.init', trigger: 'tbtnLint' },
         'dashboard-pattern-builder.js': { surface: 'editor', initializer: 'PatternBuilder.init', trigger: 'tbtnPattern' },
         'dashboard-profiles.js': { surface: 'utilities', initializer: 'ProfileManager.init', mount: 'profilesContainer' },
-        'dashboard-recommendations.js': { surface: 'scripts', initializer: 'Recommendations.init', mount: 'recommendationsContainer' },
+
         'dashboard-scheduler.js': { surface: 'scripts', initializer: 'ScriptScheduler.init' },
         'dashboard-sharing.js': { surface: 'editor', initializer: 'ScriptSharing.init', trigger: 'tbtnShare' },
         'dashboard-snippets.js': { surface: 'editor', initializer: 'SnippetLibrary.init', trigger: 'tbtnSnippet' },
@@ -1489,7 +1489,7 @@
         elements.scriptSearch = document.getElementById('scriptSearch');
         elements.btnClearScriptSearch = document.getElementById('btnClearScriptSearch');
         elements.scriptTableBody = document.getElementById('scriptTableBody');
-        elements.recommendationsContainer = document.getElementById('recommendationsContainer');
+
         elements.emptyState = document.getElementById('emptyState');
         elements.emptyStateTitle = document.getElementById('emptyStateTitle');
         elements.emptyStateDescription = document.getElementById('emptyStateDescription');
@@ -2202,7 +2202,7 @@
         'Store': 'storeContainer',
         'CardView': 'cardViewContainer', 'PatternBuilder': 'patternBuilderContainer',
         'ThemeEditor': 'themeEditorContainer', 'DepGraph': 'depGraphContainer',
-        'Recommendations': 'recommendationsContainer',
+
         'Collections': 'collectionsContainer',
         'Standalone': 'standaloneScriptSelect',
         'Heatmap': 'heatmapContainer',
@@ -2492,14 +2492,6 @@
                         syncCardView(getFilteredScripts());
                     }
                 });
-                await initDashboardModuleOnce('recommendations', 'Recommendations', async () => {
-                    if (typeof Recommendations !== 'undefined' && elements.recommendationsContainer) {
-                        await Recommendations.init(elements.recommendationsContainer, {
-                            getScripts: getAllScriptsSnapshot,
-                            onInstall: () => {}
-                        });
-                    }
-                });
                 await initDashboardModuleOnce('scheduler', 'Scheduler', async () => {
                     if (typeof ScriptScheduler !== 'undefined') {
                         await ScriptScheduler.init();
@@ -2627,11 +2619,7 @@
         if (typeof CardView !== 'undefined' && _dashboardModulesInited.has('cardview')) {
             syncCardView(getFilteredScripts());
         }
-        if (typeof Recommendations !== 'undefined' && _dashboardModulesInited.has('recommendations')) {
-            Recommendations.refresh?.().catch?.(error => {
-                console.warn('[ScriptVault] Recommendations refresh failed:', error?.message || error);
-            });
-        }
+
         if (typeof DependencyGraph !== 'undefined' && _dashboardModulesInited.has('depgraph')) {
             DependencyGraph.refresh(getAllScriptsSnapshot());
         }

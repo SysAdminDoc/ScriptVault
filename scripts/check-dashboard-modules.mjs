@@ -111,7 +111,7 @@ const wiringChecks = [
   ['dashboard-pattern-builder.js', dashboardSource, 'PatternBuilder.init', 'pages/dashboard.js'],
   ['dashboard-pattern-builder.js', htmlSource, 'tbtnPattern', 'pages/dashboard.html'],
   ['dashboard-profiles.js', dashboardSource, 'ProfileManager.init', 'pages/dashboard.js'],
-  ['dashboard-recommendations.js', dashboardSource, 'Recommendations.init', 'pages/dashboard.js'],
+
   ['dashboard-scheduler.js', dashboardSource, 'ScriptScheduler.init', 'pages/dashboard.js'],
   ['dashboard-sharing.js', dashboardSource, 'ScriptSharing.init', 'pages/dashboard.js'],
   ['dashboard-sharing.js', htmlSource, 'tbtnShare', 'pages/dashboard.html'],
