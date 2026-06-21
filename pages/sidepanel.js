@@ -18,6 +18,7 @@
   let searchRenderTimer = null;
   let currentPageCanRunScripts = false;
   let hostPermissionStatus = null;
+  let _refreshGeneration = 0;
   const pendingScriptActions = new Set();
   const SEARCH_RENDER_DEBOUNCE_MS = 90;
   const MATCHABLE_PROTOCOLS = new Set(['http:', 'https:', 'file:', 'ftp:']);
@@ -409,9 +410,11 @@
 
   async function refresh() {
     if (searchRenderTimer) { clearTimeout(searchRenderTimer); searchRenderTimer = null; }
+    const myGeneration = ++_refreshGeneration;
     setListBusy(true);
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (myGeneration !== _refreshGeneration) return;
       currentTab = tab;
       updateUrlBar();
       const currentUrl = currentTab?.url || '';
@@ -428,6 +431,7 @@
       // Phase 39.23 — VM #2516 cross-realm array guard. Coerce through
       // Array.from so an array-like response from a foreign realm doesn't
       // crash the subsequent for-of in renderPageScripts.
+      if (myGeneration !== _refreshGeneration) return;
       const rawAll = allRes?.scripts ?? Object.values(allRes || {});
       allScripts = Array.isArray(rawAll) ? rawAll : Array.from(rawAll ?? []);
       pageScripts = Array.isArray(matchedRes) ? matchedRes : Array.from(matchedRes ?? []);

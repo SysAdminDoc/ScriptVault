@@ -1702,7 +1702,7 @@ export const BackupScheduler = {
     // Defensively clamp maxBackups: a negative value would make slice() keep
     // the OLDEST backups, and NaN/non-numeric would slice to [] and wipe all.
     const rawMax = Number(settings.maxBackups);
-    const maxBackups = Number.isFinite(rawMax) && rawMax >= 0 ? Math.floor(rawMax) : 5;
+    const maxBackups = Number.isFinite(rawMax) && rawMax >= 1 ? Math.floor(rawMax) : 5;
     if (backups.length <= maxBackups) return 0;
 
     // Keep the newest N

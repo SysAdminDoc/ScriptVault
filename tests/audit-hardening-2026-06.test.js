@@ -206,7 +206,7 @@ describe('Backup retention hardening', () => {
   });
   it('pruneOldBackups clamps maxBackups against negative/NaN values', () => {
     const src = read('modules/backup-scheduler.js');
-    expect(src).toContain('Number.isFinite(rawMax) && rawMax >= 0 ? Math.floor(rawMax) : 5');
+    expect(src).toContain('Number.isFinite(rawMax) && rawMax >= 1 ? Math.floor(rawMax) : 5');
   });
 });
 
