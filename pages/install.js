@@ -1,5 +1,12 @@
 // ScriptVault Install Page v2.3.0
 
+const _svPolicy = (typeof window.trustedTypes !== 'undefined' && window.trustedTypes.createPolicy)
+    ? window.trustedTypes.createPolicy('sv-install', { createHTML: s => s })
+    : null;
+function safeSetHtml(el, html) {
+    el.innerHTML = _svPolicy ? _svPolicy.createHTML(html) : html;
+}
+
 // Dangerous permissions that warrant security warnings
 const DANGEROUS_PERMISSIONS = [
   'GM_xmlhttpRequest',
@@ -462,7 +469,7 @@ async function init() {
       if (content) {
         const extId = (typeof chrome?.runtime?.id === 'string') ? chrome.runtime.id : '';
         const detailsHref = extId ? `chrome://extensions/?id=${encodeURIComponent(extId)}` : 'chrome://extensions/';
-        content.innerHTML = `
+        safeSetHtml(content, `
           <div class="install-terminal error" role="alert" aria-live="assertive" aria-atomic="true" aria-labelledby="installTerminalTitle" aria-describedby="installTerminalMessage">
             <div class="install-state-mark is-warning error-icon" aria-hidden="true">!</div>
             <div class="error-title" id="installTerminalTitle">ScriptVault is not allowed in private windows</div>
@@ -471,7 +478,7 @@ async function init() {
               <a class="btn btn-secondary" href="${escapeHtml(detailsHref)}" target="_blank" rel="noopener">Open Extension Details</a>
             </div>
           </div>
-        `;
+        `);
       }
       return;
     }
@@ -878,7 +885,7 @@ function renderTrustCard(sourceUrl) {
           detail: 'ScriptVault is checking the embedded signature and signer trust.'
         };
 
-  mount.innerHTML = `
+  safeSetHtml(mount, `
     <div class="install-card-header">
       <div>
         <div class="install-card-title">Source & Trust</div>
@@ -951,7 +958,7 @@ function renderTrustCard(sourceUrl) {
         <button class="btn btn-secondary" id="btnTrustSigner" type="button">Trust signer</button>
       </div>
     ` : ''}
-  `;
+  `);
 
   document.getElementById('btnTrustSigner')?.addEventListener('click', async () => {
     const trustName = scriptMeta.author || scriptMeta.name || provenance.label;
@@ -1020,7 +1027,7 @@ function renderInstallUI(sourceUrl) {
   }
   const presentation = getInstallPresentation();
   setReviewExitGuard(true);
-  badge.innerHTML = presentation.badgeHtml;
+  safeSetHtml(badge, presentation.badgeHtml);
 
   const matches = [...scriptMeta.match, ...scriptMeta.include];
   const excludes = [...scriptMeta.exclude, ...scriptMeta['exclude-match']];
@@ -1542,7 +1549,7 @@ function renderInstallUI(sourceUrl) {
     </div>
   `;
 
-  content.innerHTML = html;
+  safeSetHtml(content, html);
 
   setupExpandablePatternSections();
   setupReviewNav();
@@ -1798,7 +1805,7 @@ async function handleInstall() {
   setCancelReviewArmed(false);
   clearInstallError();
   btn.disabled = true;
-  btn.innerHTML = '<span class="loading-spinner install-inline-spinner"></span> Installing…';
+  safeSetHtml(btn, '<span class="loading-spinner install-inline-spinner"></span> Installing…');
 
   try {
     const scriptId = existingScript?.id || null;
@@ -1886,13 +1893,13 @@ function showInstallError(message) {
   errorEl.setAttribute('aria-live', 'assertive');
   errorEl.setAttribute('aria-atomic', 'true');
   errorEl.tabIndex = -1;
-  errorEl.innerHTML = `
+  safeSetHtml(errorEl, `
     <span class="install-inline-mark" aria-hidden="true">!</span>
     <span class="install-error-message">
       <span>${escapeHtml(message)}</span>
       <span class="install-error-helper">No script was saved. Review the install details, then try again.</span>
     </span>
-  `;
+  `);
   errorEl.style.display = 'flex';
   errorEl.focus({ preventScroll: true });
 }
@@ -1908,7 +1915,7 @@ function showError(title, message) {
   setReviewExitGuard(false);
   const content = document.getElementById('content');
   if (!content) return;
-  content.innerHTML = `
+  safeSetHtml(content, `
     <div class="error install-terminal" role="alert" aria-live="assertive" aria-atomic="true" aria-labelledby="installTerminalTitle" aria-describedby="installTerminalMessage">
       <div class="install-state-mark is-error error-icon" aria-hidden="true">!</div>
       <div class="error-title" id="installTerminalTitle">${escapeHtml(title)}</div>
@@ -1917,7 +1924,7 @@ function showError(title, message) {
         <button class="btn btn-secondary" id="btnCloseError" type="button">Close review</button>
       </div>
     </div>
-  `;
+  `);
   document.getElementById('btnCloseError')?.addEventListener('click', () => {
     allowInstallExitOnce();
     if (history.length > 1) history.back();
@@ -1944,7 +1951,7 @@ function showSuccess(name, action, scriptId) {
     : action === 'updated'
       ? 'Existing script settings and stored values were preserved during the update.'
       : 'ScriptVault saved the script locally before leaving the install review.';
-  content.innerHTML = `
+  safeSetHtml(content, `
     <div class="success install-terminal" role="status" aria-live="polite" aria-atomic="true" aria-labelledby="installTerminalTitle" aria-describedby="installTerminalMessage">
       <div class="install-state-mark is-success success-icon" aria-hidden="true">OK</div>
       <div class="success-title" id="installTerminalTitle">${escapeHtml(titleMap[action] || 'Script Installed')}</div>
@@ -1955,7 +1962,7 @@ function showSuccess(name, action, scriptId) {
         <button class="btn btn-secondary" id="btnSuccessClose" type="button">Close review</button>
       </div>
     </div>
-  `;
+  `);
 
   document.getElementById('btnSuccessClose')?.addEventListener('click', () => {
     allowInstallExitOnce();
@@ -2309,11 +2316,11 @@ function renderRequireProvenanceEntries(entries = []) {
   if (!listEl) return;
 
   if (entries.length === 0) {
-    listEl.innerHTML = '<span class="tag neutral">No provenance</span>';
+    safeSetHtml(listEl, '<span class="tag neutral">No provenance</span>');
     return;
   }
 
-  listEl.innerHTML = entries.map((entry) => {
+  safeSetHtml(listEl, entries.map((entry) => {
     const cls = isVerifiedRequireProvenanceEntry(entry)
       ? 'safe'
       : requireProvenanceNeedsReview(entry)
@@ -2322,7 +2329,7 @@ function renderRequireProvenanceEntries(entries = []) {
     const label = getRequireProvenanceLabel(entry);
     const detail = getRequireProvenanceDetail(entry);
     return `<span class="tag ${cls}" data-provenance-index="${entry.index}" title="${escapeHtml(detail)}">${escapeHtml(label)}</span>`;
-  }).join('');
+  }).join(''));
 }
 
 async function checkRequireProvenance(meta) {
@@ -2441,7 +2448,7 @@ async function runStaticAnalysis(code) {
         detail: 'ScriptVault could not finish this scan.'
       };
       updateDecisionStates();
-      mount.innerHTML = `
+      safeSetHtml(mount, `
         <div class="install-card-header">
           <div>
             <div class="install-card-title">Security Analysis</div>
@@ -2450,7 +2457,7 @@ async function runStaticAnalysis(code) {
           <span class="count status-neutral">Unavailable</span>
         </div>
         <div class="analysis-summary">You can still review permissions, scope, and source details before deciding.</div>
-      `;
+      `);
       return;
     }
 
@@ -2471,7 +2478,7 @@ async function runStaticAnalysis(code) {
     };
     updateDecisionStates();
 
-    mount.innerHTML = `
+    safeSetHtml(mount, `
       <div class="install-card-header">
         <div>
           <div class="install-card-title">Security Analysis</div>
@@ -2490,7 +2497,7 @@ async function runStaticAnalysis(code) {
         }
         ${findings.length > 10 ? `<span class="tag neutral">+${findings.length - 10} more</span>` : ''}
       </div>
-    `;
+    `);
   } catch (e) {
     console.warn('Static analysis failed:', e);
     analysisDecisionState = {
@@ -2501,7 +2508,7 @@ async function runStaticAnalysis(code) {
     updateDecisionStates();
     const mount = document.getElementById('analysisMount');
     if (mount) {
-      mount.innerHTML = `
+      safeSetHtml(mount, `
         <div class="install-card-header">
           <div>
             <div class="install-card-title">Security Analysis</div>
@@ -2510,7 +2517,7 @@ async function runStaticAnalysis(code) {
           <span class="count status-neutral">Unavailable</span>
         </div>
         <div class="analysis-summary">Review the install details manually and open the code preview if the source is unfamiliar.</div>
-      `;
+      `);
     }
   }
 }
