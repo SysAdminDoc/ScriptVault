@@ -6509,10 +6509,13 @@ async function handleMessage(message, sender) {
         if (idx === -1) return { error: 'Not found in trash' };
 
         const script = trash[idx];
+        if (!script.code || typeof script.code !== 'string') return { error: 'Corrupt trash entry: missing code' };
+        const parsed = parseUserscript(script.code);
+        if (parsed.error) return { error: 'Corrupt trash entry: ' + parsed.error };
+        script.meta = parsed.meta;
         delete script.trashedAt;
         trash.splice(idx, 1);
         await chrome.storage.local.set({ trash });
-        // Clear sync tombstone so the restored script isn't re-deleted on next sync
         const _tombstoneData = await chrome.storage.local.get('syncTombstones');
         const _tombstones = _tombstoneData.syncTombstones || {};
         if (_tombstones[scriptId]) {
@@ -6594,6 +6597,7 @@ async function handleMessage(message, sender) {
       }
 
       case 'importScript': {
+        if (data.code && data.code.length > MAX_SCRIPT_SIZE) return { error: `Script exceeds ${formatBytes(MAX_SCRIPT_SIZE)} size limit` };
         const parsed = parseUserscript(data.code);
         if (parsed.error) return { error: parsed.error };
         
@@ -8364,8 +8368,17 @@ async function handleMessage(message, sender) {
       
       // Open tab (with close tracking for onclose callback)
       case 'GM_openInTab': {
+        const openUrl = String(data.url || '');
+        try {
+          const parsed = new URL(openUrl);
+          if (!['http:', 'https:', 'data:'].includes(parsed.protocol)) {
+            return { error: `GM_openInTab: scheme "${parsed.protocol}" is not allowed` };
+          }
+        } catch {
+          return { error: 'GM_openInTab: invalid URL' };
+        }
         const newTabOpts = {
-          url: data.url,
+          url: openUrl,
           active: data.active !== undefined ? data.active : !data.background
         };
         // Insert next to current tab if requested
