@@ -7971,13 +7971,18 @@ async function handleMessage(message, sender) {
               
               // Get content length for progress
               const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
-              
+              const GM_XHR_MAX_BYTES = GM_DOWNLOAD_FETCH_MAX_BYTES;
+              if (Number.isFinite(contentLength) && contentLength > GM_XHR_MAX_BYTES) {
+                throw new Error(`Response too large (${formatBytes(contentLength)}). Maximum is ${formatBytes(GM_XHR_MAX_BYTES)}.`);
+              }
+
               // Read response based on responseType
               let responseData;
               let responseText = '';
-              
+
               if (data.responseType === 'arraybuffer') {
                 const buffer = await response.arrayBuffer();
+                if (buffer.byteLength > GM_XHR_MAX_BYTES) throw new Error(`Response too large (${formatBytes(buffer.byteLength)}).`);
                 // Encode as base64 for efficient transfer (33% overhead vs 800%+ for number arrays)
                 const bytes = new Uint8Array(buffer);
                 let binary = '';
@@ -7994,6 +7999,7 @@ async function handleMessage(message, sender) {
                 });
               } else if (data.responseType === 'blob') {
                 const blob = await response.blob();
+                if (blob.size > GM_XHR_MAX_BYTES) throw new Error(`Response too large (${formatBytes(blob.size)}).`);
                 // Convert blob to data URL for transfer
                 responseData = await new Promise((resolve) => {
                   const reader = new FileReader();
@@ -8032,6 +8038,7 @@ async function handleMessage(message, sender) {
                       const { done, value } = await reader.read();
                       if (done || request.aborted) break;
                       loaded += value.byteLength;
+                      if (loaded > GM_XHR_MAX_BYTES) { reader.cancel(); throw new Error(`Streamed response exceeds ${formatBytes(GM_XHR_MAX_BYTES)} limit.`); }
                       const chunkText = decoder.decode(value, { stream: true });
                       chunks.push(chunkText);
                       sendEvent('progress', {
