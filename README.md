@@ -233,9 +233,9 @@ Two additional zero-config flows ship as separate modules: **Easy Cloud** for on
 ### Internationalization
 
 Manifest, browser-facing extension messages, and core dashboard shell controls
-are localized in 8 languages:
+are localized in 9 languages:
 
-English &bull; German &bull; Spanish &bull; French &bull; Japanese &bull; Portuguese &bull; Russian &bull; Chinese
+English &bull; German &bull; Spanish &bull; French &bull; Hebrew &bull; Japanese &bull; Portuguese &bull; Russian &bull; Chinese
 
 Deep dashboard content is still being migrated to DOM translation coverage.
 
@@ -541,7 +541,7 @@ ScriptVault/
 │   ├── sync-providers.js      # WebDAV, Google Drive, Dropbox, OneDrive
 │   ├── resources.js           # @resource/@require cache
 │   ├── xhr.js                 # XHR abort tracking
-│   └── i18n.js                # Inline translations (8 languages)
+│   └── i18n.js                # Inline translations (9 languages)
 ├── shared/
 │   └── utils.js               # escapeHtml, generateId, sanitizeUrl, formatBytes
 ├── pages/
