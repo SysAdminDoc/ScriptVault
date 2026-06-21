@@ -3,6 +3,9 @@
 
 import { vi } from 'vitest';
 import 'fake-indexeddb/auto';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import vm from 'node:vm';
 
 // Reset IDB between tests so each spec sees a clean store.
 // (`fake-indexeddb/auto` installs the global; we rebuild it on demand below.)
@@ -245,3 +248,28 @@ if (!globalThis.crypto.randomUUID) {
     });
   }
 }
+
+/**
+ * Load a generated JS module using vm.Script with a filename so v8
+ * coverage can instrument the code. Falls back to new Function() if
+ * vm.Script fails (e.g. sandboxed environments).
+ *
+ * @param {string} relativePath  Path relative to project root (e.g. 'modules/error-log.js')
+ * @param {Record<string, unknown>} globals  Named globals to inject into the scope
+ * @param {string} returnExpr  Expression to return from the module (e.g. '{ ErrorLog }')
+ * @returns {unknown}  The evaluated return value
+ */
+globalThis.__loadGeneratedModule = function loadGeneratedModule(relativePath, globals = {}, returnExpr = '{}') {
+  const root = process.cwd();
+  const absPath = resolve(root, relativePath);
+  const code = readFileSync(absPath, 'utf8');
+  const body = code + '\nreturn ' + returnExpr + ';';
+  const paramNames = Object.keys(globals);
+  try {
+    const fn = vm.compileFunction(body, paramNames, { filename: absPath });
+    return fn(...Object.values(globals));
+  } catch {
+    const fn = new Function(...paramNames, body);
+    return fn(...Object.values(globals));
+  }
+};
