@@ -1210,7 +1210,8 @@ const ProfileManager = (() => {
       await _loadProfiles();
       if (_profiles.length >= MAX_PROFILES) return { error: 'Maximum profiles reached' };
 
-      const data = typeof json === 'string' ? JSON.parse(json) : json;
+      let data;
+      try { data = typeof json === 'string' ? JSON.parse(json) : json; } catch { return { error: 'Invalid JSON' }; }
       if (!data.name) return { error: 'Invalid profile data' };
 
       const profile = {

@@ -3342,7 +3342,7 @@
         if (elements.settingsWordWrap) elements.settingsWordWrap.checked = s.wordWrap !== false;
         if (elements.settingsReindent) elements.settingsReindent.checked = s.reindent !== false;
         if (elements.settingsAutoSave) elements.settingsAutoSave.checked = s.autoSave || false;
-        if (elements.settingsNoSaveConfirm) elements.settingsNoSaveConfirm.checked = s.noSaveConfirm !== false;
+        if (elements.settingsNoSaveConfirm) elements.settingsNoSaveConfirm.checked = s.noSaveConfirm === true;
         if (elements.settingsHighlightTrailingWhitespace) elements.settingsHighlightTrailingWhitespace.checked = s.highlightTrailingWhitespace !== false;
         if (elements.settingsTrimWhitespace) elements.settingsTrimWhitespace.checked = s.trimWhitespace !== false;
         if (elements.settingsLintOnType) elements.settingsLintOnType.checked = s.lintOnType !== false;
@@ -6754,17 +6754,15 @@
     // existing queueScriptTableRender / SCRIPT_SEARCH_DEBOUNCE_MS path.
     function parseDashboardSearchRegex(raw) {
         if (!raw) return null;
-        // /pattern/flags shape — must have a trailing slash with optional
-        // flags. Flags are honored verbatim (case-sensitive search is
-        // intentional when the user omits 'i').
         const slashShape = raw.match(/^\/(.+)\/([gimsuy]*)$/);
         if (slashShape) {
+            if (slashShape[1].length > 200) return null;
             return { source: slashShape[1], flags: slashShape[2] || '' };
         }
-        // `re:<pattern>` shape — defaults to case-insensitive to match the
-        // substring-search ergonomics that ScriptVault has always used.
         if (raw.startsWith('re:')) {
-            return { source: raw.slice(3), flags: 'i' };
+            const pattern = raw.slice(3);
+            if (pattern.length > 200) return null;
+            return { source: pattern, flags: 'i' };
         }
         return null;
     }
@@ -11299,6 +11297,7 @@
                 try {
                     const name = file.name.toLowerCase();
                     if (name.endsWith('.zip')) {
+                        if (file.size > 50 * 1024 * 1024) { showToast(`${file.name}: too large (max 50 MB)`, 'error'); continue; }
                         const buf = await file.arrayBuffer();
                         const bytes = new Uint8Array(buf);
                         let binary = '';
@@ -14074,6 +14073,7 @@
         elements.backupArchiveInput?.addEventListener('change', async event => {
             const file = event.target.files?.[0];
             if (!file) return;
+            if (file.size > 50 * 1024 * 1024) { showToast('Archive too large (max 50 MB)', 'error'); return; }
             showProgress(`Importing ${file.name}…`);
             updateProgress(0, 1, 'Reading archive…');
             try {
@@ -14618,6 +14618,7 @@
                             importStorage: transfer.includeStorage
                         });
                 if (!await showConfirmModal(isScriptFile ? 'Install Script' : 'Restore File', confirmMessage)) return;
+                if (file.size > 50 * 1024 * 1024) { showToast('File too large (max 50 MB)', 'error'); return; }
                 showProgress(`Importing ${file.name}…`);
                 updateProgress(0, 1, 'Reading file…');
                 try {

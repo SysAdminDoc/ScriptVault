@@ -2506,10 +2506,13 @@ function buildGmValueSyncRetryResolutionRecord(history, record = {}) {
   const retryReadyEntries = entries.filter(entry => entry.status === 'retry-ready');
   if (retryReadyEntries.length === 0) return null;
   const priorRetryReadyWrites = retryReadyEntries.reduce((sum, entry) => sum + entry.writeFailureRetryReady, 0);
-  const latestRetryTimestamp = retryReadyEntries[0]?.timestamp || null;
+  const timestamp = Number.isFinite(Number(record.timestamp)) ? Math.max(0, Math.floor(Number(record.timestamp))) : null;
+  if (!timestamp || priorRetryReadyWrites <= 0) return null;
+  let latestRetryTimestamp = retryReadyEntries[0]?.timestamp || null;
+  if (latestRetryTimestamp != null && latestRetryTimestamp > timestamp) latestRetryTimestamp = timestamp;
   return {
     schema: GM_VALUE_SYNC_RETRY_RESOLUTION_SCHEMA,
-    timestamp: record.timestamp,
+    timestamp,
     applied: valueBundleSync.applied,
     priorRetryReadyEntries: retryReadyEntries.length,
     priorRetryReadyWrites,
@@ -2538,13 +2541,18 @@ function sanitizeGmValueSyncRetryResolutionHistoryEntry(entry) {
   const timestamp = Number.isFinite(Number(entry.timestamp)) ? Math.max(0, Math.floor(Number(entry.timestamp))) : null;
   const applied = _lastSyncResultCount(entry.applied);
   if (!timestamp || applied <= 0) return null;
+  const priorRetryReadyEntries = _lastSyncResultCount(entry.priorRetryReadyEntries);
+  const priorRetryReadyWrites = _lastSyncResultCount(entry.priorRetryReadyWrites);
+  if (priorRetryReadyEntries <= 0 || priorRetryReadyWrites <= 0) return null;
+  let latestRetryTimestamp = Number.isFinite(Number(entry.latestRetryTimestamp)) ? Math.max(0, Math.floor(Number(entry.latestRetryTimestamp))) : null;
+  if (latestRetryTimestamp != null && latestRetryTimestamp > timestamp) latestRetryTimestamp = timestamp;
   return {
     schema: GM_VALUE_SYNC_RETRY_RESOLUTION_SCHEMA,
     timestamp,
     applied,
-    priorRetryReadyEntries: _lastSyncResultCount(entry.priorRetryReadyEntries),
-    priorRetryReadyWrites: _lastSyncResultCount(entry.priorRetryReadyWrites),
-    latestRetryTimestamp: Number.isFinite(Number(entry.latestRetryTimestamp)) ? Math.max(0, Math.floor(Number(entry.latestRetryTimestamp))) : null
+    priorRetryReadyEntries,
+    priorRetryReadyWrites,
+    latestRetryTimestamp
   };
 }
 
@@ -3082,7 +3090,9 @@ function sanitizeGmValueSyncRetryResolutionForHealth(record) {
   if (applied <= 0) return null;
   const priorRetryReadyEntries = _lastSyncResultCount(record.priorRetryReadyEntries);
   const priorRetryReadyWrites = _lastSyncResultCount(record.priorRetryReadyWrites);
-  const latestRetryTimestamp = Number.isFinite(Number(record.latestRetryTimestamp)) ? Math.max(0, Math.floor(Number(record.latestRetryTimestamp))) : null;
+  if (priorRetryReadyEntries <= 0 || priorRetryReadyWrites <= 0) return null;
+  let latestRetryTimestamp = Number.isFinite(Number(record.latestRetryTimestamp)) ? Math.max(0, Math.floor(Number(record.latestRetryTimestamp))) : null;
+  if (latestRetryTimestamp != null && latestRetryTimestamp > timestamp) latestRetryTimestamp = timestamp;
   const resolutionAgeMinutes = _gmValueSyncRetryAgeMinutes(timestamp);
   return {
     schema: GM_VALUE_SYNC_RETRY_RESOLUTION_SCHEMA,
@@ -6443,43 +6453,42 @@ async function handleMessage(message, sender) {
       case 'deleteScript': {
         const scriptId = data.id || data.scriptId;
         if (!scriptId) return { error: 'No script ID provided' };
-        const script = await ScriptStorage.get(scriptId);
-        if (!script) return { error: 'Script not found' };
-        const settings = await SettingsManager.get();
-        const trashMode = settings.trashMode || '30';
+        return await _runExclusiveScriptOperation(scriptId, async () => {
+          const script = await ScriptStorage.get(scriptId);
+          if (!script) return { error: 'Script not found' };
+          const settings = await SettingsManager.get();
+          const trashMode = settings.trashMode || '30';
 
-        if (trashMode !== 'disabled') {
-          // Move to trash instead of permanent delete
-          const trashData = await chrome.storage.local.get('trash');
-          const trash = trashData.trash || [];
-          trash.push({ ...script, trashedAt: Date.now() });
-          await chrome.storage.local.set({ trash });
-        }
-
-        await unregisterScript(scriptId);
-        await ScriptStorage.delete(scriptId);
-
-        // Clean up menu commands for deleted script
-        try {
-          const cmdData = await chrome.storage.session.get('menuCommands');
-          if (cmdData?.menuCommands?.[scriptId]) {
-            delete cmdData.menuCommands[scriptId];
-            await chrome.storage.session.set(cmdData);
+          if (trashMode !== 'disabled') {
+            const trashData = await chrome.storage.local.get('trash');
+            const trash = trashData.trash || [];
+            trash.push({ ...script, trashedAt: Date.now() });
+            await chrome.storage.local.set({ trash });
           }
-        } catch {}
 
-        // Record tombstone so sync won't re-import this script from remote
-        const tombstoneData = await chrome.storage.local.get('syncTombstones');
-        const tombstones = tombstoneData.syncTombstones || {};
-        tombstones[scriptId] = Date.now();
-        await chrome.storage.local.set({ syncTombstones: tombstones });
+          await unregisterScript(scriptId);
+          await ScriptStorage.delete(scriptId);
 
-        await updateBadge();
-        return {
-          success: true,
-          scriptId,
-          scriptName: script.meta?.name || scriptId
-        };
+          try {
+            const cmdData = await chrome.storage.session.get('menuCommands');
+            if (cmdData?.menuCommands?.[scriptId]) {
+              delete cmdData.menuCommands[scriptId];
+              await chrome.storage.session.set(cmdData);
+            }
+          } catch {}
+
+          const tombstoneData = await chrome.storage.local.get('syncTombstones');
+          const tombstones = tombstoneData.syncTombstones || {};
+          tombstones[scriptId] = Date.now();
+          await chrome.storage.local.set({ syncTombstones: tombstones });
+
+          await updateBadge();
+          return {
+            success: true,
+            scriptId,
+            scriptName: script.meta?.name || scriptId
+          };
+        });
       }
 
       case 'getTrash': {
@@ -7144,57 +7153,53 @@ async function handleMessage(message, sender) {
       }
       
       case 'setScriptSettings': {
-        const script = await ScriptStorage.get(data.scriptId);
-        if (!script) return { error: 'Script not found' };
+        if (!data.scriptId) return { error: 'No script ID provided' };
+        return await _runExclusiveScriptOperation(data.scriptId, async () => {
+          const script = await ScriptStorage.get(data.scriptId);
+          if (!script) return { error: 'Script not found' };
 
-        const oldSettings = script.settings || {};
-        const oldEnabled = script.enabled;
-        script.settings = { ...oldSettings, ...data.settings };
-        script.updatedAt = Date.now();
+          const oldSettings = script.settings || {};
+          const oldEnabled = script.enabled;
+          script.settings = { ...oldSettings, ...data.settings };
+          script.updatedAt = Date.now();
 
-        // Handle enabled change BEFORE saving (from sidepanel toggle)
-        if ('enabled' in data.settings) {
-          script.enabled = !!data.settings.enabled;
-        }
+          if ('enabled' in data.settings) {
+            script.enabled = !!data.settings.enabled;
+          }
 
-        // Persist ALL changes including enabled state
-        await ScriptStorage.set(data.scriptId, script);
+          await ScriptStorage.set(data.scriptId, script);
 
-        // If enabled state changed, re-register and reload tabs
-        if ('enabled' in data.settings && script.enabled !== oldEnabled) {
-          await unregisterScript(data.scriptId);
-          if (script.enabled) {
+          if ('enabled' in data.settings && script.enabled !== oldEnabled) {
+            await unregisterScript(data.scriptId);
+            if (script.enabled) {
+              await registerScript(script);
+            }
+            await updateBadge();
+            try {
+              const tabs = await chrome.tabs.query({});
+              for (const tab of tabs) {
+                if (tab.url && doesScriptMatchUrl(script, tab.url)) {
+                  chrome.tabs.reload(tab.id).catch(() => {});
+                }
+              }
+            } catch {}
+            return { success: true };
+          }
+
+          const EXEC_KEYS = ['runAt', 'injectInto', 'useOriginalMatches', 'useOriginalIncludes',
+                             'useOriginalExcludes', 'userMatches', 'userIncludes', 'userExcludes',
+                             'frameMode', 'userConfig'];
+          const needsReregister = EXEC_KEYS.some(k =>
+            k in data.settings &&
+            JSON.stringify(oldSettings[k]) !== JSON.stringify(data.settings[k])
+          );
+          if (needsReregister && script.enabled !== false) {
+            await unregisterScript(data.scriptId);
             await registerScript(script);
           }
-          await updateBadge();
-          try {
-            const tabs = await chrome.tabs.query({});
-            for (const tab of tabs) {
-              if (tab.url && doesScriptMatchUrl(script, tab.url)) {
-                chrome.tabs.reload(tab.id).catch(() => {});
-              }
-            }
-          } catch {}
+
           return { success: true };
-        }
-
-        // Only re-register if execution-affecting settings changed.
-        // Guard with `k in data.settings` — otherwise comparing `oldSettings[k]`
-        // against `undefined` (from an unrelated partial update) triggers a needless
-        // re-register cycle every time any other setting is changed.
-        const EXEC_KEYS = ['runAt', 'injectInto', 'useOriginalMatches', 'useOriginalIncludes',
-                           'useOriginalExcludes', 'userMatches', 'userIncludes', 'userExcludes',
-                           'frameMode', 'userConfig'];
-        const needsReregister = EXEC_KEYS.some(k =>
-          k in data.settings &&
-          JSON.stringify(oldSettings[k]) !== JSON.stringify(data.settings[k])
-        );
-        if (needsReregister && script.enabled !== false) {
-          await unregisterScript(data.scriptId);
-          await registerScript(script);
-        }
-
-        return { success: true };
+        });
       }
       
       // Import/Export
