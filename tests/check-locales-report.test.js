@@ -14,10 +14,10 @@ function runReport(flags = []) {
 }
 
 describe('scripts/check-locales.mjs', () => {
-  it('lists the same 8 locales across _locales and modules/i18n.js', () => {
+  it('lists the same 9 locales across _locales and modules/i18n.js', () => {
     const report = runReport();
-    expect(report.sources.localesDir).toEqual(['de', 'en', 'es', 'fr', 'ja', 'pt', 'ru', 'zh']);
-    expect(report.sources.runtimeI18n).toEqual(['de', 'en', 'es', 'fr', 'ja', 'pt', 'ru', 'zh']);
+    expect(report.sources.localesDir).toEqual(['de', 'en', 'es', 'fr', 'he', 'ja', 'pt', 'ru', 'zh']);
+    expect(report.sources.runtimeI18n).toEqual(['de', 'en', 'es', 'fr', 'he', 'ja', 'pt', 'ru', 'zh']);
     expect(report.sources.dashboardI18nV2).toBeUndefined();
   });
 

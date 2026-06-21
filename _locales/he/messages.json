@@ -1,0 +1,65 @@
+{
+  "extName": {
+    "message": "ScriptVault"
+  },
+  "extDescription": {
+    "message": "מנהל סקריפטי משתמש עוצמתי עם תמיכה ב-GM API, סנכרון ענן ועדכונים אוטומטיים"
+  },
+  "cmdOpenPopup": {
+    "message": "פתח חלון קופץ"
+  },
+  "cmdOpenDashboard": {
+    "message": "פתח לוח בקרה"
+  },
+  "cmdToggleScripts": {
+    "message": "הפעל/כבה את כל הסקריפטים"
+  },
+  "settingsGeneral": {
+    "message": "כללי"
+  },
+  "settingsSecurity": {
+    "message": "אבטחה"
+  },
+  "settingsEditor": {
+    "message": "עורך"
+  },
+  "settingsSync": {
+    "message": "סנכרון"
+  },
+  "settingsUtilities": {
+    "message": "כלים"
+  },
+  "sandboxRaw": {
+    "message": "גולמי (הקשר דף)"
+  },
+  "sandboxJs": {
+    "message": "JavaScript (עקיפת CSP)"
+  },
+  "sandboxDom": {
+    "message": "DOM (הקשר הרחבה)"
+  },
+  "blacklistLow": {
+    "message": "נמוך (אזהרה בלבד)"
+  },
+  "blacklistMedium": {
+    "message": "בינוני (חסימה עם עקיפה)"
+  },
+  "blacklistHigh": {
+    "message": "גבוה (חסימה תמידית)"
+  },
+  "btnSave": {
+    "message": "שמור"
+  },
+  "btnCancel": {
+    "message": "ביטול"
+  },
+  "btnDelete": {
+    "message": "מחק"
+  },
+  "btnImport": {
+    "message": "ייבוא"
+  },
+  "btnExport": {
+    "message": "ייצוא"
+  }
+}
