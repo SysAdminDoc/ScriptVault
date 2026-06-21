@@ -10488,9 +10488,11 @@
             // Trim trailing whitespace if setting enabled
             if (state.settings.trimWhitespace) {
                 code = code.split('\n').map(line => line.replace(/\s+$/, '')).join('\n');
-                state.editor.setValue(code);
-                updateLineCount();
-                updateCursorPos();
+                if (state.currentScriptId === savingScriptId) {
+                    state.editor.setValue(code);
+                    updateLineCount();
+                    updateCursorPos();
+                }
             }
             const saveResult = await chrome.runtime.sendMessage({
                 action: 'saveScript',
@@ -11810,9 +11812,9 @@
     }
 
     function formatBytes(bytes) {
-        if (bytes === 0) return '0 B';
-        const k = 1024, sizes = ['B', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+        const k = 1024, sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.min(Math.floor(Math.log(bytes) / Math.log(k)), sizes.length - 1);
         return `${bytesFormatter.format(bytes / Math.pow(k, i))} ${sizes[i]}`;
     }
 
