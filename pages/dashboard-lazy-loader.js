@@ -22,7 +22,7 @@ const LazyLoader = (() => {
   // Map: tab name → modules to load when that tab is activated
   const TAB_MODULES = {
     store: ['dashboard-store.js'],
-    scripts: ['dashboard-cardview.js', 'dashboard-recommendations.js', 'dashboard-scheduler.js'],
+    scripts: ['dashboard-cardview.js', 'dashboard-scheduler.js'],
     settings: ['dashboard-theme-editor.js'],
     utilities: [
       'dashboard-collections.js',
