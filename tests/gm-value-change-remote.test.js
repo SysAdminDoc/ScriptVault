@@ -128,7 +128,7 @@ GM_addValueChangeListener('count', (name, oldValue, newValue, remote) => {
 });
 `), [], { count: 1 });
 
-    new Function(wrapped)();
+    try { const vm = require('node:vm'); vm.compileFunction(wrapped, [], { filename: resolve(ROOT, 'src/background/wrapper-builder.ts') })(); } catch { new Function(wrapped)(); }
     expect(messageListeners.length).toBeGreaterThan(0);
     await waitForUserscriptBody();
     expect(window.__scriptVaultRemoteEvents).toEqual([]);
@@ -148,7 +148,7 @@ GM_addValueChangeListener('count', (name, oldValue, newValue, remote) => {
 });
 `), [], { count: 2 });
 
-    new Function(wrapped)();
+    try { const vm = require('node:vm'); vm.compileFunction(wrapped, [], { filename: resolve(ROOT, 'src/background/wrapper-builder.ts') })(); } catch { new Function(wrapped)(); }
     expect(messageListeners.length).toBeGreaterThan(0);
     await waitForUserscriptBody();
     expect(window.__scriptVaultRemoteEvents).toEqual([]);

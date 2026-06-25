@@ -14,7 +14,10 @@ function extractConverter() {
     if (dashboardSource[i] === '}') depth--;
     if (depth === 0) { end = i + 1; break; }
   }
-  return new Function(`${dashboardSource.slice(start, end)}\nreturn convertBookmarkletToUserscript;`)();
+  const _body = `${dashboardSource.slice(start, end)}\nreturn convertBookmarkletToUserscript;`;
+  let fn;
+  try { const vm = require('node:vm'); fn = vm.compileFunction(_body, [], { filename: resolve(process.cwd(), 'pages/dashboard.js') }); } catch { fn = new Function(_body); }
+  return fn();
 }
 
 describe('bookmarklet-to-userscript converter', () => {

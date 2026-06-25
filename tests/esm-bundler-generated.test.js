@@ -6,13 +6,9 @@ const code = readFileSync(resolve(process.cwd(), 'bg/esm-bundler.js'), 'utf8');
 
 function createBundler(fetchRequireScript = async () => null, analyzer = { _ensureOffscreen: async () => undefined }) {
   const self = {};
-  const fn = new Function(
-    'chrome',
-    'ScriptAnalyzer',
-    'fetchRequireScript',
-    'self',
-    `${code}\nreturn { bundler: ESMUserscriptBundler, selfExport: self.ESMUserscriptBundler };`,
-  );
+  const _body = `${code}\nreturn { bundler: ESMUserscriptBundler, selfExport: self.ESMUserscriptBundler };`;
+  let fn;
+  try { const vm = require('node:vm'); fn = vm.compileFunction(_body, ['chrome', 'ScriptAnalyzer', 'fetchRequireScript', 'self'], { filename: resolve(process.cwd(), 'bg/esm-bundler.js') }); } catch { fn = new Function('chrome', 'ScriptAnalyzer', 'fetchRequireScript', 'self', _body); }
   return fn(
     { runtime: { sendMessage: async () => ({ imports: [], exports: [], dynamicImports: [], unsupportedExports: [] }) } },
     analyzer,

@@ -10,11 +10,11 @@ const guardCode = readFileSync(resolve(__dirname, '../modules/internal-host-guar
 const originalFetch = globalThis.fetch;
 
 let ResourceCache;
+const _body = guardCode + '\n' + code + '\nreturn ResourceCache;';
+let _compiledFn;
+try { const vm = require('node:vm'); _compiledFn = vm.compileFunction(_body, ['chrome', 'console', 'fetch', 'btoa', 'TextDecoder', 'URL'], { filename: resolve(__dirname, '../modules/resources.js') }); } catch { _compiledFn = new Function('chrome', 'console', 'fetch', 'btoa', 'TextDecoder', 'URL', _body); }
 function createFresh() {
-  const fn = new Function('chrome', 'console', 'fetch', 'btoa', 'TextDecoder', 'URL',
-    guardCode + '\n' + code + '\nreturn ResourceCache;'
-  );
-  return fn(globalThis.chrome, console, globalThis.fetch, globalThis.btoa, TextDecoder, URL);
+  return _compiledFn(globalThis.chrome, console, globalThis.fetch, globalThis.btoa, TextDecoder, URL);
 }
 
 beforeEach(() => {

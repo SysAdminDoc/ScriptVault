@@ -30,16 +30,9 @@ function loadProviders({ fetchImpl, settingsManager } = {}) {
     storage: { local: { get: vi.fn(async () => ({})), set: vi.fn(async () => {}) } },
     runtime: { id: 'test', getManifest: () => ({ version: '0' }) },
   };
-  const fn = new Function(
-    'fetch',
-    'SettingsManager',
-    'chrome',
-    'crypto',
-    'btoa',
-    'TextEncoder',
-    'console',
-    `${code}\nreturn CloudSyncProviders;`,
-  );
+  const _body = `${code}\nreturn CloudSyncProviders;`;
+  let fn;
+  try { const vm = require('node:vm'); fn = vm.compileFunction(_body, ['fetch', 'SettingsManager', 'chrome', 'crypto', 'btoa', 'TextEncoder', 'console'], { filename: resolve(process.cwd(), 'modules/sync-providers.js') }); } catch { fn = new Function('fetch', 'SettingsManager', 'chrome', 'crypto', 'btoa', 'TextEncoder', 'console', _body); }
   return {
     providers: fn(fakeFetch, SettingsManager, chrome, realCrypto, globalThis.btoa, globalThis.TextEncoder, console),
     fakeFetch,

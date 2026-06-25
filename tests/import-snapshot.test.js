@@ -123,17 +123,9 @@ function createHarness(existingScripts = [], existingValues = {}) {
     recordReceipt: vi.fn(async receipt => ({ id: `receipt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, ...receipt })),
   };
 
-  const fn = new Function(
-    'fflate',
-    'ScriptStorage',
-    'ScriptValues',
-    'SettingsManager',
-    'registerAllScripts',
-    'updateBadge',
-    'generateId',
-    'BackupScheduler',
-    `${extractRuntimeImportExportCode()}; return { exportToZip, importFromZip, importScripts };`,
-  );
+  const _body = `${extractRuntimeImportExportCode()}; return { exportToZip, importFromZip, importScripts };`;
+  let fn;
+  try { const vm = require('node:vm'); fn = vm.compileFunction(_body, ['fflate', 'ScriptStorage', 'ScriptValues', 'SettingsManager', 'registerAllScripts', 'updateBadge', 'generateId', 'BackupScheduler'], { filename: resolve(process.cwd(), 'background.core.js') }); } catch { fn = new Function('fflate', 'ScriptStorage', 'ScriptValues', 'SettingsManager', 'registerAllScripts', 'updateBadge', 'generateId', 'BackupScheduler', _body); }
 
   return {
     ...fn(fakeFflate, ScriptStorage, ScriptValues, SettingsManager, registerAllScripts, updateBadge, generateId, BackupScheduler),

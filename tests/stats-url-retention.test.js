@@ -16,12 +16,14 @@ function extractBetween(src, startMarker, endMarker, label) {
   return src.slice(start, end);
 }
 
-const dashboardRetain = new Function(
-  `${extractBetween(dashboardJs, 'function retainStatsUrl(url, mode)', 'function buildStatsCSV', 'dashboard retainStatsUrl')}\nreturn retainStatsUrl;`,
-)();
-const coreRetain = new Function(
-  `${extractBetween(backgroundCoreJs, 'function _retainStatsUrl(url, mode)', 'function _debouncedStatsSave', 'core _retainStatsUrl')}\nreturn _retainStatsUrl;`,
-)();
+const _body1 = `${extractBetween(dashboardJs, 'function retainStatsUrl(url, mode)', 'function buildStatsCSV', 'dashboard retainStatsUrl')}\nreturn retainStatsUrl;`;
+let _fn1;
+try { const vm = require('node:vm'); _fn1 = vm.compileFunction(_body1, [], { filename: resolve(ROOT, 'pages/dashboard.js') }); } catch { _fn1 = new Function(_body1); }
+const dashboardRetain = _fn1();
+const _body2 = `${extractBetween(backgroundCoreJs, 'function _retainStatsUrl(url, mode)', 'function _debouncedStatsSave', 'core _retainStatsUrl')}\nreturn _retainStatsUrl;`;
+let _fn2;
+try { const vm = require('node:vm'); _fn2 = vm.compileFunction(_body2, [], { filename: resolve(ROOT, 'background.core.js') }); } catch { _fn2 = new Function(_body2); }
+const coreRetain = _fn2();
 
 describe('execution-stats URL retention helper', () => {
   for (const [label, retain] of [['dashboard', dashboardRetain], ['service worker', coreRetain]]) {

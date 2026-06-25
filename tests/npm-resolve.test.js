@@ -5,11 +5,11 @@ import { resolve } from 'path';
 const code = readFileSync(resolve(__dirname, '../modules/npm-resolve.js'), 'utf8');
 
 let NpmResolver;
+const _body = code + '\nreturn NpmResolver;';
+let _compiledFn;
+try { const vm = require('node:vm'); _compiledFn = vm.compileFunction(_body, ['chrome', 'console', 'fetch', 'crypto', 'TextEncoder', 'btoa'], { filename: resolve(__dirname, '../modules/npm-resolve.js') }); } catch { _compiledFn = new Function('chrome', 'console', 'fetch', 'crypto', 'TextEncoder', 'btoa', _body); }
 function createFresh(fetchMock = vi.fn()) {
-  const fn = new Function('chrome', 'console', 'fetch', 'crypto', 'TextEncoder', 'btoa',
-    code + '\nreturn NpmResolver;'
-  );
-  return fn(globalThis.chrome, console, fetchMock, globalThis.crypto, TextEncoder, globalThis.btoa);
+  return _compiledFn(globalThis.chrome, console, fetchMock, globalThis.crypto, TextEncoder, globalThis.btoa);
 }
 
 beforeEach(() => {

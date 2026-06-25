@@ -136,19 +136,9 @@ function createSchedulerHarness(scripts, valuesByScript = {}, settings = { enabl
   };
   const FolderStorage = { cache: null };
   const WorkspaceManager = { _cache: null, _initPromise: null };
-  const fn = new Function(
-    'chrome',
-    'console',
-    'fflate',
-    'ScriptStorage',
-    'ScriptValues',
-    'SettingsManager',
-    'importFromZip',
-    'FolderStorage',
-    'WorkspaceManager',
-    'crypto',
-    code + '\nreturn BackupScheduler;',
-  );
+  const _body = code + '\nreturn BackupScheduler;';
+  let fn;
+  try { const vm = require('node:vm'); fn = vm.compileFunction(_body, ['chrome', 'console', 'fflate', 'ScriptStorage', 'ScriptValues', 'SettingsManager', 'importFromZip', 'FolderStorage', 'WorkspaceManager', 'crypto'], { filename: resolve(process.cwd(), 'modules/backup-scheduler.js') }); } catch { fn = new Function('chrome', 'console', 'fflate', 'ScriptStorage', 'ScriptValues', 'SettingsManager', 'importFromZip', 'FolderStorage', 'WorkspaceManager', 'crypto', _body); }
   return {
     BackupScheduler: fn(
       globalThis.chrome,

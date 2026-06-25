@@ -5,15 +5,15 @@ import { resolve } from 'path';
 const code = readFileSync(resolve(__dirname, '../modules/public-api.js'), 'utf8');
 
 let PublicAPI;
+const _body = code + '\nreturn PublicAPI;';
+let _compiledFn;
+try { const vm = require('node:vm'); _compiledFn = vm.compileFunction(_body, ['chrome', 'console', 'crypto', 'fetch', 'ScriptStorage', 'AbortController'], { filename: resolve(__dirname, '../modules/public-api.js') }); } catch { _compiledFn = new Function('chrome', 'console', 'crypto', 'fetch', 'ScriptStorage', 'AbortController', _body); }
 function createFreshAPI({ fetchMock, ScriptStorage } = {}) {
   const storage = ScriptStorage || {
     getAll: vi.fn().mockResolvedValue([]),
     set: vi.fn().mockResolvedValue(),
   };
-  const fn = new Function('chrome', 'console', 'crypto', 'fetch', 'ScriptStorage', 'AbortController',
-    code + '\nreturn PublicAPI;'
-  );
-  return fn(
+  return _compiledFn(
     globalThis.chrome,
     console,
     globalThis.crypto,

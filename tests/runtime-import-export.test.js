@@ -152,16 +152,9 @@ function createRuntimeHarness(existingScripts = [], storedValuesByScript = {}, s
   const updateBadge = vi.fn().mockResolvedValue();
   const generateId = vi.fn(() => `generated_script_${generatedIdCounter++}`);
 
-  const fn = new Function(
-    'fflate',
-    'ScriptStorage',
-    'ScriptValues',
-    'SettingsManager',
-    'registerAllScripts',
-    'updateBadge',
-    'generateId',
-    `${extractRuntimeImportExportCode()}; return { exportAllScripts, exportToZip, importFromZip, importScripts };`,
-  );
+  const _body = `${extractRuntimeImportExportCode()}; return { exportAllScripts, exportToZip, importFromZip, importScripts };`;
+  let fn;
+  try { const vm = require('node:vm'); fn = vm.compileFunction(_body, ['fflate', 'ScriptStorage', 'ScriptValues', 'SettingsManager', 'registerAllScripts', 'updateBadge', 'generateId'], { filename: resolve(process.cwd(), 'background.core.js') }); } catch { fn = new Function('fflate', 'ScriptStorage', 'ScriptValues', 'SettingsManager', 'registerAllScripts', 'updateBadge', 'generateId', _body); }
 
   return {
     ...fn(fakeFflate, ScriptStorage, ScriptValues, SettingsManager, registerAllScripts, updateBadge, generateId),

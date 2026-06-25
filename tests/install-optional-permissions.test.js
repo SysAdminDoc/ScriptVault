@@ -29,13 +29,14 @@ const installSource = readFileSync(resolve(repoRoot, 'pages/install.js'), 'utf8'
 function extractHelpers() {
   // Compile a tiny harness that exposes just the two pure helpers we test.
   // They have no DOM dependencies and only touch chrome.permissions.
-  const harness = `
+  const _body = `
     ${extractBlock('OPTIONAL_GRANT_PERMISSION_MAP', installSource)}
     ${extractBlock('function getRequiredOptionalPermissions', installSource)}
     ${extractBlock('async function ensureOptionalPermissions', installSource)}
     return { getRequiredOptionalPermissions, ensureOptionalPermissions };
   `;
-  const fn = new Function('chrome', harness);
+  let fn;
+  try { const vm = require('node:vm'); fn = vm.compileFunction(_body, ['chrome'], { filename: resolve(repoRoot, 'pages/install.js') }); } catch { fn = new Function('chrome', _body); }
   return fn;
 }
 

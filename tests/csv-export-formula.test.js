@@ -24,19 +24,21 @@ function extractFunctionSource(source, name) {
 }
 
 function createStatsCSVHelpers() {
-  const fn = new Function(`
+  const _body = `
     const state = { settings: { statsUrlRetention: 'full' } };
     ${extractFunctionSource(dashboardJs, 'retainStatsUrl')}
     ${extractFunctionSource(dashboardJs, 'formatStatsCSVCell')}
     ${extractFunctionSource(dashboardJs, 'buildStatsCSV')}
     return { formatStatsCSVCell, buildStatsCSV };
-  `);
+  `;
+  let fn;
+  try { const vm = require('node:vm'); fn = vm.compileFunction(_body, [], { filename: resolve(process.cwd(), 'pages/dashboard.js') }); } catch { fn = new Function(_body); }
   return fn();
 }
 
 function createCSPReporter() {
-  const fn = new Function(cspCode + '\nreturn CSPReporter;');
-  return fn();
+  const _body2 = cspCode + '\nreturn CSPReporter;';
+  try { const vm = require('node:vm'); const fn = vm.compileFunction(_body2, [], { filename: resolve(process.cwd(), 'pages/dashboard-csp.js') }); return fn(); } catch { return new Function(_body2)(); }
 }
 
 describe('CSV export formula defanging', () => {

@@ -5,11 +5,14 @@ import { resolve } from 'node:path';
 // Load both the runtime JS mirror and the TS module. We compare classifier
 // outputs side-by-side so the two stay in lock step.
 const runtimeJs = readFileSync(resolve(process.cwd(), 'modules/internal-host-guard.js'), 'utf8');
+const _guardBody = runtimeJs + '\nreturn InternalHostGuard;';
+let _guardFn;
+try { const vm = require('node:vm'); _guardFn = vm.compileFunction(_guardBody, [], { filename: resolve(process.cwd(), 'modules/internal-host-guard.js') }); } catch { _guardFn = new Function(_guardBody); }
 function loadRuntime() {
   // The runtime module is an IIFE-style file that declares `const InternalHostGuard`
-  // at the top-level scope. Wrapping in `new Function(...)` produces a fresh,
+  // at the top-level scope. Wrapping in `vm.compileFunction(...)` produces a fresh,
   // isolated copy each test so mutation (e.g., monkey-patching) cannot leak.
-  return new Function(runtimeJs + '\nreturn InternalHostGuard;')();
+  return _guardFn();
 }
 
 // Dynamic import the TS module through Vitest's transformer.

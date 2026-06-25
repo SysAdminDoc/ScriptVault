@@ -12,14 +12,16 @@ function loadOffscreen() {
     /^chrome\.runtime\.onMessage\.addListener[\s\S]*?\n\}\);/m,
     ''
   );
-  const fn = new Function('acorn', `
+  const _body = `
     var Diff = (function() { var module = { exports: {} }; var exports = module.exports;
     ${diffJs}
     return module.exports;
     })();
     ${stripped}
     return { handleAnalyze, handleMerge, handleDiff, handleESMImports };
-  `);
+  `;
+  let fn;
+  try { const vm = require('node:vm'); fn = vm.compileFunction(_body, ['acorn'], { filename: resolve(ROOT, 'offscreen.js') }); } catch { fn = new Function('acorn', _body); }
   return fn(acorn);
 }
 
