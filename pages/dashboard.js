@@ -14810,7 +14810,7 @@
             const ctrl = e.ctrlKey || e.metaKey;
             const editorActive = elements.editorOverlay?.classList.contains('active');
             const modalOpen = elements.modal?.classList.contains('show');
-            const paletteOpen = document.getElementById('commandPalette')?.classList.contains('open');
+            const paletteOpen = document.getElementById('commandPalette')?.matches(':popover-open');
 
             if (modalOpen) {
                 if (e.key === 'Escape') {
@@ -16039,8 +16039,8 @@
         if (!overlay) {
             overlay = document.createElement('div');
             overlay.id = 'commandPalette';
+            overlay.setAttribute('popover', 'auto');
             safeSetHtml(overlay, `
-                <div class="cmd-backdrop"></div>
                 <div class="cmd-dialog" role="dialog" aria-modal="true" aria-labelledby="commandPaletteLabel">
                     <div id="commandPaletteLabel" class="sr-only">Command palette</div>
                     <input type="search" id="commandPaletteInput" class="cmd-input" name="command_palette_query" placeholder="Type a command, script name, or action…" aria-label="Command palette" role="combobox" aria-autocomplete="list" aria-controls="commandPaletteResults" aria-expanded="true" autocomplete="off" spellcheck="false">
@@ -16049,8 +16049,11 @@
             `);
             document.body.appendChild(overlay);
 
-            const backdrop = overlay.querySelector('.cmd-backdrop');
-            backdrop.addEventListener('click', closeCommandPalette);
+            overlay.addEventListener('toggle', (e) => {
+                if (e.newState === 'closed') {
+                    _cleanupCommandPalette(overlay);
+                }
+            });
 
             const input = overlay.querySelector('.cmd-input');
             input.addEventListener('input', () => renderCommandResults(input.value));
@@ -16090,7 +16093,7 @@
             });
         }
 
-        overlay.classList.add('open');
+        overlay.showPopover();
         const dialog = overlay.querySelector('.cmd-dialog');
         if (dialog && typeof A11y !== 'undefined' && typeof A11y.trapFocus === 'function') {
             A11y.trapFocus(dialog);
@@ -16105,20 +16108,22 @@
         renderCommandResults('');
     }
 
-    function closeCommandPalette() {
-        const overlay = document.getElementById('commandPalette');
-        const wasOpen = overlay?.classList.contains('open');
-        overlay?.classList.remove('open');
+    function _cleanupCommandPalette(overlay) {
         const input = overlay?.querySelector('.cmd-input');
         input?.setAttribute('aria-expanded', 'false');
         input?.removeAttribute('aria-activedescendant');
-        if (wasOpen && typeof A11y !== 'undefined' && typeof A11y.releaseFocus === 'function') {
+        if (typeof A11y !== 'undefined' && typeof A11y.releaseFocus === 'function') {
             A11y.releaseFocus();
         }
         if (commandPaletteReturnFocus?.isConnected) {
             commandPaletteReturnFocus.focus();
         }
         commandPaletteReturnFocus = null;
+    }
+
+    function closeCommandPalette() {
+        const overlay = document.getElementById('commandPalette');
+        try { overlay?.hidePopover(); } catch {}
     }
 
     function renderCommandResults(query) {
