@@ -26,6 +26,8 @@
     "dev": "node esbuild.config.mjs --watch",
     "watch": "node esbuild.config.mjs --watch",
     "typecheck": "tsc --noEmit",
+    "typecheck:preview": "node scripts/check-typescript-preview.mjs",
+    "typecheck:preview:report": "node scripts/check-typescript-preview.mjs --report",
     "test": "vitest run",
     "test:e2e": "playwright test",
     "test:a11y": "node scripts/check-readability.mjs --check && vitest run tests/dashboard-a11y.test.js tests/popup-a11y.test.js tests/gui-ux-audit.test.js tests/accessibility-surface-pass.test.js",
