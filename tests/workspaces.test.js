@@ -2,9 +2,6 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
-const code = readFileSync(resolve(__dirname, '../bg/workspaces.js'), 'utf8');
-
-let WorkspaceManager;
 const preamble = `
   function generateId() { return 'ws_' + Math.random().toString(36).slice(2, 10); }
   const ScriptStorage = {
@@ -17,11 +14,17 @@ const preamble = `
   async function updateBadge() {}
 `;
 
+let WorkspaceManager;
+const _code = readFileSync(resolve(__dirname, '../bg/workspaces.js'), 'utf8');
+const _createFn = (() => {
+  const body = preamble + _code + '\nreturn { WorkspaceManager, ScriptStorage };';
+  try {
+    const vm = require('node:vm');
+    return vm.compileFunction(body, ['chrome', 'console'], { filename: resolve(__dirname, '../bg/workspaces.js') });
+  } catch { return new Function('chrome', 'console', body); }
+})();
 function createFresh() {
-  const fn = new Function('chrome', 'console',
-    preamble + code + '\nreturn { WorkspaceManager, ScriptStorage };'
-  );
-  return fn(globalThis.chrome, console);
+  return _createFn(globalThis.chrome, console);
 }
 
 let mods;
