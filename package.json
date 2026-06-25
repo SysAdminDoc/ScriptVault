@@ -21,6 +21,8 @@
     "build:firefox": "node scripts/run-bash.mjs build-firefox.sh",
     "firefox:lint": "node scripts/run-bash.mjs build-firefox.sh --lint --keep-build --no-source-zip --prepare-only",
     "firefox:package": "node scripts/run-bash.mjs build-firefox.sh --lint",
+    "firefox:warnings": "node scripts/check-firefox-lint-warnings.mjs",
+    "firefox:warnings:report": "node scripts/check-firefox-lint-warnings.mjs --report",
     "dev": "node esbuild.config.mjs --watch",
     "watch": "node esbuild.config.mjs --watch",
     "typecheck": "tsc --noEmit",
