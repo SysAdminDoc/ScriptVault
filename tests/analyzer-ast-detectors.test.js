@@ -25,10 +25,9 @@ function extractBetween(src, startMarker, endMarker) {
 const patternsArray = extractBetween(source, 'const RISK_PATTERNS = [', '\nfunction handleAnalyze');
 const helpers = extractBetween(source, 'function isIdent(node, name)', '\nfunction handleAnalyze');
 
-const factory = new Function(
-  `${helpers}\n${patternsArray}\nreturn RISK_PATTERNS;`
-);
-const RISK_PATTERNS = factory();
+const _body = `${helpers}\n${patternsArray}\nreturn RISK_PATTERNS;`;
+let RISK_PATTERNS;
+try { const vm = require('node:vm'); RISK_PATTERNS = vm.compileFunction(_body, [], { filename: resolve(process.cwd(), 'offscreen.js') })(); } catch { RISK_PATTERNS = new Function(_body)(); }
 
 function findPattern(id) {
   const p = RISK_PATTERNS.find(x => x.id === id);

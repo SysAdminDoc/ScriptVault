@@ -58,8 +58,7 @@ function loadContentBridge() {
     },
   };
 
-  const run = new Function('window', 'chrome', contentBridgeCode);
-  run(win, chromeMock);
+  try { const vm = require('node:vm'); vm.compileFunction(contentBridgeCode, ['window', 'chrome'], { filename: resolve(process.cwd(), 'content.js') })(win, chromeMock); } catch { new Function('window', 'chrome', contentBridgeCode)(win, chromeMock); }
 
   return {
     window: win,
@@ -88,11 +87,13 @@ function waitForBridgeResponse(win, id) {
 }
 
 function loadConnectPolicyHelpers() {
-  return new Function(`${connectPolicyCode}; return ConnectPolicy;`)();
+  const _body = `${connectPolicyCode}; return ConnectPolicy;`;
+  try { const vm = require('node:vm'); return vm.compileFunction(_body, [], { filename: resolve(process.cwd(), 'modules/connect-policy.js') })(); } catch { return new Function(_body)(); }
 }
 
 function loadUserScriptMessagePolicy() {
-  return new Function(`${userScriptMessagePolicyCode}\nreturn UserScriptMessagePolicy;`)();
+  const _body = `${userScriptMessagePolicyCode}\nreturn UserScriptMessagePolicy;`;
+  try { const vm = require('node:vm'); return vm.compileFunction(_body, [], { filename: resolve(process.cwd(), 'modules/user-script-message-policy.js') })(); } catch { return new Function(_body)(); }
 }
 
 // Pull the user-script messaging gate (constants + helpers + onMessage/onUserScriptMessage
@@ -144,11 +145,11 @@ function loadUserScriptMessagingGate({ hasUserScriptMessage = true } = {}) {
   const UserScriptMessagePolicy = loadUserScriptMessagePolicy();
   const ConnectPolicy = loadConnectPolicyHelpers();
 
-  const factory = new Function(
-    'chrome', 'handleMessage', 'debugLog', 'UserScriptMessagePolicy', 'ConnectPolicy',
-    `${sliceCode}\nreturn { isExtensionSurfaceSender, isUserScriptAllowedAction, USER_SCRIPT_MESSAGING_AVAILABLE };`
-  );
-  const exports = factory(chromeMock, handleMessage, debugLog, UserScriptMessagePolicy, ConnectPolicy);
+  const _factoryBody = `${sliceCode}\nreturn { isExtensionSurfaceSender, isUserScriptAllowedAction, USER_SCRIPT_MESSAGING_AVAILABLE };`;
+  const _factoryParams = ['chrome', 'handleMessage', 'debugLog', 'UserScriptMessagePolicy', 'ConnectPolicy'];
+  const _factoryArgs = [chromeMock, handleMessage, debugLog, UserScriptMessagePolicy, ConnectPolicy];
+  let exports;
+  try { const vm = require('node:vm'); exports = vm.compileFunction(_factoryBody, _factoryParams, { filename: resolve(process.cwd(), 'background.core.js') })(..._factoryArgs); } catch { exports = new Function(..._factoryParams, _factoryBody)(..._factoryArgs); }
 
   return {
     chromeMock,

@@ -30,18 +30,17 @@ function createCronHarness() {
     },
   };
   const debugLog = message => debug.push(String(message));
-  const helpers = new Function(
-    'chrome',
-    'debugLog',
-    `${extractCronSource(backgroundCore)}
-return { parseCronExpression, nextCronFire, scheduleCrontabAlarm };`
-  )(chrome, debugLog);
+  const _body = `${extractCronSource(backgroundCore)}
+return { parseCronExpression, nextCronFire, scheduleCrontabAlarm };`;
+  let helpers;
+  try { const vm = require('node:vm'); helpers = vm.compileFunction(_body, ['chrome', 'debugLog'], { filename: resolve(process.cwd(), 'background.core.js') })(chrome, debugLog); } catch { helpers = new Function('chrome', 'debugLog', _body)(chrome, debugLog); }
   return { ...helpers, alarms, debug };
 }
 
 function createLinter() {
-  return new Function(`${dashboardLinter}
-return AdvancedLinter;`)();
+  const _body = `${dashboardLinter}
+return AdvancedLinter;`;
+  try { const vm = require('node:vm'); const _fn = vm.compileFunction(_body, [], { filename: resolve(process.cwd(), 'pages/dashboard-linter.js') }); return _fn(); } catch { return new Function(_body)(); }
 }
 
 function localDate(year, month, day, hour, minute, second = 0) {

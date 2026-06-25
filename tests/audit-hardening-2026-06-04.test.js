@@ -18,8 +18,9 @@ describe('InternalHostGuard hardening (2026-06-04)', () => {
 
   beforeEach(async () => {
     const code = fs.readFileSync(path.join(ROOT, 'modules/internal-host-guard.js'), 'utf8');
-    const fn = new Function(code + '\nreturn InternalHostGuard;');
-    const guard = fn();
+    const _body = code + '\nreturn InternalHostGuard;';
+    let guard;
+    try { const vm = require('node:vm'); guard = vm.compileFunction(_body, [], { filename: path.resolve(ROOT, 'modules/internal-host-guard.js') })(); } catch { guard = new Function(_body)(); }
     isInternalHost = guard.isInternalHost;
   });
 

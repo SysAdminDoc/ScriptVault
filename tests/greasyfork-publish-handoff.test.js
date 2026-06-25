@@ -18,20 +18,24 @@ function extractFunction(source, name) {
   throw new Error(`Function ${name} did not close`);
 }
 
+function _invoke(body, params = [], args = []) {
+  try { const vm = require('node:vm'); return vm.compileFunction(body, params, { filename: resolve(process.cwd(), 'pages/dashboard.js') })(...args); } catch { return new Function(...params, body)(...args); }
+}
+
 function extractGreasyForkPreflightApi() {
   const constantsStart = dashboardJs.indexOf('const GREASY_FORK_PREFILL_BASE_URL');
   const functionsEnd = dashboardJs.indexOf('    // Generate site icons HTML', constantsStart);
   if (constantsStart < 0 || functionsEnd < 0) {
     throw new Error('Unable to locate Greasy Fork preflight helpers');
   }
-  return new Function(`
+  return _invoke(`
     ${dashboardJs.slice(constantsStart, functionsEnd)}
     return {
       parseUserscriptMetadataForPublish,
       extractGreasyForkScriptIdFromUrl,
       buildGreasyForkPublishPreflight
     };
-  `)();
+  `);
 }
 
 function parseDashboard() {
@@ -198,13 +202,13 @@ describe('Greasy Fork publish handoff preflight', () => {
   it('records local-only publication receipts without storing submitted code', () => {
     const constantsStart = dashboardJs.indexOf('const GREASY_FORK_PREFILL_BASE_URL');
     const functionsEnd = dashboardJs.indexOf('    function showGreasyForkPublishPreview', constantsStart);
-    const api = new Function(`
+    const api = _invoke(`
       ${dashboardJs.slice(constantsStart, functionsEnd)}
       return {
         buildGreasyForkPublicationReceiptRecord,
         summarizeGreasyForkPublicationReceipt
       };
-    `)();
+    `);
 
     const preflight = {
       ok: true,
@@ -272,7 +276,7 @@ describe('Greasy Fork publish handoff preflight', () => {
   it('renders local publication receipt history without exposing source data', () => {
     const constantsStart = dashboardJs.indexOf('const GREASY_FORK_PREFILL_BASE_URL');
     const functionsEnd = dashboardJs.indexOf('    function showGreasyForkPublicationConfirmation', constantsStart);
-    const api = new Function(`
+    const api = _invoke(`
       const numberFormatter = new Intl.NumberFormat('en-US');
       const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({
         '&': '&amp;',
@@ -291,7 +295,7 @@ describe('Greasy Fork publish handoff preflight', () => {
         renderGreasyForkPublicationReceiptHtml,
         normalizeGreasyForkPublicationReceiptList
       };
-    `)();
+    `);
 
     const receipts = [
       {

@@ -43,16 +43,15 @@ const hasCookieRoutingOptionsSrc = extractFunction(source, 'hasCookieRoutingOpti
 const normalizeNetworkCookieRoutingSrc = extractFunction(source, 'normalizeNetworkCookieRouting');
 const cookieHeaderFromCookiesSrc = extractFunction(source, 'cookieHeaderFromCookies');
 const exactDnrRegexForUrlSrc = extractFunction(source, 'exactDnrRegexForUrl');
-// eslint-disable-next-line @typescript-eslint/no-implied-eval
-const isHttpCookieUrl = new Function(`${isHttpCookieUrlSrc}\nreturn isHttpCookieUrl;`)();
-// eslint-disable-next-line @typescript-eslint/no-implied-eval
-const normalizeCookiePartitionKey = new Function(`${isHttpCookieUrlSrc}\n${normalizeCookiePartitionKeySrc}\nreturn normalizeCookiePartitionKey;`)();
-// eslint-disable-next-line @typescript-eslint/no-implied-eval
-const normalizeNetworkCookieRouting = new Function(`${isHttpCookieUrlSrc}\n${normalizeCookiePartitionKeySrc}\n${hasCookieRoutingOptionsSrc}\n${normalizeNetworkCookieRoutingSrc}\nreturn normalizeNetworkCookieRouting;`)();
-// eslint-disable-next-line @typescript-eslint/no-implied-eval
-const cookieHeaderFromCookies = new Function(`${cookieHeaderFromCookiesSrc}\nreturn cookieHeaderFromCookies;`)();
-// eslint-disable-next-line @typescript-eslint/no-implied-eval
-const exactDnrRegexForUrl = new Function(`${exactDnrRegexForUrlSrc}\nreturn exactDnrRegexForUrl;`)();
+const _srcFile = resolve(process.cwd(), 'background.core.js');
+function _invoke(body) {
+  try { const vm = require('node:vm'); return vm.compileFunction(body, [], { filename: _srcFile })(); } catch { return new Function(body)(); }
+}
+const isHttpCookieUrl = _invoke(`${isHttpCookieUrlSrc}\nreturn isHttpCookieUrl;`);
+const normalizeCookiePartitionKey = _invoke(`${isHttpCookieUrlSrc}\n${normalizeCookiePartitionKeySrc}\nreturn normalizeCookiePartitionKey;`);
+const normalizeNetworkCookieRouting = _invoke(`${isHttpCookieUrlSrc}\n${normalizeCookiePartitionKeySrc}\n${hasCookieRoutingOptionsSrc}\n${normalizeNetworkCookieRoutingSrc}\nreturn normalizeNetworkCookieRouting;`);
+const cookieHeaderFromCookies = _invoke(`${cookieHeaderFromCookiesSrc}\nreturn cookieHeaderFromCookies;`);
+const exactDnrRegexForUrl = _invoke(`${exactDnrRegexForUrlSrc}\nreturn exactDnrRegexForUrl;`);
 
 describe('isHttpCookieUrl', () => {
   it('accepts http and https URLs', () => {

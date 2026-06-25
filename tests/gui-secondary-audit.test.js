@@ -96,15 +96,15 @@ describe("secondary dashboard UX audit", () => {
 describe("pattern builder regex hardening", () => {
   let PB;
   beforeAll(() => {
-    const fn = new Function("document", "navigator", "CSS", "setTimeout",
-      patternBuilderJs + "\nreturn PatternBuilder;"
-    );
-    PB = fn(
+    const _body = patternBuilderJs + "\nreturn PatternBuilder;";
+    const _params = ['document', 'navigator', 'CSS', 'setTimeout'];
+    const _args = [
       { createElement: () => ({ appendChild() {}, addEventListener() {}, setAttribute() {}, style: {}, dataset: {} }), createTextNode: () => ({}) },
       { clipboard: { writeText: () => Promise.resolve() } },
       { escape: v => v },
       () => {}
-    );
+    ];
+    try { const vm = require('node:vm'); PB = vm.compileFunction(_body, _params, { filename: resolve(process.cwd(), 'pages/dashboard-pattern-builder.js') })(..._args); } catch { PB = new Function(..._params, _body)(..._args); }
   });
 
   test("sanitizeSegmentValue percent-encodes unsafe characters", () => {

@@ -7,20 +7,24 @@ const profilesCode = readFileSync(resolve(process.cwd(), 'pages/dashboard-profil
 const chainsCode = readFileSync(resolve(process.cwd(), 'pages/dashboard-chains.js'), 'utf8');
 const standaloneCode = readFileSync(resolve(process.cwd(), 'pages/dashboard-standalone.js'), 'utf8');
 
+function _invoke(body, params, args, filename) {
+  try { const vm = require('node:vm'); return vm.compileFunction(body, params, { filename })(...args); } catch { return new Function(...params, body)(...args); }
+}
+
 function createScriptStore() {
-  return new Function(storeCode + '\nreturn ScriptStore;')();
+  return _invoke(storeCode + '\nreturn ScriptStore;', [], [], resolve(process.cwd(), 'pages/dashboard-store.js'));
 }
 
 function createProfileManager() {
-  return new Function(profilesCode + '\nreturn ProfileManager;')();
+  return _invoke(profilesCode + '\nreturn ProfileManager;', [], [], resolve(process.cwd(), 'pages/dashboard-profiles.js'));
 }
 
 function createScriptChains() {
-  return new Function(chainsCode + '\nreturn ScriptChains;')();
+  return _invoke(chainsCode + '\nreturn ScriptChains;', [], [], resolve(process.cwd(), 'pages/dashboard-chains.js'));
 }
 
 function createStandaloneExport() {
-  return new Function(standaloneCode + '\nreturn StandaloneExport;')();
+  return _invoke(standaloneCode + '\nreturn StandaloneExport;', [], [], resolve(process.cwd(), 'pages/dashboard-standalone.js'));
 }
 
 function createDeferred() {

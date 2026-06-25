@@ -20,8 +20,12 @@ function extractFunction(source, name) {
   throw new Error(`Function ${name} did not close`);
 }
 
+function _invoke(body) {
+  try { const vm = require('node:vm'); return vm.compileFunction(body, [], { filename: resolve(process.cwd(), 'pages/dashboard.js') })(); } catch { return new Function(body)(); }
+}
+
 function loadSyncPreviewExportApi() {
-  return new Function(`
+  return _invoke(`
     ${extractFunction(dashboardJs, 'sanitizePreviewCount')}
     ${extractFunction(dashboardJs, 'sanitizeSyncPreviewSummary')}
     ${extractFunction(dashboardJs, 'sanitizeValueBundleTimestamp')}
@@ -33,14 +37,14 @@ function loadSyncPreviewExportApi() {
     ${extractFunction(dashboardJs, 'sanitizeValueBundleConflictPreview')}
     ${extractFunction(dashboardJs, 'buildSyncPreviewExport')}
     return { buildSyncPreviewExport };
-  `)();
+  `);
 }
 
 function loadValueBundleSyncLogApi() {
-  return new Function(`
+  return _invoke(`
     ${extractFunction(dashboardJs, 'formatValueBundleSyncLog')}
     return { formatValueBundleSyncLog };
-  `)();
+  `);
 }
 
 const SYNC_PREVIEW_EXPORT_TOP_LEVEL_KEYS = [

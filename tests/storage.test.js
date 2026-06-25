@@ -6,7 +6,7 @@ import { resolve } from 'path';
 // in the same global shape background.js uses rather than importing it as ESM.
 const storageCode = readFileSync(resolve(__dirname, '../modules/storage.js'), 'utf8');
 
-const fn = new Function('chrome', 'console', storageCode + `
+const _storageBody = storageCode + `
   return {
     SettingsManager,
     ScriptStorage,
@@ -17,7 +17,9 @@ const fn = new Function('chrome', 'console', storageCode + `
     _openTabTrackers,
     setScriptChangeListener
   };
-`);
+`;
+let _storageResult;
+try { const vm = require('node:vm'); _storageResult = vm.compileFunction(_storageBody, ['chrome', 'console'], { filename: resolve(__dirname, '../modules/storage.js') })(globalThis.chrome, console); } catch { _storageResult = new Function('chrome', 'console', _storageBody)(globalThis.chrome, console); }
 
 const {
   SettingsManager,
@@ -28,7 +30,7 @@ const {
   TabStorage,
   _openTabTrackers,
   setScriptChangeListener,
-} = fn(globalThis.chrome, console);
+} = _storageResult;
 
 function resetRuntimeCaches() {
   SettingsManager.cache = null;

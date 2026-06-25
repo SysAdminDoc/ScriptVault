@@ -27,10 +27,12 @@ const preamble = `
   function generateId() { return 'id_' + Math.random().toString(36).slice(2, 10); }
   function debugLog() {}
 `;
-const fn = new Function('chrome', 'console', preamble + storageCode + `
+const _storageBody = preamble + storageCode + `
   return { SettingsManager, ScriptStorage };
-`);
-const { SettingsManager, ScriptStorage } = fn(globalThis.chrome, console);
+`;
+let _storageResult;
+try { const vm = require('node:vm'); _storageResult = vm.compileFunction(_storageBody, ['chrome', 'console'], { filename: resolve(__dirname, '../modules/storage.js') })(globalThis.chrome, console); } catch { _storageResult = new Function('chrome', 'console', _storageBody)(globalThis.chrome, console); }
+const { SettingsManager, ScriptStorage } = _storageResult;
 
 beforeEach(() => {
   globalThis.__resetStorageMock();

@@ -16,29 +16,28 @@ const popupJs = readFileSync(resolve(process.cwd(), 'pages/popup.js'), 'utf8');
 const installJs = readFileSync(resolve(process.cwd(), 'pages/install.js'), 'utf8');
 const notificationsModuleJs = readFileSync(resolve(process.cwd(), 'modules/notifications.js'), 'utf8');
 
+function _invoke(body, params, args, filename) {
+  try { const vm = require('node:vm'); return vm.compileFunction(body, params, { filename })(...args); } catch { return new Function(...params, body)(...args); }
+}
+
 function createCardView() {
-  const fn = new Function(cardViewCode + '\nreturn CardView;');
-  return fn();
+  return _invoke(cardViewCode + '\nreturn CardView;', [], [], resolve(process.cwd(), 'pages/dashboard-cardview.js'));
 }
 
 function createCollectionManager() {
-  const fn = new Function(collectionCode + '\nreturn CollectionManager;');
-  return fn();
+  return _invoke(collectionCode + '\nreturn CollectionManager;', [], [], resolve(process.cwd(), 'pages/dashboard-collections.js'));
 }
 
 function createCSPReporter() {
-  const fn = new Function(cspCode + '\nreturn CSPReporter;');
-  return fn();
+  return _invoke(cspCode + '\nreturn CSPReporter;', [], [], resolve(process.cwd(), 'pages/dashboard-csp.js'));
 }
 
 function createProfileManager() {
-  const fn = new Function(profilesCode + '\nreturn ProfileManager;');
-  return fn();
+  return _invoke(profilesCode + '\nreturn ProfileManager;', [], [], resolve(process.cwd(), 'pages/dashboard-profiles.js'));
 }
 
 function createSnippetLibrary() {
-  const fn = new Function(snippetsCode + '\nreturn SnippetLibrary;');
-  return fn();
+  return _invoke(snippetsCode + '\nreturn SnippetLibrary;', [], [], resolve(process.cwd(), 'pages/dashboard-snippets.js'));
 }
 
 function createDashboardRouteParser() {
@@ -46,8 +45,8 @@ function createDashboardRouteParser() {
   if (!match) {
     throw new Error('Unable to locate getDashboardRoute in dashboard.js');
   }
-  const fn = new Function('window', 'DASHBOARD_TABS', `${match[0]}; return getDashboardRoute;`);
-  return fn(window, ['scripts', 'settings', 'utilities', 'trash', 'store']);
+  const _body = `${match[0]}; return getDashboardRoute;`;
+  return _invoke(_body, ['window', 'DASHBOARD_TABS'], [window, ['scripts', 'settings', 'utilities', 'trash', 'store']], resolve(process.cwd(), 'pages/dashboard.js'));
 }
 
 function createDeferred() {

@@ -851,7 +851,7 @@ describe("dashboard view settings controller", () => {
     localStorage.setItem("sv_viewSettings", JSON.stringify({ scale: "1.25", density: "spacious" }));
     document.body.innerHTML = parseDashboard().body.innerHTML;
 
-    new Function(viewSettingsController)();
+    (() => { try { const vm = require('node:vm'); vm.compileFunction(viewSettingsController, [], { filename: resolve(process.cwd(), 'pages/dashboard-viewsettings.js') })(); } catch { new Function(viewSettingsController)(); } })();
 
     const scaleSelect = document.getElementById("uiScaleSelect");
     const compactButton = document.querySelector('.density-btn[data-density="compact"]');
@@ -892,7 +892,7 @@ describe("dashboard view settings controller", () => {
     localStorage.setItem("sv_viewSettings", "{invalid-json");
     document.body.innerHTML = parseDashboard().body.innerHTML;
 
-    expect(() => new Function(viewSettingsController)()).not.toThrow();
+    expect(() => (() => { try { const vm = require('node:vm'); vm.compileFunction(viewSettingsController, [], { filename: resolve(process.cwd(), 'pages/dashboard-viewsettings.js') })(); } catch { new Function(viewSettingsController)(); } })()).not.toThrow();
 
     expect(document.documentElement.getAttribute("data-ui-scale")).toBe("1");
     expect(document.documentElement.getAttribute("data-density")).toBe("comfortable");
