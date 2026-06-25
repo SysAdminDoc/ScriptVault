@@ -609,23 +609,15 @@
         }
 
         .script-dropdown {
-            display: none;
             position: fixed;
             background: var(--popup-bg-raised);
             border: 1px solid var(--popup-border);
             border-radius: 6px;
             min-width: 110px;
-            z-index: 1000;
             box-shadow: 0 4px 12px rgba(0,0,0,0.4);
             overflow: hidden;
-        }
-
-        .script-dropdown.open {
-            display: block;
-        }
-
-        .script-dropdown[hidden] {
-            display: none !important;
+            padding: 0;
+            margin: 0;
         }
 
         .script-dropdown-item {
@@ -1405,7 +1397,7 @@
     </div>
 
     <!-- Shared dropdown (positioned at body level to avoid overflow clipping) -->
-    <div class="script-dropdown" id="scriptDropdown" role="menu" aria-label="Script actions" aria-hidden="true" hidden>
+    <div class="script-dropdown" id="scriptDropdown" role="menu" aria-label="Script actions" popover="auto">
         <div class="script-dropdown-cmds" id="dropdownMenuCmds"></div>
         <button class="script-dropdown-item" data-action="edit" role="menuitem" type="button">Edit in Dashboard</button>
         <button class="script-dropdown-item" data-action="runNow" role="menuitem" type="button">Run on This Tab</button>

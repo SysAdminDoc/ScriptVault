@@ -795,11 +795,7 @@
         if (trigger) {
             trigger.setAttribute('aria-expanded', 'false');
         }
-        if (dropdown) {
-            dropdown.classList.remove('open');
-            dropdown.hidden = true;
-            dropdown.setAttribute('aria-hidden', 'true');
-        }
+        try { dropdown?.hidePopover(); } catch {}
         if (restoreFocus) {
             trigger?.focus();
         }
@@ -858,7 +854,7 @@
     function openScriptDropdown(scriptId, trigger, { focusTarget = 0 } = {}) {
         const dropdown = document.getElementById('scriptDropdown');
         if (!dropdown || !scriptId || !trigger) return;
-        if (dropdown.classList.contains('open') && activeDropdownScriptId === scriptId) {
+        if (dropdown.matches(':popover-open') && activeDropdownScriptId === scriptId) {
             closeScriptDropdown({ restoreFocus: true });
             return;
         }
@@ -870,9 +866,7 @@
         const rect = trigger.getBoundingClientRect();
         dropdown.style.right = (document.documentElement.clientWidth - rect.right) + 'px';
         trigger.setAttribute('aria-expanded', 'true');
-        dropdown.hidden = false;
-        dropdown.setAttribute('aria-hidden', 'false');
-        dropdown.classList.add('open');
+        dropdown.showPopover();
         const dropRect = dropdown.getBoundingClientRect();
         const viewportH = document.documentElement.clientHeight;
         if (rect.bottom + 2 + dropRect.height > viewportH && rect.top - dropRect.height - 2 >= 0) {
@@ -1125,6 +1119,15 @@
         if (!dropdownListenersAttached) {
             dropdownListenersAttached = true;
 
+            dropdown.addEventListener('toggle', (e) => {
+                if (e.newState === 'closed' && activeDropdownScriptId) {
+                    const trigger = getDropdownTriggerButton(activeDropdownScriptId);
+                    if (trigger) trigger.setAttribute('aria-expanded', 'false');
+                    activeDropdownScriptId = null;
+                    resetDropdownDeleteState();
+                }
+            });
+
             dropdown.querySelector('[data-action="edit"]')?.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const scriptId = activeDropdownScriptId;
@@ -1242,13 +1245,6 @@
                 queuePopupFocusRestore(getPopupFocusDescriptor(getDropdownTriggerButton(scriptId)));
                 closeScriptDropdown();
                 deleteScript(scriptId);
-            });
-
-            // Close dropdown when clicking outside (but not inside it)
-            document.addEventListener('click', (e) => {
-                if (!dropdown.contains(e.target) && !e.target.closest('.script-more')) {
-                    closeScriptDropdown();
-                }
             });
 
             dropdown.addEventListener('keydown', (e) => {

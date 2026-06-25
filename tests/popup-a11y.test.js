@@ -45,8 +45,7 @@ describe("popup UX markup", () => {
     expect(dropdown).not.toBeNull();
     expect(dropdown?.getAttribute("role")).toBe("menu");
     expect(dropdown?.getAttribute("aria-label")).toBe("Script actions");
-    expect(dropdown?.getAttribute("aria-hidden")).toBe("true");
-    expect(dropdown?.hasAttribute("hidden")).toBe(true);
+    expect(dropdown?.getAttribute("popover")).toBe("auto");
     expect([...dropdown?.querySelectorAll("button") || []].every((button) => button.getAttribute("role") === "menuitem")).toBe(true);
   });
 
