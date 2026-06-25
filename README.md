@@ -598,6 +598,16 @@ Scripts, metadata, and `@crontab` schedules are preserved. ScriptCat `@backgroun
 1. Export your GM4 backup from Greasemonkey settings
 2. Import through ScriptVault dashboard &rarr; Utilities &rarr; Import
 
+### AI-Generated Scripts (Tweeks, ChatGPT, Claude)
+
+AI tools can generate userscripts from natural language descriptions. To manage them in ScriptVault:
+
+1. Copy the generated `.user.js` code
+2. Open the ScriptVault dashboard &rarr; click **New** (or paste into Utilities &rarr; Import)
+3. Review the script in the editor before saving
+
+ScriptVault's 31-detector AST analyzer automatically flags common issues in AI-generated scripts: overbroad `@match <all_urls>` patterns, unnecessary `@grant` declarations, `eval()` usage, hardcoded credentials, and other risk patterns. Review the analysis results in the script info panel before enabling.
+
 ---
 
 ## Contributing
