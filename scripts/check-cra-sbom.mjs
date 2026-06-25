@@ -54,7 +54,7 @@ export function validateCraSbom(sbom, pkg, lock) {
   const allRefs = new Set([rootRef, ...componentRefs]);
 
   push(failures, sbom?.bomFormat === 'CycloneDX', 'SBOM bomFormat must be CycloneDX');
-  push(failures, sbom?.specVersion === '1.6', 'SBOM specVersion must be CycloneDX 1.6');
+  push(failures, sbom?.specVersion === '1.7', 'SBOM specVersion must be CycloneDX 1.7');
   push(failures, /^urn:uuid:[0-9a-f-]{36}$/i.test(String(sbom?.serialNumber || '')), 'SBOM serialNumber must be a UUID URN');
   push(failures, Number.isInteger(sbom?.version) && sbom.version > 0, 'SBOM version must be a positive integer');
   push(failures, typeof sbom?.metadata?.timestamp === 'string' && !Number.isNaN(Date.parse(sbom.metadata.timestamp)), 'SBOM metadata.timestamp must be an ISO timestamp');

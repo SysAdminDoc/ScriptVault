@@ -166,6 +166,31 @@ function buildSbom(lock, pkg, version) {
     }
     componentByRef.set(purl, component);
   }
+  const vendoredLibraries = [
+    { name: 'acorn', version: '8.17.0', license: 'MIT', path: 'lib/acorn.min.js', description: 'Vendored JS parser for AST analysis' },
+    { name: 'diff', version: '9.0.0', license: 'BSD-3-Clause', path: 'lib/diff.min.js', description: 'Vendored diff library for sync merge' },
+    { name: 'fflate', version: '0.8.3', license: 'MIT', path: 'lib/fflate.js', description: 'Vendored ZIP compression library' },
+  ];
+  for (const lib of vendoredLibraries) {
+    const ref = packagePurl(lib.name, lib.version);
+    if (!componentByRef.has(ref)) {
+      componentByRef.set(ref, {
+        'bom-ref': ref,
+        type: 'library',
+        name: lib.name,
+        version: lib.version,
+        scope: 'required',
+        purl: packagePurl(lib.name, lib.version),
+        licenses: [{ expression: lib.license }],
+        description: lib.description,
+        properties: [
+          { name: 'scriptvault:vendored', value: 'true' },
+          { name: 'scriptvault:vendored-path', value: lib.path },
+        ],
+      });
+    }
+  }
+
   const components = [...componentByRef.values()]
     .sort((a, b) => `${a.name}@${a.version}`.localeCompare(`${b.name}@${b.version}`));
   const componentRefsByName = new Map();
@@ -197,7 +222,7 @@ function buildSbom(lock, pkg, version) {
 
   return {
     bomFormat: 'CycloneDX',
-    specVersion: '1.6',
+    specVersion: '1.7',
     serialNumber: `urn:uuid:${randomUUID()}`,
     version: 1,
     metadata: {

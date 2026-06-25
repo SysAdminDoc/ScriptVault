@@ -27,7 +27,7 @@ function validFixture() {
   const depRef = 'pkg:npm/acorn@1.0.0';
   const sbom = {
     bomFormat: 'CycloneDX',
-    specVersion: '1.6',
+    specVersion: '1.7',
     serialNumber: 'urn:uuid:123e4567-e89b-12d3-a456-426614174000',
     version: 1,
     metadata: {
@@ -61,7 +61,7 @@ function validFixture() {
 }
 
 describe('CRA SBOM gate', () => {
-  it('accepts CycloneDX 1.6 SBOMs with supplier, product, dependency, and license evidence', () => {
+  it('accepts CycloneDX 1.7 SBOMs with supplier, product, dependency, and license evidence', () => {
     const fixture = validFixture();
     expect(validateCraSbom(fixture.sbom, fixture.pkg, fixture.lock)).toMatchObject({
       ok: true,
@@ -86,7 +86,7 @@ describe('CRA SBOM gate', () => {
     expect(pkg.scripts['release:trust:cra']).toBe('node scripts/check-cra-sbom.mjs');
 
     const releaseTrust = read('scripts/release-trust-gate.mjs');
-    expect(releaseTrust).toContain("specVersion: '1.6'");
+    expect(releaseTrust).toContain("specVersion: '1.7'");
     expect(releaseTrust).toContain('supplier: {');
     expect(releaseTrust).toContain("'bom-ref': purl");
     expect(releaseTrust).toContain('dependencies,');
