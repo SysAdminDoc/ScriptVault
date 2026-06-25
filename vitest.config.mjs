@@ -41,5 +41,13 @@ export default defineConfig({
     },
     // Mock chrome.* APIs that aren't available in jsdom
     setupFiles: ["tests/setup.js"],
+    browser: {
+      enabled: false,
+      api: { host: "127.0.0.1" },
+    },
+  },
+  server: {
+    host: "127.0.0.1",
+    strictPort: true,
   },
 });

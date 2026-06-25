@@ -79,3 +79,15 @@ describe('toolchain contract gate', () => {
     expect(result.stdout).toContain('[toolchain] Contract check failed.');
   });
 });
+
+describe('Vitest dev-server exposure guard', () => {
+  it('vitest config binds server and browser API to loopback only', async () => {
+    const { readFileSync } = await import('node:fs');
+    const configSource = readFileSync(resolve(ROOT, 'vitest.config.mjs'), 'utf8');
+
+    expect(configSource).toContain('"127.0.0.1"');
+    expect(configSource).not.toMatch(/host\s*:\s*["']0\.0\.0\.0["']/);
+    expect(configSource).not.toMatch(/host\s*:\s*["']::["']/);
+    expect(configSource).toContain('strictPort: true');
+  });
+});
