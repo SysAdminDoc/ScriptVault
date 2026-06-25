@@ -27,6 +27,9 @@ export default defineConfig({
         "src/modules/**/*.ts",
         "src/shared/**/*.ts",
         "src/storage/**/*.ts",
+        "bg/*.js",
+        "modules/*.js",
+        "shared/*.js",
       ],
       exclude: ["src/config/**", "src/types/**", "lib/**", "node_modules/**"],
       thresholds: {

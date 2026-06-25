@@ -273,3 +273,15 @@ globalThis.__loadGeneratedModule = function loadGeneratedModule(relativePath, gl
     return fn(...Object.values(globals));
   }
 };
+
+globalThis.__createModuleFactory = function createModuleFactory(relativePath, paramNames, returnExpr = '{}') {
+  const root = process.cwd();
+  const absPath = resolve(root, relativePath);
+  const code = readFileSync(absPath, 'utf8');
+  const body = code + '\nreturn ' + returnExpr + ';';
+  try {
+    return vm.compileFunction(body, paramNames, { filename: absPath });
+  } catch {
+    return new Function(...paramNames, body);
+  }
+};
