@@ -3,7 +3,9 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const migrationCode = readFileSync(resolve(__dirname, '../modules/migration.js'), 'utf8');
-const fn = new Function('chrome', 'console', migrationCode + '\nreturn Migration;');
+const _body = migrationCode + '\nreturn Migration;';
+let fn;
+try { const vm = require('node:vm'); fn = vm.compileFunction(_body, ['chrome', 'console'], { filename: resolve(__dirname, '../modules/migration.js') }); } catch { fn = new Function('chrome', 'console', _body); }
 
 function createFreshMigration() {
   return fn(globalThis.chrome, console);

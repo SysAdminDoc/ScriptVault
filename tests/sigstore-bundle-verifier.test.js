@@ -318,7 +318,10 @@ describe('Sigstore bundle verifier', () => {
 
   it('exposes the verifier from the generated runtime module', async () => {
     const runtime = readFileSync(resolve(process.cwd(), 'modules/sigstore-bundle-verifier.js'), 'utf8');
-    const SigstoreBundleVerifier = new Function(`${runtime}\nreturn SigstoreBundleVerifier;`)();
+    const _verifierBody = `${runtime}\nreturn SigstoreBundleVerifier;`;
+    let _verifierFn;
+    try { const vm = require('node:vm'); _verifierFn = vm.compileFunction(_verifierBody, [], { filename: resolve(process.cwd(), 'modules/sigstore-bundle-verifier.js') }); } catch { _verifierFn = new Function(_verifierBody); }
+    const SigstoreBundleVerifier = _verifierFn();
     const fixture = makeSignedBundle();
 
     await expect(SigstoreBundleVerifier.verifyMessageSignature({

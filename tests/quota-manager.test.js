@@ -3,6 +3,9 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const code = readFileSync(resolve(process.cwd(), 'modules/quota-manager.js'), 'utf8');
+const _body = code + '\nreturn QuotaManager;';
+let _compiledFn;
+try { const vm = require('node:vm'); _compiledFn = vm.compileFunction(_body, ['chrome', 'console', 'navigator'], { filename: resolve(process.cwd(), 'modules/quota-manager.js') }); } catch { _compiledFn = new Function('chrome', 'console', 'navigator', _body); }
 const originalNavigatorStorageDescriptor = Object.getOwnPropertyDescriptor(globalThis.navigator, 'storage');
 
 function makeStoredScript(id, name) {
@@ -19,8 +22,7 @@ function makeStoredScript(id, name) {
 }
 
 function createFreshQuotaManager() {
-  const fn = new Function('chrome', 'console', 'navigator', code + '\nreturn QuotaManager;');
-  return fn(globalThis.chrome, console, globalThis.navigator);
+  return _compiledFn(globalThis.chrome, console, globalThis.navigator);
 }
 
 let QuotaManager;

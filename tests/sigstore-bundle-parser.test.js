@@ -152,7 +152,10 @@ describe('Sigstore bundle parser', () => {
 
   it('generates a runtime parser artifact with the same public API', () => {
     const runtime = readFileSync(resolve(process.cwd(), 'modules/sigstore-bundle-parser.js'), 'utf8');
-    const SigstoreBundleParser = new Function(`${runtime}\nreturn SigstoreBundleParser;`)();
+    const _parserBody = `${runtime}\nreturn SigstoreBundleParser;`;
+    let _parserFn;
+    try { const vm = require('node:vm'); _parserFn = vm.compileFunction(_parserBody, [], { filename: resolve(process.cwd(), 'modules/sigstore-bundle-parser.js') }); } catch { _parserFn = new Function(_parserBody); }
+    const SigstoreBundleParser = _parserFn();
 
     const parsed = SigstoreBundleParser.parse(BASE_BUNDLE);
 

@@ -26,7 +26,8 @@ describe('ScriptChains module', () => {
       },
     };
     globalThis.ScriptVaultDashboardUI = { toast: vi.fn() };
-    ScriptChains = new Function(chainsCode + '\nreturn ScriptChains;')();
+    const _body = chainsCode + '\nreturn ScriptChains;';
+    try { const vm = require('node:vm'); const _cf = vm.compileFunction(_body, [], { filename: resolve(__dirname, '../pages/dashboard-chains.js') }); ScriptChains = _cf(); } catch { ScriptChains = new Function(_body)(); }
   });
 
   it('createChain normalizes step delay to 0..10000', async () => {

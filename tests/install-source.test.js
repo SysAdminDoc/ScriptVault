@@ -14,7 +14,9 @@ import { resolve } from 'node:path';
 // rest of the IIFE. Mirror of the production helper; the source-of-truth
 // scan below pins the contract.
 const utilsSource = readFileSync(resolve(process.cwd(), 'shared/utils.js'), 'utf8');
-const fn = new Function(`${utilsSource}\nreturn classifyInstallSource;`);
+const _body = `${utilsSource}\nreturn classifyInstallSource;`;
+let fn;
+try { const vm = require('node:vm'); fn = vm.compileFunction(_body, [], { filename: resolve(process.cwd(), 'shared/utils.js') }); } catch { fn = new Function(_body); }
 const classifyInstallSource = fn();
 
 describe('classifyInstallSource', () => {

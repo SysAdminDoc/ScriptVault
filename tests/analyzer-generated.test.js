@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const code = readFileSync(resolve(process.cwd(), 'bg/analyzer.js'), 'utf8');
+const _body = `${code}\nreturn ScriptAnalyzer;`;
 
 function defaultChrome() {
   return {
@@ -17,9 +18,16 @@ function defaultChrome() {
   };
 }
 
+let _compiledFn;
+try {
+  const vm = require('node:vm');
+  const candidate = vm.compileFunction('return globalThis;', []);
+  if (candidate() === globalThis) { _compiledFn = vm.compileFunction(_body, ['chrome', 'debugLog'], { filename: resolve(process.cwd(), 'bg/analyzer.js') }); }
+} catch { /* fall back */ }
+if (!_compiledFn) { _compiledFn = new Function('chrome', 'debugLog', _body); }
+
 function createAnalyzer(chromeApi = defaultChrome()) {
-  const fn = new Function('chrome', 'debugLog', `${code}\nreturn ScriptAnalyzer;`);
-  return fn(chromeApi, () => undefined);
+  return _compiledFn(chromeApi, () => undefined);
 }
 
 describe('generated ScriptAnalyzer runtime', () => {

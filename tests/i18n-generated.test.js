@@ -3,10 +3,12 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const code = readFileSync(resolve(process.cwd(), 'modules/i18n.js'), 'utf8');
+const _body = `${code}\nreturn I18n;`;
+let _compiledFn;
+try { const vm = require('node:vm'); _compiledFn = vm.compileFunction(_body, ['navigator', 'document'], { filename: resolve(process.cwd(), 'modules/i18n.js') }); } catch { _compiledFn = new Function('navigator', 'document', _body); }
 
 function createI18n(language = 'en-US') {
-  const fn = new Function('navigator', 'document', `${code}\nreturn I18n;`);
-  return fn({ language }, document);
+  return _compiledFn({ language }, document);
 }
 
 beforeEach(() => {

@@ -4,11 +4,13 @@ import { resolve } from 'node:path';
 import vm from 'node:vm';
 
 const code = readFileSync(resolve(process.cwd(), 'shared/utils.js'), 'utf8');
+const _body = `${code}\nreturn { escapeHtml, generateId, sanitizeUrl, installBrowserNamespaceAlias, classifyInstallSource, formatBytes };`;
+let _compiledFn;
+try { const vm2 = require('node:vm'); _compiledFn = vm2.compileFunction(_body, ['crypto', 'globalThis'], { filename: resolve(process.cwd(), 'shared/utils.js') }); } catch { _compiledFn = new Function('crypto', 'globalThis', _body); }
 
 function createUtils() {
   const root = {};
-  const fn = new Function('crypto', 'globalThis', `${code}\nreturn { escapeHtml, generateId, sanitizeUrl, installBrowserNamespaceAlias, classifyInstallSource, formatBytes };`);
-  return fn({ randomUUID: () => 'uuid-123' }, root);
+  return _compiledFn({ randomUUID: () => 'uuid-123' }, root);
 }
 
 describe('generated shared utilities runtime', () => {

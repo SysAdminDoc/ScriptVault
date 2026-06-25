@@ -3,10 +3,12 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const code = readFileSync(resolve(process.cwd(), 'modules/userstyles.js'), 'utf8');
+const _body = code + '\nreturn UserStylesEngine;';
+let _compiledFn;
+try { const vm = require('node:vm'); _compiledFn = vm.compileFunction(_body, ['chrome', 'console'], { filename: resolve(process.cwd(), 'modules/userstyles.js') }); } catch { _compiledFn = new Function('chrome', 'console', _body); }
 
 function createFreshUserStylesEngine() {
-  const fn = new Function('chrome', 'console', code + '\nreturn UserStylesEngine;');
-  return fn(globalThis.chrome, console);
+  return _compiledFn(globalThis.chrome, console);
 }
 
 function createVariableStyle() {

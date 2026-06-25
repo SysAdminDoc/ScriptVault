@@ -6,8 +6,12 @@ const dashboardLinter = readFileSync(resolve(process.cwd(), 'pages/dashboard-lin
 
 const RULE_ID = 'trusted-types-main-world';
 
+const _linterBody = `${dashboardLinter}\nreturn AdvancedLinter;`;
+let _linterCompiled;
+try { const vm = require('node:vm'); _linterCompiled = vm.compileFunction(_linterBody, [], { filename: resolve(process.cwd(), 'pages/dashboard-linter.js') }); } catch { /* fall through */ }
 function createLinter() {
-  return new Function(`${dashboardLinter}\nreturn AdvancedLinter;`)();
+  try { if (_linterCompiled) return _linterCompiled(); } catch { /* vm context lacks window */ }
+  return new Function(_linterBody)();
 }
 
 function script({ injectInto, body }) {
