@@ -31,7 +31,8 @@ describe('ScriptScheduler module', () => {
       },
     };
     globalThis.ScriptVaultDashboardUI = { toast: vi.fn() };
-    ScriptScheduler = new Function(schedulerCode + '\nreturn ScriptScheduler;')();
+    const _body = schedulerCode + '\nreturn ScriptScheduler;';
+    try { const vm = require('node:vm'); const _cf = vm.compileFunction(_body, [], { filename: resolve(__dirname, '../pages/dashboard-scheduler.js') }); ScriptScheduler = _cf(); } catch { ScriptScheduler = new Function(_body)(); }
   });
 
   it('generateGuardCode returns empty string for disabled schedule', () => {

@@ -4,10 +4,12 @@ import { resolve } from 'node:path';
 
 const code = readFileSync(resolve(process.cwd(), 'modules/notifications.js'), 'utf8');
 const originalNavigatorStorageDescriptor = Object.getOwnPropertyDescriptor(globalThis.navigator, 'storage');
+const _body = code + '\nreturn NotificationSystem;';
+let _compiledFn;
+try { const vm = require('node:vm'); _compiledFn = vm.compileFunction(_body, ['chrome', 'console', 'navigator'], { filename: resolve(process.cwd(), 'modules/notifications.js') }); } catch { _compiledFn = new Function('chrome', 'console', 'navigator', _body); }
 
 function createFreshNotificationSystem() {
-  const fn = new Function('chrome', 'console', 'navigator', code + '\nreturn NotificationSystem;');
-  return fn(globalThis.chrome, console, globalThis.navigator);
+  return _compiledFn(globalThis.chrome, console, globalThis.navigator);
 }
 
 let NotificationSystem;

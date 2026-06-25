@@ -28,7 +28,7 @@ function extractFunction(src, name, kind = 'function') {
 const allocFn = extractFunction(source, '_allocRuleId');
 const legacyFn = extractFunction(source, '_legacyHashRuleId');
 
-const factory = new Function(`
+const _cspBody = `
   const RULE_ID_BASE = 900000;
   const RULE_ID_MAX = 999999999;
   let _ruleIdCounter = RULE_ID_BASE;
@@ -42,7 +42,9 @@ const factory = new Function(`
     BASE: RULE_ID_BASE,
     MAX: RULE_ID_MAX,
   };
-`);
+`;
+let factory;
+try { const vm = require('node:vm'); factory = vm.compileFunction(_cspBody, [], { filename: resolve(process.cwd(), 'pages/dashboard-csp.js') }); } catch { factory = new Function(_cspBody); }
 
 describe('CSP-RULEID — sequential allocator', () => {
   it('first allocation is RULE_ID_BASE + 1', () => {

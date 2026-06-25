@@ -26,9 +26,10 @@ function extractFunction(src, name) {
 }
 
 const parseSource = extractFunction(source, 'parseDashboardSearchRegex');
-const parseDashboardSearchRegex = new Function(
-  `${parseSource}\nreturn parseDashboardSearchRegex;`
-)();
+const _searchBody = `${parseSource}\nreturn parseDashboardSearchRegex;`;
+let _searchFn;
+try { const vm = require('node:vm'); _searchFn = vm.compileFunction(_searchBody, [], { filename: resolve(process.cwd(), 'pages/dashboard.js') }); } catch { _searchFn = new Function(_searchBody); }
+const parseDashboardSearchRegex = _searchFn();
 
 describe('Phase 38.2 — parseDashboardSearchRegex', () => {
   it('returns null for empty / falsy / unprefixed input', () => {

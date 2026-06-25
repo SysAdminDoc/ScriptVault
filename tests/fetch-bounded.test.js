@@ -33,8 +33,10 @@ if (depth !== 0) throw new Error('Could not balance helper braces');
 const helperSrc = code.slice(startIdx, i);
 
 // Provide a formatBytes stub the helper depends on for error messages.
-const fn = new Function('formatBytes', helperSrc + '\nreturn { _fetchTextBounded };');
-const { _fetchTextBounded } = fn((n) => `${n}B`);
+const _fetchBody = helperSrc + '\nreturn { _fetchTextBounded };';
+let _fetchFn;
+try { const vm = require('node:vm'); _fetchFn = vm.compileFunction(_fetchBody, ['formatBytes'], { filename: resolve(__dirname, '../background.core.js') }); } catch { _fetchFn = new Function('formatBytes', _fetchBody); }
+const { _fetchTextBounded } = _fetchFn((n) => `${n}B`);
 
 function bodyFromChunks(chunks) {
   let i = 0;

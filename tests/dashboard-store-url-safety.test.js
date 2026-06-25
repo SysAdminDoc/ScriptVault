@@ -31,7 +31,10 @@ function extractFunction(src, name) {
 
 const safeExternalUrlSrc = extractFunction(source, 'safeExternalUrl');
 // eslint-disable-next-line @typescript-eslint/no-implied-eval
-const safeExternalUrl = new Function(`${safeExternalUrlSrc}\nreturn safeExternalUrl;`)();
+const _storeBody = `${safeExternalUrlSrc}\nreturn safeExternalUrl;`;
+let _storeFn;
+try { const vm = require('node:vm'); _storeFn = vm.compileFunction(_storeBody, [], { filename: resolve(process.cwd(), 'pages/dashboard-store.js') }); } catch { _storeFn = new Function(_storeBody); }
+const safeExternalUrl = _storeFn();
 
 describe('safeExternalUrl (dashboard-store XSS guard)', () => {
   it('passes through http(s) URLs unchanged', () => {

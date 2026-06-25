@@ -20,9 +20,9 @@ const preamble = `
 `;
 
 let ScriptSigning;
-const fn = new Function('chrome', 'console', 'crypto', 'btoa', 'atob',
-  preamble + code + '\nreturn { ScriptSigning, SettingsManager };'
-);
+const _body = preamble + code + '\nreturn { ScriptSigning, SettingsManager };';
+let fn;
+try { const vm = require('node:vm'); fn = vm.compileFunction(_body, ['chrome', 'console', 'crypto', 'btoa', 'atob'], { filename: resolve(__dirname, '../bg/signing.js') }); } catch { fn = new Function('chrome', 'console', 'crypto', 'btoa', 'atob', _body); }
 const mods = fn(globalThis.chrome, console, globalThis.crypto, globalThis.btoa, globalThis.atob);
 ScriptSigning = mods.ScriptSigning;
 const SettingsManager = mods.SettingsManager;

@@ -4,10 +4,12 @@ import { resolve } from 'path';
 
 // Load the actual NetworkLog source
 const code = readFileSync(resolve(__dirname, '../bg/netlog.js'), 'utf8');
+const _body = code + '\nreturn NetworkLog;';
+let _compiledFn;
+try { const vm = require('node:vm'); _compiledFn = vm.compileFunction(_body, [], { filename: resolve(__dirname, '../bg/netlog.js') }); } catch { _compiledFn = new Function(_body); }
 
 function createNetworkLog() {
-  const fn = new Function(code + '\nreturn NetworkLog;');
-  return fn();
+  return _compiledFn();
 }
 
 // ── Tests ───────────────────────────────────────────────────────────────────
