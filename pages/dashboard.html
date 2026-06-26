@@ -7340,25 +7340,25 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
             <div class="utilities-shell">
             <div class="utilities-hero">
                 <div class="utilities-hero-copy">
-                    <div class="utilities-eyebrow">Operations</div>
-                    <h2>Utilities</h2>
-                    <p>Export scripts, restore archives, connect cloud backups, and inspect runtime behavior. Restores can overwrite matching scripts, and app settings only come back when the source contains them and you opt in below.</p>
+                    <div class="utilities-eyebrow" data-i18n="utilitiesOperations">Operations</div>
+                    <h2 data-i18n="utilitiesTitle">Utilities</h2>
+                    <p data-i18n="utilitiesHeroDescription">Export scripts, restore archives, connect cloud backups, and inspect runtime behavior. Restores can overwrite matching scripts, and app settings only come back when the source contains them and you opt in below.</p>
                 </div>
                 <div class="utilities-overview">
                     <div class="utilities-summary">
-                        <span class="utilities-summary-label">Cloud</span>
-                        <strong id="utilitiesCloudSummary">Not connected</strong>
+                        <span class="utilities-summary-label" data-i18n="utilitiesCloud">Cloud</span>
+                        <strong id="utilitiesCloudSummary" data-i18n="syncDisconnected">Not connected</strong>
                     </div>
                     <div class="utilities-summary">
-                        <span class="utilities-summary-label">Imports</span>
+                        <span class="utilities-summary-label" data-i18n="utilitiesImports">Imports</span>
                         <strong id="utilitiesImportSummary">4 sources</strong>
                     </div>
                     <div class="utilities-summary">
-                        <span class="utilities-summary-label">Workspaces</span>
+                        <span class="utilities-summary-label" data-i18n="utilitiesWorkspaces">Workspaces</span>
                         <strong id="utilitiesWorkspaceSummary">0 saved</strong>
                     </div>
                     <div class="utilities-summary">
-                        <span class="utilities-summary-label">Visible</span>
+                        <span class="utilities-summary-label" data-i18n="utilitiesVisible">Visible</span>
                         <strong id="utilitiesVisibleSummary">0 sections</strong>
                     </div>
                 </div>
@@ -7366,167 +7366,167 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
             <div class="utilities-toolbar">
                 <label class="utilities-search" for="utilitiesQuickFilter">
                     <span class="utilities-search-icon">⌕</span>
-                    <input type="search" class="utilities-search-input" id="utilitiesQuickFilter" name="utilities_search" placeholder="Search zip, cloud, import, network log…" autocomplete="off" spellcheck="false">
+                    <input type="search" class="utilities-search-input" id="utilitiesQuickFilter" name="utilities_search" placeholder="Search zip, cloud, import, network log..." data-i18n-placeholder="utilitiesSearchPlaceholder" autocomplete="off" spellcheck="false">
                 </label>
-                <div class="utilities-filter-row" id="utilitiesCategoryFilters" role="group" aria-label="Utilities category filters">
-                    <button type="button" class="utilities-filter active" data-utilities-filter="all">All</button>
-                    <button type="button" class="utilities-filter" data-utilities-filter="backup">Backup</button>
-                    <button type="button" class="utilities-filter" data-utilities-filter="import">Import</button>
-                    <button type="button" class="utilities-filter" data-utilities-filter="cloud">Cloud</button>
-                    <button type="button" class="utilities-filter" data-utilities-filter="diagnostics">Diagnostics</button>
+                <div class="utilities-filter-row" id="utilitiesCategoryFilters" role="group" aria-label="Utilities category filters" data-i18n-aria-label="utilitiesCategoryFilters">
+                    <button type="button" class="utilities-filter active" data-utilities-filter="all" data-i18n="utilitiesFilterAll">All</button>
+                    <button type="button" class="utilities-filter" data-utilities-filter="backup" data-i18n="utilitiesFilterBackup">Backup</button>
+                    <button type="button" class="utilities-filter" data-utilities-filter="import" data-i18n="utilitiesFilterImport">Import</button>
+                    <button type="button" class="utilities-filter" data-utilities-filter="cloud" data-i18n="utilitiesFilterCloud">Cloud</button>
+                    <button type="button" class="utilities-filter" data-utilities-filter="diagnostics" data-i18n="utilitiesFilterDiagnostics">Diagnostics</button>
                 </div>
             </div>
-            <div class="utilities-filter-status" id="utilitiesFilterStatus">Showing all utilities</div>
+            <div class="utilities-filter-status" id="utilitiesFilterStatus" data-i18n="utilitiesShowingAll">Showing all utilities</div>
             <div class="utilities-sections" id="utilitiesSections">
             <div class="settings-section">
-                <div class="section-label">General</div>
+                <div class="section-label" data-i18n="utilityGeneral">General</div>
                 <div class="section-content">
                     <div class="setting-row">
-                        <label><input type="checkbox" id="exportIncludeStorage" checked> Include stored values in JSON, ZIP, and cloud backups, then restore them when present</label>
+                        <label><input type="checkbox" id="exportIncludeStorage" checked> <span data-i18n="exportIncludeStorageLabel">Include stored values in JSON, ZIP, and cloud backups, then restore them when present</span></label>
                     </div>
                     <div class="setting-row">
-                        <label><input type="checkbox" id="exportIncludeSettings"> Include ScriptVault settings in JSON and cloud backups, then restore them when present</label>
+                        <label><input type="checkbox" id="exportIncludeSettings"> <span data-i18n="exportIncludeSettingsLabel">Include ScriptVault settings in JSON and cloud backups, then restore them when present</span></label>
                     </div>
                     <div class="setting-row">
-                        <label><input type="checkbox" id="exportIncludeSettingsCredentials"> Include sync credentials when settings are exported or restored</label>
-                        <span class="utility-inline-status">Risk: this can write WebDAV credentials, OAuth tokens, and S3 keys into portable archives or replace the live credentials during restore.</span>
+                        <label><input type="checkbox" id="exportIncludeSettingsCredentials"> <span data-i18n="exportIncludeSettingsCredentialsLabel">Include sync credentials when settings are exported or restored</span></label>
+                        <span class="utility-inline-status" data-i18n="exportCredentialsRisk">Risk: this can write WebDAV credentials, OAuth tokens, and S3 keys into portable archives or replace the live credentials during restore.</span>
                     </div>
                     <div class="setting-row">
-                        <span class="utility-inline-status">ZIP archives already preserve each script's declared <code>@require</code> and <code>@resource</code> metadata.</span>
+                        <span class="utility-inline-status" data-i18n="zipPreserveMetadata">ZIP archives preserve declared @require and @resource metadata for each script.</span>
                     </div>
                 </div>
             </div>
 
             <div class="settings-section">
-                <div class="section-label">Cloud</div>
+                <div class="section-label" data-i18n="utilitiesCloud">Cloud</div>
                 <div class="section-content">
                     <div class="setting-row">
-                        <span class="label-text">Provider:</span>
+                        <span class="label-text" data-i18n="settingsSyncProviderLabel">Provider:</span>
                         <select class="select-field" id="cloudProvider">
-                            <option value="none">Not configured</option>
-                            <option value="googledrive">Google Drive</option>
-                            <option value="dropbox">Dropbox</option>
-                            <option value="onedrive">OneDrive</option>
-                            <option value="webdav">WebDAV</option>
+                            <option value="none" data-i18n="syncNotConfigured">Not configured</option>
+                            <option value="googledrive" data-i18n="syncProviderGoogleDrive">Google Drive</option>
+                            <option value="dropbox" data-i18n="syncProviderDropbox">Dropbox</option>
+                            <option value="onedrive" data-i18n="syncProviderOneDrive">OneDrive</option>
+                            <option value="webdav" data-i18n="syncProviderWebdav">WebDAV</option>
                         </select>
                     </div>
                     <div class="setting-row" id="firefoxCloudNote" hidden>
-                        <span class="utility-inline-status">Firefox build hides OAuth cloud providers until a dedicated identity flow ships.</span>
+                        <span class="utility-inline-status" data-i18n="utilityCloudNote">Firefox build hides OAuth cloud providers until a dedicated identity flow ships.</span>
                     </div>
                     <div class="setting-row" id="cloudStatusRow">
-                        <span class="label-text">Status:</span>
-                        <span id="cloudStatusText" class="utility-inline-status">Not connected</span>
+                        <span class="label-text" data-i18n="settingsSyncStatusLabel">Status:</span>
+                        <span id="cloudStatusText" class="utility-inline-status" data-i18n="syncDisconnected">Not connected</span>
                         <span id="cloudUserInfo" class="utility-inline-status" style="margin-inline-start:8px"></span>
                     </div>
                     <div class="setting-row">
                         <div class="btn-group">
-                            <button type="button" class="btn" id="btnCloudConnect">Connect</button>
-                            <button type="button" class="btn" id="btnCloudDisconnect" style="display:none">Disconnect</button>
+                            <button type="button" class="btn" id="btnCloudConnect" data-i18n="syncConnect">Connect</button>
+                            <button type="button" class="btn" id="btnCloudDisconnect" style="display:none" data-i18n="syncDisconnect">Disconnect</button>
                         </div>
                     </div>
                     <div class="setting-row" id="cloudActionsRow" style="display:none">
                         <div class="btn-group">
-                            <button type="button" class="btn" id="btnCloudExport">Backup to Cloud</button>
-                            <button type="button" class="btn" id="btnCloudImport">Restore from Cloud</button>
+                            <button type="button" class="btn" id="btnCloudExport" data-i18n="cloudBackupToCloud">Backup to Cloud</button>
+                            <button type="button" class="btn" id="btnCloudImport" data-i18n="cloudRestoreFromCloud">Restore from Cloud</button>
                         </div>
                     </div>
                     <div class="setting-row">
-                        <span class="utility-inline-status">Cloud backups can restore scripts and stored values. App settings only come back when enabled above.</span>
+                        <span class="utility-inline-status" data-i18n="cloudBackupRestoreNote">Cloud backups can restore scripts and stored values. App settings only come back when enabled above.</span>
                     </div>
                 </div>
             </div>
 
             <div class="settings-section">
-                <div class="section-label">Restore from file</div>
+                <div class="section-label" data-i18n="restoreFromFile">Restore from file</div>
                 <div class="section-content">
                     <div class="setting-row">
                         <input type="file" id="importFileInput" accept=".json,.zip,.user.js,.js" style="display:none">
-                        <button type="button" class="btn" id="btnChooseFile">Choose File</button>
-                        <span id="importFileName" class="utility-inline-status" role="status" aria-live="polite" aria-atomic="true" style="margin-inline-start:10px">No file chosen</span>
+                        <button type="button" class="btn" id="btnChooseFile" data-i18n="chooseFile">Choose File</button>
+                        <span id="importFileName" class="utility-inline-status" role="status" aria-live="polite" aria-atomic="true" style="margin-inline-start:10px" data-i18n="noFileChosen">No file chosen</span>
                     </div>
                 </div>
             </div>
 
             <div class="settings-section">
-                <div class="section-label">ZIP archive</div>
+                <div class="section-label" data-i18n="zipArchive">ZIP archive</div>
                 <div class="section-content">
                     <div class="setting-row">
-                        <button type="button" class="btn" id="btnExportZip">Download ZIP</button>
-                        <span class="utility-inline-status" style="margin-inline-start:8px">Portable script archive. App-wide settings are not included.</span>
+                        <button type="button" class="btn" id="btnExportZip" data-i18n="downloadZip">Download ZIP</button>
+                        <span class="utility-inline-status" style="margin-inline-start:8px" data-i18n="zipArchiveDescription">Portable script archive. App-wide settings are not included.</span>
                     </div>
                 </div>
             </div>
 
             <div class="settings-section">
-                <div class="section-label">Vault JSON</div>
+                <div class="section-label" data-i18n="vaultJson">Vault JSON</div>
                 <div class="section-content">
                     <div class="setting-row">
-                        <button type="button" class="btn" id="btnExportFile">Download JSON</button>
-                        <span class="utility-inline-status" style="margin-inline-start:8px">Exports scripts plus the options enabled above.</span>
+                        <button type="button" class="btn" id="btnExportFile" data-i18n="downloadJson">Download JSON</button>
+                        <span class="utility-inline-status" style="margin-inline-start:8px" data-i18n="vaultJsonDescription">Exports scripts plus the options enabled above.</span>
                     </div>
                 </div>
             </div>
 
             <div class="settings-section">
-                <div class="section-label">Backup Schedule</div>
+                <div class="section-label" data-i18n="backupScheduleTitle">Backup Schedule</div>
                 <div class="section-content">
-                    <div class="utility-note" style="margin-bottom:8px">Control automatic backup cadence and retention for the managed backup vault.</div>
+                    <div class="utility-note" style="margin-bottom:8px" data-i18n="backupScheduleNote">Control automatic backup cadence and retention for the managed backup vault.</div>
                     <div class="setting-row" style="justify-content:space-between;align-items:center;gap:12px">
-                        <span class="script-counter" id="backupScheduleSummary">Loading…</span>
-                        <span class="utility-inline-status" id="backupScheduleStatus">Loading backup schedule…</span>
+                        <span class="script-counter" id="backupScheduleSummary" data-i18n="loadingEllipsis">Loading...</span>
+                        <span class="utility-inline-status" id="backupScheduleStatus" data-i18n="backupScheduleLoading">Loading backup schedule...</span>
                     </div>
                     <div class="setting-row">
-                        <span class="utility-inline-status" id="backupNextRunStatus">Calculating next run…</span>
+                        <span class="utility-inline-status" id="backupNextRunStatus" data-i18n="backupNextRunCalculating">Calculating next run...</span>
                     </div>
                     <div class="setting-row">
-                        <label><input type="checkbox" id="backupEnabled"> Enable automatic backups</label>
+                        <label><input type="checkbox" id="backupEnabled"> <span data-i18n="backupEnableAutomatic">Enable automatic backups</span></label>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Schedule:</span>
+                        <span class="label-text" data-i18n="backupScheduleLabel">Schedule:</span>
                         <select class="select-field" id="backupScheduleType">
-                            <option value="manual">Manual only</option>
-                            <option value="daily">Daily</option>
-                            <option value="weekly">Weekly</option>
-                            <option value="onChange">After script changes</option>
+                            <option value="manual" data-i18n="backupScheduleManual">Manual only</option>
+                            <option value="daily" data-i18n="backupScheduleDaily">Daily</option>
+                            <option value="weekly" data-i18n="backupScheduleWeekly">Weekly</option>
+                            <option value="onChange" data-i18n="backupScheduleOnChange">After script changes</option>
                         </select>
                     </div>
                     <div class="setting-row" id="backupHourRow">
-                        <span class="label-text">Hour:</span>
+                        <span class="label-text" data-i18n="backupHourLabel">Hour:</span>
                         <input type="number" class="input-field" id="backupHour" min="0" max="23" style="width:80px">
-                        <span class="utility-inline-status">24-hour local time</span>
+                        <span class="utility-inline-status" data-i18n="backupHourHelp">24-hour local time</span>
                     </div>
                     <div class="setting-row" id="backupDayRow">
-                        <span class="label-text">Day:</span>
+                        <span class="label-text" data-i18n="backupDayLabel">Day:</span>
                         <select class="select-field" id="backupDayOfWeek">
-                            <option value="0">Sunday</option>
-                            <option value="1">Monday</option>
-                            <option value="2">Tuesday</option>
-                            <option value="3">Wednesday</option>
-                            <option value="4">Thursday</option>
-                            <option value="5">Friday</option>
-                            <option value="6">Saturday</option>
+                            <option value="0" data-i18n="weekdaySunday">Sunday</option>
+                            <option value="1" data-i18n="weekdayMonday">Monday</option>
+                            <option value="2" data-i18n="weekdayTuesday">Tuesday</option>
+                            <option value="3" data-i18n="weekdayWednesday">Wednesday</option>
+                            <option value="4" data-i18n="weekdayThursday">Thursday</option>
+                            <option value="5" data-i18n="weekdayFriday">Friday</option>
+                            <option value="6" data-i18n="weekdaySaturday">Saturday</option>
                         </select>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Keep:</span>
+                        <span class="label-text" data-i18n="backupKeepLabel">Keep:</span>
                         <input type="number" class="input-field" id="backupMaxBackups" min="1" max="50" style="width:80px">
-                        <span class="utility-inline-status">stored backups</span>
+                        <span class="utility-inline-status" data-i18n="backupStoredBackups">stored backups</span>
                     </div>
                     <div class="setting-row">
-                        <label><input type="checkbox" id="backupNotifyOnSuccess" checked> Notify when a scheduled backup succeeds</label>
+                        <label><input type="checkbox" id="backupNotifyOnSuccess" checked> <span data-i18n="backupNotifySuccess">Notify when a scheduled backup succeeds</span></label>
                     </div>
                     <div class="setting-row">
-                        <label><input type="checkbox" id="backupNotifyOnFailure" checked> Notify if a scheduled backup fails</label>
+                        <label><input type="checkbox" id="backupNotifyOnFailure" checked> <span data-i18n="backupNotifyFailure">Notify if a scheduled backup fails</span></label>
                     </div>
                     <div class="setting-row">
-                        <label><input type="checkbox" id="backupWarnOnStorageFull" checked> Warn when backup storage gets too large</label>
+                        <label><input type="checkbox" id="backupWarnOnStorageFull" checked> <span data-i18n="backupWarnStorageFull">Warn when backup storage gets too large</span></label>
                     </div>
                     <div class="setting-row">
-                        <label><input type="checkbox" id="backupIncludeSettingsCredentials"> Include sync credentials in scheduled backup archives</label>
-                        <span class="utility-inline-status">Off by default. Enables WebDAV credentials, OAuth tokens, and S3 keys inside managed backup ZIPs.</span>
+                        <label><input type="checkbox" id="backupIncludeSettingsCredentials"> <span data-i18n="backupIncludeCredentials">Include sync credentials in scheduled backup archives</span></label>
+                        <span class="utility-inline-status" data-i18n="backupIncludeCredentialsHelp">Off by default. Enables WebDAV credentials, OAuth tokens, and S3 keys inside managed backup ZIPs.</span>
                     </div>
                     <div class="setting-row">
-                        <button type="button" class="btn" id="btnSaveBackupSettings">Save Backup Schedule</button>
+                        <button type="button" class="btn" id="btnSaveBackupSettings" data-i18n="saveBackupSchedule">Save Backup Schedule</button>
                     </div>
                 </div>
             </div>

@@ -174,4 +174,22 @@ describe('dashboard i18n-v2 removal', () => {
     expect(dashboardHtml).toContain('data-i18n="settingsNoMatchesTitle"');
     expect(dashboardHtml).toContain('data-i18n="settingsNoMatchesDescription"');
   });
+
+  it('translates utilities export, cloud, and backup schedule controls', () => {
+    expect(dashboardHtml).toContain('data-i18n="utilitiesOperations"');
+    expect(dashboardHtml).toContain('data-i18n-placeholder="utilitiesSearchPlaceholder"');
+    expect(dashboardHtml).toContain('data-i18n-aria-label="utilitiesCategoryFilters"');
+    expect(dashboardHtml).toContain('data-i18n="exportIncludeStorageLabel"');
+    expect(dashboardHtml).toContain('data-i18n="exportCredentialsRisk"');
+    expect(dashboardHtml).toContain('data-i18n="settingsSyncProviderLabel"');
+    expect(dashboardHtml).toContain('data-i18n="cloudBackupToCloud"');
+    expect(dashboardHtml).toContain('data-i18n="restoreFromFile"');
+    expect(dashboardHtml).toContain('data-i18n="downloadZip"');
+    expect(dashboardHtml).toContain('data-i18n="vaultJsonDescription"');
+    expect(dashboardHtml).toContain('data-i18n="backupScheduleTitle"');
+    expect(dashboardHtml).toContain('data-i18n="backupEnableAutomatic"');
+    expect(dashboardHtml).toContain('data-i18n="weekdayWednesday"');
+    expect(dashboardHtml).toContain('data-i18n="backupIncludeCredentialsHelp"');
+    expect(dashboardHtml).toContain('data-i18n="saveBackupSchedule"');
+  });
 });
