@@ -102,4 +102,22 @@ describe('dashboard i18n-v2 removal', () => {
     expect(dashboardHtml).toContain('data-i18n-title="settingsExternalsHelp"');
     expect(dashboardHtml).toContain('data-i18n="settingsUpdateIntervalLabel"');
   });
+
+  it('translates userscript sync settings, credential fields, and action controls', () => {
+    expect(dashboardHtml).toContain('data-i18n="settingsUserscriptSync"');
+    expect(dashboardHtml).toContain('data-i18n="settingsEnableUserscriptSync"');
+    expect(dashboardHtml).toContain('data-i18n-title="settingsSyncAcrossDevicesHelp"');
+    expect(dashboardHtml).toContain('data-i18n="syncProviderS3Compatible"');
+    expect(dashboardHtml).toContain('data-i18n="settingsFirefoxSyncWebdavOnly"');
+    expect(dashboardHtml).toContain('data-i18n-title="settingsAllowInternalSyncEndpointsHelp"');
+    expect(dashboardHtml).toContain('data-i18n-title="settingsSyncCredentialsSessionOnlyHelp"');
+    expect(dashboardHtml).toContain('data-i18n-aria-label="settingsSyncEncryptionPassphraseAria"');
+    expect(dashboardHtml).toContain('data-i18n-placeholder="settingsS3EndpointPlaceholder"');
+    expect(dashboardHtml).toContain('data-i18n-aria-label="settingsS3SecretKeyAria"');
+    expect(dashboardHtml).toContain('data-i18n="settingsS3CredentialNote"');
+    expect(dashboardHtml).toContain('data-i18n-placeholder="settingsWebdavUrlPlaceholder"');
+    expect(dashboardHtml).toContain('data-i18n="settingsSyncTokenStorageDisclosure"');
+    expect(dashboardHtml).toContain('data-i18n="syncDownloadPreview"');
+    expect(dashboardHtml).toContain('data-i18n="syncSaveProviderSettings"');
+  });
 });

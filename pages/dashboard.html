@@ -6752,77 +6752,77 @@
 
             <!-- Userscript Sync Section -->
             <div class="settings-section" data-config-level="advanced">
-                <div class="section-label" data-i18n="settingsSync">Userscript Sync</div>
+                <div class="section-label" data-i18n="settingsUserscriptSync">Userscript Sync</div>
                 <div class="section-content">
                     <div class="setting-row">
-                        <label><input type="checkbox" id="settingsEnableSync"> Enable Userscript Sync</label>
-                        <span class="help-icon" title="Sync scripts across devices">?</span>
+                        <label><input type="checkbox" id="settingsEnableSync"> <span data-i18n="settingsEnableUserscriptSync">Enable Userscript Sync</span></label>
+                        <span class="help-icon" title="Sync scripts across devices" data-i18n-title="settingsSyncAcrossDevicesHelp">?</span>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Provider:</span>
+                        <span class="label-text" data-i18n="settingsSyncProviderLabel">Provider:</span>
                         <select class="select-field" id="settingsSyncType">
-                            <option value="none" selected>Not configured</option>
-                            <option value="webdav">WebDAV</option>
-                            <option value="googledrive">Google Drive</option>
-                            <option value="dropbox">Dropbox</option>
-                            <option value="onedrive">OneDrive</option>
-                            <option value="s3">S3-compatible (AWS / R2 / MinIO / B2)</option>
+                            <option value="none" selected data-i18n="syncNotConfigured">Not configured</option>
+                            <option value="webdav" data-i18n="syncProviderWebdav">WebDAV</option>
+                            <option value="googledrive" data-i18n="syncProviderGoogleDrive">Google Drive</option>
+                            <option value="dropbox" data-i18n="syncProviderDropbox">Dropbox</option>
+                            <option value="onedrive" data-i18n="syncProviderOneDrive">OneDrive</option>
+                            <option value="s3" data-i18n="syncProviderS3Compatible">S3-compatible (AWS / R2 / MinIO / B2)</option>
                         </select>
                     </div>
                     <div class="setting-row" id="firefoxSyncNote" hidden>
-                        <span class="utility-inline-status">Firefox build currently supports WebDAV sync only.</span>
+                        <span class="utility-inline-status" data-i18n="settingsFirefoxSyncWebdavOnly">Firefox build currently supports WebDAV sync only.</span>
                     </div>
                     <div class="setting-row">
-                        <label><input type="checkbox" id="settingsAllowInternalSyncEndpoints"> Allow local/private sync endpoints</label>
-                        <span class="help-icon" title="Advanced: permits WebDAV/S3 sync to localhost, LAN, link-local, or private IPv6 endpoints. Leave off unless you operate the server.">!</span>
+                        <label><input type="checkbox" id="settingsAllowInternalSyncEndpoints"> <span data-i18n="settingsAllowInternalSyncEndpoints">Allow local/private sync endpoints</span></label>
+                        <span class="help-icon" title="Advanced: permits WebDAV/S3 sync to localhost, LAN, link-local, or private IPv6 endpoints. Leave off unless you operate the server." data-i18n-title="settingsAllowInternalSyncEndpointsHelp">!</span>
                     </div>
                     <div class="setting-row">
-                        <label><input type="checkbox" id="settingsSyncCredentialsSessionOnly"> Keep sync credentials for this browser session only</label>
-                        <span class="help-icon" title="Stores provider tokens, passwords, endpoint metadata, and the sync passphrase in session storage instead of persistent settings. Reconnect after browser restart.">?</span>
+                        <label><input type="checkbox" id="settingsSyncCredentialsSessionOnly"> <span data-i18n="settingsSyncCredentialsSessionOnly">Keep sync credentials for this browser session only</span></label>
+                        <span class="help-icon" title="Stores provider tokens, passwords, endpoint metadata, and the sync passphrase in session storage instead of persistent settings. Reconnect after browser restart." data-i18n-title="settingsSyncCredentialsSessionOnlyHelp">?</span>
                     </div>
                     <div class="setting-row">
-                        <label><input type="checkbox" id="settingsSyncEncryptionEnabled"> Encrypt sync payloads</label>
-                        <span class="help-icon" title="Encrypts uploaded sync JSON with AES-256-GCM before it leaves this device. Existing plaintext sync files remain readable.">?</span>
+                        <label><input type="checkbox" id="settingsSyncEncryptionEnabled"> <span data-i18n="settingsSyncEncryptionEnabled">Encrypt sync payloads</span></label>
+                        <span class="help-icon" title="Encrypts uploaded sync JSON with AES-256-GCM before it leaves this device. Existing plaintext sync files remain readable." data-i18n-title="settingsSyncEncryptionHelp">?</span>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Encryption passphrase:</span>
-                        <input type="password" class="input-field" id="settingsSyncEncryptionPassphrase" style="width:260px" aria-label="Sync encryption passphrase" autocomplete="new-password" maxlength="4096" aria-describedby="settingsSyncEncryptionPassphraseError">
+                        <span class="label-text" data-i18n="settingsSyncEncryptionPassphraseLabel">Encryption passphrase:</span>
+                        <input type="password" class="input-field" id="settingsSyncEncryptionPassphrase" style="width:260px" aria-label="Sync encryption passphrase" data-i18n-aria-label="settingsSyncEncryptionPassphraseAria" autocomplete="new-password" maxlength="4096" aria-describedby="settingsSyncEncryptionPassphraseError">
                         <span class="setting-error" id="settingsSyncEncryptionPassphraseError" hidden></span>
                     </div>
 
                     <!-- S3-compatible Settings (hidden by default) -->
                     <div id="syncS3Settings" class="sync-provider-settings" style="display:none; margin-top: 10px; padding: 10px; background: var(--bg-input); border-radius: 4px;">
                         <div class="setting-row">
-                            <span class="label-text">Endpoint:</span>
-                            <input type="url" id="settingsS3Endpoint" placeholder="https://s3.us-east-1.amazonaws.com" class="input-field" aria-label="S3 endpoint URL" inputmode="url" autocomplete="url" aria-describedby="settingsS3EndpointError">
+                            <span class="label-text" data-i18n="settingsS3EndpointLabel">Endpoint:</span>
+                            <input type="url" id="settingsS3Endpoint" placeholder="https://s3.us-east-1.amazonaws.com" data-i18n-placeholder="settingsS3EndpointPlaceholder" class="input-field" aria-label="S3 endpoint URL" data-i18n-aria-label="settingsS3EndpointAria" inputmode="url" autocomplete="url" aria-describedby="settingsS3EndpointError">
                             <span class="setting-error" id="settingsS3EndpointError" hidden></span>
                         </div>
                         <div class="setting-row">
-                            <span class="label-text">Region:</span>
-                            <input type="text" id="settingsS3Region" placeholder="us-east-1 (use 'auto' for Cloudflare R2)" class="input-field" aria-label="S3 region" autocomplete="off" pattern="^(auto|[A-Za-z0-9][A-Za-z0-9._-]{0,63})$" aria-describedby="settingsS3RegionError">
+                            <span class="label-text" data-i18n="settingsS3RegionLabel">Region:</span>
+                            <input type="text" id="settingsS3Region" placeholder="us-east-1 (use 'auto' for Cloudflare R2)" data-i18n-placeholder="settingsS3RegionPlaceholder" class="input-field" aria-label="S3 region" data-i18n-aria-label="settingsS3RegionAria" autocomplete="off" pattern="^(auto|[A-Za-z0-9][A-Za-z0-9._-]{0,63})$" aria-describedby="settingsS3RegionError">
                             <span class="setting-error" id="settingsS3RegionError" hidden></span>
                         </div>
                         <div class="setting-row">
-                            <span class="label-text">Bucket:</span>
-                            <input type="text" id="settingsS3Bucket" placeholder="scriptvault-backups" class="input-field" aria-label="S3 bucket name" autocomplete="off" pattern="^[a-zA-Z0-9][a-zA-Z0-9.-]{1,61}[a-zA-Z0-9]$" aria-describedby="settingsS3BucketError">
+                            <span class="label-text" data-i18n="settingsS3BucketLabel">Bucket:</span>
+                            <input type="text" id="settingsS3Bucket" placeholder="scriptvault-backups" data-i18n-placeholder="settingsS3BucketPlaceholder" class="input-field" aria-label="S3 bucket name" data-i18n-aria-label="settingsS3BucketAria" autocomplete="off" pattern="^[a-zA-Z0-9][a-zA-Z0-9.-]{1,61}[a-zA-Z0-9]$" aria-describedby="settingsS3BucketError">
                             <span class="setting-error" id="settingsS3BucketError" hidden></span>
                         </div>
                         <div class="setting-row">
-                            <span class="label-text">Access Key ID:</span>
-                            <input type="text" id="settingsS3AccessKeyId" autocomplete="off" class="input-field" aria-label="S3 access key ID" maxlength="256" aria-describedby="settingsS3AccessKeyIdError">
+                            <span class="label-text" data-i18n="settingsS3AccessKeyIdLabel">Access Key ID:</span>
+                            <input type="text" id="settingsS3AccessKeyId" autocomplete="off" class="input-field" aria-label="S3 access key ID" data-i18n-aria-label="settingsS3AccessKeyIdAria" maxlength="256" aria-describedby="settingsS3AccessKeyIdError">
                             <span class="setting-error" id="settingsS3AccessKeyIdError" hidden></span>
                         </div>
                         <div class="setting-row">
-                            <span class="label-text">Secret Key:</span>
-                            <input type="password" id="settingsS3SecretKey" autocomplete="new-password" class="input-field" aria-label="S3 secret access key" maxlength="1024" aria-describedby="settingsS3SecretKeyError">
+                            <span class="label-text" data-i18n="settingsS3SecretKeyLabel">Secret Key:</span>
+                            <input type="password" id="settingsS3SecretKey" autocomplete="new-password" class="input-field" aria-label="S3 secret access key" data-i18n-aria-label="settingsS3SecretKeyAria" maxlength="1024" aria-describedby="settingsS3SecretKeyError">
                             <span class="setting-error" id="settingsS3SecretKeyError" hidden></span>
                         </div>
                         <div class="setting-row">
-                            <span class="label-text">Object Key (optional):</span>
-                            <input type="text" id="settingsS3ObjectKey" placeholder="scriptvault-backup.json" class="input-field" aria-label="S3 object key override" autocomplete="off" maxlength="1024" aria-describedby="settingsS3ObjectKeyError">
+                            <span class="label-text" data-i18n="settingsS3ObjectKeyLabel">Object Key (optional):</span>
+                            <input type="text" id="settingsS3ObjectKey" placeholder="scriptvault-backup.json" data-i18n-placeholder="settingsS3ObjectKeyPlaceholder" class="input-field" aria-label="S3 object key override" data-i18n-aria-label="settingsS3ObjectKeyAria" autocomplete="off" maxlength="1024" aria-describedby="settingsS3ObjectKeyError">
                             <span class="setting-error" id="settingsS3ObjectKeyError" hidden></span>
                         </div>
-                        <div class="setting-row" style="font-size:0.6875rem;color:var(--text-muted);line-height:1.4">
+                        <div class="setting-row" style="font-size:0.6875rem;color:var(--text-muted);line-height:1.4" data-i18n="settingsS3CredentialNote">
                             Credentials are AWS SigV4-signed and sent only to the configured endpoint. Cloudflare R2 uses region "auto"; MinIO and Backblaze B2 use path-style addressing (default for non-AWS endpoints).
                         </div>
                     </div>
@@ -6830,18 +6830,18 @@
                     <!-- WebDAV Settings (hidden by default) -->
                     <div id="syncWebdavSettings" class="sync-provider-settings" style="display:none; margin-top: 10px; padding: 10px; background: var(--bg-input); border-radius: 4px;">
                         <div class="setting-row">
-                            <span class="label-text">WebDAV URL:</span>
-                            <input type="url" class="input-field wide" id="settingsWebdavUrl" placeholder="https://your-server.com/dav/" aria-label="WebDAV URL" inputmode="url" autocomplete="url" aria-describedby="settingsWebdavUrlError">
+                            <span class="label-text" data-i18n="settingsWebdavUrlLabel">WebDAV URL:</span>
+                            <input type="url" class="input-field wide" id="settingsWebdavUrl" placeholder="https://your-server.com/dav/" data-i18n-placeholder="settingsWebdavUrlPlaceholder" aria-label="WebDAV URL" data-i18n-aria-label="settingsWebdavUrlAria" inputmode="url" autocomplete="url" aria-describedby="settingsWebdavUrlError">
                             <span class="setting-error" id="settingsWebdavUrlError" hidden></span>
                         </div>
                         <div class="setting-row">
-                            <span class="label-text">Username:</span>
-                            <input type="text" class="input-field" id="settingsWebdavUsername" style="width:200px" aria-label="WebDAV username" autocomplete="username" maxlength="1024" aria-describedby="settingsWebdavUsernameError">
+                            <span class="label-text" data-i18n="settingsWebdavUsernameLabel">Username:</span>
+                            <input type="text" class="input-field" id="settingsWebdavUsername" style="width:200px" aria-label="WebDAV username" data-i18n-aria-label="settingsWebdavUsernameAria" autocomplete="username" maxlength="1024" aria-describedby="settingsWebdavUsernameError">
                             <span class="setting-error" id="settingsWebdavUsernameError" hidden></span>
                         </div>
                         <div class="setting-row">
-                            <span class="label-text">Password:</span>
-                            <input type="password" class="input-field" id="settingsWebdavPassword" style="width:200px" aria-label="WebDAV password" autocomplete="current-password" maxlength="4096" aria-describedby="settingsWebdavPasswordError">
+                            <span class="label-text" data-i18n="settingsWebdavPasswordLabel">Password:</span>
+                            <input type="password" class="input-field" id="settingsWebdavPassword" style="width:200px" aria-label="WebDAV password" data-i18n-aria-label="settingsWebdavPasswordAria" autocomplete="current-password" maxlength="4096" aria-describedby="settingsWebdavPasswordError">
                             <span class="setting-error" id="settingsWebdavPasswordError" hidden></span>
                         </div>
                     </div>
@@ -6849,50 +6849,50 @@
                     <!-- OAuth Settings (hidden by default) -->
                     <div id="syncOAuthSettings" class="sync-provider-settings" style="display:none; margin-top: 10px; padding: 10px; background: var(--bg-input); border-radius: 4px;">
                         <div class="setting-row">
-                            <span class="label-text">Status:</span>
-                            <span id="oauthStatus" class="sync-status disconnected">Not connected</span>
+                            <span class="label-text" data-i18n="settingsSyncStatusLabel">Status:</span>
+                            <span id="oauthStatus" class="sync-status disconnected" data-i18n="syncDisconnected">Not connected</span>
                         </div>
                         <div class="setting-row" id="oauthUserRow" style="display:none">
-                            <span class="label-text">Account:</span>
+                            <span class="label-text" data-i18n="settingsSyncAccountLabel">Account:</span>
                             <span id="oauthUser" class="sync-user"></span>
                         </div>
                         <div class="setting-row">
-                            <button type="button" class="btn btn-primary" id="btnConnectOAuth">Connect</button>
-                            <button type="button" class="btn btn-danger" id="btnDisconnectOAuth" style="display:none">Disconnect</button>
+                            <button type="button" class="btn btn-primary" id="btnConnectOAuth" data-i18n="syncConnect">Connect</button>
+                            <button type="button" class="btn btn-danger" id="btnDisconnectOAuth" style="display:none" data-i18n="syncDisconnect">Disconnect</button>
                         </div>
                     </div>
                     
                     <div class="setting-row" style="margin-top: 10px;">
-                        <span class="label-text">Last sync:</span>
-                        <span id="lastSyncTime" style="color:var(--text-secondary)">Never</span>
+                        <span class="label-text" data-i18n="settingsSyncLastSyncLabel">Last sync:</span>
+                        <span id="lastSyncTime" style="color:var(--text-secondary)" data-i18n="intervalNever">Never</span>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Health:</span>
-                        <span id="syncHealthStatus" class="utility-inline-status" role="status" aria-live="polite">Not checked</span>
+                        <span class="label-text" data-i18n="settingsSyncHealthLabel">Health:</span>
+                        <span id="syncHealthStatus" class="utility-inline-status" role="status" aria-live="polite" data-i18n="settingsNotChecked">Not checked</span>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Token storage:</span>
-                        <span id="syncStorageDisclosure" class="utility-inline-status">Choose a provider to inspect stored sync credentials.</span>
+                        <span class="label-text" data-i18n="settingsSyncTokenStorageLabel">Token storage:</span>
+                        <span id="syncStorageDisclosure" class="utility-inline-status" data-i18n="settingsSyncTokenStorageDisclosure">Choose a provider to inspect stored sync credentials.</span>
                     </div>
                     <div class="setting-row">
-                        <button type="button" class="btn" id="btnSyncNow">Sync Now</button>
-                        <button type="button" class="btn" id="btnSyncCheckHealth">Check Health</button>
-                        <button type="button" class="btn" id="btnSyncPreview">Preview Sync</button>
-                        <button type="button" class="btn" id="btnSyncPreviewDownload" disabled>Download Preview</button>
-                        <button type="button" class="btn btn-danger" id="btnSyncRevoke">Revoke / Clear Access</button>
-                        <button type="button" class="btn" id="btnSyncReset">Clear Log</button>
+                        <button type="button" class="btn" id="btnSyncNow" data-i18n="syncNow">Sync Now</button>
+                        <button type="button" class="btn" id="btnSyncCheckHealth" data-i18n="syncCheckHealth">Check Health</button>
+                        <button type="button" class="btn" id="btnSyncPreview" data-i18n="syncPreview">Preview Sync</button>
+                        <button type="button" class="btn" id="btnSyncPreviewDownload" disabled data-i18n="syncDownloadPreview">Download Preview</button>
+                        <button type="button" class="btn btn-danger" id="btnSyncRevoke" data-i18n="syncRevokeClearAccess">Revoke / Clear Access</button>
+                        <button type="button" class="btn" id="btnSyncReset" data-i18n="syncClearLog">Clear Log</button>
                     </div>
                     <div class="setting-row">
                         <pre id="syncPreviewSummary" class="utility-inline-status" aria-live="polite" style="display:none; white-space:pre-wrap; width:100%; margin:0; padding:10px; background:var(--bg-input); border-radius:4px;"></pre>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Recent Sync Log:</span>
+                        <span class="label-text" data-i18n="syncRecentLogLabel">Recent Sync Log:</span>
                     </div>
                     <div class="setting-row">
                         <textarea class="textarea-field" id="syncLog" readonly style="min-height: 80px; font-family: monospace; font-size: 0.6875rem;"></textarea>
                     </div>
                     <div class="setting-row">
-                        <button type="button" class="btn" id="btnSaveSync">Save Provider Settings</button>
+                        <button type="button" class="btn" id="btnSaveSync" data-i18n="syncSaveProviderSettings">Save Provider Settings</button>
                     </div>
                 </div>
             </div>
