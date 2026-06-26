@@ -4,7 +4,7 @@
     <script>document.documentElement.dir = chrome.i18n?.getMessage?.('@@bidi_dir') || 'ltr';</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ScriptVault Dashboard</title>
+    <title data-i18n="dashboardTitle">ScriptVault Dashboard</title>
     <!-- CodeMirror minimal (lint CSS only — editor is now Monaco via sandboxed iframe) -->
     <link rel="stylesheet" href="../lib/codemirror/addon/lint/lint.css">
     <link rel="stylesheet" href="theme-tokens.css">
@@ -6200,7 +6200,7 @@
             <div class="tm-logo">
                 <img src="../images/icon48.png" alt="ScriptVault" width="24" height="24">
                 <div class="tm-logo-text">
-                    <h1>ScriptVault<sup id="headerVersion"></sup></h1>
+                    <h1><span data-i18n="appName">ScriptVault</span><sup id="headerVersion"></sup></h1>
                 </div>
                 <a class="header-icon-btn" href="https://github.com/SysAdminDoc/ScriptVault" target="_blank" title="GitHub" rel="noopener" aria-label="Open ScriptVault on GitHub">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -6327,38 +6327,38 @@
                         </label>
                         <select id="bulkActionSelect" class="select-field bulk-select" title="Bulk action" aria-label="Bulk action" data-i18n-title="bulkAction" data-i18n-aria-label="bulkAction" disabled>
                             <option value="" data-i18n="chooseAction">Choose Action</option>
-                            <option value="enable">Enable</option>
-                            <option value="disable">Disable</option>
-                            <option value="export">Export</option>
-                            <option value="update">Check for Updates</option>
-                            <option value="reset">Factory Reset</option>
-                            <option value="delete">Delete</option>
+                            <option value="enable" data-i18n="enabled">Enable</option>
+                            <option value="disable" data-i18n="disabled">Disable</option>
+                            <option value="export" data-i18n="exportAction">Export</option>
+                            <option value="update" data-i18n="checkUpdates">Check for Updates</option>
+                            <option value="reset" data-i18n="factoryReset">Factory Reset</option>
+                            <option value="delete" data-i18n="delete">Delete</option>
                         </select>
-                        <button type="button" class="btn bulk-btn" id="btnBulkApply" disabled>Apply</button>
+                        <button type="button" class="btn bulk-btn" id="btnBulkApply" data-i18n="apply" disabled>Apply</button>
                     </div>
                     <div class="toolbar-divider"></div>
                     <select id="filterSelect" class="select-field bulk-select" title="Filter scripts" aria-label="Filter scripts" data-i18n-title="filterScripts" data-i18n-aria-label="filterScripts">
-                        <option value="all">All</option>
+                        <option value="all" data-i18n="scriptFilterAll">All</option>
                         <option value="enabled" data-i18n="enabled">Enabled</option>
                         <option value="disabled" data-i18n="disabled">Disabled</option>
-                        <option disabled>--- Status ---</option>
-                        <option value="attention">Needs Review</option>
-                        <option value="pinned">Pinned</option>
-                        <option value="local">Local Edits</option>
-                        <option value="remote">Remote Source</option>
-                        <option value="has-errors">Has Errors</option>
-                        <option value="has-updates">Has Update URL</option>
-                        <option value="no-url">No Update URL</option>
-                        <option disabled>--- Grants ---</option>
-                        <option value="grant:xhr">Uses XHR</option>
-                        <option value="grant:storage">Uses Storage</option>
-                        <option value="grant:style">Uses AddStyle</option>
-                        <option value="grant:none">Grant None</option>
-                        <option disabled>--- Scope ---</option>
-                        <option value="scope:broad">Broad Match (*)</option>
-                        <option value="scope:single">Single Site</option>
+                        <option disabled data-i18n="scriptFilterStatusGroup">--- Status ---</option>
+                        <option value="attention" data-i18n="scriptFilterNeedsReview">Needs Review</option>
+                        <option value="pinned" data-i18n="scriptFilterPinned">Pinned</option>
+                        <option value="local" data-i18n="scriptFilterLocalEdits">Local Edits</option>
+                        <option value="remote" data-i18n="scriptFilterRemoteSource">Remote Source</option>
+                        <option value="has-errors" data-i18n="scriptFilterHasErrors">Has Errors</option>
+                        <option value="has-updates" data-i18n="scriptFilterHasUpdateUrl">Has Update URL</option>
+                        <option value="no-url" data-i18n="scriptFilterNoUpdateUrl">No Update URL</option>
+                        <option disabled data-i18n="scriptFilterGrantsGroup">--- Grants ---</option>
+                        <option value="grant:xhr" data-i18n="scriptFilterUsesXhr">Uses XHR</option>
+                        <option value="grant:storage" data-i18n="scriptFilterUsesStorage">Uses Storage</option>
+                        <option value="grant:style" data-i18n="scriptFilterUsesAddStyle">Uses AddStyle</option>
+                        <option value="grant:none" data-i18n="scriptFilterGrantNone">Grant None</option>
+                        <option disabled data-i18n="scriptFilterScopeGroup">--- Scope ---</option>
+                        <option value="scope:broad" data-i18n="scriptFilterBroadMatch">Broad Match (*)</option>
+                        <option value="scope:single" data-i18n="scriptFilterSingleSite">Single Site</option>
                     </select>
-                    <span class="script-counter" id="scriptCounter">0 scripts</span>
+                    <span class="script-counter" id="scriptCounter" data-i18n="scriptCounterInitial">0 scripts</span>
                     <div class="search-box" role="search" aria-label="Search installed scripts" data-i18n-aria-label="searchScripts">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                         <input type="text" id="scriptSearch" name="script_search" placeholder="Search scripts or code:fetch" title="Search by script name, domain, tag, or code:fetch" aria-label="Search scripts by name, domain, tag, or code:fetch" data-i18n-placeholder="searchScriptsCode" data-i18n-title="searchScriptsCodeTitle" data-i18n-aria-label="searchScriptsCodeAria" aria-describedby="scriptCounter" autocomplete="off" spellcheck="false">
@@ -6488,11 +6488,11 @@
                     </div>
                     <div class="settings-summary">
                         <span class="settings-summary-label" data-i18n="settingsVisibleLabel">Visible</span>
-                        <strong id="settingsVisibleSummary">0 sections</strong>
+                        <strong id="settingsVisibleSummary" data-i18n="settingsSectionsInitial">0 sections</strong>
                     </div>
                     <div class="settings-summary">
                         <span class="settings-summary-label" data-i18n="settingsAdvanced">Advanced</span>
-                        <strong id="settingsAdvancedSummary">0 shown</strong>
+                        <strong id="settingsAdvancedSummary" data-i18n="settingsAdvancedInitial">0 shown</strong>
                     </div>
                 </div>
             </div>
@@ -6510,7 +6510,7 @@
                     <button type="button" class="settings-filter" data-settings-filter="recovery" data-i18n="settingsFilterRecovery">Recovery</button>
                 </div>
             </div>
-            <div class="settings-filter-status" id="settingsFilterStatus">Showing all sections</div>
+            <div class="settings-filter-status" id="settingsFilterStatus" data-i18n="settingsShowingAllSections">Showing all sections</div>
             <div class="settings-sections" id="settingsSections">
             <!-- General Section -->
             <div class="settings-section">
@@ -7351,15 +7351,15 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                     </div>
                     <div class="utilities-summary">
                         <span class="utilities-summary-label" data-i18n="utilitiesImports">Imports</span>
-                        <strong id="utilitiesImportSummary">4 sources</strong>
+                        <strong id="utilitiesImportSummary" data-i18n="utilitiesImportSourcesInitial">4 sources</strong>
                     </div>
                     <div class="utilities-summary">
                         <span class="utilities-summary-label" data-i18n="utilitiesWorkspaces">Workspaces</span>
-                        <strong id="utilitiesWorkspaceSummary">0 saved</strong>
+                        <strong id="utilitiesWorkspaceSummary" data-i18n="utilitiesWorkspaceInitial">0 saved</strong>
                     </div>
                     <div class="utilities-summary">
                         <span class="utilities-summary-label" data-i18n="utilitiesVisible">Visible</span>
-                        <strong id="utilitiesVisibleSummary">0 sections</strong>
+                        <strong id="utilitiesVisibleSummary" data-i18n="utilitiesVisibleInitial">0 sections</strong>
                     </div>
                 </div>
             </div>
@@ -7966,7 +7966,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                         </div>
                         <div class="help-summary">
                             <span class="help-summary-label" data-i18n="helpThemeSummaryLabel">Theme</span>
-                            <strong id="helpThemeSummary">Dark</strong>
+                            <strong id="helpThemeSummary" data-i18n="layoutDark">Dark</strong>
                         </div>
                         <div class="help-summary">
                             <span class="help-summary-label" data-i18n="helpScriptsSummaryLabel">Scripts</span>
@@ -8195,7 +8195,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                     <div class="about-brand">
                         <img src="../images/icon128.png" alt="ScriptVault" width="128" height="128">
                         <div class="about-brand-copy">
-                            <h2>ScriptVault</h2>
+                            <h2 data-i18n="appName">ScriptVault</h2>
                             <p class="version" id="aboutVersion"></p>
                             <p class="version" id="aboutBrowserBuild"></p>
                             <p data-i18n="helpAboutDescription">A lightweight userscript manager with a fast local control surface and a deliberate editing workspace.</p>
@@ -8242,14 +8242,14 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
         <div class="editor-header">
             <div class="editor-header-main">
                 <div class="editor-heading">
-                    <span class="editor-eyebrow" id="editorEyebrow">Userscript Editor</span>
+                    <span class="editor-eyebrow" id="editorEyebrow" data-i18n="editorUserscriptEditor">Userscript Editor</span>
                     <div class="editor-title-row">
-                        <h2 class="editor-title" id="editorTitle">Edit Script</h2>
-                        <span class="editor-save-state" id="editorSaveState" data-state="clean" role="status" aria-live="polite" aria-atomic="true">Saved</span>
+                        <h2 class="editor-title" id="editorTitle" data-i18n="editorEditScript">Edit Script</h2>
+                        <span class="editor-save-state" id="editorSaveState" data-state="clean" role="status" aria-live="polite" aria-atomic="true" data-i18n="editorSaved">Saved</span>
                     </div>
-                    <p class="editor-subtitle" id="editorSubtitle">Ready to edit.</p>
+                    <p class="editor-subtitle" id="editorSubtitle" data-i18n="editorReadyToEdit">Ready to edit.</p>
                 </div>
-                <div class="editor-metrics" aria-label="Editor metrics">
+                <div class="editor-metrics" aria-label="Editor metrics" data-i18n-aria-label="editorMetricsAria">
                     <span class="editor-metric editor-line-count" id="editorLineCount"></span>
                     <span class="editor-metric" id="editorCharCount"></span>
                     <span class="editor-metric editor-cursor-pos" id="editorCursorPos"></span>
@@ -8258,41 +8258,41 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 </div>
             </div>
             <div class="editor-actions">
-                <button class="btn" id="btnEditorSave" type="button" data-save-state="clean" title="Save (Ctrl+S)">
+                <button class="btn" id="btnEditorSave" type="button" data-save-state="clean" title="Save (Ctrl+S)" data-i18n-title="editorSaveTitle">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
-                    <span id="btnEditorSaveLabel">Save</span>
+                    <span id="btnEditorSaveLabel" data-i18n="save">Save</span>
                 </button>
-                <button class="btn" id="btnEditorRunNow" type="button" title="Run this script once on the active tab">
+                <button class="btn" id="btnEditorRunNow" type="button" title="Run this script once on the active tab" data-i18n-title="runOnTabTitle">
                     <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 5v14l11-7z"/></svg>
-                    <span>Run on Tab</span>
+                    <span data-i18n="runOnTab">Run on Tab</span>
                 </button>
-                <button class="btn" id="btnEditorPreviewUserCSS" type="button" title="Preview UserCSS on the active tab" aria-pressed="false" hidden>
+                <button class="btn" id="btnEditorPreviewUserCSS" type="button" title="Preview UserCSS on the active tab" data-i18n-title="previewCssTitle" aria-pressed="false" hidden>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16"/><path d="M4 19h16"/><path d="M7 8l-3 4 3 4"/><path d="M17 8l3 4-3 4"/><path d="M14 7l-4 10"/></svg>
-                    <span id="btnEditorPreviewUserCSSLabel">Preview CSS</span>
+                    <span id="btnEditorPreviewUserCSSLabel" data-i18n="previewCss">Preview CSS</span>
                 </button>
                 <button class="btn" id="btnEditorExport" type="button">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                    <span>Export</span>
+                    <span data-i18n="exportAction">Export</span>
                 </button>
                 <button class="btn" id="btnEditorToggle" type="button">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18"/><path d="M6.34 6.34a8 8 0 1 0 11.32 0"/></svg>
-                    <span id="btnEditorToggleLabel">Disable</span>
+                    <span id="btnEditorToggleLabel" data-i18n="disable">Disable</span>
                 </button>
                 <button class="btn" id="btnEditorDuplicate" type="button">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                    <span>Duplicate</span>
+                    <span data-i18n="duplicateAction">Duplicate</span>
                 </button>
                 <button class="btn btn-danger" id="btnEditorDelete" type="button">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3,6 5,6 21,6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                    <span>Delete</span>
+                    <span data-i18n="delete">Delete</span>
                 </button>
-                <button class="btn" id="btnEditorClose" type="button" title="Close editor (Esc)">
+                <button class="btn" id="btnEditorClose" type="button" title="Close editor (Esc)" data-i18n-title="closeEditorTitle">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
-                    <span>Close</span>
+                    <span data-i18n="closeAction">Close</span>
                 </button>
             </div>
         </div>
-        <div class="editor-tabs" role="tablist" aria-label="Script editor panels">
+        <div class="editor-tabs" role="tablist" aria-label="Script editor panels" data-i18n-aria-label="editorPanelsAria">
             <button type="button" class="editor-tab active" id="editorTabCode" role="tab" aria-selected="true" aria-controls="codePanel" tabindex="0" data-panel="code"><span data-i18n="editorTabCode">Code</span></button>
             <button type="button" class="editor-tab" id="editorTabScriptSettings" role="tab" aria-selected="false" aria-controls="scriptsettingsPanel" tabindex="-1" data-panel="scriptsettings"><span data-i18n="editorTabScriptSettings">Settings</span></button>
             <button type="button" class="editor-tab" id="editorTabExternals" role="tab" aria-selected="false" aria-controls="externalsPanel" tabindex="-1" data-panel="externals"><span data-i18n="editorTabExternals">Externals</span></button>
@@ -8300,94 +8300,94 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
             <button type="button" class="editor-tab" id="editorTabInfo" role="tab" aria-selected="false" aria-controls="infoPanel" tabindex="-1" data-panel="info"><span data-i18n="editorTabInfo">Info</span></button>
         </div>
         <div class="editor-toolbar" id="editorToolbar">
-            <button type="button" class="toolbar-btn" id="tbtnUndo" title="Undo (Ctrl+Z)">
+            <button type="button" class="toolbar-btn" id="tbtnUndo" title="Undo (Ctrl+Z)" data-i18n-title="toolbarUndoTitle">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 0118 0 9 9 0 01-9 9 9 9 0 01-7.5-4"/></svg>
-                Undo
+                <span data-i18n="shortcutUndo">Undo</span>
             </button>
-            <button type="button" class="toolbar-btn" id="tbtnRedo" title="Redo (Ctrl+Y)">
+            <button type="button" class="toolbar-btn" id="tbtnRedo" title="Redo (Ctrl+Y)" data-i18n-title="toolbarRedoTitle">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 7v6h-6"/><path d="M21 13a9 9 0 00-18 0 9 9 0 009 9 9 9 0 007.5-4"/></svg>
-                Redo
+                <span data-i18n="shortcutRedo">Redo</span>
             </button>
             <div class="toolbar-separator"></div>
-            <button type="button" class="toolbar-btn" id="tbtnSearch" title="Find (Ctrl+F)">
+            <button type="button" class="toolbar-btn" id="tbtnSearch" title="Find (Ctrl+F)" data-i18n-title="toolbarFindTitle">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-                Find
+                <span data-i18n="shortcutFind">Find</span>
             </button>
-            <button type="button" class="toolbar-btn" id="tbtnReplace" title="Replace (Ctrl+H)">
+            <button type="button" class="toolbar-btn" id="tbtnReplace" title="Replace (Ctrl+H)" data-i18n-title="toolbarReplaceTitle">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><path d="M8 11h6"/><path d="M11 8v6"/></svg>
-                Replace
+                <span data-i18n="shortcutReplace">Replace</span>
             </button>
             <div class="toolbar-separator"></div>
-            <button type="button" class="toolbar-btn" id="tbtnBeautify" title="Format/Beautify Code">
+            <button type="button" class="toolbar-btn" id="tbtnBeautify" title="Format/Beautify Code" data-i18n-title="beautifyTitle">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h10M4 17h6"/></svg>
-                Beautify
+                <span data-i18n="beautifyAction">Beautify</span>
             </button>
-            <button type="button" class="toolbar-btn" id="tbtnLint" title="Check for Errors">
+            <button type="button" class="toolbar-btn" id="tbtnLint" title="Check for Errors" data-i18n-title="lintTitle">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                Lint
+                <span data-i18n="lintAction">Lint</span>
             </button>
             <div class="toolbar-separator"></div>
-            <button type="button" class="toolbar-btn" id="tbtnFoldAll" title="Fold All">
+            <button type="button" class="toolbar-btn" id="tbtnFoldAll" title="Fold All" data-i18n-title="foldTitle">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
-                Fold
+                <span data-i18n="foldAction">Fold</span>
             </button>
-            <button type="button" class="toolbar-btn" id="tbtnUnfoldAll" title="Unfold All">
+            <button type="button" class="toolbar-btn" id="tbtnUnfoldAll" title="Unfold All" data-i18n-title="unfoldTitle">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 15l-6-6-6 6"/></svg>
-                Unfold
+                <span data-i18n="unfoldAction">Unfold</span>
             </button>
             <div class="toolbar-separator"></div>
-            <button type="button" class="toolbar-btn" id="tbtnJumpLine" title="Go to Line (Ctrl+G)">
+            <button type="button" class="toolbar-btn" id="tbtnJumpLine" title="Go to Line (Ctrl+G)" data-i18n-title="goToLineTitle">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                Go to Line
+                <span data-i18n="goToLineAction">Go to Line</span>
             </button>
             <div class="toolbar-separator"></div>
-            <button type="button" class="toolbar-btn" id="tbtnComment" title="Toggle Comment (Ctrl+/)">
+            <button type="button" class="toolbar-btn" id="tbtnComment" title="Toggle Comment (Ctrl+/)" data-i18n-title="toggleCommentTitle">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h7M4 12h16M4 17h11"/><path d="M17 7l3 3-3 3"/></svg>
                 //
             </button>
-            <button type="button" class="toolbar-btn" id="tbtnWordWrap" title="Toggle Word Wrap">
+            <button type="button" class="toolbar-btn" id="tbtnWordWrap" title="Toggle Word Wrap" data-i18n-title="wordWrapTitle">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h15a3 3 0 010 6H9m0 0l3-3m-3 3l3 3"/></svg>
-                Wrap
+                <span data-i18n="wrapAction">Wrap</span>
             </button>
-            <button type="button" class="toolbar-btn" id="tbtnSnippet" title="Insert Code Snippet">
+            <button type="button" class="toolbar-btn" id="tbtnSnippet" title="Insert Code Snippet" data-i18n-title="snippetTitle">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-                Snippet
+                <span data-i18n="snippetAction">Snippet</span>
             </button>
-            <button type="button" class="toolbar-btn" id="tbtnTemplate" title="Open Templates">
+            <button type="button" class="toolbar-btn" id="tbtnTemplate" title="Open Templates" data-i18n-title="templateTitle">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
-                Template
+                <span data-i18n="templateAction">Template</span>
             </button>
-            <button type="button" class="toolbar-btn" id="tbtnPattern" title="Open Pattern Builder">
+            <button type="button" class="toolbar-btn" id="tbtnPattern" title="Open Pattern Builder" data-i18n-title="patternTitle">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M7 4v6M17 4v6"/><path d="M6 14h12M9 11v6M15 11v6"/></svg>
-                Pattern
+                <span data-i18n="patternAction">Pattern</span>
             </button>
-            <button type="button" class="toolbar-btn" id="tbtnDiff" title="Compare saved and current code">
+            <button type="button" class="toolbar-btn" id="tbtnDiff" title="Compare saved and current code" data-i18n-title="diffTitle">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3v18M18 3v18"/><path d="M10 8h8M10 16h8"/></svg>
-                Diff
+                <span data-i18n="diffAction">Diff</span>
             </button>
-            <button type="button" class="toolbar-btn" id="tbtnBindLocalFile" title="Bind local file" aria-describedby="editorLocalWorkspaceStatus" hidden>
+            <button type="button" class="toolbar-btn" id="tbtnBindLocalFile" title="Bind local file" data-i18n-title="bindLocalFileTitle" aria-describedby="editorLocalWorkspaceStatus" hidden>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/></svg>
-                Bind File
+                <span data-i18n="bindFile">Bind File</span>
             </button>
-            <button type="button" class="toolbar-btn" id="tbtnRefreshLocalFile" title="Refresh from local file" aria-describedby="editorLocalWorkspaceStatus" disabled hidden>
+            <button type="button" class="toolbar-btn" id="tbtnRefreshLocalFile" title="Refresh from local file" data-i18n-title="refreshLocalFileTitle" aria-describedby="editorLocalWorkspaceStatus" disabled hidden>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 0 1-15.6 6"/><path d="M3 12A9 9 0 0 1 18.6 6"/><path d="M21 3v6h-6"/><path d="M3 21v-6h6"/></svg>
-                Refresh File
+                <span data-i18n="refreshFile">Refresh File</span>
             </button>
-            <button type="button" class="toolbar-btn" id="tbtnUnbindLocalFile" title="Unbind local file" aria-describedby="editorLocalWorkspaceStatus" disabled hidden>
+            <button type="button" class="toolbar-btn" id="tbtnUnbindLocalFile" title="Unbind local file" data-i18n-title="unbindLocalFileTitle" aria-describedby="editorLocalWorkspaceStatus" disabled hidden>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.07 0l2.12-2.12a5 5 0 0 0-7.07-7.07L11 4.93"/><path d="M14 11a5 5 0 0 0-7.07 0L4.81 13.12a5 5 0 0 0 7.07 7.07L13 19.07"/><path d="M3 3l18 18"/></svg>
-                Unbind
+                <span data-i18n="unbindAction">Unbind</span>
             </button>
-            <button type="button" class="toolbar-btn" id="tbtnPublishGreasyFork" title="Publish to Greasy Fork" disabled>
+            <button type="button" class="toolbar-btn" id="tbtnPublishGreasyFork" title="Publish to Greasy Fork" data-i18n-title="publishGreasyForkTitle" disabled>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12"/><path d="M7 8l5-5 5 5"/><path d="M5 15v4h14v-4"/></svg>
-                Publish
+                <span data-i18n="publishAction">Publish</span>
             </button>
-            <button type="button" class="toolbar-btn" id="tbtnDebug" title="Open Script Debugger">
+            <button type="button" class="toolbar-btn" id="tbtnDebug" title="Open Script Debugger" data-i18n-title="debugTitle">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 8h8v8H8z"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>
-                Debug
+                <span data-i18n="debugAction">Debug</span>
             </button>
-            <button type="button" class="toolbar-btn" id="tbtnShare" title="Share Script">
+            <button type="button" class="toolbar-btn" id="tbtnShare" title="Share Script" data-i18n-title="shareTitle">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 10.6l6.8-4.2M8.6 13.4l6.8 4.2"/></svg>
-                Share
+                <span data-i18n="shareAction">Share</span>
             </button>
         </div>
         <div class="editor-body">
@@ -8399,7 +8399,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                                 src="editor-sandbox.html"
                                 sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
                                 style="width:100%;height:100%;border:none;display:block;"
-                                title="Monaco Editor"></iframe>
+                                title="Monaco Editor" data-i18n-title="monacoEditorTitle"></iframe>
                         <!-- Fallback textarea shown while Monaco loads or if iframe fails -->
                         <textarea id="editorTextarea" style="display:none;width:100%;height:100%;background:#1a1a1a;color:#e0e0e0;font-family:monospace;font-size:0.8125rem;border:none;resize:none;padding:8px;box-sizing:border-box;"></textarea>
                     </div>
@@ -8408,91 +8408,91 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                     <div class="editor-panel-shell">
                         <div class="editor-panel-head">
                             <div class="editor-panel-headline">
-                                <h3>Script Info</h3>
-                                <p>Metadata, runtime health, and update history for the current script.</p>
+                                <h3 data-i18n="scriptInfoTitle">Script Info</h3>
+                                <p data-i18n="scriptInfoDescription">Metadata, runtime health, and update history for the current script.</p>
                             </div>
                         </div>
                         <div class="editor-panel-scroll">
                             <div class="info-panel">
                                 <div class="info-grid">
                                     <div class="info-item">
-                                        <span class="info-label">Name</span>
+                                        <span class="info-label" data-i18n="scriptNameLabel">Name</span>
                                         <span class="info-value" id="infoName">-</span>
                                     </div>
                                     <div class="info-item">
-                                        <span class="info-label">Version</span>
+                                        <span class="info-label" data-i18n="scriptVersionLabel">Version</span>
                                         <span class="info-value" id="infoVersion">-</span>
                                     </div>
                                     <div class="info-item">
-                                        <span class="info-label">Author</span>
+                                        <span class="info-label" data-i18n="scriptAuthorLabel">Author</span>
                                         <span class="info-value" id="infoAuthor">-</span>
                                     </div>
                                     <div class="info-item">
-                                        <span class="info-label">License</span>
+                                        <span class="info-label" data-i18n="scriptLicenseLabel">License</span>
                                         <span class="info-value" id="infoLicense">-</span>
                                     </div>
                                     <div class="info-item info-item-wide">
-                                        <span class="info-label">Description</span>
+                                        <span class="info-label" data-i18n="scriptDescriptionLabel">Description</span>
                                         <span class="info-value" id="infoDescription">-</span>
                                     </div>
                                     <div class="info-item">
-                                        <span class="info-label">Homepage</span>
+                                        <span class="info-label" data-i18n="scriptHomepageLabel">Homepage</span>
                                         <span class="info-value" id="infoHomepage">-</span>
                                     </div>
                                     <div class="info-item">
-                                        <span class="info-label">Update URL</span>
+                                        <span class="info-label" data-i18n="scriptUpdateUrlLabel">Update URL</span>
                                         <span class="info-value" id="infoUpdateUrl">-</span>
                                     </div>
                                     <div class="info-item">
-                                        <span class="info-label">Download URL</span>
+                                        <span class="info-label" data-i18n="scriptDownloadUrlLabel">Download URL</span>
                                         <span class="info-value" id="infoDownloadUrl">-</span>
                                     </div>
                                     <div class="info-item">
-                                        <span class="info-label">Provenance</span>
+                                        <span class="info-label" data-i18n="scriptProvenanceLabel">Provenance</span>
                                         <span class="info-value" id="infoProvenance">-</span>
                                     </div>
                                     <div class="info-item info-item-wide">
-                                        <span class="info-label">Trust Receipt</span>
+                                        <span class="info-label" data-i18n="scriptTrustReceiptLabel">Trust Receipt</span>
                                         <div class="info-value" id="infoTrustReceipt">-</div>
                                     </div>
                                     <div class="info-item info-item-wide">
-                                        <span class="info-label">Publication</span>
-                                        <div class="info-value" id="infoPublicationReceipt">No publish handoff receipt recorded yet</div>
+                                        <span class="info-label" data-i18n="scriptPublicationLabel">Publication</span>
+                                        <div class="info-value" id="infoPublicationReceipt" data-i18n="scriptNoPublishReceipt">No publish handoff receipt recorded yet</div>
                                     </div>
                                     <div class="info-item info-item-wide">
-                                        <span class="info-label">Contribution</span>
+                                        <span class="info-label" data-i18n="scriptContributionLabel">Contribution</span>
                                         <span class="info-value" id="infoContributionURL">-</span>
                                     </div>
                                     <div class="info-item info-item-wide">
-                                        <span class="info-label">Compatible</span>
-                                        <div class="info-tags" id="infoCompatible"><span class="panel-empty-inline">Not specified</span></div>
+                                        <span class="info-label" data-i18n="scriptCompatibleLabel">Compatible</span>
+                                        <div class="info-tags" id="infoCompatible"><span class="panel-empty-inline" data-i18n="notSpecified">Not specified</span></div>
                                     </div>
                                     <div class="info-item info-item-wide">
-                                        <span class="info-label">Grants</span>
+                                        <span class="info-label" data-i18n="scriptGrantsLabel">Grants</span>
                                         <div class="info-tags" id="infoGrants">-</div>
                                     </div>
                                     <div class="info-item info-item-wide">
-                                        <span class="info-label">Matches</span>
+                                        <span class="info-label" data-i18n="scriptMatchesLabel">Matches</span>
                                         <div class="info-tags" id="infoMatches">-</div>
                                     </div>
                                     <div class="info-item info-item-wide">
-                                        <span class="info-label">Resources</span>
+                                        <span class="info-label" data-i18n="scriptResourcesLabel">Resources</span>
                                         <div class="info-value" id="infoResources">-</div>
                                     </div>
                                     <div class="info-item info-item-wide">
-                                        <span class="info-label">Performance</span>
+                                        <span class="info-label" data-i18n="scriptPerformanceLabel">Performance</span>
                                         <div class="info-value" id="infoPerf">
                                             <div id="infoPerfStats" class="perf-stats-grid">-</div>
-                                            <button type="button" class="btn btn-sm btn-danger" id="btnResetStats" style="margin-top:10px;display:none">Reset Stats</button>
+                                            <button type="button" class="btn btn-sm btn-danger" id="btnResetStats" style="margin-top:10px;display:none" data-i18n="resetStats">Reset Stats</button>
                                         </div>
                                     </div>
                                     <div class="info-item info-item-wide">
-                                        <span class="info-label">Conflicts</span>
+                                        <span class="info-label" data-i18n="scriptConflictsLabel">Conflicts</span>
                                         <div class="info-value" id="infoConflicts">-</div>
                                     </div>
                                     <div class="info-item info-item-wide">
-                                        <span class="info-label">Version History</span>
-                                        <div class="info-value" id="infoVersionHistory">No previous versions</div>
+                                        <span class="info-label" data-i18n="versionHistoryLabel">Version History</span>
+                                        <div class="info-value" id="infoVersionHistory" data-i18n="noPreviousVersions">No previous versions</div>
                                     </div>
                                 </div>
                             </div>
@@ -8503,12 +8503,12 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                     <div class="editor-panel-shell">
                         <div class="editor-panel-head">
                             <div class="editor-panel-headline">
-                                <h3>Script Storage</h3>
-                                <p>Inspect and edit the values this script persists through the GM storage APIs.</p>
+                                <h3 data-i18n="scriptStorageTitle">Script Storage</h3>
+                                <p data-i18n="scriptStorageDescription">Inspect and edit the values this script persists through the GM storage APIs.</p>
                             </div>
                             <div class="editor-panel-actions">
-                                <span id="storageSizeInfo" class="script-counter">0 B used</span>
-                                <button type="button" class="btn" id="btnAddStorage">+ Add Value</button>
+                                <span id="storageSizeInfo" class="script-counter" data-i18n="storageUsedEmpty">0 B used</span>
+                                <button type="button" class="btn" id="btnAddStorage" data-i18n="addValue">+ Add Value</button>
                             </div>
                         </div>
                         <div class="editor-panel-scroll">
@@ -8522,99 +8522,99 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                     <div class="editor-panel-shell">
                         <div class="editor-panel-head">
                             <div class="editor-panel-headline">
-                                <h3>Per-Script Settings</h3>
-                                <p>Override updates, execution behavior, sync protection, and URL matching without touching the source code.</p>
+                                <h3 data-i18n="perScriptSettingsTitle">Per-Script Settings</h3>
+                                <p data-i18n="perScriptSettingsDescription">Override updates, execution behavior, sync protection, and URL matching without touching the source code.</p>
                             </div>
                         </div>
                         <div class="editor-panel-scroll">
                             <div class="script-settings-panel">
                                 <div class="settings-section">
                             <!-- Phase 38.8 — Singular "Update" matches VM v2.37.1 + TM split tabs convention. -->
-                            <div class="section-label">Update</div>
+                            <div class="section-label" data-i18n="scriptSettingsUpdateSection">Update</div>
                             <div class="section-content">
                                 <div class="setting-row">
-                                    <label><input type="checkbox" id="scriptAutoUpdate" checked> Auto-update this script</label>
+                                    <label><input type="checkbox" id="scriptAutoUpdate" checked> <span data-i18n="scriptAutoUpdateLabel">Auto-update this script</span></label>
                                 </div>
                                 <div class="setting-row">
-                                    <label><input type="checkbox" id="scriptNotifyUpdates" checked> Notify when updated</label>
+                                    <label><input type="checkbox" id="scriptNotifyUpdates" checked> <span data-i18n="scriptNotifyUpdatedLabel">Notify when updated</span></label>
                                 </div>
                             </div>
                         </div>
 
                                 <div class="settings-section">
-                            <div class="section-label">Sync</div>
+                            <div class="section-label" data-i18n="scriptSettingsSyncSection">Sync</div>
                             <div class="section-content">
                                 <div class="setting-row">
-                                    <label title="When enabled, cloud sync will not overwrite this script's local changes"><input type="checkbox" id="scriptSyncLock"> Lock from cloud sync (protect local edits)</label>
+                                    <label title="When enabled, cloud sync will not overwrite this script's local changes" data-i18n-title="scriptSyncLockTitle"><input type="checkbox" id="scriptSyncLock"> <span data-i18n="scriptSyncLockLabel">Lock from cloud sync (protect local edits)</span></label>
                                 </div>
                                 <div class="setting-row panel-status-inline" id="syncLockStatus" style="display:none">
-                                    Script was manually edited — sync will not overwrite. Uncheck to allow sync.
+                                    <span data-i18n="scriptSyncLockStatus">Script was manually edited — sync will not overwrite. Uncheck to allow sync.</span>
                                 </div>
                             </div>
                         </div>
                         
                                 <div class="settings-section">
-                            <div class="section-label">Execution</div>
+                            <div class="section-label" data-i18n="scriptSettingsExecutionSection">Execution</div>
                             <div class="section-content">
                                 <div class="setting-row">
-                                    <span class="label-text">Run at:</span>
+                                    <span class="label-text" data-i18n="scriptRunAtLabel">Run at:</span>
                                     <select class="select-field" id="scriptRunAt">
-                                        <option value="default">Default (from metadata)</option>
-                                        <option value="document-start">Document Start</option>
-                                        <option value="document-end">Document End</option>
-                                        <option value="document-idle">Document Idle</option>
+                                        <option value="default" data-i18n="scriptRunAtDefaultOption">Default (from metadata)</option>
+                                        <option value="document-start" data-i18n="runAtDocumentStart">Document Start</option>
+                                        <option value="document-end" data-i18n="runAtDocumentEnd">Document End</option>
+                                        <option value="document-idle" data-i18n="runAtDocumentIdle">Document Idle</option>
                                     </select>
                                 </div>
                                 <div class="setting-row">
-                                    <span class="label-text">Inject into:</span>
+                                    <span class="label-text" data-i18n="scriptInjectIntoLabel">Inject into:</span>
                                     <select class="select-field" id="scriptInjectInto">
-                                        <option value="auto">Auto</option>
-                                        <option value="page">Page context</option>
-                                        <option value="content">Content script context</option>
+                                        <option value="auto" data-i18n="scriptInjectAutoOption">Auto</option>
+                                        <option value="page" data-i18n="scriptInjectPageOption">Page context</option>
+                                        <option value="content" data-i18n="scriptInjectContentOption">Content script context</option>
                                     </select>
                                 </div>
                                 <div class="setting-row">
-                                    <span class="label-text">Frame mode:</span>
-                                    <select class="select-field" id="scriptFrameMode" aria-label="Frame mode override">
-                                        <option value="default">Default (@noframes metadata)</option>
-                                        <option value="top">Top frame only</option>
-                                        <option value="all">All frames (force)</option>
+                                    <span class="label-text" data-i18n="scriptFrameModeLabel">Frame mode:</span>
+                                    <select class="select-field" id="scriptFrameMode" aria-label="Frame mode override" data-i18n-aria-label="scriptFrameModeAria">
+                                        <option value="default" data-i18n="scriptFrameDefaultOption">Default (@noframes metadata)</option>
+                                        <option value="top" data-i18n="scriptFrameTopOption">Top frame only</option>
+                                        <option value="all" data-i18n="scriptFrameAllOption">All frames (force)</option>
                                     </select>
                                 </div>
                             </div>
                         </div>
 
                                 <div class="settings-section">
-                            <div class="section-label">Notifications</div>
+                            <div class="section-label" data-i18n="scriptNotificationsSection">Notifications</div>
                             <div class="section-content">
                                 <div class="setting-row">
-                                    <label><input type="checkbox" id="scriptNotifyErrors"> Notify on script errors</label>
+                                    <label><input type="checkbox" id="scriptNotifyErrors"> <span data-i18n="scriptNotifyErrorsLabel">Notify on script errors</span></label>
                                 </div>
                             </div>
                         </div>
 
                                 <div class="settings-section">
-                            <div class="section-label">Configuration</div>
+                            <div class="section-label" data-i18n="scriptConfigurationSection">Configuration</div>
                             <div class="section-content">
                                 <div class="script-config-fields" id="scriptConfigFields"></div>
                             </div>
                         </div>
 
                                 <div class="settings-section">
-                            <div class="section-label">Notes</div>
+                            <div class="section-label" data-i18n="scriptNotesSection">Notes</div>
                             <div class="section-content">
                                 <div class="setting-row">
-                                    <textarea class="textarea-field" id="scriptNotes" rows="3" placeholder="Personal notes about this script…"></textarea>
+                                    <textarea class="textarea-field" id="scriptNotes" rows="3" placeholder="Personal notes about this script..." data-i18n-placeholder="scriptNotesPlaceholder"></textarea>
                                 </div>
                             </div>
                         </div>
 
                         <!-- URL Overrides - Tampermonkey-style -->
                                 <div class="settings-section url-overrides-section">
-                            <div class="section-label">URL Overrides</div>
+                            <div class="section-label" data-i18n="urlOverridesSection">URL Overrides</div>
                             <div class="section-content">
                                 <p class="editor-panel-note">
-                                    Override where this script runs without editing its code. Uncheck "Original" sections to disable them entirely.
+                                    <span data-i18n="urlOverridesDescription">Override where this script runs without editing its code. Uncheck Original sections to disable them entirely.</span>
                                 </p>
                                 
                                 <!-- Original Includes -->
@@ -8622,12 +8622,12 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                                     <div class="url-override-header">
                                         <label class="url-override-toggle">
                                             <input type="checkbox" id="useOriginalIncludes" checked>
-                                            <span class="label-text url-override-title">Original @include</span>
+                                            <span class="label-text url-override-title" data-i18n="originalIncludeLabel">Original @include</span>
                                         </label>
-                                        <span class="help-icon" title="Glob patterns from the script's metadata">?</span>
+                                        <span class="help-icon" title="Glob patterns from the script's metadata" data-i18n-title="metadataGlobPatternsHelp">?</span>
                                     </div>
                                     <div class="url-pattern-list original-patterns" id="originalIncludesList">
-                                        <em>None defined</em>
+                                        <em data-i18n="noneDefined">None defined</em>
                                     </div>
                                 </div>
                                 
@@ -8636,12 +8636,12 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                                     <div class="url-override-header">
                                         <label class="url-override-toggle">
                                             <input type="checkbox" id="useOriginalMatches" checked>
-                                            <span class="label-text url-override-title">Original @match</span>
+                                            <span class="label-text url-override-title" data-i18n="originalMatchLabel">Original @match</span>
                                         </label>
-                                        <span class="help-icon" title="Match patterns from the script's metadata">?</span>
+                                        <span class="help-icon" title="Match patterns from the script's metadata" data-i18n-title="metadataMatchPatternsHelp">?</span>
                                     </div>
                                     <div class="url-pattern-list original-patterns" id="originalMatchesList">
-                                        <em>None defined</em>
+                                        <em data-i18n="noneDefined">None defined</em>
                                     </div>
                                 </div>
                                 
@@ -8650,12 +8650,12 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                                     <div class="url-override-header">
                                         <label class="url-override-toggle">
                                             <input type="checkbox" id="useOriginalExcludes" checked>
-                                            <span class="label-text url-override-title">Original @exclude</span>
+                                            <span class="label-text url-override-title" data-i18n="originalExcludeLabel">Original @exclude</span>
                                         </label>
-                                        <span class="help-icon" title="Exclude patterns from the script's metadata">?</span>
+                                        <span class="help-icon" title="Exclude patterns from the script's metadata" data-i18n-title="metadataExcludePatternsHelp">?</span>
                                     </div>
                                     <div class="url-pattern-list original-patterns" id="originalExcludesList">
-                                        <em>None defined</em>
+                                        <em data-i18n="noneDefined">None defined</em>
                                     </div>
                                 </div>
                                 
@@ -8664,9 +8664,9 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                                 <!-- User Includes -->
                                 <div class="url-override-group">
                                     <div class="url-override-header">
-                                        <span class="label-text url-override-title accent">User @include</span>
+                                        <span class="label-text url-override-title accent" data-i18n="userIncludeLabel">User @include</span>
                                         <div class="url-override-actions">
-                                            <button type="button" class="btn btn-sm" id="btnAddUserInclude" title="Add pattern">+ Add</button>
+                                            <button type="button" class="btn btn-sm" id="btnAddUserInclude" title="Add pattern" data-i18n-title="addPatternTitle" data-i18n="addAction">+ Add</button>
                                         </div>
                                     </div>
                                     <div class="url-pattern-editable" id="userIncludesList">
@@ -8678,9 +8678,9 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                                 <!-- User Matches -->
                                 <div class="url-override-group">
                                     <div class="url-override-header">
-                                        <span class="label-text url-override-title accent">User @match</span>
+                                        <span class="label-text url-override-title accent" data-i18n="userMatchLabel">User @match</span>
                                         <div class="url-override-actions">
-                                            <button type="button" class="btn btn-sm" id="btnAddUserMatch" title="Add pattern">+ Add</button>
+                                            <button type="button" class="btn btn-sm" id="btnAddUserMatch" title="Add pattern" data-i18n-title="addPatternTitle" data-i18n="addAction">+ Add</button>
                                         </div>
                                     </div>
                                     <div class="url-pattern-editable" id="userMatchesList">
@@ -8692,21 +8692,21 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                                 <!-- User Excludes -->
                                 <div class="url-override-group">
                                     <div class="url-override-header">
-                                        <span class="label-text url-override-title danger">User @exclude</span>
+                                        <span class="label-text url-override-title danger" data-i18n="userExcludeLabel">User @exclude</span>
                                         <div class="url-override-actions">
                                             <!-- Phase 39.15 — TM #2780: filter + sort over the
                                                  @exclude list so 50+ pattern lists are manageable. -->
                                             <input type="search" class="input-field pattern-filter-input"
                                                    id="userExcludesFilter"
                                                    data-pattern-filter="userExcludesList"
-                                                   placeholder="Filter…"
-                                                   aria-label="Filter @exclude patterns">
+                                                   placeholder="Filter..." data-i18n-placeholder="filterPlaceholder"
+                                                   aria-label="Filter @exclude patterns" data-i18n-aria-label="filterExcludePatternsAria">
                                             <button type="button" class="btn btn-sm pattern-sort-btn"
                                                     id="userExcludesSortBtn"
                                                     data-pattern-sort="userExcludesList"
                                                     aria-pressed="false"
-                                                    title="Toggle alphabetical sort">A→Z</button>
-                                            <button type="button" class="btn btn-sm" id="btnAddUserExclude" title="Add pattern">+ Add</button>
+                                                    title="Toggle alphabetical sort" data-i18n-title="toggleAlphabeticalSortTitle">A→Z</button>
+                                            <button type="button" class="btn btn-sm" id="btnAddUserExclude" title="Add pattern" data-i18n-title="addPatternTitle" data-i18n="addAction">+ Add</button>
                                         </div>
                                     </div>
                                     <div class="url-pattern-editable" id="userExcludesList">
@@ -8718,8 +8718,8 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                         </div>
                         
                                 <div class="btn-group editor-panel-footer">
-                            <button type="button" class="btn btn-primary" id="btnSaveScriptSettings">Save Settings</button>
-                            <button type="button" class="btn" id="btnResetScriptSettings">Reset to Defaults</button>
+                            <button type="button" class="btn btn-primary" id="btnSaveScriptSettings" data-i18n="saveSettings">Save Settings</button>
+                            <button type="button" class="btn" id="btnResetScriptSettings" data-i18n="resetToDefaults">Reset to Defaults</button>
                                 </div>
                             </div>
                         </div>
@@ -8729,35 +8729,35 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                     <div class="editor-panel-shell">
                         <div class="editor-panel-head">
                             <div class="editor-panel-headline">
-                                <h3>External Resources</h3>
-                                <p>Review `@require` and `@resource` dependencies, then pull in library URLs without leaving the editor.</p>
+                                <h3 data-i18n="externalResourcesTitle">External Resources</h3>
+                                <p data-i18n="externalResourcesDescription">Review @require and @resource dependencies, then pull in library URLs without leaving the editor.</p>
                             </div>
                             <div class="editor-panel-actions">
-                                <button type="button" class="btn" id="btnRefreshExternals" title="Re-fetch all external resources">Refresh All</button>
+                                <button type="button" class="btn" id="btnRefreshExternals" title="Re-fetch all external resources" data-i18n-title="refreshExternalsTitle" data-i18n="refreshAll">Refresh All</button>
                             </div>
                         </div>
                         <div class="editor-panel-scroll">
                             <div class="externals-panel">
                                 <div class="settings-section">
-                            <div class="section-label">Find Libraries</div>
+                            <div class="section-label" data-i18n="findLibrariesTitle">Find Libraries</div>
                             <div class="section-content">
                                 <div class="editor-inline-search">
-                                    <input type="search" class="input-field" id="libSearchInput" name="librarySearch" aria-label="Search CDN libraries" autocomplete="off" spellcheck="false" placeholder="Search CDN libraries (e.g. jquery, lodash, react)…">
-                                    <button type="button" class="btn btn-primary" id="btnLibSearch">Search</button>
+                                    <input type="search" class="input-field" id="libSearchInput" name="librarySearch" aria-label="Search CDN libraries" data-i18n-aria-label="searchCdnLibrariesAria" autocomplete="off" spellcheck="false" placeholder="Search CDN libraries (e.g. jquery, lodash, react)..." data-i18n-placeholder="searchCdnLibrariesPlaceholder">
+                                    <button type="button" class="btn btn-primary" id="btnLibSearch" data-i18n="helpSearchLabel">Search</button>
                                 </div>
-                                <div id="libSearchResults" class="panel-empty-inline" aria-live="polite">Search cdnjs for popular libraries to add as @require</div>
+                                <div id="libSearchResults" class="panel-empty-inline" aria-live="polite" data-i18n="searchCdnjsPrompt">Search cdnjs for popular libraries to add as @require</div>
                             </div>
                         </div>
                                 <div class="settings-section">
                             <div class="section-label">@require</div>
                             <div class="section-content">
-                                <div id="externalRequireList" class="panel-empty-inline">No @require directives</div>
+                                <div id="externalRequireList" class="panel-empty-inline" data-i18n="noRequireDirectives">No @require directives</div>
                             </div>
                         </div>
                                 <div class="settings-section">
                             <div class="section-label">@resource</div>
                             <div class="section-content">
-                                <div id="externalResourceList" class="panel-empty-inline">No @resource directives</div>
+                                <div id="externalResourceList" class="panel-empty-inline" data-i18n="noResourceDirectives">No @resource directives</div>
                             </div>
                                 </div>
                             </div>
@@ -8774,23 +8774,23 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
             <div>
                 <div class="find-scripts-title" id="findScriptsTitle">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                    Find Userscripts
+                    <span data-i18n="findUserscriptsTitle">Find Userscripts</span>
                 </div>
-                <span class="find-scripts-subtitle" id="findScriptsIntro">Search trusted script directories, preview source, and install without leaving the dashboard.</span>
+                <span class="find-scripts-subtitle" id="findScriptsIntro" data-i18n="findUserscriptsIntro">Search trusted script directories, preview source, and install without leaving the dashboard.</span>
             </div>
-            <button class="find-scripts-close" id="btnCloseFindScripts" type="button" aria-label="Close Find Userscripts dialog">&times;</button>
+            <button class="find-scripts-close" id="btnCloseFindScripts" type="button" aria-label="Close Find Userscripts dialog" data-i18n-aria-label="closeFindUserscriptsAria">&times;</button>
         </div>
-        <div class="find-scripts-search" role="search" aria-label="Userscript directory search">
-            <input type="search" id="findScriptsInput" name="find_scripts_query" class="input-field" placeholder="Search by domain or keyword (e.g. youtube.com, dark mode)…" aria-label="Search userscripts by domain or keyword" aria-describedby="findScriptsIntro" autocomplete="off" spellcheck="false">
-            <select id="findScriptsSource" name="find_scripts_source" class="select-field" aria-label="Choose script search source">
+        <div class="find-scripts-search" role="search" aria-label="Userscript directory search" data-i18n-aria-label="userscriptDirectorySearchAria">
+            <input type="search" id="findScriptsInput" name="find_scripts_query" class="input-field" placeholder="Search by domain or keyword (e.g. youtube.com, dark mode)..." data-i18n-placeholder="findScriptsPlaceholder" aria-label="Search userscripts by domain or keyword" data-i18n-aria-label="findScriptsAria" aria-describedby="findScriptsIntro" autocomplete="off" spellcheck="false">
+            <select id="findScriptsSource" name="find_scripts_source" class="select-field" aria-label="Choose script search source" data-i18n-aria-label="findScriptsSourceAria">
                 <option value="greasyfork">GreasyFork</option>
                 <option value="openuserjs">OpenUserJS</option>
                 <option value="github">GitHub</option>
             </select>
-            <button class="toolbar-btn primary" id="btnFindScriptsSearch" type="button" aria-controls="findScriptsResults">Search</button>
+            <button class="toolbar-btn primary" id="btnFindScriptsSearch" type="button" aria-controls="findScriptsResults" data-i18n="helpSearchLabel">Search</button>
         </div>
         <div class="find-scripts-results" id="findScriptsResults" role="status" aria-live="polite" aria-atomic="false" aria-busy="false" tabindex="-1">
-            <div class="find-scripts-empty"><strong>Search script directories</strong><span>Enter a site domain or workflow keyword. Results show install status, source metadata, and a source preview before you install.</span></div>
+            <div class="find-scripts-empty"><strong data-i18n="searchScriptDirectoriesTitle">Search script directories</strong><span data-i18n="searchScriptDirectoriesDescription">Enter a site domain or workflow keyword. Results show install status, source metadata, and a source preview before you install.</span></div>
         </div>
     </div>
 
@@ -8798,8 +8798,8 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
     <div class="modal-overlay" id="modal" hidden aria-hidden="true">
         <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="modalTitle" tabindex="-1">
             <div class="modal-header">
-                <span class="modal-title" id="modalTitle">Modal</span>
-                <button class="modal-close" type="button" aria-label="Close dialog">&times;</button>
+                <span class="modal-title" id="modalTitle" data-i18n="modalFallbackTitle">Modal</span>
+                <button class="modal-close" type="button" aria-label="Close dialog" data-i18n-aria-label="closeDialogAria">&times;</button>
             </div>
             <div class="modal-body" id="modalBody"></div>
             <div class="modal-footer" id="modalActions"></div>
@@ -8836,7 +8836,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
     <!-- Progress Overlay -->
     <div class="progress-overlay" id="progressOverlay" role="dialog" aria-modal="true" aria-labelledby="progressTitle" aria-describedby="progressStatus" aria-hidden="true" aria-busy="false" tabindex="-1" hidden>
         <div class="progress-card">
-            <h2 class="progress-title" id="progressTitle">Working…</h2>
+            <h2 class="progress-title" id="progressTitle" data-i18n="workingEllipsis">Working...</h2>
             <div class="progress-bar-track" id="progressBar" role="progressbar" aria-labelledby="progressTitle" aria-describedby="progressStatus" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
                 <div class="progress-bar-fill" id="progressFill"></div>
             </div>

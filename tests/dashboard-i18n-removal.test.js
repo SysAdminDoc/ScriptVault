@@ -253,4 +253,28 @@ describe('dashboard i18n-v2 removal', () => {
     expect(dashboardJs).toContain("'helpResultsForQuery'");
     expect(dashboardJs).toContain("'helpShowingFilter'");
   });
+
+  it('translates editor overlay and find scripts shell controls', () => {
+    expect(dashboardHtml).toContain('data-i18n="editorUserscriptEditor"');
+    expect(dashboardHtml).toContain('data-i18n-title="editorSaveTitle"');
+    expect(dashboardHtml).toContain('data-i18n-aria-label="editorPanelsAria"');
+    expect(dashboardHtml).toContain('data-i18n="runOnTab"');
+    expect(dashboardHtml).toContain('data-i18n="scriptInfoTitle"');
+    expect(dashboardHtml).toContain('data-i18n="scriptStorageTitle"');
+    expect(dashboardHtml).toContain('data-i18n="perScriptSettingsTitle"');
+    expect(dashboardHtml).toContain('data-i18n="urlOverridesSection"');
+    expect(dashboardHtml).toContain('data-i18n-placeholder="scriptNotesPlaceholder"');
+    expect(dashboardHtml).toContain('data-i18n="externalResourcesTitle"');
+    expect(dashboardHtml).toContain('data-i18n-placeholder="searchCdnLibrariesPlaceholder"');
+    expect(dashboardHtml).toContain('data-i18n="findUserscriptsTitle"');
+    expect(dashboardHtml).toContain('data-i18n-placeholder="findScriptsPlaceholder"');
+    expect(dashboardHtml).toContain('data-i18n="workingEllipsis"');
+    expect(dashboardJs).toContain("'editorSyncedUserscript'");
+    expect(dashboardJs).toContain("'editorTargetPlural'");
+    expect(dashboardJs).toContain("'runOnTabRequiresChrome'");
+    expect(dashboardJs).toContain("'runOnTabOpenScript'");
+    expect(dashboardJs).toContain("'clearPreview'");
+    expect(dashboardJs).toContain("'userCssPreviewOpenDraft'");
+    expect(dashboardJs).toContain("'previewingEllipsis'");
+  });
 });

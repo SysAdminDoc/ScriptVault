@@ -89,6 +89,13 @@
         catppuccin: 'Catppuccin',
         oled: 'OLED'
     };
+    const THEME_LABEL_KEYS = {
+        auto: 'layoutAutoSystem',
+        dark: 'layoutDark',
+        light: 'layoutLight',
+        catppuccin: 'layoutCatppuccinMocha',
+        oled: 'layoutOledBlack'
+    };
 
     function resolveTheme(layout) {
         if (layout === 'auto') {
@@ -6451,7 +6458,8 @@
         const active = state.scripts.filter(s => s.enabled !== false).length;
         const resolvedVisibleCount = visibleCount == null ? getHelpPanelSections().filter(section => !section.hidden).length : visibleCount;
         const actionCount = elements.helpActionButtons?.length || 0;
-        const theme = THEME_LABELS[state.settings.layout || 'dark'] || 'Dark';
+        const currentTheme = state.settings.layout || 'dark';
+        const theme = tDashboard(THEME_LABEL_KEYS[currentTheme] || 'layoutDark', THEME_LABELS[currentTheme] || 'Dark');
 
         if (elements.helpActionSummary) {
             elements.helpActionSummary.textContent = tDashboard('helpLaunchCount', '{count} {launchLabel}', {
@@ -7696,7 +7704,12 @@
             const shown = filtered.length;
             const formattedTotal = numberFormatter.format(total);
             const formattedShown = numberFormatter.format(shown);
-            elements.scriptCounter.textContent = total === shown ? `All ${formattedTotal} scripts` : `Showing ${formattedShown} of ${formattedTotal}`;
+            elements.scriptCounter.textContent = total === shown
+                ? tDashboard('allScriptsCount', 'All {count} scripts', { count: formattedTotal })
+                : tDashboard('scriptsShowingCount', 'Showing {shown} of {total}', {
+                    shown: formattedShown,
+                    total: formattedTotal
+                });
         }
         syncScriptWorkspaceStateToUrl();
 
@@ -8037,7 +8050,7 @@
         tr.querySelector('.script-name-button')?.addEventListener('click', () => openEditorForScript(script.id));
         tr.querySelector('[data-action="edit"]')?.addEventListener('click', () => openEditorForScript(script.id));
         tr.querySelector('[data-action="runNow"]')?.addEventListener('click', async e => {
-            await runButtonTask(e.currentTarget, () => runScriptOnceOnTab(script.id), { busyLabel: 'Running...' });
+            await runButtonTask(e.currentTarget, () => runScriptOnceOnTab(script.id), { busyLabel: tDashboard('runningEllipsis', 'Running...') });
         });
         tr.querySelector('[data-action="delete"]')?.addEventListener('click', async () => {
             const name = script.metadata?.name || script.id;
@@ -9885,39 +9898,58 @@
         const tabData = ensureOpenTabStatus(script.id, script);
         const saveState = tabData?.saveState || (tabData?.unsaved ? 'dirty' : 'clean');
         const targetCount = countScriptTargets(script);
+        const formattedTargetCount = numberFormatter.format(targetCount);
         const subtitleParts = [
-            script.enabled !== false ? 'Enabled' : 'Disabled',
-            metadata.version ? `v${metadata.version}` : null,
-            metadata.author ? `by ${metadata.author}` : null,
-            targetCount > 0 ? `${numberFormatter.format(targetCount)} target${targetCount === 1 ? '' : 's'}` : 'No match rules',
+            script.enabled !== false ? tDashboard('enabled', 'Enabled') : tDashboard('disabled', 'Disabled'),
+            metadata.version ? tDashboard('editorVersionSummary', 'v{version}', { version: metadata.version }) : null,
+            metadata.author ? tDashboard('editorByAuthor', 'by {author}', { author: metadata.author }) : null,
+            targetCount > 0
+                ? tDashboard(
+                    targetCount === 1 ? 'editorTargetSingular' : 'editorTargetPlural',
+                    targetCount === 1 ? '{count} target' : '{count} targets',
+                    { count: formattedTargetCount }
+                )
+                : tDashboard('editorNoMatchRules', 'No match rules'),
             metadata.runAt ? metadata.runAt.replace(/^document-/, '') : null
         ].filter(Boolean);
 
         if (elements.editorEyebrow) {
-            elements.editorEyebrow.textContent = metadata.downloadURL || metadata.updateURL ? 'Synced Userscript' : 'Userscript Editor';
+            elements.editorEyebrow.textContent = metadata.downloadURL || metadata.updateURL
+                ? tDashboard('editorSyncedUserscript', 'Synced Userscript')
+                : tDashboard('editorUserscriptEditor', 'Userscript Editor');
         }
-        if (elements.editorTitle) elements.editorTitle.textContent = metadata.name || 'Edit Script';
+        if (elements.editorTitle) elements.editorTitle.textContent = metadata.name || tDashboard('editorEditScript', 'Edit Script');
         if (elements.editorSubtitle) elements.editorSubtitle.textContent = subtitleParts.join(' • ');
 
         if (elements.editorSaveState) {
-            const stateLabel = saveState === 'dirty' ? 'Unsaved' : saveState === 'saving' ? 'Saving' : saveState === 'error' ? 'Save Failed' : 'Saved';
+            const stateLabel = saveState === 'dirty'
+                ? tDashboard('editorUnsaved', 'Unsaved')
+                : saveState === 'saving'
+                    ? tDashboard('editorSaving', 'Saving')
+                    : saveState === 'error'
+                        ? tDashboard('editorSaveFailed', 'Save Failed')
+                        : tDashboard('editorSaved', 'Saved');
             elements.editorSaveState.dataset.state = saveState;
             elements.editorSaveState.textContent = stateLabel;
             elements.editorSaveState.title = tabData?.saveError || stateLabel;
         }
 
         if (elements.editorSavedAt) {
-            let detail = 'Ready to edit';
+            let detail = tDashboard('editorReadyToEditNoPeriod', 'Ready to edit');
             if (state.userCssPreview.active && state.userCssPreview.scriptId === script.id) {
-                detail = 'Previewing unsaved CSS in active tab';
+                detail = tDashboard('editorPreviewingUnsavedCss', 'Previewing unsaved CSS in active tab');
             } else if (saveState === 'dirty') {
-                detail = state.settings.autoSave ? 'Autosaves after 2 seconds' : 'Press Ctrl+S to save';
+                detail = state.settings.autoSave
+                    ? tDashboard('editorAutosavesAfter2Seconds', 'Autosaves after 2 seconds')
+                    : tDashboard('editorPressCtrlSToSave', 'Press Ctrl+S to save');
             } else if (saveState === 'saving') {
-                detail = 'Writing changes…';
+                detail = tDashboard('editorWritingChanges', 'Writing changes…');
             } else if (saveState === 'error') {
-                detail = tabData?.saveError ? `Retry required: ${tabData.saveError}` : 'Retry save';
+                detail = tabData?.saveError
+                    ? tDashboard('editorRetryRequired', 'Retry required: {error}', { error: tabData.saveError })
+                    : tDashboard('editorRetrySave', 'Retry save');
             } else if (tabData?.lastSavedAt) {
-                detail = `Saved ${formatTime(tabData.lastSavedAt)}`;
+                detail = tDashboard('editorSavedAt', 'Saved {time}', { time: formatTime(tabData.lastSavedAt) });
             }
             elements.editorSavedAt.textContent = detail;
             elements.editorSavedAt.title = detail;
@@ -9925,7 +9957,7 @@
 
         if (elements.tbtnPublishGreasyFork) {
             elements.tbtnPublishGreasyFork.disabled = !script;
-            elements.tbtnPublishGreasyFork.setAttribute('aria-label', 'Publish to Greasy Fork');
+            elements.tbtnPublishGreasyFork.setAttribute('aria-label', tDashboard('publishGreasyForkTitle', 'Publish to Greasy Fork'));
         }
 
         if (elements.btnEditorSave) {
@@ -9935,7 +9967,11 @@
             elements.btnEditorSave.classList.toggle('btn-danger', saveState === 'error');
         }
         if (elements.btnEditorSaveLabel) {
-            elements.btnEditorSaveLabel.textContent = saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Retry Save' : 'Save';
+            elements.btnEditorSaveLabel.textContent = saveState === 'saving'
+                ? tDashboard('editorSavingEllipsis', 'Saving…')
+                : saveState === 'error'
+                    ? tDashboard('editorRetrySave', 'Retry Save')
+                    : tDashboard('save', 'Save');
         }
 
         if (elements.btnEditorRunNow) {
@@ -9943,8 +9979,8 @@
             elements.btnEditorRunNow.hidden = !runNowSupported;
             elements.btnEditorRunNow.disabled = !runNowSupported || !script;
             elements.btnEditorRunNow.title = runNowSupported
-                ? 'Run this script once on the active tab'
-                : 'Run on Tab requires Chrome 135 or newer';
+                ? tDashboard('runOnTabTitle', 'Run this script once on the active tab')
+                : tDashboard('runOnTabRequiresChrome', 'Run on Tab requires Chrome 135 or newer');
         }
         updateUserCssPreviewButton(script);
 
@@ -10267,7 +10303,7 @@
         if (elements.infoGrants) safeSetHtml(elements.infoGrants, grants.length ? grants.map(g => `<span class="info-tag grant">${escapeHtml(g)}</span>`).join('') : '<span class="info-tag">none</span>');
 
         const matches = [...(m.match || []), ...(m.include || [])];
-        if (elements.infoMatches) safeSetHtml(elements.infoMatches, matches.length ? matches.map(x => `<span class="info-tag">${escapeHtml(x)}</span>`).join('') : '<span class="panel-empty-inline">No match rules</span>');
+        if (elements.infoMatches) safeSetHtml(elements.infoMatches, matches.length ? matches.map(x => `<span class="info-tag">${escapeHtml(x)}</span>`).join('') : `<span class="panel-empty-inline">${escapeHtml(tDashboard('editorNoMatchRules', 'No match rules'))}</span>`);
 
         const res = [...(Array.isArray(m.resource) ? m.resource : []), ...(Array.isArray(m.require) ? m.require : [])];
         if (elements.infoResources) {
@@ -11083,12 +11119,12 @@
         button.classList.toggle('btn-primary', isCurrentPreview);
         button.setAttribute('aria-pressed', isCurrentPreview ? 'true' : 'false');
         button.title = isCurrentPreview
-            ? 'Clear the temporary UserCSS preview'
-            : 'Preview this UserCSS draft on the active tab';
+            ? tDashboard('clearPreviewTitle', 'Clear the temporary UserCSS preview')
+            : tDashboard('previewCssDraftTitle', 'Preview this UserCSS draft on the active tab');
         if (elements.btnEditorPreviewUserCSSLabel) {
             elements.btnEditorPreviewUserCSSLabel.textContent = pending
-                ? 'Previewing...'
-                : isCurrentPreview ? 'Clear Preview' : 'Preview CSS';
+                ? tDashboard('previewingEllipsis', 'Previewing...')
+                : isCurrentPreview ? tDashboard('clearPreview', 'Clear Preview') : tDashboard('previewCss', 'Preview CSS');
         }
     }
 
@@ -11108,7 +11144,7 @@
                 tabId
             });
         } catch (error) {
-            if (!options.silent) showToast(error?.message || 'Failed to clear UserCSS preview', 'error');
+            if (!options.silent) showToast(error?.message || tDashboard('userCssPreviewFailedClear', 'Failed to clear UserCSS preview'), 'error');
             return { error: error?.message || String(error) };
         }
     }
@@ -11117,13 +11153,13 @@
         const scriptId = state.currentScriptId;
         const code = getCurrentEditorCode();
         if (!scriptId || !code || !isUserCSSDraft(code)) {
-            if (!options.silent) showToast('Open a UserCSS draft before previewing', 'info');
+            if (!options.silent) showToast(tDashboard('userCssPreviewOpenDraft', 'Open a UserCSS draft before previewing'), 'info');
             return false;
         }
 
         const targetTab = await getRunNowTargetTab();
         if (!targetTab?.id) {
-            if (!options.silent) showToast('Open a web page tab in this window, then preview again', 'warning');
+            if (!options.silent) showToast(tDashboard('userCssPreviewOpenWebPage', 'Open a web page tab in this window, then preview again'), 'warning');
             return false;
         }
 
@@ -11145,12 +11181,12 @@
                 timer: null
             };
             updateEditorHeader(getCurrentScript());
-            if (!options.silent) showToast('Previewing unsaved UserCSS on this tab', 'success');
+            if (!options.silent) showToast(tDashboard('userCssPreviewActiveToast', 'Previewing unsaved UserCSS on this tab'), 'success');
             return true;
         } catch (error) {
             state.userCssPreview.pending = false;
             updateUserCssPreviewButton();
-            if (!options.silent) showToast(error?.message || 'UserCSS preview failed', 'error');
+            if (!options.silent) showToast(error?.message || tDashboard('userCssPreviewFailed', 'UserCSS preview failed'), 'error');
             return false;
         }
     }
@@ -11171,7 +11207,7 @@
     async function toggleUserCssPreview() {
         if (state.userCssPreview.active && state.userCssPreview.scriptId === state.currentScriptId) {
             await clearUserCssPreview();
-            showToast('UserCSS preview cleared', 'info');
+            showToast(tDashboard('userCssPreviewCleared', 'UserCSS preview cleared'), 'info');
             return false;
         }
         return await applyUserCssPreview();
@@ -13206,18 +13242,18 @@
 
     async function runScriptOnceOnTab(scriptId = state.currentScriptId) {
         if (!supportsOneShotRunNow()) {
-            showToast('Run on Tab requires Chrome 135 or newer', 'warning');
+            showToast(tDashboard('runOnTabRequiresChrome', 'Run on Tab requires Chrome 135 or newer'), 'warning');
             return false;
         }
 
         if (!scriptId) {
-            showToast('Open a script before running it on a tab', 'info');
+            showToast(tDashboard('runOnTabOpenScript', 'Open a script before running it on a tab'), 'info');
             return false;
         }
 
         const targetTab = await getRunNowTargetTab();
         if (!targetTab?.id) {
-            showToast('Open a web page tab in this window, then run again', 'warning');
+            showToast(tDashboard('runOnTabOpenWebPage', 'Open a web page tab in this window, then run again'), 'warning');
             return false;
         }
 
@@ -13620,16 +13656,16 @@
             runButtonTask(event.currentTarget, refreshCurrentScriptFromLocalFile, { busyLabel: 'Refreshing...' });
         });
         elements.tbtnUnbindLocalFile?.addEventListener('click', event => {
-            runButtonTask(event.currentTarget, unbindCurrentScriptLocalFile, { busyLabel: 'Unbinding...' });
+            runButtonTask(event.currentTarget, unbindCurrentScriptLocalFile, { busyLabel: tDashboard('unbindingEllipsis', 'Unbinding...') });
         });
         elements.tbtnPublishGreasyFork?.addEventListener('click', event => {
-            runButtonTask(event.currentTarget, openGreasyForkPublishHandoff, { busyLabel: 'Preparing...' });
+            runButtonTask(event.currentTarget, openGreasyForkPublishHandoff, { busyLabel: tDashboard('preparingEllipsis', 'Preparing...') });
         });
         elements.btnEditorRunNow?.addEventListener('click', event => {
-            runButtonTask(event.currentTarget, () => runScriptOnceOnTab(), { busyLabel: 'Running...' });
+            runButtonTask(event.currentTarget, () => runScriptOnceOnTab(), { busyLabel: tDashboard('runningEllipsis', 'Running...') });
         });
         elements.btnEditorPreviewUserCSS?.addEventListener('click', event => {
-            runButtonTask(event.currentTarget, toggleUserCssPreview, { busyLabel: 'Previewing...' });
+            runButtonTask(event.currentTarget, toggleUserCssPreview, { busyLabel: tDashboard('previewingEllipsis', 'Previewing...') });
         });
         elements.btnEditorToggle?.addEventListener('click', async () => {
             const script = state.scripts.find(s => s.id === state.currentScriptId);
