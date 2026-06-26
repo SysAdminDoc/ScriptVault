@@ -271,6 +271,7 @@
       }
     });
     $('btnExportHAR').addEventListener('click', exportHAR);
+    $('btnExportTrace').addEventListener('click', exportTrace);
     $('btnCloseDetail').addEventListener('click', () => closeDetail({ restoreFocus: true }));
     $('btnConsoleToNetwork').addEventListener('click', () => setActiveTab('network'));
     $('btnConsoleToExecution').addEventListener('click', () => setActiveTab('execution'));
@@ -559,6 +560,49 @@
     const a = document.createElement('a');
     a.href = url;
     a.download = 'scriptvault-network.har';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  // ── Trace Export ─────────────────────────────────────────────────────────
+  function exportTrace() {
+    const version = chrome.runtime?.getManifest?.()?.version || 'unknown';
+    const trace = {
+      version: '1.0',
+      generator: { name: 'ScriptVault', version },
+      exportedAt: new Date().toISOString(),
+      network: netLog.map(e => ({
+        id: e.id,
+        timestamp: e.timestamp,
+        method: e.method || 'GET',
+        url: e.url || '',
+        status: e.status || 0,
+        duration: e.duration || 0,
+        responseSize: e.responseSize || 0,
+        scriptName: e.scriptName || '',
+        type: e.type || 'xmlhttpRequest',
+        error: e.error || null,
+      })),
+      execution: scripts.filter(s => s.stats && s.stats.runs > 0).map(s => ({
+        scriptId: s.id,
+        scriptName: s.meta?.name || s.id,
+        runs: s.stats.runs || 0,
+        avgTime: s.stats.avgTime != null ? s.stats.avgTime : (s.stats.totalTime / s.stats.runs),
+        totalTime: s.stats.totalTime || 0,
+        errors: s.stats.errors || 0,
+      })),
+      summary: {
+        totalRequests: netLog.length,
+        totalErrors: netLog.filter(e => e.error || (e.status && e.status >= 400)).length,
+        totalBytes: netLog.reduce((s, e) => s + (e.responseSize || 0), 0),
+        scriptsWithStats: scripts.filter(s => s.stats && s.stats.runs > 0).length,
+      },
+    };
+    const blob = new Blob([JSON.stringify(trace, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `scriptvault-trace-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
