@@ -7029,139 +7029,139 @@
                 <div class="section-label" data-i18n="settingsSecurity">Security</div>
                 <div class="section-content">
                     <div class="setting-row">
-                        <span class="label-text">Content Script API:</span>
+                        <span class="label-text" data-i18n="settingsContentScriptApiLabel">Content Script API:</span>
                         <select class="select-field" id="settingsContentScriptAPI" aria-describedby="settingsContentScriptAPIError">
-                            <option value="userscripts" selected>UserScripts API</option>
-                            <option value="dynamic">Dynamic Content Script</option>
+                            <option value="userscripts" selected data-i18n="contentScriptApiUserScripts">UserScripts API</option>
+                            <option value="dynamic" data-i18n="contentScriptApiDynamic">Dynamic Content Script</option>
                         </select>
                         <span class="setting-error" id="settingsContentScriptAPIError" hidden></span>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Sandbox Mode:</span>
+                        <span class="label-text" data-i18n="settingsSandboxModeLabel">Sandbox Mode:</span>
                         <select class="select-field" id="settingsSandboxMode" aria-describedby="settingsSandboxModeError">
                             <option value="default" selected>Default</option>
-                            <option value="raw">Raw</option>
-                            <option value="js">JavaScript</option>
-                            <option value="dom">DOM</option>
+                            <option value="raw" data-i18n="sandboxModeRaw">Raw</option>
+                            <option value="js" data-i18n="sandboxModeJavaScript">JavaScript</option>
+                            <option value="dom" data-i18n="sandboxModeDom">DOM</option>
                         </select>
                         <span class="setting-error" id="settingsSandboxModeError" hidden></span>
-                        <span class="help-icon" title="Script execution environment">?</span>
+                        <span class="help-icon" title="Script execution environment" data-i18n-title="settingsSandboxModeHelp">?</span>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Modify existing content security policy (CSP) headers:</span>
+                        <span class="label-text" data-i18n="settingsModifyCspLabel">Modify existing content security policy (CSP) headers:</span>
                         <select class="select-field" id="settingsModifyCSP" aria-describedby="settingsModifyCSPError">
-                            <option value="auto" selected>Auto</option>
-                            <option value="yes">Yes</option>
-                            <option value="no">No</option>
+                            <option value="auto" selected data-i18n="optionAuto">Auto</option>
+                            <option value="yes" data-i18n="yes">Yes</option>
+                            <option value="no" data-i18n="no">No</option>
                         </select>
                         <span class="setting-error" id="settingsModifyCSPError" hidden></span>
-                        <span class="help-icon" title="Allow scripts to bypass CSP restrictions">?</span>
+                        <span class="help-icon" title="Allow scripts to bypass CSP restrictions" data-i18n-title="settingsModifyCspHelp">?</span>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Execution stats URL retention:</span>
+                        <span class="label-text" data-i18n="settingsStatsUrlRetentionLabel">Execution stats URL retention:</span>
                         <select class="select-field" id="settingsStatsUrlRetention" aria-describedby="settingsStatsUrlRetentionError">
-                            <option value="full" selected>Full URL</option>
-                            <option value="origin">Origin only</option>
-                            <option value="none">Do not store</option>
+                            <option value="full" selected data-i18n="statsUrlRetentionFull">Full URL</option>
+                            <option value="origin" data-i18n="statsUrlRetentionOrigin">Origin only</option>
+                            <option value="none" data-i18n="statsUrlRetentionNone">Do not store</option>
                         </select>
                         <span class="setting-error" id="settingsStatsUrlRetentionError" hidden></span>
-                        <span class="help-icon" title="How much of the last execution URL to keep in per-script stats">?</span>
+                        <span class="help-icon" title="How much of the last execution URL to keep in per-script stats" data-i18n-title="settingsStatsUrlRetentionHelp">?</span>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Allow HTTP headers to be modified by scripts:</span>
+                        <span class="label-text" data-i18n="settingsAllowHttpHeadersLabel">Allow HTTP headers to be modified by scripts:</span>
                         <select class="select-field" id="settingsAllowHttpHeaders" aria-describedby="settingsAllowHttpHeadersError">
-                            <option value="yes" selected>Yes</option>
+                            <option value="yes" selected data-i18n="yes">Yes</option>
                             <option value="no">No</option>
                         </select>
                         <span class="setting-error" id="settingsAllowHttpHeadersError" hidden></span>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Default tab types to run scripts in:</span>
+                        <span class="label-text" data-i18n="settingsDefaultTabTypesLabel">Default tab types to run scripts in:</span>
                         <select class="select-field" id="settingsDefaultTabTypes" aria-describedby="settingsDefaultTabTypesError">
-                            <option value="all" selected>All tabs</option>
-                            <option value="normal">Normal tabs only</option>
-                            <option value="incognito">Incognito only</option>
+                            <option value="all" selected data-i18n="tabTypesAll">All tabs</option>
+                            <option value="normal" data-i18n="tabTypesNormalOnly">Normal tabs only</option>
+                            <option value="incognito" data-i18n="tabTypesIncognitoOnly">Incognito only</option>
                         </select>
                         <span class="setting-error" id="settingsDefaultTabTypesError" hidden></span>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Allow scripts to access local files:</span>
+                        <span class="label-text" data-i18n="settingsAllowLocalFilesLabel">Allow scripts to access local files:</span>
                         <select class="select-field" id="settingsAllowLocalFiles" aria-describedby="settingsAllowLocalFilesError">
-                            <option value="all" selected>All local files</option>
-                            <option value="ask">Ask</option>
+                            <option value="all" selected data-i18n="localFilesAll">All local files</option>
+                            <option value="ask" data-i18n="optionAsk">Ask</option>
                             <option value="none">None</option>
                         </select>
                         <span class="setting-error" id="settingsAllowLocalFilesError" hidden></span>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Allow scripts to access cookies:</span>
+                        <span class="label-text" data-i18n="settingsAllowCookiesLabel">Allow scripts to access cookies:</span>
                         <select class="select-field" id="settingsAllowCookies" aria-describedby="settingsAllowCookiesError">
-                            <option value="all" selected>All</option>
-                            <option value="matching">Matching only</option>
+                            <option value="all" selected data-i18n="cookiesAll">All</option>
+                            <option value="matching" data-i18n="cookiesMatchingOnly">Matching only</option>
                             <option value="none">None</option>
                         </select>
                         <span class="setting-error" id="settingsAllowCookiesError" hidden></span>
                     </div>
                     <div class="setting-row">
-                        <label><input type="checkbox" id="settingsAllowHighPrivilegeScriptApis"> Allow cross-scope privileged script APIs</label>
+                        <label><input type="checkbox" id="settingsAllowHighPrivilegeScriptApis"> <span data-i18n="settingsAllowHighPrivilegeApis">Allow cross-scope privileged script APIs</span></label>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Allow communication with cooperate pages:</span>
+                        <span class="label-text" data-i18n="settingsAllowCommunicationLabel">Allow communication with cooperate pages:</span>
                         <select class="select-field" id="settingsAllowCommunication" aria-describedby="settingsAllowCommunicationError">
-                            <option value="version" selected>ScriptVault + script version</option>
-                            <option value="minimal">ScriptVault only</option>
+                            <option value="version" selected data-i18n="communicationVersion">ScriptVault + script version</option>
+                            <option value="minimal" data-i18n="communicationMinimal">ScriptVault only</option>
                             <option value="none">None</option>
                         </select>
                         <span class="setting-error" id="settingsAllowCommunicationError" hidden></span>
-                        <span class="help-icon" title="External message communication">?</span>
+                        <span class="help-icon" title="External message communication" data-i18n-title="settingsAllowCommunicationHelp">?</span>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Subresource Integrity:</span>
+                        <span class="label-text" data-i18n="settingsSriLabel">Subresource Integrity:</span>
                         <select class="select-field" id="settingsSRI" aria-describedby="settingsSRIError">
-                            <option value="validate" selected>Validate if possible</option>
-                            <option value="require">Require</option>
-                            <option value="ignore">Ignore</option>
+                            <option value="validate" selected data-i18n="sriValidateIfPossible">Validate if possible</option>
+                            <option value="require" data-i18n="sriRequire">Require</option>
+                            <option value="ignore" data-i18n="sriIgnore">Ignore</option>
                         </select>
                         <span class="setting-error" id="settingsSRIError" hidden></span>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Userscript @include Mode:</span>
+                        <span class="label-text" data-i18n="settingsIncludeModeLabel">Userscript @include Mode:</span>
                         <select class="select-field" id="settingsIncludeMode" aria-describedby="settingsIncludeModeError">
                             <option value="default" selected>Default</option>
-                            <option value="glob">Glob</option>
-                            <option value="regex">Regex</option>
+                            <option value="glob" data-i18n="includeGlob">Glob</option>
+                            <option value="regex" data-i18n="includeRegex">Regex</option>
                         </select>
                         <span class="setting-error" id="settingsIncludeModeError" hidden></span>
-                        <span class="help-icon" title="Pattern matching mode for @include">?</span>
+                        <span class="help-icon" title="Pattern matching mode for @include" data-i18n-title="settingsIncludeModeHelp">?</span>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Check @connect:</span>
+                        <span class="label-text" data-i18n="settingsCheckConnectLabel">Check @connect:</span>
                         <select class="select-field" id="settingsCheckConnect" aria-describedby="settingsCheckConnectError">
-                            <option value="ask" selected>Ask if unknown</option>
-                            <option value="allow">Allow all</option>
-                            <option value="deny">Deny unknown</option>
+                            <option value="ask" selected data-i18n="connectAskUnknown">Ask if unknown</option>
+                            <option value="allow" data-i18n="connectAllowAll">Allow all</option>
+                            <option value="deny" data-i18n="connectDenyUnknown">Deny unknown</option>
                         </select>
                         <span class="setting-error" id="settingsCheckConnectError" hidden></span>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Store data in incognito mode:</span>
+                        <span class="label-text" data-i18n="settingsIncognitoStorageLabel">Store data in incognito mode:</span>
                         <select class="select-field" id="settingsIncognitoStorage" aria-describedby="settingsIncognitoStorageError">
-                            <option value="temporary" selected>Temporary</option>
-                            <option value="persistent">Persistent</option>
+                            <option value="temporary" selected data-i18n="incognitoTemporary">Temporary</option>
+                            <option value="persistent" data-i18n="incognitoPersistent">Persistent</option>
                             <option value="none">None</option>
                         </select>
                         <span class="setting-error" id="settingsIncognitoStorageError" hidden></span>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Page Filter Mode:</span>
+                        <span class="label-text" data-i18n="settingsPageFilterModeLabel">Page Filter Mode:</span>
                         <select class="select-field" id="settingsPageFilterMode" aria-describedby="settingsPageFilterModeError">
-                            <option value="blacklist" selected>Blacklist</option>
-                            <option value="whitelist">Whitelist</option>
+                            <option value="blacklist" selected data-i18n="pageFilterBlacklist">Blacklist</option>
+                            <option value="whitelist" data-i18n="pageFilterWhitelist">Whitelist</option>
                         </select>
                         <span class="setting-error" id="settingsPageFilterModeError" hidden></span>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Whitelisted Pages:</span>
+                        <span class="label-text" data-i18n="settingsWhitelistedPagesLabel">Whitelisted Pages:</span>
                     </div>
                     <div class="setting-row">
                         <textarea class="textarea-field" id="settingsWhitelistedPages" placeholder="/https?:\/\/greasyfork\.org\/.*/" style="min-height: 100px; font-family: monospace;" aria-describedby="settingsWhitelistedPagesError">/https?:\/\/greasyfork\.org\/.*/
@@ -7170,7 +7170,7 @@ http://xkcd.com/970/
                         <span class="setting-error" id="settingsWhitelistedPagesError" hidden></span>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Blacklisted Pages:</span>
+                        <span class="label-text" data-i18n="settingsBlacklistedPagesLabel">Blacklisted Pages:</span>
                     </div>
                     <div class="setting-row">
                         <textarea class="textarea-field" id="settingsBlacklistedPages" placeholder="*example.org/*" style="min-height: 120px; font-family: monospace;" aria-describedby="settingsBlacklistedPagesError">*example.org/*
@@ -7185,26 +7185,26 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                         <span class="setting-error" id="settingsBlacklistedPagesError" hidden></span>
                     </div>
                     <div class="setting-row">
-                        <button type="button" class="btn" id="btnSaveSecurity">Save</button>
+                        <button type="button" class="btn" id="btnSaveSecurity" data-i18n="save">Save</button>
                     </div>
                 </div>
             </div>
 
             <!-- Runtime Host Permissions Section -->
             <div class="settings-section" data-config-level="advanced">
-                <div class="section-label">Runtime Host Permissions</div>
+                <div class="section-label" data-i18n="settingsRuntimeHostPermissions">Runtime Host Permissions</div>
                 <div class="section-content">
                     <div class="setting-row">
-                        <span class="label-text">Host permissions denied by user:</span>
+                        <span class="label-text" data-i18n="settingsDeniedHostsLabel">Host permissions denied by user:</span>
                     </div>
                     <div class="setting-row">
-                        <textarea class="textarea-field" id="settingsDeniedHosts" readonly placeholder="&lt;No previously denied runtime host permissions found&gt;" style="min-height: 80px;" aria-describedby="settingsDeniedHostsError"></textarea>
+                        <textarea class="textarea-field" id="settingsDeniedHosts" readonly placeholder="&lt;No previously denied runtime host permissions found&gt;" data-i18n-placeholder="settingsDeniedHostsPlaceholder" style="min-height: 80px;" aria-describedby="settingsDeniedHostsError"></textarea>
                         <span class="setting-error" id="settingsDeniedHostsError" hidden></span>
                     </div>
                     <div class="setting-row">
-                        <button type="button" class="btn" id="btnGrantSelected">Grant Selected</button>
-                        <button type="button" class="btn" id="btnGrantAll">Grant All</button>
-                        <button type="button" class="btn" id="btnResetPermissions">Reset List</button>
+                        <button type="button" class="btn" id="btnGrantSelected" data-i18n="grantSelected">Grant Selected</button>
+                        <button type="button" class="btn" id="btnGrantAll" data-i18n="grantAll">Grant All</button>
+                        <button type="button" class="btn" id="btnResetPermissions" data-i18n="resetList">Reset List</button>
                     </div>
                 </div>
             </div>

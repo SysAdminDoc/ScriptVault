@@ -137,4 +137,24 @@ describe('dashboard i18n-v2 removal', () => {
     expect(dashboardHtml).toContain('data-i18n="settingsLintMaxSizeLabel"');
     expect(dashboardHtml).toContain('data-i18n-title="settingsCustomLinterConfigHelp"');
   });
+
+  it('translates security and runtime host permission settings controls', () => {
+    expect(dashboardHtml).toContain('data-i18n="settingsContentScriptApiLabel"');
+    expect(dashboardHtml).toContain('data-i18n="contentScriptApiUserScripts"');
+    expect(dashboardHtml).toContain('data-i18n="settingsSandboxModeLabel"');
+    expect(dashboardHtml).toContain('data-i18n-title="settingsSandboxModeHelp"');
+    expect(dashboardHtml).toContain('data-i18n="settingsModifyCspLabel"');
+    expect(dashboardHtml).toContain('data-i18n-title="settingsModifyCspHelp"');
+    expect(dashboardHtml).toContain('data-i18n="settingsStatsUrlRetentionLabel"');
+    expect(dashboardHtml).toContain('data-i18n-title="settingsStatsUrlRetentionHelp"');
+    expect(dashboardHtml).toContain('data-i18n="settingsAllowHighPrivilegeApis"');
+    expect(dashboardHtml).toContain('data-i18n="settingsAllowCommunicationLabel"');
+    expect(dashboardHtml).toContain('data-i18n="settingsSriLabel"');
+    expect(dashboardHtml).toContain('data-i18n="settingsCheckConnectLabel"');
+    expect(dashboardHtml).toContain('data-i18n="settingsWhitelistedPagesLabel"');
+    expect(dashboardHtml).toContain('data-i18n="settingsRuntimeHostPermissions"');
+    expect(dashboardHtml).toContain('data-i18n-placeholder="settingsDeniedHostsPlaceholder"');
+    expect(dashboardHtml).toContain('data-i18n="grantAll"');
+    expect(dashboardHtml).toContain('data-i18n="resetList"');
+  });
 });
