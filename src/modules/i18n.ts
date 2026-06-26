@@ -33,6 +33,13 @@ type TranslationKeys = {
   tabHelp: string;
   tabValues: string;
 
+  // Editor tabs
+  editorTabCode: string;
+  editorTabScriptSettings: string;
+  editorTabExternals: string;
+  editorTabStorage: string;
+  editorTabInfo: string;
+
   // Scripts
   newScript: string;
   importScript: string;
@@ -271,6 +278,13 @@ const translations: TranslationMap = {
     tabHelp: 'Help',
     tabValues: 'Values Editor',
 
+    // Editor tabs
+    editorTabCode: 'Code',
+    editorTabScriptSettings: 'Settings',
+    editorTabExternals: 'Externals',
+    editorTabStorage: 'Storage',
+    editorTabInfo: 'Info',
+
     // Scripts
     newScript: 'New Script',
     importScript: 'Import',
@@ -477,6 +491,11 @@ const translations: TranslationMap = {
     tabUtilities: 'Utilidades',
     tabHelp: 'Ayuda',
     tabValues: 'Editor de Valores',
+    editorTabCode: 'Código',
+    editorTabScriptSettings: 'Configuración',
+    editorTabExternals: 'Externos',
+    editorTabStorage: 'Almacenamiento',
+    editorTabInfo: 'Info',
     newScript: 'Nuevo Script',
     importScript: 'Importar',
     checkUpdates: 'Buscar Actualizaciones',
@@ -671,6 +690,11 @@ const translations: TranslationMap = {
     tabUtilities: 'Utilitaires',
     tabHelp: 'Aide',
     tabValues: 'Éditeur de Valeurs',
+    editorTabCode: 'Code',
+    editorTabScriptSettings: 'Paramètres',
+    editorTabExternals: 'Externes',
+    editorTabStorage: 'Stockage',
+    editorTabInfo: 'Info',
     newScript: 'Nouveau Script',
     importScript: 'Importer',
     checkUpdates: 'Vérifier les Mises à Jour',
@@ -865,6 +889,11 @@ const translations: TranslationMap = {
     tabUtilities: 'Werkzeuge',
     tabHelp: 'Hilfe',
     tabValues: 'Werte-Editor',
+    editorTabCode: 'Code',
+    editorTabScriptSettings: 'Einstellungen',
+    editorTabExternals: 'Externe',
+    editorTabStorage: 'Speicher',
+    editorTabInfo: 'Info',
     newScript: 'Neues Script',
     importScript: 'Importieren',
     checkUpdates: 'Updates prüfen',
@@ -1059,6 +1088,11 @@ const translations: TranslationMap = {
     tabUtilities: '工具',
     tabHelp: '帮助',
     tabValues: '值编辑器',
+    editorTabCode: '代码',
+    editorTabScriptSettings: '设置',
+    editorTabExternals: '外部资源',
+    editorTabStorage: '存储',
+    editorTabInfo: '信息',
     newScript: '新建脚本',
     importScript: '导入',
     checkUpdates: '检查更新',
@@ -1253,6 +1287,11 @@ const translations: TranslationMap = {
     tabUtilities: 'ユーティリティ',
     tabHelp: 'ヘルプ',
     tabValues: '値エディタ',
+    editorTabCode: 'コード',
+    editorTabScriptSettings: '設定',
+    editorTabExternals: '外部リソース',
+    editorTabStorage: 'ストレージ',
+    editorTabInfo: '情報',
     newScript: '新規スクリプト',
     importScript: 'インポート',
     checkUpdates: '更新を確認',
@@ -1447,6 +1486,11 @@ const translations: TranslationMap = {
     tabUtilities: 'Utilitários',
     tabHelp: 'Ajuda',
     tabValues: 'Editor de Valores',
+    editorTabCode: 'Código',
+    editorTabScriptSettings: 'Configurações',
+    editorTabExternals: 'Externos',
+    editorTabStorage: 'Armazenamento',
+    editorTabInfo: 'Info',
     newScript: 'Novo Script',
     importScript: 'Importar',
     checkUpdates: 'Verificar Atualizações',
@@ -1641,6 +1685,11 @@ const translations: TranslationMap = {
     tabUtilities: 'Утилиты',
     tabHelp: 'Помощь',
     tabValues: 'Редактор значений',
+    editorTabCode: 'Код',
+    editorTabScriptSettings: 'Настройки',
+    editorTabExternals: 'Внешние ресурсы',
+    editorTabStorage: 'Хранилище',
+    editorTabInfo: 'Инфо',
     newScript: 'Новый скрипт',
     importScript: 'Импорт',
     checkUpdates: 'Проверить обновления',
@@ -1838,6 +1887,11 @@ const translations: TranslationMap = {
     tabStore: 'Script Store',
     tabHelp: 'Help',
     tabValues: 'Values Editor',
+    editorTabCode: 'Code',
+    editorTabScriptSettings: 'Settings',
+    editorTabExternals: 'Externals',
+    editorTabStorage: 'Storage',
+    editorTabInfo: 'Info',
     newScript: 'New Script',
     importScript: 'Import',
     checkUpdates: 'Check Updates',
