@@ -50,6 +50,7 @@ const sourceModules = [
   "modules/internal-host-guard.js",
   "modules/user-script-message-policy.js",
   "modules/message-router.js",
+  "modules/gm-audio-handler.js",
   "modules/connect-policy.js",
   "modules/resources.js",
   "modules/npm-resolve.js",

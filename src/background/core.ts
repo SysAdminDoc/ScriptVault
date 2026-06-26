@@ -9133,50 +9133,12 @@ async function handleMessage(message, sender) {
       }
 
       // GM_audio API - Tab mute control (Tampermonkey-compatible)
-      case 'GM_audio_setMute': {
-        try {
-          const tabId = sender.tab?.id;
-          if (!tabId) return { error: 'No tab context' };
-          const mute = typeof data.mute === 'object' ? data.mute.mute : !!data.mute;
-          await chrome.tabs.update(tabId, { muted: mute });
-          return { success: true };
-        } catch (e) {
-          return { error: e.message };
-        }
-      }
-
-      case 'GM_audio_getState': {
-        try {
-          const tabId = sender.tab?.id;
-          if (!tabId) return { error: 'No tab context' };
-          const tab = await chrome.tabs.get(tabId);
-          return {
-            muted: tab.mutedInfo?.muted || false,
-            reason: tab.mutedInfo?.reason || 'user',
-            audible: tab.audible || false
-          };
-        } catch (e) {
-          return { error: e.message };
-        }
-      }
-
-      case 'GM_audio_watchState': {
-        // Start watching tab audio state changes for the requesting tab
-        const tabId = sender.tab?.id;
-        if (!tabId) return { error: 'No tab context' };
-        if (!self._audioWatchedTabs) self._audioWatchedTabs = new Set();
-        self._audioWatchedTabs.add(tabId);
-        SessionState.persistAudioWatchedTabs();
-        return { success: true };
-      }
-
-      case 'GM_audio_unwatchState': {
-        const tabId = sender.tab?.id;
-        if (tabId && self._audioWatchedTabs?.delete(tabId)) {
-          SessionState.persistAudioWatchedTabs();
-        }
-        return { success: true };
-      }
+      case 'GM_audio_setMute':
+      case 'GM_audio_getState':
+      case 'GM_audio_watchState':
+      case 'GM_audio_unwatchState':
+        if (typeof GMAudioHandler === 'undefined') return { error: 'GMAudioHandler not available' };
+        return await GMAudioHandler.handleGMAudioMessage(action, data, sender);
 
       // ── v2.0 Module Handlers ──────────────────────────────────────────────
 

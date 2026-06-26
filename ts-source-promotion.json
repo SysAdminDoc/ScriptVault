@@ -84,6 +84,14 @@
       "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for exhaustive background action routing metadata."
     },
     {
+      "runtime": "modules/gm-audio-handler.js",
+      "sources": [
+        "src/background/gm-audio-handler.ts"
+      ],
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for the extracted GM_audio background handler."
+    },
+    {
       "runtime": "modules/connect-policy.js",
       "sources": [
         "src/background/connect-policy.ts"

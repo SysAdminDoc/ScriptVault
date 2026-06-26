@@ -52,6 +52,13 @@ export type {
   KnownBackgroundActionResolution,
   UnknownBackgroundActionResolution,
 } from './message-router';
+export {
+  GM_AUDIO_ACTIONS,
+  GMAudioHandler,
+  handleGMAudioMessage,
+  isGMAudioAction,
+} from './gm-audio-handler';
+export type { GMAudioAction } from './gm-audio-handler';
 export { createScriptTrustReceipt, sha256Hex } from './trust-receipt';
 
 export { CloudSync } from './cloud-sync';

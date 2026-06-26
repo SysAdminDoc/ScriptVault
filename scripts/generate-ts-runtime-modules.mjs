@@ -158,6 +158,13 @@ export const TS_RUNTIME_MODULES = [
     selfExportName: 'MessageRouter',
   },
   {
+    id: 'gm-audio-handler',
+    source: 'src/background/gm-audio-handler.ts',
+    output: 'modules/gm-audio-handler.js',
+    exportName: 'GMAudioHandler',
+    selfExportName: 'GMAudioHandler',
+  },
+  {
     id: 'connect-policy',
     source: 'src/background/connect-policy.ts',
     output: 'modules/connect-policy.js',

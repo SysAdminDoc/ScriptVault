@@ -50,6 +50,7 @@ describe('TS source drift gate', () => {
     expect(map.entries.some((entry) => entry.runtime === 'modules/xhr.js' && entry.status === 'promoted')).toBe(true);
     expect(map.entries.some((entry) => entry.runtime === 'modules/internal-host-guard.js' && entry.status === 'promoted')).toBe(true);
     expect(map.entries.some((entry) => entry.runtime === 'modules/message-router.js' && entry.status === 'promoted')).toBe(true);
+    expect(map.entries.some((entry) => entry.runtime === 'modules/gm-audio-handler.js' && entry.status === 'promoted')).toBe(true);
     expect(map.entries.some((entry) => entry.runtime === 'modules/connect-policy.js' && entry.status === 'promoted')).toBe(true);
     expect(map.entries.some((entry) => entry.runtime === 'modules/resources.js' && entry.status === 'promoted')).toBe(true);
     expect(map.entries.some((entry) => entry.runtime === 'modules/storage.js' && entry.status === 'promoted')).toBe(true);
@@ -73,12 +74,13 @@ describe('TS source drift gate', () => {
     const report = analyzeSourceDrift(map, []);
     const text = formatTextReport(report, { reportMode: true });
 
-    expect(report.totals.promoted).toBe(31);
+    expect(report.totals.promoted).toBe(32);
     expect(report.totals.candidate).toBe(0);
     expect(report.totals.mirrored).toBe(0);
     expect(report.totals['intentionally-divergent']).toBe(0);
     expect(text).toContain('modules/error-log.js -> src/modules/error-log.ts');
     expect(text).toContain('modules/message-router.js -> src/background/message-router.ts');
+    expect(text).toContain('modules/gm-audio-handler.js -> src/background/gm-audio-handler.ts');
     expect(text).toContain('modules/connect-policy.js -> src/background/connect-policy.ts');
     expect(text).toContain('modules/sync-crypto.js -> src/modules/sync-crypto.ts');
     expect(text).toContain('background.core.js -> src/background/core.ts');
