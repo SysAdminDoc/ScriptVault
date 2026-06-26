@@ -789,12 +789,12 @@ const AdvancedLinter = (() => {
           if (/\.(innerHTML|outerHTML)\b\s*\+?=(?!=)/.test(line)) {
             issues.push({
               line: bodyStart + i + 1,
-              message: 'innerHTML/outerHTML assignment throws on pages that enforce Trusted Types (require-trusted-types-for). In @inject-into page scripts use textContent, append(), or GM_addElement() instead.',
+              message: 'innerHTML/outerHTML assignment throws on pages that enforce Trusted Types (require-trusted-types-for). In @inject-into page scripts use textContent, append(), GM_addElement(), or Element.setHTML() (Sanitizer API, Chrome 146+/Firefox 148+) instead.',
             });
           } else if (/\bdocument\s*\.\s*write(ln)?\s*\(/.test(line) || /\.insertAdjacentHTML\s*\(/.test(line)) {
             issues.push({
               line: bodyStart + i + 1,
-              message: 'This HTML string sink throws on pages that enforce Trusted Types (require-trusted-types-for). In @inject-into page scripts build nodes with DOM methods (append/GM_addElement) instead.',
+              message: 'This HTML string sink throws on pages that enforce Trusted Types (require-trusted-types-for). In @inject-into page scripts build nodes with DOM methods (append/GM_addElement) or use Element.setHTML() (Sanitizer API, Chrome 146+/Firefox 148+) instead.',
             });
           }
         }

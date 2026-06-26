@@ -41,6 +41,19 @@ describe('Trusted Types MAIN-world linter rule', () => {
     expect(issues[0].message).toMatch(/Trusted Types/);
   });
 
+  it('suggests setHTML (Sanitizer API) as an alternative for innerHTML/outerHTML sinks', () => {
+    const linter = createLinter();
+    const innerIssues = ttIssues(linter, script({ injectInto: 'page', body: 'el.innerHTML = html;' }));
+    expect(innerIssues).toHaveLength(1);
+    expect(innerIssues[0].message).toMatch(/setHTML/);
+    expect(innerIssues[0].message).toMatch(/Sanitizer API/);
+
+    const writeIssues = ttIssues(linter, script({ injectInto: 'page', body: 'document.write("<p>x</p>");' }));
+    expect(writeIssues).toHaveLength(1);
+    expect(writeIssues[0].message).toMatch(/setHTML/);
+    expect(writeIssues[0].message).toMatch(/Sanitizer API/);
+  });
+
   it('flags outerHTML, document.write/writeln, and insertAdjacentHTML in MAIN world', () => {
     const linter = createLinter();
     const body = [
