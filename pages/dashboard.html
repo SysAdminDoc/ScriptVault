@@ -6902,12 +6902,12 @@
                 <div class="section-label" data-i18n="settingsEditor">Editor</div>
                 <div class="section-content">
                     <div class="setting-row">
-                        <label><input type="checkbox" id="settingsEnableEditor" checked> Enable enhanced editor</label>
+                        <label><input type="checkbox" id="settingsEnableEditor" checked> <span data-i18n="settingsEnableEnhancedEditor">Enable enhanced editor</span></label>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Theme:</span>
+                        <span class="label-text" data-i18n="settingsEditorThemeLabel">Theme:</span>
                         <select class="select-field" id="settingsEditorTheme" aria-describedby="settingsEditorThemeError">
-                            <option value="default" selected>Default</option>
+                            <option value="default" selected data-i18n="optionDefault">Default</option>
                             <option value="monokai">Monokai</option>
                             <option value="dracula">Dracula</option>
                             <option value="material-darker">Material Darker</option>
@@ -6918,7 +6918,7 @@
                         <span class="setting-error" id="settingsEditorThemeError" hidden></span>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Font Size:</span>
+                        <span class="label-text" data-i18n="settingsEditorFontSizeLabel">Font Size:</span>
                         <select class="select-field" id="settingsEditorFontSize" aria-describedby="settingsEditorFontSizeError">
                             <option value="80">80%</option>
                             <option value="90">90%</option>
@@ -6930,17 +6930,17 @@
                         <span class="setting-error" id="settingsEditorFontSizeError" hidden></span>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Key Mapping:</span>
+                        <span class="label-text" data-i18n="settingsKeyMappingLabel">Key Mapping:</span>
                         <select class="select-field" id="settingsKeyMapping" aria-describedby="settingsKeyMappingError">
-                            <option value="default" selected>Windows</option>
-                            <option value="vim">Vim</option>
-                            <option value="emacs">Emacs</option>
-                            <option value="sublime">Sublime</option>
+                            <option value="default" selected data-i18n="keymapWindows">Windows</option>
+                            <option value="vim" data-i18n="keymapVim">Vim</option>
+                            <option value="emacs" data-i18n="keymapEmacs">Emacs</option>
+                            <option value="sublime" data-i18n="keymapSublime">Sublime</option>
                         </select>
                         <span class="setting-error" id="settingsKeyMappingError" hidden></span>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Indentation Width:</span>
+                        <span class="label-text" data-i18n="settingsIndentationWidthLabel">Indentation Width:</span>
                         <select class="select-field" id="settingsIndentWidth" aria-describedby="settingsIndentWidthError">
                             <option value="2">2</option>
                             <option value="4" selected>4</option>
@@ -6949,7 +6949,7 @@
                         <span class="setting-error" id="settingsIndentWidthError" hidden></span>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Tab Size:</span>
+                        <span class="label-text" data-i18n="settingsTabSizeLabel">Tab Size:</span>
                         <select class="select-field" id="settingsTabSize" aria-describedby="settingsTabSizeError">
                             <option value="2">2</option>
                             <option value="4" selected>4</option>
@@ -6958,68 +6958,68 @@
                         <span class="setting-error" id="settingsTabSizeError" hidden></span>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Indent with:</span>
+                        <span class="label-text" data-i18n="settingsIndentWithLabel">Indent with:</span>
                         <select class="select-field" id="settingsIndentWith" aria-describedby="settingsIndentWithError">
-                            <option value="spaces" selected>Spaces</option>
-                            <option value="tabs">Tabs</option>
+                            <option value="spaces" selected data-i18n="indentSpaces">Spaces</option>
+                            <option value="tabs" data-i18n="indentTabs">Tabs</option>
                         </select>
                         <span class="setting-error" id="settingsIndentWithError" hidden></span>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">TabMode:</span>
+                        <span class="label-text" data-i18n="settingsTabModeLabel">TabMode:</span>
                         <select class="select-field" id="settingsTabMode" aria-describedby="settingsTabModeError">
-                            <option value="indent" selected>Indent</option>
-                            <option value="shift">Shift</option>
-                            <option value="default">Default</option>
+                            <option value="indent" selected data-i18n="tabModeIndent">Indent</option>
+                            <option value="shift" data-i18n="tabModeShift">Shift</option>
+                            <option value="default" data-i18n="optionDefault">Default</option>
                         </select>
                         <span class="setting-error" id="settingsTabModeError" hidden></span>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Highlight selection matches:</span>
+                        <span class="label-text" data-i18n="settingsHighlightMatchesLabel">Highlight selection matches:</span>
                         <select class="select-field" id="settingsHighlightMatches" aria-describedby="settingsHighlightMatchesError">
-                            <option value="cursor" selected>Cursor</option>
-                            <option value="selection">Selection</option>
-                            <option value="none">None</option>
+                            <option value="cursor" selected data-i18n="highlightCursor">Cursor</option>
+                            <option value="selection" data-i18n="highlightSelection">Selection</option>
+                            <option value="none" data-i18n="highlightNone">None</option>
                         </select>
                         <span class="setting-error" id="settingsHighlightMatchesError" hidden></span>
                     </div>
                     <div class="setting-row">
-                        <label><input type="checkbox" id="settingsWordWrap" checked> Word wrap</label>
+                        <label><input type="checkbox" id="settingsWordWrap" checked> <span data-i18n="settingsWordWrap">Word wrap</span></label>
                     </div>
                     <div class="setting-row">
-                        <label><input type="checkbox" id="settingsReindent" checked> Re-indent on typing</label>
+                        <label><input type="checkbox" id="settingsReindent" checked> <span data-i18n="settingsReindentOnTyping">Re-indent on typing</span></label>
                     </div>
                     <div class="setting-row">
-                        <label><input type="checkbox" id="settingsAutoSave"> Save content when editor loses focus</label>
+                        <label><input type="checkbox" id="settingsAutoSave"> <span data-i18n="settingsAutosaveOnBlur">Save content when editor loses focus</span></label>
                     </div>
                     <div class="setting-row">
-                        <label><input type="checkbox" id="settingsNoSaveConfirm" checked> Don't show confirmation dialog on save</label>
+                        <label><input type="checkbox" id="settingsNoSaveConfirm" checked> <span data-i18n="settingsNoSaveConfirm">Do not show confirmation dialog on save</span></label>
                     </div>
                     <div class="setting-row">
-                        <label><input type="checkbox" id="settingsHighlightTrailingWhitespace" checked> Highlight trailing whitespace</label>
+                        <label><input type="checkbox" id="settingsHighlightTrailingWhitespace" checked> <span data-i18n="settingsHighlightTrailingWhitespace">Highlight trailing whitespace</span></label>
                     </div>
                     <div class="setting-row">
-                        <label><input type="checkbox" id="settingsTrimWhitespace" checked> Trim trailing whitespace from modified lines</label>
+                        <label><input type="checkbox" id="settingsTrimWhitespace" checked> <span data-i18n="settingsTrimTrailingWhitespaceModifiedLines">Trim trailing whitespace from modified lines</span></label>
                     </div>
                     <div class="setting-row">
-                        <label><input type="checkbox" id="settingsLintOnType" checked> Automatic syntax check on typing</label>
-                        <span class="help-icon" title="Real-time JavaScript linting">?</span>
+                        <label><input type="checkbox" id="settingsLintOnType" checked> <span data-i18n="settingsLintOnType">Automatic syntax check on typing</span></label>
+                        <span class="help-icon" title="Real-time JavaScript linting" data-i18n-title="settingsLintOnTypeHelp">?</span>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Automatic syntax check max size:</span>
+                        <span class="label-text" data-i18n="settingsLintMaxSizeLabel">Automatic syntax check max size:</span>
                         <input type="number" class="input-field" id="settingsLintMaxSize" value="1000000" min="1000" max="5000000" step="1000" inputmode="numeric" style="width: 120px;" aria-describedby="settingsLintMaxSizeError">
                         <span class="setting-error" id="settingsLintMaxSizeError" hidden></span>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Custom Linter Config:</span>
-                        <span class="help-icon" title="ESLint configuration in JSON format">!</span>
+                        <span class="label-text" data-i18n="settingsCustomLinterConfigLabel">Custom Linter Config:</span>
+                        <span class="help-icon" title="ESLint configuration in JSON format" data-i18n-title="settingsCustomLinterConfigHelp">!</span>
                     </div>
                     <div class="setting-row">
                         <textarea class="textarea-field" id="settingsLinterConfig" placeholder="{}" style="min-height: 80px; font-family: monospace;" aria-describedby="settingsLinterConfigError"></textarea>
                         <span class="setting-error" id="settingsLinterConfigError" hidden></span>
                     </div>
                     <div class="setting-row">
-                        <button type="button" class="btn" id="btnSaveEditor">Save</button>
+                        <button type="button" class="btn" id="btnSaveEditor" data-i18n="save">Save</button>
                     </div>
                 </div>
             </div>

@@ -120,4 +120,21 @@ describe('dashboard i18n-v2 removal', () => {
     expect(dashboardHtml).toContain('data-i18n="syncDownloadPreview"');
     expect(dashboardHtml).toContain('data-i18n="syncSaveProviderSettings"');
   });
+
+  it('translates editor preference controls and helper text', () => {
+    expect(dashboardHtml).toContain('data-i18n="settingsEnableEnhancedEditor"');
+    expect(dashboardHtml).toContain('data-i18n="settingsEditorThemeLabel"');
+    expect(dashboardHtml).toContain('data-i18n="settingsEditorFontSizeLabel"');
+    expect(dashboardHtml).toContain('data-i18n="settingsKeyMappingLabel"');
+    expect(dashboardHtml).toContain('data-i18n="settingsIndentationWidthLabel"');
+    expect(dashboardHtml).toContain('data-i18n="settingsIndentWithLabel"');
+    expect(dashboardHtml).toContain('data-i18n="settingsTabModeLabel"');
+    expect(dashboardHtml).toContain('data-i18n="settingsHighlightMatchesLabel"');
+    expect(dashboardHtml).toContain('data-i18n="settingsAutosaveOnBlur"');
+    expect(dashboardHtml).toContain('data-i18n="settingsNoSaveConfirm"');
+    expect(dashboardHtml).toContain('data-i18n="settingsTrimTrailingWhitespaceModifiedLines"');
+    expect(dashboardHtml).toContain('data-i18n-title="settingsLintOnTypeHelp"');
+    expect(dashboardHtml).toContain('data-i18n="settingsLintMaxSizeLabel"');
+    expect(dashboardHtml).toContain('data-i18n-title="settingsCustomLinterConfigHelp"');
+  });
 });
