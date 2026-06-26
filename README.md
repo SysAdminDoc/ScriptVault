@@ -166,12 +166,14 @@ Sync scripts across devices with 5 providers:
 
 Two additional zero-config flows ship as separate modules: **Easy Cloud** for one-click Google Drive sync via `chrome.identity`, and **GitHub Gist** import/export/sync via a personal access token.
 
+**Session-only credentials** &mdash; Sync provider secrets and encryption passphrases can be kept in `chrome.storage.session` (cleared on browser restart) instead of stored at rest. No other MV3 userscript manager offers this mode.
+
 ### Monaco Editor
 
 - **Monaco Editor** &mdash; Same editor that powers VS Code, loaded in a sandboxed iframe
 - **Tabbed editing** &mdash; Open multiple scripts simultaneously with browser-style tabs (middle-click to close)
 - **Unsaved indicators** &mdash; Visual dot on tabs with pending changes
-- **5 editor themes** &mdash; Auto (system), Dark, Light, Catppuccin Mocha, OLED
+- **5 editor themes** &mdash; Auto (system, follows OS dark/light preference), Dark, Light, Catppuccin Mocha, OLED
 - **Status bar** &mdash; Line count and cursor position display
 - **IntelliSense** &mdash; Autocomplete for GM API functions and `@metadata` directives
 - Code folding, bracket matching, bracket pair colorization, auto-close
@@ -229,6 +231,7 @@ Two additional zero-config flows ship as separate modules: **Easy Cloud** for on
 - **File import** &mdash; Drag and drop `.user.js` or `.zip` files anywhere on the dashboard
 - **URL import** &mdash; Install directly from any URL
 - **Clipboard import** &mdash; Paste script code directly
+- **Bookmarklet import** &mdash; Paste a `javascript:` URL to convert it into a userscript for review
 
 ### Internationalization
 
@@ -283,7 +286,7 @@ Deep dashboard content is still being migrated to DOM translation coverage.
 - **Violentmonkey/Greasemonkey Import** &mdash; Import from VM JSON and GM4 backup formats
 
 #### Platform & Architecture
-- **UserStyles/CSS Support** &mdash; `.user.css` files with variable editor, Stylus import
+- **UserStyles/CSS Support** &mdash; `.user.css` files with variable editor, Stylus import, and draft live preview
 - **Script Chaining** &mdash; Visual pipeline builder for sequential script execution
 - **npm Package Resolution** &mdash; `@require npm:lodash` with CDN fallback chain
 - **Script Scheduling** &mdash; Time/day/date-based execution with visual picker
@@ -510,6 +513,8 @@ that script in the dashboard editor.
 | Storage Quota Monitor | Yes | No | No |
 | Bulk Operations w/ Progress | Yes | Yes | No |
 | 5 UI Themes | Yes | No | Yes |
+| Session-Only Credentials | Yes | No | No |
+| Bookmarklet Import | Yes | No | No |
 | Open Source | MIT | No | Yes |
 | Free | Yes | Freemium | Yes |
 
