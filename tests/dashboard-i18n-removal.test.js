@@ -81,4 +81,25 @@ describe('dashboard i18n-v2 removal', () => {
     expect(dashboardHtml).toContain('data-i18n="trashModeThirtyDays"');
     expect(dashboardHtml).toContain('data-i18n-title="settingsTrashModeHelp"');
   });
+
+  it('translates appearance, menu, search, update, and externals settings controls', () => {
+    expect(dashboardHtml).toContain('data-i18n="settingsLayoutLabel"');
+    expect(dashboardHtml).toContain('data-i18n="layoutAutoSystem"');
+    expect(dashboardHtml).toContain('data-i18n-title="settingsCustomCssHelp"');
+    expect(dashboardHtml).toContain('data-i18n-placeholder="settingsCustomCssPlaceholder"');
+    expect(dashboardHtml).toContain('data-i18n="settingsUpdateNotificationLabel"');
+    expect(dashboardHtml).toContain('data-i18n="settingsSiteMarkerRichBadge"');
+    expect(dashboardHtml).toContain('data-i18n="settingsThemeEditor"');
+    expect(dashboardHtml).toContain('data-i18n="settingsEnableTags"');
+    expect(dashboardHtml).toContain('data-i18n="settingsActionMenu"');
+    expect(dashboardHtml).toContain('data-i18n="settingsUserscriptOrderLabel"');
+    expect(dashboardHtml).toContain('data-i18n="settingsBadgeInfoRunning"');
+    expect(dashboardHtml).toContain('data-i18n="settingsContextMenu"');
+    expect(dashboardHtml).toContain('data-i18n="settingsUserscriptSearch"');
+    expect(dashboardHtml).toContain('data-i18n-title="settingsSearchIntegrationHelp"');
+    expect(dashboardHtml).toContain('data-i18n="settingsUpdateDisabledScripts"');
+    expect(dashboardHtml).toContain('data-i18n="intervalEvery12Hours"');
+    expect(dashboardHtml).toContain('data-i18n-title="settingsExternalsHelp"');
+    expect(dashboardHtml).toContain('data-i18n="settingsUpdateIntervalLabel"');
+  });
 });

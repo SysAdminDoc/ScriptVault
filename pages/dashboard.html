@@ -6565,47 +6565,47 @@
                 <div class="section-label" data-i18n="settingsAppearance">Appearance</div>
                 <div class="section-content">
                     <div class="setting-row">
-                        <span class="label-text">Layout:</span>
+                        <span class="label-text" data-i18n="settingsLayoutLabel">Layout:</span>
                         <select class="select-field" id="settingsLayout">
-                            <option value="auto">Auto (system)</option>
-                            <option value="dark" selected>Dark</option>
-                            <option value="light">Light</option>
-                            <option value="catppuccin">Catppuccin Mocha</option>
-                            <option value="oled">OLED Black</option>
+                            <option value="auto" data-i18n="layoutAutoSystem">Auto (system)</option>
+                            <option value="dark" selected data-i18n="layoutDark">Dark</option>
+                            <option value="light" data-i18n="layoutLight">Light</option>
+                            <option value="catppuccin" data-i18n="layoutCatppuccinMocha">Catppuccin Mocha</option>
+                            <option value="oled" data-i18n="layoutOledBlack">OLED Black</option>
                         </select>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Custom CSS:</span>
-                        <span class="help-icon" title="Add custom CSS to the dashboard">?</span>
+                        <span class="label-text" data-i18n="settingsCustomCssLabel">Custom CSS:</span>
+                        <span class="help-icon" title="Add custom CSS to the dashboard" data-i18n-title="settingsCustomCssHelp">?</span>
                     </div>
                     <div class="setting-row">
-                        <textarea class="textarea-field" id="settingsCustomCss" placeholder="/* Custom CSS for the dashboard */" style="min-height: 100px;" maxlength="100000" aria-describedby="settingsCustomCssError"></textarea>
+                        <textarea class="textarea-field" id="settingsCustomCss" placeholder="/* Custom CSS for the dashboard */" data-i18n-placeholder="settingsCustomCssPlaceholder" style="min-height: 100px;" maxlength="100000" aria-describedby="settingsCustomCssError"></textarea>
                         <span class="setting-error" id="settingsCustomCssError" hidden></span>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Show update notification:</span>
+                        <span class="label-text" data-i18n="settingsUpdateNotificationLabel">Show update notification:</span>
                         <select class="select-field" id="settingsUpdateNotify">
-                            <option value="changelog" selected>Open changelog</option>
-                            <option value="badge">Badge only</option>
-                            <option value="never">Never</option>
+                            <option value="changelog" selected data-i18n="settingsUpdateNotifyChangelog">Open changelog</option>
+                            <option value="badge" data-i18n="settingsUpdateNotifyBadge">Badge only</option>
+                            <option value="never" data-i18n="intervalNever">Never</option>
                         </select>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Site Marker Style:</span>
+                        <span class="label-text" data-i18n="settingsSiteMarkerStyleLabel">Site Marker Style:</span>
                         <select class="select-field" id="settingsFaviconService">
-                            <option value="google" selected>Rich Badge</option>
-                            <option value="duckduckgo">Compact Badge</option>
-                            <option value="none">Minimal</option>
+                            <option value="google" selected data-i18n="settingsSiteMarkerRichBadge">Rich Badge</option>
+                            <option value="duckduckgo" data-i18n="settingsSiteMarkerCompactBadge">Compact Badge</option>
+                            <option value="none" data-i18n="settingsSiteMarkerMinimal">Minimal</option>
                         </select>
                     </div>
                     <div class="setting-row">
-                        <button type="button" class="btn" id="btnSaveAppearance">Save</button>
+                        <button type="button" class="btn" id="btnSaveAppearance" data-i18n="save">Save</button>
                     </div>
                 </div>
             </div>
 
             <div class="settings-section">
-                <div class="section-label">Theme Editor</div>
+                <div class="section-label" data-i18n="settingsThemeEditor">Theme Editor</div>
                 <div class="section-content">
                     <div id="themeEditorContainer" class="utility-surface dashboard-module-surface"></div>
                 </div>
@@ -6613,23 +6613,23 @@
 
             <!-- Tags Section -->
             <div class="settings-section">
-                <div class="section-label">Tags</div>
+                <div class="section-label" data-i18n="settingsTags">Tags</div>
                 <div class="section-content">
                     <div class="setting-row">
-                        <label><input type="checkbox" id="settingsEnableTags"> Enable Tags</label>
+                        <label><input type="checkbox" id="settingsEnableTags"> <span data-i18n="settingsEnableTags">Enable Tags</span></label>
                     </div>
                 </div>
             </div>
 
             <!-- Action Menu Section -->
             <div class="settings-section">
-                <div class="section-label">Action Menu</div>
+                <div class="section-label" data-i18n="settingsActionMenu">Action Menu</div>
                 <div class="section-content">
                     <div class="setting-row">
-                        <label><input type="checkbox" id="settingsHideDisabledPopup"> Hide disabled scripts</label>
+                        <label><input type="checkbox" id="settingsHideDisabledPopup"> <span data-i18n="settingsHideDisabledScripts">Hide disabled scripts</span></label>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Columns:</span>
+                        <span class="label-text" data-i18n="settingsColumnsLabel">Columns:</span>
                         <select class="select-field" id="settingsPopupColumns" aria-describedby="settingsPopupColumnsError">
                             <option value="1" selected>1</option>
                             <option value="2">2</option>
@@ -6638,65 +6638,65 @@
                         <span class="setting-error" id="settingsPopupColumnsError" hidden></span>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Userscript order:</span>
+                        <span class="label-text" data-i18n="settingsUserscriptOrderLabel">Userscript order:</span>
                         <select class="select-field" id="settingsScriptOrder" aria-describedby="settingsScriptOrderError">
-                            <option value="auto" selected>Auto</option>
-                            <option value="name">Name</option>
-                            <option value="lastmod">Last Modified</option>
-                            <option value="position">Position</option>
+                            <option value="auto" selected data-i18n="settingsOrderAuto">Auto</option>
+                            <option value="name" data-i18n="settingsOrderName">Name</option>
+                            <option value="lastmod" data-i18n="settingsOrderLastModified">Last Modified</option>
+                            <option value="position" data-i18n="settingsOrderPosition">Position</option>
                         </select>
                         <span class="setting-error" id="settingsScriptOrderError" hidden></span>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Icon badge info:</span>
+                        <span class="label-text" data-i18n="settingsIconBadgeInfoLabel">Icon badge info:</span>
                         <select class="select-field" id="settingsBadgeInfo" aria-describedby="settingsBadgeInfoError">
-                            <option value="running" selected>All-time running instances</option>
-                            <option value="active">Active scripts only</option>
-                            <option value="none">None</option>
+                            <option value="running" selected data-i18n="settingsBadgeInfoRunning">All-time running instances</option>
+                            <option value="active" data-i18n="settingsBadgeInfoActive">Active scripts only</option>
+                            <option value="none" data-i18n="settingsBadgeInfoNone">None</option>
                         </select>
                         <span class="setting-error" id="settingsBadgeInfoError" hidden></span>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Icon badge color:</span>
+                        <span class="label-text" data-i18n="settingsIconBadgeColorLabel">Icon badge color:</span>
                         <input type="text" class="input-field" id="settingsBadgeColor" value="#22c55e" style="width: 100px;" pattern="^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$" inputmode="text" autocomplete="off" aria-describedby="settingsBadgeColorError">
                         <div class="color-preview" id="badgeColorPreview" style="width: 24px; height: 24px; border-radius: 50%; background: #22c55e; border: 1px solid var(--border-color);"></div>
                         <span class="setting-error" id="settingsBadgeColorError" hidden></span>
                     </div>
                     <div class="setting-row">
-                        <button type="button" class="btn" id="btnSaveActionMenu">Save</button>
+                        <button type="button" class="btn" id="btnSaveActionMenu" data-i18n="save">Save</button>
                     </div>
                 </div>
             </div>
 
             <!-- Context Menu Section -->
             <div class="settings-section">
-                <div class="section-label">Context Menu</div>
+                <div class="section-label" data-i18n="settingsContextMenu">Context Menu</div>
                 <div class="section-content">
                     <div class="setting-row">
-                        <label><input type="checkbox" id="settingsEnableContextMenu" checked> Enable context menu</label>
+                        <label><input type="checkbox" id="settingsEnableContextMenu" checked> <span data-i18n="settingsEnableContextMenu">Enable context menu</span></label>
                     </div>
                     <div class="setting-row">
-                        <label><input type="checkbox" id="settingsContextMenuRunAt" checked> Userscripts using @run-at context-menu</label>
+                        <label><input type="checkbox" id="settingsContextMenuRunAt" checked> <span data-i18n="settingsContextMenuRunAt">Userscripts using @run-at context-menu</span></label>
                     </div>
                     <div class="setting-row">
-                        <label><input type="checkbox" id="settingsContextMenuCommands" checked> Userscript menu commands</label>
+                        <label><input type="checkbox" id="settingsContextMenuCommands" checked> <span data-i18n="settingsContextMenuCommands">Userscript menu commands</span></label>
                     </div>
                 </div>
             </div>
 
             <!-- Userscript Search Section -->
             <div class="settings-section">
-                <div class="section-label">Userscript Search</div>
+                <div class="section-label" data-i18n="settingsUserscriptSearch">Userscript Search</div>
                 <div class="section-content">
                     <div class="setting-row">
-                        <span class="label-text">Userscript Search integration:</span>
+                        <span class="label-text" data-i18n="settingsSearchIntegrationLabel">Userscript Search integration:</span>
                         <select class="select-field" id="settingsSearchIntegration" aria-describedby="settingsSearchIntegrationError">
-                            <option value="disabled" selected>Disabled</option>
+                            <option value="disabled" selected data-i18n="disabled">Disabled</option>
                             <option value="greasyFork">Greasy Fork</option>
                             <option value="openUserJS">OpenUserJS</option>
                         </select>
                         <span class="setting-error" id="settingsSearchIntegrationError" hidden></span>
-                        <span class="help-icon" title="Search for scripts when visiting new sites">!</span>
+                        <span class="help-icon" title="Search for scripts when visiting new sites" data-i18n-title="settingsSearchIntegrationHelp">!</span>
                     </div>
                 </div>
             </div>
@@ -6706,28 +6706,28 @@
                 <div class="section-label" data-i18n="settingsUpdate">Userscript Update</div>
                 <div class="section-content">
                     <div class="setting-row">
-                        <label><input type="checkbox" id="settingsUpdateDisabled"> Update disabled scripts</label>
+                        <label><input type="checkbox" id="settingsUpdateDisabled"> <span data-i18n="settingsUpdateDisabledScripts">Update disabled scripts</span></label>
                     </div>
                     <div class="setting-row">
-                        <label><input type="checkbox" id="settingsSilentUpdate"> Apply safe updates without review</label>
+                        <label><input type="checkbox" id="settingsSilentUpdate"> <span data-i18n="settingsApplySafeUpdates">Apply safe updates without review</span></label>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Check Interval:</span>
+                        <span class="label-text" data-i18n="settingsCheckIntervalLabel">Check Interval:</span>
                         <select class="select-field" id="settingsCheckInterval" aria-describedby="settingsCheckIntervalError">
-                            <option value="0">Never</option>
-                            <option value="12">Every 12 Hours</option>
-                            <option value="24" selected>Every Day</option>
-                            <option value="168">Every Week</option>
+                            <option value="0" data-i18n="intervalNever">Never</option>
+                            <option value="12" data-i18n="intervalEvery12Hours">Every 12 Hours</option>
+                            <option value="24" selected data-i18n="intervalEveryDay">Every Day</option>
+                            <option value="168" data-i18n="intervalEveryWeek">Every Week</option>
                         </select>
                         <span class="setting-error" id="settingsCheckIntervalError" hidden></span>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Hide notification after:</span>
+                        <span class="label-text" data-i18n="settingsHideNotificationAfterLabel">Hide notification after:</span>
                         <select class="select-field" id="settingsNotifyHideAfter" aria-describedby="settingsNotifyHideAfterError">
-                            <option value="0">Never</option>
-                            <option value="5">5 Seconds</option>
-                            <option value="15" selected>15 Seconds</option>
-                            <option value="30">30 Seconds</option>
+                            <option value="0" data-i18n="intervalNever">Never</option>
+                            <option value="5" data-i18n="intervalFiveSeconds">5 Seconds</option>
+                            <option value="15" selected data-i18n="intervalFifteenSeconds">15 Seconds</option>
+                            <option value="30" data-i18n="intervalThirtySeconds">30 Seconds</option>
                         </select>
                         <span class="setting-error" id="settingsNotifyHideAfterError" hidden></span>
                     </div>
@@ -6736,14 +6736,14 @@
 
             <!-- Externals Section -->
             <div class="settings-section" data-config-level="advanced">
-                <div class="section-label"><span data-i18n="settingsExternals">Externals</span> <span class="help-icon" title="@require and @resource URL handling">?</span></div>
+                <div class="section-label"><span data-i18n="settingsExternals">Externals</span> <span class="help-icon" title="@require and @resource URL handling" data-i18n-title="settingsExternalsHelp">?</span></div>
                 <div class="section-content">
                     <div class="setting-row">
-                        <span class="label-text">Update Interval:</span>
+                        <span class="label-text" data-i18n="settingsUpdateIntervalLabel">Update Interval:</span>
                         <select class="select-field" id="settingsExternalsInterval" aria-describedby="settingsExternalsIntervalError">
-                            <option value="0" selected>Never</option>
-                            <option value="24">Every Day</option>
-                            <option value="168">Every Week</option>
+                            <option value="0" selected data-i18n="intervalNever">Never</option>
+                            <option value="24" data-i18n="intervalEveryDay">Every Day</option>
+                            <option value="168" data-i18n="intervalEveryWeek">Every Week</option>
                         </select>
                         <span class="setting-error" id="settingsExternalsIntervalError" hidden></span>
                     </div>
