@@ -119,6 +119,13 @@
         cloud: 'cloud utilities',
         diagnostics: 'diagnostic utilities'
     };
+    const UTILITIES_FILTER_LABEL_KEYS = {
+        all: 'utilitiesFilterAllUtilities',
+        backup: 'utilitiesFilterBackupUtilities',
+        import: 'utilitiesFilterImportUtilities',
+        cloud: 'utilitiesFilterCloudUtilities',
+        diagnostics: 'utilitiesFilterDiagnosticUtilities'
+    };
     const SCRIPT_SORT_LABELS = {
         order: 'Manual Order',
         enabled: 'Enabled',
@@ -151,11 +158,29 @@
         scripts: 'scripts-only backups',
         values: 'backups with stored values'
     };
+    const BACKUP_BROWSER_FILTER_LABEL_KEYS = {
+        all: 'backupBrowserFilterAllBackups',
+        vault: 'backupBrowserFilterVaultSnapshots',
+        scripts: 'backupBrowserFilterScriptsOnly',
+        values: 'backupBrowserFilterStoredValues'
+    };
+    const BACKUP_BROWSER_BUTTON_LABEL_KEYS = {
+        all: 'utilitiesFilterAll',
+        vault: 'backupBrowserFilterVault',
+        scripts: 'backupBrowserFilterScripts',
+        values: 'backupBrowserFilterValues'
+    };
     const BACKUP_BROWSER_SORT_LABELS = {
         newest: 'newest first',
         oldest: 'oldest first',
         largest: 'largest archives first',
         scripts: 'most scripts first'
+    };
+    const BACKUP_BROWSER_SORT_LABEL_KEYS = {
+        newest: 'backupBrowserSortNewestFirst',
+        oldest: 'backupBrowserSortOldestFirst',
+        largest: 'backupBrowserSortLargestFirst',
+        scripts: 'backupBrowserSortMostScriptsFirst'
     };
     const TRASH_FILTER_LABELS = {
         all: 'all deleted scripts',
@@ -825,26 +850,33 @@
     function describeBackupScope(backup = {}) {
         const scopeParts = [];
         if (backup.hasGlobalSettings || backup.hasFolders || backup.hasWorkspaces) {
-            scopeParts.push('vault snapshot');
+            scopeParts.push(tDashboard('backupScopeVaultSnapshot', 'vault snapshot'));
         } else {
-            scopeParts.push('scripts only');
+            scopeParts.push(tDashboard('backupScopeScriptsOnly', 'scripts only'));
         }
         if (backup.hasScriptStorage) {
-            scopeParts.push('stored values');
+            scopeParts.push(tDashboard('backupScopeStoredValues', 'stored values'));
         }
         return scopeParts.join(' + ');
     }
 
     function formatBackupBrowserSummary(backups = []) {
         if (!Array.isArray(backups) || backups.length === 0) {
-            return '0 backups · no recovery snapshots yet';
+            return tDashboard('backupBrowserSummaryNone', '0 backups - no recovery snapshots yet');
         }
         const totalSize = backups.reduce((sum, entry) => sum + Number(entry.size || 0), 0);
         const latestBackup = backups[0];
         const latestLabel = latestBackup?.timestamp
-            ? `latest ${formatBackupReason(latestBackup.reason).toLowerCase()} backup ${dateTimeFormatter.format(new Date(latestBackup.timestamp))}`
-            : 'latest backup time unknown';
-        return `${numberFormatter.format(backups.length)} backups · ${formatBytes(totalSize)} · ${latestLabel}`;
+            ? tDashboard('backupBrowserLatestBackup', 'latest {reason} backup {date}', {
+                reason: formatBackupReason(latestBackup.reason).toLowerCase(),
+                date: dateTimeFormatter.format(new Date(latestBackup.timestamp))
+            })
+            : tDashboard('backupBrowserSummaryLatestUnknown', 'latest backup time unknown');
+        return tDashboard('backupBrowserSummary', '{count} backups - {size} - {latest}', {
+            count: numberFormatter.format(backups.length),
+            size: formatBytes(totalSize),
+            latest: latestLabel
+        });
     }
 
     function formatRelativeBackupTime(timestamp) {
@@ -879,20 +911,30 @@
     }
 
     function getBackupAgeGroup(timestamp) {
-        if (!timestamp) return 'Older';
+        if (!timestamp) return tDashboard('backupAgeOlder', 'Older');
         const now = new Date();
         const backupDate = new Date(timestamp);
         const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
         const startOfWeek = startOfToday - (6 * 24 * 60 * 60 * 1000);
-        if (timestamp >= startOfToday) return 'Today';
-        if (timestamp >= startOfWeek) return 'Last 7 Days';
+        if (timestamp >= startOfToday) return tDashboard('backupAgeToday', 'Today');
+        if (timestamp >= startOfWeek) return tDashboard('backupAgeLast7Days', 'Last 7 Days');
         if (backupDate.getFullYear() === now.getFullYear() && backupDate.getMonth() === now.getMonth()) {
-            return 'Earlier This Month';
+            return tDashboard('backupAgeEarlierThisMonth', 'Earlier This Month');
         }
-        return 'Older';
+        return tDashboard('backupAgeOlder', 'Older');
     }
 
-    function groupBackupsForDisplay(backups = [], groupOrder = ['Today', 'Last 7 Days', 'Earlier This Month', 'Older']) {
+    function getBackupAgeGroupOrder(newestFirst = true) {
+        const order = [
+            tDashboard('backupAgeToday', 'Today'),
+            tDashboard('backupAgeLast7Days', 'Last 7 Days'),
+            tDashboard('backupAgeEarlierThisMonth', 'Earlier This Month'),
+            tDashboard('backupAgeOlder', 'Older')
+        ];
+        return newestFirst ? order : order.slice().reverse();
+    }
+
+    function groupBackupsForDisplay(backups = [], groupOrder = getBackupAgeGroupOrder()) {
         const map = new Map();
         backups.forEach(backup => {
             const label = getBackupAgeGroup(backup.timestamp);
@@ -933,14 +975,12 @@
     function getBackupDisplayGroups(backups = []) {
         const orderedBackups = sortBackupsForDisplay(backups);
         if (state.backupBrowserSort === 'largest') {
-            return [{ label: 'Largest Archives', backups: orderedBackups }];
+            return [{ label: tDashboard('backupGroupLargestArchives', 'Largest Archives'), backups: orderedBackups }];
         }
         if (state.backupBrowserSort === 'scripts') {
-            return [{ label: 'Most Scripts', backups: orderedBackups }];
+            return [{ label: tDashboard('backupGroupMostScripts', 'Most Scripts'), backups: orderedBackups }];
         }
-        const groupOrder = state.backupBrowserSort === 'oldest'
-            ? ['Older', 'Earlier This Month', 'Last 7 Days', 'Today']
-            : ['Today', 'Last 7 Days', 'Earlier This Month', 'Older'];
+        const groupOrder = getBackupAgeGroupOrder(state.backupBrowserSort !== 'oldest');
         return groupBackupsForDisplay(orderedBackups, groupOrder);
     }
 
@@ -1230,9 +1270,9 @@
 
     function updateBackupBrowserControls(visibleBackups = getVisibleBackups()) {
         elements.backupBrowserFilterButtons?.forEach(button => {
-            const label = button.dataset.backupBrowserLabel || button.textContent.trim();
-            button.dataset.backupBrowserLabel = label;
             const filter = button.dataset.backupBrowserFilter || 'all';
+            const label = getBackupBrowserButtonLabel(filter);
+            button.dataset.backupBrowserLabel = label;
             const query = normalizeSettingsLabel(state.backupBrowserQuery);
             const count = state.backups.filter(backup => {
                 if (!backupMatchesBrowserFilter(backup, filter)) return false;
@@ -1268,22 +1308,36 @@
         const totalCount = Array.isArray(state.backups) ? state.backups.length : 0;
         const visibleCount = visibleBackups.length;
         const query = state.backupBrowserQuery.trim();
-        const filterLabel = BACKUP_BROWSER_FILTER_LABELS[state.backupBrowserFilter] || 'all backups';
-        const sortLabel = BACKUP_BROWSER_SORT_LABELS[state.backupBrowserSort] || 'newest first';
-        const sortSuffix = state.backupBrowserSort === 'newest' ? '' : ` Sorted ${sortLabel}.`;
+        const filterLabel = getBackupBrowserFilterLabel(state.backupBrowserFilter);
+        const sortLabel = getBackupBrowserSortLabel(state.backupBrowserSort);
+        const sortSuffix = state.backupBrowserSort === 'newest'
+            ? ''
+            : tDashboard('backupBrowserSortedSuffix', ' Sorted {sort}.', { sort: sortLabel });
         if (totalCount === 0) {
-            elements.backupBrowserStatus.textContent = 'No backups saved yet.';
+            elements.backupBrowserStatus.textContent = tDashboard('backupBrowserNoBackups', 'No backups saved yet.');
             return;
         }
         if (query) {
-            elements.backupBrowserStatus.textContent = `Showing ${numberFormatter.format(visibleCount)} of ${numberFormatter.format(totalCount)} backups for "${query}".${sortSuffix}`;
+            elements.backupBrowserStatus.textContent = tDashboard('backupBrowserShowingQuery', 'Showing {visible} of {total} backups for "{query}".{sortSuffix}', {
+                visible: numberFormatter.format(visibleCount),
+                total: numberFormatter.format(totalCount),
+                query,
+                sortSuffix
+            });
             return;
         }
         if (state.backupBrowserFilter === 'all') {
-            elements.backupBrowserStatus.textContent = `Showing all ${numberFormatter.format(totalCount)} backups.${sortSuffix}`;
+            elements.backupBrowserStatus.textContent = tDashboard('backupBrowserShowingAllCount', 'Showing all {total} backups.{sortSuffix}', {
+                total: numberFormatter.format(totalCount),
+                sortSuffix
+            });
             return;
         }
-        elements.backupBrowserStatus.textContent = `Showing ${numberFormatter.format(visibleCount)} ${filterLabel}.${sortSuffix}`;
+        elements.backupBrowserStatus.textContent = tDashboard('backupBrowserShowingFilterCount', 'Showing {visible} {filter}.{sortSuffix}', {
+            visible: numberFormatter.format(visibleCount),
+            filter: filterLabel,
+            sortSuffix
+        });
     }
 
     function applyBackupBrowserFilters() {
@@ -2059,6 +2113,30 @@
     function getSettingsFilterLabel(filter) {
         const labelKey = SETTINGS_FILTER_LABEL_KEYS[filter] || SETTINGS_FILTER_LABEL_KEYS.all;
         return tDashboard(labelKey, SETTINGS_FILTER_LABELS[filter] || SETTINGS_FILTER_LABELS.all);
+    }
+
+    function getUtilitiesFilterLabel(filter) {
+        const labelKey = UTILITIES_FILTER_LABEL_KEYS[filter] || UTILITIES_FILTER_LABEL_KEYS.all;
+        return tDashboard(labelKey, UTILITIES_FILTER_LABELS[filter] || UTILITIES_FILTER_LABELS.all);
+    }
+
+    function getBackupBrowserFilterLabel(filter) {
+        const labelKey = BACKUP_BROWSER_FILTER_LABEL_KEYS[filter] || BACKUP_BROWSER_FILTER_LABEL_KEYS.all;
+        return tDashboard(labelKey, BACKUP_BROWSER_FILTER_LABELS[filter] || BACKUP_BROWSER_FILTER_LABELS.all);
+    }
+
+    function getBackupBrowserButtonLabel(filter) {
+        const labelKey = BACKUP_BROWSER_BUTTON_LABEL_KEYS[filter] || BACKUP_BROWSER_BUTTON_LABEL_KEYS.all;
+        return tDashboard(labelKey, filter === 'all' ? 'All' : filter);
+    }
+
+    function getBackupBrowserSortLabel(sort) {
+        const labelKey = BACKUP_BROWSER_SORT_LABEL_KEYS[sort] || BACKUP_BROWSER_SORT_LABEL_KEYS.newest;
+        return tDashboard(labelKey, BACKUP_BROWSER_SORT_LABELS[sort] || BACKUP_BROWSER_SORT_LABELS.newest);
+    }
+
+    function getDashboardPluralLabel(count, singularKey, pluralKey, singularFallback, pluralFallback) {
+        return tDashboard(count === 1 ? singularKey : pluralKey, count === 1 ? singularFallback : pluralFallback);
     }
 
     function setLabelPreservingDecor(el, label) {
@@ -4981,23 +5059,34 @@
 
         if (elements.utilitiesCloudSummary) {
             elements.utilitiesCloudSummary.textContent = providerValue === 'none'
-                ? 'Choose provider'
-                : cloudStatus === 'Connected'
-                ? `${providerLabel} live`
-                : cloudStatus === 'Error'
-                    ? `${providerLabel} error`
-                    : `${providerLabel} idle`;
+                ? tDashboard('utilitiesCloudChooseProvider', 'Choose provider')
+                : cloudStatus === tDashboard('syncConnected', 'Connected')
+                ? tDashboard('utilitiesCloudLive', '{provider} live', { provider: providerLabel })
+                : cloudStatus === tDashboard('error', 'Error')
+                    ? tDashboard('utilitiesCloudError', '{provider} error', { provider: providerLabel })
+                    : tDashboard('utilitiesCloudIdle', '{provider} idle', { provider: providerLabel });
         }
         if (elements.utilitiesImportSummary) {
-            elements.utilitiesImportSummary.textContent = `${numberFormatter.format(importCount)} paths`;
+            elements.utilitiesImportSummary.textContent = tDashboard('utilitiesImportPaths', '{count} paths', {
+                count: numberFormatter.format(importCount)
+            });
         }
         if (elements.utilitiesWorkspaceSummary) {
             elements.utilitiesWorkspaceSummary.textContent = workspaceCount === 0
-                ? 'None saved'
-                : `${numberFormatter.format(workspaceCount)} saved`;
+                ? tDashboard('utilitiesWorkspaceNoneSaved', 'None saved')
+                : tDashboard('utilitiesWorkspaceSaved', '{count} saved', { count: numberFormatter.format(workspaceCount) });
         }
         if (elements.utilitiesVisibleSummary) {
-            elements.utilitiesVisibleSummary.textContent = `${numberFormatter.format(resolvedVisibleCount)} section${resolvedVisibleCount === 1 ? '' : 's'}`;
+            elements.utilitiesVisibleSummary.textContent = tDashboard('utilitiesVisibleSectionCount', '{count} {sectionLabel}', {
+                count: numberFormatter.format(resolvedVisibleCount),
+                sectionLabel: getDashboardPluralLabel(
+                    resolvedVisibleCount,
+                    'utilitiesSectionSingular',
+                    'utilitiesSectionPlural',
+                    'section',
+                    'sections'
+                )
+            });
         }
     }
 
@@ -5024,9 +5113,21 @@
 
         if (elements.utilitiesFilterStatus) {
             if (query) {
-                elements.utilitiesFilterStatus.textContent = `Showing ${numberFormatter.format(visibleCount)} result${visibleCount === 1 ? '' : 's'} for "${elements.utilitiesQuickFilter?.value?.trim() || ''}".`;
+                elements.utilitiesFilterStatus.textContent = tDashboard('utilitiesResultsForQuery', 'Showing {count} {resultLabel} for "{query}".', {
+                    count: numberFormatter.format(visibleCount),
+                    resultLabel: getDashboardPluralLabel(
+                        visibleCount,
+                        'utilitiesResultSingular',
+                        'utilitiesResultPlural',
+                        'result',
+                        'results'
+                    ),
+                    query: elements.utilitiesQuickFilter?.value?.trim() || ''
+                });
             } else {
-                elements.utilitiesFilterStatus.textContent = `Showing ${UTILITIES_FILTER_LABELS[state.utilitiesPanelFilter] || 'all utilities'}.`;
+                elements.utilitiesFilterStatus.textContent = tDashboard('utilitiesShowingFilter', 'Showing {filter}.', {
+                    filter: getUtilitiesFilterLabel(state.utilitiesPanelFilter)
+                });
             }
         }
         if (elements.utilitiesEmptyState) {
@@ -11761,51 +11862,72 @@
     }
 
     function getSubscriptionHealth(subscription) {
-        if (subscription?.enabled === false) return { label: 'Disabled', className: 'disabled' };
+        if (subscription?.enabled === false) return { label: tDashboard('subscriptionHealthDisabled', 'Disabled'), className: 'disabled' };
         if (Array.isArray(subscription?.lastErrors) && subscription.lastErrors.length > 0) {
-            return { label: 'Needs attention', className: 'error' };
+            return { label: tDashboard('subscriptionHealthNeedsAttention', 'Needs attention'), className: 'error' };
         }
-        if (subscription?.lastCheckedAt) return { label: 'Healthy', className: 'ok' };
-        return { label: 'Not checked', className: 'warn' };
+        if (subscription?.lastCheckedAt) return { label: tDashboard('subscriptionHealthHealthy', 'Healthy'), className: 'ok' };
+        return { label: tDashboard('subscriptionHealthNotChecked', 'Not checked'), className: 'warn' };
     }
 
     function renderSubscriptions() {
         if (!elements.subscriptionList) return;
         const subscriptions = Array.isArray(state.subscriptions) ? state.subscriptions : [];
         if (subscriptions.length === 0) {
-            safeSetHtml(elements.subscriptionList, '<div class="panel-empty-inline">No subscriptions saved.</div>');
-            setSubscriptionStatus('No feeds loaded');
+            safeSetHtml(elements.subscriptionList, `<div class="panel-empty-inline">${escapeHtml(tDashboard('noSubscriptionsSaved', 'No subscriptions saved.'))}</div>`);
+            setSubscriptionStatus(tDashboard('noFeedsLoaded', 'No feeds loaded'));
             return;
         }
 
         const totalScripts = subscriptions.reduce((sum, item) => sum + (Array.isArray(item.scripts) ? item.scripts.length : 0), 0);
-        setSubscriptionStatus(`${numberFormatter.format(subscriptions.length)} feed${subscriptions.length === 1 ? '' : 's'}, ${numberFormatter.format(totalScripts)} listed script${totalScripts === 1 ? '' : 's'}`);
+        setSubscriptionStatus(tDashboard('subscriptionStatusCounts', '{feeds} {feedLabel}, {scripts} listed {scriptLabel}', {
+            feeds: numberFormatter.format(subscriptions.length),
+            feedLabel: getDashboardPluralLabel(
+                subscriptions.length,
+                'subscriptionFeedSingular',
+                'subscriptionFeedPlural',
+                'feed',
+                'feeds'
+            ),
+            scripts: numberFormatter.format(totalScripts),
+            scriptLabel: getDashboardPluralLabel(totalScripts, 'scriptSingular', 'scriptPlural', 'script', 'scripts')
+        }));
         safeSetHtml(elements.subscriptionList, subscriptions.map(subscription => {
             const scripts = Array.isArray(subscription.scripts) ? subscription.scripts.length : 0;
             const lastChecked = subscription.lastCheckedAt
                 ? formatSyncTimestamp(subscription.lastCheckedAt)
-                : 'Never';
+                : tDashboard('never', 'Never');
             const errors = Array.isArray(subscription.lastErrors) && subscription.lastErrors.length
-                ? `<span>${numberFormatter.format(subscription.lastErrors.length)} error${subscription.lastErrors.length === 1 ? '' : 's'}</span>`
+                ? `<span>${escapeHtml(tDashboard('subscriptionErrorCount', '{count} {errorLabel}', {
+                    count: numberFormatter.format(subscription.lastErrors.length),
+                    errorLabel: getDashboardPluralLabel(
+                        subscription.lastErrors.length,
+                        'errorSingular',
+                        'errorPlural',
+                        'error',
+                        'errors'
+                    )
+                }))}</span>`
                 : '';
             const health = getSubscriptionHealth(subscription);
+            const scriptLabel = getDashboardPluralLabel(scripts, 'scriptSingular', 'scriptPlural', 'script', 'scripts');
             return `
                 <article class="subscription-item" data-subscription-id="${escapeHtml(subscription.id || '')}">
                     <div class="subscription-copy">
-                        <strong>${escapeHtml(subscription.name || 'Script subscription')}</strong>
+                        <strong>${escapeHtml(subscription.name || tDashboard('subscriptionDefaultName', 'Script subscription'))}</strong>
                         <span class="subscription-url">${escapeHtml(subscription.url || '')}</span>
                         <div class="subscription-meta">
-                            <span class="subscription-health ${escapeHtml(health.className)}">Health: ${escapeHtml(health.label)}</span>
-                            <span>${numberFormatter.format(scripts)} script${scripts === 1 ? '' : 's'}</span>
-                            <span>Last checked: ${escapeHtml(lastChecked)}</span>
-                            <span>${numberFormatter.format(subscription.lastQueued || 0)} queued</span>
-                            <span>${numberFormatter.format(subscription.lastSkipped || 0)} skipped</span>
+                            <span class="subscription-health ${escapeHtml(health.className)}">${escapeHtml(tDashboard('subscriptionHealthPrefix', 'Health: {health}', { health: health.label }))}</span>
+                            <span>${escapeHtml(tDashboard('subscriptionScriptCount', '{count} {scriptLabel}', { count: numberFormatter.format(scripts), scriptLabel }))}</span>
+                            <span>${escapeHtml(tDashboard('subscriptionLastChecked', 'Last checked: {time}', { time: lastChecked }))}</span>
+                            <span>${escapeHtml(tDashboard('subscriptionQueuedCount', '{count} queued', { count: numberFormatter.format(subscription.lastQueued || 0) }))}</span>
+                            <span>${escapeHtml(tDashboard('subscriptionSkippedCount', '{count} skipped', { count: numberFormatter.format(subscription.lastSkipped || 0) }))}</span>
                             ${errors}
                         </div>
                     </div>
                     <div class="subscription-actions">
-                        <button type="button" class="toolbar-btn" data-subscription-action="refresh" data-subscription-id="${escapeHtml(subscription.id || '')}">Refresh</button>
-                        <button type="button" class="toolbar-btn" data-subscription-action="remove" data-subscription-id="${escapeHtml(subscription.id || '')}">Remove</button>
+                        <button type="button" class="toolbar-btn" data-subscription-action="refresh" data-subscription-id="${escapeHtml(subscription.id || '')}">${escapeHtml(tDashboard('refresh', 'Refresh'))}</button>
+                        <button type="button" class="toolbar-btn" data-subscription-action="remove" data-subscription-id="${escapeHtml(subscription.id || '')}">${escapeHtml(tDashboard('removeAction', 'Remove'))}</button>
                     </div>
                 </article>
             `;
@@ -15418,9 +15540,9 @@
             return state.backups;
         } catch (error) {
             const message = error?.message || 'Failed to load backups';
-            if (elements.backupBrowserSummary) elements.backupBrowserSummary.textContent = 'Backup browser unavailable';
+            if (elements.backupBrowserSummary) elements.backupBrowserSummary.textContent = tDashboard('backupBrowserUnavailable', 'Backup browser unavailable.');
             if (elements.backupList) safeSetHtml(elements.backupList, `<div class="panel-empty-inline">${escapeHtml(message)}</div>`);
-            if (elements.backupBrowserStatus) elements.backupBrowserStatus.textContent = 'Backup browser unavailable.';
+            if (elements.backupBrowserStatus) elements.backupBrowserStatus.textContent = tDashboard('backupBrowserUnavailable', 'Backup browser unavailable.');
             updateBackupScheduleSummary(state.backupSettings || {});
             updateSupportSnapshotSummary();
             if (announce) showToast(message, 'error');

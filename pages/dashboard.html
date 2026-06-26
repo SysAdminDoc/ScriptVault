@@ -7532,185 +7532,185 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
             </div>
 
             <div class="settings-section">
-                <div class="section-label">Backup Browser</div>
+                <div class="section-label" data-i18n="backupBrowserTitle">Backup Browser</div>
                 <div class="section-content">
-                    <div class="utility-note" style="margin-bottom:8px">Review stored backups, export them, or restore the full vault or selected scripts with a preview first.</div>
+                    <div class="utility-note" style="margin-bottom:8px" data-i18n="backupBrowserNote">Review stored backups, export them, or restore the full vault or selected scripts with a preview first.</div>
                     <div class="setting-row" style="justify-content:space-between;align-items:center;gap:12px">
-                        <span class="script-counter" id="backupBrowserSummary">0 backups</span>
+                        <span class="script-counter" id="backupBrowserSummary" data-i18n="backupBrowserSummaryEmpty">0 backups</span>
                         <div class="btn-group">
-                            <button type="button" class="btn" id="btnCreateBackup">Create Backup</button>
-                            <button type="button" class="btn" id="btnImportBackupArchive">Import ZIP</button>
-                            <button type="button" class="btn" id="btnRefreshBackups">Refresh</button>
+                            <button type="button" class="btn" id="btnCreateBackup" data-i18n="createBackup">Create Backup</button>
+                            <button type="button" class="btn" id="btnImportBackupArchive" data-i18n="importZip">Import ZIP</button>
+                            <button type="button" class="btn" id="btnRefreshBackups" data-i18n="refresh">Refresh</button>
                         </div>
                     </div>
                     <div class="utilities-toolbar" style="padding:0;margin-top:12px">
                         <label class="utilities-search" for="backupBrowserQuickFilter">
                             <span class="utilities-search-icon">⌕</span>
-                            <input type="search" class="utilities-search-input" id="backupBrowserQuickFilter" name="backup_browser_search" placeholder="Search manual, scheduled, vault snapshot…" autocomplete="off" spellcheck="false">
+                            <input type="search" class="utilities-search-input" id="backupBrowserQuickFilter" name="backup_browser_search" placeholder="Search manual, scheduled, vault snapshot..." data-i18n-placeholder="backupBrowserSearchPlaceholder" autocomplete="off" spellcheck="false">
                         </label>
                         <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:flex-end">
-                            <div class="utilities-filter-row" role="group" aria-label="Backup browser filters">
-                                <button type="button" class="utilities-filter active" data-backup-browser-filter="all">All</button>
-                                <button type="button" class="utilities-filter" data-backup-browser-filter="vault">Vault</button>
-                                <button type="button" class="utilities-filter" data-backup-browser-filter="scripts">Scripts</button>
-                                <button type="button" class="utilities-filter" data-backup-browser-filter="values">Values</button>
+                            <div class="utilities-filter-row" role="group" aria-label="Backup browser filters" data-i18n-aria-label="backupBrowserFilters">
+                                <button type="button" class="utilities-filter active" data-backup-browser-filter="all" data-i18n="utilitiesFilterAll">All</button>
+                                <button type="button" class="utilities-filter" data-backup-browser-filter="vault" data-i18n="backupBrowserFilterVault">Vault</button>
+                                <button type="button" class="utilities-filter" data-backup-browser-filter="scripts" data-i18n="backupBrowserFilterScripts">Scripts</button>
+                                <button type="button" class="utilities-filter" data-backup-browser-filter="values" data-i18n="backupBrowserFilterValues">Values</button>
                             </div>
                             <select class="select-field" id="backupBrowserSort" style="min-width:170px">
-                                <option value="newest">Newest First</option>
-                                <option value="oldest">Oldest First</option>
-                                <option value="largest">Largest Archives</option>
-                                <option value="scripts">Most Scripts</option>
+                                <option value="newest" data-i18n="backupBrowserSortNewest">Newest First</option>
+                                <option value="oldest" data-i18n="backupBrowserSortOldest">Oldest First</option>
+                                <option value="largest" data-i18n="backupBrowserSortLargest">Largest Archives</option>
+                                <option value="scripts" data-i18n="backupBrowserSortMostScripts">Most Scripts</option>
                             </select>
-                            <button type="button" class="btn" id="btnResetBackupBrowser">Reset View</button>
+                            <button type="button" class="btn" id="btnResetBackupBrowser" data-i18n="resetView">Reset View</button>
                         </div>
                     </div>
-                    <div class="utilities-filter-status" id="backupBrowserStatus">Showing all backups.</div>
+                    <div class="utilities-filter-status" id="backupBrowserStatus" data-i18n="backupBrowserShowingAllStatic">Showing all backups.</div>
                     <input type="file" id="backupArchiveInput" accept=".zip" style="display:none">
                     <div id="backupList" class="utility-surface">
-                        <div class="panel-empty-inline">No backups saved yet.</div>
+                        <div class="panel-empty-inline" data-i18n="backupBrowserNoBackups">No backups saved yet.</div>
                     </div>
                 </div>
             </div>
 
             <div class="settings-section">
-                <div class="section-label">Script Stats</div>
+                <div class="section-label" data-i18n="scriptStatsTitle">Script Stats</div>
                 <div class="section-content">
                     <div class="setting-row">
-                        <button type="button" class="btn" id="btnExportStats">Export CSV</button>
-                        <span class="utility-inline-status" style="margin-inline-start:8px">Export execution stats for all scripts</span>
+                        <button type="button" class="btn" id="btnExportStats" data-i18n="exportCsv">Export CSV</button>
+                        <span class="utility-inline-status" style="margin-inline-start:8px" data-i18n="scriptStatsDescription">Export execution stats for all scripts</span>
                     </div>
                 </div>
             </div>
 
             <div class="settings-section">
-                <div class="section-label">Tampermonkey Import</div>
+                <div class="section-label" data-i18n="tampermonkeyImportTitle">Tampermonkey Import</div>
                 <div class="section-content">
                     <div class="setting-row">
-                        <button type="button" class="btn" id="btnImportTampermonkey">Import .txt Export</button>
-                        <span class="utility-inline-status" style="margin-inline-start:8px">Import from Tampermonkey's text backup format</span>
+                        <button type="button" class="btn" id="btnImportTampermonkey" data-i18n="importTxtExport">Import .txt Export</button>
+                        <span class="utility-inline-status" style="margin-inline-start:8px" data-i18n="tampermonkeyImportDescription">Import from Tampermonkey's text backup format</span>
                     </div>
                 </div>
             </div>
 
             <div class="settings-section">
-                <div class="section-label">TextArea</div>
+                <div class="section-label" data-i18n="textareaTitle">TextArea</div>
                 <div class="section-content">
                     <div class="setting-row">
                         <div class="btn-group">
-                            <button type="button" class="btn" id="btnTextareaExport">Export</button>
-                            <button type="button" class="btn" id="btnTextareaImport">Import</button>
+                            <button type="button" class="btn" id="btnTextareaExport" data-i18n="exportAction">Export</button>
+                            <button type="button" class="btn" id="btnTextareaImport" data-i18n="importAction">Import</button>
                         </div>
                     </div>
                     <div class="setting-row">
-                        <textarea class="textarea-field" id="textareaData" name="vault_json_data" aria-label="Vault JSON data" spellcheck="false" style="min-height:150px" placeholder="Paste JSON data here…"></textarea>
+                        <textarea class="textarea-field" id="textareaData" name="vault_json_data" aria-label="Vault JSON data" data-i18n-aria-label="vaultJsonDataAria" spellcheck="false" style="min-height:150px" placeholder="Paste JSON data here..." data-i18n-placeholder="pasteJsonPlaceholder"></textarea>
                     </div>
                 </div>
             </div>
 
             <div class="settings-section">
-                <div class="section-label">Import from URL</div>
+                <div class="section-label" data-i18n="importFromUrlTitle">Import from URL</div>
                 <div class="section-content">
                     <div class="setting-row">
-                        <input type="url" class="input-field wide" id="importUrlInput" name="import_script_url" aria-label="Userscript URL" autocomplete="off" spellcheck="false" inputmode="url" placeholder="https://example.com/script.user.js">
-                        <button type="button" class="btn" id="btnInstallFromUrl" style="margin-inline-start:10px">Install</button>
+                        <input type="url" class="input-field wide" id="importUrlInput" name="import_script_url" aria-label="Userscript URL" data-i18n-aria-label="userscriptUrlAria" autocomplete="off" spellcheck="false" inputmode="url" placeholder="https://example.com/script.user.js">
+                        <button type="button" class="btn" id="btnInstallFromUrl" style="margin-inline-start:10px" data-i18n="installAction">Install</button>
                     </div>
                 </div>
             </div>
 
             <div class="settings-section">
-                <div class="section-label">Script Subscriptions</div>
+                <div class="section-label" data-i18n="scriptSubscriptionsTitle">Script Subscriptions</div>
                 <div class="section-content">
                     <div class="setting-row subscription-form">
-                        <input type="url" class="input-field wide" id="subscriptionUrlInput" name="subscription_feed_url" aria-label="Subscription feed URL" autocomplete="off" spellcheck="false" inputmode="url" placeholder="https://example.com/scripts.json">
-                        <input type="text" class="input-field" id="subscriptionNameInput" name="subscription_feed_name" aria-label="Subscription name" autocomplete="off" spellcheck="false" placeholder="Name">
-                        <button type="button" class="btn" id="btnAddSubscription">Add Feed</button>
+                        <input type="url" class="input-field wide" id="subscriptionUrlInput" name="subscription_feed_url" aria-label="Subscription feed URL" data-i18n-aria-label="subscriptionFeedUrlAria" autocomplete="off" spellcheck="false" inputmode="url" placeholder="https://example.com/scripts.json">
+                        <input type="text" class="input-field" id="subscriptionNameInput" name="subscription_feed_name" aria-label="Subscription name" data-i18n-aria-label="subscriptionNameAria" autocomplete="off" spellcheck="false" placeholder="Name" data-i18n-placeholder="subscriptionNamePlaceholder">
+                        <button type="button" class="btn" id="btnAddSubscription" data-i18n="addFeed">Add Feed</button>
                     </div>
                     <div class="setting-row" style="gap:8px">
-                        <button type="button" class="btn" id="btnRefreshSubscriptions">Refresh Feeds</button>
-                        <label><input type="checkbox" id="settingsSubscriptionAutoRefresh"> Auto-refresh</label>
-                        <select class="select-field" id="settingsSubscriptionRefreshInterval" aria-label="Subscription refresh interval" aria-describedby="settingsSubscriptionRefreshIntervalError">
+                        <button type="button" class="btn" id="btnRefreshSubscriptions" data-i18n="refreshFeeds">Refresh Feeds</button>
+                        <label><input type="checkbox" id="settingsSubscriptionAutoRefresh"> <span data-i18n="subscriptionAutoRefresh">Auto-refresh</span></label>
+                        <select class="select-field" id="settingsSubscriptionRefreshInterval" aria-label="Subscription refresh interval" data-i18n-aria-label="subscriptionRefreshIntervalAria" aria-describedby="settingsSubscriptionRefreshIntervalError">
                             <option value="0">Never</option>
                             <option value="12">Every 12 Hours</option>
                             <option value="24" selected>Every Day</option>
                             <option value="168">Every Week</option>
                         </select>
                         <span class="setting-error" id="settingsSubscriptionRefreshIntervalError" hidden></span>
-                        <span class="utility-inline-status" id="subscriptionStatus">No feeds loaded</span>
+                        <span class="utility-inline-status" id="subscriptionStatus" data-i18n="noFeedsLoaded">No feeds loaded</span>
                     </div>
                     <div id="subscriptionList" class="subscription-list utility-surface">
-                        <div class="panel-empty-inline">No subscriptions saved.</div>
+                        <div class="panel-empty-inline" data-i18n="noSubscriptionsSaved">No subscriptions saved.</div>
                     </div>
                 </div>
             </div>
 
             <div class="settings-section">
-                <div class="section-label">Install from Local File</div>
+                <div class="section-label" data-i18n="installLocalFileTitle">Install from Local File</div>
                 <div class="section-content">
-                    <div class="utility-note" style="margin-bottom:8px">Pick a <code>.user.js</code> file or drag and drop one anywhere on this page.</div>
+                    <div class="utility-note" style="margin-bottom:8px" data-i18n="installLocalFileNote">Pick a .user.js file or drag and drop one anywhere on this page.</div>
                     <div class="setting-row">
-                        <input type="file" id="installFileInput" name="install_file" accept=".user.js,.js,text/javascript" aria-label="Userscript file" style="display:none">
-                        <button type="button" class="btn" id="btnInstallFromFile">Choose file…</button>
-                        <span class="utility-inline-status" id="installFileStatus" style="margin-inline-start:8px">No file selected</span>
+                        <input type="file" id="installFileInput" name="install_file" accept=".user.js,.js,text/javascript" aria-label="Userscript file" data-i18n-aria-label="userscriptFileAria" style="display:none">
+                        <button type="button" class="btn" id="btnInstallFromFile" data-i18n="chooseFileEllipsis">Choose file...</button>
+                        <span class="utility-inline-status" id="installFileStatus" style="margin-inline-start:8px" data-i18n="noFileSelected">No file selected</span>
                     </div>
                 </div>
             </div>
 
             <div class="settings-section">
-                <div class="section-label">Batch Install from URLs</div>
+                <div class="section-label" data-i18n="batchInstallTitle">Batch Install from URLs</div>
                 <div class="section-content">
                     <div class="setting-row">
-                        <textarea class="textarea-field" id="batchUrlInput" name="batch_install_urls" aria-label="Batch install script URLs" spellcheck="false" rows="4" placeholder="Paste one .user.js URL per line…" style="width:100%;font-size:0.75rem;resize:vertical"></textarea>
+                        <textarea class="textarea-field" id="batchUrlInput" name="batch_install_urls" aria-label="Batch install script URLs" data-i18n-aria-label="batchInstallUrlsAria" spellcheck="false" rows="4" placeholder="Paste one .user.js URL per line..." data-i18n-placeholder="batchInstallPlaceholder" style="width:100%;font-size:0.75rem;resize:vertical"></textarea>
                     </div>
                     <div class="setting-row">
-                        <button type="button" class="btn" id="btnBatchInstall">Install All</button>
-                        <span class="utility-inline-status" style="margin-inline-start:8px">One URL per line</span>
+                        <button type="button" class="btn" id="btnBatchInstall" data-i18n="installAll">Install All</button>
+                        <span class="utility-inline-status" style="margin-inline-start:8px" data-i18n="oneUrlPerLine">One URL per line</span>
                     </div>
                 </div>
             </div>
 
             <div class="settings-section">
-                <div class="section-label">Workspaces</div>
+                <div class="section-label" data-i18n="workspacesTitle">Workspaces</div>
                 <div class="section-content">
-                    <div class="utility-note" style="margin-bottom:8px">Save and switch between different sets of enabled and disabled scripts.</div>
+                    <div class="utility-note" style="margin-bottom:8px" data-i18n="workspacesNote">Save and switch between different sets of enabled and disabled scripts.</div>
                     <div id="workspaceList" class="workspace-list" aria-live="polite" aria-busy="false" style="margin-bottom:8px"></div>
                     <div class="setting-row">
-                        <button type="button" class="btn" id="btnCreateWorkspace">Save Current as Workspace</button>
+                        <button type="button" class="btn" id="btnCreateWorkspace" data-i18n="saveCurrentWorkspace">Save Current as Workspace</button>
                     </div>
                 </div>
             </div>
 
             <div class="settings-section">
-                <div class="section-label">Collections</div>
+                <div class="section-label" data-i18n="collectionsTitle">Collections</div>
                 <div class="section-content">
                     <div id="collectionsContainer" class="utility-surface dashboard-module-surface"></div>
                 </div>
             </div>
 
             <div class="settings-section">
-                <div class="section-label">Standalone Export</div>
+                <div class="section-label" data-i18n="standaloneExportTitle">Standalone Export</div>
                 <div class="section-content">
                     <div class="setting-row standalone-export-row">
-                        <select class="select-field" id="standaloneScriptSelect" aria-label="Standalone export script"></select>
+                        <select class="select-field" id="standaloneScriptSelect" aria-label="Standalone export script" data-i18n-aria-label="standaloneExportScriptAria"></select>
                         <div class="btn-group">
-                            <button type="button" class="btn" id="btnStandaloneHtml">HTML</button>
-                            <button type="button" class="btn" id="btnStandaloneInstall">Install Page</button>
-                            <button type="button" class="btn" id="btnStandaloneBookmarklet">Bookmarklet</button>
-                            <button type="button" class="btn" id="btnStandalonePortfolio">Portfolio</button>
+                            <button type="button" class="btn" id="btnStandaloneHtml" data-i18n="htmlExport">HTML</button>
+                            <button type="button" class="btn" id="btnStandaloneInstall" data-i18n="installPage">Install Page</button>
+                            <button type="button" class="btn" id="btnStandaloneBookmarklet" data-i18n="bookmarklet">Bookmarklet</button>
+                            <button type="button" class="btn" id="btnStandalonePortfolio" data-i18n="portfolio">Portfolio</button>
                         </div>
                     </div>
-                    <span class="utility-inline-status" id="standaloneExportStatus" role="status" aria-live="polite">Select a script or use the current selection.</span>
+                    <span class="utility-inline-status" id="standaloneExportStatus" role="status" aria-live="polite" data-i18n="standaloneDefaultStatus">Select a script or use the current selection.</span>
                 </div>
             </div>
 
             <div class="settings-section">
-                <div class="section-label">GitHub Gist</div>
+                <div class="section-label" data-i18n="githubGistTitle">GitHub Gist</div>
                 <div class="section-content">
                     <div id="gistContainer" class="utility-surface dashboard-module-surface"></div>
                 </div>
             </div>
 
             <div class="settings-section">
-                <div class="section-label">Profiles</div>
+                <div class="section-label" data-i18n="profilesTitle">Profiles</div>
                 <div class="section-content">
                     <div id="profilesContainer" class="utility-surface dashboard-module-surface">
                         <div class="sv-profile-header-anchor"></div>
@@ -7719,165 +7719,165 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
             </div>
 
             <div class="settings-section">
-                <div class="section-label">Script Chains</div>
+                <div class="section-label" data-i18n="scriptChainsTitle">Script Chains</div>
                 <div class="section-content">
                     <div id="chainsContainer" class="utility-surface dashboard-module-surface"></div>
                 </div>
             </div>
 
             <div class="settings-section">
-                <div class="section-label">Achievements</div>
+                <div class="section-label" data-i18n="achievementsTitle">Achievements</div>
                 <div class="section-content">
                     <div id="gamificationContainer" class="utility-surface dashboard-module-surface"></div>
                 </div>
             </div>
 
             <div class="settings-section">
-                <div class="section-label">CSP Reporter</div>
+                <div class="section-label" data-i18n="cspReporterTitle">CSP Reporter</div>
                 <div class="section-content">
                     <div id="cspContainer" class="utility-surface dashboard-module-surface"></div>
                 </div>
             </div>
 
             <div class="settings-section">
-                <div class="section-label">Dependency Graph</div>
+                <div class="section-label" data-i18n="dependencyGraphTitle">Dependency Graph</div>
                 <div class="section-content">
                     <div id="depGraphContainer" class="utility-surface dashboard-module-surface"></div>
                 </div>
             </div>
 
             <div class="settings-section">
-                <div class="section-label">Activity Heatmap</div>
+                <div class="section-label" data-i18n="activityHeatmapTitle">Activity Heatmap</div>
                 <div class="section-content">
                     <div id="heatmapContainer" class="utility-surface dashboard-module-surface"></div>
                 </div>
             </div>
 
             <div class="settings-section">
-                <div class="section-label">Network Request Log</div>
+                <div class="section-label" data-i18n="networkRequestLogTitle">Network Request Log</div>
                 <div class="section-content">
                     <div id="networkLogContainer" class="utility-surface" style="max-height:250px;overflow-y:auto;font-size:0.75rem">
                         <div class="dashboard-state dashboard-state-muted" role="status" aria-live="polite">
                             <span class="dashboard-state-mark" aria-hidden="true">i</span>
-                            <span><strong class="dashboard-state-title">No network requests logged yet</strong> <span class="dashboard-state-detail">GM_xmlhttpRequest calls will appear here with status, size, and timing once scripts make requests.</span></span>
+                            <span><strong class="dashboard-state-title" data-i18n="noNetworkRequestsTitle">No network requests logged yet</strong> <span class="dashboard-state-detail" data-i18n="noNetworkRequestsDetail">GM_xmlhttpRequest calls will appear here with status, size, and timing once scripts make requests.</span></span>
                         </div>
                     </div>
                     <div class="setting-row" style="margin-top:8px;gap:8px">
-                        <button type="button" class="btn" id="btnRefreshNetLog">Refresh</button>
-                        <button type="button" class="btn" id="btnClearNetLog">Clear</button>
-                        <button type="button" class="btn" id="btnExportNetLog">Export HAR</button>
+                        <button type="button" class="btn" id="btnRefreshNetLog" data-i18n="refresh">Refresh</button>
+                        <button type="button" class="btn" id="btnClearNetLog" data-i18n="clearAction">Clear</button>
+                        <button type="button" class="btn" id="btnExportNetLog" data-i18n="exportHar">Export HAR</button>
                     </div>
                 </div>
             </div>
 
             <div class="settings-section">
-                <div class="section-label">Performance Budgets</div>
+                <div class="section-label" data-i18n="performanceBudgetsTitle">Performance Budgets</div>
                 <div class="section-content">
-                    <div class="utility-note" style="margin-bottom:8px">Set execution time limits per script. Scripts exceeding budget are highlighted.</div>
+                    <div class="utility-note" style="margin-bottom:8px" data-i18n="performanceBudgetsNote">Set execution time limits per script. Scripts exceeding budget are highlighted.</div>
                     <div class="setting-row">
-                        <span class="label-text">Default budget (ms):</span>
+                        <span class="label-text" data-i18n="defaultBudgetLabel">Default budget (ms):</span>
                         <input type="number" class="input-field" id="perfBudgetDefault" value="200" style="width:80px" min="10" max="10000">
-                        <button type="button" class="btn" id="btnSavePerfBudget" style="margin-inline-start:8px">Save</button>
+                        <button type="button" class="btn" id="btnSavePerfBudget" style="margin-inline-start:8px" data-i18n="save">Save</button>
                     </div>
                     <div id="perfBudgetOverrides" style="margin-top:8px;font-size:0.75rem"></div>
                 </div>
             </div>
 
             <div class="settings-section">
-                <div class="section-label">Runtime Repair</div>
+                <div class="section-label" data-i18n="runtimeRepairTitle">Runtime Repair</div>
                 <div class="section-content">
-                    <div class="utility-note" style="margin-bottom:8px">Inspect setup state and repair userScripts registrations, alarms, and menus without restarting the whole extension.</div>
+                    <div class="utility-note" style="margin-bottom:8px" data-i18n="runtimeRepairNote">Inspect setup state and repair userScripts registrations, alarms, and menus without restarting the whole extension.</div>
                     <div id="runtimeRepairDetails" class="utility-surface" style="display:grid;gap:10px">
                         <div class="setting-row" style="margin:0;display:flex;justify-content:space-between;align-items:center;gap:12px">
-                            <span class="label-text">Runtime status</span>
-                            <span class="script-counter" id="runtimeStatusSummary">Checking…</span>
+                            <span class="label-text" data-i18n="runtimeStatusLabel">Runtime status</span>
+                            <span class="script-counter" id="runtimeStatusSummary" data-i18n="checkingEllipsis">Checking...</span>
                         </div>
-                        <div class="utility-note" id="runtimeStatusDetails">Loading runtime diagnostics…</div>
+                        <div class="utility-note" id="runtimeStatusDetails" data-i18n="runtimeStatusLoading">Loading runtime diagnostics...</div>
                         <div class="setting-row" style="margin:0;display:flex;justify-content:space-between;align-items:center;gap:12px">
-                            <span class="label-text">Current-site access</span>
-                            <span class="script-counter" id="runtimeHostPermissionSummary">Checking…</span>
+                            <span class="label-text" data-i18n="currentSiteAccessLabel">Current-site access</span>
+                            <span class="script-counter" id="runtimeHostPermissionSummary" data-i18n="checkingEllipsis">Checking...</span>
                         </div>
-                        <div class="utility-note" id="runtimeHostPermissionDetails">Loading host access diagnostics…</div>
+                        <div class="utility-note" id="runtimeHostPermissionDetails" data-i18n="runtimeHostAccessLoading">Loading host access diagnostics...</div>
                     </div>
                     <div class="setting-row" style="margin-top:8px;gap:8px">
-                        <button type="button" class="btn" id="btnRefreshRuntimeStatus">Refresh Status</button>
-                        <button type="button" class="btn" id="btnGrantCurrentHostAccess" hidden>Grant Site Access</button>
-                        <button type="button" class="btn" id="btnRepairRuntime">Repair Runtime</button>
-                        <button type="button" class="btn" id="btnShowSetupGuide">Setup Guide</button>
+                        <button type="button" class="btn" id="btnRefreshRuntimeStatus" data-i18n="refreshStatus">Refresh Status</button>
+                        <button type="button" class="btn" id="btnGrantCurrentHostAccess" hidden data-i18n="grantSiteAccess">Grant Site Access</button>
+                        <button type="button" class="btn" id="btnRepairRuntime" data-i18n="repairRuntime">Repair Runtime</button>
+                        <button type="button" class="btn" id="btnShowSetupGuide" data-i18n="setupGuide">Setup Guide</button>
                     </div>
                 </div>
             </div>
 
             <div class="settings-section">
-                <div class="section-label">Support Snapshot</div>
+                <div class="section-label" data-i18n="supportSnapshotTitle">Support Snapshot</div>
                 <div class="section-content">
-                    <div class="utility-note" style="margin-bottom:8px">Pick which data categories to include in the support bundle. Sensitive categories — script names, URLs, error log, network log, denied hosts — default to OFF so personal data stays on your device unless you opt in.</div>
-                    <div id="supportSnapshotSummary" class="utility-surface">Bundle includes runtime status, backup inventory, and counts by default. Sensitive categories are off until you explicitly tick them.</div>
+                    <div class="utility-note" style="margin-bottom:8px" data-i18n="supportSnapshotNote">Pick which data categories to include in the support bundle. Sensitive categories - script names, URLs, error log, network log, denied hosts - default to OFF so personal data stays on your device unless you opt in.</div>
+                    <div id="supportSnapshotSummary" class="utility-surface" data-i18n="supportSnapshotSummaryDefault">Bundle includes runtime status, backup inventory, and counts by default. Sensitive categories are off until you explicitly tick them.</div>
                     <div class="setting-row" style="margin-top:8px;gap:8px">
-                        <button type="button" class="btn" id="btnExportSupportSnapshot">Export Snapshot…</button>
-                        <span class="utility-inline-status" id="supportSnapshotStatus">Ready</span>
+                        <button type="button" class="btn" id="btnExportSupportSnapshot" data-i18n="exportSnapshot">Export Snapshot...</button>
+                        <span class="utility-inline-status" id="supportSnapshotStatus" data-i18n="ready">Ready</span>
                     </div>
                 </div>
             </div>
 
             <div class="settings-section">
-                <div class="section-label">Public API Trust</div>
+                <div class="section-label" data-i18n="publicApiTrustTitle">Public API Trust</div>
                 <div class="section-content">
-                    <div class="utility-note" style="margin-bottom:8px">Review which web origins and extensions are trusted to call the public API. Unknown extensions are denied by default. Inspect the recent external audit trail below.</div>
+                    <div class="utility-note" style="margin-bottom:8px" data-i18n="publicApiTrustNote">Review which web origins and extensions are trusted to call the public API. Unknown extensions are denied by default. Inspect the recent external audit trail below.</div>
                     <div class="setting-row">
-                        <span class="label-text">Trusted web origins</span>
+                        <span class="label-text" data-i18n="trustedWebOrigins">Trusted web origins</span>
                     </div>
                     <textarea class="textarea-field" id="publicApiTrustedOrigins" rows="4" placeholder="https://example.com" style="width:100%;font-size:0.75rem;resize:vertical"></textarea>
                     <div class="setting-row" style="margin-top:8px">
-                        <span class="label-text">Trusted extension IDs</span>
+                        <span class="label-text" data-i18n="trustedExtensionIds">Trusted extension IDs</span>
                     </div>
                     <textarea class="textarea-field" id="publicApiTrustedExtensionIds" rows="3" placeholder="abcdefghijklmnopqrstuvwxyzabcdef" style="width:100%;font-size:0.75rem;resize:vertical;font-family:monospace"></textarea>
-                    <div class="utility-inline-status" id="publicApiPermissionsSummary" style="display:block;margin-top:8px">Loading permission policy…</div>
-                    <div class="utility-inline-status" id="publicApiTrustStatus" style="display:block;margin-top:4px">Loading trust state…</div>
+                    <div class="utility-inline-status" id="publicApiPermissionsSummary" style="display:block;margin-top:8px" data-i18n="loadingPermissionPolicy">Loading permission policy...</div>
+                    <div class="utility-inline-status" id="publicApiTrustStatus" style="display:block;margin-top:4px" data-i18n="loadingTrustState">Loading trust state...</div>
                     <div class="setting-row" style="margin-top:8px;gap:8px">
-                        <button type="button" class="btn" id="btnRefreshPublicApiTrust">Refresh</button>
-                        <button type="button" class="btn" id="btnSavePublicApiOrigins">Save Origins</button>
-                        <button type="button" class="btn" id="btnSavePublicApiExtensionIds">Save Extension IDs</button>
-                        <button type="button" class="btn" id="btnClearPublicApiAudit">Clear Audit</button>
+                        <button type="button" class="btn" id="btnRefreshPublicApiTrust" data-i18n="refresh">Refresh</button>
+                        <button type="button" class="btn" id="btnSavePublicApiOrigins" data-i18n="saveOrigins">Save Origins</button>
+                        <button type="button" class="btn" id="btnSavePublicApiExtensionIds" data-i18n="saveExtensionIds">Save Extension IDs</button>
+                        <button type="button" class="btn" id="btnClearPublicApiAudit" data-i18n="clearAudit">Clear Audit</button>
                     </div>
                     <div id="publicApiAuditLog" class="utility-surface" style="margin-top:8px;max-height:220px;overflow-y:auto;font-size:0.75rem">
-                        <div class="panel-empty-inline">No external API activity yet.</div>
+                        <div class="panel-empty-inline" data-i18n="noExternalApiActivity">No external API activity yet.</div>
                     </div>
                 </div>
             </div>
 
             <div class="settings-section">
-                <div class="section-label">Signing Trust</div>
+                <div class="section-label" data-i18n="signingTrustTitle">Signing Trust</div>
                 <div class="section-content">
-                    <div class="utility-note" style="margin-bottom:8px">Manage the trusted signing keys used during install and verification flows.</div>
-                    <div class="utility-inline-status" id="signingTrustSummary" style="display:block;margin-bottom:8px">Loading trusted signing keys…</div>
+                    <div class="utility-note" style="margin-bottom:8px" data-i18n="signingTrustNote">Manage the trusted signing keys used during install and verification flows.</div>
+                    <div class="utility-inline-status" id="signingTrustSummary" style="display:block;margin-bottom:8px" data-i18n="signingTrustLoading">Loading trusted signing keys...</div>
                     <div id="signingKeysList" class="utility-surface" style="max-height:220px;overflow-y:auto;font-size:0.75rem">
-                        <div class="panel-empty-inline">No trusted signing keys saved.</div>
+                        <div class="panel-empty-inline" data-i18n="noSigningKeys">No trusted signing keys saved.</div>
                     </div>
                     <div class="setting-row" style="margin-top:8px;gap:8px">
-                        <button type="button" class="btn" id="btnRefreshSigningTrust">Refresh</button>
+                        <button type="button" class="btn" id="btnRefreshSigningTrust" data-i18n="refresh">Refresh</button>
                     </div>
                 </div>
             </div>
 
             <div class="settings-section">
-                <div class="section-label">Activity Log</div>
+                <div class="section-label" data-i18n="activityLogTitle">Activity Log</div>
                 <div class="section-content">
                     <div id="activityLog" class="activity-log utility-surface" data-empty="true" style="max-height:200px;overflow-y:auto;font-size:0.75rem;color:var(--text-muted)">
                         <div class="dashboard-state dashboard-state-muted" role="status" aria-live="polite">
                             <span class="dashboard-state-mark" aria-hidden="true">i</span>
-                            <span><strong class="dashboard-state-title">No activity yet</strong> <span class="dashboard-state-detail">Recent installs, updates, repairs, and errors will appear here.</span></span>
+                            <span><strong class="dashboard-state-title" data-i18n="noActivityTitle">No activity yet</strong> <span class="dashboard-state-detail" data-i18n="noActivityDetail">Recent installs, updates, repairs, and errors will appear here.</span></span>
                         </div>
                     </div>
                     <div class="setting-row" style="margin-top:8px">
-                        <button type="button" class="btn" id="btnClearLog">Clear Log</button>
+                        <button type="button" class="btn" id="btnClearLog" data-i18n="clearLog">Clear Log</button>
                     </div>
                 </div>
             </div>
             </div>
             <div class="panel-empty" id="utilitiesEmptyState" hidden>
-                <strong>No utilities matched</strong>
-                <span>Adjust the category filter or clear the search input to bring the tools back into view.</span>
+                <strong data-i18n="utilitiesNoMatchesTitle">No utilities matched</strong>
+                <span data-i18n="utilitiesNoMatchesDescription">Adjust the category filter or clear the search input to bring the tools back into view.</span>
             </div>
             </div>
         </div>

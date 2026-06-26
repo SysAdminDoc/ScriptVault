@@ -192,4 +192,29 @@ describe('dashboard i18n-v2 removal', () => {
     expect(dashboardHtml).toContain('data-i18n="backupIncludeCredentialsHelp"');
     expect(dashboardHtml).toContain('data-i18n="saveBackupSchedule"');
   });
+
+  it('translates utilities backup browser, imports, diagnostics, and support surfaces', () => {
+    expect(dashboardHtml).toContain('data-i18n="backupBrowserTitle"');
+    expect(dashboardHtml).toContain('data-i18n-placeholder="backupBrowserSearchPlaceholder"');
+    expect(dashboardHtml).toContain('data-i18n-aria-label="backupBrowserFilters"');
+    expect(dashboardHtml).toContain('data-i18n="backupBrowserSortLargest"');
+    expect(dashboardHtml).toContain('data-i18n="scriptStatsTitle"');
+    expect(dashboardHtml).toContain('data-i18n="tampermonkeyImportTitle"');
+    expect(dashboardHtml).toContain('data-i18n-placeholder="pasteJsonPlaceholder"');
+    expect(dashboardHtml).toContain('data-i18n="scriptSubscriptionsTitle"');
+    expect(dashboardHtml).toContain('data-i18n="installLocalFileTitle"');
+    expect(dashboardHtml).toContain('data-i18n="batchInstallTitle"');
+    expect(dashboardHtml).toContain('data-i18n="workspacesTitle"');
+    expect(dashboardHtml).toContain('data-i18n="standaloneExportTitle"');
+    expect(dashboardHtml).toContain('data-i18n="networkRequestLogTitle"');
+    expect(dashboardHtml).toContain('data-i18n="runtimeRepairTitle"');
+    expect(dashboardHtml).toContain('data-i18n="supportSnapshotTitle"');
+    expect(dashboardHtml).toContain('data-i18n="publicApiTrustTitle"');
+    expect(dashboardHtml).toContain('data-i18n="signingTrustTitle"');
+    expect(dashboardHtml).toContain('data-i18n="activityLogTitle"');
+    expect(dashboardHtml).toContain('data-i18n="utilitiesNoMatchesTitle"');
+    expect(dashboardJs).toContain("'utilitiesResultsForQuery'");
+    expect(dashboardJs).toContain("'backupBrowserShowingQuery'");
+    expect(dashboardJs).toContain("'subscriptionStatusCounts'");
+  });
 });
