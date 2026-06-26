@@ -67,4 +67,18 @@ describe('dashboard i18n-v2 removal', () => {
     expect(dashboardHtml).toContain('data-i18n-title="setupDismissWarning"');
     expect(dashboardHtml).toContain('data-i18n-aria-label="setupDismissWarning"');
   });
+
+  it('translates the Settings General controls and helper titles through the runtime dictionary', () => {
+    expect(dashboardHtml).toContain('data-i18n="settingsConfigModeLabel"');
+    expect(dashboardHtml).toContain('data-i18n-title="settingsConfigModeHelp"');
+    expect(dashboardHtml).toContain('data-i18n="settingsAutoReloadPages"');
+    expect(dashboardHtml).toContain('data-i18n-title="settingsAutoReloadHelp"');
+    expect(dashboardHtml).toContain('data-i18n="settingsDebugScripts"');
+    expect(dashboardHtml).toContain('data-i18n="settingsShowFixedSource"');
+    expect(dashboardHtml).toContain('data-i18n="settingsLoggingLevelLabel"');
+    expect(dashboardHtml).toContain('data-i18n="loggingWarning"');
+    expect(dashboardHtml).toContain('data-i18n="settingsTrashModeLabel"');
+    expect(dashboardHtml).toContain('data-i18n="trashModeThirtyDays"');
+    expect(dashboardHtml).toContain('data-i18n-title="settingsTrashModeHelp"');
+  });
 });

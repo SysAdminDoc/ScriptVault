@@ -6517,45 +6517,45 @@
                 <div class="section-label" data-i18n="settingsGeneral">General</div>
                 <div class="section-content">
                     <div class="setting-row">
-                        <span class="label-text">Config mode:</span>
+                        <span class="label-text" data-i18n="settingsConfigModeLabel">Config mode:</span>
                         <select class="select-field" id="settingsConfigMode" aria-describedby="settingsConfigModeError">
-                            <option value="beginner">Beginner</option>
-                            <option value="advanced" selected>Advanced</option>
+                            <option value="beginner" data-i18n="settingsModeBeginner">Beginner</option>
+                            <option value="advanced" selected data-i18n="settingsModeAdvanced">Advanced</option>
                         </select>
                         <span class="setting-error" id="settingsConfigModeError" hidden></span>
-                        <span class="help-icon" title="Beginner mode hides advanced options">?</span>
+                        <span class="help-icon" title="Beginner mode hides advanced options" data-i18n-title="settingsConfigModeHelp">?</span>
                     </div>
                     <div class="setting-row">
-                        <label><input type="checkbox" id="settingsAutoReload" checked> Auto reload pages</label>
-                        <span class="help-icon" title="Automatically reload the active page when a script changes">?</span>
+                        <label><input type="checkbox" id="settingsAutoReload" checked> <span data-i18n="settingsAutoReloadPages">Auto reload pages</span></label>
+                        <span class="help-icon" title="Automatically reload the active page when a script changes" data-i18n-title="settingsAutoReloadHelp">?</span>
                     </div>
                     <div class="setting-row">
-                        <label><input type="checkbox" id="settingsDebugMode"> Debug scripts</label>
+                        <label><input type="checkbox" id="settingsDebugMode"> <span data-i18n="settingsDebugScripts">Debug scripts</span></label>
                     </div>
                     <div class="setting-row">
-                        <label><input type="checkbox" id="settingsShowFixedSource"> Show fixed source</label>
+                        <label><input type="checkbox" id="settingsShowFixedSource"> <span data-i18n="settingsShowFixedSource">Show fixed source</span></label>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Logging Level:</span>
+                        <span class="label-text" data-i18n="settingsLoggingLevelLabel">Logging Level:</span>
                         <select class="select-field" id="settingsLoggingLevel" aria-describedby="settingsLoggingLevelError">
-                            <option value="off">Off</option>
-                            <option value="error" selected>Error</option>
-                            <option value="warn">Warning</option>
-                            <option value="info">Info</option>
-                            <option value="debug">Debug</option>
+                            <option value="off" data-i18n="loggingOff">Off</option>
+                            <option value="error" selected data-i18n="loggingError">Error</option>
+                            <option value="warn" data-i18n="loggingWarning">Warning</option>
+                            <option value="info" data-i18n="loggingInfo">Info</option>
+                            <option value="debug" data-i18n="loggingDebug">Debug</option>
                         </select>
                         <span class="setting-error" id="settingsLoggingLevelError" hidden></span>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Trash Mode:</span>
+                        <span class="label-text" data-i18n="settingsTrashModeLabel">Trash Mode:</span>
                         <select class="select-field" id="settingsTrashMode" aria-describedby="settingsTrashModeError">
-                            <option value="disabled" selected>Disabled</option>
-                            <option value="1">1 day</option>
-                            <option value="7">7 days</option>
-                            <option value="30">30 days</option>
+                            <option value="disabled" selected data-i18n="trashModeDisabled">Disabled</option>
+                            <option value="1" data-i18n="trashModeOneDay">1 day</option>
+                            <option value="7" data-i18n="trashModeSevenDays">7 days</option>
+                            <option value="30" data-i18n="trashModeThirtyDays">30 days</option>
                         </select>
                         <span class="setting-error" id="settingsTrashModeError" hidden></span>
-                        <span class="help-icon" title="Keep deleted scripts in trash for recovery">?</span>
+                        <span class="help-icon" title="Keep deleted scripts in trash for recovery" data-i18n-title="settingsTrashModeHelp">?</span>
                     </div>
                 </div>
             </div>
