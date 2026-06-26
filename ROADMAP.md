@@ -805,3 +805,39 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 | RD25D-29 | awesome-userscripts | https://github.com/awesome-scripts/awesome-userscripts |
 | RD25D-30 | Monaco v0.55 changelog | https://github.com/microsoft/monaco-editor/blob/main/CHANGELOG.md |
 
+## Research-Driven Additions (2026-06-26)
+
+> Items below identified by exhaustive repo walk (verified code state, test suite
+> execution, npm audit, dependency outdated scan, CI pipeline, typecheck, TS
+> runtime/source drift gates) + 30+ external sources across competitors (TM v5.5.0,
+> VM MV3 death confirmed, ScriptCat v1.4.0 stable shipped June 26), Chrome 150-151
+> APIs, Firefox 153 beta (userScripts.execute, publicSuffix, documentId, constructed
+> stylesheets), security landscape (108 malicious extensions campaign, DLL side-loading
+> via enterprise policies, ownership-transfer attacks), and dependency changelogs
+> (Vitest 4.1.9/5.0.0-beta.5, Monaco 0.55.1/0.56-dev, puppeteer-core 25.2.1).
+> Deduplicated against all existing tiers (Now through Rejected), all prior
+> RD-1..RD-25D additions, Roadmap_Blocked.md, and the 8 existing unchecked items.
+
+### P2
+
+- [ ] P2 — README feature documentation sync for shipped differentiators
+  Why: Session-only credential storage, UserCSS draft preview, bookmarklet converter, system theme auto-detection, and Popover API adoption shipped in unreleased commits but are absent from the README feature list and comparison table. These are competitive differentiators (no other MV3 manager offers session-only credentials) that aren't discoverable by users reading the README.
+  Evidence: `CHANGELOG.md` (2026-06-25 entries for session credentials and UserCSS preview, 2026-06-15 entries for bookmarklet converter and system theme); `README.md` has zero matches for "session", "UserCSS preview", "bookmarklet", "Popover", or "system theme"; `npm run readme:check` only validates sync provider claims, not feature completeness.
+  Touches: `README.md` (feature list section, comparison table), `scripts/check-readme-claims.mjs` (optionally extend to cover key feature claims)
+  Acceptance: README feature list includes session-only credential storage, UserCSS draft preview, bookmarklet import, and system theme auto-detection. Comparison table adds "Session-only credentials" row showing ScriptVault Yes, competitors No. `npm run readme:check` still passes.
+  Complexity: S
+
+### Appendix: Research-Driven Sources (2026-06-26)
+
+| ID | Source | URL |
+|---|---|---|
+| RD26-01 | ScriptCat v1.4.0 stable release | https://github.com/scriptscat/scriptcat/releases |
+| RD26-02 | Chrome 150 MV2 flag removal | https://developer.chrome.com/docs/extensions/develop/migrate/mv2-deprecation-timeline |
+| RD26-03 | Chrome 151 MV2 final lockdown | https://piunikaweb.com/2026/06/08/chrome-manifest-v2-unpacked-extensions-mac-windows/ |
+| RD26-04 | Firefox 153 beta release notes | https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/153 |
+| RD26-05 | 108 malicious extensions campaign (Socket) | https://techretry.com/malicious-chrome-extensions-2026/ |
+| RD26-06 | DLL side-loading via Chrome enterprise policies | https://cybersecuritynews.com/malicious-chrome-extension-uses-native-messaging-host/ |
+| RD26-07 | Vitest 4.1.9 / 5.0.0-beta.5 | https://github.com/vitest-dev/vitest/releases |
+| RD26-08 | Monaco v0.55.1 stable / v0.56-dev | https://github.com/microsoft/monaco-editor/releases |
+| RD26-09 | Vitest CVE-2026-47429 (CVSS 9.8) | https://github.com/advisories/GHSA-5xrq-8626-4rwp |
+| RD26-10 | W3C WebExtensions WG draft charter | https://w3c.github.io/charter-drafts/2025/webextensions-wg.html |
