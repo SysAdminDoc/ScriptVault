@@ -3,7 +3,7 @@
 <head>
     <script>document.documentElement.dir = chrome.i18n?.getMessage?.('@@bidi_dir') || 'ltr';</script>
     <meta charset="UTF-8">
-    <title>ScriptVault</title>
+    <title data-i18n="appName">ScriptVault</title>
     <link rel="stylesheet" href="theme-tokens.css">
     <style>
         :root {
@@ -228,41 +228,41 @@
 </head>
 <body>
     <div class="toolbar">
-        <span class="toolbar-title">ScriptVault</span>
+        <span class="toolbar-title" data-i18n="appName">ScriptVault</span>
         <div class="toolbar-sep"></div>
-        <div class="toolbar-tabs" role="tablist" aria-label="DevTools sections">
-            <button class="tab-btn active" id="devtoolsTabNetwork" type="button" role="tab" tabindex="0" aria-selected="true" aria-controls="panelNetwork" data-tab="network">Network</button>
-            <button class="tab-btn" id="devtoolsTabExecution" type="button" role="tab" tabindex="-1" aria-selected="false" aria-controls="panelExecution" data-tab="execution">Execution</button>
-            <button class="tab-btn" id="devtoolsTabConsole" type="button" role="tab" tabindex="-1" aria-selected="false" aria-controls="panelConsole" data-tab="console">Console</button>
+        <div class="toolbar-tabs" role="tablist" aria-label="DevTools sections" data-i18n-aria-label="devtoolsSectionsAria">
+            <button class="tab-btn active" id="devtoolsTabNetwork" type="button" role="tab" tabindex="0" aria-selected="true" aria-controls="panelNetwork" data-tab="network" data-i18n="devtoolsNetworkTab">Network</button>
+            <button class="tab-btn" id="devtoolsTabExecution" type="button" role="tab" tabindex="-1" aria-selected="false" aria-controls="panelExecution" data-tab="execution" data-i18n="devtoolsExecutionTab">Execution</button>
+            <button class="tab-btn" id="devtoolsTabConsole" type="button" role="tab" tabindex="-1" aria-selected="false" aria-controls="panelConsole" data-tab="console" data-i18n="devtoolsConsoleTab">Console</button>
         </div>
         <div class="spacer"></div>
-        <label class="sr-only" for="filterInput">Filter network requests</label>
-        <input class="filter-input" id="filterInput" type="search" placeholder="Filter requests, URLs, or scripts…" aria-describedby="toolbarStatus" autocomplete="off" spellcheck="false">
+        <label class="sr-only" for="filterInput" data-i18n="devtoolsFilterNetworkRequests">Filter network requests</label>
+        <input class="filter-input" id="filterInput" type="search" placeholder="Filter requests, URLs, or scripts…" data-i18n-placeholder="devtoolsFilterRequestsPlaceholder" aria-describedby="toolbarStatus" autocomplete="off" spellcheck="false">
         <span class="toolbar-status" id="toolbarStatus" role="status" aria-live="polite" aria-atomic="true"></span>
-        <button class="toolbar-btn" id="btnClear" type="button">Clear</button>
-        <button class="toolbar-btn" id="btnExportHAR" type="button" style="display:none" aria-label="Export HAR">Export HAR</button>
-        <button class="toolbar-btn" id="btnExportTrace" type="button" aria-label="Export execution trace">Export Trace</button>
-        <button class="toolbar-btn" id="btnRefresh" type="button">Refresh</button>
+        <button class="toolbar-btn" id="btnClear" type="button" data-i18n="clearAction" data-i18n-aria-label="devtoolsClearRecordedNetworkRequests">Clear</button>
+        <button class="toolbar-btn" id="btnExportHAR" type="button" style="display:none" aria-label="Export HAR" data-i18n="exportHar">Export HAR</button>
+        <button class="toolbar-btn" id="btnExportTrace" type="button" aria-label="Export execution trace" data-i18n-aria-label="devtoolsExportTrace" data-i18n="devtoolsExportTrace">Export Trace</button>
+        <button class="toolbar-btn" id="btnRefresh" type="button" data-i18n="devtoolsRefresh">Refresh</button>
     </div>
 
     <!-- Network panel -->
     <div class="panel active" id="panelNetwork" role="tabpanel" aria-labelledby="devtoolsTabNetwork">
         <div class="net-stats" id="devtoolsStatus" role="status" aria-live="polite" aria-atomic="true">
-            <span class="net-stat"><span class="net-stat-val" id="netTotal">0</span> requests</span>
-            <span class="net-stat"><span class="net-stat-val net-stat-err" id="netErrors">0</span> errors</span>
-            <span class="net-stat"><span class="net-stat-val" id="netBytes">0 B</span> transferred</span>
+            <span class="net-stat"><span class="net-stat-val" id="netTotal">0</span> <span data-i18n="devtoolsRequestsLabel">requests</span></span>
+            <span class="net-stat"><span class="net-stat-val net-stat-err" id="netErrors">0</span> <span data-i18n="devtoolsErrorsLabel">errors</span></span>
+            <span class="net-stat"><span class="net-stat-val" id="netBytes">0 B</span> <span data-i18n="devtoolsTransferredLabel">transferred</span></span>
         </div>
         <div class="net-split">
             <div class="net-table-wrap" id="netTableWrap">
                 <table class="net-table">
                     <thead>
                         <tr>
-                            <th style="width:55px">Method</th>
-                            <th>URL</th>
-                            <th style="width:55px">Status</th>
-                            <th style="width:65px">Time</th>
-                            <th style="width:60px">Size</th>
-                            <th style="width:120px">Script</th>
+                            <th style="width:55px" data-i18n="devtoolsMethodHeader">Method</th>
+                            <th data-i18n="devtoolsUrlHeader">URL</th>
+                            <th style="width:55px" data-i18n="devtoolsStatusHeader">Status</th>
+                            <th style="width:65px" data-i18n="devtoolsTimeHeader">Time</th>
+                            <th style="width:60px" data-i18n="devtoolsSizeHeader">Size</th>
+                            <th style="width:120px" data-i18n="devtoolsScriptHeader">Script</th>
                         </tr>
                     </thead>
                     <tbody id="netTableBody"></tbody>
@@ -270,8 +270,8 @@
             </div>
             <div class="net-detail" id="netDetail" role="region" aria-labelledby="netDetailTitle" aria-hidden="true" hidden>
                 <div class="net-detail-header">
-                    <span id="netDetailTitle">Request Detail</span>
-                    <button class="net-detail-close" id="btnCloseDetail" type="button" aria-label="Close request detail">×</button>
+                    <span id="netDetailTitle" data-i18n="devtoolsRequestDetail">Request Detail</span>
+                    <button class="net-detail-close" id="btnCloseDetail" type="button" aria-label="Close request detail" data-i18n-aria-label="devtoolsCloseRequestDetail">×</button>
                 </div>
                 <div id="netDetailBody"></div>
             </div>
@@ -284,12 +284,12 @@
             <table class="exec-table">
                 <thead>
                     <tr>
-                        <th>Script</th>
-                        <th style="width:50px">Runs</th>
-                        <th style="width:80px">Avg Time</th>
-                        <th style="width:80px">Total Time</th>
-                        <th style="width:60px">Errors</th>
-                        <th style="width:100px">Relative Load</th>
+                        <th data-i18n="devtoolsScriptHeader">Script</th>
+                        <th style="width:50px" data-i18n="devtoolsRunsHeader">Runs</th>
+                        <th style="width:80px" data-i18n="devtoolsAvgTimeHeader">Avg Time</th>
+                        <th style="width:80px" data-i18n="devtoolsTotalTimeHeader">Total Time</th>
+                        <th style="width:60px" data-i18n="devtoolsErrorsLabel">Errors</th>
+                        <th style="width:100px" data-i18n="devtoolsRelativeLoadHeader">Relative Load</th>
                     </tr>
                 </thead>
                 <tbody id="execTableBody"></tbody>
@@ -302,16 +302,17 @@
         <div class="console-wrap" id="consoleWrap">
             <div class="empty-state" id="consoleEmpty">
                 <div class="empty-icon" aria-hidden="true">SV</div>
-                <div>Console messages from user scripts will appear here when capture is available</div>
-                <div style="font-size:0.625rem;margin-top:4px">This panel currently focuses on network and execution insight first.</div>
+                <div data-i18n="devtoolsConsoleEmptyTitle">Console messages from user scripts will appear here when capture is available</div>
+                <div style="font-size:0.625rem;margin-top:4px" data-i18n="devtoolsConsoleEmptyDetail">This panel currently focuses on network and execution insight first.</div>
                 <div class="empty-actions">
-                    <button class="empty-action" id="btnConsoleToNetwork" type="button">Open Network</button>
-                    <button class="empty-action" id="btnConsoleToExecution" type="button">Open Execution</button>
+                    <button class="empty-action" id="btnConsoleToNetwork" type="button" data-i18n="devtoolsOpenNetwork">Open Network</button>
+                    <button class="empty-action" id="btnConsoleToExecution" type="button" data-i18n="devtoolsOpenExecution">Open Execution</button>
                 </div>
             </div>
         </div>
     </div>
 
+    <script src="../modules/i18n.js"></script>
     <script src="devtools-panel.js"></script>
 </body>
 </html>

@@ -4,7 +4,7 @@
     <script>document.documentElement.dir = chrome.i18n?.getMessage?.('@@bidi_dir') || 'ltr';</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ScriptVault</title>
+    <title data-i18n="appName">ScriptVault</title>
     <link rel="stylesheet" href="theme-tokens.css">
     <style>
         :root {
@@ -390,19 +390,19 @@
     </style>
 </head>
 <body>
-    <a class="sp-skip-link" href="#pageScriptList">Skip to scripts</a>
+    <a class="sp-skip-link" href="#pageScriptList" data-i18n="sideSkipToScripts">Skip to scripts</a>
     <div class="sp-header">
         <img class="sp-logo" src="../images/icon32.png" alt="" width="18" height="18">
-        <span class="sp-title">ScriptVault</span>
-        <button class="sp-update-chip" id="btnPendingUpdates" type="button" title="Open queued updates" aria-label="Open queued updates" hidden>0</button>
-        <button class="sp-header-btn" id="btnHelp" type="button" title="Help" aria-label="Help" data-help>
+        <span class="sp-title" data-i18n="appName">ScriptVault</span>
+        <button class="sp-update-chip" id="btnPendingUpdates" type="button" title="Open queued updates" aria-label="Open queued updates" data-i18n-title="sideOpenQueuedUpdates" data-i18n-aria-label="sideOpenQueuedUpdates" hidden>0</button>
+        <button class="sp-header-btn" id="btnHelp" type="button" title="Help" aria-label="Help" data-i18n-title="tabHelp" data-i18n-aria-label="tabHelp" data-help>
             <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                 <circle cx="12" cy="12" r="10"></circle>
                 <path d="M9.1 9a3 3 0 1 1 5.8 1.3c-.6.8-1.4 1.1-2.1 1.7-.6.5-.8 1-.8 2"></path>
                 <circle cx="12" cy="17" r="0.6"></circle>
             </svg>
         </button>
-        <button class="sp-header-btn" id="btnRefresh" type="button" title="Refresh" aria-label="Refresh scripts">
+        <button class="sp-header-btn" id="btnRefresh" type="button" title="Refresh" aria-label="Refresh scripts" data-i18n-title="refresh" data-i18n-aria-label="sideRefreshScripts">
             <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                 <path d="M21 12a9 9 0 0 1-15.1 6.6"></path>
                 <path d="M3 12A9 9 0 0 1 18.1 5.4"></path>
@@ -410,7 +410,7 @@
                 <path d="M6 22v-4h4"></path>
             </svg>
         </button>
-        <button class="sp-header-btn" id="btnDashboard" type="button" title="Open Dashboard" aria-label="Open Dashboard">
+        <button class="sp-header-btn" id="btnDashboard" type="button" title="Open Dashboard" aria-label="Open Dashboard" data-i18n-title="sideOpenDashboard" data-i18n-aria-label="sideOpenDashboard">
             <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                 <rect x="3" y="3" width="7" height="7" rx="1.5"></rect>
                 <rect x="14" y="3" width="7" height="7" rx="1.5"></rect>
@@ -422,7 +422,7 @@
 
     <div class="sp-url-bar">
         <div class="sp-url-text" id="urlBar">
-            <span class="sp-url-hostname" id="urlHostname">Loading…</span>
+            <span class="sp-url-hostname" id="urlHostname" data-i18n="sideLoadingEllipsis">Loading…</span>
             <span class="sp-url-path" id="urlPath"></span>
         </div>
     </div>
@@ -430,45 +430,45 @@
     <div class="sp-status" id="statusMessage" role="status" aria-live="polite" aria-atomic="true" hidden></div>
     <div class="sp-host-access" id="hostAccessPanel" role="status" aria-live="polite" aria-atomic="true" hidden>
         <div class="sp-host-access-message" id="hostAccessMessage"></div>
-        <button class="sp-host-access-btn" id="btnGrantHostAccess" type="button">Grant Site Access</button>
+        <button class="sp-host-access-btn" id="btnGrantHostAccess" type="button" data-i18n="sideGrantSiteAccess">Grant Site Access</button>
     </div>
 
     <div class="sp-section">
         <div class="sp-section-header">
-            <span class="sp-section-title">On this page</span>
+            <span class="sp-section-title" data-i18n="sideOnThisPage">On this page</span>
             <div style="display:flex;align-items:center;gap:6px">
                 <span class="sp-section-count" id="pageScriptCount">0</span>
-                <button class="sp-toggle-all" id="btnToggleAll" type="button">Toggle All</button>
+                <button class="sp-toggle-all" id="btnToggleAll" type="button" data-i18n="sideToggleAll">Toggle All</button>
             </div>
         </div>
     </div>
 
-    <div class="sp-list" id="pageScriptList" role="list" aria-label="Scripts running on this page" aria-busy="true">
-        <div class="sp-loading">Loading scripts…</div>
+    <div class="sp-list" id="pageScriptList" role="list" aria-label="Scripts running on this page" data-i18n-aria-label="sideScriptsRunningOnPageAria" aria-busy="true">
+        <div class="sp-loading" data-i18n="sideLoadingScriptsEllipsis">Loading scripts…</div>
     </div>
 
     <!-- v2.0: Search & Sort Controls -->
-    <div class="sp-search-bar" role="search" aria-label="Filter installed scripts">
-        <label class="sp-sr-only" for="spSearch">Search installed scripts</label>
-        <button class="sp-search-clear" id="btnClearSearch" type="button" aria-label="Clear script search" hidden>Clear</button>
-        <label class="sp-sr-only" for="spSort">Sort installed scripts</label>
-        <input type="search" class="sp-search-input" id="spSearch" name="sidepanel_search" placeholder="Search scripts…" aria-label="Search scripts" aria-describedby="spSearchStatus" autocomplete="off" spellcheck="false">
-        <select class="sp-sort-select" id="spSort" title="Sort scripts" aria-label="Sort scripts by">
-            <option value="default">Install Order</option>
-            <option value="alpha">A-Z</option>
-            <option value="perf">Slowest</option>
-            <option value="errors">Most Errors</option>
-            <option value="recent">Recently Updated</option>
+    <div class="sp-search-bar" role="search" aria-label="Filter installed scripts" data-i18n-aria-label="sideFilterInstalledScriptsAria">
+        <label class="sp-sr-only" for="spSearch" data-i18n="sideSearchInstalledScripts">Search installed scripts</label>
+        <button class="sp-search-clear" id="btnClearSearch" type="button" aria-label="Clear script search" data-i18n-aria-label="sideClearScriptSearch" data-i18n="clearAction" hidden>Clear</button>
+        <label class="sp-sr-only" for="spSort" data-i18n="sideSortInstalledScripts">Sort installed scripts</label>
+        <input type="search" class="sp-search-input" id="spSearch" name="sidepanel_search" placeholder="Search scripts…" aria-label="Search scripts" data-i18n-placeholder="sideSearchScriptsPlaceholder" data-i18n-aria-label="searchScripts" aria-describedby="spSearchStatus" autocomplete="off" spellcheck="false">
+        <select class="sp-sort-select" id="spSort" title="Sort scripts" aria-label="Sort scripts by" data-i18n-title="sideSortScriptsTitle" data-i18n-aria-label="sideSortScriptsTitle">
+            <option value="default" data-i18n="sideSortInstallOrder">Install Order</option>
+            <option value="alpha" data-i18n="sideSortAlpha">A-Z</option>
+            <option value="perf" data-i18n="sideSortSlowest">Slowest</option>
+            <option value="errors" data-i18n="sideSortMostErrors">Most Errors</option>
+            <option value="recent" data-i18n="sideSortRecentlyUpdated">Recently Updated</option>
         </select>
     </div>
     <div class="sp-search-meta">
-        <p class="sp-search-status" id="spSearchStatus" role="status" aria-live="polite" aria-atomic="true">Showing all installed scripts.</p>
+        <p class="sp-search-status" id="spSearchStatus" role="status" aria-live="polite" aria-atomic="true" data-i18n="sideShowingAllInstalledScripts">Showing all installed scripts.</p>
     </div>
 
     <div class="sp-all-section" id="allSection">
         <button class="sp-all-header" id="allSectionHeader" type="button" aria-expanded="true" aria-controls="allScriptList">
             <div style="display:flex;align-items:center;gap:6px">
-                <span class="sp-section-title">All Scripts</span>
+                <span class="sp-section-title" data-i18n="sideAllScripts">All Scripts</span>
                 <span class="sp-section-count" id="allScriptCount">0</span>
             </div>
             <span class="sp-collapse-icon" id="collapseIcon">▼</span>
@@ -482,14 +482,14 @@
                 <path d="M12 5v14"></path>
                 <path d="M5 12h14"></path>
             </svg>
-            <span>New</span>
+            <span data-i18n="sideNew">New</span>
         </button>
         <button class="sp-footer-btn" id="btnFindScripts" type="button">
             <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                 <circle cx="11" cy="11" r="8"></circle>
                 <path d="m21 21-4.3-4.3"></path>
             </svg>
-            <span>Find</span>
+            <span data-i18n="sideFind">Find</span>
         </button>
         <button class="sp-footer-btn primary" id="btnOpenDash" type="button">
             <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -498,11 +498,12 @@
                 <rect x="3" y="14" width="7" height="7" rx="1.5"></rect>
                 <rect x="14" y="14" width="7" height="7" rx="1.5"></rect>
             </svg>
-            <span>Dashboard</span>
+            <span data-i18n="dashboardSections">Dashboard</span>
         </button>
     </div>
 
     <script src="../shared/utils.js"></script>
+    <script src="../modules/i18n.js"></script>
     <script src="sidepanel.js"></script>
 </body>
 </html>

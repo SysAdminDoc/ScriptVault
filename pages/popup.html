@@ -5,7 +5,7 @@
     <link rel="icon" href="../images/icon32.png">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ScriptVault</title>
+    <title data-i18n="appName">ScriptVault</title>
     <link rel="stylesheet" href="theme-tokens.css">
     <style>
         :root {
@@ -1202,13 +1202,13 @@
     </style>
 </head>
 <body>
-    <a class="popup-skip-link" href="#menuSection">Skip to actions</a>
+    <a class="popup-skip-link" href="#menuSection" data-i18n="skipToMainContent">Skip to actions</a>
     <!-- Header with branding + toggle -->
     <button class="header" id="headerToggle" type="button" title="Toggle all scripts on/off">
         <svg class="header-check" id="headerCheckIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <polyline points="20 6 9 17 4 12"/>
         </svg>
-        <span class="header-text">ScriptVault</span>
+        <span class="header-text" data-i18n="appName">ScriptVault</span>
         <span class="header-count" id="headerCount"></span>
     </button>
 
@@ -1216,12 +1216,12 @@
     <div class="setup-warning" id="setupWarning" role="status" aria-live="polite" aria-atomic="true" data-setup-state="unknown">
         <div class="setup-warning-title">
             <span aria-hidden="true">!</span>
-            <span class="setup-warning-title-text">Setup Required</span>
+            <span class="setup-warning-title-text" data-i18n="popupSetupRequired">Setup Required</span>
         </div>
         <div class="setup-warning-text">
             User scripts are off. In Firefox, grant the optional userScripts permission. In Chrome 138 or newer, turn on "Allow User Scripts" for ScriptVault. In Chrome 120-137, turn on Developer Mode.
         </div>
-        <button class="setup-warning-link" id="btnOpenExtSettings" type="button">Open Extension Details</button>
+        <button class="setup-warning-link" id="btnOpenExtSettings" type="button" data-i18n="setupOpenExtensionDetails">Open Extension Details</button>
     </div>
 
     <!-- Phase 38.4 — @run-at context-menu scripts for the current tab.
@@ -1230,20 +1230,20 @@
          no context-menu scripts match the active URL. -->
     <div class="context-menu-scripts-section" id="contextMenuSection" hidden>
         <div class="context-menu-scripts-header">
-            <span class="context-menu-scripts-title">Context-menu scripts</span>
-            <span class="context-menu-scripts-count" id="contextMenuScriptsCount" aria-label="Count of context-menu scripts">0</span>
+            <span class="context-menu-scripts-title" data-i18n="popupContextMenuScripts">Context-menu scripts</span>
+            <span class="context-menu-scripts-count" id="contextMenuScriptsCount" aria-label="Count of context-menu scripts" data-i18n-aria-label="popupContextMenuCountAria">0</span>
         </div>
-        <div class="context-menu-scripts-list" id="contextMenuScriptsList" role="list" aria-label="Run a context-menu script on this tab"></div>
+        <div class="context-menu-scripts-list" id="contextMenuScriptsList" role="list" aria-label="Run a context-menu script on this tab" data-i18n-aria-label="popupRunContextMenuScriptAria"></div>
     </div>
 
     <!-- Scripts for this page -->
-    <div class="script-list" id="scriptList" role="list" aria-label="Scripts for this page" hidden></div>
+    <div class="script-list" id="scriptList" role="list" aria-label="Scripts for this page" data-i18n-aria-label="popupScriptsForThisPageAria" hidden></div>
 
     <!-- Empty state (shown when no scripts match) -->
         <div id="emptyState" role="status" aria-live="polite" aria-atomic="true" style="display:none;">
             <div class="empty-state-icon" id="emptyStateIcon" aria-hidden="true">SV</div>
-            <div class="empty-state-title" id="emptyStateTitle">No scripts run here</div>
-            <div class="empty-state-hint" id="emptyStateHint">Find trusted scripts or create one for this site.</div>
+            <div class="empty-state-title" id="emptyStateTitle" data-i18n="popupNoScriptsRunHere">No scripts run here</div>
+            <div class="empty-state-hint" id="emptyStateHint" data-i18n="popupNoScriptsDefaultHint">Find trusted scripts or create one for this site.</div>
         </div>
 
     <!-- Menu items -->
@@ -1255,7 +1255,7 @@
                     <path d="M21 21l-4.35-4.35"/>
                 </svg>
             </div>
-            <span class="menu-item-text">Find New Scripts…</span>
+            <span class="menu-item-text" data-i18n="popupFindNewScriptsEllipsis">Find New Scripts…</span>
         </button>
 
         <button class="menu-item" id="btnNewScript" type="button">
@@ -1266,7 +1266,7 @@
                     <line x1="8" y1="12" x2="16" y2="12"/>
                 </svg>
             </div>
-            <span class="menu-item-text">Create New Script…</span>
+            <span class="menu-item-text" data-i18n="popupCreateNewScriptEllipsis">Create New Script…</span>
         </button>
 
         <!-- Utilities submenu -->
@@ -1276,7 +1276,7 @@
                     <path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>
                 </svg>
             </div>
-            <span class="menu-item-text">Utilities</span>
+            <span class="menu-item-text" data-i18n="tabUtilities">Utilities</span>
             <div class="menu-item-arrow">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <polyline points="9 18 15 12 9 6"/>
@@ -1284,29 +1284,29 @@
             </div>
         </button>
 
-        <div class="submenu" id="utilitiesSubmenu" aria-hidden="true" hidden role="group" aria-label="Utility actions">
+        <div class="submenu" id="utilitiesSubmenu" aria-hidden="true" hidden role="group" aria-label="Utility actions" data-i18n-aria-label="popupUtilityActionsAria">
             <button class="menu-item" id="btnCheckUpdates" type="button">
-                <span class="menu-item-text">Update Userscripts</span>
+                <span class="menu-item-text" data-i18n="popupUpdateUserscripts">Update Userscripts</span>
                 <span class="menu-item-badge" id="pendingUpdatesBadge" hidden>0</span>
             </button>
             <button class="menu-item" id="btnBlacklistDomain" type="button">
-                <span class="menu-item-text">Do not run on this domain</span>
+                <span class="menu-item-text" data-i18n="popupDoNotRunOnDomain">Do not run on this domain</span>
             </button>
             <button class="menu-item" id="btnWhitelistDomain" type="button">
-                <span class="menu-item-text">Run only on this domain</span>
+                <span class="menu-item-text" data-i18n="popupRunOnlyOnDomain">Run only on this domain</span>
             </button>
             <button class="menu-item" id="btnExportZip" type="button">
-                <span class="menu-item-text">Export to ZIP…</span>
+                <span class="menu-item-text" data-i18n="popupExportToZipEllipsis">Export to ZIP…</span>
             </button>
             <button class="menu-item" id="btnImport" type="button">
-                <span class="menu-item-text">Import from File…</span>
+                <span class="menu-item-text" data-i18n="popupImportFromFileEllipsis">Import from File…</span>
             </button>
         </div>
     </div>
 
     <!-- Help and Dashboard links -->
-    <div class="footer-actions" role="group" aria-label="Help and dashboard links">
-        <button class="footer" id="btnHelp" type="button" aria-label="Help" data-help>
+    <div class="footer-actions" role="group" aria-label="Help and dashboard links" data-i18n-aria-label="popupHelpDashboardLinksAria">
+        <button class="footer" id="btnHelp" type="button" aria-label="Help" data-i18n-aria-label="tabHelp" data-help>
             <div class="footer-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <circle cx="12" cy="12" r="10"/>
@@ -1314,7 +1314,7 @@
                     <circle cx="12" cy="17" r=".6"/>
                 </svg>
             </div>
-            <span class="footer-text">Help</span>
+            <span class="footer-text" data-i18n="tabHelp">Help</span>
         </button>
         <button class="footer" id="btnDashboard" type="button">
             <div class="footer-icon">
@@ -1323,22 +1323,23 @@
                     <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
                 </svg>
             </div>
-            <span class="footer-text">Dashboard</span>
+            <span class="footer-text" data-i18n="dashboardSections">Dashboard</span>
         </button>
     </div>
 
     <!-- Shared dropdown (positioned at body level to avoid overflow clipping) -->
-    <div class="script-dropdown" id="scriptDropdown" role="menu" aria-label="Script actions" popover="auto">
+    <div class="script-dropdown" id="scriptDropdown" role="menu" aria-label="Script actions" data-i18n-aria-label="popupScriptActionsAria" popover="auto">
         <div class="script-dropdown-cmds" id="dropdownMenuCmds"></div>
-        <button class="script-dropdown-item" data-action="edit" role="menuitem" type="button">Edit in Dashboard</button>
-        <button class="script-dropdown-item" data-action="runNow" role="menuitem" type="button">Run on This Tab</button>
-        <button class="script-dropdown-item" data-action="update" role="menuitem" type="button">Check for Update</button>
-        <button class="script-dropdown-item" data-action="copyUrl" role="menuitem" type="button">Copy Install URL</button>
-        <button class="script-dropdown-item" data-action="pin" role="menuitem" type="button">Pin / Unpin</button>
-        <button class="script-dropdown-item danger" data-action="delete" role="menuitem" type="button">Delete</button>
+        <button class="script-dropdown-item" data-action="edit" role="menuitem" type="button" data-i18n="popupEditInDashboard">Edit in Dashboard</button>
+        <button class="script-dropdown-item" data-action="runNow" role="menuitem" type="button" data-i18n="popupRunOnThisTab">Run on This Tab</button>
+        <button class="script-dropdown-item" data-action="update" role="menuitem" type="button" data-i18n="popupCheckForUpdate">Check for Update</button>
+        <button class="script-dropdown-item" data-action="copyUrl" role="menuitem" type="button" data-i18n="popupCopyInstallUrl">Copy Install URL</button>
+        <button class="script-dropdown-item" data-action="pin" role="menuitem" type="button" data-i18n="popupPinUnpin">Pin / Unpin</button>
+        <button class="script-dropdown-item danger" data-action="delete" role="menuitem" type="button" data-i18n="delete">Delete</button>
     </div>
 
     <script src="../shared/utils.js"></script>
+    <script src="../modules/i18n.js"></script>
     <script src="../modules/user-scripts-setup.js"></script>
     <script src="popup.js"></script>
 </body>

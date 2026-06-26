@@ -6,6 +6,26 @@
 
   const numberFormatter = new Intl.NumberFormat();
 
+  function getSidepanelI18n() {
+    try {
+      return typeof I18n !== 'undefined' ? I18n : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function tSidepanel(key, fallback = key, placeholders = {}) {
+    const i18n = getSidepanelI18n();
+    return i18n?.getMessage ? i18n.getMessage(key, placeholders) : fallback;
+  }
+
+  function applySidepanelI18n() {
+    const i18n = getSidepanelI18n();
+    if (!i18n?.applyToDOM) return;
+    i18n.init?.('auto');
+    i18n.applyToDOM(document);
+  }
+
   let currentTab = null;
   let allScripts = [];
   let pageScripts = [];
@@ -40,7 +60,7 @@
     banner.className = 'sp-context-banner';
     banner.setAttribute('aria-live', 'assertive');
     banner.setAttribute('aria-atomic', 'true');
-    banner.textContent = 'Extension restarted. Reconnect side panel.';
+    banner.textContent = tSidepanel('sideExtensionRestarted', 'Extension restarted. Reconnect side panel.');
     banner.addEventListener('click', () => location.reload());
     document.body.prepend(banner);
   }
@@ -223,14 +243,18 @@
     const total = allScripts.length;
     const normalizedQuery = searchQuery.replace(/\s+/g, ' ').trim();
     if (!total) {
-      status.textContent = 'No scripts installed yet.';
+      status.textContent = tSidepanel('sideNoScriptsInstalled', 'No scripts installed yet.');
       return;
     }
     if (normalizedQuery) {
-      status.textContent = `Showing ${numberFormatter.format(filteredCount)} of ${numberFormatter.format(total)} installed scripts for "${normalizedQuery}".`;
+      status.textContent = tSidepanel('sideShowingFilteredScripts', 'Showing {shown} of {total} installed scripts for "{query}".', {
+        shown: numberFormatter.format(filteredCount),
+        total: numberFormatter.format(total),
+        query: normalizedQuery
+      });
       return;
     }
-    status.textContent = `Showing all ${numberFormatter.format(total)} installed scripts.`;
+    status.textContent = tSidepanel('sideShowingAllInstalledScripts', 'Showing all installed scripts.');
   }
 
   function updatePageActions() {
@@ -241,13 +265,13 @@
       const canToggle = currentPageCanRunScripts && pageCount > 0;
       toggleButton.disabled = !canToggle;
       toggleButton.textContent = canToggle
-        ? (anyEnabled ? 'Disable Page Scripts' : 'Enable Page Scripts')
-        : 'Toggle All';
+        ? (anyEnabled ? tSidepanel('sideDisablePageScripts', 'Disable Page Scripts') : tSidepanel('sideEnablePageScripts', 'Enable Page Scripts'))
+        : tSidepanel('sideToggleAll', 'Toggle All');
       toggleButton.setAttribute(
         'aria-label',
         canToggle
           ? `${toggleButton.textContent} (${numberFormatter.format(pageCount)})`
-          : 'No page scripts are available to toggle'
+          : tSidepanel('sideNoPageScriptsToggle', 'No page scripts are available to toggle')
       );
     }
 
@@ -257,8 +281,12 @@
       if (canMatchScriptsForUrl(currentTab?.url || '')) {
         try { hostname = new URL(currentTab?.url || '').hostname.replace(/^www\./, ''); } catch {}
       }
-      setButtonLabel(findButton, hostname ? `Find for ${hostname}` : 'Find');
-      findButton.setAttribute('aria-label', hostname ? `Find userscripts for ${hostname}` : 'Find userscripts');
+      setButtonLabel(findButton, hostname
+        ? tSidepanel('sideFindForHost', 'Find for {hostname}', { hostname })
+        : tSidepanel('sideFind', 'Find'));
+      findButton.setAttribute('aria-label', hostname
+        ? tSidepanel('sideFindUserscriptsForHost', 'Find userscripts for {hostname}', { hostname })
+        : tSidepanel('sideFindUserscripts', 'Find userscripts'));
     }
   }
 
@@ -334,10 +362,18 @@
     const blocked = Array.isArray(status?.blockedScripts) ? status.blockedScripts : [];
     const names = blocked.slice(0, 2).map(script => script.name || script.id || 'script').join(', ');
     const remaining = status?.blockedCount > blocked.slice(0, 2).length
-      ? ` and ${status.blockedCount - blocked.slice(0, 2).length} more`
+      ? tSidepanel('sideAdditionalScriptsNeedAccess', ' and {count} more', {
+          count: numberFormatter.format(status.blockedCount - blocked.slice(0, 2).length)
+        })
       : '';
-    if (names) return `${names}${remaining} need browser access for ${status.host || 'this site'}.`;
-    return status?.message || 'Grant browser access before matching scripts can run here.';
+    if (names) {
+      return tSidepanel('sideScriptsNeedAccess', '{names}{remaining} need browser access for {host}.', {
+        names,
+        remaining,
+        host: status.host || 'this site'
+      });
+    }
+    return status?.message || tSidepanel('sideGrantAccessBeforeMatching', 'Grant browser access before matching scripts can run here.');
   }
 
   function renderHostAccessPanel(status = hostPermissionStatus) {
@@ -355,13 +391,15 @@
       return;
     }
     message.textContent = summarizeHostAccessStatus(status);
-    button.textContent = status.requestMethod === 'addHostAccessRequest' ? 'Request Site Access' : 'Grant Site Access';
+    button.textContent = status.requestMethod === 'addHostAccessRequest'
+      ? tSidepanel('sideRequestSiteAccess', 'Request Site Access')
+      : tSidepanel('sideGrantSiteAccess', 'Grant Site Access');
   }
 
   async function requestHostAccessFromPanel() {
     const status = hostPermissionStatus;
     if (!status?.supported || !status.pattern) {
-      showPanelNotice(status?.message || 'Host access is not available for this page', 'error');
+      showPanelNotice(status?.message || tSidepanel('sideHostAccessUnavailable', 'Host access is not available for this page'), 'error');
       return;
     }
 
@@ -377,16 +415,16 @@
         if (response?.error || response?.success === false) {
           throw new Error(response?.error || 'Could not queue site access request');
         }
-        showPanelNotice(response.message || 'Site access request added');
+        showPanelNotice(response.message || tSidepanel('sideSiteAccessRequestAdded', 'Site access request added'));
       } else if (chrome.permissions?.request) {
         const granted = await chrome.permissions.request({ origins: [status.pattern] });
-        showPanelNotice(granted ? 'Site access granted' : 'Site access was not granted', granted ? 'success' : 'error');
+        showPanelNotice(granted ? tSidepanel('sideSiteAccessGranted', 'Site access granted') : tSidepanel('sideSiteAccessNotGranted', 'Site access was not granted'), granted ? 'success' : 'error');
       } else {
         await chrome.tabs.create({ url: `chrome://extensions/?id=${chrome.runtime.id}` });
       }
       await refresh();
     } catch (error) {
-      showPanelNotice(error?.message || 'Failed to request site access', 'error');
+      showPanelNotice(error?.message || tSidepanel('sideRequestSiteAccessFailed', 'Failed to request site access'), 'error');
     } finally {
       if (button) button.disabled = false;
     }
@@ -402,6 +440,7 @@
 
   // ── Init ────────────────────────────────────────────────────────────────
   async function init() {
+    applySidepanelI18n();
     await loadSettings();
     applyTheme();
     applySidePanelLayout();
@@ -478,7 +517,7 @@
         list.replaceChildren();
         const err = document.createElement('div');
         err.className = 'sp-empty';
-        err.textContent = 'Unable to reach the background service. Refresh the panel to reconnect.';
+        err.textContent = tSidepanel('sideUnableToReachBackground', 'Unable to reach the background service. Refresh the panel to reconnect.');
         list.appendChild(err);
       }
     } finally {
@@ -523,10 +562,10 @@
       icon.setAttribute('aria-hidden', 'true');
       const msg = document.createElement('div');
       msg.className = 'sp-empty-title';
-      msg.textContent = 'Scripts don’t run on this page.';
+      msg.textContent = tSidepanel('sideNoRegularPageTitle', 'Scripts don’t run on this page.');
       const detail = document.createElement('div');
       detail.className = 'sp-empty-detail';
-      detail.textContent = 'Open a regular website or local file to review matching userscripts.';
+      detail.textContent = tSidepanel('sideNoRegularPageDetail', 'Open a regular website or local file to review matching userscripts.');
       empty.append(icon, msg, detail);
       list.replaceChildren(empty);
       updatePageActions();
@@ -549,14 +588,14 @@
       icon.setAttribute('aria-hidden', 'true');
       const msg = document.createElement('div');
       msg.className = 'sp-empty-title';
-      msg.textContent = 'No matching scripts on this page.';
+      msg.textContent = tSidepanel('sideNoMatchingScriptsTitle', 'No matching scripts on this page.');
       const link = document.createElement('div');
       link.className = 'sp-empty-detail';
       if (hostname) {
         const a = document.createElement('button');
         a.className = 'sp-empty-link';
         a.type = 'button';
-        a.textContent = 'Find scripts for ' + hostname;
+        a.textContent = tSidepanel('sideFindScriptsForHostText', 'Find scripts for {hostname}', { hostname });
         a.addEventListener('click', () => {
           chrome.tabs.create({ url: 'https://greasyfork.org/en/scripts/by-site/' + encodeURIComponent(hostname) + '?filter_locale=0' });
         });
@@ -632,19 +671,21 @@
       icon.setAttribute('aria-hidden', 'true');
       const msg = document.createElement('div');
       msg.className = 'sp-empty-title';
-      msg.textContent = searchQuery ? `No scripts match "${searchQuery}".` : 'No scripts in your vault yet.';
+      msg.textContent = searchQuery
+        ? tSidepanel('sideNoMatchingScriptsForQuery', 'No scripts match "{query}".', { query: searchQuery })
+        : tSidepanel('sideNoScriptsInVault', 'No scripts in your vault yet.');
       empty.append(icon, msg);
       if (!searchQuery) {
         const detail = document.createElement('div');
         detail.className = 'sp-empty-detail';
-        detail.textContent = 'Open Dashboard to create or import a userscript.';
+        detail.textContent = tSidepanel('sideOpenDashboardToCreate', 'Open Dashboard to create or import a userscript.');
         empty.appendChild(detail);
       }
       if (searchQuery) {
         const reset = document.createElement('button');
         reset.type = 'button';
         reset.className = 'sp-empty-link';
-        reset.textContent = 'Clear search';
+        reset.textContent = tSidepanel('sideClearSearch', 'Clear search');
         reset.addEventListener('click', () => {
           $('spSearch').value = '';
           searchQuery = '';
@@ -681,13 +722,22 @@
     const stats = script.stats || {};
     const hasError = stats.errors > 0;
     const avgMs = stats.avgTime;
+    const errorLabel = tSidepanel(stats.errors === 1 ? 'errorSingular' : 'errorPlural', stats.errors === 1 ? 'error' : 'errors');
     const detailText = isPageScript
       ? (hasError
-          ? `${numberFormatter.format(stats.errors)} error${stats.errors === 1 ? '' : 's'} recorded`
+          ? tSidepanel('sideScriptErrorsRecorded', '{count} {errors} recorded', {
+              count: numberFormatter.format(stats.errors),
+              errors: errorLabel
+            })
           : enabled
-            ? 'Available on this page'
-            : 'Paused for this page')
+            ? tSidepanel('sideAvailableOnThisPage', 'Available on this page')
+            : tSidepanel('sidePausedForThisPage', 'Paused for this page'))
       : (meta.description || '');
+    const averageLabel = avgMs != null && enabled
+      ? (avgMs < 1000
+          ? tSidepanel('sideAverageExecutionMs', 'average {ms} milliseconds', { ms: avgMs.toFixed(0) })
+          : tSidepanel('sideAverageExecutionSeconds', 'average {seconds} seconds', { seconds: (avgMs / 1000).toFixed(1) }))
+      : '';
 
     const item = document.createElement('div');
     item.className = 'sp-item' +
@@ -699,9 +749,9 @@
       'aria-label',
       [
         meta.name || script.id,
-        enabled ? 'enabled' : 'disabled',
-        hasError ? `${stats.errors} errors` : '',
-        avgMs != null && enabled ? `average ${avgMs < 1000 ? `${avgMs.toFixed(0)} milliseconds` : `${(avgMs / 1000).toFixed(1)} seconds`}` : ''
+        tSidepanel(enabled ? 'enabled' : 'disabled', enabled ? 'enabled' : 'disabled'),
+        hasError ? tSidepanel('sideErrorCountAria', '{count} {errors}', { count: numberFormatter.format(stats.errors), errors: errorLabel }) : '',
+        averageLabel
       ].filter(Boolean).join(', ')
     );
     if (pendingScriptActions.has(script.id)) {
@@ -738,7 +788,7 @@
     name.className = 'sp-item-name-btn';
     name.textContent = meta.name || script.id;
     name.title = detailText || meta.description || '';
-    name.setAttribute('aria-label', `Open ${meta.name || script.id} in editor`);
+    name.setAttribute('aria-label', tSidepanel('sideOpenScriptInEditor', 'Open {name} in editor', { name: meta.name || script.id }));
     name.addEventListener('click', () => openInEditor(script.id));
     name.addEventListener('keydown', (event) => {
       if (event.key === 'ArrowDown') {
@@ -770,14 +820,14 @@
     if (hasError) {
       const dot = document.createElement('div');
       dot.className = 'sp-error-dot';
-      dot.title = stats.errors + ' error(s)';
+      dot.title = tSidepanel('sideErrorCountAria', '{count} {errors}', { count: numberFormatter.format(stats.errors), errors: errorLabel });
       meta2.appendChild(dot);
     }
     if (avgMs != null && enabled) {
       const badge = document.createElement('span');
       badge.className = 'sp-timing ' + (avgMs < 50 ? 'fast' : avgMs < 200 ? 'medium' : 'slow');
       badge.textContent = avgMs < 1000 ? avgMs.toFixed(0) + 'ms' : (avgMs / 1000).toFixed(1) + 's';
-      badge.title = 'Avg execution time';
+      badge.title = tSidepanel('sideAvgExecutionTime', 'Avg execution time');
       meta2.appendChild(badge);
     }
     item.appendChild(meta2);
@@ -822,14 +872,14 @@
     setScriptRowsBusy(id, true);
     try {
       const result = await chrome.runtime.sendMessage({ action: 'toggleScript', scriptId: id, enabled });
-      const error = getRuntimeError(result, 'Failed to update script');
+      const error = getRuntimeError(result, tSidepanel('sideFailedUpdateScript', 'Failed to update script'));
       if (error) throw new Error(error);
       updateLocalScriptState(id, enabled);
       renderPageScripts();
       renderAllScripts();
     } catch (error) {
       if (isContextInvalidated(error)) { showContextInvalidatedBanner(); return; }
-      showPanelNotice(error.message || 'Failed to update script', 'error');
+      showPanelNotice(error.message || tSidepanel('sideFailedUpdateScript', 'Failed to update script'), 'error');
       await refresh();
     } finally {
       pendingScriptActions.delete(id);
@@ -855,7 +905,7 @@
 
       for (const outcome of outcomes) {
         if (outcome.status === 'fulfilled') {
-          const error = getRuntimeError(outcome.value.result, 'Failed to update script');
+          const error = getRuntimeError(outcome.value.result, tSidepanel('sideFailedUpdateScript', 'Failed to update script'));
           if (!error) {
             updated++;
             updateLocalScriptState(outcome.value.id, newState);
@@ -875,10 +925,15 @@
       }
 
       if (failed > 0) {
+        const updatedLabel = tSidepanel(updated === 1 ? 'scriptSingular' : 'scriptPlural', updated === 1 ? 'script' : 'scripts');
         showPanelNotice(
           updated > 0
-            ? `Updated ${numberFormatter.format(updated)} script${updated === 1 ? '' : 's'}, but ${numberFormatter.format(failed)} failed.`
-            : 'Failed to update scripts on this page.',
+            ? tSidepanel('sideBulkUpdatePartial', 'Updated {updated} {scripts}, but {failed} failed.', {
+                updated: numberFormatter.format(updated),
+                scripts: updatedLabel,
+                failed: numberFormatter.format(failed)
+              })
+            : tSidepanel('sideBulkUpdateFailed', 'Failed to update scripts on this page.'),
           'error'
         );
         if (needsRefresh || updated === 0) {
@@ -887,8 +942,13 @@
         return;
       }
 
+      const updatedLabel = tSidepanel(updated === 1 ? 'scriptSingular' : 'scriptPlural', updated === 1 ? 'script' : 'scripts');
       showPanelNotice(
-        `${newState ? 'Enabled' : 'Disabled'} ${numberFormatter.format(updated)} script${updated === 1 ? '' : 's'} on this page.`
+        tSidepanel('sideBulkUpdateSuccess', '{state} {count} {scripts} on this page.', {
+          state: newState ? tSidepanel('enabled', 'Enabled') : tSidepanel('disabled', 'Disabled'),
+          count: numberFormatter.format(updated),
+          scripts: updatedLabel
+        })
       );
     } finally {
       setPageScriptRowsBusy(false);
@@ -912,7 +972,10 @@
       const count = Array.isArray(updates) ? updates.length : 0;
       chip.hidden = count === 0;
       chip.textContent = numberFormatter.format(count);
-      chip.setAttribute('aria-label', `${numberFormatter.format(count)} queued update${count === 1 ? '' : 's'}`);
+      chip.setAttribute('aria-label', tSidepanel('sideQueuedUpdates', '{count} queued {updates}', {
+        count: numberFormatter.format(count),
+        updates: tSidepanel(count === 1 ? 'updateSingular' : 'updatePlural', count === 1 ? 'update' : 'updates')
+      }));
     } catch (_error) {
       chip.hidden = true;
     }

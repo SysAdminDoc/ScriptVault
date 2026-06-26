@@ -7,6 +7,26 @@
     const numberFormatter = new Intl.NumberFormat();
     const setupDoctor = globalThis.UserScriptsSetupDoctor;
 
+    function getPopupI18n() {
+        try {
+            return typeof I18n !== 'undefined' ? I18n : null;
+        } catch (_) {
+            return null;
+        }
+    }
+
+    function tPopup(key, fallback = key, placeholders = {}) {
+        const i18n = getPopupI18n();
+        return i18n?.getMessage ? i18n.getMessage(key, placeholders) : fallback;
+    }
+
+    function applyPopupI18n() {
+        const i18n = getPopupI18n();
+        if (!i18n?.applyToDOM) return;
+        i18n.init?.('auto');
+        i18n.applyToDOM(document);
+    }
+
     const _svPolicy = (typeof window.trustedTypes !== 'undefined' && window.trustedTypes.createPolicy)
         ? window.trustedTypes.createPolicy('sv-popup', { createHTML: s => s })
         : null;
@@ -77,6 +97,7 @@
 
     // Initialize
     async function init() {
+        applyPopupI18n();
         setPopupListLoading(true);
         await checkUserScriptsAvailability();
         await loadSettings();
@@ -115,7 +136,7 @@
             loading.className = 'popup-loading';
             loading.setAttribute('role', 'status');
             loading.setAttribute('aria-live', 'polite');
-            loading.setAttribute('aria-label', 'Loading scripts for this page');
+            loading.setAttribute('aria-label', tPopup('popupLoadingScriptsForPage', 'Loading scripts for this page'));
             for (let i = 0; i < 3; i += 1) {
                 const row = document.createElement('div');
                 row.className = 'popup-loading-row';
@@ -322,16 +343,16 @@
     function updateEmptyStateHint() {
         const el = elements.emptyStateHint;
         if (!el) return;
-        el.textContent = 'Find trusted scripts or create one for this site.';
+        el.textContent = tPopup('popupNoScriptsDefaultHint', 'Find trusted scripts or create one for this site.');
         updatePrimaryActionMenuVisibility();
         if (!canMatchScriptsForUrl(currentUrl)) {
-            el.textContent = 'Switch to a regular website or local file to search for matching scripts.';
+            el.textContent = tPopup('popupNoScriptsRestrictedHint', 'Switch to a regular website or local file to search for matching scripts.');
             return;
         }
         try {
             const hostname = new URL(currentUrl).hostname.replace(/^www\./, '');
             if (hostname) {
-                el.textContent = `Search GreasyFork for ${hostname} or create a focused script for this site.`;
+                el.textContent = tPopup('popupNoScriptsHostHint', 'Search GreasyFork for {hostname} or create a focused script for this site.', { hostname });
             }
         } catch {}
     }
@@ -782,7 +803,7 @@
         pendingDeleteScriptId = null;
         const deleteBtn = getDropdownDeleteButton();
         if (!deleteBtn) return;
-        deleteBtn.textContent = 'Delete';
+        deleteBtn.textContent = tPopup('delete', 'Delete');
         deleteBtn.classList.remove('confirming');
     }
 
@@ -823,7 +844,7 @@
 
         if (updateBtn) {
             updateBtn.disabled = !hasUpdateUrl;
-            updateBtn.textContent = hasUpdateUrl ? 'Check for Update' : 'No Update Channel';
+            updateBtn.textContent = hasUpdateUrl ? tPopup('popupCheckForUpdate', 'Check for Update') : tPopup('popupNoUpdateChannel', 'No Update Channel');
             updateBtn.title = hasUpdateUrl
                 ? `Check ${name} against its remote update URL.`
                 : `${name} does not declare @updateURL or @downloadURL metadata.`;
@@ -831,14 +852,14 @@
 
         if (copyUrlBtn) {
             copyUrlBtn.disabled = !installUrl;
-            copyUrlBtn.textContent = installUrl ? 'Copy Install URL' : 'No Install URL';
+            copyUrlBtn.textContent = installUrl ? tPopup('popupCopyInstallUrl', 'Copy Install URL') : tPopup('popupNoInstallUrl', 'No Install URL');
             copyUrlBtn.title = installUrl
                 ? `Copy ${name}'s remote install URL.`
                 : `${name} does not declare a remote install URL.`;
         }
 
         if (pinBtn) {
-            pinBtn.textContent = script?.settings?.pinned ? 'Unpin Script' : 'Pin Script';
+            pinBtn.textContent = script?.settings?.pinned ? tPopup('popupUnpinScript', 'Unpin Script') : tPopup('popupPinScript', 'Pin Script');
         }
     }
 
@@ -881,7 +902,7 @@
         pendingDeleteScriptId = scriptId;
         const deleteBtn = getDropdownDeleteButton();
         if (deleteBtn) {
-            deleteBtn.textContent = 'Confirm Delete';
+            deleteBtn.textContent = tPopup('popupConfirmDelete', 'Confirm Delete');
             deleteBtn.classList.add('confirming');
         }
         showPopupToast(`Click delete again to remove "${name}"`);
@@ -1199,7 +1220,7 @@
                 if (url) {
                     try {
                         await copyTextToClipboard(url);
-                        showPopupToast('Install URL copied');
+                        showPopupToast(tPopup('popupInstallUrlCopied', 'Install URL copied'));
                     } catch { showPopupToast('Copy failed', 'error'); }
                 } else {
                     showPopupToast('No download URL', 'error');

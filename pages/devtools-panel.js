@@ -11,6 +11,38 @@
       el.innerHTML = _svPolicy ? _svPolicy.createHTML(html) : html;
   }
 
+  function getDevtoolsI18n() {
+    try {
+      return typeof I18n !== 'undefined' ? I18n : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function tDevtools(key, fallback = key, placeholders = {}) {
+    const i18n = getDevtoolsI18n();
+    return i18n?.getMessage ? i18n.getMessage(key, placeholders) : fallback;
+  }
+
+  function requestLabel(count) {
+    return tDevtools(count === 1 ? 'requestSingular' : 'requestPlural', count === 1 ? 'request' : 'requests');
+  }
+
+  function scriptLabel(count) {
+    return tDevtools(count === 1 ? 'scriptSingular' : 'scriptPlural', count === 1 ? 'script' : 'scripts');
+  }
+
+  function profileLabel(count) {
+    return tDevtools(count === 1 ? 'scriptProfileSingular' : 'scriptProfilePlural', count === 1 ? 'script profile' : 'script profiles');
+  }
+
+  function applyDevtoolsI18n() {
+    const i18n = getDevtoolsI18n();
+    if (!i18n?.applyToDOM) return;
+    i18n.init?.('auto');
+    i18n.applyToDOM(document);
+  }
+
   const $ = id => {
     const el = document.getElementById(id);
     if (!el) {
@@ -77,12 +109,12 @@
     if (refreshButton instanceof HTMLButtonElement) {
       refreshButton.disabled = isBusy;
       if (isBusy) {
-        refreshButton.dataset.originalLabel = refreshButton.dataset.originalLabel || refreshButton.textContent || 'Refresh';
+        refreshButton.dataset.originalLabel = refreshButton.dataset.originalLabel || refreshButton.textContent || tDevtools('devtoolsRefresh', 'Refresh');
         refreshButton.setAttribute('aria-busy', 'true');
-        if (!quiet) refreshButton.textContent = 'Refreshing...';
+        if (!quiet) refreshButton.textContent = tDevtools('devtoolsRefreshing', 'Refreshing...');
       } else {
         refreshButton.removeAttribute('aria-busy');
-        refreshButton.textContent = refreshButton.dataset.originalLabel || 'Refresh';
+        refreshButton.textContent = refreshButton.dataset.originalLabel || tDevtools('devtoolsRefresh', 'Refresh');
         delete refreshButton.dataset.originalLabel;
       }
     }
@@ -108,27 +140,27 @@
     $('netDetailTitle').textContent = (entry.method || 'GET') + ' ' + (entry.url || '').slice(0, 40) + '…';
 
     let html = '';
-    html += section('General', [
-      ['URL', escapeHtml(entry.url || '')],
-      ['Method', escapeHtml(entry.method || 'GET')],
-      ['Status', entry.status ? `${Number(entry.status) || 0} ${escapeHtml(entry.statusText || '')}` : 'Error'],
-      ['Duration', formatDuration(entry.duration)],
-      ['Size', formatBytes(entry.responseSize)],
-      ['Script', escapeHtml(entry.scriptName || '')],
-      ['Time', timeFormatter.format(new Date(entry.timestamp))]
+    html += section(tDevtools('devtoolsGeneralSection', 'General'), [
+      [tDevtools('devtoolsUrlField', 'URL'), escapeHtml(entry.url || '')],
+      [tDevtools('devtoolsMethodField', 'Method'), escapeHtml(entry.method || 'GET')],
+      [tDevtools('devtoolsStatusField', 'Status'), entry.status ? `${Number(entry.status) || 0} ${escapeHtml(entry.statusText || '')}` : tDevtools('error', 'Error')],
+      [tDevtools('devtoolsDurationField', 'Duration'), formatDuration(entry.duration)],
+      [tDevtools('devtoolsSizeField', 'Size'), formatBytes(entry.responseSize)],
+      [tDevtools('devtoolsScriptField', 'Script'), escapeHtml(entry.scriptName || '')],
+      [tDevtools('devtoolsTimeField', 'Time'), timeFormatter.format(new Date(entry.timestamp))]
     ]);
 
     if (entry.requestHeaders) {
-      html += section('Request Headers', Object.entries(entry.requestHeaders).map(([k, v]) => [escapeHtml(k), escapeHtml(String(v))]));
+      html += section(tDevtools('devtoolsRequestHeadersSection', 'Request Headers'), Object.entries(entry.requestHeaders).map(([k, v]) => [escapeHtml(k), escapeHtml(String(v))]));
     }
     if (entry.responseHeaders) {
-      html += section('Response Headers', Object.entries(entry.responseHeaders).map(([k, v]) => [escapeHtml(k), escapeHtml(String(v))]));
+      html += section(tDevtools('devtoolsResponseHeadersSection', 'Response Headers'), Object.entries(entry.responseHeaders).map(([k, v]) => [escapeHtml(k), escapeHtml(String(v))]));
     }
     if (entry.error) {
-      html += `<div class="net-detail-section"><div class="net-detail-section-title">Error</div><div style="color:var(--danger)">${escapeHtml(entry.error)}</div></div>`;
+      html += `<div class="net-detail-section"><div class="net-detail-section-title">${escapeHtml(tDevtools('devtoolsErrorSection', 'Error'))}</div><div style="color:var(--danger)">${escapeHtml(entry.error)}</div></div>`;
     }
     if (entry.responsePreview) {
-      html += `<div class="net-detail-section"><div class="net-detail-section-title">Response Preview</div><pre class="net-body-pre">${escapeHtml(String(entry.responsePreview).slice(0, 2000))}</pre></div>`;
+      html += `<div class="net-detail-section"><div class="net-detail-section-title">${escapeHtml(tDevtools('devtoolsResponsePreviewSection', 'Response Preview'))}</div><pre class="net-body-pre">${escapeHtml(String(entry.responsePreview).slice(0, 2000))}</pre></div>`;
     }
 
     safeSetHtml($('netDetailBody'), html);
@@ -186,33 +218,34 @@
     const clearButton = $('btnClear');
     if (activeTab === 'network') {
       filterInput.disabled = false;
-      filterInput.placeholder = 'Filter requests, URLs, or scripts…';
-      filterInput.setAttribute('aria-label', 'Filter network requests');
+      filterInput.placeholder = tDevtools('devtoolsFilterRequestsPlaceholder', 'Filter requests, URLs, or scripts…');
+      filterInput.setAttribute('aria-label', tDevtools('devtoolsFilterNetworkRequests', 'Filter network requests'));
       clearButton.hidden = false;
-      clearButton.textContent = 'Clear';
-      clearButton.setAttribute('aria-label', 'Clear recorded network requests');
+      clearButton.textContent = tDevtools('clearAction', 'Clear');
+      clearButton.setAttribute('aria-label', tDevtools('devtoolsClearRecordedNetworkRequests', 'Clear recorded network requests'));
       clearButton.disabled = netLog.length === 0;
       return;
     }
     if (activeTab === 'execution') {
       filterInput.disabled = false;
-      filterInput.placeholder = 'Filter scripts in execution stats…';
-      filterInput.setAttribute('aria-label', 'Filter execution statistics');
+      filterInput.placeholder = tDevtools('devtoolsFilterExecutionPlaceholder', 'Filter scripts in execution stats…');
+      filterInput.setAttribute('aria-label', tDevtools('devtoolsFilterExecutionAria', 'Filter execution statistics'));
       clearButton.hidden = false;
-      clearButton.textContent = 'Reset';
-      clearButton.setAttribute('aria-label', 'Reset execution filter');
+      clearButton.textContent = tDevtools('resetView', 'Reset View');
+      clearButton.setAttribute('aria-label', tDevtools('devtoolsResetExecutionFilter', 'Reset execution filter'));
       clearButton.disabled = !filterText;
       return;
     }
     filterInput.disabled = true;
-    filterInput.placeholder = 'Console search is unavailable in this panel';
-    filterInput.setAttribute('aria-label', 'Console search unavailable');
+    filterInput.placeholder = tDevtools('devtoolsConsoleSearchUnavailable', 'Console search is unavailable in this panel');
+    filterInput.setAttribute('aria-label', tDevtools('devtoolsConsoleSearchUnavailable', 'Console search unavailable'));
     clearButton.hidden = true;
-    setToolbarStatus('Console capture isn’t available here yet. Use Network or Execution for current insight.');
+    setToolbarStatus(tDevtools('devtoolsConsoleCaptureUnavailable', 'Console capture isn’t available here yet. Use Network or Execution for current insight.'));
   }
 
   // ── Init ─────────────────────────────────────────────────────────────────
   async function init() {
+    applyDevtoolsI18n();
     setupTabs();
     setupToolbar();
     await refreshAll();
@@ -231,24 +264,24 @@
       ]);
       const failures = [];
       if (logResult.status === 'fulfilled') netLog = logResult.value || [];
-      else failures.push('network log');
+      else failures.push(tDevtools('devtoolsNetworkLogLabel', 'network log'));
       if (scriptsResult.status === 'fulfilled') {
         const val = scriptsResult.value;
         scripts = val?.scripts || Object.values(val || {});
       } else {
-        failures.push('script stats');
+        failures.push(tDevtools('devtoolsScriptStatsLabel', 'script stats'));
       }
       renderNetwork();
       renderExecution();
       if (activeTab === 'console') renderConsoleState();
       if (failures.length) {
-        setToolbarStatus(`Could not refresh ${failures.join(' and ')}. Showing the last available data.`, 'error');
+        setToolbarStatus(tDevtools('devtoolsCouldNotRefresh', 'Could not refresh {failures}. Showing the last available data.', { failures: failures.join(' and ') }), 'error');
       } else if (!quiet) {
-        setToolbarStatus('Diagnostics refreshed.', 'success');
+        setToolbarStatus(tDevtools('devtoolsDiagnosticsRefreshed', 'Diagnostics refreshed.'), 'success');
       }
     } catch (e) {
       console.error('[DT] refresh error:', e);
-      setToolbarStatus('Diagnostics refresh failed. Showing the last available data.', 'error');
+      setToolbarStatus(tDevtools('devtoolsDiagnosticsRefreshFailed', 'Diagnostics refresh failed. Showing the last available data.'), 'error');
     } finally {
       isRefreshing = false;
       setRefreshBusy(false, { quiet });
@@ -373,10 +406,14 @@
     if (activeTab === 'network') {
       setToolbarStatus(
         filtered.length
-          ? `${filtered.length} request${filtered.length === 1 ? '' : 's'} visible • ${errors} error${errors === 1 ? '' : 's'} • ${formatBytes(bytes)} transferred`
+          ? tDevtools('devtoolsNetworkSummary', '{requests} visible • {errors} • {bytes} transferred', {
+              requests: `${filtered.length} ${requestLabel(filtered.length)}`,
+              errors: `${errors} ${tDevtools(errors === 1 ? 'errorSingular' : 'errorPlural', errors === 1 ? 'error' : 'errors')}`,
+              bytes: formatBytes(bytes)
+            })
           : (filterText
-              ? `No requests match “${filterText}”.`
-              : 'No network requests yet. Open a page that runs userscripts to capture activity.')
+              ? tDevtools('devtoolsNoRequestsMatch', 'No requests match “{query}”', { query: filterText })
+              : tDevtools('devtoolsNoNetworkRequestsYet', 'No network requests yet. Open a page that runs userscripts to capture activity.'))
       );
       $('btnClear').disabled = netLog.length === 0;
     }
@@ -390,10 +427,10 @@
         $('filterInput').focus({ preventScroll: true });
       }
       const tr = document.createElement('tr');
-      const title = filterText ? 'No requests match this filter' : 'No network requests yet';
+      const title = filterText ? tDevtools('devtoolsNoRequestsMatchTitle', 'No requests match this filter') : tDevtools('devtoolsNoNetworkRequestsTitle', 'No network requests yet');
       const detail = filterText
-        ? `No requests match "${filterText}". Clear the filter or try a script, host, or method name.`
-        : 'Open a page that runs userscripts to capture activity.';
+        ? tDevtools('devtoolsNoRequestsMatchDetail', 'No requests match "{query}". Clear the filter or try a script, host, or method name.', { query: filterText })
+        : tDevtools('devtoolsNoNetworkRequestsDetail', 'Open a page that runs userscripts to capture activity.');
       safeSetHtml(tr, `<td colspan="6" class="table-empty-cell">${tableEmptyMarkup(title, detail, 'NET')}</td>`);
       tbody.appendChild(tr);
       return;
@@ -516,20 +553,23 @@
     if (activeTab === 'execution') {
       setToolbarStatus(
         withStats.length
-          ? `Showing ${withStats.length} script${withStats.length === 1 ? '' : 's'} with execution data`
+          ? tDevtools('devtoolsExecutionSummary', 'Showing {count} {scripts} with execution data', {
+              count: String(withStats.length),
+              scripts: scriptLabel(withStats.length)
+            })
           : (filterText && executionScripts.length
-              ? `No scripts match “${filterText}”.`
-              : 'No execution data yet. Scripts will appear here after they run.')
+              ? tDevtools('devtoolsNoScriptsMatch', 'No scripts match “{query}”', { query: filterText })
+              : tDevtools('devtoolsNoExecutionDataYet', 'No execution data yet. Scripts will appear here after they run.'))
       );
       $('btnClear').disabled = !filterText;
     }
 
     if (!withStats.length) {
       const tr = document.createElement('tr');
-      const title = filterText && executionScripts.length ? 'No scripts match this filter' : 'No execution data yet';
+      const title = filterText && executionScripts.length ? tDevtools('devtoolsNoScriptsMatchTitle', 'No scripts match this filter') : tDevtools('devtoolsNoExecutionDataTitle', 'No execution data yet');
       const detail = filterText && executionScripts.length
-        ? `No scripts match "${filterText}". Reset the filter to return to execution stats.`
-        : 'Scripts will appear here after they run.';
+        ? tDevtools('devtoolsNoScriptsMatchExecutionDetail', 'No scripts match "{query}". Reset the filter to return to execution stats.', { query: filterText })
+        : tDevtools('devtoolsNoExecutionDataDetail', 'Scripts will appear here after they run.');
       safeSetHtml(tr, `<td colspan="6" class="table-empty-cell">${tableEmptyMarkup(title, detail, 'RUN')}</td>`);
       tbody.appendChild(tr);
       return;
@@ -556,7 +596,7 @@
   }
 
   function renderConsoleState() {
-    setToolbarStatus('Console capture isn’t available here yet. Use Network or Execution for current insight.');
+    setToolbarStatus(tDevtools('devtoolsConsoleCaptureUnavailable', 'Console capture isn’t available here yet. Use Network or Execution for current insight.'));
   }
 
   function tableEmptyMarkup(title, detail, mark = 'SV') {
@@ -572,7 +612,7 @@
   // ── HAR Export ────────────────────────────────────────────────────────────
   function exportHAR() {
     if (!netLog.length) {
-      setToolbarStatus('No network requests to export yet.', 'error');
+      setToolbarStatus(tDevtools('devtoolsNoNetworkExport', 'No network requests to export yet.'), 'error');
       return;
     }
     const entries = netLog.map(e => ({
@@ -612,7 +652,10 @@
     a.download = 'scriptvault-network.har';
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-    setToolbarStatus(`Exported ${entries.length} request${entries.length === 1 ? '' : 's'} as HAR.`, 'success');
+    setToolbarStatus(tDevtools('devtoolsExportedHar', 'Exported {count} {requests} as HAR.', {
+      count: String(entries.length),
+      requests: requestLabel(entries.length)
+    }), 'success');
   }
 
   // ── Trace Export ─────────────────────────────────────────────────────────
@@ -620,7 +663,7 @@
     const version = chrome.runtime?.getManifest?.()?.version || 'unknown';
     const executionEntries = scripts.filter(s => s.stats && s.stats.runs > 0);
     if (!netLog.length && !executionEntries.length) {
-      setToolbarStatus('No network or execution data to export yet.', 'error');
+      setToolbarStatus(tDevtools('devtoolsNoTraceExport', 'No network or execution data to export yet.'), 'error');
       return;
     }
     const trace = {
@@ -662,7 +705,12 @@
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     setToolbarStatus(
-      `Exported trace with ${netLog.length} request${netLog.length === 1 ? '' : 's'} and ${executionEntries.length} script profile${executionEntries.length === 1 ? '' : 's'}.`,
+      tDevtools('devtoolsExportedTrace', 'Exported trace with {requests} {requestLabel} and {profiles} {profileLabel}.', {
+        requests: String(netLog.length),
+        requestLabel: requestLabel(netLog.length),
+        profiles: String(executionEntries.length),
+        profileLabel: profileLabel(executionEntries.length)
+      }),
       'success'
     );
   }

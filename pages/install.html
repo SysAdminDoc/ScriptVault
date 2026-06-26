@@ -4,7 +4,7 @@
   <script>document.documentElement.dir = chrome.i18n?.getMessage?.('@@bidi_dir') || 'ltr';</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Install Userscript - ScriptVault</title>
+    <title data-i18n="installPageTitle">Install Userscript - ScriptVault</title>
   
   <!-- CodeMirror for code preview -->
   <link rel="stylesheet" href="../lib/codemirror/codemirror.min.css">
@@ -1586,18 +1586,18 @@
   </style>
 </head>
 <body>
-  <a class="install-skip-link" href="#content">Skip to install details</a>
+  <a class="install-skip-link" href="#content" data-i18n="installSkipToDetails">Skip to install details</a>
   <div class="container">
     <div class="header">
       <div class="header-left">
         <div class="logo"><img src="../images/icon48.png" alt="ScriptVault" width="32" height="32" style="width:32px;height:32px"></div>
         <div class="header-text">
-          <h1>Install Userscript</h1>
-          <p>Review permissions, scope, and source details before bringing a script into ScriptVault.</p>
+          <h1 data-i18n="installUserscriptTitle">Install Userscript</h1>
+          <p data-i18n="installReviewDescription">Review permissions, scope, and source details before bringing a script into ScriptVault.</p>
         </div>
       </div>
       <div class="header-actions">
-        <button class="header-help-btn" id="btnHelp" type="button" aria-label="Help" title="Help" data-help>?</button>
+        <button class="header-help-btn" id="btnHelp" type="button" aria-label="Help" title="Help" data-i18n-aria-label="tabHelp" data-i18n-title="tabHelp" data-help>?</button>
         <div id="install-type-badge"></div>
       </div>
     </div>
@@ -1605,12 +1605,13 @@
     <div class="content" id="content">
       <div class="loading">
         <div class="loading-spinner"></div>
-        <div class="loading-text">Loading script information…</div>
+        <div class="loading-text" data-i18n="installLoadingScriptInformation">Loading script information…</div>
       </div>
     </div>
   </div>
   
   <script src="../shared/utils.js"></script>
+  <script src="../modules/i18n.js"></script>
   <script src="install.js"></script>
 </body>
 </html>

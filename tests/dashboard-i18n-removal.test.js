@@ -7,6 +7,16 @@ const dashboardJs = readFileSync(resolve(process.cwd(), 'pages/dashboard.js'), '
 const lazyLoader = readFileSync(resolve(process.cwd(), 'pages/dashboard-lazy-loader.js'), 'utf8');
 const localeDocs = readFileSync(resolve(process.cwd(), 'docs/locale-coverage.md'), 'utf8');
 const readme = readFileSync(resolve(process.cwd(), 'README.md'), 'utf8');
+const popupHtml = readFileSync(resolve(process.cwd(), 'pages/popup.html'), 'utf8');
+const popupJs = readFileSync(resolve(process.cwd(), 'pages/popup.js'), 'utf8');
+const sidepanelHtml = readFileSync(resolve(process.cwd(), 'pages/sidepanel.html'), 'utf8');
+const sidepanelJs = readFileSync(resolve(process.cwd(), 'pages/sidepanel.js'), 'utf8');
+const installHtml = readFileSync(resolve(process.cwd(), 'pages/install.html'), 'utf8');
+const installJs = readFileSync(resolve(process.cwd(), 'pages/install.js'), 'utf8');
+const devtoolsHtml = readFileSync(resolve(process.cwd(), 'pages/devtools.html'), 'utf8');
+const devtoolsJs = readFileSync(resolve(process.cwd(), 'pages/devtools.js'), 'utf8');
+const devtoolsPanelHtml = readFileSync(resolve(process.cwd(), 'pages/devtools-panel.html'), 'utf8');
+const devtoolsPanelJs = readFileSync(resolve(process.cwd(), 'pages/devtools-panel.js'), 'utf8');
 
 describe('dashboard i18n-v2 removal', () => {
   it('does not ship or eager-load the dead dashboard dictionary', () => {
@@ -276,5 +286,32 @@ describe('dashboard i18n-v2 removal', () => {
     expect(dashboardJs).toContain("'clearPreview'");
     expect(dashboardJs).toContain("'userCssPreviewOpenDraft'");
     expect(dashboardJs).toContain("'previewingEllipsis'");
+  });
+
+  it('translates popup, side panel, install, and DevTools shell controls through the active runtime dictionary', () => {
+    for (const html of [popupHtml, sidepanelHtml, installHtml, devtoolsHtml, devtoolsPanelHtml]) {
+      expect(html).toContain('modules/i18n.js');
+    }
+    expect(popupHtml).toContain('data-i18n="popupFindNewScriptsEllipsis"');
+    expect(popupHtml).toContain('data-i18n-aria-label="popupScriptActionsAria"');
+    expect(popupJs).toContain('function applyPopupI18n()');
+    expect(popupJs).toContain("'popupInstallUrlCopied'");
+
+    expect(sidepanelHtml).toContain('data-i18n="sideOnThisPage"');
+    expect(sidepanelHtml).toContain('data-i18n-placeholder="sideSearchScriptsPlaceholder"');
+    expect(sidepanelJs).toContain('function applySidepanelI18n()');
+    expect(sidepanelJs).toContain("'sideNoMatchingScriptsForQuery'");
+    expect(sidepanelJs).toContain("'sideBulkUpdatePartial'");
+
+    expect(installHtml).toContain('data-i18n="installUserscriptTitle"');
+    expect(installJs).toContain('function applyInstallI18n()');
+
+    expect(devtoolsHtml).toContain('data-i18n="devtoolsTitle"');
+    expect(devtoolsJs).toContain('I18n.applyToDOM?.(document)');
+    expect(devtoolsPanelHtml).toContain('data-i18n="devtoolsNetworkTab"');
+    expect(devtoolsPanelHtml).toContain('data-i18n="devtoolsConsoleEmptyTitle"');
+    expect(devtoolsPanelJs).toContain('function applyDevtoolsI18n()');
+    expect(devtoolsPanelJs).toContain("'devtoolsNetworkSummary'");
+    expect(devtoolsPanelJs).toContain("'devtoolsExportedTrace'");
   });
 });

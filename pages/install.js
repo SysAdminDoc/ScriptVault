@@ -7,6 +7,26 @@ function safeSetHtml(el, html) {
     el.innerHTML = _svPolicy ? _svPolicy.createHTML(html) : html;
 }
 
+function getInstallI18n() {
+  try {
+    return typeof I18n !== 'undefined' ? I18n : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function tInstall(key, fallback = key, placeholders = {}) {
+  const i18n = getInstallI18n();
+  return i18n?.getMessage ? i18n.getMessage(key, placeholders) : fallback;
+}
+
+function applyInstallI18n() {
+  const i18n = getInstallI18n();
+  if (!i18n?.applyToDOM) return;
+  i18n.init?.('auto');
+  i18n.applyToDOM(document);
+}
+
 // Dangerous permissions that warrant security warnings
 const DANGEROUS_PERMISSIONS = [
   'GM_xmlhttpRequest',
@@ -426,6 +446,7 @@ function updateDecisionHero() {
 }
 
 async function init() {
+  applyInstallI18n();
   document.getElementById('btnHelp')?.addEventListener('click', openHelpDashboard);
 
   window.addEventListener('beforeunload', (event) => {
