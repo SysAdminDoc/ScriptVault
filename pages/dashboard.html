@@ -6191,7 +6191,7 @@
 </head>
 <body>
     <!-- Accessibility: Skip to main content -->
-<a href="#mainContent" class="skip-link">Skip to main content</a>
+<a href="#mainContent" class="skip-link" data-i18n="skipToMainContent">Skip to main content</a>
     <!-- Live region for screen reader announcements -->
     <div id="a11yAnnouncer" role="status" aria-live="polite" aria-atomic="true" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap"></div>
     <!-- Header -->
@@ -6254,13 +6254,16 @@
         <div class="setup-warning-content">
             <span class="setup-warning-icon" aria-hidden="true">!</span>
             <div class="setup-warning-text" id="setupWarningText">
-                <strong>Setup Required:</strong> User scripts are off.
-                Chrome 138 or newer needs the per-extension <strong>"Allow User Scripts"</strong> toggle.
-                Chrome 120-137 needs <strong>Developer Mode</strong> in chrome://extensions.
+                <strong data-i18n="setupRequiredLabel">Setup Required:</strong>
+                <span data-i18n="setupWarningIntro">User scripts are off. Chrome 138 or newer needs the per-extension</span>
+                <strong data-i18n="setupAllowUserScriptsToggle">"Allow User Scripts"</strong>
+                <span data-i18n="setupWarningMiddle">toggle. Chrome 120-137 needs</span>
+                <strong data-i18n="setupDeveloperMode">Developer Mode</strong>
+                <span data-i18n="setupWarningEnd">in chrome://extensions.</span>
             </div>
-            <button type="button" class="btn btn-warning" id="btnOpenExtensionDetails">Open Extension Details</button>
-            <button type="button" class="btn btn-warning" id="btnSetupHelp">How to Enable</button>
-            <button type="button" class="setup-warning-dismiss" id="btnDismissWarning" title="Dismiss" aria-label="Dismiss setup warning">×</button>
+            <button type="button" class="btn btn-warning" id="btnOpenExtensionDetails" data-i18n="setupOpenExtensionDetails">Open Extension Details</button>
+            <button type="button" class="btn btn-warning" id="btnSetupHelp" data-i18n="setupHowToEnable">How to Enable</button>
+            <button type="button" class="setup-warning-dismiss" id="btnDismissWarning" title="Dismiss setup warning" aria-label="Dismiss setup warning" data-i18n-title="setupDismissWarning" data-i18n-aria-label="setupDismissWarning">×</button>
         </div>
     </div>
 

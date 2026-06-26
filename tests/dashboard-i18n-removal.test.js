@@ -53,4 +53,18 @@ describe('dashboard i18n-v2 removal', () => {
     expect(dashboardJs).toContain("'settingsShowingFilterMode'");
     expect(dashboardJs).toContain('function getSettingsFilterLabel(filter)');
   });
+
+  it('translates first-run setup guidance through the runtime dictionary', () => {
+    expect(dashboardHtml).toContain('data-i18n="skipToMainContent"');
+    expect(dashboardHtml).toContain('data-i18n="setupRequiredLabel"');
+    expect(dashboardHtml).toContain('data-i18n="setupWarningIntro"');
+    expect(dashboardHtml).toContain('data-i18n="setupAllowUserScriptsToggle"');
+    expect(dashboardHtml).toContain('data-i18n="setupWarningMiddle"');
+    expect(dashboardHtml).toContain('data-i18n="setupDeveloperMode"');
+    expect(dashboardHtml).toContain('data-i18n="setupWarningEnd"');
+    expect(dashboardHtml).toContain('data-i18n="setupOpenExtensionDetails"');
+    expect(dashboardHtml).toContain('data-i18n="setupHowToEnable"');
+    expect(dashboardHtml).toContain('data-i18n-title="setupDismissWarning"');
+    expect(dashboardHtml).toContain('data-i18n-aria-label="setupDismissWarning"');
+  });
 });
