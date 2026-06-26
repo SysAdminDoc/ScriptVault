@@ -1251,6 +1251,50 @@ input[type="checkbox"] {
   margin-bottom: 0;
 }
 
+#settingsPanel .settings-section {
+  position: relative;
+}
+
+#settingsPanel .settings-section[data-settings-state="invalid"] {
+  border-color: var(--tint-red-edge) !important;
+  box-shadow: var(--panel-sheen, inset 0 1px 0 rgba(255, 255, 255, 0.06)),
+              0 0 0 1px rgba(248, 113, 113, 0.08),
+              0 16px 30px rgba(0, 0, 0, 0.18);
+}
+
+#settingsPanel .settings-section[data-settings-state="invalid"]::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 3px;
+  background: var(--accent-red);
+  pointer-events: none;
+}
+
+#settingsPanel .settings-section[data-settings-state="invalid"] .section-label {
+  color: var(--accent-red);
+  background:
+    linear-gradient(180deg, var(--tint-red-soft), transparent 120%),
+    var(--bg-section-header);
+}
+
+#settingsPanel .settings-section[data-settings-state="invalid"] .section-label::before {
+  content: 'Needs review';
+  order: 2;
+  margin-inline-start: auto;
+  padding: 3px 7px;
+  border: 1px solid var(--tint-red-edge);
+  border-radius: var(--r-sm);
+  background: var(--tint-red-soft);
+  color: var(--accent-red);
+  font-size: 0.625rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
 .setting-row label {
   display: flex;
   align-items: center;

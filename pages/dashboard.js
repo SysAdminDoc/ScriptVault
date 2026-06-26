@@ -3524,6 +3524,7 @@
                 errorEl.textContent = message;
                 errorEl.hidden = false;
             }
+            syncSettingsSectionErrorStates();
             return;
         }
         input.removeAttribute('aria-invalid');
@@ -3532,6 +3533,50 @@
             errorEl.textContent = '';
             errorEl.hidden = true;
         }
+        syncSettingsSectionErrorStates();
+    }
+
+    function enhanceSettingsPanelSemantics(sections = getSettingsPanelSections()) {
+        sections.forEach((section, sectionIndex) => {
+            const sectionLabel = section.querySelector('.section-label');
+            if (sectionLabel) {
+                if (!sectionLabel.id) sectionLabel.id = `settingsSectionLabel${sectionIndex + 1}`;
+                section.setAttribute('role', 'group');
+                section.setAttribute('aria-labelledby', sectionLabel.id);
+            }
+
+            section.querySelectorAll('.setting-row').forEach((row, rowIndex) => {
+                const label = row.querySelector('.label-text');
+                if (!label) return;
+
+                const controls = row.querySelectorAll('input:not([type="hidden"]), select, textarea');
+                if (controls.length !== 1) return;
+
+                const control = controls[0];
+                if (control.closest('label') || control.getAttribute('aria-label') || control.getAttribute('aria-labelledby')) {
+                    return;
+                }
+
+                if (!label.id) label.id = `settingsFieldLabel${sectionIndex + 1}_${rowIndex + 1}`;
+                control.setAttribute('aria-labelledby', label.id);
+            });
+        });
+    }
+
+    function syncSettingsSectionErrorStates(sections = getSettingsPanelSections()) {
+        sections.forEach(section => {
+            const visibleErrors = Array.from(section.querySelectorAll('.setting-error'))
+                .filter(error => !error.hidden && error.textContent.trim());
+            if (visibleErrors.length > 0) {
+                section.dataset.settingsState = 'invalid';
+                if (visibleErrors[0].id) {
+                    section.setAttribute('aria-describedby', visibleErrors[0].id);
+                }
+                return;
+            }
+            delete section.dataset.settingsState;
+            section.removeAttribute('aria-describedby');
+        });
     }
 
     function isS3ProviderSelected() {
@@ -4782,6 +4827,8 @@
         const sections = getSettingsPanelSections();
         if (sections.length === 0) return;
 
+        enhanceSettingsPanelSemantics(sections);
+
         sections.forEach(section => {
             if (!section.dataset.settingsGroup) {
                 const labelText = normalizeSettingsLabel(section.querySelector('.section-label')?.textContent || '');
@@ -4801,6 +4848,7 @@
 
         elements.settingsQuickFilter?.addEventListener('input', () => applySettingsPanelFilters());
         applySettingsPanelFilters();
+        syncSettingsSectionErrorStates(sections);
     }
 
     function applySettingsPanelFilters() {

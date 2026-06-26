@@ -136,6 +136,9 @@ describe("accessibility surface pass", () => {
     expect(dashboardHtml).toContain("--premium-state-transition");
     expect(dashboardHtml).toContain("Your vault is empty");
     expect(dashboardJs).toContain("No scripts match this view");
+    expect(dashboardJs).toContain("function enhanceSettingsPanelSemantics");
+    expect(dashboardJs).toContain("function syncSettingsSectionErrorStates");
+    expect(dashboardCss).toContain('[data-settings-state="invalid"]');
     expect(dashboardCss).toContain(".toast.toast-info");
 
     expect(popupHtml).toContain(".popup-toast.warning");

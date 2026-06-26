@@ -204,6 +204,16 @@
     $('allScriptList')?.setAttribute('aria-busy', String(isBusy));
   }
 
+  function setButtonLabel(button, label) {
+    if (!button) return;
+    const labelEl = button.querySelector('span');
+    if (labelEl) {
+      labelEl.textContent = label;
+      return;
+    }
+    button.textContent = label;
+  }
+
   function updateSearchSummary(filteredCount = allScripts.length) {
     const status = $('spSearchStatus');
     if (!status) return;
@@ -244,7 +254,7 @@
       if (canMatchScriptsForUrl(currentTab?.url || '')) {
         try { hostname = new URL(currentTab?.url || '').hostname.replace(/^www\./, ''); } catch {}
       }
-      findButton.textContent = hostname ? `Find for ${hostname}` : 'Find Scripts';
+      setButtonLabel(findButton, hostname ? `Find for ${hostname}` : 'Find');
       findButton.setAttribute('aria-label', hostname ? `Find userscripts for ${hostname}` : 'Find userscripts');
     }
   }

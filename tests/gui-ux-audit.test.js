@@ -109,6 +109,7 @@ describe("cross-surface UX audit", () => {
 
     expect(sidepanelJs).toContain("function updateSearchSummary");
     expect(sidepanelJs).toContain("function setAllScriptsCollapsed");
+    expect(sidepanelJs).toContain("function setButtonLabel");
     expect(sidepanelJs).toContain("const pendingScriptActions = new Set();");
     expect(sidepanelJs).toContain("function setScriptRowsBusy(scriptId, isBusy)");
     expect(sidepanelJs).toContain("function getScriptToggleLabel(script, enabled = script.enabled !== false)");
@@ -132,6 +133,10 @@ describe("cross-surface UX audit", () => {
     expect(sidepanelJs).toContain("requestAnimationFrame(() => restoreSidepanelFallbackFocus('all'));");
     expect(sidepanelJs).toContain('No scripts match "${searchQuery}".');
     expect(sidepanelJs).toContain("Find for ");
+    expect(doc.querySelector("#btnHelp svg")).not.toBeNull();
+    expect(doc.querySelector("#btnRefresh svg")).not.toBeNull();
+    expect(doc.querySelector("#btnDashboard svg")).not.toBeNull();
+    expect(doc.querySelector("#btnFindScripts svg")).not.toBeNull();
   });
 
   test("devtools panel uses real tab semantics and an honest filter/detail shell", () => {
@@ -161,7 +166,8 @@ describe("cross-surface UX audit", () => {
     expect(consoleActions.map((button) => button.textContent?.trim())).toEqual(["Open Network", "Open Execution"]);
 
     expect(devtoolsJs).toContain("function setActiveTab");
-    expect(devtoolsJs).toContain("function setToolbarStatus(message)");
+    expect(devtoolsJs).toContain("function setToolbarStatus(message, tone = '')");
+    expect(devtoolsJs).toContain("function setRefreshBusy");
     expect(devtoolsJs).toContain("function clearFilter({ focus = false } = {})");
     expect(devtoolsJs).toContain("function getNetworkRows()");
     expect(devtoolsJs).toContain("function renderDetailContent(entry)");
@@ -189,6 +195,9 @@ describe("cross-surface UX audit", () => {
     expect(devtoolsJs).toContain("No scripts match");
     expect(devtoolsJs).toContain("clearButton.textContent = 'Clear'");
     expect(devtoolsJs).toContain("clearButton.setAttribute('aria-label', 'Clear recorded network requests');");
+    expect(devtoolsJs).toContain("No network or execution data to export yet.");
+    expect(devtoolsJs).toContain("Diagnostics refresh failed. Showing the last available data.");
+    expect(devtoolsHtml).toContain('.toolbar-btn[aria-busy="true"]');
   });
 
   test("dashboard keeps the updated column on a real button control", () => {

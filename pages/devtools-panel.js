@@ -33,6 +33,7 @@
   let focusedRow = null;
   let refreshTimer = null;
   let activeTab = 'network';
+  let isRefreshing = false;
 
   function setActiveTab(nextTab) {
     activeTab = nextTab;
@@ -56,8 +57,34 @@
     if (nextTab === 'console') renderConsoleState();
   }
 
-  function setToolbarStatus(message) {
-    $('toolbarStatus').textContent = message;
+  function setToolbarStatus(message, tone = '') {
+    const status = $('toolbarStatus');
+    status.textContent = message;
+    if (tone) {
+      status.dataset.tone = tone;
+    } else {
+      delete status.dataset.tone;
+    }
+  }
+
+  function setRefreshBusy(isBusy, { quiet = false } = {}) {
+    const refreshButton = $('btnRefresh');
+    document.body.toggleAttribute('data-refreshing', isBusy);
+    $('devtoolsStatus').setAttribute('aria-busy', String(isBusy));
+    $('netTableWrap').setAttribute('aria-busy', String(isBusy));
+    $('panelExecution').setAttribute('aria-busy', String(isBusy));
+    if (refreshButton instanceof HTMLButtonElement) {
+      refreshButton.disabled = isBusy;
+      if (isBusy) {
+        refreshButton.dataset.originalLabel = refreshButton.dataset.originalLabel || refreshButton.textContent || 'Refresh';
+        refreshButton.setAttribute('aria-busy', 'true');
+        if (!quiet) refreshButton.textContent = 'Refreshing...';
+      } else {
+        refreshButton.removeAttribute('aria-busy');
+        refreshButton.textContent = refreshButton.dataset.originalLabel || 'Refresh';
+        delete refreshButton.dataset.originalLabel;
+      }
+    }
   }
 
   function clearFilter({ focus = false } = {}) {
@@ -191,27 +218,45 @@
     startAutoRefresh();
   }
 
-  async function refreshAll() {
+  async function refreshAll(options = {}) {
+    if (isRefreshing) return;
+    isRefreshing = true;
+    const quiet = options.quiet === true;
+    setRefreshBusy(true, { quiet });
     try {
       const [logResult, scriptsResult] = await Promise.allSettled([
         chrome.runtime.sendMessage({ action: 'getNetworkLog', limit: 200 }),
         chrome.runtime.sendMessage({ action: 'getScripts' })
       ]);
+      const failures = [];
       if (logResult.status === 'fulfilled') netLog = logResult.value || [];
+      else failures.push('network log');
       if (scriptsResult.status === 'fulfilled') {
         const val = scriptsResult.value;
         scripts = val?.scripts || Object.values(val || {});
+      } else {
+        failures.push('script stats');
       }
       renderNetwork();
       renderExecution();
+      if (activeTab === 'console') renderConsoleState();
+      if (failures.length) {
+        setToolbarStatus(`Could not refresh ${failures.join(' and ')}. Showing the last available data.`, 'error');
+      } else if (!quiet) {
+        setToolbarStatus('Diagnostics refreshed.', 'success');
+      }
     } catch (e) {
       console.error('[DT] refresh error:', e);
+      setToolbarStatus('Diagnostics refresh failed. Showing the last available data.', 'error');
+    } finally {
+      isRefreshing = false;
+      setRefreshBusy(false, { quiet });
     }
   }
 
   function startAutoRefresh() {
     if (refreshTimer) clearInterval(refreshTimer);
-    refreshTimer = setInterval(refreshAll, 3000);
+    refreshTimer = setInterval(() => refreshAll({ quiet: true }), 3000);
   }
 
   function stopAutoRefresh() {
@@ -225,7 +270,7 @@
     if (document.hidden) {
       stopAutoRefresh();
     } else {
-      refreshAll();
+      refreshAll({ quiet: true });
       startAutoRefresh();
     }
   });
@@ -256,7 +301,7 @@
 
   // ── Toolbar ───────────────────────────────────────────────────────────────
   function setupToolbar() {
-    $('btnRefresh').addEventListener('click', refreshAll);
+    $('btnRefresh').addEventListener('click', () => refreshAll());
     $('btnClear').addEventListener('click', async () => {
       if (activeTab === 'network') {
         await chrome.runtime.sendMessage({ action: 'clearNetworkLog' });
@@ -525,6 +570,10 @@
 
   // ── HAR Export ────────────────────────────────────────────────────────────
   function exportHAR() {
+    if (!netLog.length) {
+      setToolbarStatus('No network requests to export yet.', 'error');
+      return;
+    }
     const entries = netLog.map(e => ({
       startedDateTime: new Date(e.timestamp).toISOString(),
       time: e.duration || 0,
@@ -562,11 +611,17 @@
     a.download = 'scriptvault-network.har';
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setToolbarStatus(`Exported ${entries.length} request${entries.length === 1 ? '' : 's'} as HAR.`, 'success');
   }
 
   // ── Trace Export ─────────────────────────────────────────────────────────
   function exportTrace() {
     const version = chrome.runtime?.getManifest?.()?.version || 'unknown';
+    const executionEntries = scripts.filter(s => s.stats && s.stats.runs > 0);
+    if (!netLog.length && !executionEntries.length) {
+      setToolbarStatus('No network or execution data to export yet.', 'error');
+      return;
+    }
     const trace = {
       version: '1.0',
       generator: { name: 'ScriptVault', version },
@@ -583,7 +638,7 @@
         type: e.type || 'xmlhttpRequest',
         error: e.error || null,
       })),
-      execution: scripts.filter(s => s.stats && s.stats.runs > 0).map(s => ({
+      execution: executionEntries.map(s => ({
         scriptId: s.id,
         scriptName: s.meta?.name || s.id,
         runs: s.stats.runs || 0,
@@ -595,7 +650,7 @@
         totalRequests: netLog.length,
         totalErrors: netLog.filter(e => e.error || (e.status && e.status >= 400)).length,
         totalBytes: netLog.reduce((s, e) => s + (e.responseSize || 0), 0),
-        scriptsWithStats: scripts.filter(s => s.stats && s.stats.runs > 0).length,
+        scriptsWithStats: executionEntries.length,
       },
     };
     const blob = new Blob([JSON.stringify(trace, null, 2)], { type: 'application/json' });
@@ -605,6 +660,10 @@
     a.download = `scriptvault-trace-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setToolbarStatus(
+      `Exported trace with ${netLog.length} request${netLog.length === 1 ? '' : 's'} and ${executionEntries.length} script profile${executionEntries.length === 1 ? '' : 's'}.`,
+      'success'
+    );
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────

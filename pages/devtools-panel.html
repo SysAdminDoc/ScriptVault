@@ -66,8 +66,11 @@
         .toolbar-btn { min-height: 26px; background: rgba(255,255,255,0.025); border: 1px solid var(--border); color: var(--text-muted); cursor: pointer; padding: 3px 9px; border-radius: var(--radius-control); font-size: 0.6875rem; font-weight: 600; white-space: nowrap; transition: border-color 0.15s, color 0.15s, background-color 0.15s, transform 0.15s; }
         .toolbar-btn:hover { color: var(--text); border-color: var(--text-muted); background: var(--bg-hover); transform: translateY(-1px); }
         .toolbar-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+        .toolbar-btn[aria-busy="true"] { cursor: wait; color: var(--text); border-color: rgba(96,165,250,0.34); background: rgba(96,165,250,0.10); }
         .toolbar-btn:active { transform: translateY(0); }
         .toolbar-status { min-width: 0; max-width: 320px; color: var(--text-muted); font-size: 0.6875rem; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .toolbar-status[data-tone="error"] { color: var(--danger); }
+        .toolbar-status[data-tone="success"] { color: var(--accent); }
         .filter-input { background: var(--bg-row); border: 1px solid var(--border); color: var(--text); padding: 4px 8px; border-radius: var(--radius-control); font-size: 0.6875rem; width: clamp(180px, 24vw, 260px); min-height: 26px; }
         .filter-input:focus,
         .filter-input:focus-visible { outline: none; border-color: var(--accent); box-shadow: var(--focus-ring); }
