@@ -601,42 +601,7 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 > test infrastructure, CSS architecture, and accessibility compliance.
 > Deduplicated against all existing tiers and prior RD additions.
 
-### Now (v3.12.0)
-
-#### IMP-1. Coverage Reporter Enrichment
-- **Priority:** P2 | **Effort:** S
-- **Problem:** Vitest coverage only generates `text` + `json-summary` reporters. No HTML report for visual gap inspection, no lcov for CI integrations (Codecov, Coveralls). Developers must read terminal tables to find coverage gaps.
-- **Deliverable:** Add `html` and `lcov` reporters to `vitest.config.mjs`. Add `test:cov:report` npm script that opens the HTML report. Add `coverage/` to `.gitignore`.
-- **Acceptance:** `npm run test:cov` produces `coverage/index.html` browsable report and `coverage/lcov.info` for CI upload.
-
-#### IMP-2. Production Source Maps
-- **Priority:** P2 | **Effort:** S
-- **Problem:** `esbuild.config.mjs` production build (`--prod`) minifies without generating source maps. Error stack traces in production are opaque. External source maps don't ship to users but help developers debug CWS reviewer reports.
-- **Deliverable:** Add `sourcemap: 'external'` to the esbuild production minify call. Exclude `.map` files from CWS/AMO/Edge packaging scripts.
-- **Acceptance:** `npm run build:prod` produces `background.js` + `background.js.map`. Map file is excluded from published packages.
-
-#### IMP-3. Bundle Size Analysis
-- **Priority:** P3 | **Effort:** S
-- **Problem:** No tooling to track `background.js` composition or detect size regressions. The bundle is ~22K lines (~1.3MB) but there's no breakdown of which modules contribute what.
-- **Deliverable:** Add `build:analyze` npm script that builds background.js and reports per-module line counts and total size. Output as JSON for CI comparison.
-- **Acceptance:** `npm run build:analyze` outputs module-by-module size breakdown and total. Can be diffed across releases.
-
-#### IMP-4. Watch Mode Type Checking
-- **Priority:** P3 | **Effort:** S
-- **Problem:** `npm run dev` (watch mode) rebuilds background.js on file changes but doesn't run TypeScript type-checking. Type errors are only caught on explicit `npm run typecheck` or `npm run check`.
-- **Deliverable:** Add `--typecheck` flag support to watch mode that spawns `tsc --watch --noEmit` in parallel with the file watcher. Add `dev:tc` npm script alias.
-- **Acceptance:** `npm run dev:tc` rebuilds on changes AND reports type errors continuously.
-
 ### Next
-
-#### IMP-5. Shared Theme Token System
-- **Priority:** P2 | **Effort:** M
-- **Problem:** Theme tokens are triplicated across `dashboard.css` (`:root` with `--bg-body`, `--bg-header`), `popup.html` (inline `<style>` with `--popup-*` prefix), and `sidepanel.html` (inline `<style>` with `--bg`, `--bg-raised`). Four themes (dark/light/catppuccin/oled) are maintained independently with divergent names and slightly different values. Any theme change requires editing three files.
-- **Deliverable:** Extract canonical theme tokens into `pages/theme-tokens.css` with all four theme variants. Each page `<link>`s the shared file and maps tokens to its local names (or adopts the shared names). Inline `<style>` blocks in popup/sidepanel shrink to layout-only rules.
-- **Acceptance:** Theme change in one file propagates to all pages. All four themes render correctly in dashboard, popup, and sidepanel.
-
-#### ~~IMP-6. px → rem Font Size Migration~~ — DONE
-- All 75+ font-size declarations already use rem units. No px conversion needed.
 
 #### IMP-7. Coverage Threshold Ratchet
 - **Priority:** P2 | **Effort:** L
