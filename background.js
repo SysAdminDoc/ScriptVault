@@ -17156,7 +17156,8 @@ const ScriptAnalyzer = (() => {
     { id: "proto-pollution", regex: /__proto__|Object\.setPrototypeOf\s*\(|prototype\[/g, label: "Prototype manipulation", risk: 25, category: "hijack", desc: "Modifying object prototypes can corrupt global state and affect other scripts" },
     { id: "document-domain", regex: /document\.domain\s*=/g, label: "document.domain assignment", risk: 20, category: "hijack", desc: "Changing document.domain relaxes same-origin restrictions" },
     { id: "postmessage-noorigin", regex: /postMessage\s*\([^,)]+,\s*['"]\*['"]/g, label: "postMessage with wildcard origin", risk: 15, category: "hijack", desc: "Sending postMessage to any origin (* target) can leak data to malicious frames" },
-    { id: "defineProperty-global", regex: /Object\.defineProperty\s*\(\s*(?:window|globalThis|self|unsafeWindow)\s*,/g, label: "Global property definition", risk: 10, category: "hijack", desc: "Defining properties on the global object can interfere with page code" }
+    { id: "defineProperty-global", regex: /Object\.defineProperty\s*\(\s*(?:window|globalThis|self|unsafeWindow)\s*,/g, label: "Global property definition", risk: 10, category: "hijack", desc: "Defining properties on the global object can interfere with page code" },
+    { id: "mutation-events", regex: /addEventListener\s*\(\s*['"](?:DOMNodeInserted|DOMNodeRemoved|DOMSubtreeModified|DOMAttrModified|DOMCharacterDataModified|DOMNodeInsertedIntoDocument|DOMNodeRemovedFromDocument)['"]/g, label: "Deprecated Mutation Events", risk: 5, category: "deprecated", desc: "Legacy Mutation Events are removed in Chrome and Firefox 140+. Use MutationObserver instead." }
   ];
   var AST_RISK_PATTERNS = [
     {
@@ -17789,7 +17790,7 @@ const ScriptAnalyzer = (() => {
   function generateSummary(riskLevel, findings) {
     if (!findings.length) return "No suspicious patterns detected.";
     const cats = [...new Set(findings.map((f) => f.category))];
-    const catLabels = { execution: "dynamic code execution", data: "data access", network: "network activity", fingerprint: "device fingerprinting", obfuscation: "code obfuscation", mining: "potential mining", hijack: "page manipulation" };
+    const catLabels = { execution: "dynamic code execution", data: "data access", network: "network activity", fingerprint: "device fingerprinting", obfuscation: "code obfuscation", mining: "potential mining", hijack: "page manipulation", deprecated: "deprecated API usage" };
     return `Found ${findings.length} pattern(s) involving ${cats.map((c) => catLabels[c] ?? c).join(", ")}.`;
   }
   var ScriptAnalyzer = {

@@ -360,6 +360,7 @@ const patterns: AnalysisPattern[] = [
   { id: 'document-domain', regex: /document\.domain\s*=/g, label: 'document.domain assignment', risk: 20, category: 'hijack', desc: 'Changing document.domain relaxes same-origin restrictions' },
   { id: 'postmessage-noorigin', regex: /postMessage\s*\([^,)]+,\s*['"]\*['"]/g, label: 'postMessage with wildcard origin', risk: 15, category: 'hijack', desc: 'Sending postMessage to any origin (* target) can leak data to malicious frames' },
   { id: 'defineProperty-global', regex: /Object\.defineProperty\s*\(\s*(?:window|globalThis|self|unsafeWindow)\s*,/g, label: 'Global property definition', risk: 10, category: 'hijack', desc: 'Defining properties on the global object can interfere with page code' },
+  { id: 'mutation-events', regex: /addEventListener\s*\(\s*['"](?:DOMNodeInserted|DOMNodeRemoved|DOMSubtreeModified|DOMAttrModified|DOMCharacterDataModified|DOMNodeInsertedIntoDocument|DOMNodeRemovedFromDocument)['"]/g, label: 'Deprecated Mutation Events', risk: 5, category: 'deprecated', desc: 'Legacy Mutation Events are removed in Chrome and Firefox 140+. Use MutationObserver instead.' },
 ];
 
 const AST_RISK_PATTERNS: AstPattern[] = [
@@ -1027,7 +1028,7 @@ function calculateEntropy(str: string): number {
 function generateSummary(riskLevel: string, findings: Finding[]): string {
   if (!findings.length) return 'No suspicious patterns detected.';
   const cats: string[] = [...new Set(findings.map((f: Finding) => f.category))];
-  const catLabels: Record<string, string> = { execution: 'dynamic code execution', data: 'data access', network: 'network activity', fingerprint: 'device fingerprinting', obfuscation: 'code obfuscation', mining: 'potential mining', hijack: 'page manipulation' };
+  const catLabels: Record<string, string> = { execution: 'dynamic code execution', data: 'data access', network: 'network activity', fingerprint: 'device fingerprinting', obfuscation: 'code obfuscation', mining: 'potential mining', hijack: 'page manipulation', deprecated: 'deprecated API usage' };
   return `Found ${findings.length} pattern(s) involving ${cats.map((c: string) => catLabels[c] ?? c).join(', ')}.`;
 }
 

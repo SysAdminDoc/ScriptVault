@@ -34,6 +34,7 @@ const patterns = [
   { id: 'document-domain', regex: /document\.domain\s*=/g, label: 'document.domain assignment', risk: 20, category: 'hijack' },
   { id: 'postmessage-noorigin', regex: /postMessage\s*\([^,)]+,\s*['"]\*['"]/g, label: 'postMessage with wildcard origin', risk: 15, category: 'hijack' },
   { id: 'defineProperty-global', regex: /Object\.defineProperty\s*\(\s*(?:window|globalThis|self|unsafeWindow)\s*,/g, label: 'Global property definition', risk: 10, category: 'hijack' },
+  { id: 'mutation-events', regex: /addEventListener\s*\(\s*['"](?:DOMNodeInserted|DOMNodeRemoved|DOMSubtreeModified|DOMAttrModified|DOMCharacterDataModified|DOMNodeInsertedIntoDocument|DOMNodeRemovedFromDocument)['"]/g, label: 'Deprecated Mutation Events', risk: 5, category: 'deprecated' },
 ];
 
 function testPattern(id, code) {
@@ -251,6 +252,39 @@ describe('Analyzer: mining patterns', () => {
   });
 });
 
+// ── Deprecated API patterns ──────────────────────────────────────────────
+
+describe('Analyzer: deprecated API patterns', () => {
+  it('detects DOMNodeInserted event listener', () => {
+    expect(testPattern('mutation-events', 'document.addEventListener("DOMNodeInserted", handler)')).toBe(true);
+  });
+
+  it('detects DOMSubtreeModified event listener', () => {
+    expect(testPattern('mutation-events', 'el.addEventListener("DOMSubtreeModified", fn)')).toBe(true);
+  });
+
+  it('detects DOMNodeRemoved event listener', () => {
+    expect(testPattern('mutation-events', 'addEventListener("DOMNodeRemoved", cb)')).toBe(true);
+  });
+
+  it('detects DOMAttrModified event listener', () => {
+    expect(testPattern('mutation-events', 'addEventListener("DOMAttrModified", fn)')).toBe(true);
+  });
+
+  it('detects DOMCharacterDataModified event listener', () => {
+    expect(testPattern('mutation-events', 'addEventListener("DOMCharacterDataModified", fn)')).toBe(true);
+  });
+
+  it('does not flag MutationObserver (the correct replacement)', () => {
+    expect(testPattern('mutation-events', 'new MutationObserver(callback)')).toBe(false);
+  });
+
+  it('does not flag non-mutation addEventListener calls', () => {
+    expect(testPattern('mutation-events', 'addEventListener("click", handler)')).toBe(false);
+    expect(testPattern('mutation-events', 'addEventListener("load", handler)')).toBe(false);
+  });
+});
+
 // ── Multiple match counting ───────────────────────────────────────────────
 
 describe('Analyzer: match counting', () => {
@@ -277,7 +311,7 @@ function calculateEntropy(str) {
 function generateSummary(riskLevel, findings) {
   if (!findings.length) return 'No suspicious patterns detected.';
   const cats = [...new Set(findings.map(f => f.category))];
-  const catLabels = { execution: 'dynamic code execution', data: 'data access', network: 'network activity', fingerprint: 'device fingerprinting', obfuscation: 'code obfuscation', mining: 'potential mining', hijack: 'page manipulation' };
+  const catLabels = { execution: 'dynamic code execution', data: 'data access', network: 'network activity', fingerprint: 'device fingerprinting', obfuscation: 'code obfuscation', mining: 'potential mining', hijack: 'page manipulation', deprecated: 'deprecated API usage' };
   return `Found ${findings.length} pattern(s) involving ${cats.map(c => catLabels[c] || c).join(', ')}.`;
 }
 
