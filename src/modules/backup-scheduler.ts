@@ -111,7 +111,8 @@ interface BackupEntry {
   redactedSettingsCredentialKeys?: string[];
   size: number;
   sizeFormatted: string;
-  data: string;
+  /** @deprecated Blob data is stored in IndexedDB since v3.12. Only present in legacy entries pending migration. */
+  data?: string;
 }
 
 type BackupSummary = Omit<BackupEntry, 'data'>;
@@ -890,6 +891,98 @@ async function _saveBackupList(list: BackupEntry[]): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// IndexedDB blob storage (v3.12 migration: blobs move out of chrome.storage.local)
+// ---------------------------------------------------------------------------
+
+/**
+ * Store backup blob data in IndexedDB by backup ID.
+ * Returns true if the blob was stored in IDB, false if IDB is unavailable
+ * (in which case the caller should keep data inline as fallback).
+ */
+async function _storeBackupBlob(id: string, base64Data: string): Promise<boolean> {
+  const dao = _tryGetBackupsDAO();
+  if (!dao) return false;
+  try {
+    await dao.put({
+      id,
+      name: id,
+      createdAt: Date.now(),
+      byteSize: Math.round(base64Data.length * 0.75),
+      data: _base64ToArrayBuffer(base64Data),
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Retrieve backup blob data from IndexedDB. Returns base64 string or null. */
+async function _getBackupBlob(id: string): Promise<string | null> {
+  const dao = _tryGetBackupsDAO();
+  if (!dao) return null;
+  try {
+    const record = await dao.get(id);
+    if (!record?.data) return null;
+    return _arrayBufferToBase64(record.data);
+  } catch {
+    return null;
+  }
+}
+
+/** Delete backup blob from IndexedDB. */
+async function _deleteBackupBlob(id: string): Promise<void> {
+  const dao = _tryGetBackupsDAO();
+  if (!dao) return;
+  try {
+    await dao.delete(id);
+  } catch { /* best-effort cleanup */ }
+}
+
+/** Get BackupsDAO if available (returns null in test environments without IDB). */
+function _tryGetBackupsDAO(): typeof import('../storage/script-db').BackupsDAO | null {
+  if (typeof indexedDB === 'undefined') return null;
+  const dao = (globalThis as Record<string, unknown>).BackupsDAO as
+    typeof import('../storage/script-db').BackupsDAO | undefined;
+  return dao ?? null;
+}
+
+function _base64ToArrayBuffer(base64: string): ArrayBuffer {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+}
+
+function _arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]!);
+  return btoa(binary);
+}
+
+/**
+ * One-time migration: move any base64 data blobs from chrome.storage.local
+ * BackupEntry.data fields into IndexedDB, then strip them from the metadata.
+ */
+async function _migrateBackupBlobsToIdb(): Promise<void> {
+  if (typeof indexedDB === 'undefined') return;
+  const list = await _getBackupList();
+  const needsMigration = list.filter(e => typeof e.data === 'string' && e.data.length > 0);
+  if (needsMigration.length === 0) return;
+
+  for (const entry of needsMigration) {
+    try {
+      await _storeBackupBlob(entry.id, entry.data!);
+    } catch {
+      // If IDB write fails, keep the data in chrome.storage.local as fallback
+      continue;
+    }
+    delete entry.data;
+  }
+  await _saveBackupList(list);
+}
+
+// ---------------------------------------------------------------------------
 // Restore receipts
 // ---------------------------------------------------------------------------
 
@@ -1095,6 +1188,9 @@ async function _uploadBackupToCloud(backup: BackupEntry): Promise<void> {
   const provider = CloudSyncProviders[providerName];
   if (!provider || typeof provider.upload !== 'function') return;
 
+  const blobData = backup.data ?? await _getBackupBlob(backup.id);
+  if (!blobData) throw new Error('Backup data not found in IndexedDB');
+
   const envelope = {
     schema: 'scriptvault-cloud-backup/v1',
     backupId: backup.id,
@@ -1103,7 +1199,7 @@ async function _uploadBackupToCloud(backup: BackupEntry): Promise<void> {
     scriptCount: backup.scriptCount,
     reason: backup.reason,
     size: backup.size,
-    data: backup.data,
+    data: blobData,
   };
 
   const uploadSettings = Object.assign({}, globalSettings, {
@@ -1131,6 +1227,7 @@ export const BackupScheduler = {
 
     await _loadSettings();
     await _registerAlarms();
+    _migrateBackupBlobsToIdb().catch(() => { /* best-effort migration */ });
 
     // Listen for backup-related alarms
     chrome.alarms.onAlarm.addListener(async (alarm: chrome.alarms.Alarm) => {
@@ -1162,8 +1259,9 @@ export const BackupScheduler = {
       });
       const sizeBytes: number = Math.round(base64.length * 0.75); // approximate binary size
 
+      const backupId = _generateId();
       const backup: BackupEntry = {
-        id: _generateId(),
+        id: backupId,
         timestamp: Date.now(),
         version: chrome.runtime.getManifest?.()?.version ?? '1.0',
         reason,
@@ -1176,11 +1274,16 @@ export const BackupScheduler = {
         redactedSettingsCredentialKeys,
         size: sizeBytes,
         sizeFormatted: _formatBytes(sizeBytes),
-        data: base64,
       };
 
       // Prune old backups BEFORE writing to avoid quota exhaustion
       await BackupScheduler.pruneOldBackups();
+
+      // Store blob in IndexedDB; fall back to inline if IDB unavailable
+      const storedInIdb = await _storeBackupBlob(backupId, base64);
+      if (!storedInIdb) {
+        backup.data = base64;
+      }
 
       const backups: BackupEntry[] = await _getBackupList();
       backups.unshift(backup); // newest first
@@ -1283,7 +1386,9 @@ export const BackupScheduler = {
     }
 
     try {
-      const unzipped: Record<string, Uint8Array> = unzipArchiveBounded(backup.data);
+      const backupData = backup.data ?? await _getBackupBlob(backup.id);
+      if (!backupData) return { success: false, error: 'Backup data not found' };
+      const unzipped: Record<string, Uint8Array> = unzipArchiveBounded(backupData);
       const fileNames: string[] = Object.keys(unzipped);
       let restoredScripts = 0;
       let skippedScripts = 0;
@@ -1403,7 +1508,7 @@ export const BackupScheduler = {
       } else {
         // Full restore: use importFromZip for all scripts at once
         try {
-          const importResult = await importFromZip(backup.data, {
+          const importResult = await importFromZip(backupData, {
             overwrite: true,
             recordReceipt: false,
             trustImportedScripts,
@@ -1592,6 +1697,7 @@ export const BackupScheduler = {
     if (filtered.length === backups.length)
       return { success: false, error: 'Backup not found' };
     await _saveBackupList(filtered);
+    await _deleteBackupBlob(backupId);
     return { success: true };
   },
 
@@ -1607,11 +1713,14 @@ export const BackupScheduler = {
     );
     if (!backup) return null;
 
+    const backupData = backup.data ?? await _getBackupBlob(backup.id);
+    if (!backupData) return null;
+
     const dateStr: string = new Date(backup.timestamp)
       .toISOString()
       .replace(/[:.]/g, '-');
     return {
-      zipData: backup.data,
+      zipData: backupData,
       filename: `scriptvault-autobackup-${dateStr}.zip`,
     };
   },
@@ -1705,10 +1814,14 @@ export const BackupScheduler = {
     const maxBackups = Number.isFinite(rawMax) && rawMax >= 1 ? Math.floor(rawMax) : 5;
     if (backups.length <= maxBackups) return 0;
 
-    // Keep the newest N
+    // Keep the newest N, delete IDB blobs for pruned entries
     const pruned: BackupEntry[] = backups.slice(0, maxBackups);
+    const removed: BackupEntry[] = backups.slice(maxBackups);
+    for (const entry of removed) {
+      await _deleteBackupBlob(entry.id);
+    }
     await _saveBackupList(pruned);
-    return Math.max(0, backups.length - pruned.length);
+    return removed.length;
   },
 
   /**
@@ -1740,7 +1853,9 @@ export const BackupScheduler = {
     if (!backup) return null;
 
     try {
-      const unzipped: Record<string, Uint8Array> = unzipArchiveBounded(backup.data);
+      const backupData = backup.data ?? await _getBackupBlob(backup.id);
+      if (!backupData) return null;
+      const unzipped: Record<string, Uint8Array> = unzipArchiveBounded(backupData);
       const fileNames: string[] = Object.keys(unzipped);
       const parseJsonFile = (fileName: string): unknown => {
         const fileData = unzipped[fileName];
@@ -1879,7 +1994,9 @@ export const BackupScheduler = {
       typeof opts.parseUserscript === 'function' ? opts.parseUserscript : null;
 
     try {
-      const unzipped: Record<string, Uint8Array> = unzipArchiveBounded(backup.data);
+      const backupData = backup.data ?? await _getBackupBlob(backup.id);
+      if (!backupData) return null;
+      const unzipped: Record<string, Uint8Array> = unzipArchiveBounded(backupData);
       const fileNames: string[] = Object.keys(unzipped);
 
       const installedIdSet = new Set<string>();

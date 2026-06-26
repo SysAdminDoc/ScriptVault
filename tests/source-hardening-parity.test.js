@@ -178,7 +178,7 @@ describe('source hardening parity guards', () => {
       expect(text).toContain('= unzipArchiveBounded(zipData);');
     }
 
-    expect(backupScheduler).toContain('= unzipArchiveBounded(backup.data);');
+    expect(backupScheduler).toContain('= unzipArchiveBounded(backupData);');
     expect(backupScheduler).toContain('= unzipArchiveBounded(data);');
   });
 

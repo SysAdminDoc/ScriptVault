@@ -11908,6 +11908,73 @@ const BackupScheduler = (() => {
   async function _saveBackupList(list) {
     await chrome.storage.local.set({ [STORAGE_KEY_BACKUPS]: list });
   }
+  async function _storeBackupBlob(id, base64Data) {
+    const dao = _tryGetBackupsDAO();
+    if (!dao) return false;
+    try {
+      await dao.put({
+        id,
+        name: id,
+        createdAt: Date.now(),
+        byteSize: Math.round(base64Data.length * 0.75),
+        data: _base64ToArrayBuffer(base64Data)
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  async function _getBackupBlob(id) {
+    const dao = _tryGetBackupsDAO();
+    if (!dao) return null;
+    try {
+      const record = await dao.get(id);
+      if (!record?.data) return null;
+      return _arrayBufferToBase64(record.data);
+    } catch {
+      return null;
+    }
+  }
+  async function _deleteBackupBlob(id) {
+    const dao = _tryGetBackupsDAO();
+    if (!dao) return;
+    try {
+      await dao.delete(id);
+    } catch {
+    }
+  }
+  function _tryGetBackupsDAO() {
+    if (typeof indexedDB === "undefined") return null;
+    const dao = globalThis.BackupsDAO;
+    return dao ?? null;
+  }
+  function _base64ToArrayBuffer(base64) {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes.buffer;
+  }
+  function _arrayBufferToBase64(buffer) {
+    const bytes = new Uint8Array(buffer);
+    let binary = "";
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    return btoa(binary);
+  }
+  async function _migrateBackupBlobsToIdb() {
+    if (typeof indexedDB === "undefined") return;
+    const list = await _getBackupList();
+    const needsMigration = list.filter((e) => typeof e.data === "string" && e.data.length > 0);
+    if (needsMigration.length === 0) return;
+    for (const entry of needsMigration) {
+      try {
+        await _storeBackupBlob(entry.id, entry.data);
+      } catch {
+        continue;
+      }
+      delete entry.data;
+    }
+    await _saveBackupList(list);
+  }
   async function _getReceipts() {
     const data = await chrome.storage.local.get(STORAGE_KEY_RECEIPTS);
     const receipts = data[STORAGE_KEY_RECEIPTS];
@@ -12064,6 +12131,8 @@ const BackupScheduler = (() => {
     if (providerName === "none") return;
     const provider = CloudSyncProviders[providerName];
     if (!provider || typeof provider.upload !== "function") return;
+    const blobData = backup.data ?? await _getBackupBlob(backup.id);
+    if (!blobData) throw new Error("Backup data not found in IndexedDB");
     const envelope = {
       schema: "scriptvault-cloud-backup/v1",
       backupId: backup.id,
@@ -12072,7 +12141,7 @@ const BackupScheduler = (() => {
       scriptCount: backup.scriptCount,
       reason: backup.reason,
       size: backup.size,
-      data: backup.data
+      data: blobData
     };
     const uploadSettings = Object.assign({}, globalSettings, {
       syncFilename: "scriptvault-backup.json"
@@ -12092,6 +12161,8 @@ const BackupScheduler = (() => {
       _initialized = true;
       await _loadSettings();
       await _registerAlarms();
+      _migrateBackupBlobsToIdb().catch(() => {
+      });
       chrome.alarms.onAlarm.addListener(async (alarm) => {
         if (alarm.name === ALARM_NAME) {
           await BackupScheduler.createBackup("scheduled");
@@ -12119,8 +12190,9 @@ const BackupScheduler = (() => {
           includeSettingsCredentials: settings.includeSettingsCredentials === true
         });
         const sizeBytes = Math.round(base64.length * 0.75);
+        const backupId = _generateId();
         const backup = {
-          id: _generateId(),
+          id: backupId,
           timestamp: Date.now(),
           version: chrome.runtime.getManifest?.()?.version ?? "1.0",
           reason,
@@ -12132,10 +12204,13 @@ const BackupScheduler = (() => {
           settingsCredentialsIncluded,
           redactedSettingsCredentialKeys,
           size: sizeBytes,
-          sizeFormatted: _formatBytes(sizeBytes),
-          data: base64
+          sizeFormatted: _formatBytes(sizeBytes)
         };
         await BackupScheduler.pruneOldBackups();
+        const storedInIdb = await _storeBackupBlob(backupId, base64);
+        if (!storedInIdb) {
+          backup.data = base64;
+        }
         const backups = await _getBackupList();
         backups.unshift(backup);
         await _saveBackupList(backups);
@@ -12217,7 +12292,9 @@ const BackupScheduler = (() => {
         }
       }
       try {
-        const unzipped = unzipArchiveBounded(backup.data);
+        const backupData = backup.data ?? await _getBackupBlob(backup.id);
+        if (!backupData) return { success: false, error: "Backup data not found" };
+        const unzipped = unzipArchiveBounded(backupData);
         const fileNames = Object.keys(unzipped);
         let restoredScripts = 0;
         let skippedScripts = 0;
@@ -12313,7 +12390,7 @@ const BackupScheduler = (() => {
           }
         } else {
           try {
-            const importResult = await importFromZip(backup.data, {
+            const importResult = await importFromZip(backupData, {
               overwrite: true,
               recordReceipt: false,
               trustImportedScripts,
@@ -12469,6 +12546,7 @@ const BackupScheduler = (() => {
       if (filtered.length === backups.length)
         return { success: false, error: "Backup not found" };
       await _saveBackupList(filtered);
+      await _deleteBackupBlob(backupId);
       return { success: true };
     },
     /**
@@ -12480,9 +12558,11 @@ const BackupScheduler = (() => {
         (b) => b.id === backupId
       );
       if (!backup) return null;
+      const backupData = backup.data ?? await _getBackupBlob(backup.id);
+      if (!backupData) return null;
       const dateStr = new Date(backup.timestamp).toISOString().replace(/[:.]/g, "-");
       return {
-        zipData: backup.data,
+        zipData: backupData,
         filename: `scriptvault-autobackup-${dateStr}.zip`
       };
     },
@@ -12564,8 +12644,12 @@ const BackupScheduler = (() => {
       const maxBackups = Number.isFinite(rawMax) && rawMax >= 1 ? Math.floor(rawMax) : 5;
       if (backups.length <= maxBackups) return 0;
       const pruned = backups.slice(0, maxBackups);
+      const removed = backups.slice(maxBackups);
+      for (const entry of removed) {
+        await _deleteBackupBlob(entry.id);
+      }
       await _saveBackupList(pruned);
-      return Math.max(0, backups.length - pruned.length);
+      return removed.length;
     },
     /**
      * Called externally when a script is installed, updated, or deleted.
@@ -12590,7 +12674,9 @@ const BackupScheduler = (() => {
       );
       if (!backup) return null;
       try {
-        const unzipped = unzipArchiveBounded(backup.data);
+        const backupData = backup.data ?? await _getBackupBlob(backup.id);
+        if (!backupData) return null;
+        const unzipped = unzipArchiveBounded(backupData);
         const fileNames = Object.keys(unzipped);
         const parseJsonFile = (fileName) => {
           const fileData = unzipped[fileName];
@@ -12694,7 +12780,9 @@ const BackupScheduler = (() => {
       if (!backup) return null;
       const parseUserscript = typeof opts.parseUserscript === "function" ? opts.parseUserscript : null;
       try {
-        const unzipped = unzipArchiveBounded(backup.data);
+        const backupData = backup.data ?? await _getBackupBlob(backup.id);
+        if (!backupData) return null;
+        const unzipped = unzipArchiveBounded(backupData);
         const fileNames = Object.keys(unzipped);
         const installedIdSet = /* @__PURE__ */ new Set();
         try {
