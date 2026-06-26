@@ -157,4 +157,21 @@ describe('dashboard i18n-v2 removal', () => {
     expect(dashboardHtml).toContain('data-i18n="grantAll"');
     expect(dashboardHtml).toContain('data-i18n="resetList"');
   });
+
+  it('translates BlackCheck, downloads, experimental, reset, and settings empty state controls', () => {
+    expect(dashboardHtml).toContain('data-i18n="settingsBlackCheck"');
+    expect(dashboardHtml).toContain('data-i18n="blacklistSourceRemoteManual"');
+    expect(dashboardHtml).toContain('data-i18n="manualBlacklistLabel"');
+    expect(dashboardHtml).toContain('data-i18n="settingsDownloadsBeta"');
+    expect(dashboardHtml).toContain('data-i18n="downloadsPermissionChecking"');
+    expect(dashboardHtml).toContain('data-i18n-title="downloadsPermissionHelp"');
+    expect(dashboardHtml).toContain('data-i18n="downloadModeLabel"');
+    expect(dashboardHtml).toContain('data-i18n-title="downloadWhitelistHelp"');
+    expect(dashboardHtml).toContain('data-i18n="settingsStrictModeLabel"');
+    expect(dashboardHtml).toContain('data-i18n="settingsTopLevelAwaitLabel"');
+    expect(dashboardHtml).toContain('data-i18n="restartScriptVault"');
+    expect(dashboardHtml).toContain('data-i18n="factoryReset"');
+    expect(dashboardHtml).toContain('data-i18n="settingsNoMatchesTitle"');
+    expect(dashboardHtml).toContain('data-i18n="settingsNoMatchesDescription"');
+  });
 });

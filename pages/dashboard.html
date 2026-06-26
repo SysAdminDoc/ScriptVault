@@ -6339,8 +6339,8 @@
                     <div class="toolbar-divider"></div>
                     <select id="filterSelect" class="select-field bulk-select" title="Filter scripts" aria-label="Filter scripts" data-i18n-title="filterScripts" data-i18n-aria-label="filterScripts">
                         <option value="all">All</option>
-                        <option value="enabled">Enabled</option>
-                        <option value="disabled">Disabled</option>
+                        <option value="enabled" data-i18n="enabled">Enabled</option>
+                        <option value="disabled" data-i18n="disabled">Disabled</option>
                         <option disabled>--- Status ---</option>
                         <option value="attention">Needs Review</option>
                         <option value="pinned">Pinned</option>
@@ -7039,7 +7039,7 @@
                     <div class="setting-row">
                         <span class="label-text" data-i18n="settingsSandboxModeLabel">Sandbox Mode:</span>
                         <select class="select-field" id="settingsSandboxMode" aria-describedby="settingsSandboxModeError">
-                            <option value="default" selected>Default</option>
+                            <option value="default" selected data-i18n="optionDefault">Default</option>
                             <option value="raw" data-i18n="sandboxModeRaw">Raw</option>
                             <option value="js" data-i18n="sandboxModeJavaScript">JavaScript</option>
                             <option value="dom" data-i18n="sandboxModeDom">DOM</option>
@@ -7127,7 +7127,7 @@
                     <div class="setting-row">
                         <span class="label-text" data-i18n="settingsIncludeModeLabel">Userscript @include Mode:</span>
                         <select class="select-field" id="settingsIncludeMode" aria-describedby="settingsIncludeModeError">
-                            <option value="default" selected>Default</option>
+                            <option value="default" selected data-i18n="optionDefault">Default</option>
                             <option value="glob" data-i18n="includeGlob">Glob</option>
                             <option value="regex" data-i18n="includeRegex">Regex</option>
                         </select>
@@ -7211,20 +7211,20 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
 
             <!-- BlackCheck Section -->
             <div class="settings-section" data-config-level="advanced">
-                <div class="section-label">BlackCheck</div>
+                <div class="section-label" data-i18n="settingsBlackCheck">BlackCheck</div>
                 <div class="section-content">
                     <div class="setting-row">
-                        <span class="label-text">Userscript Blacklist Source:</span>
+                        <span class="label-text" data-i18n="blacklistSourceLabel">Userscript Blacklist Source:</span>
                         <select class="select-field" id="settingsBlacklistSource" aria-describedby="settingsBlacklistSourceError">
-                            <option value="remote_manual" selected>Remote + Manual</option>
-                            <option value="remote">Remote only</option>
-                            <option value="manual">Manual only</option>
-                            <option value="disabled">Disabled</option>
+                            <option value="remote_manual" selected data-i18n="blacklistSourceRemoteManual">Remote + Manual</option>
+                            <option value="remote" data-i18n="blacklistSourceRemoteOnly">Remote only</option>
+                            <option value="manual" data-i18n="blacklistSourceManualOnly">Manual only</option>
+                            <option value="disabled" data-i18n="disabled">Disabled</option>
                         </select>
                         <span class="setting-error" id="settingsBlacklistSourceError" hidden></span>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Block From Severity Level:</span>
+                        <span class="label-text" data-i18n="blockSeverityLabel">Block From Severity Level:</span>
                         <select class="select-field" id="settingsBlockSeverity" aria-describedby="settingsBlockSeverityError">
                             <option value="1">1</option>
                             <option value="2">2</option>
@@ -7235,41 +7235,41 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                         <span class="setting-error" id="settingsBlockSeverityError" hidden></span>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Manual Userscript and @require Blacklist:</span>
+                        <span class="label-text" data-i18n="manualBlacklistLabel">Manual Userscript and @require Blacklist:</span>
                     </div>
                     <div class="setting-row">
                         <textarea class="textarea-field" id="settingsManualBlacklist" placeholder="/^https?:\/\/example\.com(:[0-9]{1,5})?\/.*/" style="min-height: 100px; font-family: monospace;" aria-describedby="settingsManualBlacklistError">/^https?:\/\/example\.com(:[0-9]{1,5})?\/.*/ </textarea>
                         <span class="setting-error" id="settingsManualBlacklistError" hidden></span>
                     </div>
                     <div class="setting-row">
-                        <button type="button" class="btn" id="btnSaveBlackCheck">Save</button>
+                        <button type="button" class="btn" id="btnSaveBlackCheck" data-i18n="save">Save</button>
                     </div>
                 </div>
             </div>
 
             <!-- Downloads BETA Section -->
             <div class="settings-section" data-config-level="advanced">
-                <div class="section-label">Downloads BETA</div>
+                <div class="section-label" data-i18n="settingsDownloadsBeta">Downloads BETA</div>
                 <div class="section-content">
                     <div class="setting-row">
-                        <span class="label-text">Permission:</span>
-                        <span id="downloadsPermissionStatus" class="status-text">checking...</span>
-                        <button type="button" class="btn btn-sm" id="btnGrantDownloads" hidden>Grant</button>
-                        <span class="help-icon" title="GM_download requires the optional downloads permission. Grant it here if it was not requested at script install time.">?</span>
+                        <span class="label-text" data-i18n="downloadsPermissionLabel">Permission:</span>
+                        <span id="downloadsPermissionStatus" class="status-text" data-i18n="downloadsPermissionChecking">checking...</span>
+                        <button type="button" class="btn btn-sm" id="btnGrantDownloads" hidden data-i18n="grantPermission">Grant</button>
+                        <span class="help-icon" title="GM_download requires the optional downloads permission. Grant it here if it was not requested at script install time." data-i18n-title="downloadsPermissionHelp">?</span>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Download Mode:</span>
+                        <span class="label-text" data-i18n="downloadModeLabel">Download Mode:</span>
                         <select class="select-field" id="settingsDownloadMode" aria-describedby="settingsDownloadModeError">
-                            <option value="default" selected>Default</option>
-                            <option value="native">Native</option>
-                            <option value="browser">Browser</option>
+                            <option value="default" selected data-i18n="optionDefault">Default</option>
+                            <option value="native" data-i18n="downloadModeNative">Native</option>
+                            <option value="browser" data-i18n="downloadModeBrowser">Browser</option>
                         </select>
                         <span class="setting-error" id="settingsDownloadModeError" hidden></span>
-                        <span class="help-icon" title="How GM_download handles file downloads">?</span>
+                        <span class="help-icon" title="How GM_download handles file downloads" data-i18n-title="downloadModeHelp">?</span>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">Whitelisted File Extensions:</span>
-                        <span class="help-icon" title="Regex patterns for allowed file extensions">?</span>
+                        <span class="label-text" data-i18n="downloadWhitelistLabel">Whitelisted File Extensions:</span>
+                        <span class="help-icon" title="Regex patterns for allowed file extensions" data-i18n-title="downloadWhitelistHelp">?</span>
                     </div>
                     <div class="setting-row">
                         <textarea class="textarea-field" id="settingsDownloadWhitelist" style="min-height: 180px; font-family: monospace;" aria-describedby="settingsDownloadWhitelistError">/^[^\.].*$/
@@ -7286,7 +7286,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                         <span class="setting-error" id="settingsDownloadWhitelistError" hidden></span>
                     </div>
                     <div class="setting-row">
-                        <button type="button" class="btn" id="btnSaveDownloads">Save</button>
+                        <button type="button" class="btn" id="btnSaveDownloads" data-i18n="save">Save</button>
                     </div>
                 </div>
             </div>
@@ -7296,20 +7296,20 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 <div class="section-label" data-i18n="settingsExperimental">Experimental</div>
                 <div class="section-content">
                     <div class="setting-row">
-                        <span class="label-text">strict mode:</span>
+                        <span class="label-text" data-i18n="settingsStrictModeLabel">strict mode:</span>
                         <select class="select-field" id="settingsStrictMode" aria-describedby="settingsStrictModeError">
-                            <option value="default" selected>Default</option>
-                            <option value="enabled">Enabled</option>
-                            <option value="disabled">Disabled</option>
+                            <option value="default" selected data-i18n="optionDefault">Default</option>
+                            <option value="enabled" data-i18n="enabled">Enabled</option>
+                            <option value="disabled" data-i18n="disabled">Disabled</option>
                         </select>
                         <span class="setting-error" id="settingsStrictModeError" hidden></span>
                     </div>
                     <div class="setting-row">
-                        <span class="label-text">top-level await:</span>
+                        <span class="label-text" data-i18n="settingsTopLevelAwaitLabel">top-level await:</span>
                         <select class="select-field" id="settingsTopLevelAwait" aria-describedby="settingsTopLevelAwaitError">
-                            <option value="default" selected>Default</option>
-                            <option value="enabled">Enabled</option>
-                            <option value="disabled">Disabled</option>
+                            <option value="default" selected data-i18n="optionDefault">Default</option>
+                            <option value="enabled" data-i18n="enabled">Enabled</option>
+                            <option value="disabled" data-i18n="disabled">Disabled</option>
                         </select>
                         <span class="setting-error" id="settingsTopLevelAwaitError" hidden></span>
                     </div>
@@ -7321,17 +7321,17 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 <div class="section-label" data-i18n="settingsReset">Reset</div>
                 <div class="section-content">
                     <div class="setting-row">
-                        <button type="button" class="btn" id="btnRestartExtension">Restart ScriptVault</button>
+                        <button type="button" class="btn" id="btnRestartExtension" data-i18n="restartScriptVault">Restart ScriptVault</button>
                     </div>
                     <div class="setting-row">
-                        <button type="button" class="btn btn-danger" id="btnFactoryReset">Factory Reset</button>
+                        <button type="button" class="btn btn-danger" id="btnFactoryReset" data-i18n="factoryReset">Factory Reset</button>
                     </div>
                 </div>
             </div>
             </div>
             <div class="panel-empty" id="settingsEmptyState" hidden>
-                <strong>No settings matched</strong>
-                <span>Adjust the category filter or clear the search input to bring sections back into view.</span>
+                <strong data-i18n="settingsNoMatchesTitle">No settings matched</strong>
+                <span data-i18n="settingsNoMatchesDescription">Adjust the category filter or clear the search input to bring sections back into view.</span>
             </div>
             </div>
         </div>
