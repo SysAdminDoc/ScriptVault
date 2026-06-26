@@ -47,6 +47,12 @@ export const TS_RUNTIME_MODULES = [
     exportName: 'ErrorLog',
   },
   {
+    id: 'event-log',
+    source: 'src/modules/event-log.ts',
+    output: 'modules/event-log.js',
+    exportName: 'EventLog',
+  },
+  {
     id: 'notifications',
     source: 'src/modules/notifications.ts',
     output: 'modules/notifications.js',
