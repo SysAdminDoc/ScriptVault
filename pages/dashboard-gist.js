@@ -1,7 +1,7 @@
 /**
  * ScriptVault GitHub Gist Integration Module
  * Import/export userscripts to GitHub Gists, sync changes, and browse user Gists.
- * Uses a GitHub Personal Access Token stored in chrome.storage.local.
+ * Uses a GitHub Personal Access Token stored in chrome.storage.local or chrome.storage.session.
  */
 const GistIntegration = (() => {
     'use strict';
@@ -15,6 +15,7 @@ const GistIntegration = (() => {
         modalEl: null,
         token: null,
         tokenVerified: false,
+        tokenSessionOnly: false,
         autoSync: false,
         getScript: null,
         getAllScripts: null,
@@ -36,6 +37,8 @@ const GistIntegration = (() => {
     // one read so existing installs migrate transparently.
     const STORAGE_KEY_TOKEN = 'gist_pat';
     const STORAGE_KEY_TOKEN_LEGACY = 'gist_pat_encrypted';
+    const STORAGE_KEY_TOKEN_SESSION_ONLY = 'gist_pat_session_only';
+    const STORAGE_KEY_TOKEN_SESSION = 'sv_gist_pat_session';
     const STORAGE_KEY_AUTOSYNC = 'gist_autosync';
     const CACHE_TTL = 5 * 60 * 1000; // 5 min
 
@@ -79,11 +82,62 @@ const GistIntegration = (() => {
     // =========================================
     // Token storage
     // =========================================
+    const _sessionTokenMemoryFallback = { token: null };
+
+    function hasSessionStorage() {
+        return typeof chrome !== 'undefined' &&
+            typeof chrome.storage?.session?.get === 'function' &&
+            typeof chrome.storage.session.set === 'function' &&
+            typeof chrome.storage.session.remove === 'function';
+    }
+
+    async function readSessionToken() {
+        if (!hasSessionStorage()) return _sessionTokenMemoryFallback.token;
+        try {
+            const data = await chrome.storage.session.get(STORAGE_KEY_TOKEN_SESSION);
+            return data?.[STORAGE_KEY_TOKEN_SESSION] || null;
+        } catch (_e) {
+            return _sessionTokenMemoryFallback.token;
+        }
+    }
+
+    async function writeSessionToken(token) {
+        _sessionTokenMemoryFallback.token = token || null;
+        if (!hasSessionStorage()) return;
+        await chrome.storage.session.set({ [STORAGE_KEY_TOKEN_SESSION]: token });
+    }
+
+    async function clearSessionToken() {
+        _sessionTokenMemoryFallback.token = null;
+        if (!hasSessionStorage()) return;
+        await chrome.storage.session.remove(STORAGE_KEY_TOKEN_SESSION);
+    }
+
     async function loadToken() {
         const data = await chrome.storage.local.get([
-            STORAGE_KEY_TOKEN, STORAGE_KEY_TOKEN_LEGACY, STORAGE_KEY_AUTOSYNC
+            STORAGE_KEY_TOKEN, STORAGE_KEY_TOKEN_LEGACY, STORAGE_KEY_TOKEN_SESSION_ONLY, STORAGE_KEY_AUTOSYNC
         ]);
-        if (data[STORAGE_KEY_TOKEN]) {
+        _state.tokenSessionOnly = data[STORAGE_KEY_TOKEN_SESSION_ONLY] === true;
+        if (_state.tokenSessionOnly) {
+            const sessionToken = await readSessionToken();
+            if (sessionToken) {
+                _state.token = sessionToken;
+                _state.tokenVerified = true;
+            } else if (data[STORAGE_KEY_TOKEN]) {
+                await writeSessionToken(data[STORAGE_KEY_TOKEN]);
+                await chrome.storage.local.remove(STORAGE_KEY_TOKEN);
+                _state.token = data[STORAGE_KEY_TOKEN];
+                _state.tokenVerified = true;
+            } else if (data[STORAGE_KEY_TOKEN_LEGACY]) {
+                const legacy = await _legacyDecryptToken(data[STORAGE_KEY_TOKEN_LEGACY]);
+                if (legacy) {
+                    await writeSessionToken(legacy);
+                    await chrome.storage.local.remove(STORAGE_KEY_TOKEN_LEGACY);
+                    _state.token = legacy;
+                    _state.tokenVerified = true;
+                }
+            }
+        } else if (data[STORAGE_KEY_TOKEN]) {
             _state.token = data[STORAGE_KEY_TOKEN];
             _state.tokenVerified = !!_state.token;
         } else if (data[STORAGE_KEY_TOKEN_LEGACY]) {
@@ -109,11 +163,21 @@ const GistIntegration = (() => {
     // () => resolve()))` pattern would hang indefinitely on rejection,
     // freezing the caller. Use the modern Promise API and propagate
     // failures so the UI can surface them.
-    async function saveToken(token) {
+    async function saveToken(token, options = {}) {
         try {
-            await chrome.storage.local.set({ [STORAGE_KEY_TOKEN]: token });
+            const sessionOnly = options.sessionOnly === true || _state.tokenSessionOnly === true;
+            await chrome.storage.local.set({ [STORAGE_KEY_TOKEN_SESSION_ONLY]: sessionOnly });
+            if (sessionOnly) {
+                await writeSessionToken(token);
+                await chrome.storage.local.remove([STORAGE_KEY_TOKEN, STORAGE_KEY_TOKEN_LEGACY]);
+            } else {
+                await chrome.storage.local.set({ [STORAGE_KEY_TOKEN]: token });
+                await clearSessionToken();
+                await chrome.storage.local.remove(STORAGE_KEY_TOKEN_LEGACY);
+            }
             _state.token = token;
             _state.tokenVerified = true;
+            _state.tokenSessionOnly = sessionOnly;
         } catch (e) {
             console.error('[gist] saveToken failed:', e);
             throw e;
@@ -125,12 +189,25 @@ const GistIntegration = (() => {
             // Remove both the new and the (defensively, in case migration
             // didn't fire yet) legacy entry.
             await chrome.storage.local.remove([STORAGE_KEY_TOKEN, STORAGE_KEY_TOKEN_LEGACY]);
+            await clearSessionToken();
         } catch (e) {
             console.warn('[gist] clearToken failed:', e);
             // Don't re-throw — caller treats clearToken as best-effort.
         }
         _state.token = null;
         _state.tokenVerified = false;
+    }
+
+    async function setTokenSessionOnly(sessionOnly) {
+        const next = sessionOnly === true;
+        const token = _state.token;
+        _state.tokenSessionOnly = next;
+        await chrome.storage.local.set({ [STORAGE_KEY_TOKEN_SESSION_ONLY]: next });
+        if (token) {
+            await saveToken(token, { sessionOnly: next });
+        } else if (!next) {
+            await clearSessionToken();
+        }
     }
 
     function saveAutoSync(val) {
@@ -1213,7 +1290,9 @@ const GistIntegration = (() => {
 
             const disclosure = document.createElement('div');
             disclosure.style.cssText = 'font-size:0.6875rem;color:var(--text-muted,#707070);line-height:1.5;margin-bottom:12px;';
-            disclosure.textContent = 'Token storage: gist_pat in chrome.storage.local. ScriptVault can clear the local copy here; revoke the token itself in GitHub settings if it should stop working everywhere.';
+            disclosure.textContent = _state.tokenSessionOnly
+                ? `Token storage: ${hasSessionStorage() ? 'chrome.storage.session' : 'memory-session fallback'}. Re-enter after browser restart; revoke the token itself in GitHub settings if it should stop working everywhere.`
+                : 'Token storage: gist_pat in chrome.storage.local. ScriptVault can clear the local copy here; revoke the token itself in GitHub settings if it should stop working everywhere.';
             tokenSection.appendChild(disclosure);
         } else {
             const inputRow = document.createElement('div');
@@ -1249,9 +1328,32 @@ const GistIntegration = (() => {
 
             const hint = document.createElement('div');
             hint.style.cssText = 'font-size:0.6875rem;color:var(--text-muted,#707070);';
-            _safeSetHtml(hint, 'Generate a token at <a href="https://github.com/settings/tokens/new?scopes=gist&description=ScriptVault" target="_blank" style="color:var(--accent-blue,#60a5fa)">GitHub Settings</a> with the <strong>gist</strong> scope. Stored in <code>chrome.storage.local</code>, sandboxed by Chrome — readable only by ScriptVault.');
+            _safeSetHtml(hint, 'Generate a token at <a href="https://github.com/settings/tokens/new?scopes=gist&description=ScriptVault" target="_blank" style="color:var(--accent-blue,#60a5fa)">GitHub Settings</a> with the <strong>gist</strong> scope. Use session-only storage if the token should not be retained after browser restart.');
             tokenSection.appendChild(hint);
         }
+        const storageRow = document.createElement('label');
+        storageRow.className = 'gi-toggle-row';
+        const storageCopy = document.createElement('div');
+        _safeSetHtml(storageCopy, `<div class="gi-toggle-label">Session-only token storage</div><div class="gi-toggle-desc">Do not write the Gist PAT to persistent extension storage</div>`);
+        storageRow.appendChild(storageCopy);
+        const storageToggle = document.createElement('input');
+        storageToggle.type = 'checkbox';
+        storageToggle.checked = _state.tokenSessionOnly === true;
+        storageToggle.onchange = async () => {
+            storageToggle.disabled = true;
+            try {
+                await setTokenSessionOnly(storageToggle.checked);
+                toast(storageToggle.checked ? 'Gist token will be kept for this browser session' : 'Gist token will be remembered on this device', 'info');
+                render();
+            } catch (e) {
+                storageToggle.checked = _state.tokenSessionOnly === true;
+                toast(e.message || 'Failed to update token storage mode', 'error');
+            } finally {
+                storageToggle.disabled = false;
+            }
+        };
+        storageRow.appendChild(storageToggle);
+        tokenSection.appendChild(storageRow);
         container.appendChild(tokenSection);
 
         // Auto-sync toggle
@@ -1451,6 +1553,7 @@ const GistIntegration = (() => {
             if (_state.syncIntervalId) { clearInterval(_state.syncIntervalId); _state.syncIntervalId = null; }
             _state.token = null;
             _state.tokenVerified = false;
+            _state.tokenSessionOnly = false;
             _state.gistCache = [];
             _state.cacheTime = 0;
         }

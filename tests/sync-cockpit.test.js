@@ -607,8 +607,12 @@ describe('sync safety cockpit wiring', () => {
   });
 
   it('keeps Gist token storage disclosure honest', () => {
-    expect(gistJs).toContain('Uses a GitHub Personal Access Token stored in chrome.storage.local.');
+    expect(gistJs).toContain('Uses a GitHub Personal Access Token stored in chrome.storage.local or chrome.storage.session.');
     expect(gistJs).toContain('Token storage: gist_pat in chrome.storage.local.');
+    expect(gistJs).toContain('STORAGE_KEY_TOKEN_SESSION_ONLY');
+    expect(gistJs).toContain('chrome.storage.session.get(STORAGE_KEY_TOKEN_SESSION)');
+    expect(gistJs).toContain('memory-session fallback');
+    expect(gistJs).toContain('await chrome.storage.local.remove([STORAGE_KEY_TOKEN, STORAGE_KEY_TOKEN_LEGACY]);');
     expect(gistJs).toContain('revoke the token itself in GitHub settings');
     expect(gistJs).not.toContain('stored encrypted in chrome.storage.local');
   });

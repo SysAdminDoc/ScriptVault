@@ -79,8 +79,9 @@ const WhatsNew = (() => {
     }
   };
 
-  const _safeSetHtml = (typeof window.ScriptVaultDashboardUI?.safeSetHtml === 'function')
-      ? window.ScriptVaultDashboardUI.safeSetHtml
+  const _dashboardUi = (typeof window !== 'undefined') ? window.ScriptVaultDashboardUI : null;
+  const _safeSetHtml = (typeof _dashboardUi?.safeSetHtml === 'function')
+      ? _dashboardUi.safeSetHtml
       : (el, html) => { el.innerHTML = html; };
 
   function _hasChangelogEntry(version) {

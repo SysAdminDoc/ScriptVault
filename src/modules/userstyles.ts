@@ -80,6 +80,24 @@ interface ImportResult {
   errors: string[];
 }
 
+interface DraftPreviewOptions {
+  tabId?: number;
+}
+
+interface DraftPreviewResult {
+  success?: boolean;
+  error?: string;
+  tabId?: number;
+  tabUrl?: string;
+  styleName?: string;
+  cssBytes?: number;
+}
+
+interface DraftPreviewClearResult {
+  success: boolean;
+  cleared: number;
+}
+
 interface StylusSection {
   code?: string;
   urls?: string[];
@@ -114,6 +132,7 @@ let _styles: Record<string, StyleEntry> = {};
 let _customVars: Record<string, Record<string, string | number | boolean>> = {};
 let _initialized = false;
 const _registeredTabs: Map<number, Map<string, string>> = new Map();
+const _draftPreviewTabs: Map<number, string> = new Map();
 const _injectingTabs: Set<number> = new Set();
 
 /* ------------------------------------------------------------------ */
@@ -381,6 +400,99 @@ function _buildCSS(styleId: string): string {
   const vars: StyleVariable[] = style.variables ?? [];
   const custom: Record<string, string | number | boolean> = _customVars[styleId] ?? {};
   return _substituteVariables(style.css, vars, custom);
+}
+
+function _buildDraftPreviewCSS(usercssCode: string): DraftPreviewResult & { css?: string; match?: string[] } {
+  const parsed: ParseResult = parseUserCSS(usercssCode);
+  if (parsed.error) return { error: parsed.error };
+
+  const variables: StyleVariable[] = parsed.variables ?? [];
+  const defaults: Record<string, string | number | boolean> = {};
+  for (const variable of variables) {
+    defaults[variable.name] = variable.default;
+  }
+
+  const css: string = _substituteVariables(parsed.css ?? '', variables, defaults).trim();
+  if (!css) return { error: 'UserCSS draft has no CSS to preview.' };
+
+  return {
+    css,
+    match: parsed.match ?? ['*://*/*'],
+    styleName: parsed.meta?.name || 'UserCSS draft',
+  };
+}
+
+async function _getPreviewTab(tabId?: number): Promise<chrome.tabs.Tab | null> {
+  if (typeof tabId === 'number') {
+    try {
+      return await chrome.tabs.get(tabId);
+    } catch {
+      return null;
+    }
+  }
+
+  const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  return activeTab ?? null;
+}
+
+async function _removeDraftPreviewFromTab(tabId: number): Promise<boolean> {
+  const previousCss: string | undefined = _draftPreviewTabs.get(tabId);
+  if (!previousCss) return false;
+
+  try {
+    await chrome.scripting.removeCSS({
+      target: { tabId },
+      css: previousCss,
+    });
+  } catch {
+    // The tab may have navigated or closed. The bookkeeping must still clear.
+  }
+  _draftPreviewTabs.delete(tabId);
+  return true;
+}
+
+async function clearDraftPreview(options: DraftPreviewOptions = {}): Promise<DraftPreviewClearResult> {
+  if (typeof options.tabId === 'number') {
+    const cleared: boolean = await _removeDraftPreviewFromTab(options.tabId);
+    return { success: true, cleared: cleared ? 1 : 0 };
+  }
+
+  let cleared = 0;
+  for (const tabId of Array.from(_draftPreviewTabs.keys())) {
+    if (await _removeDraftPreviewFromTab(tabId)) cleared++;
+  }
+  return { success: true, cleared };
+}
+
+async function previewDraft(usercssCode: string, options: DraftPreviewOptions = {}): Promise<DraftPreviewResult> {
+  const built = _buildDraftPreviewCSS(usercssCode);
+  if (built.error || !built.css || !built.match) return { error: built.error || 'Unable to preview UserCSS draft.' };
+
+  const tab = await _getPreviewTab(options.tabId);
+  if (tab?.id == null) return { error: 'No active tab is available for preview.' };
+  if (!_urlMatchesPatterns(tab.url, built.match)) {
+    return { error: 'The UserCSS @match rules do not include the preview tab.' };
+  }
+
+  await _removeDraftPreviewFromTab(tab.id);
+  try {
+    await chrome.scripting.insertCSS({
+      target: { tabId: tab.id },
+      css: built.css,
+    });
+    _draftPreviewTabs.set(tab.id, built.css);
+    return {
+      success: true,
+      tabId: tab.id,
+      tabUrl: tab.url || '',
+      styleName: built.styleName,
+      cssBytes: built.css.length,
+    };
+  } catch (e: unknown) {
+    const message: string = e instanceof Error ? e.message : String(e);
+    _draftPreviewTabs.delete(tab.id);
+    return { error: message || 'Failed to inject UserCSS preview.' };
+  }
 }
 
 /**
@@ -837,6 +949,9 @@ function isUserCSSUrl(url: string): boolean {
  */
 async function onTabUpdated(tabId: number, url: string | undefined): Promise<void> {
   if (!url) return;
+  if (_draftPreviewTabs.has(tabId)) {
+    await clearDraftPreview({ tabId });
+  }
   if (_injectingTabs.has(tabId)) return;
   _injectingTabs.add(tabId);
 
@@ -882,6 +997,7 @@ async function onTabUpdated(tabId: number, url: string | undefined): Promise<voi
  */
 function onTabRemoved(tabId: number): void {
   _registeredTabs.delete(tabId);
+  _draftPreviewTabs.delete(tabId);
 }
 
 /* ------------------------------------------------------------------ */
@@ -954,6 +1070,8 @@ export const UserStylesEngine = {
   getStyles,
   getStyle,
   updateCSS,
+  previewDraft,
+  clearDraftPreview,
   convertToUserscript,
   importStylusBackup,
   isUserCSSUrl,
@@ -961,4 +1079,4 @@ export const UserStylesEngine = {
   onTabRemoved,
 } as const;
 
-export type { StyleVariable, StyleVariableWithCurrent, StyleMeta, StyleEntry, StyleRegistration, ParseResult, ConvertResult, ImportResult, StylusSection, StylusStyle };
+export type { StyleVariable, StyleVariableWithCurrent, StyleMeta, StyleEntry, StyleRegistration, ParseResult, ConvertResult, ImportResult, DraftPreviewOptions, DraftPreviewResult, DraftPreviewClearResult, StylusSection, StylusStyle };

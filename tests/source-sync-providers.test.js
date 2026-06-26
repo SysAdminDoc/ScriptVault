@@ -27,6 +27,7 @@ async function loadFreshSyncProviders() {
     onedriveRefreshToken: '',
     onedriveConnected: false,
     onedriveUser: null,
+    syncCredentialsSessionOnly: false,
     webdavUrl: '',
     webdavUsername: '',
     webdavPassword: '',
@@ -54,6 +55,7 @@ async function loadFreshSyncProviders() {
   const mod = await import('../src/modules/sync-providers.ts');
   return {
     CloudSyncProviders: mod.CloudSyncProviders,
+    SyncCredentialStore: mod.SyncCredentialStore,
     settingsState,
     SettingsManager,
   };
@@ -236,6 +238,51 @@ describe('source sync providers module', () => {
     });
   });
 
+  it('stores WebDAV credentials in chrome.storage.session when session-only mode is enabled', async () => {
+    const { CloudSyncProviders, SyncCredentialStore, settingsState } = await loadFreshSyncProviders();
+
+    await SyncCredentialStore.persistSettingsUpdate({
+      syncCredentialsSessionOnly: true,
+      webdavUrl: 'https://dav.example.com/backups',
+      webdavUsername: 'alice',
+      webdavPassword: 'secret',
+      syncEncryptionPassphrase: 'vault passphrase',
+    });
+
+    expect(settingsState.syncCredentialsSessionOnly).toBe(true);
+    expect(settingsState.webdavUrl).toBe('');
+    expect(settingsState.webdavUsername).toBe('');
+    expect(settingsState.webdavPassword).toBe('');
+    expect(settingsState.syncEncryptionPassphrase).toBe('');
+
+    const session = await chrome.storage.session.get(SyncCredentialStore.sessionKey);
+    expect(session[SyncCredentialStore.sessionKey]).toMatchObject({
+      webdavUrl: 'https://dav.example.com/backups',
+      webdavUsername: 'alice',
+      webdavPassword: 'secret',
+      syncEncryptionPassphrase: 'vault passphrase',
+    });
+
+    const fetchMock = vi.fn().mockResolvedValue(new Response('', { status: 201 }));
+    globalThis.fetch = fetchMock;
+    await CloudSyncProviders.webdav.upload({ scripts: [] }, settingsState);
+
+    const expectedAuth = `Basic ${btoa('alice:secret')}`;
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://dav.example.com/backups/scriptvault-backup.json',
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: expectedAuth }),
+      }),
+    );
+
+    const effective = await SyncCredentialStore.resolveSettings(settingsState);
+    const disclosure = CloudSyncProviders.webdav.getStorageDisclosure(effective);
+    expect(disclosure.storage).toBe('chrome.storage.session');
+    expect(disclosure.credentialStorageMode).toBe('session');
+    expect(disclosure.reconnectRequired).toBe(true);
+    expect(JSON.stringify(settingsState)).not.toContain('secret');
+  });
+
   it('exports Google Drive under both legacy and current provider keys', async () => {
     const { CloudSyncProviders } = await loadFreshSyncProviders();
 
@@ -276,6 +323,85 @@ describe('source sync providers module', () => {
     expect(serialized).not.toContain('super-secret-google-token');
     expect(serialized).not.toContain('super-secret-dropbox-token');
     expect(serialized).not.toContain('super-secret-onedrive-refresh');
+  });
+
+  it('keeps refreshed OAuth tokens out of persistent settings in session-only mode', async () => {
+    const { CloudSyncProviders, SyncCredentialStore, settingsState } = await loadFreshSyncProviders();
+    await SyncCredentialStore.persistSettingsUpdate({
+      syncCredentialsSessionOnly: true,
+      googleDriveRefreshToken: 'google-refresh-token',
+      googleClientId: 'google-client-id',
+    });
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      access_token: 'fresh-google-token',
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }));
+    globalThis.fetch = fetchMock;
+
+    const token = await CloudSyncProviders.googledrive.refreshToken(settingsState);
+
+    expect(token).toBe('fresh-google-token');
+    expect(settingsState.googleDriveToken).toBe('');
+    expect(settingsState.googleDriveRefreshToken).toBe('');
+    expect(JSON.stringify(settingsState)).not.toContain('fresh-google-token');
+
+    const session = await chrome.storage.session.get(SyncCredentialStore.sessionKey);
+    expect(session[SyncCredentialStore.sessionKey]).toMatchObject({
+      googleDriveToken: 'fresh-google-token',
+      googleDriveRefreshToken: 'google-refresh-token',
+      googleClientId: 'google-client-id',
+    });
+  });
+
+  it('clears session and persistent OAuth credentials on disconnect', async () => {
+    const { CloudSyncProviders, SyncCredentialStore, settingsState } = await loadFreshSyncProviders();
+    await SyncCredentialStore.persistSettingsUpdate({
+      syncCredentialsSessionOnly: true,
+      dropboxToken: 'dropbox-session-token',
+      dropboxRefreshToken: 'dropbox-refresh-token',
+    });
+    const fetchMock = vi.fn().mockResolvedValue(new Response('', { status: 200 }));
+    globalThis.fetch = fetchMock;
+
+    const result = await CloudSyncProviders.dropbox.disconnect(settingsState);
+    const session = await chrome.storage.session.get(SyncCredentialStore.sessionKey);
+
+    expect(result).toEqual({ success: true });
+    expect(session[SyncCredentialStore.sessionKey]).toBeUndefined();
+    expect(settingsState.dropboxToken).toBe('');
+    expect(settingsState.dropboxRefreshToken).toBe('');
+    expect(JSON.stringify(settingsState)).not.toContain('dropbox-session-token');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.dropboxapi.com/2/auth/token/revoke',
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer dropbox-session-token' }),
+      }),
+    );
+  });
+
+  it('uses a memory session fallback when chrome.storage.session is unavailable', async () => {
+    const originalSession = chrome.storage.session;
+    chrome.storage.session = undefined;
+    try {
+      const { CloudSyncProviders, SyncCredentialStore, settingsState } = await loadFreshSyncProviders();
+      await SyncCredentialStore.persistSettingsUpdate({
+        syncCredentialsSessionOnly: true,
+        webdavUrl: 'https://dav.example.com/backups',
+        webdavUsername: 'fallback-user',
+        webdavPassword: 'fallback-secret',
+      });
+
+      expect(settingsState.webdavPassword).toBe('');
+      const effective = await SyncCredentialStore.resolveSettings(settingsState);
+      expect(effective.webdavPassword).toBe('fallback-secret');
+      const disclosure = CloudSyncProviders.webdav.getStorageDisclosure(effective);
+      expect(disclosure.storage).toBe('memory-session');
+      expect(disclosure.sessionFallback).toBe(true);
+    } finally {
+      chrome.storage.session = originalSession;
+    }
   });
 
   it('rejects Google Drive OAuth callbacks with a mismatched state parameter', async () => {

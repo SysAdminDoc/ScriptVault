@@ -70,7 +70,18 @@ interface CloudSyncProvider {
 // CloudSyncProviders — external global registry of sync providers
 // ---------------------------------------------------------------------------
 
-declare const CloudSyncProviders: Record<string, CloudSyncProvider>;
+declare const CloudSyncProviders: Record<string, CloudSyncProvider> & {
+  _credentialStore?: {
+    resolveSettings(settings: Settings): Promise<Settings>;
+  };
+};
+
+async function resolveSyncCredentialSettings(settings: Settings): Promise<Settings> {
+  if (typeof CloudSyncProviders?._credentialStore?.resolveSettings === 'function') {
+    return CloudSyncProviders._credentialStore.resolveSettings(settings);
+  }
+  return settings;
+}
 
 // ---------------------------------------------------------------------------
 // Local types for sync data
@@ -1283,7 +1294,7 @@ export const CloudSync = {
   },
 
   async preview(providerName?: SyncProvider | string): Promise<SyncPreviewResult> {
-    const settings = await SettingsManager.get();
+    const settings = await resolveSyncCredentialSettings(await SettingsManager.get());
     const selectedProvider = providerName || settings.syncProvider;
     if (!selectedProvider || selectedProvider === 'none') {
       return { success: false, error: 'Choose a sync provider first' };
@@ -1475,7 +1486,7 @@ export const CloudSync = {
   },
 
   async _performSync(): Promise<SyncResult> {
-    const settings = await SettingsManager.get();
+    const settings = await resolveSyncCredentialSettings(await SettingsManager.get());
     if (!settings.syncEnabled || settings.syncProvider === 'none') return {};
 
     const provider: CloudSyncProvider | undefined = this.providers[settings.syncProvider];

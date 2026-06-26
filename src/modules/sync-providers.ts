@@ -15,8 +15,12 @@ declare const SettingsManager: {
 };
 
 /** Helper to get full Settings object with correct type (works around conditional return). */
-async function getSettings(): Promise<Settings> {
+async function getRawSettings(): Promise<Settings> {
   return SettingsManager.get() as unknown as Promise<Settings>;
+}
+
+async function getSettings(): Promise<Settings> {
+  return SyncCredentialStore.resolveSettings(await getRawSettings());
 }
 
 // ============================================================================
@@ -61,7 +65,10 @@ interface SyncStorageDisclosureField {
 }
 
 interface SyncStorageDisclosure {
-  storage: 'chrome.storage.local';
+  storage: 'chrome.storage.local' | 'chrome.storage.session' | 'memory-session';
+  credentialStorageMode: 'local' | 'session';
+  sessionFallback: boolean;
+  reconnectRequired: boolean;
   protection: string;
   fields: SyncStorageDisclosureField[];
   hasStoredSecrets: boolean;
@@ -89,6 +96,197 @@ interface GoogleDriveFile {
   name: string;
   modifiedTime: string;
 }
+
+const SYNC_SESSION_CREDENTIALS_KEY = 'sv_sync_session_credentials';
+
+const SYNC_CREDENTIAL_DEFAULTS = {
+  webdavUrl: '',
+  webdavUsername: '',
+  webdavPassword: '',
+  googleDriveToken: '',
+  googleDriveRefreshToken: '',
+  googleClientId: '',
+  googleDriveConnected: false,
+  googleDriveUser: null,
+  dropboxToken: '',
+  dropboxRefreshToken: '',
+  dropboxClientId: '',
+  dropboxUser: null,
+  onedriveToken: '',
+  onedriveRefreshToken: '',
+  onedriveClientId: '',
+  onedriveConnected: false,
+  onedriveUser: null,
+  s3Endpoint: '',
+  s3Region: '',
+  s3Bucket: '',
+  s3AccessKeyId: '',
+  s3SecretKey: '',
+  s3ObjectKey: '',
+  syncEncryptionPassphrase: '',
+} satisfies Partial<Record<keyof Settings, unknown>>;
+
+type SyncCredentialKey = keyof typeof SYNC_CREDENTIAL_DEFAULTS;
+
+const SYNC_CREDENTIAL_KEYS = Object.keys(SYNC_CREDENTIAL_DEFAULTS) as SyncCredentialKey[];
+const _sessionCredentialMemoryFallback: Partial<Record<SyncCredentialKey, unknown>> = {};
+
+function hasStorageSession(): boolean {
+  return typeof chrome !== 'undefined' &&
+    typeof chrome.storage?.session?.get === 'function' &&
+    typeof chrome.storage.session.set === 'function' &&
+    typeof chrome.storage.session.remove === 'function';
+}
+
+function cloneSyncCredentialValue<T>(value: T): T {
+  if (!value || typeof value !== 'object') return value;
+  if (typeof structuredClone === 'function') {
+    try {
+      return structuredClone(value) as T;
+    } catch (_) {
+      // Fall through.
+    }
+  }
+  try {
+    return JSON.parse(JSON.stringify(value)) as T;
+  } catch (_) {
+    return (Array.isArray(value) ? [...value] : { ...(value as object) }) as T;
+  }
+}
+
+function isSyncCredentialKey(key: string): key is SyncCredentialKey {
+  return Object.prototype.hasOwnProperty.call(SYNC_CREDENTIAL_DEFAULTS, key);
+}
+
+function pickSyncCredentialPatch(update: Partial<Settings>): Partial<Record<SyncCredentialKey, unknown>> {
+  const patch: Partial<Record<SyncCredentialKey, unknown>> = {};
+  for (const key of SYNC_CREDENTIAL_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(update, key)) {
+      patch[key] = cloneSyncCredentialValue((update as Record<string, unknown>)[key]);
+    }
+  }
+  return patch;
+}
+
+function hasAnySyncCredentialPatchValue(patch: Partial<Record<SyncCredentialKey, unknown>>): boolean {
+  return Object.keys(patch).length > 0;
+}
+
+async function readSessionCredentials(): Promise<Partial<Record<SyncCredentialKey, unknown>>> {
+  if (!hasStorageSession()) return { ..._sessionCredentialMemoryFallback };
+  try {
+    const data = await chrome.storage.session.get(SYNC_SESSION_CREDENTIALS_KEY);
+    const value = data?.[SYNC_SESSION_CREDENTIALS_KEY];
+    return value && typeof value === 'object'
+      ? { ...(value as Partial<Record<SyncCredentialKey, unknown>>) }
+      : {};
+  } catch (_) {
+    return { ..._sessionCredentialMemoryFallback };
+  }
+}
+
+async function writeSessionCredentials(patch: Partial<Record<SyncCredentialKey, unknown>>): Promise<void> {
+  if (!hasAnySyncCredentialPatchValue(patch)) return;
+  const current = await readSessionCredentials();
+  const next = { ...current, ...patch };
+  Object.assign(_sessionCredentialMemoryFallback, next);
+  if (!hasStorageSession()) return;
+  try {
+    await chrome.storage.session.set({ [SYNC_SESSION_CREDENTIALS_KEY]: next });
+  } catch (_) {
+    // The memory fallback preserves behavior for the current extension runtime.
+  }
+}
+
+async function clearSessionCredentials(): Promise<void> {
+  for (const key of Object.keys(_sessionCredentialMemoryFallback)) {
+    delete _sessionCredentialMemoryFallback[key as SyncCredentialKey];
+  }
+  if (!hasStorageSession()) return;
+  try {
+    await chrome.storage.session.remove(SYNC_SESSION_CREDENTIALS_KEY);
+  } catch (_) {
+    // Best effort. Persistent settings are still scrubbed by the caller.
+  }
+}
+
+function buildPersistentCredentialScrub(): Partial<Settings> {
+  const scrub: Partial<Settings> = {};
+  for (const key of SYNC_CREDENTIAL_KEYS) {
+    (scrub as Record<string, unknown>)[key] = cloneSyncCredentialValue(SYNC_CREDENTIAL_DEFAULTS[key]);
+  }
+  return scrub;
+}
+
+export const SyncCredentialStore = {
+  sessionKey: SYNC_SESSION_CREDENTIALS_KEY,
+  credentialKeys: SYNC_CREDENTIAL_KEYS,
+
+  storageKind(): SyncStorageDisclosure['storage'] {
+    return hasStorageSession() ? 'chrome.storage.session' : 'memory-session';
+  },
+
+  async resolveSettings(settings: Settings): Promise<Settings> {
+    if (settings.syncCredentialsSessionOnly !== true) return settings;
+    const sessionCredentials = await readSessionCredentials();
+    return {
+      ...settings,
+      ...(sessionCredentials as Partial<Settings>),
+    };
+  },
+
+  async persistSettingsUpdate(
+    update: Partial<Settings>,
+    baseSettings?: Settings,
+  ): Promise<Settings> {
+    const rawBase = baseSettings ?? (await getRawSettings());
+    const updateRecord = update as Record<string, unknown>;
+
+    if (update.syncCredentialsSessionOnly === false) {
+      const sessionCredentials = await readSessionCredentials();
+      await clearSessionCredentials();
+      return SettingsManager.set({
+        ...(sessionCredentials as Partial<Settings>),
+        ...update,
+      });
+    }
+
+    const sessionOnly = update.syncCredentialsSessionOnly === true ||
+      rawBase.syncCredentialsSessionOnly === true;
+    if (!sessionOnly) {
+      return SettingsManager.set(update);
+    }
+
+    const sessionPatch = pickSyncCredentialPatch(update);
+    const persistentUpdate: Partial<Settings> = { ...update };
+
+    for (const key of SYNC_CREDENTIAL_KEYS) {
+      if (Object.prototype.hasOwnProperty.call(updateRecord, key)) {
+        (persistentUpdate as Record<string, unknown>)[key] =
+          cloneSyncCredentialValue(SYNC_CREDENTIAL_DEFAULTS[key]);
+      }
+    }
+
+    if (update.syncCredentialsSessionOnly === true) {
+      Object.assign(persistentUpdate, buildPersistentCredentialScrub());
+      const rawBaseRecord = rawBase as unknown as Record<string, unknown>;
+      for (const key of SYNC_CREDENTIAL_KEYS) {
+        if (!Object.prototype.hasOwnProperty.call(sessionPatch, key) &&
+            hasStoredSyncValue(rawBaseRecord[key])) {
+          sessionPatch[key] = cloneSyncCredentialValue(rawBaseRecord[key]);
+        }
+      }
+    }
+
+    await writeSessionCredentials(sessionPatch);
+    const persistent = await SettingsManager.set(persistentUpdate);
+    return this.resolveSettings(persistent);
+  },
+
+  async clearSessionCredentials(): Promise<void> {
+    await clearSessionCredentials();
+  },
+};
 
 function getRequiredWebDavBaseUrl(settings: Pick<Settings, 'webdavUrl'>): string {
   const baseUrl = settings.webdavUrl?.trim();
@@ -155,19 +353,31 @@ function syncStorageDisclosure(
   config: SyncStorageDisclosureConfig,
 ): SyncStorageDisclosure {
   const settingsRecord = (settings ?? {}) as Record<string, unknown>;
+  const sessionOnly = (settings as Partial<Settings> | undefined)?.syncCredentialsSessionOnly === true;
   const fields = config.fields.map((field): SyncStorageDisclosureField => ({
     key: field.key,
     label: field.label,
     type: field.type ?? 'metadata',
     present: hasStoredSyncValue(settingsRecord[field.key]),
   }));
+  const storage = sessionOnly ? SyncCredentialStore.storageKind() : 'chrome.storage.local';
+  const sessionFallback = sessionOnly && storage === 'memory-session';
   return {
-    storage: 'chrome.storage.local',
-    protection: 'Extension-scoped browser storage; ScriptVault does not add a second encryption layer.',
+    storage,
+    credentialStorageMode: sessionOnly ? 'session' : 'local',
+    sessionFallback,
+    reconnectRequired: sessionOnly,
+    protection: sessionOnly
+      ? (sessionFallback
+          ? 'Current-runtime memory fallback; credentials are not written to persistent settings and must be re-entered after reload or browser restart.'
+          : 'Session-scoped extension storage; credentials are cleared by browser restart and are not written to persistent settings.')
+      : 'Extension-scoped browser storage; ScriptVault does not add a second encryption layer.',
     fields,
     hasStoredSecrets: fields.some((field) => field.present && field.type !== 'metadata'),
     revokeAction: config.revokeAction,
-    notes: config.notes ?? '',
+    notes: sessionOnly
+      ? `${config.notes ?? ''} Browser restart requires reconnecting or re-entering credentials.`.trim()
+      : config.notes ?? '',
   };
 }
 
@@ -244,11 +454,12 @@ const webdav = {
   },
 
   async upload(data: unknown, settings: Settings): Promise<SyncUploadResult> {
-    const url = `${getRequiredWebDavBaseUrl(settings)}/scriptvault-backup.json`;
-    const auth = getWebDavAuthHeader(settings);
+    const effectiveSettings = await SyncCredentialStore.resolveSettings(settings);
+    const url = `${getRequiredWebDavBaseUrl(effectiveSettings)}/scriptvault-backup.json`;
+    const auth = getWebDavAuthHeader(effectiveSettings);
     const guardOptions = {
       label: 'WebDAV sync endpoint',
-      allowInternalEndpoint: allowsInternalSyncEndpoints(settings),
+      allowInternalEndpoint: allowsInternalSyncEndpoints(effectiveSettings),
     };
 
     const response = await fetchWithTimeout(url, {
@@ -265,11 +476,12 @@ const webdav = {
   },
 
   async download(settings: Settings): Promise<unknown | null> {
-    const url = `${getRequiredWebDavBaseUrl(settings)}/scriptvault-backup.json`;
-    const auth = getWebDavAuthHeader(settings);
+    const effectiveSettings = await SyncCredentialStore.resolveSettings(settings);
+    const url = `${getRequiredWebDavBaseUrl(effectiveSettings)}/scriptvault-backup.json`;
+    const auth = getWebDavAuthHeader(effectiveSettings);
     const guardOptions = {
       label: 'WebDAV sync endpoint',
-      allowInternalEndpoint: allowsInternalSyncEndpoints(settings),
+      allowInternalEndpoint: allowsInternalSyncEndpoints(effectiveSettings),
     };
 
     const response = await fetchWithTimeout(url, {
@@ -285,11 +497,12 @@ const webdav = {
 
   async test(settings: Settings): Promise<SyncTestResult> {
     try {
-      const url = getRequiredWebDavBaseUrl(settings);
-      const auth = getWebDavAuthHeader(settings);
+      const effectiveSettings = await SyncCredentialStore.resolveSettings(settings);
+      const url = getRequiredWebDavBaseUrl(effectiveSettings);
+      const auth = getWebDavAuthHeader(effectiveSettings);
       const guardOptions = {
         label: 'WebDAV sync endpoint',
-        allowInternalEndpoint: allowsInternalSyncEndpoints(settings),
+        allowInternalEndpoint: allowsInternalSyncEndpoints(effectiveSettings),
       };
 
       const response = await fetchWithTimeout(url, {
@@ -305,17 +518,18 @@ const webdav = {
   },
 
   async getStatus(settings: Settings): Promise<SyncStatusResult> {
-    if (!settings.webdavUrl) {
+    const effectiveSettings = await SyncCredentialStore.resolveSettings(settings);
+    if (!effectiveSettings.webdavUrl) {
       return {
         connected: false,
         status: 'missing_config',
         error: 'WebDAV URL is not configured',
       };
     }
-    const result = await this.test(settings);
+    const result = await this.test(effectiveSettings);
     let endpointHost = '';
     try {
-      endpointHost = new URL(settings.webdavUrl).host;
+      endpointHost = new URL(effectiveSettings.webdavUrl).host;
     } catch {
       // Invalid URL details are surfaced through test().
     }
@@ -325,13 +539,14 @@ const webdav = {
       error: result.error ?? null,
       user: {
         email: '',
-        name: settings.webdavUsername || endpointHost || 'WebDAV',
+        name: effectiveSettings.webdavUsername || endpointHost || 'WebDAV',
       },
       endpointHost,
     };
   },
 
   async disconnect(): Promise<SyncDisconnectResult> {
+    await SyncCredentialStore.clearSessionCredentials();
     await SettingsManager.set({
       webdavUrl: '',
       webdavUsername: '',
@@ -375,7 +590,7 @@ const googledrive = {
   },
 
   async refreshToken(settings?: Settings): Promise<string | null> {
-    const currentSettings = settings ?? (await getSettings());
+    const currentSettings = await SyncCredentialStore.resolveSettings(settings ?? (await getRawSettings()));
     const refreshTok = currentSettings.googleDriveRefreshToken;
     if (!refreshTok) return null;
 
@@ -397,12 +612,12 @@ const googledrive = {
     }
     const data: { access_token?: string; refresh_token?: string } = await resp.json();
     if (data.access_token) {
-      await SettingsManager.set({
+      await SyncCredentialStore.persistSettingsUpdate({
         googleDriveToken: data.access_token,
         googleDriveConnected: true,
-      });
+      }, currentSettings);
       if (data.refresh_token) {
-        await SettingsManager.set({ googleDriveRefreshToken: data.refresh_token });
+        await SyncCredentialStore.persistSettingsUpdate({ googleDriveRefreshToken: data.refresh_token }, currentSettings);
       }
       return data.access_token;
     }
@@ -410,7 +625,7 @@ const googledrive = {
   },
 
   async getValidToken(settings?: Settings): Promise<string | null> {
-    const currentSettings = settings ?? (await getSettings());
+    const currentSettings = await SyncCredentialStore.resolveSettings(settings ?? (await getRawSettings()));
     let token = currentSettings.googleDriveToken || null;
     if (!token) {
       return await this.refreshToken(currentSettings);
@@ -513,13 +728,13 @@ const googledrive = {
         ? await userResp.json()
         : {};
 
-      await SettingsManager.set({
+      await SyncCredentialStore.persistSettingsUpdate({
         googleDriveToken: tokens.access_token,
         googleDriveRefreshToken:
           tokens.refresh_token || settings.googleDriveRefreshToken || '',
         googleDriveConnected: true,
         googleDriveUser: { email: user.email ?? '', name: user.name ?? '' },
-      });
+      }, settings);
 
       return {
         success: true,
@@ -541,6 +756,7 @@ const googledrive = {
           body: `token=${encodeURIComponent(token)}`,
         }, 10_000).catch(() => {});
       }
+      await SyncCredentialStore.clearSessionCredentials();
       await SettingsManager.set({
         googleDriveToken: '',
         googleDriveRefreshToken: '',
@@ -655,7 +871,7 @@ const googledrive = {
 
   async getStatus(settings?: Settings): Promise<SyncStatusResult> {
     try {
-      const s = settings ?? (await getSettings());
+      const s = await SyncCredentialStore.resolveSettings(settings ?? (await getRawSettings()));
       if (!s.googleDriveToken && !s.googleDriveRefreshToken) {
         return { connected: false };
       }
@@ -705,13 +921,14 @@ const dropbox = {
   },
 
   async connect(settings: Settings): Promise<SyncConnectResult> {
-    if (!settings.dropboxClientId) {
+    const effectiveSettings = await SyncCredentialStore.resolveSettings(settings);
+    if (!effectiveSettings.dropboxClientId) {
       throw new Error(
         'Dropbox App Key is required. Create one at https://www.dropbox.com/developers/apps',
       );
     }
 
-    const clientId = settings.dropboxClientId;
+    const clientId = effectiveSettings.dropboxClientId;
     const redirectUri = chrome.identity.getRedirectURL('dropbox');
 
     // PKCE code verifier + challenge
@@ -785,8 +1002,9 @@ const dropbox = {
   },
 
   async refreshToken(settings: Settings): Promise<string | null> {
-    const refreshTok = settings.dropboxRefreshToken;
-    const clientId = settings.dropboxClientId;
+    const effectiveSettings = await SyncCredentialStore.resolveSettings(settings);
+    const refreshTok = effectiveSettings.dropboxRefreshToken;
+    const clientId = effectiveSettings.dropboxClientId;
     if (!refreshTok || !clientId) return null;
 
     const resp = await _oauthFetchWithTimeout('https://api.dropboxapi.com/oauth2/token', {
@@ -806,45 +1024,48 @@ const dropbox = {
     }
     const data: { access_token?: string } = await resp.json();
     if (data.access_token) {
-      await SettingsManager.set({ dropboxToken: data.access_token });
+      await SyncCredentialStore.persistSettingsUpdate({ dropboxToken: data.access_token }, effectiveSettings);
       return data.access_token;
     }
     return null;
   },
 
   async getValidToken(settings: Settings): Promise<string | null> {
-    if (settings.dropboxToken) {
+    const effectiveSettings = await SyncCredentialStore.resolveSettings(settings);
+    if (effectiveSettings.dropboxToken) {
       try {
         const test = await _oauthFetchWithTimeout(
           'https://api.dropboxapi.com/2/users/get_current_account',
           {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${settings.dropboxToken}` },
+            headers: { 'Authorization': `Bearer ${effectiveSettings.dropboxToken}` },
           },
           'Dropbox',
           10_000,
         );
-        if (!test) return settings.dropboxToken;
-        if (test.ok) return settings.dropboxToken;
-        if (test.status !== 401 && test.status !== 403) return settings.dropboxToken;
+        if (!test) return effectiveSettings.dropboxToken;
+        if (test.ok) return effectiveSettings.dropboxToken;
+        if (test.status !== 401 && test.status !== 403) return effectiveSettings.dropboxToken;
       } catch (_e: unknown) {
-        return settings.dropboxToken;
+        return effectiveSettings.dropboxToken;
       }
     }
-    return await this.refreshToken(settings);
+    return await this.refreshToken(effectiveSettings);
   },
 
   async disconnect(settings: Settings): Promise<SyncDisconnectResult> {
-    if (settings.dropboxToken) {
+    const effectiveSettings = await SyncCredentialStore.resolveSettings(settings);
+    if (effectiveSettings.dropboxToken) {
       try {
         await fetchWithTimeout('https://api.dropboxapi.com/2/auth/token/revoke', {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${settings.dropboxToken}` },
+          headers: { 'Authorization': `Bearer ${effectiveSettings.dropboxToken}` },
         }, 10_000);
       } catch (e: unknown) {
         console.warn('[CloudSync] Dropbox revoke error:', e);
       }
     }
+    await SyncCredentialStore.clearSessionCredentials();
     await SettingsManager.set({
       dropboxToken: '',
       dropboxRefreshToken: '',
@@ -854,7 +1075,8 @@ const dropbox = {
   },
 
   async upload(data: unknown, settings: Settings): Promise<SyncUploadResult> {
-    const token = await this.getValidToken(settings);
+    const effectiveSettings = await SyncCredentialStore.resolveSettings(settings);
+    const token = await this.getValidToken(effectiveSettings);
     if (!token) throw new Error('Not authenticated with Dropbox');
 
     const body = JSON.stringify(data);
@@ -885,7 +1107,8 @@ const dropbox = {
   },
 
   async download(settings: Settings): Promise<unknown | null> {
-    const token = await this.getValidToken(settings);
+    const effectiveSettings = await SyncCredentialStore.resolveSettings(settings);
+    const token = await this.getValidToken(effectiveSettings);
     if (!token) throw new Error('Not authenticated with Dropbox');
 
     const response = await fetchWithTimeout('https://content.dropboxapi.com/2/files/download', {
@@ -905,7 +1128,8 @@ const dropbox = {
 
   async test(settings: Settings): Promise<SyncTestResult> {
     try {
-      const token = await this.getValidToken(settings);
+      const effectiveSettings = await SyncCredentialStore.resolveSettings(settings);
+      const token = await this.getValidToken(effectiveSettings);
       if (!token) return { success: false, error: 'Not authenticated' };
 
       const response = await fetchWithTimeout(
@@ -926,7 +1150,7 @@ const dropbox = {
   },
 
   async getStatus(settings?: Settings): Promise<SyncStatusResult> {
-    const s = settings ?? (await getSettings());
+    const s = await SyncCredentialStore.resolveSettings(settings ?? (await getRawSettings()));
     if (!s.dropboxToken && !s.dropboxRefreshToken) return { connected: false };
 
     try {
@@ -990,7 +1214,8 @@ const onedrive = {
   },
 
   async connect(settings: Settings): Promise<SyncConnectResult> {
-    const clientId = settings.onedriveClientId;
+    const effectiveSettings = await SyncCredentialStore.resolveSettings(settings);
+    const clientId = effectiveSettings.onedriveClientId;
     if (!clientId) {
       throw new Error(
         'OneDrive Client ID required. Create one at https://portal.azure.com → App registrations',
@@ -1063,7 +1288,7 @@ const onedrive = {
     const user: { mail?: string; userPrincipalName?: string; displayName?: string } =
       userResp.ok ? await userResp.json() : {};
 
-    await SettingsManager.set({
+    await SyncCredentialStore.persistSettingsUpdate({
       onedriveToken: tokens.access_token,
       onedriveRefreshToken: tokens.refresh_token || '',
       onedriveConnected: true,
@@ -1071,7 +1296,7 @@ const onedrive = {
         email: user.mail || user.userPrincipalName || '',
         name: user.displayName || '',
       },
-    });
+    }, effectiveSettings);
 
     return {
       success: true,
@@ -1083,7 +1308,7 @@ const onedrive = {
   },
 
   async refreshToken(settings?: Settings): Promise<string | null> {
-    const currentSettings = settings ?? (await getSettings());
+    const currentSettings = await SyncCredentialStore.resolveSettings(settings ?? (await getRawSettings()));
     const refreshTok = currentSettings.onedriveRefreshToken;
     const clientId = currentSettings.onedriveClientId;
     if (!refreshTok || !clientId) return null;
@@ -1108,18 +1333,18 @@ const onedrive = {
     if (!resp.ok) return null;
     const data: { access_token?: string; refresh_token?: string } = await resp.json();
     if (data.access_token) {
-      await SettingsManager.set({
+      await SyncCredentialStore.persistSettingsUpdate({
         onedriveToken: data.access_token,
         onedriveRefreshToken: data.refresh_token || refreshTok,
         onedriveConnected: true,
-      });
+      }, currentSettings);
       return data.access_token;
     }
     return null;
   },
 
   async getValidToken(settings?: Settings): Promise<string | null> {
-    const currentSettings = settings ?? (await getSettings());
+    const currentSettings = await SyncCredentialStore.resolveSettings(settings ?? (await getRawSettings()));
     const token = currentSettings.onedriveToken;
     if (!token) {
       return await this.refreshToken(currentSettings);
@@ -1141,6 +1366,7 @@ const onedrive = {
   },
 
   async disconnect(): Promise<SyncDisconnectResult> {
+    await SyncCredentialStore.clearSessionCredentials();
     await SettingsManager.set({
       onedriveToken: '',
       onedriveRefreshToken: '',
@@ -1151,7 +1377,8 @@ const onedrive = {
   },
 
   async upload(data: unknown, settings?: Settings): Promise<SyncUploadResult> {
-    const token = await this.getValidToken(settings);
+    const effectiveSettings = await SyncCredentialStore.resolveSettings(settings ?? (await getRawSettings()));
+    const token = await this.getValidToken(effectiveSettings);
     if (!token) throw new Error('Not authenticated with OneDrive');
     if (!data || typeof data !== 'object') throw new Error('Invalid backup data');
 
@@ -1173,7 +1400,8 @@ const onedrive = {
   },
 
   async download(settings?: Settings): Promise<unknown | null> {
-    const token = await this.getValidToken(settings);
+    const effectiveSettings = await SyncCredentialStore.resolveSettings(settings ?? (await getRawSettings()));
+    const token = await this.getValidToken(effectiveSettings);
     if (!token) throw new Error('Not authenticated with OneDrive');
 
     const response = await fetchWithTimeout(
@@ -1189,7 +1417,8 @@ const onedrive = {
 
   async test(settings?: Settings): Promise<SyncTestResult> {
     try {
-      const token = await this.getValidToken(settings);
+      const effectiveSettings = await SyncCredentialStore.resolveSettings(settings ?? (await getRawSettings()));
+      const token = await this.getValidToken(effectiveSettings);
       if (!token) return { success: false, error: 'Not authenticated' };
       const response = await fetchWithTimeout('https://graph.microsoft.com/v1.0/me', {
         headers: { 'Authorization': `Bearer ${token}` },
@@ -1203,7 +1432,7 @@ const onedrive = {
 
   async getStatus(settings?: Settings): Promise<SyncStatusResult> {
     try {
-      const s = settings ?? (await getSettings());
+      const s = await SyncCredentialStore.resolveSettings(settings ?? (await getRawSettings()));
       if (!s.onedriveToken && !s.onedriveRefreshToken) return { connected: false };
       const token = await this.getValidToken(s);
       if (!token) return { connected: false };
@@ -1429,23 +1658,24 @@ const s3 = {
     settings: Settings,
     opts: { signal?: AbortSignal } = {},
   ): Promise<SyncUploadResult> {
-    const check = this.validate(settings);
+    const effectiveSettings = await SyncCredentialStore.resolveSettings(settings);
+    const check = this.validate(effectiveSettings);
     if (!check.valid) {
       throw new Error(`S3 settings invalid: ${check.errors.map((e) => e.error).join(' ')}`);
     }
-    const url = this._buildObjectUrl(settings, this._objectKey(settings));
+    const url = this._buildObjectUrl(effectiveSettings, this._objectKey(effectiveSettings));
     const guardOptions = {
       label: 'S3 sync endpoint',
-      allowInternalEndpoint: allowsInternalSyncEndpoints(settings),
+      allowInternalEndpoint: allowsInternalSyncEndpoints(effectiveSettings),
     };
     assertSyncEndpointAllowed(url, guardOptions);
     const body = JSON.stringify(data);
     const signed = await this._signRequest({
       method: 'PUT',
       url,
-      region: settings.s3Region,
-      accessKeyId: settings.s3AccessKeyId,
-      secretKey: settings.s3SecretKey,
+      region: effectiveSettings.s3Region,
+      accessKeyId: effectiveSettings.s3AccessKeyId,
+      secretKey: effectiveSettings.s3SecretKey,
       body,
       contentType: 'application/json',
     });
@@ -1467,22 +1697,23 @@ const s3 = {
     settings: Settings,
     opts: { signal?: AbortSignal } = {},
   ): Promise<unknown | null> {
-    const check = this.validate(settings);
+    const effectiveSettings = await SyncCredentialStore.resolveSettings(settings);
+    const check = this.validate(effectiveSettings);
     if (!check.valid) {
       throw new Error(`S3 settings invalid: ${check.errors.map((e) => e.error).join(' ')}`);
     }
-    const url = this._buildObjectUrl(settings, this._objectKey(settings));
+    const url = this._buildObjectUrl(effectiveSettings, this._objectKey(effectiveSettings));
     const guardOptions = {
       label: 'S3 sync endpoint',
-      allowInternalEndpoint: allowsInternalSyncEndpoints(settings),
+      allowInternalEndpoint: allowsInternalSyncEndpoints(effectiveSettings),
     };
     assertSyncEndpointAllowed(url, guardOptions);
     const signed = await this._signRequest({
       method: 'GET',
       url,
-      region: settings.s3Region,
-      accessKeyId: settings.s3AccessKeyId,
-      secretKey: settings.s3SecretKey,
+      region: effectiveSettings.s3Region,
+      accessKeyId: effectiveSettings.s3AccessKeyId,
+      secretKey: effectiveSettings.s3SecretKey,
     });
     const response = await fetch(url, {
       method: 'GET',
@@ -1499,23 +1730,24 @@ const s3 = {
   },
 
   async test(settings: Settings): Promise<SyncTestResult> {
-    const check = this.validate(settings);
+    const effectiveSettings = await SyncCredentialStore.resolveSettings(settings);
+    const check = this.validate(effectiveSettings);
     if (!check.valid) {
       return { success: false, error: check.errors.map((e) => e.error).join(' ') };
     }
     try {
-      const url = this._buildObjectUrl(settings, this._objectKey(settings));
+      const url = this._buildObjectUrl(effectiveSettings, this._objectKey(effectiveSettings));
       const guardOptions = {
         label: 'S3 sync endpoint',
-        allowInternalEndpoint: allowsInternalSyncEndpoints(settings),
+        allowInternalEndpoint: allowsInternalSyncEndpoints(effectiveSettings),
       };
       assertSyncEndpointAllowed(url, guardOptions);
       const signed = await this._signRequest({
         method: 'HEAD',
         url,
-        region: settings.s3Region,
-        accessKeyId: settings.s3AccessKeyId,
-        secretKey: settings.s3SecretKey,
+        region: effectiveSettings.s3Region,
+        accessKeyId: effectiveSettings.s3AccessKeyId,
+        secretKey: effectiveSettings.s3SecretKey,
       });
       const response = await fetch(url, { method: 'HEAD', headers: signed.headers });
       assertSyncResponseAllowed(response, guardOptions);
@@ -1527,7 +1759,8 @@ const s3 = {
   },
 
   async getStatus(settings: Settings): Promise<SyncStatusResult> {
-    const check = this.validate(settings);
+    const effectiveSettings = await SyncCredentialStore.resolveSettings(settings);
+    const check = this.validate(effectiveSettings);
     if (!check.valid) {
       return {
         connected: false,
@@ -1536,18 +1769,19 @@ const s3 = {
       };
     }
     let endpointHost = '';
-    try { endpointHost = new URL(settings.s3Endpoint).host; } catch {}
-    const result = await this.test(settings);
+    try { endpointHost = new URL(effectiveSettings.s3Endpoint).host; } catch {}
+    const result = await this.test(effectiveSettings);
     return {
       connected: result.success === true,
       status: result.success === true ? 'ok' : 'error',
       error: result.error ?? null,
-      user: { email: '', name: `${settings.s3Bucket}@${endpointHost}` },
+      user: { email: '', name: `${effectiveSettings.s3Bucket}@${endpointHost}` },
       endpointHost,
     };
   },
 
   async disconnect(): Promise<SyncDisconnectResult> {
+    await SyncCredentialStore.clearSessionCredentials();
     await SettingsManager.set({
       s3Endpoint: '',
       s3Region: '',
@@ -1568,3 +1802,9 @@ export const CloudSyncProviders = {
   onedrive,
   s3,
 };
+
+Object.defineProperty(CloudSyncProviders, '_credentialStore', {
+  value: SyncCredentialStore,
+  enumerable: false,
+  configurable: false,
+});

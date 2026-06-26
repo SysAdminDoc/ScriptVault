@@ -48,7 +48,14 @@
         backups: [],
         backupSettings: null,
         runtimeDescriptor: null,
-        lastSyncPreviewExport: null
+        lastSyncPreviewExport: null,
+        userCssPreview: {
+            scriptId: null,
+            tabId: null,
+            active: false,
+            pending: false,
+            timer: null
+        }
     };
 
     // DOM Elements
@@ -1559,6 +1566,8 @@
         elements.btnEditorSave = document.getElementById('btnEditorSave');
         elements.btnEditorSaveLabel = document.getElementById('btnEditorSaveLabel');
         elements.btnEditorRunNow = document.getElementById('btnEditorRunNow');
+        elements.btnEditorPreviewUserCSS = document.getElementById('btnEditorPreviewUserCSS');
+        elements.btnEditorPreviewUserCSSLabel = document.getElementById('btnEditorPreviewUserCSSLabel');
         elements.btnEditorToggle = document.getElementById('btnEditorToggle');
         elements.btnEditorToggleLabel = document.getElementById('btnEditorToggleLabel');
         elements.btnEditorDuplicate = document.getElementById('btnEditorDuplicate');
@@ -1705,6 +1714,7 @@
         elements.settingsEnableSync = document.getElementById('settingsEnableSync');
         elements.settingsSyncType = document.getElementById('settingsSyncType');
         elements.settingsAllowInternalSyncEndpoints = document.getElementById('settingsAllowInternalSyncEndpoints');
+        elements.settingsSyncCredentialsSessionOnly = document.getElementById('settingsSyncCredentialsSessionOnly');
         elements.settingsSyncEncryptionEnabled = document.getElementById('settingsSyncEncryptionEnabled');
         elements.settingsSyncEncryptionPassphrase = document.getElementById('settingsSyncEncryptionPassphrase');
         elements.firefoxSyncNote = document.getElementById('firefoxSyncNote');
@@ -3293,6 +3303,9 @@
         if (elements.settingsAllowInternalSyncEndpoints) {
             elements.settingsAllowInternalSyncEndpoints.checked = s.allowInternalSyncEndpoints === true;
         }
+        if (elements.settingsSyncCredentialsSessionOnly) {
+            elements.settingsSyncCredentialsSessionOnly.checked = s.syncCredentialsSessionOnly === true;
+        }
         if (elements.settingsSyncEncryptionEnabled) {
             elements.settingsSyncEncryptionEnabled.checked = s.syncEncryptionEnabled === true;
         }
@@ -4014,7 +4027,10 @@
         const fieldSummary = stored.length
             ? `Stored now: ${storedLabels}.`
             : 'No token or credential values are currently stored.';
-        return `${fieldSummary} Storage: ${disclosure.storage}. ${disclosure.protection} ${disclosure.revokeAction || ''}`.trim();
+        const reconnect = disclosure.reconnectRequired
+            ? ' Reconnect or re-enter credentials after browser restart.'
+            : '';
+        return `${fieldSummary} Storage: ${disclosure.storage}. ${disclosure.protection}${reconnect} ${disclosure.revokeAction || ''}`.trim();
     }
 
     function updateSyncCockpit(provider, health = {}) {
@@ -9655,7 +9671,9 @@
 
         if (elements.editorSavedAt) {
             let detail = 'Ready to edit';
-            if (saveState === 'dirty') {
+            if (state.userCssPreview.active && state.userCssPreview.scriptId === script.id) {
+                detail = 'Previewing unsaved CSS in active tab';
+            } else if (saveState === 'dirty') {
                 detail = state.settings.autoSave ? 'Autosaves after 2 seconds' : 'Press Ctrl+S to save';
             } else if (saveState === 'saving') {
                 detail = 'Writing changes…';
@@ -9691,6 +9709,7 @@
                 ? 'Run this script once on the active tab'
                 : 'Run on Tab requires Chrome 135 or newer';
         }
+        updateUserCssPreviewButton(script);
 
         if (elements.btnEditorToggleLabel) {
             elements.btnEditorToggleLabel.textContent = script.enabled !== false ? 'Disable' : 'Enable';
@@ -9784,6 +9803,9 @@
                 state.openTabs[previousScriptId].unsaved = state.unsavedChanges;
             } catch {}
         }
+        if (previousScriptId && previousScriptId !== scriptId && state.userCssPreview.scriptId === previousScriptId) {
+            void clearUserCssPreview({ silent: true });
+        }
         state.currentScriptId = scriptId;
         const tabData = ensureOpenTabStatus(scriptId, script);
         state.unsavedChanges = tabData?.unsaved || false;
@@ -9855,6 +9877,9 @@
             }
 
             if (state.currentScriptId === scriptId) {
+                if (state.userCssPreview.scriptId === scriptId) {
+                    void clearUserCssPreview({ silent: true });
+                }
                 state.currentScriptId = null;
                 state.unsavedChanges = false;
 
@@ -10484,6 +10509,9 @@
                     updateCursorPos();
                 }
             }
+            if (state.userCssPreview.scriptId === savingScriptId) {
+                await clearUserCssPreview({ silent: true });
+            }
             const saveResult = await chrome.runtime.sendMessage({
                 action: 'saveScript',
                 scriptId: savingScriptId,
@@ -10772,6 +10800,10 @@
         }
     }
 
+    function isUserCSSDraft(code = '') {
+        return /\/\*\s*==UserStyle==[\s\S]*?==\/UserStyle==\s*\*\//.test(String(code || ''));
+    }
+
     async function getRunNowTargetTab() {
         const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
         if (activeTab?.id && isRunnableTabUrl(activeTab.url)) return activeTab;
@@ -10780,6 +10812,132 @@
         return tabs
             .filter(tab => typeof tab.id === 'number' && isRunnableTabUrl(tab.url))
             .sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0))[0] || null;
+    }
+
+    function getCurrentEditorCode() {
+        if (state.editor && typeof state.editor.getValue === 'function') return state.editor.getValue();
+        if (state.currentScriptId && state.openTabs[state.currentScriptId]) return state.openTabs[state.currentScriptId].code || '';
+        return getCurrentScript()?.code || '';
+    }
+
+    function resetUserCssPreviewState() {
+        if (state.userCssPreview.timer) {
+            clearTimeout(state.userCssPreview.timer);
+        }
+        state.userCssPreview = {
+            scriptId: null,
+            tabId: null,
+            active: false,
+            pending: false,
+            timer: null
+        };
+        updateUserCssPreviewButton();
+    }
+
+    function updateUserCssPreviewButton(script = getCurrentScript()) {
+        const button = elements.btnEditorPreviewUserCSS;
+        if (!button) return;
+        const code = getCurrentEditorCode();
+        const isUserCss = isUserCSSDraft(code);
+        const isCurrentPreview = state.userCssPreview.active && state.userCssPreview.scriptId === state.currentScriptId;
+        const pending = state.userCssPreview.pending && state.userCssPreview.scriptId === state.currentScriptId;
+        button.hidden = !isUserCss;
+        button.disabled = !script || pending;
+        button.classList.toggle('btn-primary', isCurrentPreview);
+        button.setAttribute('aria-pressed', isCurrentPreview ? 'true' : 'false');
+        button.title = isCurrentPreview
+            ? 'Clear the temporary UserCSS preview'
+            : 'Preview this UserCSS draft on the active tab';
+        if (elements.btnEditorPreviewUserCSSLabel) {
+            elements.btnEditorPreviewUserCSSLabel.textContent = pending
+                ? 'Previewing...'
+                : isCurrentPreview ? 'Clear Preview' : 'Preview CSS';
+        }
+    }
+
+    async function clearUserCssPreview(options = {}) {
+        const preview = state.userCssPreview;
+        if (preview.timer) {
+            clearTimeout(preview.timer);
+            preview.timer = null;
+        }
+        const tabId = typeof options.tabId === 'number' ? options.tabId : preview.tabId;
+        const hadPreview = preview.active || typeof tabId === 'number';
+        resetUserCssPreviewState();
+        if (!hadPreview) return { success: true, cleared: 0 };
+        try {
+            return await chrome.runtime.sendMessage({
+                action: 'userStyleClearPreview',
+                tabId
+            });
+        } catch (error) {
+            if (!options.silent) showToast(error?.message || 'Failed to clear UserCSS preview', 'error');
+            return { error: error?.message || String(error) };
+        }
+    }
+
+    async function applyUserCssPreview(options = {}) {
+        const scriptId = state.currentScriptId;
+        const code = getCurrentEditorCode();
+        if (!scriptId || !code || !isUserCSSDraft(code)) {
+            if (!options.silent) showToast('Open a UserCSS draft before previewing', 'info');
+            return false;
+        }
+
+        const targetTab = await getRunNowTargetTab();
+        if (!targetTab?.id) {
+            if (!options.silent) showToast('Open a web page tab in this window, then preview again', 'warning');
+            return false;
+        }
+
+        state.userCssPreview.pending = true;
+        state.userCssPreview.scriptId = scriptId;
+        updateUserCssPreviewButton();
+        try {
+            const result = await chrome.runtime.sendMessage({
+                action: 'userStylePreviewDraft',
+                code,
+                tabId: targetTab.id
+            });
+            if (result?.error) throw new Error(result.error);
+            state.userCssPreview = {
+                scriptId,
+                tabId: result?.tabId || targetTab.id,
+                active: true,
+                pending: false,
+                timer: null
+            };
+            updateEditorHeader(getCurrentScript());
+            if (!options.silent) showToast('Previewing unsaved UserCSS on this tab', 'success');
+            return true;
+        } catch (error) {
+            state.userCssPreview.pending = false;
+            updateUserCssPreviewButton();
+            if (!options.silent) showToast(error?.message || 'UserCSS preview failed', 'error');
+            return false;
+        }
+    }
+
+    function scheduleUserCssPreviewRefresh() {
+        if (!state.userCssPreview.active || state.userCssPreview.scriptId !== state.currentScriptId) return;
+        if (state.userCssPreview.timer) clearTimeout(state.userCssPreview.timer);
+        state.userCssPreview.timer = setTimeout(() => {
+            state.userCssPreview.timer = null;
+            if (!isUserCSSDraft(getCurrentEditorCode())) {
+                void clearUserCssPreview({ silent: true });
+                return;
+            }
+            void applyUserCssPreview({ silent: true });
+        }, 450);
+    }
+
+    async function toggleUserCssPreview() {
+        if (state.userCssPreview.active && state.userCssPreview.scriptId === state.currentScriptId) {
+            await clearUserCssPreview();
+            showToast('UserCSS preview cleared', 'info');
+            return false;
+        }
+        return await applyUserCssPreview();
     }
 
     let _creatingScript = false;
@@ -11243,6 +11401,8 @@
             if (change.origin === 'setValue') return;
             markCurrentEditorDirty();
             updateLineCount();
+            updateUserCssPreviewButton();
+            scheduleUserCssPreviewRefresh();
             if (s.autoSave) {
                 clearTimeout(autoSaveTimer);
                 autoSaveTimer = setTimeout(() => saveCurrentScript({ autosave: true }), 2000);
@@ -13210,9 +13370,17 @@
         elements.btnEditorRunNow?.addEventListener('click', event => {
             runButtonTask(event.currentTarget, () => runScriptOnceOnTab(), { busyLabel: 'Running...' });
         });
-        elements.btnEditorToggle?.addEventListener('click', () => {
+        elements.btnEditorPreviewUserCSS?.addEventListener('click', event => {
+            runButtonTask(event.currentTarget, toggleUserCssPreview, { busyLabel: 'Previewing...' });
+        });
+        elements.btnEditorToggle?.addEventListener('click', async () => {
             const script = state.scripts.find(s => s.id === state.currentScriptId);
-            if (script) toggleScriptEnabled(script.id, script.enabled === false);
+            if (script) {
+                if (state.userCssPreview.scriptId === script.id) {
+                    await clearUserCssPreview({ silent: true });
+                }
+                toggleScriptEnabled(script.id, script.enabled === false);
+            }
         });
         elements.btnEditorDuplicate?.addEventListener('click', duplicateCurrentScript);
         elements.btnEditorExport?.addEventListener('click', () => {
@@ -13631,6 +13799,7 @@
             // Sync
             settingsEnableSync: ['syncEnabled', 'checked'],
             settingsAllowInternalSyncEndpoints: ['allowInternalSyncEndpoints', 'checked'],
+            settingsSyncCredentialsSessionOnly: ['syncCredentialsSessionOnly', 'checked'],
             settingsSyncEncryptionEnabled: ['syncEncryptionEnabled', 'checked'],
             
             // Editor
@@ -13775,6 +13944,7 @@
                 await saveSettingOrThrow('syncEnabled', !!elements.settingsEnableSync?.checked);
                 await saveSettingOrThrow('syncProvider', provider);
                 await saveSettingOrThrow('allowInternalSyncEndpoints', !!elements.settingsAllowInternalSyncEndpoints?.checked);
+                await saveSettingOrThrow('syncCredentialsSessionOnly', !!elements.settingsSyncCredentialsSessionOnly?.checked);
                 await saveSettingOrThrow('syncEncryptionEnabled', !!elements.settingsSyncEncryptionEnabled?.checked);
                 await saveSettingOrThrow('syncEncryptionPassphrase', elements.settingsSyncEncryptionPassphrase?.value || '');
                 if (provider === 'webdav') {

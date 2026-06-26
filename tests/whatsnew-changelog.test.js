@@ -20,7 +20,12 @@ function createWhatsNew({ version = manifest.version, lastSeenVersion = '0.0.0' 
   };
   const _wnBody = `${whatsNewSource}\nreturn WhatsNew;`;
   let WhatsNew;
-  try { const vm = require('node:vm'); WhatsNew = vm.compileFunction(_wnBody, ['chrome'], { filename: resolve(process.cwd(), 'pages/dashboard-whatsnew.js') })(chromeStub); } catch { WhatsNew = new Function('chrome', _wnBody)(chromeStub); }
+  try {
+    const vm = require('node:vm');
+    WhatsNew = vm.compileFunction(_wnBody, ['chrome', 'window', 'document'], { filename: resolve(process.cwd(), 'pages/dashboard-whatsnew.js') })(chromeStub, window, document);
+  } catch {
+    WhatsNew = new Function('chrome', 'window', 'document', _wnBody)(chromeStub, window, document);
+  }
   return { WhatsNew, storageSet };
 }
 

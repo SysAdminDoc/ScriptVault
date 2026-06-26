@@ -28,6 +28,17 @@ function createVariableStyle() {
   };
 }
 
+function createUserCSSDraft(match = 'https://example.com/*') {
+  return `/* ==UserStyle==
+@name Draft style
+@namespace scriptvault
+@version 1.0.0
+@var color accent "Accent" #123456
+@match ${match}
+==/UserStyle== */
+body { color: /*[[accent]]*/; }`;
+}
+
 let UserStylesEngine;
 
 describe('UserStylesEngine runtime module', () => {
@@ -36,6 +47,7 @@ describe('UserStylesEngine runtime module', () => {
     chrome.tabs.query.mockResolvedValue([
       { id: 1, url: 'https://example.com/page' },
     ]);
+    chrome.tabs.get.mockResolvedValue({ id: 1, url: 'https://example.com/page' });
     UserStylesEngine = createFreshUserStylesEngine();
     vi.clearAllMocks();
   });
@@ -83,6 +95,21 @@ body { color: tomato; }`;
     expect(converted.script).toContain('// @match        https://example.com/*');
     expect(converted.script).toContain('// @match        https://news.example.com/*');
     expect(converted.script).not.toContain('// @match        *://*/*');
+  });
+
+  it('previews a UserCSS draft without persisting it', async () => {
+    const result = await UserStylesEngine.previewDraft(createUserCSSDraft(), { tabId: 1 });
+
+    expect(result).toMatchObject({
+      success: true,
+      tabId: 1,
+      styleName: 'Draft style',
+    });
+    expect(chrome.scripting.insertCSS).toHaveBeenCalledWith({
+      target: { tabId: 1 },
+      css: 'body { color: #123456; }',
+    });
+    expect(chrome.storage.local.set).not.toHaveBeenCalled();
   });
 
   it('refreshes stored match patterns when full UserCSS metadata is edited', async () => {

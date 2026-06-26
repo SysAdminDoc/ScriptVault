@@ -6773,6 +6773,10 @@
                         <span class="help-icon" title="Advanced: permits WebDAV/S3 sync to localhost, LAN, link-local, or private IPv6 endpoints. Leave off unless you operate the server.">!</span>
                     </div>
                     <div class="setting-row">
+                        <label><input type="checkbox" id="settingsSyncCredentialsSessionOnly"> Keep sync credentials for this browser session only</label>
+                        <span class="help-icon" title="Stores provider tokens, passwords, endpoint metadata, and the sync passphrase in session storage instead of persistent settings. Reconnect after browser restart.">?</span>
+                    </div>
+                    <div class="setting-row">
                         <label><input type="checkbox" id="settingsSyncEncryptionEnabled"> Encrypt sync payloads</label>
                         <span class="help-icon" title="Encrypts uploaded sync JSON with AES-256-GCM before it leaves this device. Existing plaintext sync files remain readable.">?</span>
                     </div>
@@ -8257,6 +8261,10 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 <button class="btn" id="btnEditorRunNow" type="button" title="Run this script once on the active tab">
                     <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 5v14l11-7z"/></svg>
                     <span>Run on Tab</span>
+                </button>
+                <button class="btn" id="btnEditorPreviewUserCSS" type="button" title="Preview UserCSS on the active tab" aria-pressed="false" hidden>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16"/><path d="M4 19h16"/><path d="M7 8l-3 4 3 4"/><path d="M17 8l3 4-3 4"/><path d="M14 7l-4 10"/></svg>
+                    <span id="btnEditorPreviewUserCSSLabel">Preview CSS</span>
                 </button>
                 <button class="btn" id="btnEditorExport" type="button">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>

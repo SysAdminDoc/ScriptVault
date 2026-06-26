@@ -3892,6 +3892,37 @@ const SubscriptionSystem = {
 // Cloud Sync
 // ============================================================================
 
+function getSyncCredentialStore() {
+  try {
+    return CloudSyncProviders?._credentialStore || null;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function getEffectiveSyncSettings(settings) {
+  const store = getSyncCredentialStore();
+  if (store && typeof store.resolveSettings === 'function') {
+    return await store.resolveSettings(settings);
+  }
+  return settings;
+}
+
+async function persistSyncSettingsUpdate(update, baseSettings) {
+  const store = getSyncCredentialStore();
+  if (store && typeof store.persistSettingsUpdate === 'function') {
+    return await store.persistSettingsUpdate(update, baseSettings);
+  }
+  return await SettingsManager.set(update);
+}
+
+async function clearSyncSessionCredentials() {
+  const store = getSyncCredentialStore();
+  if (store && typeof store.clearSessionCredentials === 'function') {
+    await store.clearSessionCredentials();
+  }
+}
+
 const CloudSync = {
   // Use providers from imported CloudSyncProviders module
   get providers() {
@@ -3966,7 +3997,7 @@ const CloudSync = {
   },
 
   async preview(providerName) {
-    const settings = await SettingsManager.get();
+    const settings = await getEffectiveSyncSettings(await SettingsManager.get());
     const selectedProvider = providerName || settings.syncProvider;
     if (!selectedProvider || selectedProvider === 'none') {
       return { success: false, error: 'Choose a sync provider first' };
@@ -4143,7 +4174,7 @@ const CloudSync = {
 
   async _performSync(opts = {}) {
     const { signal } = opts;
-    const settings = await SettingsManager.get();
+    const settings = await getEffectiveSyncSettings(await SettingsManager.get());
     if (!settings.syncEnabled || settings.syncProvider === 'none') return;
     if (signal?.aborted) throw new Error('Sync aborted');
 
@@ -4391,7 +4422,7 @@ async function buildSyncProviderHealth(providerName) {
   const provider = CloudSyncProviders[providerName];
   if (!provider) return { success: false, connected: false, error: `Unknown provider: ${providerName}` };
 
-  const settings = await SettingsManager.get();
+  const settings = await getEffectiveSyncSettings(await SettingsManager.get());
   let status = {};
   try {
     if (typeof provider.getStatus === 'function') {
@@ -6708,7 +6739,7 @@ async function handleMessage(message, sender) {
       }
 
       case 'getSettings': {
-        const settings = await SettingsManager.get();
+        const settings = await getEffectiveSyncSettings(await SettingsManager.get());
         return { settings };
       }
 
@@ -6752,8 +6783,8 @@ async function handleMessage(message, sender) {
         return await SettingsManager.get(data.key);
         
       case 'setSettings': {
-        const oldSettings = await SettingsManager.get();
-        const result = await SettingsManager.set(data.settings);
+        const oldSettings = await getEffectiveSyncSettings(await SettingsManager.get());
+        const result = await persistSyncSettingsUpdate(data.settings, oldSettings);
         const changed = data.settings;
 
         // If global enabled state changed, re-register all scripts
@@ -6914,7 +6945,7 @@ async function handleMessage(message, sender) {
         // status. Accept an optional `data.provider` override so the dashboard
         // can test a provider not currently selected (e.g. "verify the new
         // WebDAV URL before saving").
-        const settings = await SettingsManager.get();
+        const settings = await getEffectiveSyncSettings(await SettingsManager.get());
         const providerName = data?.provider || settings.syncProvider;
         const provider = CloudSync.providers[providerName];
         if (!provider) {
@@ -6946,7 +6977,7 @@ async function handleMessage(message, sender) {
         return (await chrome.storage.local.get('lastSyncResult'))?.lastSyncResult || null;
 
       case 'syncProviderHealth': {
-        const settings = await SettingsManager.get();
+        const settings = await getEffectiveSyncSettings(await SettingsManager.get());
         return await buildSyncProviderHealth(data?.provider || settings.syncProvider);
       }
 
@@ -6961,7 +6992,7 @@ async function handleMessage(message, sender) {
         if (!provider) return { success: false, error: 'Unknown provider' };
         
         try {
-          const settings = await SettingsManager.get();
+          const settings = await getEffectiveSyncSettings(await SettingsManager.get());
           const result = await provider.connect(settings);
           
           if (result.success) {
@@ -6978,7 +7009,7 @@ async function handleMessage(message, sender) {
               if (status.user) updates.dropboxUser = status.user;
             }
             updates.syncProvider = providerName;
-            await SettingsManager.set(updates);
+            await persistSyncSettingsUpdate(updates, settings);
           }
           return result;
         } catch (e) {
@@ -6993,7 +7024,7 @@ async function handleMessage(message, sender) {
         if (!provider) return { success: false, error: 'Unknown provider' };
         
         try {
-          const settings = await SettingsManager.get();
+          const settings = await getEffectiveSyncSettings(await SettingsManager.get());
           await provider.disconnect(settings);
           
           const updates = { syncProvider: 'none' };
@@ -7015,7 +7046,8 @@ async function handleMessage(message, sender) {
             updates.webdavPassword = '';
           }
           updates.syncEnabled = false;
-          await SettingsManager.set(updates);
+          await persistSyncSettingsUpdate(updates, settings);
+          await clearSyncSessionCredentials();
           return { success: true };
         } catch (e) {
           return { success: false, error: e.message };
@@ -7027,7 +7059,7 @@ async function handleMessage(message, sender) {
         const provider = CloudSyncProviders[providerName];
         if (!provider) return { connected: false };
         
-        const settings = await SettingsManager.get();
+        const settings = await getEffectiveSyncSettings(await SettingsManager.get());
         if (provider.getStatus) {
           return await provider.getStatus(settings);
         }
@@ -7054,7 +7086,7 @@ async function handleMessage(message, sender) {
             includeStorage,
             includeSettingsCredentials
           });
-          const settings = await SettingsManager.get();
+          const settings = await getEffectiveSyncSettings(await SettingsManager.get());
           await provider.upload(exportData, settings);
           return {
             success: true,
@@ -7075,7 +7107,7 @@ async function handleMessage(message, sender) {
         if (!provider) return { success: false, error: 'Unknown provider: ' + providerName };
 
         try {
-          const settings = await SettingsManager.get();
+          const settings = await getEffectiveSyncSettings(await SettingsManager.get());
           const remoteData = await provider.download(settings);
           if (!remoteData) return { success: false, error: 'No backup found on ' + providerName };
           const result = await importScripts(remoteData, {
@@ -7097,7 +7129,7 @@ async function handleMessage(message, sender) {
         if (!provider) return { connected: false };
 
         try {
-          const settings = await SettingsManager.get();
+          const settings = await getEffectiveSyncSettings(await SettingsManager.get());
           if (provider.getStatus) return await provider.getStatus(settings);
           return { connected: false };
         } catch (e) {
@@ -8550,6 +8582,18 @@ async function handleMessage(message, sender) {
           return { success: false, error: e?.message || 'Run failed' };
         }
       }
+
+      case 'userStylePreviewDraft':
+        if (typeof UserStylesEngine === 'undefined') return { success: false, error: 'UserCSS tools unavailable' };
+        return await UserStylesEngine.previewDraft(String(data.code || ''), {
+          tabId: typeof data.tabId === 'number' ? data.tabId : undefined
+        });
+
+      case 'userStyleClearPreview':
+        if (typeof UserStylesEngine === 'undefined') return { success: true, cleared: 0 };
+        return await UserStylesEngine.clearDraftPreview({
+          tabId: typeof data.tabId === 'number' ? data.tabId : undefined
+        });
       
       // Get info
       case 'getExtensionInfo':

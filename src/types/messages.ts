@@ -83,6 +83,31 @@ interface RunScriptNow {
   tabId?: number;
 }
 
+interface UserStylePreviewDraft {
+  action: 'userStylePreviewDraft';
+  code: string;
+  tabId?: number;
+}
+
+interface UserStyleClearPreview {
+  action: 'userStyleClearPreview';
+  tabId?: number;
+}
+
+interface UserStylePreviewResponse {
+  success?: boolean;
+  error?: string;
+  tabId?: number;
+  tabUrl?: string;
+  styleName?: string;
+  cssBytes?: number;
+}
+
+interface UserStyleClearPreviewResponse {
+  success: boolean;
+  cleared: number;
+}
+
 interface DuplicateScript {
   action: 'duplicateScript';
   id: string;
@@ -1374,7 +1399,7 @@ interface RenameScriptValue {
 export type BackgroundMessage =
   // Script management
   | GetScripts | GetScript | SaveScript | CreateScript | DeleteScript
-  | ToggleScript | RunScriptNow | DuplicateScript | SearchScripts | ReorderScripts
+  | ToggleScript | RunScriptNow | DuplicateScript | UserStylePreviewDraft | UserStyleClearPreview | SearchScripts | ReorderScripts
   // Trash
   | GetTrash | RestoreFromTrash | EmptyTrash | PermanentlyDelete
   // Script values
@@ -1520,6 +1545,8 @@ export interface ResponseMap {
   deleteScript: SuccessResponse | ErrorResponse;
   toggleScript: SuccessResponse;
   runScriptNow: SuccessOrError<{ mode: 'userScripts.execute' | 'scripting.executeScript' }>;
+  userStylePreviewDraft: UserStylePreviewResponse | ErrorResponse;
+  userStyleClearPreview: UserStyleClearPreviewResponse;
   duplicateScript: { success: true; script: Script } | ErrorResponse;
   searchScripts: { scripts: Script[] };
   reorderScripts: SuccessResponse;

@@ -22,6 +22,17 @@ function createVariableStyle() {
   };
 }
 
+function createUserCSSDraft(match = 'https://example.com/*') {
+  return `/* ==UserStyle==
+@name Draft style
+@namespace scriptvault
+@version 1.0.0
+@var color accent "Accent" #123456
+@match ${match}
+==/UserStyle== */
+body { color: /*[[accent]]*/; }`;
+}
+
 describe('source userstyles module', () => {
   beforeEach(() => {
     globalThis.__resetStorageMock();
@@ -29,6 +40,7 @@ describe('source userstyles module', () => {
     chrome.tabs.query.mockResolvedValue([
       { id: 1, url: 'https://example.com/page' },
     ]);
+    chrome.tabs.get.mockResolvedValue({ id: 1, url: 'https://example.com/page' });
   });
 
   it('removes the previously injected CSS when variables change', async () => {
@@ -132,6 +144,62 @@ describe('source userstyles module', () => {
     await secondUpdate;
 
     expect(chrome.scripting.insertCSS).toHaveBeenCalledTimes(1);
+  });
+
+  it('previews a UserCSS draft without persisting it', async () => {
+    const { UserStylesEngine } = await loadFreshUserStyles();
+
+    const result = await UserStylesEngine.previewDraft(createUserCSSDraft(), { tabId: 1 });
+
+    expect(result).toMatchObject({
+      success: true,
+      tabId: 1,
+      styleName: 'Draft style',
+    });
+    expect(chrome.scripting.insertCSS).toHaveBeenCalledWith({
+      target: { tabId: 1 },
+      css: 'body { color: #123456; }',
+    });
+    expect(chrome.storage.local.set).not.toHaveBeenCalled();
+  });
+
+  it('removes an old UserCSS preview before applying a new draft', async () => {
+    const { UserStylesEngine } = await loadFreshUserStyles();
+
+    await UserStylesEngine.previewDraft(createUserCSSDraft(), { tabId: 1 });
+    await UserStylesEngine.previewDraft(createUserCSSDraft('https://example.com/*').replace('#123456', '#abcdef'), { tabId: 1 });
+
+    expect(chrome.scripting.removeCSS).toHaveBeenCalledWith({
+      target: { tabId: 1 },
+      css: 'body { color: #123456; }',
+    });
+    expect(chrome.scripting.insertCSS).toHaveBeenLastCalledWith({
+      target: { tabId: 1 },
+      css: 'body { color: #abcdef; }',
+    });
+  });
+
+  it('clears a UserCSS draft preview on navigation', async () => {
+    const { UserStylesEngine } = await loadFreshUserStyles();
+
+    await UserStylesEngine.previewDraft(createUserCSSDraft(), { tabId: 1 });
+    vi.clearAllMocks();
+    await UserStylesEngine.onTabUpdated(1, 'https://example.com/next');
+
+    expect(chrome.scripting.removeCSS).toHaveBeenCalledWith({
+      target: { tabId: 1 },
+      css: 'body { color: #123456; }',
+    });
+  });
+
+  it('rejects a UserCSS preview when the active tab is outside @match scope', async () => {
+    const { UserStylesEngine } = await loadFreshUserStyles();
+    chrome.tabs.get.mockResolvedValue({ id: 1, url: 'https://example.com/page' });
+
+    const result = await UserStylesEngine.previewDraft(createUserCSSDraft('https://other.example/*'), { tabId: 1 });
+
+    expect(result.error).toContain('@match');
+    expect(chrome.scripting.insertCSS).not.toHaveBeenCalled();
   });
 
   it('preserves scoped match directives when converting UserCSS to a userscript', async () => {

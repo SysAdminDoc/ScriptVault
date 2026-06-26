@@ -89,6 +89,7 @@
       "subscriptionAutoRefresh",
       "subscriptionRefreshInterval",
       "syncEnabled",
+      "syncCredentialsSessionOnly",
       "syncEncryptionEnabled",
       "syncEncryptionKdfIterations",
       "syncInterval",
@@ -1525,6 +1526,14 @@
       "label": "Sync Enabled",
       "help": "Controls sync enabled.",
       "elementId": "settingsEnableSync",
+      "default": false
+    },
+    "syncCredentialsSessionOnly": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "Keep sync credentials for this browser session only",
+      "help": "Stores sync provider credentials in chrome.storage.session instead of persistent settings.",
+      "elementId": "settingsSyncCredentialsSessionOnly",
       "default": false
     },
     "syncEncryptionEnabled": {
