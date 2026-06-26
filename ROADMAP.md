@@ -375,13 +375,6 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 ### P2
 
 
-- [ ] P2 — Session-only mode for sync and Gist credentials
-  Why: WebDAV passwords, OAuth tokens, provider metadata, sync passphrases, and Gist PATs are local-only but currently persistent settings/local-storage shaped; privacy-sensitive users need a no-at-rest option that survives normal use without silently exporting or retaining credentials.
-  Evidence: `src/config/settings-defaults.json:26-49`; `src/types/settings.ts:46-67`; `src/modules/sync-providers.ts:153-155`; `src/modules/sync-providers.ts:359-369`; `src/modules/sync-providers.ts:590-608`; `src/modules/sync-providers.ts:828-842`; `pages/dashboard-gist.js:1-5`; `pages/dashboard-gist.js:1208-1210`; Chrome and MDN `storage.session` documentation.
-  Touches: provider credential storage boundary; sync provider settings/disconnect paths; Gist settings UI; backup/export redaction; support snapshot copy; provider tests.
-  Acceptance: Each provider can run with remembered-on-device or session-only credentials; session-only credentials are kept out of persistent settings, backups, exports, and support snapshots; browser restart shows an explicit reconnect state; disconnect clears session and persistent copies; tests cover WebDAV, one OAuth provider, Gist PAT, and fallback behavior where `chrome.storage.session` is unavailable.
-  Complexity: L
-
 ## Research-Driven Additions (2026-06-12)
 
 > Items below were identified by exhaustive repo walk + external research across
@@ -390,13 +383,6 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 > and all prior RD-1..RD-11 additions.
 
 ### P2
-
-- [ ] P2 — MCP server for AI agent integration (L-3 implementation)
-  Why: Tampermonkey shipped an official MCP server (`tampermonkey-mcp` on GitHub) enabling AI agents to list, read, write, and manage userscripts. ScriptVault's existing Public API foundation provides the CRUD surface, but no MCP transport exists. This is a competitive gap in the AI-native developer workflow.
-  Evidence: https://github.com/Tampermonkey/tampermonkey-mcp; ScriptVault `src/modules/public-api.ts` has list/get/toggle/install/delete handlers; L-3 roadmap item exists but lacks implementation detail.
-  Touches: New `mcp-server/` package or `scripts/mcp-server.mjs`; `src/modules/public-api.ts` (reuse existing handlers); `manifest.json` (native messaging if local); `docs/mcp-integration.md`; MCP protocol tests.
-  Acceptance: An MCP client (Claude Code, other) can list installed scripts, read script source, toggle enable/disable, and install from URL through ScriptVault's MCP server; write operations require user review (reuse quarantine flow); no credentials are stored by the MCP transport; tests prove the MCP protocol schema matches the official MCP specification.
-  Complexity: L
 
 ### P3
 
@@ -432,15 +418,6 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 > platform APIs. Deduplicated against all existing tiers (Now through Rejected)
 > and all prior RD-1..RD-12 additions. Items fixed since last research pass
 > (BUG-2, BUG-3, pre-release ordering, toggle/save mutex) are excluded.
-
-### P2
-
-- [ ] P2 — Signature-Based SRI for @require provenance
-  Why: Chrome 141 shipped Ed25519-signed HTTP responses (RFC 9421, WICG spec). ScriptVault already has Ed25519 infrastructure and hash-only SRI verification for `@require`. CDNs that adopt Signature-Based SRI can have their scripts verified cryptographically for author provenance, not just content integrity — a leapfrog beyond every other userscript manager.
-  Evidence: https://developer.chrome.com/release-notes/141; https://wicg.github.io/signature-based-sri/; `src/background/resource-loader.ts` `verifySRI()` (hash-only today); `bg/signing.js` Ed25519 infrastructure; `ROADMAP.md:S57` (tracked as source reference but no implementation item).
-  Touches: `src/background/resource-loader.ts`; `src/background/core.ts` @require fetch path; `src/types/script.ts` (signature metadata on @require entries); `pages/install.js` (provenance display); `tests/` regression for signature verification; `README.md` security model.
-  Acceptance: When a CDN response includes a valid `Signature` + `Signature-Input` header per the WICG spec and the author's public key is in the trust store, ScriptVault displays verified-provenance status on the @require entry in the install page and dashboard info panel; hash-only SRI continues to work unchanged on CDNs that don't support the header; no new permissions required; regression tests prove both paths.
-  Complexity: L
 
 ### P3
 
@@ -537,15 +514,6 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 > Trusted Types Baseline, extension supply chain campaigns), dependency changelogs,
 > and community signal (Reddit, HN, GitHub issues). Deduplicated against all existing
 > tiers (Now through Rejected) and all prior RD-1..RD-15 additions.
-
-### P1
-
-- [ ] P1 — Coverage instrumentation alignment for promoted TS modules
-  Why: `npm run test:cov` reports 0% coverage across all 28 promoted TypeScript source files because tests use `readFileSync` + `new Function()` string eval to load generated JS, which is invisible to v8 coverage. The few tests that `import` TS source directly show 0% due to Windows `Z:` drive path mismatches in Vitest's v8 provider.
-  Evidence: `coverage/coverage-summary.json` shows 0% for every `src/` file; `tests/*.test.js` files use `readFileSync`+`new Function` pattern; `vitest.config.mjs` coverage `include` uses Unix-style globs vs `Z:\` absolute paths.
-  Touches: `tests/setup.js` (centralize `vm.Script`-based eval with `filename`); all test files that use `readFileSync`+`new Function` pattern (~60+ files); `vitest.config.mjs` coverage config.
-  Acceptance: `npm run test:cov` reports non-zero line/branch coverage for promoted TS modules; coverage report matches actual test execution; no test behavior changes.
-  Complexity: XL
 
 ### P2
 
@@ -723,37 +691,117 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 | RD25-27 | EU CRA open-source carve-out | https://digital-strategy.ec.europa.eu/en/policies/cra-open-source |
 | RD25-28 | W3C WebExtensions spec draft (June 5, 2026) | https://w3c.github.io/webextensions/specification/ |
 
-## Research-Driven Additions
+## Research-Driven Additions (2026-06-25 deep pass)
+
+> Items below identified by exhaustive repo walk (full file tree, test suite
+> execution, npm audit, npm outdated, dependency changelog review, CI pipeline
+> analysis, source-level grep for TODOs/FIXMEs/@deprecated) + 65+ external
+> sources across competitors (TM v5.5.0, VM MV3 death, ScriptCat v1.4.0 with
+> AI Agent/MCP, Tweeks YC W25, OrangeMonkey 2M+, Greasemonkey, FireMonkey,
+> Userscripts Safari), Chrome 130-153 APIs, Firefox 147-153, security landscape
+> (extension supply chain campaigns 2024-2026, CSA MCP v1, ownership-transfer
+> attack class), web platform (Sanitizer API setHTML Baseline, Mutation Events
+> removal, Navigation API Baseline, OPFS), adjacent tools (Playwright Trace
+> Viewer, Requestly, Stylebot, n8n, Automa, vite-plugin-monkey 2K stars),
+> dependency changelogs (Monaco 0.55, Vitest 4.1, CodeMirror 6, puppeteer-core
+> 25, TypeScript 6.0), and community signal (Reddit r/userscripts, HN, GitHub
+> issues across 6 managers). Deduplicated against all existing tiers (Now
+> through Rejected), all prior RD-1..RD-25 additions, and Roadmap_Blocked.md.
 
 ### P1
 
-- [ ] P1 — AMO lint warning budget for dynamic HTML and unsupported probes
-  Why: The checked-in Firefox lint artifact has 148 warnings, dominated by dynamic HTML assignments, even though errors and notices are already zero.
-  Evidence: `firefox-artifacts/web-ext-lint.json`; `pages/dashboard-*.js`; OWASP Browser Extension Vulnerabilities Cheat Sheet; Mozilla source-code submission docs.
-  Touches: `pages/dashboard-linter.js`, `pages/dashboard-scheduler.js`, `pages/dashboard-snippets.js`, `pages/dashboard-theme-editor.js`, `pages/dashboard-*.js`, `pages/install.js`, `pages/devtools-panel.js`, Firefox lint gate scripts.
-  Acceptance: `npm run firefox:lint` remains 0 errors/0 notices and either reduces warnings below 50 or emits a committed allowlist/report with every remaining warning code, file, and reviewer-safe rationale; no dashboard module keeps an unsafe raw-HTML fallback where DOM construction or `safeSetHtml` is viable.
-  Complexity: L
+- [ ] P1 — Remove stale dependabot-config.test.js
+  Why: Test file references deleted `.github/dependabot.yml` (removed in c81cc05), causing 1 of 1738 tests to fail. Breaks CI green.
+  Evidence: `npx vitest run` output — `FAIL tests/dependabot-config.test.js`; `ls .github/dependabot.yml` confirms file missing.
+  Touches: `tests/dependabot-config.test.js` (delete entirely)
+  Acceptance: `npm test` reports 0 failures. No references to `dependabot.yml` in test suite.
+  Complexity: S
+
 ### P2
 
-- [ ] P2 — Browser Mode dev-server exposure guard
-  Why: Existing visual-regression work plans Vitest Browser Mode, and Vitest's advisory makes exposed UI/browser servers a local-file risk if bound beyond loopback.
-  Evidence: existing L-7 Visual Regression Testing item; `vitest.config.mjs`; GitHub Advisory GHSA-5xrq-8626-4rwp; Vitest 4.1 release notes.
-  Touches: `vitest.config.mjs`, `package.json`, `scripts/`, `tests/`, contributor/test docs.
-  Acceptance: Any Browser Mode or UI-server command binds to `127.0.0.1`/localhost by default, fails fast on `0.0.0.0` or public hosts unless an explicit local override is set, and has a regression test that rejects unsafe host flags.
-  Complexity: M
+- [ ] P2 — Raise coverage thresholds to measured baseline
+  Why: Current thresholds (10% lines, 5% branches, 10% functions) are effectively no-op gates. 1738 tests produce significantly higher coverage, but regressions go undetected.
+  Evidence: `vitest.config.mjs` lines 31-36 set the thresholds. `npm run test:cov` output will show actual coverage.
+  Touches: `vitest.config.mjs` (threshold values)
+  Acceptance: Run `npm run test:cov`, measure actual line/branch/function coverage, set thresholds to (measured - 5%) to prevent regression while allowing normal variance. All tests still pass.
+  Complexity: S
 
-- [ ] P2 — TypeScript 7 preview compatibility gate
-  Why: The repo already depends on TypeScript 6.0.2, and TypeScript 6 is the bridge release for the native TypeScript 7 compiler, so source-promotion and generated-runtime gates need early drift detection.
-  Evidence: `package.json`; `tsconfig.json`; `src/`; `scripts/ts-source-drift-gate.mjs`; TypeScript 6.0 announcement.
-  Touches: `package.json`, `tsconfig.json`, `scripts/`, `tests/toolchain-contract.test.js`, CI workflow docs.
-  Acceptance: A non-release-blocking CI/report command runs `typescript@next` or the native preview against the current TS project, records known incompatibilities, and fails only on unexpected new diagnostics or generated-runtime drift.
-  Complexity: M
+- [ ] P2 — Add Sanitizer API (setHTML) linter hint for MAIN-world scripts
+  Why: Chrome 146+ and Firefox 148+ ship `Element.setHTML()` for native XSS-safe DOM insertion. The existing Trusted Types linter (`pages/dashboard-linter.js`) warns about innerHTML/outerHTML in `@inject-into page` scripts but does not suggest the modern `setHTML` alternative. This is the platform-recommended replacement.
+  Evidence: `web.dev/articles/sanitizer` (Sanitizer API docs); `pages/dashboard-linter.js` line 578+ (existing Trusted Types rule); zero `setHTML` references in codebase.
+  Touches: `pages/dashboard-linter.js` (add setHTML suggestion to Trusted Types rule output), `tests/trusted-types-linter.test.js` (extend coverage)
+  Acceptance: When a MAIN-world script uses innerHTML, the linter message includes "consider Element.setHTML() on supporting browsers" alongside the existing textContent/append/GM_addElement suggestions. Test verifies new hint text.
+  Complexity: S
 
 ### P3
 
-- [ ] P3 — Draft-only UserCSS live preview
-  Why: ScriptVault already reinjects saved UserCSS changes, while adjacent userstyle tools advertise live CSS editing; a temporary preview would improve authoring without weakening persistence or provenance.
-  Evidence: `src/modules/userstyles.ts`; `modules/userstyles.js`; `tests/source-userstyles.test.js`; User JS and CSS live CSS documentation.
-  Touches: `pages/dashboard.html`, `pages/dashboard.js`, `src/modules/userstyles.ts`, `modules/userstyles.js`, `tests/source-userstyles.test.js`, `tests/dashboard-*.test.js`.
-  Acceptance: Editing a UserCSS/UserStyle draft can preview CSS in the active eligible tab, clearly marks the state as unsaved, removes temporary CSS on cancel/disable/navigation, and persists nothing until the normal save path succeeds.
+- [ ] P3 — Add Mutation Events deprecation linter warning
+  Why: Chrome removed legacy Mutation Events (DOMNodeInserted, DOMSubtreeModified, DOMNodeRemoved, DOMAttrModified, DOMCharacterDataModified); Firefox 140 is removing them. Userscripts using these APIs will break silently. The AST analyzer has 31 pattern detectors but none flag this.
+  Evidence: `developer.chrome.com/blog/mutation-events-deprecation`; `bg/analyzer.js` has no Mutation Event detection; `grep -r "DOMNodeInserted" src/ pages/ bg/` returns no hits in extension code (confirming it's a userscript-author concern, not internal).
+  Touches: `src/bg/analyzer.ts`, `bg/analyzer.js` (add detector), `tests/analyzer*.test.js` (coverage)
+  Acceptance: Scripts containing `addEventListener('DOMNodeInserted'` or similar legacy Mutation Event names trigger a "deprecated — use MutationObserver" warning in the risk analysis. Existing scripts not using Mutation Events are unaffected.
+  Complexity: S
+
+- [ ] P3 — Evaluate CodeMirror 6 for Firefox editor
+  Why: Firefox currently falls back to a bare textarea when Monaco is unavailable (Monaco AMD excluded from Firefox build, ESM bundle not yet shipped). CodeMirror 6 at ~50KB provides syntax highlighting, code folding, search/replace, and diff/merge views — covering 80% of editor functionality at 0.3% of Monaco's 14MB footprint. This fills the Firefox editor gap faster than waiting for the Monaco ESM migration to clear all gates.
+  Evidence: `codemirror.net/docs/changelog/` (CM6 features); `pages/editor-sandbox.html` (Firefox textarea fallback path); `docs/monaco-esm-migration-plan.md` (ESM timeline); `esbuild.config.mjs` Firefox exclusion.
+  Touches: `pages/editor-sandbox.html` (CM6 loader), `esbuild.config.mjs` (CM6 bundle), `lib/codemirror/` (vendored), `tests/editor-firefox.test.js` (new)
+  Acceptance: Firefox build includes CodeMirror 6 as the editor with JavaScript/CSS syntax highlighting, basic code folding, and search. Chrome build continues using Monaco. Firefox lint gate still passes (0 errors, 0 notices). Bundle size stays under 100KB for CM6 assets.
+  Complexity: M
+
+- [ ] P3 — Script execution trace export in DevTools panel
+  Why: No userscript manager offers execution tracing. Playwright's Trace Viewer proves that recording DOM snapshots, console output, network requests, and timing data per action is a powerful debugging paradigm. ScriptVault's DevTools panel already has network logging and execution profiling — adding trace export unifies this into a shareable debugging artifact.
+  Evidence: `playwright.dev/docs/trace-viewer` (Trace Viewer UX); `pages/devtools-panel.js` (existing network/profiler infrastructure); `bg/netlog.js` (2000-entry network log); Tampermonkey and Violentmonkey have no equivalent.
+  Touches: `pages/devtools-panel.js` (trace recording toggle + export), `pages/devtools-panel.html` (UI), `bg/netlog.js` (structured trace entries), `tests/devtools-trace.test.js` (new)
+  Acceptance: DevTools panel has an "Export Trace" button that produces a JSON file containing: per-script console output, network requests (from netlog), execution timing, and error events for the session. File is importable for offline review.
   Complexity: L
+
+- [ ] P3 — Ambient toolbar badge error states
+  Why: The toolbar badge currently shows only the count of active scripts with a green background. It does not signal errors, blocked scripts, or disabled state. An amber/red badge on error would provide at-a-glance script health without opening the popup — a pattern proven by the Web Vitals extension (now deprecated, absorbed into DevTools).
+  Evidence: `src/background/badge.ts` (single green color: `settings.badgeColor || '#22c55e'`); no error-state branching in badge logic; Web Vitals extension used green/amber/red ambient badges.
+  Touches: `src/background/badge.ts`, `background.core.js` (generated), `src/background/core.ts` (badge calls), `tests/badge-states.test.js` (new)
+  Acceptance: Badge turns amber when any script on the current tab has console errors. Badge turns red when any script on the current tab failed to execute (registration error, crash). Settings allow disabling color states (keep count-only mode). Badge reverts to green/count when errors clear.
+  Complexity: M
+
+- [ ] P3 — Puppeteer-core major version upgrade (24 to 25)
+  Why: puppeteer-core 24.42.0 is installed; 25.2.1 is the latest major. Major versions may include breaking API changes, new Chrome DevTools Protocol features, or security fixes. The package is used for dashboard smoke tests and store screenshot capture.
+  Evidence: `npm outdated` shows `puppeteer-core 24.42.0 → 25.2.1`; `scripts/smoke-dashboard.mjs` and `scripts/capture-store-screenshots.mjs` consume it.
+  Touches: `package.json` (version bump), `scripts/smoke-dashboard.mjs`, `scripts/capture-store-screenshots.mjs` (adapt to any API changes)
+  Acceptance: `npm run smoke:dashboard` and `npm run screenshots` pass after upgrade. No test regressions.
+  Complexity: S
+
+### Appendix: Research-Driven Sources (2026-06-25 deep pass)
+
+| ID | Source | URL |
+|---|---|---|
+| RD25D-01 | Tampermonkey v5.5.0 changelog | https://www.tampermonkey.net/changelog.php |
+| RD25D-02 | Tampermonkey MCP server | https://github.com/Tampermonkey/tampermonkey-mcp |
+| RD25D-03 | Violentmonkey MV3 death (confirmed) | https://github.com/violentmonkey/violentmonkey/issues/1934 |
+| RD25D-04 | ScriptCat v1.4.0 AI Agent + MCP | https://github.com/scriptscat/scriptcat/releases/tag/v1.4.0 |
+| RD25D-05 | ScriptCat documentation | https://docs.scriptcat.org/en/ |
+| RD25D-06 | Tweeks (YC W25) AI userscript | https://www.tweeks.io/ |
+| RD25D-07 | OrangeMonkey (2M+ users) | https://chrome-stats.com/d/ekmeppjgajofkpiofbebgcbohbmfldaf |
+| RD25D-08 | Greasemonkey v4.14 | https://github.com/greasemonkey/greasemonkey |
+| RD25D-09 | FireMonkey (userscript+userstyle) | https://github.com/erosman/firemonkey |
+| RD25D-10 | Userscripts Safari v5.0.0-beta.23 | https://github.com/quoid/userscripts |
+| RD25D-11 | Chrome MV2 final removal (Chrome 150) | https://developer.chrome.com/docs/extensions/develop/migrate/mv2-deprecation-timeline |
+| RD25D-12 | Chrome Mutation Events deprecation | https://developer.chrome.com/blog/mutation-events-deprecation |
+| RD25D-13 | Sanitizer API (setHTML) | https://web.dev/articles/sanitizer |
+| RD25D-14 | Playwright Trace Viewer | https://playwright.dev/docs/trace-viewer |
+| RD25D-15 | CodeMirror 6 changelog | https://codemirror.net/docs/changelog/ |
+| RD25D-16 | vite-plugin-monkey (2K stars) | https://github.com/lisonge/vite-plugin-monkey |
+| RD25D-17 | Chrome userScripts API | https://developer.chrome.com/docs/extensions/reference/api/userScripts |
+| RD25D-18 | Chrome service worker lifecycle | https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/lifecycle |
+| RD25D-19 | Chrome I/O 2026 extensions recap | https://developer.chrome.com/blog/extensions-io-2026 |
+| RD25D-20 | Firefox 153 release notes | https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/153 |
+| RD25D-21 | OWASP Extension Cheat Sheet | https://cheatsheetseries.owasp.org/cheatsheets/Browser_Extension_Vulnerabilities_Cheat_Sheet.html |
+| RD25D-22 | CSA MCP Security Best Practices v1 | https://labs.cloudsecurityalliance.org/agentic/agentic-mcp-security-best-practices-v1/ |
+| RD25D-23 | Extension supply chain attacks (Sekoia) | https://blog.sekoia.io/targeted-supply-chain-attack-against-chrome-browser-extensions/ |
+| RD25D-24 | Cyberhaven supply chain attack | https://www.cyberhaven.com/engineering-blog/final-analysis-chrome-extension-security-incident |
+| RD25D-25 | Ownership-transfer permission creep | https://pluto.security/blog/chrome-extension-supply-chain-attacks-permission-creep/ |
+| RD25D-26 | Requestly (HTTP interception + scripts) | https://www.requestly.com/ |
+| RD25D-27 | Automa browser automation | https://www.automa.site/ |
+| RD25D-28 | n8n workflow automation | https://n8n.io/ |
+| RD25D-29 | awesome-userscripts | https://github.com/awesome-scripts/awesome-userscripts |
+| RD25D-30 | Monaco v0.55 changelog | https://github.com/microsoft/monaco-editor/blob/main/CHANGELOG.md |
+
