@@ -123,6 +123,36 @@ interface ReorderScripts {
   orderedIds: string[];
 }
 
+interface ImportScript {
+  action: 'importScript';
+  code: string;
+}
+
+interface GetHostPermissionStatus {
+  action: 'getHostPermissionStatus';
+  url?: string;
+  currentUrl?: string;
+}
+
+interface QueueHostAccessRequest {
+  action: 'queueHostAccessRequest';
+  url?: string;
+  currentUrl?: string;
+  tabId?: number;
+  documentId?: string;
+}
+
+interface OpenDashboard {
+  action: 'openDashboard';
+  scriptId?: string;
+  newScript?: boolean;
+  tab?: string;
+}
+
+interface FactoryReset {
+  action: 'factoryReset';
+}
+
 // ─── Trash ───────────────────────────────────────────────────────────
 
 interface GetTrash {
@@ -556,6 +586,11 @@ interface SetScriptSettings {
   settings: Record<string, unknown>;
 }
 
+interface ResetScriptSettings {
+  action: 'resetScriptSettings';
+  scriptId: string;
+}
+
 // ─── Updates ─────────────────────────────────────────────────────────
 
 interface CheckUpdates {
@@ -589,6 +624,14 @@ interface GetPendingUpdates {
 interface ClearPendingUpdates {
   action: 'clearPendingUpdates';
   scriptId?: string;
+}
+
+interface GetRecentUpdates {
+  action: 'getRecentUpdates';
+}
+
+interface ClearRecentUpdates {
+  action: 'clearRecentUpdates';
 }
 
 interface ApplyPendingUpdate {
@@ -679,6 +722,10 @@ interface SyncDryRunPreview {
   provider?: string;
 }
 
+interface GetLastSyncResult {
+  action: 'getLastSyncResult';
+}
+
 interface RevokeSyncProvider {
   action: 'revokeSyncProvider';
   provider: string;
@@ -761,6 +808,14 @@ interface ImportFromZip {
   options?: Record<string, unknown>;
 }
 
+interface VerifyRequireProvenancePreview {
+  action: 'verifyRequireProvenancePreview';
+  code?: string;
+  meta?: Record<string, unknown>;
+  resources?: unknown[];
+  requires?: unknown[];
+}
+
 interface InstallFromUrl {
   action: 'installFromUrl';
   url: string;
@@ -769,6 +824,8 @@ interface InstallFromUrl {
 interface InstallFromCode {
   action: 'installFromCode';
   code: string;
+  sourceUrl?: string;
+  operation?: string;
 }
 
 // ─── Storage Quota ───────────────────────────────────────────────────
@@ -809,8 +866,47 @@ interface RestoreBackup {
   options?: Record<string, unknown>;
 }
 
+interface VerifyBackup {
+  action: 'verifyBackup';
+  backupId: string;
+}
+
+interface GetRestoreReceipts {
+  action: 'getRestoreReceipts';
+}
+
+interface GetRestoreReceipt {
+  action: 'getRestoreReceipt';
+  receiptId: string;
+}
+
+interface RollbackRestore {
+  action: 'rollbackRestore';
+  receiptId: string;
+  options?: Record<string, unknown>;
+}
+
+interface ClearRestoreReceipts {
+  action: 'clearRestoreReceipts';
+}
+
 interface DeleteBackup {
   action: 'deleteBackup';
+  backupId: string;
+}
+
+interface ImportBackupArchive {
+  action: 'importBackup';
+  zipData: unknown;
+}
+
+interface ExportBackup {
+  action: 'exportBackup';
+  backupId: string;
+}
+
+interface InspectBackup {
+  action: 'inspectBackup';
   backupId: string;
 }
 
@@ -982,6 +1078,19 @@ interface GMNotification {
   scriptId?: string;
 }
 
+interface GMUpdateNotification {
+  action: 'GM_updateNotification';
+  id: string;
+  title?: string;
+  text?: string;
+  progress?: number;
+}
+
+interface GMCloseNotification {
+  action: 'GM_closeNotification';
+  id: string;
+}
+
 interface GMOpenInTab {
   action: 'GM_openInTab';
   url: string;
@@ -1144,6 +1253,39 @@ interface SigningGetTrustedKeys {
 
 interface SigningGenerateNewKeypair {
   action: 'signing_generateNewKeypair';
+}
+
+// ─── Public API Controls ─────────────────────────────────────────────
+
+interface PublicApiGetTrustedOrigins {
+  action: 'publicApi_getTrustedOrigins';
+}
+
+interface PublicApiSetTrustedOrigins {
+  action: 'publicApi_setTrustedOrigins';
+  origins: string[];
+}
+
+interface PublicApiGetTrustedExtensionIds {
+  action: 'publicApi_getTrustedExtensionIds';
+}
+
+interface PublicApiSetTrustedExtensionIds {
+  action: 'publicApi_setTrustedExtensionIds';
+  extensionIds: string[];
+}
+
+interface PublicApiGetPermissions {
+  action: 'publicApi_getPermissions';
+}
+
+interface PublicApiGetAuditLog {
+  action: 'publicApi_getAuditLog';
+  limit?: number;
+}
+
+interface PublicApiClearAuditLog {
+  action: 'publicApi_clearAuditLog';
 }
 
 // ─── Workspaces ──────────────────────────────────────────────────────
@@ -1423,6 +1565,7 @@ export type BackgroundMessage =
   // Script management
   | GetScripts | GetScript | SaveScript | CreateScript | DeleteScript
   | ToggleScript | RunScriptNow | DuplicateScript | UserStylePreviewDraft | UserStyleClearPreview | SearchScripts | ReorderScripts
+  | ImportScript | GetHostPermissionStatus | QueueHostAccessRequest | OpenDashboard | FactoryReset
   // Trash
   | GetTrash | RestoreFromTrash | EmptyTrash | PermanentlyDelete
   // Script values
@@ -1434,25 +1577,27 @@ export type BackgroundMessage =
   // Settings
   | GetSettings | GetSetting | SetSettings | ResetSettings | GetExtensionStatus | GetLocalHealthReport | PrepareBackgroundRunnerDryRun
   // Per-script settings
-  | GetScriptSettings | SetScriptSettings
+  | GetScriptSettings | SetScriptSettings | ResetScriptSettings
   // Updates
   | CheckUpdates | ForceUpdate | ApplyUpdate | QueueUpdates | GetPendingUpdates
-  | ClearPendingUpdates | ApplyPendingUpdate | ApplySafePendingUpdates
+  | ClearPendingUpdates | GetRecentUpdates | ClearRecentUpdates | ApplyPendingUpdate | ApplySafePendingUpdates
   | GetSubscriptions | AddSubscription | RefreshSubscription | RefreshSubscriptions | RemoveSubscription
   | GetVersionHistory | RollbackScript
   // Cloud sync
   | SyncNow | TestSync | ConnectSyncProvider | DisconnectSyncProvider
-  | GetSyncProviderStatus | SyncProviderHealth | SyncDryRunPreview | RevokeSyncProvider
+  | GetSyncProviderStatus | SyncProviderHealth | SyncDryRunPreview | GetLastSyncResult | RevokeSyncProvider
   | CloudExport | CloudImport | CloudStatus
   // Easy Cloud
   | EasyCloudConnect | EasyCloudDisconnect | EasyCloudSync | EasyCloudStatus
   // Import/export
   | ExportAll | ImportAll | ImportBackup | ExportZip | ImportFromZip | InstallFromUrl | InstallFromCode
+  | VerifyRequireProvenancePreview
   // Storage quota
   | GetStorageUsage | GetStorageBreakdown | CleanupStorage
   // Backup
   | CreateBackup | GetBackups | RestoreBackup | DeleteBackup
-  | GetBackupSettings | SetBackupSettings
+  | VerifyBackup | GetRestoreReceipts | GetRestoreReceipt | RollbackRestore | ClearRestoreReceipts
+  | ImportBackupArchive | ExportBackup | InspectBackup | GetBackupSettings | SetBackupSettings
   // Profiles
   | GetProfiles | SwitchProfile | SaveProfile | DeleteProfile
   // Collections
@@ -1463,7 +1608,7 @@ export type BackgroundMessage =
   // GM APIs
   | GMXmlhttpRequest | GMXmlhttpRequestAbort | GMDownload
   | GMWebSocket | GMWebSocketSend | GMWebSocketClose
-  | GMNotification | GMOpenInTab
+  | GMNotification | GMUpdateNotification | GMCloseNotification | GMOpenInTab
   | GMRegisterMenuCommand | GMUnregisterMenuCommand
   | GetMenuCommands | ExecuteMenuCommand
   // Resources
@@ -1477,6 +1622,10 @@ export type BackgroundMessage =
   // Signing
   | SigningGetPublicKey | SigningSign | SigningVerify
   | SigningTrustKey | SigningUntrustKey | SigningGetTrustedKeys | SigningGenerateNewKeypair
+  // Public API controls
+  | PublicApiGetTrustedOrigins | PublicApiSetTrustedOrigins
+  | PublicApiGetTrustedExtensionIds | PublicApiSetTrustedExtensionIds
+  | PublicApiGetPermissions | PublicApiGetAuditLog | PublicApiClearAuditLog
   // Workspaces
   | GetWorkspaces | CreateWorkspace | SaveWorkspace
   | ActivateWorkspace | UpdateWorkspace | DeleteWorkspace
@@ -1575,6 +1724,8 @@ export interface ResponseMap {
   searchScripts: { scripts: Script[] };
   reorderScripts: SuccessResponse;
   importScript: SuccessOrError<{ script?: Script }>;
+  getHostPermissionStatus: unknown;
+  queueHostAccessRequest: SuccessOrError<{ requestId?: string; tabId?: number; url?: string }>;
   bulkDeleteScripts: SuccessOrError<{ deleted: number }>;
   bulkToggleScripts: SuccessOrError<{ toggled: number }>;
   bulkExportScripts: SuccessOrError<{ data: string }>;
@@ -1605,6 +1756,7 @@ export interface ResponseMap {
   getSetting: unknown;
   setSettings: unknown;
   setScriptSettings: SuccessOrError;
+  resetScriptSettings: SuccessOrError;
   resetSettings: unknown;
   getExtensionStatus: ExtensionStatusResponse;
   getLocalHealthReport: LocalHealthReportResponse;
@@ -1618,6 +1770,7 @@ export interface ResponseMap {
   // ── Install flow ───────────────────────────────────────────────────
   installFromUrl: { success: true } | ErrorResponse;
   installFromCode: { success: true } | ErrorResponse;
+  verifyRequireProvenancePreview: unknown;
 
   // ── Storage / quota ────────────────────────────────────────────────
   getStorageUsage: StorageUsageResponse;
@@ -1631,6 +1784,9 @@ export interface ResponseMap {
   importViolentmonkeyBackup: ImportBackupResponse;
   importGreasemonkeyBackup: ImportBackupResponse;
   importFromZip: SuccessOrError<{ imported: number; skipped: number; errors: string[] }>;
+  importBackup: SuccessOrError;
+  exportBackup: SuccessOrError<{ data?: string; blob?: unknown; filename?: string }>;
+  inspectBackup: SuccessOrError;
   exportAllScripts: SuccessOrError<{ data: string }>;
   exportStatsCSV: SuccessOrError<{ data: string }>;
 
@@ -1655,6 +1811,7 @@ export interface ResponseMap {
   cloudExport: SuccessOrError;
   cloudImport: SuccessOrError;
   cloudStatus: SuccessOrError<{ connected: boolean; provider?: string; lastSync?: number }>;
+  getLastSyncResult: unknown;
   syncProviderHealth: SuccessOrError<{
     provider: string;
     providerLabel: string;
@@ -1768,6 +1925,11 @@ export interface ResponseMap {
   createBackup: SuccessOrError<{ backupId: string }>;
   listBackups: { backups: { id: string; timestamp: number; scriptCount: number; size: number }[] };
   restoreBackup: SuccessOrError<{ restored: number }>;
+  verifyBackup: SuccessOrError;
+  getRestoreReceipts: { receipts: unknown[] };
+  getRestoreReceipt: { receipt: unknown | null };
+  rollbackRestore: SuccessOrError;
+  clearRestoreReceipts: SuccessOrError;
   deleteBackup: SuccessOrError;
 
   // ── Logging / observability ────────────────────────────────────────
@@ -1797,6 +1959,13 @@ export interface ResponseMap {
   apiGetPermissions: { permissions: string[] };
   apiSetWebhook: SuccessOrError;
   apiTrustOrigin: SuccessOrError;
+  publicApi_getTrustedOrigins: { origins: string[] };
+  publicApi_setTrustedOrigins: SuccessOrError<{ origins?: string[] }>;
+  publicApi_getTrustedExtensionIds: { extensionIds: string[] };
+  publicApi_setTrustedExtensionIds: SuccessOrError<{ extensionIds?: string[] }>;
+  publicApi_getPermissions: { permissions: unknown };
+  publicApi_getAuditLog: { entries: unknown[] };
+  publicApi_clearAuditLog: SuccessOrError;
 
   // ── DevTools / debugger ────────────────────────────────────────────
   attachDebugger: SuccessOrError;
