@@ -347,33 +347,6 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 | R12 | WCAG 2.2 resize text | https://www.w3.org/TR/WCAG22/ |
 | R13 | Chrome ext supply chain (2026) | https://securityboulevard.com/2026/03/the-chrome-extension-backdoor-how-productivity-tools-became-enterprise-attack-vectors/ |
 
-## Research-Driven Additions (2026-06-10)
-
-> New items only; deduplicated against N-1..N-9, X-1..X-9, L-1..L-10, UC/R tiers,
-> and RD-1..RD-12 above. Evidence detail lives in RESEARCH.md (2026-06-10 pass).
-
-### P3
-
-
-## Research-Driven Additions
-
-
-### P2
-
-
-## Research-Driven Additions (2026-06-12)
-
-> Items below were identified by exhaustive repo walk + external research across
-> 45+ sources covering competitors, platform changes, security landscape, and
-> community signal. Deduplicated against all existing tiers (Now through Rejected)
-> and all prior RD-1..RD-11 additions.
-
-### P2
-
-### P3
-
-
-
 ### Appendix: Research-Driven Sources (2026-06-12)
 
 | ID | Source | URL |
@@ -397,16 +370,6 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 | RD12-17 | Firefox AMO policies (Aug 2025) | https://blog.mozilla.org/addons/2025/06/23/updated-add-on-policies-simplified-clarified/ |
 | RD12-18 | MV2 deprecation timeline | https://developer.chrome.com/docs/extensions/develop/migrate/mv2-deprecation-timeline |
 
-## Research-Driven Additions (2026-06-13)
-
-> Items below were identified by exhaustive repo walk + external research across
-> competitors, Chrome/Firefox platform changes, security landscape, and web
-> platform APIs. Deduplicated against all existing tiers (Now through Rejected)
-> and all prior RD-1..RD-12 additions. Items fixed since last research pass
-> (BUG-2, BUG-3, pre-release ordering, toggle/save mutex) are excluded.
-
-### P3
-
 ### Appendix: Research-Driven Sources (2026-06-13)
 
 | ID | Source | URL |
@@ -426,16 +389,6 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 | RD13-13 | Chrome IndexedDB Snappy compression | https://developer.chrome.com/docs/chromium/indexeddb-storage-improvements |
 | RD13-14 | W3C WebExtensions WG draft charter | https://w3c.github.io/charter-drafts/2025/webextensions-wg.html |
 | RD13-15 | Chrome DevTools for Agents v1 | https://developer.chrome.com/blog/devtools-for-agents-v1 |
-
-## Research-Driven Additions (2026-06-14)
-
-> Items below were identified by repo verification plus current external
-> research across competing userscript managers, browser extension platform
-> changes, store-review risk, and malicious-extension campaigns. Deduplicated
-> against existing N/X/L/RD items and stale findings already fixed in the
-> current tree.
-
-### P2
 
 ### Appendix: Research-Driven Sources (2026-06-14)
 
@@ -465,13 +418,6 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 > Sep 2026, Trusted Types Baseline), and dependency changelogs. Deduplicated against
 > all existing tiers (Now through Rejected) and all prior RD-1..RD-14 additions.
 
-### P2
-
-
-
-### P3
-
-
 ### Appendix: Research-Driven Sources (2026-06-15)
 
 | ID | Source | URL |
@@ -492,25 +438,6 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 | RD15-14 | Tampermonkey MCP server | https://github.com/Tampermonkey/tampermonkey-mcp |
 | RD15-15 | Chrome MV2 final removal | https://developer.chrome.com/docs/extensions/develop/migrate/mv2-deprecation-timeline |
 
-## Research-Driven Additions (2026-06-20)
-
-> Items below identified by exhaustive repo walk + 40+ external sources across
-> competitors (Tampermonkey v5.5.0, Violentmonkey MV3 death, ScriptCat v1.4.0-beta.4),
-> Chrome 140-150 APIs, Firefox 140-153, security landscape (NSA MCP, EU CRA Sep 2026,
-> Trusted Types Baseline, extension supply chain campaigns), dependency changelogs,
-> and community signal (Reddit, HN, GitHub issues). Deduplicated against all existing
-> tiers (Now through Rejected) and all prior RD-1..RD-15 additions.
-
-### P2
-
-
-
-
-
-### P3
-
-
-
 
 
 ### Appendix: Research-Driven Sources (2026-06-20)
@@ -530,16 +457,6 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 | RD20-11 | Trusted Types MDN | https://developer.mozilla.org/en-US/docs/Web/API/Trusted_Types_API |
 | RD20-12 | NSA MCP security guidance | https://media.defense.gov/2026/Jun/02/2003943289/-1/-1/0/CSI_MCP_SECURITY.PDF |
 
-## Research-Driven Additions (2026-06-21)
-
-> Items below identified by exhaustive repo walk with deep source-level scanning.
-> Deduplicated against all existing tiers (Now through Rejected), all prior
-> RD-1..RD-20 additions, and blocked items in Roadmap_Blocked.md.
-
-### P2
-
-
-
 
 
 
@@ -558,36 +475,9 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 | RD21-09 | Red Hat npm worm (2026) | https://www.wiz.io/blog/miasma-supply-chain-attack-targeting-redhat-npm-packages |
 | RD21-10 | Mastra npm scope takeover (2026) | https://www.microsoft.com/en-us/security/blog/2026/06/17/postinstall-payload-inside-mastra-npm-supply-chain-compromise/ |
 
-## Research-Driven Additions (2026-06-20 deep pass)
-
-> Items below identified by exhaustive repo walk + 60+ external sources across
-> competitors (TM v5.5.0, VM MV3 death, ScriptCat v1.4.0-beta.4, MCPMonkey,
-> OrangeMonkey), Chrome 135-150 APIs, Firefox 149-153, security landscape
-> (NSA MCP, EU CRA Sep 2026, Trusted Types Baseline, extension supply chain
-> campaigns 2024-2026), web platform APIs (Popover, Container Queries, Navigation
-> API, sidePanel lifecycle, IndexedDB Snappy), dependency changelogs (Monaco 0.55,
-> Vitest 4.1, TypeScript 6.0), and community signal (Reddit, HN, GH issues,
-> Privacy Guides). Deduplicated against all existing tiers and all prior
-> RD-1..RD-21 additions.
-
-
-### P2
 
 
 
-
-
-
-
-### P3
-
-
-
-## Research-Driven Additions (2026-06-20 deep pass 2)
-
-> Items below identified by deep code-level analysis verifying claims from
-> the prior research pass. Deduplicated against all 21 existing unchecked
-> items and all prior RD-1..RD-22 additions.
 
 ### Appendix: Research-Driven Sources (2026-06-20 deep pass 2)
 
@@ -619,30 +509,8 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 | RD22-24 | TypeScript 6.0 announcement | https://devblogs.microsoft.com/typescript/announcing-typescript-6-0/ |
 | RD22-25 | Chrome I/O 2026 extensions recap | https://developer.chrome.com/blog/extensions-io-2026 |
 
-## Audit-Driven Additions (2026-06-20)
 
 
-
-
-## Audit-Driven Additions (2026-06-20 session 2)
-
-
-
-## Research-Driven Additions (2026-06-25)
-
-> Items below identified by exhaustive repo walk (verified code state, test suite,
-> dependency audit, CI pipeline, accessibility scan) + 60+ external sources across
-> Chrome 148-151, Firefox 149-153, competitors (TM v5.5.0, VM death, ScriptCat
-> v0.16.13, Tweeks YC W25, OrangeMonkey 2M+ users), security landscape (QuickLens,
-> ShadyPanda, ownership-transfer attack class, npm 1.2M+ malicious packages, Vitest
-> CVE-2026-47429, CSA MCP Best Practices v1, MCP-38 taxonomy), web platform APIs
-> (Popover Baseline, CSS Anchor Positioning Baseline, Container Queries style
-> queries Baseline May 2026, CycloneDX 1.7), and community signal. Deduplicated
-> against all existing tiers and all prior RD-1..RD-22 additions.
-
-### P2
-
-### P3
 
 ### Appendix: Research-Driven Sources (2026-06-25)
 
@@ -676,28 +544,6 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 | RD25-26 | Firefox adopted stylesheets content script access | https://bugzilla.mozilla.org/show_bug.cgi?id=1751346 |
 | RD25-27 | EU CRA open-source carve-out | https://digital-strategy.ec.europa.eu/en/policies/cra-open-source |
 | RD25-28 | W3C WebExtensions spec draft (June 5, 2026) | https://w3c.github.io/webextensions/specification/ |
-
-## Research-Driven Additions (2026-06-25 deep pass)
-
-> Items below identified by exhaustive repo walk (full file tree, test suite
-> execution, npm audit, npm outdated, dependency changelog review, CI pipeline
-> analysis, source-level grep for TODOs/FIXMEs/@deprecated) + 65+ external
-> sources across competitors (TM v5.5.0, VM MV3 death, ScriptCat v1.4.0 with
-> AI Agent/MCP, Tweeks YC W25, OrangeMonkey 2M+, Greasemonkey, FireMonkey,
-> Userscripts Safari), Chrome 130-153 APIs, Firefox 147-153, security landscape
-> (extension supply chain campaigns 2024-2026, CSA MCP v1, ownership-transfer
-> attack class), web platform (Sanitizer API setHTML Baseline, Mutation Events
-> removal, Navigation API Baseline, OPFS), adjacent tools (Playwright Trace
-> Viewer, Requestly, Stylebot, n8n, Automa, vite-plugin-monkey 2K stars),
-> dependency changelogs (Monaco 0.55, Vitest 4.1, CodeMirror 6, puppeteer-core
-> 25, TypeScript 6.0), and community signal (Reddit r/userscripts, HN, GitHub
-> issues across 6 managers). Deduplicated against all existing tiers (Now
-> through Rejected), all prior RD-1..RD-25 additions, and Roadmap_Blocked.md.
-
-### P2
-
-### P3
-
 
 ### Appendix: Research-Driven Sources (2026-06-25 deep pass)
 
@@ -733,22 +579,6 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 | RD25D-28 | n8n workflow automation | https://n8n.io/ |
 | RD25D-29 | awesome-userscripts | https://github.com/awesome-scripts/awesome-userscripts |
 | RD25D-30 | Monaco v0.55 changelog | https://github.com/microsoft/monaco-editor/blob/main/CHANGELOG.md |
-
-## Research-Driven Additions (2026-06-26)
-
-> Items below identified by exhaustive repo walk (verified code state, test suite
-> execution, npm audit, dependency outdated scan, CI pipeline, typecheck, TS
-> runtime/source drift gates) + 30+ external sources across competitors (TM v5.5.0,
-> VM MV3 death confirmed, ScriptCat v1.4.0 stable shipped June 26), Chrome 150-151
-> APIs, Firefox 153 beta (userScripts.execute, publicSuffix, documentId, constructed
-> stylesheets), security landscape (108 malicious extensions campaign, DLL side-loading
-> via enterprise policies, ownership-transfer attacks), and dependency changelogs
-> (Vitest 4.1.9/5.0.0-beta.5, Monaco 0.55.1/0.56-dev, puppeteer-core 25.2.1).
-> Deduplicated against all existing tiers (Now through Rejected), all prior
-> RD-1..RD-25D additions, Roadmap_Blocked.md, and the 8 existing unchecked items.
-
-### P2
-
 
 ### Appendix: Research-Driven Sources (2026-06-26)
 
@@ -805,11 +635,8 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 - **Deliverable:** Extract canonical theme tokens into `pages/theme-tokens.css` with all four theme variants. Each page `<link>`s the shared file and maps tokens to its local names (or adopts the shared names). Inline `<style>` blocks in popup/sidepanel shrink to layout-only rules.
 - **Acceptance:** Theme change in one file propagates to all pages. All four themes render correctly in dashboard, popup, and sidepanel.
 
-#### IMP-6. px → rem Font Size Migration
-- **Priority:** P2 | **Effort:** L
-- **Problem:** All font sizes across dashboard.css, popup.html, and sidepanel.html use `px` units. This breaks WCAG 2.1 SC 1.4.4 (Resize Text) — users who set a larger browser default font size see no effect. Documented as a known issue in CLAUDE.md.
-- **Deliverable:** Convert all `font-size` declarations from `px` to `rem` (base 16px = 1rem). Preserve visual appearance at default settings. Verify text scales correctly when browser font size is changed.
-- **Acceptance:** No `font-size: <N>px` in any CSS file or inline style. Text scales proportionally with browser font size setting. WCAG 2.1 SC 1.4.4 audit passes.
+#### ~~IMP-6. px → rem Font Size Migration~~ — DONE
+- All 75+ font-size declarations already use rem units. No px conversion needed.
 
 #### IMP-7. Coverage Threshold Ratchet
 - **Priority:** P2 | **Effort:** L
