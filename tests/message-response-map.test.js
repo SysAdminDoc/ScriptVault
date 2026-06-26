@@ -2,6 +2,12 @@
 
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import {
+  BACKGROUND_MESSAGE_ACTIONS,
+  getBackgroundActionOrigin,
+  isKnownBackgroundAction,
+  resolveBackgroundAction,
+} from "../src/background/message-router.ts";
 
 const source = readFileSync(resolve(process.cwd(), "src/types/messages.ts"), "utf8");
 const coreSource = readFileSync(resolve(process.cwd(), "src/background/core.ts"), "utf8");
@@ -65,5 +71,31 @@ describe("message response map coverage", () => {
 
   it("declares every handleMessage action literal in BackgroundMessage", () => {
     expect(extractActionLiterals()).toEqual(extractHandleMessageActions());
+  });
+
+  it("keeps the generated router action table exhaustive", () => {
+    expect([...BACKGROUND_MESSAGE_ACTIONS]).toEqual(extractActionLiterals());
+    expect([...BACKGROUND_MESSAGE_ACTIONS]).toEqual(extractHandleMessageActions());
+  });
+
+  it("resolves known and unknown background actions", () => {
+    expect(isKnownBackgroundAction("saveScript")).toBe(true);
+    expect(isKnownBackgroundAction("GM_xmlhttpRequest")).toBe(true);
+    expect(isKnownBackgroundAction("deleteEverything")).toBe(false);
+
+    expect(getBackgroundActionOrigin("GM_xmlhttpRequest")).toBe("gm-api");
+    expect(getBackgroundActionOrigin("publicApi_getAuditLog")).toBe("external-api");
+    expect(getBackgroundActionOrigin("reportExecError")).toBe("telemetry");
+    expect(getBackgroundActionOrigin("saveScript")).toBe("extension-ui");
+
+    expect(resolveBackgroundAction("saveScript")).toEqual({
+      known: true,
+      action: "saveScript",
+      origin: "extension-ui",
+    });
+    expect(resolveBackgroundAction("deleteEverything")).toEqual({
+      known: false,
+      action: "deleteEverything",
+    });
   });
 });

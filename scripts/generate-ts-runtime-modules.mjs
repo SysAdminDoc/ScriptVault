@@ -151,6 +151,13 @@ export const TS_RUNTIME_MODULES = [
     exportName: 'UserScriptMessagePolicy',
   },
   {
+    id: 'message-router',
+    source: 'src/background/message-router.ts',
+    output: 'modules/message-router.js',
+    exportName: 'MessageRouter',
+    selfExportName: 'MessageRouter',
+  },
+  {
     id: 'connect-policy',
     source: 'src/background/connect-policy.ts',
     output: 'modules/connect-policy.js',

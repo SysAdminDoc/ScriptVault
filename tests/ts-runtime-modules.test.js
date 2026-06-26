@@ -135,6 +135,13 @@ describe('TS runtime module generator', () => {
         exportName: 'UserScriptMessagePolicy',
       }),
       expect.objectContaining({
+        id: 'message-router',
+        source: 'src/background/message-router.ts',
+        output: 'modules/message-router.js',
+        exportName: 'MessageRouter',
+        selfExportName: 'MessageRouter',
+      }),
+      expect.objectContaining({
         id: 'resources',
         source: 'src/modules/resources.ts',
         output: 'modules/resources.js',
@@ -241,6 +248,16 @@ describe('TS runtime module generator', () => {
     expect(text).toContain('const installBrowserNamespaceAlias = SharedUtils.installBrowserNamespaceAlias;');
     expect(text).toContain('installBrowserNamespaceAlias(globalThis);');
     expect(text).toContain('const classifyInstallSource = SharedUtils.classifyInstallSource;');
+  });
+
+  it('generates the background message router before the raw core bridge', async () => {
+    const definition = TS_RUNTIME_MODULES.find((entry) => entry.id === 'message-router');
+    const text = await buildTsRuntimeModuleText(definition, { rootDir: ROOT });
+
+    expect(text).toContain('Generated from src/background/message-router.ts');
+    expect(text).toContain('const MessageRouter = (() => {');
+    expect(text).toContain('self.MessageRouter = MessageRouter;');
+    expect(text).toContain('BACKGROUND_MESSAGE_ACTIONS');
   });
 
   it('generates the raw background core bridge without hiding top-level functions', async () => {

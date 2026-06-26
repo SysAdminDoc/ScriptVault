@@ -38,6 +38,20 @@ export {
   isInternalHost,
 } from './internal-host-guard';
 export type { InternalHostCheckResult, InternalHostReason } from './internal-host-guard';
+export {
+  BACKGROUND_MESSAGE_ACTIONS,
+  MessageRouter,
+  getBackgroundActionOrigin,
+  isKnownBackgroundAction,
+  resolveBackgroundAction,
+} from './message-router';
+export type {
+  BackgroundAction,
+  BackgroundActionOrigin,
+  BackgroundActionResolution,
+  KnownBackgroundActionResolution,
+  UnknownBackgroundActionResolution,
+} from './message-router';
 export { createScriptTrustReceipt, sha256Hex } from './trust-receipt';
 
 export { CloudSync } from './cloud-sync';

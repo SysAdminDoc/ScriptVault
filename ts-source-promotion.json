@@ -76,6 +76,14 @@
       "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for the user-script message allowlist."
     },
     {
+      "runtime": "modules/message-router.js",
+      "sources": [
+        "src/background/message-router.ts"
+      ],
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for exhaustive background action routing metadata."
+    },
+    {
       "runtime": "modules/connect-policy.js",
       "sources": [
         "src/background/connect-policy.ts"

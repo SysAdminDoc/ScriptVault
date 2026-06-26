@@ -3951,7 +3951,7 @@ const CloudSync = {
     try {
       const timeoutPromise = new Promise((_, reject) => {
         chrome.alarms.create(syncTimeoutAlarm, { delayInMinutes: 1.5 });
-        const onAlarm = (alarm: chrome.alarms.Alarm) => {
+        const onAlarm = (alarm) => {
           if (alarm.name !== syncTimeoutAlarm) return;
           chrome.alarms.onAlarm.removeListener(onAlarm);
           try { this._abortController.abort(new Error('Sync timed out after 90s')); } catch {}
@@ -3962,7 +3962,7 @@ const CloudSync = {
       return await Promise.race([this._performSync({ signal: this._abortController.signal }), timeoutPromise]);
     } catch (e) {
       console.error('[ScriptVault] Sync failed:', e);
-      return { error: (e as Error).message };
+      return { error: e?.message || String(e) };
     } finally {
       chrome.alarms.clear(syncTimeoutAlarm).catch(() => {});
       this._syncInProgress = false;
@@ -6356,6 +6356,9 @@ async function handleMessage(message, sender) {
   const { action } = message;
   // Support both patterns: { action, data: { ... } } and { action, prop1, prop2, ... }
   const data = message.data || message;
+  if (typeof MessageRouter !== 'undefined' && !MessageRouter.isKnownBackgroundAction(action)) {
+    return { error: 'Unknown action: ' + action };
+  }
   
   try {
     switch (action) {
