@@ -116,6 +116,7 @@ const StorageModule = (() => {
     statsUrlRetention: "full",
     blacklist: [],
     badgeInfo: "running",
+    badgeErrorStates: true,
     autoReload: false,
     pageFilterMode: "blacklist",
     blacklistedPages: "",

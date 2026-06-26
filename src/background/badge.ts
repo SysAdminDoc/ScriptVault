@@ -99,7 +99,15 @@ export async function updateBadgeForTab(
     }
     // badgeInfo === 'none' leaves badgeText empty
     chrome.action.setBadgeText({ text: badgeText, tabId });
-    chrome.action.setBadgeBackgroundColor({ color: settings.badgeColor || '#22c55e', tabId });
+
+    const baseColor = settings.badgeColor || '#22c55e';
+    const badgeErrorStates = settings.badgeErrorStates !== false;
+    let badgeColor = baseColor;
+    if (badgeErrorStates && matchingScripts.length > 0) {
+      const hasErrors = matchingScripts.some(s => s.stats && s.stats.errors > 0);
+      if (hasErrors) badgeColor = '#f59e0b'; // amber
+    }
+    chrome.action.setBadgeBackgroundColor({ color: badgeColor, tabId });
   } catch (e) {
     console.error('[ScriptVault] Failed to update badge:', e);
   }

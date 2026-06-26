@@ -100,6 +100,7 @@ export interface Settings {
 
   // Badge
   badgeInfo: 'running' | 'total' | 'none';
+  badgeErrorStates: boolean;
 
   // Auto-reload
   autoReload: boolean;

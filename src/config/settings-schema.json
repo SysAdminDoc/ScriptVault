@@ -14,6 +14,7 @@
       "autoUpdate",
       "autoUpdateMode",
       "badgeColor",
+      "badgeErrorStates",
       "badgeInfo",
       "blacklist",
       "blacklistSource",
@@ -364,6 +365,13 @@
           "label": "None"
         }
       ]
+    },
+    "badgeErrorStates": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "Badge error colors",
+      "help": "Show amber badge when scripts have errors.",
+      "default": true
     },
     "blacklist": {
       "type": "array",
