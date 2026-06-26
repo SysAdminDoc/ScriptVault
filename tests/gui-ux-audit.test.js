@@ -133,6 +133,11 @@ describe("cross-surface UX audit", () => {
     expect(sidepanelJs).toContain("requestAnimationFrame(() => restoreSidepanelFallbackFocus('all'));");
     expect(sidepanelJs).toContain('No scripts match "${searchQuery}".');
     expect(sidepanelJs).toContain("Find for ");
+    expect(sidepanelHtml).toContain(".sp-context-banner");
+    expect(sidepanelJs).toContain("const banner = document.createElement('button');");
+    expect(sidepanelJs).toContain("banner.className = 'sp-context-banner';");
+    expect(sidepanelJs).toContain("banner.setAttribute('aria-live', 'assertive');");
+    expect(sidepanelJs).toContain("Extension restarted. Reconnect side panel.");
     expect(doc.querySelector("#btnHelp svg")).not.toBeNull();
     expect(doc.querySelector("#btnRefresh svg")).not.toBeNull();
     expect(doc.querySelector("#btnDashboard svg")).not.toBeNull();
@@ -198,6 +203,10 @@ describe("cross-surface UX audit", () => {
     expect(devtoolsJs).toContain("No network or execution data to export yet.");
     expect(devtoolsJs).toContain("Diagnostics refresh failed. Showing the last available data.");
     expect(devtoolsHtml).toContain('.toolbar-btn[aria-busy="true"]');
+    expect(devtoolsHtml).toContain('--bg: var(--sv-bg)');
+    expect(devtoolsHtml).toContain('.exec-table-wrap[aria-busy="true"]::after');
+    expect(devtoolsHtml).toContain('id="execTableWrap"');
+    expect(devtoolsJs).toContain("$('execTableWrap').setAttribute('aria-busy', String(isBusy));");
   });
 
   test("dashboard keeps the updated column on a real button control", () => {

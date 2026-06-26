@@ -34,10 +34,13 @@
     teardownTabListeners();
     const existing = document.getElementById('sp-context-banner');
     if (existing) return;
-    const banner = document.createElement('div');
+    const banner = document.createElement('button');
+    banner.type = 'button';
     banner.id = 'sp-context-banner';
-    banner.style.cssText = 'padding:10px 12px;background:var(--danger,#ef4444);color:#fff;font-size:0.75rem;font-weight:600;border-radius:var(--radius-panel,8px);text-align:center;margin-block-end:4px;cursor:pointer;';
-    banner.textContent = 'Extension restarted — click to reconnect';
+    banner.className = 'sp-context-banner';
+    banner.setAttribute('aria-live', 'assertive');
+    banner.setAttribute('aria-atomic', 'true');
+    banner.textContent = 'Extension restarted. Reconnect side panel.';
     banner.addEventListener('click', () => location.reload());
     document.body.prepend(banner);
   }
@@ -403,7 +406,7 @@
     applyTheme();
     applySidePanelLayout();
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-      const layout = settings.theme || settings.layout || 'dark';
+      const layout = settings.layout || 'dark';
       if (layout === 'auto') applyTheme();
     });
     await refresh();
@@ -428,7 +431,7 @@
   }
 
   function applyTheme() {
-    const layout = settings.theme || settings.layout || 'dark';
+    const layout = settings.layout || 'dark';
     const resolved = layout === 'auto'
       ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
       : layout;

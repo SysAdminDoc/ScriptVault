@@ -64,6 +64,8 @@
         .sp-status { display: none; padding: 7px 9px; border: 1px solid rgba(76,175,80,0.24); border-radius: var(--radius-panel); background: rgba(76,175,80,0.1); color: var(--text); font-size: 0.6875rem; flex-shrink: 0; }
         .sp-status.show { display: block; }
         .sp-status.error { border-color: rgba(239,68,68,0.34); background: rgba(239,68,68,0.1); }
+        .sp-context-banner { appearance: none; width: 100%; flex-shrink: 0; padding: 8px 10px; border: 1px solid rgba(239,68,68,0.36); border-radius: var(--radius-panel); background: linear-gradient(180deg, rgba(239,68,68,0.14), rgba(239,68,68,0.06)), var(--bg-raised); color: var(--text); font: inherit; font-size: 0.6875rem; font-weight: 700; line-height: 1.35; text-align: center; cursor: pointer; transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease, transform 0.15s ease; }
+        .sp-context-banner:hover { border-color: var(--danger); background: linear-gradient(180deg, rgba(239,68,68,0.18), rgba(239,68,68,0.08)), var(--bg-raised); transform: translateY(-1px); }
         .sp-host-access { display: none; padding: 8px 9px; border: 1px solid rgba(245,158,11,0.36); border-radius: var(--radius-panel); background: rgba(245,158,11,0.12); color: var(--text); font-size: 0.6875rem; flex-shrink: 0; gap: 7px; }
         .sp-host-access.show { display: grid; }
         .sp-host-access-message { line-height: 1.35; color: var(--text); }
@@ -213,6 +215,7 @@
 
         /* Premium compact polish */
         .sp-status,
+        .sp-context-banner,
         .sp-search-bar,
         .sp-list,
         .sp-all-list,
@@ -321,6 +324,7 @@
             .sp-header,
             .sp-url-bar,
             .sp-status,
+            .sp-context-banner,
             .sp-section,
             .sp-list,
             .sp-item,

@@ -72,6 +72,7 @@
     document.body.toggleAttribute('data-refreshing', isBusy);
     $('devtoolsStatus').setAttribute('aria-busy', String(isBusy));
     $('netTableWrap').setAttribute('aria-busy', String(isBusy));
+    $('execTableWrap').setAttribute('aria-busy', String(isBusy));
     $('panelExecution').setAttribute('aria-busy', String(isBusy));
     if (refreshButton instanceof HTMLButtonElement) {
       refreshButton.disabled = isBusy;

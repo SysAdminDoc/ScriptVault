@@ -11,6 +11,7 @@ const popupHtml = readFileSync(resolve(process.cwd(), "pages/popup.html"), "utf8
 const popupJs = readFileSync(resolve(process.cwd(), "pages/popup.js"), "utf8");
 const sidepanelHtml = readFileSync(resolve(process.cwd(), "pages/sidepanel.html"), "utf8");
 const sidepanelJs = readFileSync(resolve(process.cwd(), "pages/sidepanel.js"), "utf8");
+const devtoolsHtml = readFileSync(resolve(process.cwd(), "pages/devtools-panel.html"), "utf8");
 const installHtml = readFileSync(resolve(process.cwd(), "pages/install.html"), "utf8");
 const installJs = readFileSync(resolve(process.cwd(), "pages/install.js"), "utf8");
 const packageJson = JSON.parse(readFileSync(resolve(process.cwd(), "package.json"), "utf8"));
@@ -73,6 +74,7 @@ describe("accessibility surface pass", () => {
     expectForcedColorsSurface(dashboardCss);
     expectForcedColorsSurface(popupHtml);
     expectForcedColorsSurface(sidepanelHtml);
+    expectForcedColorsSurface(devtoolsHtml);
     expectForcedColorsSurface(installHtml);
   });
 
@@ -125,6 +127,10 @@ describe("accessibility surface pass", () => {
     expect(getAttr(findTagById(sidepanelHtml, "spSearchStatus"), "aria-live")).toBe("polite");
     expect(sidepanelJs).toContain("function showPanelNotice");
     expect(sidepanelJs).toContain("notice.hidden = false");
+    expect(sidepanelHtml).toContain(".sp-context-banner");
+    expect(sidepanelJs).toContain("const banner = document.createElement('button');");
+    expect(sidepanelJs).toContain("banner.setAttribute('aria-live', 'assertive');");
+    expect(sidepanelJs).toContain("banner.setAttribute('aria-atomic', 'true');");
 
     expect(installJs).toContain('id="decisionHeroCopy" role="status" aria-live="polite" aria-atomic="true"');
     expect(installJs).toContain('role="alert" aria-live="assertive"');

@@ -6,50 +6,39 @@
     <title>ScriptVault</title>
     <link rel="stylesheet" href="theme-tokens.css">
     <style>
-        :root, [data-theme="dark"] {
-            --bg: #1e1e1e;
-            --bg-raised: #252525;
-            --bg-row: #282828;
-            --bg-hover: #2e2e2e;
-            --border: #3a3a3a;
-            --text: #d4d4d4;
-            --text-muted: #888;
-            --text-dim: #555;
-            --accent: #4CAF50;
-            --danger: #ef4444;
-            --warning: #f59e0b;
-            --info: #60a5fa;
-            --method-get: #4ade80;
-            --method-post: #60a5fa;
-            --method-put: #fbbf24;
-            --method-delete: #f87171;
+        :root {
+            --bg: var(--sv-bg);
+            --bg-raised: var(--sv-bg-raised);
+            --bg-row: var(--sv-bg-raised);
+            --bg-hover: var(--sv-bg-hover);
+            --border: var(--sv-border);
+            --border-subtle: var(--sv-border-subtle);
+            --text: var(--sv-text);
+            --text-muted: var(--sv-text-muted);
+            --text-dim: var(--sv-text-dim);
+            --accent: var(--sv-accent);
+            --accent-dim: var(--sv-accent-dim);
+            --danger: var(--sv-danger);
+            --warning: var(--sv-warning);
+            --info: var(--sv-info);
+            --method-get: var(--sv-accent);
+            --method-post: var(--sv-info);
+            --method-put: var(--sv-warning);
+            --method-delete: var(--sv-danger);
             --method-other: #a78bfa;
-            --focus-ring: 0 0 0 2px rgba(76, 175, 80, 0.72), 0 0 0 4px rgba(76, 175, 80, 0.16);
-            --radius-control: 6px;
-            --radius-panel: 8px;
-            color-scheme: dark;
+            --focus-ring: var(--sv-focus-ring);
+            --radius-control: var(--sv-radius-control);
+            --radius-panel: var(--sv-radius-panel);
+            --accent-bg: color-mix(in srgb, var(--accent) 11%, transparent);
+            --accent-border: color-mix(in srgb, var(--accent) 30%, transparent);
+            --busy-bg: color-mix(in srgb, var(--info) 12%, transparent);
+            --busy-border: color-mix(in srgb, var(--info) 36%, transparent);
+            --danger-bg: color-mix(in srgb, var(--danger) 10%, transparent);
+            --warning-bg: color-mix(in srgb, var(--warning) 10%, transparent);
+            --info-bg: color-mix(in srgb, var(--info) 10%, transparent);
         }
-        [data-theme="light"] {
-            --bg: #f8f8f8;
-            --bg-raised: #ffffff;
-            --bg-row: #fafafa;
-            --bg-hover: #f0f0f0;
-            --border: #e0e0e0;
-            --text: #333;
-            --text-muted: #666;
-            --text-dim: #aaa;
-            --accent: #16a34a;
-            --danger: #dc2626;
-            --warning: #d97706;
-            --info: #2563eb;
-            --method-get: #15803d;
-            --method-post: #1d4ed8;
-            --method-put: #b45309;
-            --method-delete: #b91c1c;
-            --method-other: #7c3aed;
-            --focus-ring: 0 0 0 2px rgba(22, 163, 74, 0.66), 0 0 0 4px rgba(22, 163, 74, 0.14);
-            color-scheme: light;
-        }
+        [data-theme="light"] { --method-other: #7c3aed; }
+        [data-theme="catppuccin"] { --method-other: #cba6f7; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif; font-size: 0.75rem; background: linear-gradient(180deg, var(--bg-raised), var(--bg) 72px); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
         .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
@@ -62,12 +51,12 @@
         .toolbar-tabs { display: inline-flex; align-items: center; gap: 4px; }
         .tab-btn { background: none; border: 1px solid transparent; color: var(--text-muted); cursor: pointer; padding: 4px 9px; border-radius: var(--radius-control); font-size: 0.75rem; transition: color 0.15s, background-color 0.15s, border-color 0.15s, transform 0.15s; }
         .tab-btn:hover { color: var(--text); background: var(--bg-hover); border-color: var(--border); transform: translateY(-1px); }
-        .tab-btn.active { color: var(--accent); background: rgba(76,175,80,0.10); border-color: rgba(76,175,80,0.28); }
+        .tab-btn.active { color: var(--accent); background: var(--accent-bg); border-color: var(--accent-border); }
         .spacer { flex: 1; }
         .toolbar-btn { min-height: 26px; background: rgba(255,255,255,0.025); border: 1px solid var(--border); color: var(--text-muted); cursor: pointer; padding: 3px 9px; border-radius: var(--radius-control); font-size: 0.6875rem; font-weight: 600; white-space: nowrap; transition: border-color 0.15s, color 0.15s, background-color 0.15s, transform 0.15s; }
         .toolbar-btn:hover { color: var(--text); border-color: var(--text-muted); background: var(--bg-hover); transform: translateY(-1px); }
         .toolbar-btn:disabled { opacity: 0.55; cursor: not-allowed; }
-        .toolbar-btn[aria-busy="true"] { cursor: wait; color: var(--text); border-color: rgba(96,165,250,0.34); background: rgba(96,165,250,0.10); }
+        .toolbar-btn[aria-busy="true"] { cursor: wait; color: var(--text); border-color: var(--busy-border); background: var(--busy-bg); }
         .toolbar-btn:active { transform: translateY(0); }
         .toolbar-status { min-width: 0; max-width: 320px; color: var(--text-muted); font-size: 0.6875rem; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .toolbar-status[data-tone="error"] { color: var(--danger); }
@@ -86,13 +75,32 @@
         .net-stat-val { font-weight: 600; color: var(--text); }
         .net-stat-err { color: var(--danger); }
 
-        .net-table-wrap { flex: 1; overflow: auto; min-height: 0; }
+        .net-table-wrap { position: relative; flex: 1; overflow: auto; min-height: 0; }
+        .net-table-wrap[aria-busy="true"]::after,
+        .exec-table-wrap[aria-busy="true"]::after {
+            content: 'Refreshing';
+            position: absolute;
+            inset-block-start: 8px;
+            inset-inline-end: 8px;
+            z-index: 4;
+            padding: 4px 8px;
+            border: 1px solid var(--busy-border);
+            border-radius: var(--radius-control);
+            background: var(--bg-raised);
+            color: var(--info);
+            font-size: 0.625rem;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            box-shadow: 0 10px 24px rgba(0,0,0,0.18);
+            pointer-events: none;
+        }
         .net-table { width: 100%; border-collapse: collapse; font-size: 0.6875rem; }
         .net-table th { position: sticky; top: 0; background: var(--bg-raised); color: var(--text-muted); font-weight: 700; text-align: start; padding: 5px 6px; border-bottom: 1px solid var(--border); white-space: nowrap; user-select: none; text-transform: uppercase; letter-spacing: 0.05em; }
         .net-table td { padding: 3px 6px; border-bottom: 1px solid var(--border); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; vertical-align: middle; }
         .net-table tr:hover td { background: var(--bg-hover); }
         .net-table tr.selected td { background: var(--bg-hover); outline: 1px solid var(--accent); }
-        .net-table tr:focus-visible td { background: var(--bg-hover); outline: 1px solid rgba(76, 175, 80, 0.45); }
+        .net-table tr:focus-visible td { background: var(--bg-hover); outline: 1px solid var(--accent); }
 
         .method-badge { font-size: 0.625rem; font-weight: 700; padding: 1px 4px; border-radius: 2px; }
         .method-GET { color: var(--method-get); }
@@ -121,7 +129,7 @@
         .net-split { display: flex; flex: 1; overflow: hidden; min-height: 0; }
 
         /* ── Execution panel ───────────────────────────────────────────── */
-        .exec-table-wrap { flex: 1; overflow: auto; }
+        .exec-table-wrap { position: relative; flex: 1; overflow: auto; min-height: 0; }
         .exec-table { width: 100%; border-collapse: collapse; font-size: 0.6875rem; }
         .exec-table th { position: sticky; top: 0; background: var(--bg-raised); color: var(--text-muted); font-weight: 700; text-align: start; padding: 5px 8px; border-bottom: 1px solid var(--border); text-transform: uppercase; letter-spacing: 0.05em; }
         .exec-table td { padding: 4px 8px; border-bottom: 1px solid var(--border); }
@@ -140,9 +148,9 @@
         .console-script { color: var(--accent); flex-shrink: 0; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .console-level { flex-shrink: 0; font-size: 0.625rem; font-weight: 700; padding: 1px 4px; border-radius: 2px; }
         .console-level.log { color: var(--text-muted); }
-        .console-level.warn { color: var(--warning); background: rgba(245,158,11,0.1); }
-        .console-level.error { color: var(--danger); background: rgba(239,68,68,0.1); }
-        .console-level.info { color: var(--info); background: rgba(96,165,250,0.1); }
+        .console-level.warn { color: var(--warning); background: var(--warning-bg); }
+        .console-level.error { color: var(--danger); background: var(--danger-bg); }
+        .console-level.info { color: var(--info); background: var(--info-bg); }
         .console-msg { flex: 1; word-break: break-all; white-space: pre-wrap; }
 
         /* Empty state */
@@ -153,9 +161,66 @@
         .empty-action:hover { border-color: var(--accent); background: var(--bg-hover); color: var(--accent); transform: translateY(-1px); }
         .table-empty-cell { text-align: center; padding: 32px 20px; color: var(--text-muted); background: linear-gradient(180deg, rgba(255,255,255,0.025), transparent); }
         .table-empty-state { display: inline-grid; justify-items: center; gap: 6px; max-width: 430px; margin: 0 auto; line-height: 1.45; }
-        .table-empty-mark { min-width: 34px; min-height: 28px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid rgba(76,175,80,0.28); border-radius: var(--radius-panel); background: rgba(76,175,80,0.08); color: var(--accent); font-size: 0.625rem; font-weight: 800; letter-spacing: 0.08em; }
+        .table-empty-mark { min-width: 34px; min-height: 28px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--accent-border); border-radius: var(--radius-panel); background: var(--accent-bg); color: var(--accent); font-size: 0.625rem; font-weight: 800; letter-spacing: 0.08em; }
         .table-empty-title { color: var(--text); font-size: 0.75rem; font-weight: 700; }
         .table-empty-detail { color: var(--text-muted); font-size: 0.6875rem; }
+        @media (forced-colors: active) {
+            :root {
+                --bg: Canvas;
+                --bg-raised: Canvas;
+                --bg-row: Canvas;
+                --bg-hover: Canvas;
+                --border: CanvasText;
+                --border-subtle: CanvasText;
+                --text: CanvasText;
+                --text-muted: GrayText;
+                --text-dim: GrayText;
+                --accent: Highlight;
+                --danger: CanvasText;
+                --warning: CanvasText;
+                --info: Highlight;
+                --focus-ring: none;
+            }
+
+            *, *::before, *::after {
+                box-shadow: none !important;
+                text-shadow: none !important;
+            }
+
+            body,
+            .toolbar,
+            .net-stats,
+            .net-detail,
+            .net-table th,
+            .exec-table th,
+            .console-entry,
+            .empty-state,
+            .empty-icon,
+            .table-empty-mark {
+                background: Canvas !important;
+                color: CanvasText !important;
+                border-color: CanvasText !important;
+            }
+
+            button,
+            input,
+            .toolbar-btn,
+            .tab-btn,
+            .empty-action {
+                background: ButtonFace !important;
+                color: ButtonText !important;
+                border-color: ButtonText !important;
+            }
+
+            :focus-visible,
+            button:focus-visible,
+            input:focus-visible,
+            tr:focus-visible {
+                outline: 2px solid Highlight !important;
+                outline-offset: 2px;
+                box-shadow: none !important;
+            }
+        }
         @media (prefers-reduced-motion: reduce) {
             *, *::before, *::after { transition: none !important; animation: none !important; }
         }
@@ -215,7 +280,7 @@
 
     <!-- Execution panel -->
     <div class="panel" id="panelExecution" role="tabpanel" aria-labelledby="devtoolsTabExecution" hidden>
-        <div class="exec-table-wrap">
+        <div class="exec-table-wrap" id="execTableWrap">
             <table class="exec-table">
                 <thead>
                     <tr>
