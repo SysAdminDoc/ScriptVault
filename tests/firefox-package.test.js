@@ -159,7 +159,7 @@ describe('Firefox AMO validation gate', () => {
       32: 'images/icon32.png',
     });
     expect(popupHtml).toContain('width: 360px;');
-    expect(popupHtml).toContain('html[data-theme="light"]');
+    expect(popupHtml).toContain('href="theme-tokens.css"');
   });
 
   it('keeps Chromium-only local workspace controls hidden until feature detection', () => {

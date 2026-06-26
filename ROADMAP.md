@@ -322,20 +322,6 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 - **Deliverable:** Partition ScriptStorage, ScriptValues, and BackupScheduler into separate storage buckets. Measure write throughput for libraries >500 scripts. Fall back to single-bucket on browsers that don't support the Storage Buckets API.
 - **Acceptance:** `navigator.storageBuckets` feature-detected. Backup restore and sync merge still work after partitioning. Large-library perf harness shows improvement.
 
-### RD-9. Structured Event Logging
-- **Tier:** Later | **Priority:** P3 | **Impact:** 3 | **Effort:** M
-- **Source:** Architecture assessment; no structured logging exists beyond the 500-entry error log
-- **Problem:** Debugging production issues relies on the 500-entry error log and ad-hoc console output. There is no structured event system for install/update/sync/toggle/registration operations. Support snapshots capture aggregate health but not event sequences.
-- **Deliverable:** Lightweight event ring (1000 entries) with typed event categories (install, update, sync, toggle, registration, error, security). JSON-exportable. Privacy-safe (no script source, no URLs beyond hostnames). Surfaced in DevTools panel and support snapshot opt-in.
-- **Acceptance:** Events written for all major background operations. Export format documented. Support snapshot includes event summary when opted in.
-
-### RD-10. Backup Scheduler Blob-to-IndexedDB Migration
-- **Tier:** Later | **Priority:** P3 | **Impact:** 2 | **Effort:** S
-- **Source:** CLAUDE.md "Known Remaining Issues" (BackupScheduler stores full ZIP blobs in chrome.storage.local)
-- **Problem:** `BackupScheduler` stores full ZIP backup blobs in `chrome.storage.local`, which has a 10MB default quota (unlimitedStorage declared but best-effort). A library of 50+ scripts with resources can produce backups that compete with script storage for quota.
-- **Deliverable:** Move backup blobs to IndexedDB (already used for scripts/values). Keep backup metadata in chrome.storage.local for alarm scheduling. Add cleanup migration for existing blobs.
-- **Acceptance:** Backup create/restore/verify still work. QuotaManager no longer counts backup blobs against chrome.storage.local estimates. Migration handles existing blobs transparently.
-
 ### RD-11. Monaco v0.55+ Upgrade for LSP Namespace
 - **Tier:** Under Consideration | **Priority:** P3 | **Impact:** 3 | **Effort:** M
 - **Source:** Monaco ESM migration plan, Monaco v0.55 changelog (LSP namespace)
@@ -708,67 +694,10 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 > issues across 6 managers). Deduplicated against all existing tiers (Now
 > through Rejected), all prior RD-1..RD-25 additions, and Roadmap_Blocked.md.
 
-### P1
-
-- [ ] P1 — Remove stale dependabot-config.test.js
-  Why: Test file references deleted `.github/dependabot.yml` (removed in c81cc05), causing 1 of 1738 tests to fail. Breaks CI green.
-  Evidence: `npx vitest run` output — `FAIL tests/dependabot-config.test.js`; `ls .github/dependabot.yml` confirms file missing.
-  Touches: `tests/dependabot-config.test.js` (delete entirely)
-  Acceptance: `npm test` reports 0 failures. No references to `dependabot.yml` in test suite.
-  Complexity: S
-
 ### P2
-
-- [ ] P2 — Raise coverage thresholds to measured baseline
-  Why: Current thresholds (10% lines, 5% branches, 10% functions) are effectively no-op gates. 1738 tests produce significantly higher coverage, but regressions go undetected.
-  Evidence: `vitest.config.mjs` lines 31-36 set the thresholds. `npm run test:cov` output will show actual coverage.
-  Touches: `vitest.config.mjs` (threshold values)
-  Acceptance: Run `npm run test:cov`, measure actual line/branch/function coverage, set thresholds to (measured - 5%) to prevent regression while allowing normal variance. All tests still pass.
-  Complexity: S
-
-- [ ] P2 — Add Sanitizer API (setHTML) linter hint for MAIN-world scripts
-  Why: Chrome 146+ and Firefox 148+ ship `Element.setHTML()` for native XSS-safe DOM insertion. The existing Trusted Types linter (`pages/dashboard-linter.js`) warns about innerHTML/outerHTML in `@inject-into page` scripts but does not suggest the modern `setHTML` alternative. This is the platform-recommended replacement.
-  Evidence: `web.dev/articles/sanitizer` (Sanitizer API docs); `pages/dashboard-linter.js` line 578+ (existing Trusted Types rule); zero `setHTML` references in codebase.
-  Touches: `pages/dashboard-linter.js` (add setHTML suggestion to Trusted Types rule output), `tests/trusted-types-linter.test.js` (extend coverage)
-  Acceptance: When a MAIN-world script uses innerHTML, the linter message includes "consider Element.setHTML() on supporting browsers" alongside the existing textContent/append/GM_addElement suggestions. Test verifies new hint text.
-  Complexity: S
 
 ### P3
 
-- [ ] P3 — Add Mutation Events deprecation linter warning
-  Why: Chrome removed legacy Mutation Events (DOMNodeInserted, DOMSubtreeModified, DOMNodeRemoved, DOMAttrModified, DOMCharacterDataModified); Firefox 140 is removing them. Userscripts using these APIs will break silently. The AST analyzer has 31 pattern detectors but none flag this.
-  Evidence: `developer.chrome.com/blog/mutation-events-deprecation`; `bg/analyzer.js` has no Mutation Event detection; `grep -r "DOMNodeInserted" src/ pages/ bg/` returns no hits in extension code (confirming it's a userscript-author concern, not internal).
-  Touches: `src/bg/analyzer.ts`, `bg/analyzer.js` (add detector), `tests/analyzer*.test.js` (coverage)
-  Acceptance: Scripts containing `addEventListener('DOMNodeInserted'` or similar legacy Mutation Event names trigger a "deprecated — use MutationObserver" warning in the risk analysis. Existing scripts not using Mutation Events are unaffected.
-  Complexity: S
-
-- [ ] P3 — Evaluate CodeMirror 6 for Firefox editor
-  Why: Firefox currently falls back to a bare textarea when Monaco is unavailable (Monaco AMD excluded from Firefox build, ESM bundle not yet shipped). CodeMirror 6 at ~50KB provides syntax highlighting, code folding, search/replace, and diff/merge views — covering 80% of editor functionality at 0.3% of Monaco's 14MB footprint. This fills the Firefox editor gap faster than waiting for the Monaco ESM migration to clear all gates.
-  Evidence: `codemirror.net/docs/changelog/` (CM6 features); `pages/editor-sandbox.html` (Firefox textarea fallback path); `docs/monaco-esm-migration-plan.md` (ESM timeline); `esbuild.config.mjs` Firefox exclusion.
-  Touches: `pages/editor-sandbox.html` (CM6 loader), `esbuild.config.mjs` (CM6 bundle), `lib/codemirror/` (vendored), `tests/editor-firefox.test.js` (new)
-  Acceptance: Firefox build includes CodeMirror 6 as the editor with JavaScript/CSS syntax highlighting, basic code folding, and search. Chrome build continues using Monaco. Firefox lint gate still passes (0 errors, 0 notices). Bundle size stays under 100KB for CM6 assets.
-  Complexity: M
-
-- [ ] P3 — Script execution trace export in DevTools panel
-  Why: No userscript manager offers execution tracing. Playwright's Trace Viewer proves that recording DOM snapshots, console output, network requests, and timing data per action is a powerful debugging paradigm. ScriptVault's DevTools panel already has network logging and execution profiling — adding trace export unifies this into a shareable debugging artifact.
-  Evidence: `playwright.dev/docs/trace-viewer` (Trace Viewer UX); `pages/devtools-panel.js` (existing network/profiler infrastructure); `bg/netlog.js` (2000-entry network log); Tampermonkey and Violentmonkey have no equivalent.
-  Touches: `pages/devtools-panel.js` (trace recording toggle + export), `pages/devtools-panel.html` (UI), `bg/netlog.js` (structured trace entries), `tests/devtools-trace.test.js` (new)
-  Acceptance: DevTools panel has an "Export Trace" button that produces a JSON file containing: per-script console output, network requests (from netlog), execution timing, and error events for the session. File is importable for offline review.
-  Complexity: L
-
-- [ ] P3 — Ambient toolbar badge error states
-  Why: The toolbar badge currently shows only the count of active scripts with a green background. It does not signal errors, blocked scripts, or disabled state. An amber/red badge on error would provide at-a-glance script health without opening the popup — a pattern proven by the Web Vitals extension (now deprecated, absorbed into DevTools).
-  Evidence: `src/background/badge.ts` (single green color: `settings.badgeColor || '#22c55e'`); no error-state branching in badge logic; Web Vitals extension used green/amber/red ambient badges.
-  Touches: `src/background/badge.ts`, `background.core.js` (generated), `src/background/core.ts` (badge calls), `tests/badge-states.test.js` (new)
-  Acceptance: Badge turns amber when any script on the current tab has console errors. Badge turns red when any script on the current tab failed to execute (registration error, crash). Settings allow disabling color states (keep count-only mode). Badge reverts to green/count when errors clear.
-  Complexity: M
-
-- [ ] P3 — Puppeteer-core major version upgrade (24 to 25)
-  Why: puppeteer-core 24.42.0 is installed; 25.2.1 is the latest major. Major versions may include breaking API changes, new Chrome DevTools Protocol features, or security fixes. The package is used for dashboard smoke tests and store screenshot capture.
-  Evidence: `npm outdated` shows `puppeteer-core 24.42.0 → 25.2.1`; `scripts/smoke-dashboard.mjs` and `scripts/capture-store-screenshots.mjs` consume it.
-  Touches: `package.json` (version bump), `scripts/smoke-dashboard.mjs`, `scripts/capture-store-screenshots.mjs` (adapt to any API changes)
-  Acceptance: `npm run smoke:dashboard` and `npm run screenshots` pass after upgrade. No test regressions.
-  Complexity: S
 
 ### Appendix: Research-Driven Sources (2026-06-25 deep pass)
 
@@ -820,12 +749,6 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 
 ### P2
 
-- [ ] P2 — README feature documentation sync for shipped differentiators
-  Why: Session-only credential storage, UserCSS draft preview, bookmarklet converter, system theme auto-detection, and Popover API adoption shipped in unreleased commits but are absent from the README feature list and comparison table. These are competitive differentiators (no other MV3 manager offers session-only credentials) that aren't discoverable by users reading the README.
-  Evidence: `CHANGELOG.md` (2026-06-25 entries for session credentials and UserCSS preview, 2026-06-15 entries for bookmarklet converter and system theme); `README.md` has zero matches for "session", "UserCSS preview", "bookmarklet", "Popover", or "system theme"; `npm run readme:check` only validates sync provider claims, not feature completeness.
-  Touches: `README.md` (feature list section, comparison table), `scripts/check-readme-claims.mjs` (optionally extend to cover key feature claims)
-  Acceptance: README feature list includes session-only credential storage, UserCSS draft preview, bookmarklet import, and system theme auto-detection. Comparison table adds "Session-only credentials" row showing ScriptVault Yes, competitors No. `npm run readme:check` still passes.
-  Complexity: S
 
 ### Appendix: Research-Driven Sources (2026-06-26)
 
@@ -841,3 +764,55 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 | RD26-08 | Monaco v0.55.1 stable / v0.56-dev | https://github.com/microsoft/monaco-editor/releases |
 | RD26-09 | Vitest CVE-2026-47429 (CVSS 9.8) | https://github.com/advisories/GHSA-5xrq-8626-4rwp |
 | RD26-10 | W3C WebExtensions WG draft charter | https://w3c.github.io/charter-drafts/2025/webextensions-wg.html |
+
+## Improvement Pass (2026-06-26)
+
+> Items below identified by systematic code-level audit of build pipeline,
+> test infrastructure, CSS architecture, and accessibility compliance.
+> Deduplicated against all existing tiers and prior RD additions.
+
+### Now (v3.12.0)
+
+#### IMP-1. Coverage Reporter Enrichment
+- **Priority:** P2 | **Effort:** S
+- **Problem:** Vitest coverage only generates `text` + `json-summary` reporters. No HTML report for visual gap inspection, no lcov for CI integrations (Codecov, Coveralls). Developers must read terminal tables to find coverage gaps.
+- **Deliverable:** Add `html` and `lcov` reporters to `vitest.config.mjs`. Add `test:cov:report` npm script that opens the HTML report. Add `coverage/` to `.gitignore`.
+- **Acceptance:** `npm run test:cov` produces `coverage/index.html` browsable report and `coverage/lcov.info` for CI upload.
+
+#### IMP-2. Production Source Maps
+- **Priority:** P2 | **Effort:** S
+- **Problem:** `esbuild.config.mjs` production build (`--prod`) minifies without generating source maps. Error stack traces in production are opaque. External source maps don't ship to users but help developers debug CWS reviewer reports.
+- **Deliverable:** Add `sourcemap: 'external'` to the esbuild production minify call. Exclude `.map` files from CWS/AMO/Edge packaging scripts.
+- **Acceptance:** `npm run build:prod` produces `background.js` + `background.js.map`. Map file is excluded from published packages.
+
+#### IMP-3. Bundle Size Analysis
+- **Priority:** P3 | **Effort:** S
+- **Problem:** No tooling to track `background.js` composition or detect size regressions. The bundle is ~22K lines (~1.3MB) but there's no breakdown of which modules contribute what.
+- **Deliverable:** Add `build:analyze` npm script that builds background.js and reports per-module line counts and total size. Output as JSON for CI comparison.
+- **Acceptance:** `npm run build:analyze` outputs module-by-module size breakdown and total. Can be diffed across releases.
+
+#### IMP-4. Watch Mode Type Checking
+- **Priority:** P3 | **Effort:** S
+- **Problem:** `npm run dev` (watch mode) rebuilds background.js on file changes but doesn't run TypeScript type-checking. Type errors are only caught on explicit `npm run typecheck` or `npm run check`.
+- **Deliverable:** Add `--typecheck` flag support to watch mode that spawns `tsc --watch --noEmit` in parallel with the file watcher. Add `dev:tc` npm script alias.
+- **Acceptance:** `npm run dev:tc` rebuilds on changes AND reports type errors continuously.
+
+### Next
+
+#### IMP-5. Shared Theme Token System
+- **Priority:** P2 | **Effort:** M
+- **Problem:** Theme tokens are triplicated across `dashboard.css` (`:root` with `--bg-body`, `--bg-header`), `popup.html` (inline `<style>` with `--popup-*` prefix), and `sidepanel.html` (inline `<style>` with `--bg`, `--bg-raised`). Four themes (dark/light/catppuccin/oled) are maintained independently with divergent names and slightly different values. Any theme change requires editing three files.
+- **Deliverable:** Extract canonical theme tokens into `pages/theme-tokens.css` with all four theme variants. Each page `<link>`s the shared file and maps tokens to its local names (or adopts the shared names). Inline `<style>` blocks in popup/sidepanel shrink to layout-only rules.
+- **Acceptance:** Theme change in one file propagates to all pages. All four themes render correctly in dashboard, popup, and sidepanel.
+
+#### IMP-6. px → rem Font Size Migration
+- **Priority:** P2 | **Effort:** L
+- **Problem:** All font sizes across dashboard.css, popup.html, and sidepanel.html use `px` units. This breaks WCAG 2.1 SC 1.4.4 (Resize Text) — users who set a larger browser default font size see no effect. Documented as a known issue in CLAUDE.md.
+- **Deliverable:** Convert all `font-size` declarations from `px` to `rem` (base 16px = 1rem). Preserve visual appearance at default settings. Verify text scales correctly when browser font size is changed.
+- **Acceptance:** No `font-size: <N>px` in any CSS file or inline style. Text scales proportionally with browser font size setting. WCAG 2.1 SC 1.4.4 audit passes.
+
+#### IMP-7. Coverage Threshold Ratchet
+- **Priority:** P2 | **Effort:** L
+- **Problem:** Coverage thresholds sit at lines 36%, functions 39%, branches 25%, statements 34% — the measured baseline. Critical service worker code (storage, sync, GM API) should have higher coverage to prevent regressions.
+- **Deliverable:** Phase 1 (v3.12.0): raise to 45/48/32/42. Phase 2 (v3.13.0): raise to 55/58/40/52. Phase 3: raise to 65/68/50/62. Each phase requires writing tests to fill gaps before ratcheting.
+- **Acceptance:** Each phase's thresholds pass in CI before the next phase begins.

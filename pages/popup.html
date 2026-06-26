@@ -6,97 +6,28 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ScriptVault</title>
+    <link rel="stylesheet" href="theme-tokens.css">
     <style>
-        :root, [data-theme="dark"] {
-            --popup-bg: #1a1a1a;
-            --popup-bg-raised: #242424;
-            --popup-bg-hover: #2a2a2a;
-            --popup-border: #333;
-            --popup-border-subtle: #2a2a2a;
-            --popup-text: #e0e0e0;
-            --popup-text-muted: #888;
-            --popup-text-dim: #666;
-            --popup-accent: #4CAF50;
-            --popup-slider-bg: #444;
-            --popup-slider-knob: #888;
-            --popup-scrollbar: #444;
-            --popup-scrollbar-hover: #555;
-            --popup-danger: #ef4444;
-            --popup-warning: #f59e0b;
-            --popup-info: #60a5fa;
-            --popup-focus: 0 0 0 2px rgba(76, 175, 80, 0.78), 0 0 0 4px rgba(76, 175, 80, 0.18);
-            --popup-radius-panel: 8px;
-            --popup-radius-control: 6px;
-        }
-
-        [data-theme="light"] {
-            --popup-bg: #f5f5f5;
-            --popup-bg-raised: #ffffff;
-            --popup-bg-hover: #ebebeb;
-            --popup-border: #ddd;
-            --popup-border-subtle: #e8e8e8;
-            --popup-text: #333;
-            --popup-text-muted: #888;
-            --popup-text-dim: #aaa;
-            --popup-accent: #4CAF50;
-            --popup-slider-bg: #ccc;
-            --popup-slider-knob: #999;
-            --popup-scrollbar: #ccc;
-            --popup-scrollbar-hover: #bbb;
-            --popup-danger: #dc2626;
-            --popup-warning: #d97706;
-            --popup-info: #2563eb;
-            --popup-focus: 0 0 0 2px rgba(22, 163, 74, 0.68), 0 0 0 4px rgba(22, 163, 74, 0.16);
-        }
-
-        [data-theme="catppuccin"] {
-            --popup-bg: #1e1e2e;
-            --popup-bg-raised: #252536;
-            --popup-bg-hover: #2a2a3c;
-            --popup-border: #45475a;
-            --popup-border-subtle: #313244;
-            --popup-text: #cdd6f4;
-            --popup-text-muted: #a6adc8;
-            --popup-text-dim: #585b70;
-            --popup-accent: #a6e3a1;
-            --popup-slider-bg: #45475a;
-            --popup-slider-knob: #6c7086;
-            --popup-scrollbar: #45475a;
-            --popup-scrollbar-hover: #585b70;
-            --popup-danger: #f38ba8;
-            --popup-warning: #f9e2af;
-            --popup-info: #89b4fa;
-            --popup-focus: 0 0 0 2px rgba(166, 227, 161, 0.72), 0 0 0 4px rgba(166, 227, 161, 0.16);
-        }
-
-        [data-theme="oled"] {
-            --popup-bg: #000000;
-            --popup-bg-raised: #0a0a0a;
-            --popup-bg-hover: #141414;
-            --popup-border: #1a1a1a;
-            --popup-border-subtle: #111;
-            --popup-text: #e0e0e0;
-            --popup-text-muted: #777;
-            --popup-text-dim: #444;
-            --popup-accent: #22c55e;
-            --popup-slider-bg: #333;
-            --popup-slider-knob: #666;
-            --popup-scrollbar: #333;
-            --popup-scrollbar-hover: #444;
-            --popup-danger: #ef4444;
-            --popup-warning: #f59e0b;
-            --popup-info: #60a5fa;
-            --popup-focus: 0 0 0 2px rgba(34, 197, 94, 0.72), 0 0 0 4px rgba(34, 197, 94, 0.16);
-        }
-
-        html[data-theme="dark"],
-        html[data-theme="catppuccin"],
-        html[data-theme="oled"] {
-            color-scheme: dark;
-        }
-
-        html[data-theme="light"] {
-            color-scheme: light;
+        :root {
+            --popup-bg: var(--sv-bg);
+            --popup-bg-raised: var(--sv-bg-raised);
+            --popup-bg-hover: var(--sv-bg-hover);
+            --popup-border: var(--sv-border);
+            --popup-border-subtle: var(--sv-border-subtle);
+            --popup-text: var(--sv-text);
+            --popup-text-muted: var(--sv-text-muted);
+            --popup-text-dim: var(--sv-text-dim);
+            --popup-accent: var(--sv-accent);
+            --popup-slider-bg: var(--sv-scrollbar);
+            --popup-slider-knob: var(--sv-text-muted);
+            --popup-scrollbar: var(--sv-scrollbar);
+            --popup-scrollbar-hover: var(--sv-scrollbar-hover);
+            --popup-danger: var(--sv-danger);
+            --popup-warning: var(--sv-warning);
+            --popup-info: var(--sv-info);
+            --popup-focus: var(--sv-focus-ring);
+            --popup-radius-panel: var(--sv-radius-panel);
+            --popup-radius-control: var(--sv-radius-control);
         }
 
         * {

@@ -20,7 +20,7 @@ export default defineConfig({
     exclude: ["tests/e2e/**", "node_modules/**", "dist/**", "build/**"],
     coverage: {
       provider: "v8",
-      reporter: ["text", "json-summary"],
+      reporter: ["text", "json-summary", "html", "lcov"],
       include: [
         "src/background/**/*.ts",
         "src/bg/**/*.ts",

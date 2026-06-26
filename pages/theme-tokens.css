@@ -1,0 +1,89 @@
+/* ScriptVault — Shared theme tokens
+   Canonical color/radius/focus definitions for all extension pages.
+   Each page <link>s this file; page-specific layout CSS stays local. */
+
+:root, [data-theme="dark"] {
+  --sv-bg: #1a1a1a;
+  --sv-bg-raised: #242424;
+  --sv-bg-hover: #2e2e2e;
+  --sv-border: #333;
+  --sv-border-subtle: #2a2a2a;
+  --sv-text: #e0e0e0;
+  --sv-text-muted: #888;
+  --sv-text-dim: #666;
+  --sv-accent: #4CAF50;
+  --sv-accent-dim: #2d6a30;
+  --sv-danger: #ef4444;
+  --sv-warning: #f59e0b;
+  --sv-info: #60a5fa;
+  --sv-badge-bg: #2a2a2a;
+  --sv-scrollbar: #444;
+  --sv-scrollbar-hover: #555;
+  --sv-radius-panel: 8px;
+  --sv-radius-control: 6px;
+  --sv-focus-ring: 0 0 0 2px rgba(76, 175, 80, 0.72), 0 0 0 4px rgba(76, 175, 80, 0.16);
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  --sv-bg: #f5f5f5;
+  --sv-bg-raised: #ffffff;
+  --sv-bg-hover: #ebebeb;
+  --sv-border: #ddd;
+  --sv-border-subtle: #e8e8e8;
+  --sv-text: #333;
+  --sv-text-muted: #777;
+  --sv-text-dim: #aaa;
+  --sv-accent: #16a34a;
+  --sv-accent-dim: #dcfce7;
+  --sv-danger: #dc2626;
+  --sv-warning: #d97706;
+  --sv-info: #2563eb;
+  --sv-badge-bg: #f0f0f0;
+  --sv-scrollbar: #ccc;
+  --sv-scrollbar-hover: #bbb;
+  --sv-focus-ring: 0 0 0 2px rgba(22, 163, 74, 0.68), 0 0 0 4px rgba(22, 163, 74, 0.16);
+  color-scheme: light;
+}
+
+[data-theme="catppuccin"] {
+  --sv-bg: #1e1e2e;
+  --sv-bg-raised: #252536;
+  --sv-bg-hover: #2a2a3c;
+  --sv-border: #45475a;
+  --sv-border-subtle: #313244;
+  --sv-text: #cdd6f4;
+  --sv-text-muted: #a6adc8;
+  --sv-text-dim: #585b70;
+  --sv-accent: #a6e3a1;
+  --sv-accent-dim: #40523f;
+  --sv-danger: #f38ba8;
+  --sv-warning: #f9e2af;
+  --sv-info: #89b4fa;
+  --sv-badge-bg: #313244;
+  --sv-scrollbar: #45475a;
+  --sv-scrollbar-hover: #585b70;
+  --sv-focus-ring: 0 0 0 2px rgba(166, 227, 161, 0.72), 0 0 0 4px rgba(166, 227, 161, 0.16);
+  color-scheme: dark;
+}
+
+[data-theme="oled"] {
+  --sv-bg: #000000;
+  --sv-bg-raised: #0a0a0a;
+  --sv-bg-hover: #141414;
+  --sv-border: #1a1a1a;
+  --sv-border-subtle: #111;
+  --sv-text: #e0e0e0;
+  --sv-text-muted: #777;
+  --sv-text-dim: #444;
+  --sv-accent: #22c55e;
+  --sv-accent-dim: #14532d;
+  --sv-danger: #ef4444;
+  --sv-warning: #f59e0b;
+  --sv-info: #60a5fa;
+  --sv-badge-bg: #1a1a1a;
+  --sv-scrollbar: #333;
+  --sv-scrollbar-hover: #444;
+  --sv-focus-ring: 0 0 0 2px rgba(34, 197, 94, 0.72), 0 0 0 4px rgba(34, 197, 94, 0.16);
+  color-scheme: dark;
+}

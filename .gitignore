@@ -10,6 +10,7 @@ firefox-artifacts/
 edge-artifacts/
 release-artifacts/
 background.js
+*.js.map
 lib/monaco/
 lib/monaco-esm/
 

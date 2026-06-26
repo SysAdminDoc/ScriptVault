@@ -124,19 +124,36 @@ async function buildBackground() {
 
   let code = parts.join(separator);
 
+  const outPath = join(ROOT, "background.js");
+
   if (production) {
-    // Use esbuild to minify the concatenated bundle
     const result = await build({
-      stdin: { contents: code, loader: "js" },
+      stdin: { contents: code, loader: "ts", sourcefile: "background.js" },
       write: false,
       minify: true,
+      sourcemap: true,
       target: "chrome120",
       format: "iife",
     });
-    code = result.outputFiles[0].text;
+    const paths = result.outputFiles.map((f) => f.path);
+    const jsFile = result.outputFiles.find((f) => !f.path.endsWith(".map"));
+    const mapFile = result.outputFiles.find((f) => f.path.endsWith(".map"));
+    code = jsFile ? jsFile.text : result.outputFiles[0].text;
+    if (mapFile) {
+      writeFileSync(join(ROOT, "background.js.map"), mapFile.text, "utf-8");
+      console.log("Source map: background.js.map");
+    } else if (result.outputFiles.length === 1 && code.includes("//# sourceMappingURL=data:")) {
+      const dataIdx = code.indexOf("//# sourceMappingURL=data:application/json;base64,");
+      if (dataIdx !== -1) {
+        const b64 = code.slice(dataIdx + "//# sourceMappingURL=data:application/json;base64,".length).trim();
+        const mapJson = Buffer.from(b64, "base64").toString("utf-8");
+        writeFileSync(join(ROOT, "background.js.map"), mapJson, "utf-8");
+        code = code.slice(0, dataIdx) + `//# sourceMappingURL=background.js.map\n`;
+        console.log("Source map: background.js.map (extracted from inline)");
+      }
+    }
   }
 
-  const outPath = join(ROOT, "background.js");
   writeFileSync(outPath, code, "utf-8");
   const lines = code.split("\n").length;
   console.log(`Done: background.js (${lines} lines)`);
@@ -192,7 +209,8 @@ async function buildMonacoEsm() {
 
 async function startWatch() {
   const version = readVersion();
-  console.log(`Watching for changes (v${version})...`);
+  const withTypeCheck = args.includes("--typecheck");
+  console.log(`Watching for changes (v${version})${withTypeCheck ? " + tsc" : ""}...`);
 
   // Directories to watch for changes
   const watchDirs = ["shared", "modules", "lib", "bg", "src"];
@@ -217,6 +235,16 @@ async function startWatch() {
     if (existsSync(abs)) {
       fsWatch(abs, rebuild);
     }
+  }
+
+  if (withTypeCheck) {
+    const { spawn } = await import("node:child_process");
+    const tsc = spawn("npx", ["tsc", "--watch", "--noEmit", "--preserveWatchOutput"], {
+      cwd: ROOT,
+      stdio: "inherit",
+      shell: true,
+    });
+    process.on("exit", () => tsc.kill());
   }
 
   // Initial build
