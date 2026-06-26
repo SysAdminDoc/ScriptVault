@@ -9,7 +9,10 @@ import { ScriptConfig as SourceScriptConfig } from '../src/modules/script-config
 function loadRuntimeScriptConfig() {
   const modulePath = resolve(__dirname, '../modules/script-config.js');
   const code = readFileSync(modulePath, 'utf8');
-  return compileFunction(`${code}\nreturn ScriptConfig;`, [], { filename: modulePath })();
+  return compileFunction(`${code}\nreturn ScriptConfig;`, ['document', 'HTMLInputElement'], { filename: modulePath })(
+    globalThis.document,
+    globalThis.HTMLInputElement,
+  );
 }
 
 const implementations = [

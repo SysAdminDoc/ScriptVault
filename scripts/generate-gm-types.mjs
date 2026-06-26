@@ -109,6 +109,67 @@ interface GMXmlhttpRequestPromise<T = unknown> extends Promise<GMXmlhttpRequestR
   abort(): void;
 }
 
+type GMWebSocketData = string | ArrayBuffer | ArrayBufferView | Blob;
+
+interface GMWebSocketEvent {
+  type: string;
+  target?: GMWebSocketHandle;
+  currentTarget?: GMWebSocketHandle;
+}
+
+interface GMWebSocketMessageEvent extends GMWebSocketEvent {
+  data: string | ArrayBuffer;
+  origin?: string;
+}
+
+interface GMWebSocketErrorEvent extends GMWebSocketEvent {
+  message?: string;
+  error?: unknown;
+}
+
+interface GMWebSocketCloseEvent extends GMWebSocketEvent {
+  code: number;
+  reason: string;
+  wasClean: boolean;
+}
+
+interface GMWebSocketOptions {
+  url?: string | URL;
+  protocols?: string | string[];
+  binaryType?: 'arraybuffer' | 'blob';
+  onopen?: (event: GMWebSocketEvent) => void;
+  onmessage?: (event: GMWebSocketMessageEvent) => void;
+  onerror?: (event: GMWebSocketErrorEvent) => void;
+  onclose?: (event: GMWebSocketCloseEvent) => void;
+}
+
+interface GMWebSocketHandle {
+  readonly CONNECTING: 0;
+  readonly OPEN: 1;
+  readonly CLOSING: 2;
+  readonly CLOSED: 3;
+  readonly url: string;
+  readonly readyState: number;
+  readonly protocol: string;
+  readonly extensions: string;
+  binaryType: 'arraybuffer' | 'blob';
+  onopen: ((event: GMWebSocketEvent) => void) | null;
+  onmessage: ((event: GMWebSocketMessageEvent) => void) | null;
+  onerror: ((event: GMWebSocketErrorEvent) => void) | null;
+  onclose: ((event: GMWebSocketCloseEvent) => void) | null;
+  send(data: GMWebSocketData): boolean;
+  close(code?: number, reason?: string): void;
+  abort(): void;
+  addEventListener(type: 'open', listener: (event: GMWebSocketEvent) => void): void;
+  addEventListener(type: 'message', listener: (event: GMWebSocketMessageEvent) => void): void;
+  addEventListener(type: 'error', listener: (event: GMWebSocketErrorEvent) => void): void;
+  addEventListener(type: 'close', listener: (event: GMWebSocketCloseEvent) => void): void;
+  removeEventListener(type: 'open', listener: (event: GMWebSocketEvent) => void): void;
+  removeEventListener(type: 'message', listener: (event: GMWebSocketMessageEvent) => void): void;
+  removeEventListener(type: 'error', listener: (event: GMWebSocketErrorEvent) => void): void;
+  removeEventListener(type: 'close', listener: (event: GMWebSocketCloseEvent) => void): void;
+}
+
 interface GMDownloadDetails {
   url: string | Blob | File;
   name?: string;
@@ -310,6 +371,7 @@ interface GMAsyncApi {
   addElement<K extends keyof HTMLElementTagNameMap>(parentNode: Node | null, tagName: K, attributes?: GMAddElementAttributes): Promise<HTMLElementTagNameMap[K] | null>;
   xmlHttpRequest<T = unknown>(details: GMXmlhttpRequestDetails<T>): GMXmlhttpRequestPromise<T>;
   fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
+  webSocket(url: string | URL | GMWebSocketOptions, protocols?: string | string[] | GMWebSocketOptions, options?: GMWebSocketOptions): GMWebSocketHandle;
   head<T = unknown>(url: string, callback?: (response: GMXmlhttpRequestResponse<T>) => void): Promise<void>;
   notification(details: string | GMNotificationDetails, ondone?: () => void): Promise<GMNotificationHandle | undefined>;
   setClipboard(data: string, type?: string): Promise<void>;
@@ -355,6 +417,7 @@ declare function GM_addValueChangeListener(
 declare function GM_removeValueChangeListener(listenerId: number): boolean;
 declare function GM_xmlhttpRequest<T = unknown>(details: GMXmlhttpRequestDetails<T>): GMXmlhttpRequestHandle;
 declare function GM_fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
+declare function GM_webSocket(url: string | URL | GMWebSocketOptions, protocols?: string | string[] | GMWebSocketOptions, options?: GMWebSocketOptions): GMWebSocketHandle;
 declare function GM_head<T = unknown>(url: string, callback?: (response: GMXmlhttpRequestResponse<T>) => void): void;
 declare function GM_setClipboard(data: string, type?: string): void;
 declare function GM_notification(

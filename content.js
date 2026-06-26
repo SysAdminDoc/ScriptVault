@@ -141,6 +141,20 @@
       handled = true;
     }
 
+    // GM_webSocket event forwarding (open, message, error, close)
+    if (message.action === 'webSocketEvent') {
+      window.postMessage({
+        channel: CHANNEL_ID,
+        direction: 'to-userscript',
+        type: 'webSocketEvent',
+        requestId: message.data?.requestId,
+        scriptId: message.data?.scriptId,
+        eventType: message.data?.type,
+        data: message.data
+      }, '*');
+      handled = true;
+    }
+
     // Notification event forwarding (click, done, buttonClick).
     // Phase 11.11: buttonIndex is forwarded so the wrapper can fire
     // onbuttonclick({ buttonClickIndex }) per ScriptCat semantics.

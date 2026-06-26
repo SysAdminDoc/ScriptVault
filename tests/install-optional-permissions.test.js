@@ -162,7 +162,7 @@ describe('handleInstall threads optionalPermissions through saveScript', () => {
 describe('install page privileged host-scope copy', () => {
   it('shows the run-host and @connect boundary for privileged APIs', () => {
     expect(installSource).toContain('Privileged Host Scope');
-    expect(installSource).toContain('GM_xmlhttpRequest, GM_download, GM_cookie, and GM_webRequest are limited to the declared run hosts');
+    expect(installSource).toContain('GM_xmlhttpRequest, GM_webSocket, GM_download, GM_cookie, and GM_webRequest are limited to the declared run hosts');
     expect(installSource).toContain('No extra @connect hosts');
     expect(installSource).toContain("'GM_webRequest'");
     expect(installSource).toContain('Can intercept and modify network requests within declared run hosts');

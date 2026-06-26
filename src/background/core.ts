@@ -5988,6 +5988,137 @@ function internalXhrError(prefix, guardResult) {
   return `${prefix}: internal host (${reason})`;
 }
 
+const GM_WEBSOCKET_MAX_MESSAGE_BYTES = 1024 * 1024;
+
+function getGMWebSocketMap() {
+  if (!self._gmWebSockets) self._gmWebSockets = new Map();
+  return self._gmWebSockets;
+}
+
+function scriptHasGrant(script, names) {
+  const grants = Array.isArray(script?.meta?.grant) ? script.meta.grant : [];
+  if (grants.includes('*')) return true;
+  return names.some(name => grants.includes(name));
+}
+
+function normalizeGMWebSocketUrl(rawUrl) {
+  const parsed = new URL(String(rawUrl || ''));
+  if (parsed.protocol !== 'ws:' && parsed.protocol !== 'wss:') {
+    throw new Error('GM_webSocket requires a ws: or wss: URL');
+  }
+  return parsed.href;
+}
+
+function normalizeGMWebSocketProtocols(value) {
+  if (value == null || value === '') return undefined;
+  const protocols = Array.isArray(value) ? value : [value];
+  const seen = new Set();
+  const normalized = [];
+  for (const protocol of protocols) {
+    const token = String(protocol || '').trim();
+    if (!token) continue;
+    if (!/^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/.test(token)) {
+      throw new Error('GM_webSocket protocol contains invalid characters');
+    }
+    const key = token.toLowerCase();
+    if (seen.has(key)) {
+      throw new Error('GM_webSocket protocol list contains duplicates');
+    }
+    seen.add(key);
+    normalized.push(token);
+  }
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function estimateGMWebSocketPayloadBytes(payload) {
+  if (payload == null) return 0;
+  if (typeof payload === 'string') return new TextEncoder().encode(payload).byteLength;
+  if (payload instanceof ArrayBuffer) return payload.byteLength;
+  if (ArrayBuffer.isView(payload)) return payload.byteLength;
+  if (payload instanceof Blob) return payload.size;
+  if (payload && typeof payload === 'object' && payload.__sv_base64__) {
+    return Math.floor(String(payload.data || '').length * 3 / 4);
+  }
+  return new TextEncoder().encode(String(payload)).byteLength;
+}
+
+function decodeGMWebSocketPayload(payload) {
+  if (payload && typeof payload === 'object' && payload.__sv_base64__) {
+    const binary = atob(String(payload.data || ''));
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes.buffer;
+  }
+  return typeof payload === 'string' ? payload : String(payload ?? '');
+}
+
+async function encodeGMWebSocketPayload(payload) {
+  if (typeof payload === 'string') return payload;
+  let buffer = null;
+  if (payload instanceof ArrayBuffer) {
+    buffer = payload;
+  } else if (ArrayBuffer.isView(payload)) {
+    buffer = payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength);
+  } else if (payload instanceof Blob) {
+    buffer = await payload.arrayBuffer();
+  }
+  if (!buffer) return String(payload ?? '');
+
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let offset = 0; offset < bytes.length; offset += 8192) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 8192));
+  }
+  return { __sv_base64__: true, data: btoa(binary) };
+}
+
+function normalizeGMWebSocketCloseCode(code) {
+  if (code === undefined || code === null || code === '') return undefined;
+  const value = Number(code);
+  if (!Number.isInteger(value)) return undefined;
+  if (value === 1000 || (value >= 3000 && value <= 4999)) return value;
+  return undefined;
+}
+
+function normalizeGMWebSocketCloseReason(reason) {
+  if (reason === undefined || reason === null) return undefined;
+  const text = String(reason);
+  const encoder = new TextEncoder();
+  if (encoder.encode(text).byteLength <= 123) return text;
+  let out = '';
+  for (const char of text) {
+    if (encoder.encode(out + char).byteLength > 123) break;
+    out += char;
+  }
+  return out;
+}
+
+function sendGMWebSocketEvent(record, type, eventData = {}) {
+  if (!record || typeof record.tabId !== 'number') return;
+  try {
+    chrome.tabs.sendMessage(record.tabId, {
+      action: 'webSocketEvent',
+      data: {
+        requestId: record.requestId,
+        scriptId: record.scriptId,
+        type,
+        ...eventData
+      }
+    }).catch(() => {});
+  } catch (_) {
+    // Tab may be gone.
+  }
+}
+
+function closeGMWebSocketsForTab(tabId, code = 1001, reason = 'Tab closed') {
+  const sockets = getGMWebSocketMap();
+  for (const [requestId, record] of sockets) {
+    if (record.tabId !== tabId) continue;
+    sockets.delete(requestId);
+    try { record.socket?.close?.(code, reason); } catch (_) {}
+  }
+}
+
 function resolveCookiePolicyTarget(data, sender) {
   if (data?.url) return String(data.url);
   if (data?.domain) {
@@ -8208,6 +8339,159 @@ async function handleMessage(message, sender) {
         }
         return { success: false };
       }
+
+      // GM_webSocket - background-owned WebSocket with @connect enforcement.
+      case 'GM_webSocket': {
+        try {
+          if (typeof WebSocket !== 'function') return { error: 'WebSocket is not available in this browser context' };
+          if (!data.url) return { error: 'No URL provided' };
+          if (!data.scriptId) return { error: 'Missing script context' };
+
+          const wsScript = await ScriptStorage.get(data.scriptId);
+          if (!wsScript) return { error: 'Script context not found' };
+          if (!scriptHasGrant(wsScript, ['GM_webSocket', 'GM.webSocket'])) return { error: 'Not granted' };
+
+          const wsUrl = normalizeGMWebSocketUrl(data.url);
+          const connectPolicy = evaluateConnectPolicy(wsScript, wsUrl);
+          if (!connectPolicy.allowed) {
+            if (connectPolicy.hostname) {
+              console.warn(`[ScriptVault] @connect blocked WebSocket: ${connectPolicy.hostname} not in allowed list for ${wsScript.meta.name}`);
+            }
+            return { error: connectPolicy.error };
+          }
+
+          const settings = await SettingsManager.get();
+          const wsPreCheck = InternalHostGuard.classifyFetchUrl(wsUrl, ['ws:', 'wss:']);
+          if (!wsPreCheck.ok && !shouldAllowInternalXhr(wsScript, wsUrl, settings, wsPreCheck)) {
+            return { error: internalXhrError('GM_webSocket URL rejected', wsPreCheck) };
+          }
+
+          const tabId = sender.tab?.id;
+          if (typeof tabId !== 'number') return { error: 'Missing tab context' };
+
+          const protocols = normalizeGMWebSocketProtocols(data.protocols);
+          const requestId = `ws_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+          const startTime = Date.now();
+          const sockets = getGMWebSocketMap();
+          let socket;
+          try {
+            socket = protocols ? new WebSocket(wsUrl, protocols) : new WebSocket(wsUrl);
+          } catch (error) {
+            return { error: error?.message || 'WebSocket setup failed' };
+          }
+          if (data.binaryType === 'blob' || data.binaryType === 'arraybuffer') {
+            try { socket.binaryType = data.binaryType; } catch (_) {}
+          }
+
+          const record = {
+            requestId,
+            socket,
+            tabId,
+            scriptId: data.scriptId,
+            scriptName: wsScript.meta?.name || data.scriptId,
+            url: wsUrl,
+            bytesSent: 0,
+            bytesReceived: 0,
+            startTime,
+          };
+          sockets.set(requestId, record);
+
+          socket.addEventListener('open', () => {
+            sendGMWebSocketEvent(record, 'open', {
+              protocol: socket.protocol || '',
+              extensions: socket.extensions || ''
+            });
+            NetworkLog.add({
+              scriptId: record.scriptId,
+              scriptName: record.scriptName,
+              type: 'websocket',
+              method: 'WS',
+              url: wsUrl,
+              status: 101,
+              statusText: 'Switching Protocols',
+              duration: Date.now() - startTime,
+            });
+          });
+
+          socket.addEventListener('message', (event) => {
+            (async () => {
+              const size = estimateGMWebSocketPayloadBytes(event.data);
+              record.bytesReceived += size;
+              if (size > GM_WEBSOCKET_MAX_MESSAGE_BYTES) {
+                try { socket.close(1000, 'Message too large'); } catch (_) { try { socket.close(); } catch (_) {} }
+                sendGMWebSocketEvent(record, 'error', { error: `WebSocket message exceeds ${formatBytes(GM_WEBSOCKET_MAX_MESSAGE_BYTES)} limit` });
+                return;
+              }
+              const payload = await encodeGMWebSocketPayload(event.data);
+              sendGMWebSocketEvent(record, 'message', {
+                payload,
+                origin: event.origin || '',
+              });
+            })().catch(error => {
+              sendGMWebSocketEvent(record, 'error', { error: error?.message || 'WebSocket message relay failed' });
+            });
+          });
+
+          socket.addEventListener('error', () => {
+            sendGMWebSocketEvent(record, 'error', { error: 'WebSocket error' });
+          });
+
+          socket.addEventListener('close', (event) => {
+            sockets.delete(requestId);
+            NetworkLog.add({
+              scriptId: record.scriptId,
+              scriptName: record.scriptName,
+              type: 'websocket',
+              method: 'WS_CLOSE',
+              url: wsUrl,
+              status: event.code || 0,
+              statusText: event.reason || '',
+              requestSize: record.bytesSent,
+              responseSize: record.bytesReceived,
+              duration: Date.now() - startTime,
+            });
+            sendGMWebSocketEvent(record, 'close', {
+              code: event.code || 1006,
+              reason: event.reason || '',
+              wasClean: event.wasClean === true,
+            });
+          });
+
+          return { requestId, started: true };
+        } catch (e) {
+          console.error('[ScriptVault] GM_webSocket setup error:', e);
+          return { error: e?.message || 'WebSocket setup failed' };
+        }
+      }
+
+      case 'GM_webSocket_send': {
+        try {
+          const record = getGMWebSocketMap().get(data.requestId);
+          if (!record || record.scriptId !== data.scriptId) return { error: 'WebSocket request not found' };
+          if (record.socket.readyState !== WebSocket.OPEN) return { error: 'WebSocket is not open' };
+          const size = estimateGMWebSocketPayloadBytes(data.payload);
+          if (size > GM_WEBSOCKET_MAX_MESSAGE_BYTES) {
+            return { error: `WebSocket payload exceeds ${formatBytes(GM_WEBSOCKET_MAX_MESSAGE_BYTES)} limit` };
+          }
+          record.socket.send(decodeGMWebSocketPayload(data.payload));
+          record.bytesSent += size;
+          return { success: true };
+        } catch (e) {
+          return { error: e?.message || 'WebSocket send failed' };
+        }
+      }
+
+      case 'GM_webSocket_close': {
+        const record = getGMWebSocketMap().get(data.requestId);
+        if (!record || record.scriptId !== data.scriptId) return { success: false };
+        const code = normalizeGMWebSocketCloseCode(data.code);
+        const reason = normalizeGMWebSocketCloseReason(data.reason);
+        try {
+          if (code !== undefined) record.socket.close(code, reason);
+          else record.socket.close();
+        } catch (_) {}
+        return { success: true };
+      }
       
       // Download (with callbacks: onload, onerror, onprogress, ontimeout)
       case 'GM_download': {
@@ -10368,6 +10652,7 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
   if (self._audioWatchedTabs?.delete(tabId)) {
     SessionState.persistAudioWatchedTabs();
   }
+  closeGMWebSocketsForTab(tabId);
 });
 
 // GM_notification onclick/ondone: fire callbacks on notification interaction

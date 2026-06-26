@@ -47,7 +47,7 @@ Full Greasemonkey/Tampermonkey API compatibility with promise-based `GM.*` async
 | `GM_deleteValue` | `GM_webRequest` | `GM_registerMenuCommand` | `GM_setClipboard` |
 | `GM_listValues` | | `GM_unregisterMenuCommand` | `GM_openInTab` |
 | `GM_getValues` | | `GM_getMenuCommands` | `GM_getResourceText` |
-| `GM_setValues` | | `GM_addElement` | `GM_getResourceURL` |
+| `GM_setValues` | `GM_webSocket` | `GM_addElement` | `GM_getResourceURL` |
 | `GM_deleteValues` | `GM_head` | `GM_loadScript` | `GM_cookie` |
 | `GM_addValueChangeListener` | | `GM_audio` | `GM_focusTab` |
 | `GM_removeValueChangeListener` | | | |
@@ -219,7 +219,7 @@ Two additional zero-config flows ship as separate modules: **Easy Cloud** for on
 - **Script signing** &mdash; Ed25519 cryptographic signatures with trust store
 - **Blacklist system** &mdash; Remote + manual blacklists
 - **Permission analysis** &mdash; Visual `@grant` permission breakdown on install
-- **`@connect` validation** &mdash; Restrict XHR domains and block internal-host requests by default
+- **`@connect` validation** &mdash; Restrict XHR/WebSocket domains and block internal-host requests by default
 - **SRI verification** &mdash; `@require` URLs with `#sha256=` hash are verified after fetch
 - **CSP handling** &mdash; Works on sites with strict Content Security Policies
 - **Zero telemetry** &mdash; No phone home, all data stays local
@@ -475,7 +475,7 @@ that script in the dashboard editor.
 |-------|------------|
 | Script isolation | Scripts run in isolated `USER_SCRIPT` world via `chrome.userScripts` API |
 | Permission transparency | Installation page shows all requested `@grant` permissions |
-| Network restrictions | `@connect` domains and internal-host redirects are validated before XHR response bodies are read |
+| Network restrictions | `@connect` domains and internal-host guards are enforced before XHR, download, and WebSocket requests run |
 | Blacklist protection | Remote + manual blacklists block known malicious scripts |
 | Zero telemetry | No data collection, no phone home &mdash; everything stays local |
 

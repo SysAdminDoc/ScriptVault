@@ -7,7 +7,7 @@ import { ScriptSubscriptions as SourceScriptSubscriptions } from '../src/modules
 function loadRuntimeSubscriptions() {
   const modulePath = resolve(__dirname, '../modules/subscriptions.js');
   const code = readFileSync(modulePath, 'utf8');
-  return compileFunction(`${code}\nreturn ScriptSubscriptions;`, [], { filename: modulePath })();
+  return compileFunction(`${code}\nreturn ScriptSubscriptions;`, ['chrome'], { filename: modulePath })(globalThis.chrome);
 }
 
 const implementations = [

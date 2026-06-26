@@ -32,6 +32,7 @@ const DANGEROUS_PERMISSIONS = [
   'GM_xmlhttpRequest',
   'GM.xmlHttpRequest',
   'GM_download',
+  'GM_webSocket',
   'GM_setClipboard',
   'unsafeWindow',
   'GM_cookie',
@@ -43,6 +44,7 @@ const GRANT_DESCRIPTIONS = {
   'GM_xmlhttpRequest': 'Can make network requests from declared run hosts or explicit @connect hosts',
   'GM.xmlHttpRequest': 'Can make network requests from declared run hosts or explicit @connect hosts',
   'GM_download': 'Can download files from declared run hosts or explicit @connect hosts',
+  'GM_webSocket': 'Can open persistent WebSocket connections to declared run hosts or explicit @connect hosts',
   'GM_setClipboard': 'Can write to your clipboard',
   'GM_cookie': 'Can read and modify browser cookies for declared run hosts',
   'unsafeWindow': 'Direct access to the page\'s JavaScript environment',
@@ -1399,7 +1401,7 @@ function renderInstallUI(sourceUrl) {
           <span class="count">${scriptMeta.connect.length > 0 ? numberFormatter.format(scriptMeta.connect.length) : 'Run hosts'}</span>
         </div>
         <p class="optional-perm-note" style="margin-top:0;margin-bottom:8px;font-size:0.85em;color:var(--text-muted,#888);">
-          GM_xmlhttpRequest, GM_download, GM_cookie, and GM_webRequest are limited to the declared run hosts. @connect entries explicitly widen network/download/DNR targets; cookie access stays run-host scoped unless the advanced cross-scope override is enabled.
+          GM_xmlhttpRequest, GM_webSocket, GM_download, GM_cookie, and GM_webRequest are limited to the declared run hosts. @connect entries explicitly widen network, download, WebSocket, and DNR targets; cookie access stays run-host scoped unless the advanced cross-scope override is enabled.
         </p>
         <div class="tag-list">
           ${scriptMeta.connect.length > 0

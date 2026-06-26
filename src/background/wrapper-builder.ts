@@ -330,6 +330,11 @@ ${req.code}
   const _xhrRequests = new Map(); // requestId -> { details, aborted }
   let _xhrSeqId = 0;
 
+  // Background-owned WebSocket handles. Connections live in the service
+  // worker so @connect and internal-host guards are enforced before dialing.
+  const _webSocketHandles = new Map(); // requestId -> { handle, details, listeners, readyState, closed }
+  let _webSocketSeqId = 0;
+
   // Value change listeners (like Tampermonkey)
   const _valueChangeListeners = new Map(); // listenerId -> { key, callback }
   let _valueChangeListenerId = 0;
@@ -435,6 +440,77 @@ ${req.code}
       // Clean up on loadend
       if (eventType === 'loadend') {
         _xhrRequests.delete(msg.requestId);
+      }
+    }
+
+    // Handle GM_webSocket events
+    if (msg.type === 'webSocketEvent' && msg.scriptId === scriptId) {
+      const socket = _webSocketHandles.get(msg.requestId);
+      if (!socket || socket.closed) return;
+
+      const eventType = msg.eventType;
+      const eventData = msg.data || {};
+
+      function decodeMessageData(value) {
+        if (value && typeof value === 'object' && value.__sv_base64__) {
+          const binary = atob(value.data || '');
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+          return bytes.buffer;
+        }
+        return value;
+      }
+
+      function dispatch(type, eventObject) {
+        const handler = socket.handle && socket.handle['on' + type];
+        if (typeof handler === 'function') {
+          try { handler.call(socket.handle, eventObject); } catch (_e) {}
+        }
+        const listeners = socket.listeners[type];
+        if (listeners) {
+          for (const listener of Array.from(listeners)) {
+            try { listener.call(socket.handle, eventObject); } catch (_e) {}
+          }
+        }
+      }
+
+      if (eventType === 'open') {
+        socket.readyState = 1;
+        socket.protocol = eventData.protocol || '';
+        socket.extensions = eventData.extensions || '';
+        dispatch('open', { type: 'open', target: socket.handle, currentTarget: socket.handle });
+      } else if (eventType === 'message') {
+        const messageEvent = {
+          type: 'message',
+          data: decodeMessageData(eventData.payload),
+          origin: eventData.origin || '',
+          lastEventId: '',
+          source: null,
+          ports: [],
+          target: socket.handle,
+          currentTarget: socket.handle,
+        };
+        dispatch('message', messageEvent);
+      } else if (eventType === 'error') {
+        dispatch('error', {
+          type: 'error',
+          message: eventData.error || 'WebSocket error',
+          error: eventData.error || 'WebSocket error',
+          target: socket.handle,
+          currentTarget: socket.handle,
+        });
+      } else if (eventType === 'close') {
+        socket.readyState = 3;
+        socket.closed = true;
+        dispatch('close', {
+          type: 'close',
+          code: eventData.code || 1006,
+          reason: eventData.reason || '',
+          wasClean: eventData.wasClean === true,
+          target: socket.handle,
+          currentTarget: socket.handle,
+        });
+        _webSocketHandles.delete(msg.requestId);
       }
     }
   });
@@ -881,6 +957,193 @@ ${req.code}
     promise.abort = () => { if (control && typeof control.abort === 'function') control.abort(); };
     return promise;
   }
+
+  function _normalizeWebSocketDetails(urlOrDetails, protocolsOrOptions, maybeOptions) {
+    let details = {};
+    if (urlOrDetails && typeof urlOrDetails === 'object' && !(urlOrDetails instanceof URL)) {
+      details = { ...urlOrDetails };
+    } else {
+      details.url = String(urlOrDetails || '');
+    }
+
+    if (Array.isArray(protocolsOrOptions) || typeof protocolsOrOptions === 'string') {
+      details.protocols = protocolsOrOptions;
+    } else if (protocolsOrOptions && typeof protocolsOrOptions === 'object') {
+      details = { ...details, ...protocolsOrOptions };
+    }
+
+    if (maybeOptions && typeof maybeOptions === 'object') {
+      details = { ...details, ...maybeOptions };
+    }
+
+    return details;
+  }
+
+  function _dispatchLocalWebSocketError(entry, message) {
+    const eventObject = {
+      type: 'error',
+      message,
+      error: message,
+      target: entry.handle,
+      currentTarget: entry.handle,
+    };
+    if (typeof entry.handle.onerror === 'function') {
+      try { entry.handle.onerror.call(entry.handle, eventObject); } catch (_e) {}
+    }
+    const listeners = entry.listeners.error;
+    if (listeners) {
+      for (const listener of Array.from(listeners)) {
+        try { listener.call(entry.handle, eventObject); } catch (_e) {}
+      }
+    }
+  }
+
+  async function _serializeWebSocketPayload(payload) {
+    if (payload == null) return '';
+    if (typeof payload === 'string') return payload;
+    if (payload instanceof URLSearchParams) return payload.toString();
+
+    let buffer = null;
+    if (payload instanceof ArrayBuffer) {
+      buffer = payload;
+    } else if (ArrayBuffer.isView(payload)) {
+      buffer = payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength);
+    } else if (payload instanceof Blob || payload instanceof File) {
+      buffer = await payload.arrayBuffer();
+    }
+
+    if (!buffer) return String(payload);
+
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    for (let offset = 0; offset < bytes.length; offset += 8192) {
+      binary += String.fromCharCode(...bytes.subarray(offset, offset + 8192));
+    }
+    return { __sv_base64__: true, data: btoa(binary) };
+  }
+
+  function GM_webSocket(urlOrDetails, protocolsOrOptions, maybeOptions) {
+    const details = _normalizeWebSocketDetails(urlOrDetails, protocolsOrOptions, maybeOptions);
+    const localId = 'ws_' + (++_webSocketSeqId) + '_' + Date.now().toString(36);
+    const listeners = { open: new Set(), message: new Set(), error: new Set(), close: new Set() };
+    const entry = {
+      requestId: null,
+      details,
+      listeners,
+      readyState: 0,
+      closed: false,
+      protocol: '',
+      extensions: '',
+      handle: null,
+    };
+
+    const handle = {
+      CONNECTING: 0,
+      OPEN: 1,
+      CLOSING: 2,
+      CLOSED: 3,
+      binaryType: details.binaryType === 'blob' ? 'blob' : 'arraybuffer',
+      onopen: typeof details.onopen === 'function' ? details.onopen : null,
+      onmessage: typeof details.onmessage === 'function' ? details.onmessage : null,
+      onerror: typeof details.onerror === 'function' ? details.onerror : null,
+      onclose: typeof details.onclose === 'function' ? details.onclose : null,
+      get url() { return String(details.url || ''); },
+      get readyState() { return entry.readyState; },
+      get protocol() { return entry.protocol || ''; },
+      get extensions() { return entry.extensions || ''; },
+      addEventListener(type, listener) {
+        if (listeners[type] && typeof listener === 'function') listeners[type].add(listener);
+      },
+      removeEventListener(type, listener) {
+        if (listeners[type]) listeners[type].delete(listener);
+      },
+      dispatchEvent(event) {
+        if (!event || !listeners[event.type]) return false;
+        for (const listener of Array.from(listeners[event.type])) {
+          try { listener.call(handle, event); } catch (_e) {}
+        }
+        return true;
+      },
+      send(payload) {
+        if (!entry.requestId || entry.readyState !== 1 || entry.closed) {
+          _dispatchLocalWebSocketError(entry, 'WebSocket is not open');
+          return false;
+        }
+        (async () => {
+          const encoded = await _serializeWebSocketPayload(payload);
+          const response = await sendToBackground('GM_webSocket_send', {
+            scriptId,
+            requestId: entry.requestId,
+            payload: encoded,
+          });
+          if (response && response.error) _dispatchLocalWebSocketError(entry, response.error);
+        })().catch(error => _dispatchLocalWebSocketError(entry, error?.message || 'WebSocket send failed'));
+        return true;
+      },
+      close(code, reason) {
+        if (entry.closed) return;
+        entry.readyState = 2;
+        if (entry.requestId) {
+          sendToBackground('GM_webSocket_close', {
+            scriptId,
+            requestId: entry.requestId,
+            code,
+            reason,
+          }).catch(() => {});
+        } else {
+          entry.closed = true;
+          entry.readyState = 3;
+          _webSocketHandles.delete(localId);
+        }
+      },
+      abort() {
+        handle.close(1000, 'aborted');
+      },
+    };
+
+    entry.handle = handle;
+    _webSocketHandles.set(localId, entry);
+
+    if (!hasGrant('GM_webSocket') && !hasGrant('GM.webSocket')) {
+      entry.readyState = 3;
+      entry.closed = true;
+      _dispatchLocalWebSocketError(entry, 'Permission denied');
+      _webSocketHandles.delete(localId);
+      return handle;
+    }
+
+    sendToBackground('GM_webSocket', {
+      scriptId,
+      url: details.url,
+      protocols: details.protocols,
+      binaryType: handle.binaryType,
+    }).then(response => {
+      if (!response || response.error) {
+        entry.readyState = 3;
+        entry.closed = true;
+        _dispatchLocalWebSocketError(entry, response?.error || 'WebSocket connection failed');
+        _webSocketHandles.delete(localId);
+        return;
+      }
+      if (response.requestId) {
+        entry.requestId = response.requestId;
+        _webSocketHandles.set(response.requestId, entry);
+        _webSocketHandles.delete(localId);
+      }
+    }).catch(error => {
+      entry.readyState = 3;
+      entry.closed = true;
+      _dispatchLocalWebSocketError(entry, error?.message || 'WebSocket connection failed');
+      _webSocketHandles.delete(localId);
+    });
+
+    return handle;
+  }
+
+  GM_webSocket.CONNECTING = 0;
+  GM_webSocket.OPEN = 1;
+  GM_webSocket.CLOSING = 2;
+  GM_webSocket.CLOSED = 3;
 
   function _gmFetchAbortError() {
     if (typeof DOMException === 'function') return new DOMException('The operation was aborted.', 'AbortError');
@@ -1571,6 +1834,7 @@ ${req.code}
     saveTab: (t) => Promise.resolve(GM_saveTab(t)),
     getTabs: () => new Promise(r => GM_getTabs(r)),
     loadScript: (url, opts) => GM_loadScript(url, opts),
+    webSocket: (url, protocols, opts) => GM_webSocket(url, protocols, opts),
     cookies: {
       list: (d) => new Promise((res, rej) => GM_cookie.list(d, (cookies, err) => err ? rej(err) : res(cookies))),
       set: (d) => new Promise((res, rej) => GM_cookie.set(d, (err) => err ? rej(err) : res())),
@@ -1624,6 +1888,7 @@ ${req.code}
   window.GM_removeValueChangeListener = GM_removeValueChangeListener;
   window.GM_cookie = GM_cookie;
   window.GM_focusTab = GM_focusTab;
+  window.GM_webSocket = GM_webSocket;
 
   // ========== GM_webRequest (Tampermonkey-compatible, declarativeNetRequest-backed) ==========
   function GM_webRequest(rules, listener) {

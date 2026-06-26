@@ -48,6 +48,8 @@ describe('GM ambient declarations', () => {
     expect(declaration).toContain('interface GMCookiePartitionKey');
     expect(declaration).toContain('partitionKey?: GMCookiePartitionKey;');
     expect(declaration).toContain('audio: GMAudioPromiseApi;');
+    expect(declaration).toContain('webSocket(url: string | URL | GMWebSocketOptions');
+    expect(declaration).toContain('declare function GM_webSocket');
     expect(declaration).toContain('webRequest(rules: GMWebRequestRule | GMWebRequestRule[], listener?: GMWebRequestListener): Promise<void>;');
     expect(declaration).toContain('fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;');
     expect(declaration).toContain('declare function GM_fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;');
@@ -91,6 +93,18 @@ async function main() {
   const fetchJson: unknown = await fetchResponse.json();
   const directFetchResponse = await GM_fetch(new URL('https://example.com/api'));
   console.log(fetchResponse.status, directFetchResponse.url, fetchJson);
+
+  const socket = GM_webSocket('wss://example.com/socket', ['chat'], {
+    onmessage(event) {
+      const payload: string | ArrayBuffer = event.data;
+      console.log(payload);
+    },
+  });
+  socket.addEventListener('open', event => console.log(event.type));
+  socket.send('hello');
+  socket.close(1000, 'done');
+  const asyncSocket = GM.webSocket({ url: 'wss://example.com/events', binaryType: 'arraybuffer' });
+  asyncSocket.abort();
 
   const tab = GM_openInTab('https://example.com', { active: true });
   tab?.close();

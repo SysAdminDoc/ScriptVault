@@ -925,6 +925,29 @@ interface GMXmlhttpRequestAbort {
   requestId: string;
 }
 
+interface GMWebSocket {
+  action: 'GM_webSocket';
+  scriptId: string;
+  url: string;
+  protocols?: string | string[];
+  binaryType?: 'arraybuffer' | 'blob';
+}
+
+interface GMWebSocketSend {
+  action: 'GM_webSocket_send';
+  scriptId: string;
+  requestId: string;
+  payload?: unknown;
+}
+
+interface GMWebSocketClose {
+  action: 'GM_webSocket_close';
+  scriptId: string;
+  requestId: string;
+  code?: number;
+  reason?: string;
+}
+
 interface GMDownload {
   action: 'GM_download';
   url: string;
@@ -1439,6 +1462,7 @@ export type BackgroundMessage =
   | AddScriptToFolder | RemoveScriptFromFolder | MoveScriptToFolder
   // GM APIs
   | GMXmlhttpRequest | GMXmlhttpRequestAbort | GMDownload
+  | GMWebSocket | GMWebSocketSend | GMWebSocketClose
   | GMNotification | GMOpenInTab
   | GMRegisterMenuCommand | GMUnregisterMenuCommand
   | GetMenuCommands | ExecuteMenuCommand
@@ -1795,6 +1819,9 @@ export interface ResponseMap {
   GM_listValues: { keys: string[] };
   GM_xmlhttpRequest: SuccessOrError<{ requestId: string }>;
   GM_xmlhttpRequest_abort: SuccessResponse;
+  GM_webSocket: SuccessOrError<{ requestId: string }>;
+  GM_webSocket_send: SuccessOrError;
+  GM_webSocket_close: SuccessResponse;
   GM_cookie_list: SuccessOrError<{ cookies: chrome.cookies.Cookie[] }>;
   GM_cookie_set: SuccessOrError<{ cookie?: chrome.cookies.Cookie }>;
   GM_cookie_delete: SuccessOrError;

@@ -8,8 +8,8 @@ const code = readFileSync(modulePath, 'utf8');
 
 let XhrManager;
 function createFresh() {
-  const fn = compileFunction(code + '\nreturn XhrManager;', [], { filename: modulePath });
-  return fn();
+  const fn = compileFunction(code + '\nreturn XhrManager;', ['setTimeout', 'clearTimeout'], { filename: modulePath });
+  return fn(globalThis.setTimeout, globalThis.clearTimeout);
 }
 
 beforeEach(() => {
@@ -76,12 +76,14 @@ describe('XhrManager', () => {
 
   it('auto-cleans abandoned requests after the cleanup delay', () => {
     vi.useFakeTimers();
+    XhrManager = createFresh();
     const req = XhrManager.create(1, 's1', {});
 
     vi.advanceTimersByTime(XhrManager.cleanupDelayMs - 1);
     expect(XhrManager.get(req.id)).toBe(req);
 
     vi.advanceTimersByTime(1);
+    vi.runOnlyPendingTimers();
     expect(XhrManager.get(req.id)).toBeUndefined();
   });
 
