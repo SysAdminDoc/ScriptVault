@@ -187,6 +187,11 @@
         recent: 'deletions from the last 7 days',
         older: 'older deletions'
     };
+    const TRASH_FILTER_LABEL_KEYS = {
+        all: 'trashFilterAllDeletedScripts',
+        recent: 'trashFilterRecentDeletedScripts',
+        older: 'trashFilterOlderDeletedScripts'
+    };
     const TRASH_RETENTION_MS_PER_DAY = 24 * 60 * 60 * 1000;
     const HELP_FILTER_LABELS = {
         all: 'all references',
@@ -2133,6 +2138,11 @@
     function getBackupBrowserSortLabel(sort) {
         const labelKey = BACKUP_BROWSER_SORT_LABEL_KEYS[sort] || BACKUP_BROWSER_SORT_LABEL_KEYS.newest;
         return tDashboard(labelKey, BACKUP_BROWSER_SORT_LABELS[sort] || BACKUP_BROWSER_SORT_LABELS.newest);
+    }
+
+    function getTrashFilterLabel(filter) {
+        const labelKey = TRASH_FILTER_LABEL_KEYS[filter] || TRASH_FILTER_LABEL_KEYS.all;
+        return tDashboard(labelKey, TRASH_FILTER_LABELS[filter] || TRASH_FILTER_LABELS.all);
     }
 
     function getDashboardPluralLabel(count, singularKey, pluralKey, singularFallback, pluralFallback) {
@@ -6536,17 +6546,22 @@
     function getTrashMetadata(script) {
         const metadata = script?.metadata || script?.meta || {};
         return {
-            name: metadata.name || 'Unnamed',
-            version: metadata.version || 'No version',
+            name: metadata.name || tDashboard('unnamedScript', 'Unnamed'),
+            version: metadata.version || tDashboard('noVersion', 'No version'),
             author: metadata.author || '',
             description: metadata.description || ''
         };
     }
 
     function formatTrashRetention(mode = state.settings?.trashMode || 'disabled') {
-        if (mode === 'disabled') return 'Disabled';
+        if (mode === 'disabled') return tDashboard('trashRetentionDisabled', 'Disabled');
         const days = parseInt(mode, 10);
-        return Number.isFinite(days) ? `${days} day${days === 1 ? '' : 's'}` : 'Manual';
+        return Number.isFinite(days)
+            ? tDashboard('trashRetentionDays', '{count} {dayLabel}', {
+                count: numberFormatter.format(days),
+                dayLabel: getDashboardPluralLabel(days, 'trashDaySingular', 'trashDayPlural', 'day', 'days')
+            })
+            : tDashboard('trashRetentionManual', 'Manual');
     }
 
     function getTrashRetentionDays(mode = state.settings?.trashMode || 'disabled') {
@@ -6568,9 +6583,11 @@
 
     function formatRelativeTimeLabel(ts) {
         const formatted = formatTime(ts);
-        if (formatted === '-') return 'Unknown';
-        if (formatted === 'now') return 'Just now';
-        return /^\d+[mhd]$/.test(formatted) ? `${formatted} ago` : formatted;
+        if (formatted === '-') return tDashboard('unknown', 'Unknown');
+        if (formatted === 'now') return tDashboard('justNow', 'Just now');
+        return /^\d+[mhd]$/.test(formatted)
+            ? tDashboard('timeAgo', '{time} ago', { time: formatted })
+            : formatted;
     }
 
     function getFilteredTrashItems() {
@@ -6608,7 +6625,10 @@
         const query = elements.trashQuickFilter?.value?.trim() || '';
 
         if (elements.trashCountSummary) {
-            elements.trashCountSummary.textContent = `${numberFormatter.format(total)} script${total === 1 ? '' : 's'}`;
+            elements.trashCountSummary.textContent = tDashboard('trashScriptCount', '{count} {scriptLabel}', {
+                count: numberFormatter.format(total),
+                scriptLabel: getDashboardPluralLabel(total, 'scriptSingular', 'scriptPlural', 'script', 'scripts')
+            });
         }
         if (elements.trashRetentionSummary) {
             elements.trashRetentionSummary.textContent = retentionLabel;
@@ -6616,7 +6636,7 @@
         if (elements.trashLatestSummary) {
             elements.trashLatestSummary.textContent = latestDeletedAt
                 ? formatRelativeTimeLabel(latestDeletedAt)
-                : 'Never';
+                : tDashboard('never', 'Never');
         }
         if (elements.trashRetentionBanner) {
             const nextPurgeAt = state.trashItems.reduce((soonest, item) => {
@@ -6624,12 +6644,17 @@
                 if (!purgeAt) return soonest;
                 return soonest === 0 ? purgeAt : Math.min(soonest, purgeAt);
             }, 0);
-            if (retentionLabel === 'Disabled') {
-                elements.trashRetentionBanner.textContent = 'Trash is disabled. New deletes bypass recovery and are removed immediately.';
+            if (retentionLabel === tDashboard('trashRetentionDisabled', 'Disabled')) {
+                elements.trashRetentionBanner.textContent = tDashboard('trashDisabledBanner', 'Trash is disabled. New deletes bypass recovery and are removed immediately.');
             } else if (nextPurgeAt) {
-                elements.trashRetentionBanner.textContent = `Deleted scripts stay here for ${retentionLabel.toLowerCase()}; next automatic purge is ${dateTimeFormatter.format(new Date(nextPurgeAt))}.`;
+                elements.trashRetentionBanner.textContent = tDashboard('trashRetentionNextPurge', 'Deleted scripts stay here for {retention}; next automatic purge is {date}.', {
+                    retention: retentionLabel,
+                    date: dateTimeFormatter.format(new Date(nextPurgeAt))
+                });
             } else {
-                elements.trashRetentionBanner.textContent = `Deleted scripts stay here for ${retentionLabel.toLowerCase()} before permanent cleanup.`;
+                elements.trashRetentionBanner.textContent = tDashboard('trashRetentionCleanup', 'Deleted scripts stay here for {retention} before permanent cleanup.', {
+                    retention: retentionLabel
+                });
             }
         }
         if (elements.btnEmptyTrash) {
@@ -6641,13 +6666,25 @@
         );
         if (elements.trashFilterStatus) {
             if (total === 0) {
-                elements.trashFilterStatus.textContent = retentionLabel === 'Disabled'
-                    ? 'Trash is disabled. Deleted scripts are removed immediately.'
-                    : `Deleted scripts stay here for ${retentionLabel.toLowerCase()} before final cleanup.`;
+                elements.trashFilterStatus.textContent = retentionLabel === tDashboard('trashRetentionDisabled', 'Disabled')
+                    ? tDashboard('trashFilterStatusDisabled', 'Trash is disabled. Deleted scripts are removed immediately.')
+                    : tDashboard('trashFilterStatusCleanup', 'Deleted scripts stay here for {retention} before final cleanup.', { retention: retentionLabel });
             } else if (query) {
-                elements.trashFilterStatus.textContent = `Showing ${numberFormatter.format(resolvedVisibleCount)} result${resolvedVisibleCount === 1 ? '' : 's'} for "${query}".`;
+                elements.trashFilterStatus.textContent = tDashboard('trashResultsForQuery', 'Showing {count} {resultLabel} for "{query}".', {
+                    count: numberFormatter.format(resolvedVisibleCount),
+                    resultLabel: getDashboardPluralLabel(
+                        resolvedVisibleCount,
+                        'utilitiesResultSingular',
+                        'utilitiesResultPlural',
+                        'result',
+                        'results'
+                    ),
+                    query
+                });
             } else {
-                elements.trashFilterStatus.textContent = `Showing ${TRASH_FILTER_LABELS[state.trashPanelFilter] || 'all deleted scripts'}.`;
+                elements.trashFilterStatus.textContent = tDashboard('trashShowingFilter', 'Showing {filter}.', {
+                    filter: getTrashFilterLabel(state.trashPanelFilter)
+                });
             }
         }
     }
@@ -6661,20 +6698,24 @@
         if (state.trashItems.length === 0) {
             const retentionLabel = formatTrashRetention();
             setTrashEmptyState(
-                retentionLabel === 'Disabled' ? 'Trash is disabled' : 'Trash is empty',
-                retentionLabel === 'Disabled'
-                    ? 'Deleted scripts bypass recovery while this policy is off.'
-                    : `Deleted scripts will stay here for ${retentionLabel.toLowerCase()} before permanent cleanup.`
+                retentionLabel === tDashboard('trashRetentionDisabled', 'Disabled')
+                    ? tDashboard('trashEmptyDisabledTitle', 'Trash is disabled')
+                    : tDashboard('trashEmptyTitle', 'Trash is empty'),
+                retentionLabel === tDashboard('trashRetentionDisabled', 'Disabled')
+                    ? tDashboard('trashEmptyDisabledDescription', 'Deleted scripts bypass recovery while this policy is off.')
+                    : tDashboard('trashEmptyDescriptionWithRetention', 'Deleted scripts will stay here for {retention} before permanent cleanup.', {
+                        retention: retentionLabel
+                    })
             );
             return;
         }
 
         if (filteredTrash.length === 0) {
             setTrashEmptyState(
-                'No deleted scripts matched',
+                tDashboard('trashNoMatchTitle', 'No deleted scripts matched'),
                 elements.trashQuickFilter?.value?.trim()
-                    ? 'Try a different name, author, or version search.'
-                    : 'Switch the time filter to inspect a different recovery window.'
+                    ? tDashboard('trashNoMatchSearchDescription', 'Try a different name, author, or version search.')
+                    : tDashboard('trashNoMatchFilterDescription', 'Switch the time filter to inspect a different recovery window.')
             );
             return;
         }
@@ -6686,8 +6727,8 @@
         filteredTrash.forEach(script => {
             const metadata = getTrashMetadata(script);
             const deletedAt = getTrashTimestamp(script);
-            const deletedLabel = deletedAt ? formatRelativeTimeLabel(deletedAt) : 'Unknown';
-            const deletedExact = deletedAt ? dateTimeFormatter.format(new Date(deletedAt)) : 'Unknown time';
+            const deletedLabel = deletedAt ? formatRelativeTimeLabel(deletedAt) : tDashboard('unknown', 'Unknown');
+            const deletedExact = deletedAt ? dateTimeFormatter.format(new Date(deletedAt)) : tDashboard('unknownTime', 'Unknown time');
             const purgeLabel = formatTrashPurgeDate(script);
             const scriptIdAttr = escapeHtml(script.id);
             const item = document.createElement('article');
@@ -6701,14 +6742,14 @@
                     ${metadata.description ? `<div class="trash-item-description">${escapeHtml(metadata.description)}</div>` : ''}
                     <div class="trash-item-meta">
                         ${metadata.author ? `<span>${escapeHtml(metadata.author)}</span>` : ''}
-                        <span>Deleted ${escapeHtml(deletedLabel)}</span>
-                        <span>Removed ${escapeHtml(deletedExact)}</span>
-                        <span class="trash-item-purge">${purgeLabel ? `Will auto-delete on ${escapeHtml(purgeLabel)}` : 'No automatic deletion scheduled'}</span>
+                        <span>${escapeHtml(tDashboard('trashDeletedLabel', 'Deleted {time}', { time: deletedLabel }))}</span>
+                        <span>${escapeHtml(tDashboard('trashRemovedLabel', 'Removed {time}', { time: deletedExact }))}</span>
+                        <span class="trash-item-purge">${purgeLabel ? escapeHtml(tDashboard('trashAutoDeleteOn', 'Will auto-delete on {date}', { date: purgeLabel })) : escapeHtml(tDashboard('trashNoAutoDelete', 'No automatic deletion scheduled'))}</span>
                     </div>
                 </div>
                 <div class="trash-item-actions">
-                    <button type="button" class="btn" data-trash-restore="${scriptIdAttr}">Restore</button>
-                    <button type="button" class="btn btn-danger" data-trash-delete="${scriptIdAttr}">Delete Forever</button>
+                    <button type="button" class="btn" data-trash-restore="${scriptIdAttr}">${escapeHtml(tDashboard('restoreAction', 'Restore'))}</button>
+                    <button type="button" class="btn btn-danger" data-trash-delete="${scriptIdAttr}">${escapeHtml(tDashboard('deleteForever', 'Delete Forever'))}</button>
                 </div>
             `);
 
@@ -6723,20 +6764,20 @@
                         }
                         await Promise.all([loadTrash(), loadScripts()]);
                         updateStats();
-                        showToast('Script restored', 'success');
+                        showToast(tDashboard('scriptRestored', 'Script restored'), 'success');
                     } catch (error) {
                         console.error('Failed to restore from trash:', error);
-                        showToast('Failed to restore script', 'error');
+                        showToast(tDashboard('failedRestoreScript', 'Failed to restore script'), 'error');
                     }
-                }, { busyLabel: 'Restoring…' });
+                }, { busyLabel: tDashboard('restoringEllipsis', 'Restoring...') });
             });
 
             item.querySelector('[data-trash-delete]')?.addEventListener('click', async () => {
                 const button = item.querySelector('[data-trash-delete]');
                 await runButtonTask(button, async () => {
                     const confirm = await showConfirmModal(
-                        'Delete Forever',
-                        `Permanently remove "${metadata.name}" from trash?`
+                        tDashboard('deleteForever', 'Delete Forever'),
+                        tDashboard('confirmDeleteForever', 'Permanently remove "{name}" from trash?', { name: metadata.name })
                     );
                     if (!confirm) return;
                     try {
@@ -6747,12 +6788,12 @@
                         }
                         await loadTrash();
                         updateStats();
-                        showToast('Permanently deleted', 'success');
+                        showToast(tDashboard('permanentlyDeleted', 'Permanently deleted'), 'success');
                     } catch (error) {
                         console.error('Failed to permanently delete script:', error);
-                        showToast('Failed to permanently delete script', 'error');
+                        showToast(tDashboard('failedPermanentDeleteScript', 'Failed to permanently delete script'), 'error');
                     }
-                }, { busyLabel: 'Deleting…' });
+                }, { busyLabel: tDashboard('deletingEllipsis', 'Deleting...') });
             });
 
             fragment.appendChild(item);
@@ -6765,7 +6806,7 @@
         if (!elements.trashList) return;
         elements.trashList.hidden = false;
         if (elements.trashEmptyState) elements.trashEmptyState.hidden = true;
-        safeSetHtml(elements.trashList, '<div class="panel-empty-inline">Loading deleted scripts…</div>');
+        safeSetHtml(elements.trashList, `<div class="panel-empty-inline">${escapeHtml(tDashboard('trashLoadingDeletedScripts', 'Loading deleted scripts...'))}</div>`);
         try {
             const response = await chrome.runtime.sendMessage({ action: 'getTrash' });
             state.trashItems = Array.isArray(response?.trash) ? response.trash : [];
@@ -6775,9 +6816,12 @@
             state.trashItems = [];
             updateTrashOverview(0);
             if (elements.trashFilterStatus) {
-                elements.trashFilterStatus.textContent = 'Trash could not be loaded right now.';
+                elements.trashFilterStatus.textContent = tDashboard('trashCouldNotLoad', 'Trash could not be loaded right now.');
             }
-            setTrashEmptyState('Trash unavailable', 'ScriptVault could not load deleted scripts right now.');
+            setTrashEmptyState(
+                tDashboard('trashUnavailableTitle', 'Trash unavailable'),
+                tDashboard('trashUnavailableDescription', 'ScriptVault could not load deleted scripts right now.')
+            );
         }
     }
 

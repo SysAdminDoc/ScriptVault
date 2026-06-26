@@ -7887,52 +7887,52 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
             <div class="trash-shell">
                 <div class="trash-hero">
                     <div class="trash-hero-copy">
-                        <div class="trash-eyebrow">Recovery</div>
-                        <h2>Restore deleted scripts without guesswork.</h2>
-                        <p>Everything removed from the vault lands here first, with clear retention policy, quick search, and permanent-delete actions that stay explicit.</p>
+                        <div class="trash-eyebrow" data-i18n="trashRecovery">Recovery</div>
+                        <h2 data-i18n="trashHeroTitle">Restore deleted scripts without guesswork.</h2>
+                        <p data-i18n="trashHeroDescription">Everything removed from the vault lands here first, with clear retention policy, quick search, and permanent-delete actions that stay explicit.</p>
                     </div>
-                    <div class="trash-overview" aria-label="Trash overview">
+                    <div class="trash-overview" aria-label="Trash overview" data-i18n-aria-label="trashOverviewAria">
                         <div class="trash-summary">
-                            <span class="trash-summary-label">Recoverable</span>
-                            <strong id="trashCountSummary">0 scripts</strong>
+                            <span class="trash-summary-label" data-i18n="trashRecoverable">Recoverable</span>
+                            <strong id="trashCountSummary" data-i18n="trashNoScriptsSummary">0 scripts</strong>
                         </div>
                         <div class="trash-summary">
-                            <span class="trash-summary-label">Retention</span>
-                            <strong id="trashRetentionSummary">Disabled</strong>
+                            <span class="trash-summary-label" data-i18n="trashRetention">Retention</span>
+                            <strong id="trashRetentionSummary" data-i18n="trashRetentionDisabled">Disabled</strong>
                         </div>
                         <div class="trash-summary">
-                            <span class="trash-summary-label">Latest Removal</span>
-                            <strong id="trashLatestSummary">Never</strong>
+                            <span class="trash-summary-label" data-i18n="trashLatestRemoval">Latest Removal</span>
+                            <strong id="trashLatestSummary" data-i18n="never">Never</strong>
                         </div>
                     </div>
                 </div>
 
                 <div class="trash-retention-banner" id="trashRetentionBanner" role="status" aria-live="polite">
-                    Deleted scripts stay here for the configured retention window before permanent cleanup.
+                    <span data-i18n="trashRetentionBannerDefault">Deleted scripts stay here for the configured retention window before permanent cleanup.</span>
                 </div>
 
                 <div class="trash-toolbar">
                     <label class="trash-search" for="trashQuickFilter">
-                        <span class="trash-search-icon" aria-hidden="true">Search</span>
-                        <input id="trashQuickFilter" name="trash_search" type="search" placeholder="Filter deleted scripts by name, author, or version" autocomplete="off" spellcheck="false">
+                        <span class="trash-search-icon" aria-hidden="true" data-i18n="trashSearchLabel">Search</span>
+                        <input id="trashQuickFilter" name="trash_search" type="search" placeholder="Filter deleted scripts by name, author, or version" data-i18n-placeholder="trashSearchPlaceholder" autocomplete="off" spellcheck="false">
                     </label>
                     <div class="trash-toolbar-actions">
-                        <div class="trash-filter-row" id="trashCategoryFilters" role="group" aria-label="Trash time filters">
-                            <button type="button" class="trash-filter active" data-trash-filter="all">All</button>
-                            <button type="button" class="trash-filter" data-trash-filter="recent">Last 7 Days</button>
-                            <button type="button" class="trash-filter" data-trash-filter="older">Older</button>
+                        <div class="trash-filter-row" id="trashCategoryFilters" role="group" aria-label="Trash time filters" data-i18n-aria-label="trashTimeFilters">
+                            <button type="button" class="trash-filter active" data-trash-filter="all" data-i18n="utilitiesFilterAll">All</button>
+                            <button type="button" class="trash-filter" data-trash-filter="recent" data-i18n="trashFilterLast7Days">Last 7 Days</button>
+                            <button type="button" class="trash-filter" data-trash-filter="older" data-i18n="trashFilterOlder">Older</button>
                         </div>
-                        <button type="button" class="btn btn-danger" id="btnEmptyTrash">Empty Trash</button>
+                        <button type="button" class="btn btn-danger" id="btnEmptyTrash" data-i18n="emptyTrash">Empty Trash</button>
                     </div>
                 </div>
 
-                <div class="trash-filter-status" id="trashFilterStatus" aria-live="polite">Showing all deleted scripts.</div>
+                <div class="trash-filter-status" id="trashFilterStatus" aria-live="polite" data-i18n="trashShowingAllStatic">Showing all deleted scripts.</div>
 
                 <div class="utility-surface trash-surface">
                     <div id="trashList" class="trash-list" aria-live="polite"></div>
                     <div class="panel-empty" id="trashEmptyState" hidden>
-                        <strong id="trashEmptyTitle">Trash is empty</strong>
-                        <span id="trashEmptyDescription">Deleted scripts will appear here when recovery is available.</span>
+                        <strong id="trashEmptyTitle" data-i18n="trashEmptyTitle">Trash is empty</strong>
+                        <span id="trashEmptyDescription" data-i18n="trashEmptyDescription">Deleted scripts will appear here when recovery is available.</span>
                     </div>
                 </div>
             </div>
@@ -7941,7 +7941,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
         <!-- Script Store Panel -->
         <div id="storePanel" class="tm-panel" role="tabpanel" aria-labelledby="dashboardTabStore" hidden>
             <div id="storeContainer" style="min-height:calc(100vh - 120px);">
-                <div class="lazy-loading-state"><div class="lazy-spinner"></div><div>Loading Script Store…</div></div>
+                <div class="lazy-loading-state"><div class="lazy-spinner"></div><div data-i18n="loadingScriptStore">Loading Script Store...</div></div>
             </div>
         </div>
 

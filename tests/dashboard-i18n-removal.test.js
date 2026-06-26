@@ -217,4 +217,20 @@ describe('dashboard i18n-v2 removal', () => {
     expect(dashboardJs).toContain("'backupBrowserShowingQuery'");
     expect(dashboardJs).toContain("'subscriptionStatusCounts'");
   });
+
+  it('translates trash recovery and script store loading states', () => {
+    expect(dashboardHtml).toContain('data-i18n="trashRecovery"');
+    expect(dashboardHtml).toContain('data-i18n="trashHeroTitle"');
+    expect(dashboardHtml).toContain('data-i18n-aria-label="trashOverviewAria"');
+    expect(dashboardHtml).toContain('data-i18n-placeholder="trashSearchPlaceholder"');
+    expect(dashboardHtml).toContain('data-i18n-aria-label="trashTimeFilters"');
+    expect(dashboardHtml).toContain('data-i18n="emptyTrash"');
+    expect(dashboardHtml).toContain('data-i18n="trashShowingAllStatic"');
+    expect(dashboardHtml).toContain('data-i18n="trashEmptyTitle"');
+    expect(dashboardHtml).toContain('data-i18n="loadingScriptStore"');
+    expect(dashboardJs).toContain("'trashRetentionNextPurge'");
+    expect(dashboardJs).toContain("'trashResultsForQuery'");
+    expect(dashboardJs).toContain("'confirmDeleteForever'");
+    expect(dashboardJs).toContain("'trashUnavailableDescription'");
+  });
 });
