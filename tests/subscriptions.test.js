@@ -1,10 +1,25 @@
-import { ScriptSubscriptions } from '../src/modules/subscriptions.ts';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { compileFunction } from 'node:vm';
+
+import { ScriptSubscriptions as SourceScriptSubscriptions } from '../src/modules/subscriptions.ts';
+
+function loadRuntimeSubscriptions() {
+  const modulePath = resolve(__dirname, '../modules/subscriptions.js');
+  const code = readFileSync(modulePath, 'utf8');
+  return compileFunction(`${code}\nreturn ScriptSubscriptions;`, [], { filename: modulePath })();
+}
+
+const implementations = [
+  { label: 'source', api: SourceScriptSubscriptions },
+  { label: 'runtime', api: loadRuntimeSubscriptions() },
+];
 
 beforeEach(() => {
   globalThis.__resetStorageMock?.();
 });
 
-describe('script subscriptions', () => {
+describe.each(implementations)('script subscriptions ($label)', ({ api: ScriptSubscriptions }) => {
   it('parses array and object feed entries with relative URLs', () => {
     const feed = ScriptSubscriptions.parseFeed(JSON.stringify({
       name: 'Curated Pack',

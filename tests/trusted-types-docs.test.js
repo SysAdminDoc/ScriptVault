@@ -24,10 +24,10 @@ describe('Trusted Types author documentation', () => {
     const dashboard = read('pages/dashboard.html');
 
     expect(dashboard).toContain('Trusted Types And MAIN-World Scripts');
-    expect(dashboard).toContain('ScriptVault runs scripts in <code>USER_SCRIPT</code> world');
-    expect(dashboard).toContain('Scripts that use page context or <code>unsafeWindow</code>');
-    expect(dashboard).toContain('<code>GM_addElement</code> with attributes');
-    expect(dashboard).toContain('<strong>TrustedHTML:</strong>');
+    expect(dashboard).toContain('data-i18n="helpTrustedTypesDefaultDescription">ScriptVault runs scripts in USER_SCRIPT world');
+    expect(dashboard).toContain('data-i18n="helpTrustedTypesMainDescription">Scripts that use page context or unsafeWindow');
+    expect(dashboard).toContain('data-i18n="helpTrustedTypesDomDescription">Prefer textContent, append, createElement, and GM_addElement with attributes.');
+    expect(dashboard).toContain('data-i18n="helpTrustedTypesHtmlLabel">TrustedHTML:</strong>');
   });
 
   it('keeps the cycle documentation-only without adding a runtime policy shim', () => {

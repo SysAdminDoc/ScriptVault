@@ -131,7 +131,7 @@ describe("cross-surface UX audit", () => {
     expect(sidepanelJs).toContain("requestAnimationFrame(() => restoreSidepanelFocus(focusDescriptor));");
     expect(sidepanelJs).toContain("requestAnimationFrame(() => restoreSidepanelFallbackFocus('page'));");
     expect(sidepanelJs).toContain("requestAnimationFrame(() => restoreSidepanelFallbackFocus('all'));");
-    expect(sidepanelJs).toContain('No scripts match "${searchQuery}".');
+    expect(sidepanelJs).toContain("tSidepanel('sideNoMatchingScriptsForQuery', 'No scripts match \"{query}\".', { query: searchQuery })");
     expect(sidepanelJs).toContain("Find for ");
     expect(sidepanelHtml).toContain(".sp-context-banner");
     expect(sidepanelJs).toContain("const banner = document.createElement('button');");
@@ -192,14 +192,14 @@ describe("cross-surface UX audit", () => {
     expect(devtoolsJs).toContain("$('btnCloseDetail').focus({ preventScroll: true });");
     expect(devtoolsJs).toContain("if (selectedEntry && $('netDetail').classList.contains('open')) {");
     expect(devtoolsJs).toContain("renderDetailContent(selectedEntry);");
-    expect(devtoolsJs).toContain("clearButton.textContent = 'Reset'");
-    expect(devtoolsJs).toContain("clearButton.setAttribute('aria-label', 'Reset execution filter');");
+    expect(devtoolsJs).toContain("clearButton.textContent = tDevtools('resetView', 'Reset View');");
+    expect(devtoolsJs).toContain("clearButton.setAttribute('aria-label', tDevtools('devtoolsResetExecutionFilter', 'Reset execution filter'));");
     expect(devtoolsJs).toContain("tr.setAttribute('aria-selected', String(selectedRow === entry.id));");
     expect(devtoolsJs).toContain("Console capture isn’t available here yet. Use Network or Execution for current insight.");
     expect(devtoolsJs).toContain("No requests match");
     expect(devtoolsJs).toContain("No scripts match");
-    expect(devtoolsJs).toContain("clearButton.textContent = 'Clear'");
-    expect(devtoolsJs).toContain("clearButton.setAttribute('aria-label', 'Clear recorded network requests');");
+    expect(devtoolsJs).toContain("clearButton.textContent = tDevtools('clearAction', 'Clear');");
+    expect(devtoolsJs).toContain("clearButton.setAttribute('aria-label', tDevtools('devtoolsClearRecordedNetworkRequests', 'Clear recorded network requests'));");
     expect(devtoolsJs).toContain("No network or execution data to export yet.");
     expect(devtoolsJs).toContain("Diagnostics refresh failed. Showing the last available data.");
     expect(devtoolsHtml).toContain('.toolbar-btn[aria-busy="true"]');

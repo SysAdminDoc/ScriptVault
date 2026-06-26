@@ -1,7 +1,21 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { compileFunction } from 'node:vm';
 
 import { parseUserscript } from '../src/background/parser.ts';
-import { ScriptConfig } from '../src/modules/script-config.ts';
+import { ScriptConfig as SourceScriptConfig } from '../src/modules/script-config.ts';
+
+function loadRuntimeScriptConfig() {
+  const modulePath = resolve(__dirname, '../modules/script-config.js');
+  const code = readFileSync(modulePath, 'utf8');
+  return compileFunction(`${code}\nreturn ScriptConfig;`, [], { filename: modulePath })();
+}
+
+const implementations = [
+  { label: 'source', api: SourceScriptConfig },
+  { label: 'runtime', api: loadRuntimeScriptConfig() },
+];
 
 describe('ScriptConfig userscript @var helpers', () => {
   it('parses userscript @var metadata into config variables', () => {
@@ -25,7 +39,9 @@ describe('ScriptConfig userscript @var helpers', () => {
       { type: 'select', name: 'mode', label: 'Mode', default: 'auto', options: { auto: 'auto', manual: 'manual' } },
     ]);
   });
+});
 
+describe.each(implementations)('ScriptConfig userscript @var helpers ($label)', ({ api: ScriptConfig }) => {
   it('coerces saved values and fills defaults for missing variables', () => {
     const variables = [
       ScriptConfig.parseDirective('number retries "Retries" 2'),

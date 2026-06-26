@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
+import { compileFunction } from 'node:vm';
 
-const code = readFileSync(resolve(__dirname, '../modules/xhr.js'), 'utf8');
+const modulePath = resolve(__dirname, '../modules/xhr.js');
+const code = readFileSync(modulePath, 'utf8');
 
 let XhrManager;
 function createFresh() {
-  const fn = new Function(code + '\nreturn XhrManager;');
+  const fn = compileFunction(code + '\nreturn XhrManager;', [], { filename: modulePath });
   return fn();
 }
 

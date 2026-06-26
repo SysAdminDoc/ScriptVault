@@ -112,7 +112,7 @@ describe('Chrome userScripts onboarding diagnostics', () => {
     expect(dashboardJs).toContain("action: 'runScriptNow'");
     expect(dashboardJs).toContain('scriptId,');
     expect(dashboardJs).toContain('tabId: targetTab.id');
-    expect(dashboardJs).toContain('runButtonTask(event.currentTarget, () => runScriptOnceOnTab(), { busyLabel: \'Running...\' })');
+    expect(dashboardJs).toContain("runButtonTask(event.currentTarget, () => runScriptOnceOnTab(), { busyLabel: tDashboard('runningEllipsis', 'Running...') })");
     expect(dashboardJs).toContain('[data-action="runNow"]');
     expect(messagesTs).toContain("interface RunScriptNow");
     expect(messagesTs).toContain("action: 'runScriptNow';");

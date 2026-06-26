@@ -128,7 +128,7 @@ describe("popup UX controller", () => {
     expect(popupJs).toMatch(/await copyTextToClipboard\(url\);/);
     expect(popupJs).toMatch(/updateBtn\.disabled = !hasUpdateUrl;/);
     expect(popupJs).toMatch(/copyUrlBtn\.disabled = !installUrl;/);
-    expect(popupJs).toMatch(/pinBtn\.textContent = script\?\.settings\?\.pinned \? 'Unpin Script' : 'Pin Script';/);
+    expect(popupJs).toMatch(/pinBtn\.textContent = script\?\.settings\?\.pinned \? tPopup\('popupUnpinScript', 'Unpin Script'\) : tPopup\('popupPinScript', 'Pin Script'\);/);
     expect(popupJs).toMatch(/dropdown\.setAttribute\('aria-label', `Actions for \$\{name\}`\);/);
     expect(popupJs).toMatch(/queuePopupFocusRestore\(getPopupFocusDescriptor\(getDropdownTriggerButton\(scriptId\)\)\);/);
     expect(popupJs).toMatch(/dropdown\.addEventListener\('keydown', \(e\) => \{/);

@@ -30,7 +30,7 @@ describe('subscription dashboard surface', () => {
 
   it('renders feed health indicators', () => {
     expect(html).toContain('subscription-health');
-    expect(js).toContain("Health: ${escapeHtml(health.label)}");
+    expect(js).toContain("tDashboard('subscriptionHealthPrefix', 'Health: {health}', { health: health.label })");
     expect(js).toContain("Needs attention");
     expect(js).toContain("Not checked");
     expect(js).toContain("Healthy");

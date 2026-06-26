@@ -1,7 +1,21 @@
 import { webcrypto } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { compileFunction } from 'node:vm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { SyncCrypto } from '../src/modules/sync-crypto.ts';
+import { SyncCrypto as SourceSyncCrypto } from '../src/modules/sync-crypto.ts';
+
+function loadRuntimeSyncCrypto() {
+  const modulePath = resolve(__dirname, '../modules/sync-crypto.js');
+  const code = readFileSync(modulePath, 'utf8');
+  return compileFunction(`${code}\nreturn SyncCrypto;`, [], { filename: modulePath })();
+}
+
+const implementations = [
+  { label: 'source', api: SourceSyncCrypto },
+  { label: 'runtime', api: loadRuntimeSyncCrypto() },
+];
 
 const fastEncryptedSettings = {
   syncEncryptionEnabled: true,
@@ -19,7 +33,7 @@ afterAll(() => {
   Object.defineProperty(globalThis, 'crypto', { value: originalCrypto, configurable: true });
 });
 
-describe('sync crypto helper', () => {
+describe.each(implementations)('sync crypto helper ($label)', ({ api: SyncCrypto }) => {
   it('round-trips a v1 sync envelope through PBKDF2 and AES-256-GCM', async () => {
     const envelope = {
       version: 1,

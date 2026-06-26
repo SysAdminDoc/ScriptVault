@@ -33,10 +33,10 @@ export default defineConfig({
       ],
       exclude: ["src/config/**", "src/types/**", "lib/**", "node_modules/**"],
       thresholds: {
-        lines: 36,
-        functions: 39,
-        branches: 25,
-        statements: 34,
+        lines: 45,
+        functions: 48,
+        branches: 32,
+        statements: 42,
       },
     },
     // Mock chrome.* APIs that aren't available in jsdom
