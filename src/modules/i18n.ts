@@ -40,6 +40,15 @@ type TranslationKeys = {
   editorTabStorage: string;
   editorTabInfo: string;
 
+  // Settings sections (additions — settingsGeneral/settingsEditor/settingsSync are below in settings filter keys)
+  settingsAppearance: string;
+  settingsSecurity: string;
+  settingsUpdate: string;
+  settingsExternals: string;
+  settingsExperimental: string;
+  settingsReset: string;
+  settingsBackup: string;
+
   // Scripts
   newScript: string;
   importScript: string;
@@ -285,6 +294,15 @@ const translations: TranslationMap = {
     editorTabStorage: 'Storage',
     editorTabInfo: 'Info',
 
+    // Settings sections
+    settingsAppearance: 'Appearance',
+    settingsSecurity: 'Security',
+    settingsUpdate: 'Userscript Update',
+    settingsExternals: 'Externals',
+    settingsExperimental: 'Experimental',
+    settingsReset: 'Reset',
+    settingsBackup: 'Backup',
+
     // Scripts
     newScript: 'New Script',
     importScript: 'Import',
@@ -496,6 +514,13 @@ const translations: TranslationMap = {
     editorTabExternals: 'Externos',
     editorTabStorage: 'Almacenamiento',
     editorTabInfo: 'Info',
+    settingsAppearance: 'Apariencia',
+    settingsSecurity: 'Seguridad',
+    settingsUpdate: 'Actualización de Scripts',
+    settingsExternals: 'Externos',
+    settingsExperimental: 'Experimental',
+    settingsReset: 'Restablecer',
+    settingsBackup: 'Copia de Seguridad',
     newScript: 'Nuevo Script',
     importScript: 'Importar',
     checkUpdates: 'Buscar Actualizaciones',
@@ -695,6 +720,13 @@ const translations: TranslationMap = {
     editorTabExternals: 'Externes',
     editorTabStorage: 'Stockage',
     editorTabInfo: 'Info',
+    settingsAppearance: 'Apparence',
+    settingsSecurity: 'Sécurité',
+    settingsUpdate: 'Mise à Jour des Scripts',
+    settingsExternals: 'Externes',
+    settingsExperimental: 'Expérimental',
+    settingsReset: 'Réinitialiser',
+    settingsBackup: 'Sauvegarde',
     newScript: 'Nouveau Script',
     importScript: 'Importer',
     checkUpdates: 'Vérifier les Mises à Jour',
@@ -894,6 +926,13 @@ const translations: TranslationMap = {
     editorTabExternals: 'Externe',
     editorTabStorage: 'Speicher',
     editorTabInfo: 'Info',
+    settingsAppearance: 'Darstellung',
+    settingsSecurity: 'Sicherheit',
+    settingsUpdate: 'Skript-Aktualisierung',
+    settingsExternals: 'Externe Ressourcen',
+    settingsExperimental: 'Experimentell',
+    settingsReset: 'Zurücksetzen',
+    settingsBackup: 'Sicherung',
     newScript: 'Neues Script',
     importScript: 'Importieren',
     checkUpdates: 'Updates prüfen',
@@ -1093,6 +1132,13 @@ const translations: TranslationMap = {
     editorTabExternals: '外部资源',
     editorTabStorage: '存储',
     editorTabInfo: '信息',
+    settingsAppearance: '外观',
+    settingsSecurity: '安全',
+    settingsUpdate: '脚本更新',
+    settingsExternals: '外部资源',
+    settingsExperimental: '实验性',
+    settingsReset: '重置',
+    settingsBackup: '备份',
     newScript: '新建脚本',
     importScript: '导入',
     checkUpdates: '检查更新',
@@ -1292,6 +1338,13 @@ const translations: TranslationMap = {
     editorTabExternals: '外部リソース',
     editorTabStorage: 'ストレージ',
     editorTabInfo: '情報',
+    settingsAppearance: '外観',
+    settingsSecurity: 'セキュリティ',
+    settingsUpdate: 'スクリプト更新',
+    settingsExternals: '外部リソース',
+    settingsExperimental: '実験的',
+    settingsReset: 'リセット',
+    settingsBackup: 'バックアップ',
     newScript: '新規スクリプト',
     importScript: 'インポート',
     checkUpdates: '更新を確認',
@@ -1491,6 +1544,13 @@ const translations: TranslationMap = {
     editorTabExternals: 'Externos',
     editorTabStorage: 'Armazenamento',
     editorTabInfo: 'Info',
+    settingsAppearance: 'Aparência',
+    settingsSecurity: 'Segurança',
+    settingsUpdate: 'Atualização de Scripts',
+    settingsExternals: 'Externos',
+    settingsExperimental: 'Experimental',
+    settingsReset: 'Redefinir',
+    settingsBackup: 'Backup',
     newScript: 'Novo Script',
     importScript: 'Importar',
     checkUpdates: 'Verificar Atualizações',
@@ -1690,6 +1750,13 @@ const translations: TranslationMap = {
     editorTabExternals: 'Внешние ресурсы',
     editorTabStorage: 'Хранилище',
     editorTabInfo: 'Инфо',
+    settingsAppearance: 'Оформление',
+    settingsSecurity: 'Безопасность',
+    settingsUpdate: 'Обновление скриптов',
+    settingsExternals: 'Внешние ресурсы',
+    settingsExperimental: 'Экспериментальные',
+    settingsReset: 'Сброс',
+    settingsBackup: 'Резервное копирование',
     newScript: 'Новый скрипт',
     importScript: 'Импорт',
     checkUpdates: 'Проверить обновления',
@@ -1892,6 +1959,13 @@ const translations: TranslationMap = {
     editorTabExternals: 'Externals',
     editorTabStorage: 'Storage',
     editorTabInfo: 'Info',
+    settingsAppearance: 'Appearance',
+    settingsSecurity: 'Security',
+    settingsUpdate: 'Userscript Update',
+    settingsExternals: 'Externals',
+    settingsExperimental: 'Experimental',
+    settingsReset: 'Reset',
+    settingsBackup: 'Backup',
     newScript: 'New Script',
     importScript: 'Import',
     checkUpdates: 'Check Updates',
