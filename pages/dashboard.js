@@ -199,6 +199,12 @@
         shortcuts: 'shortcut references',
         reference: 'API and matcher references'
     };
+    const HELP_FILTER_LABEL_KEYS = {
+        all: 'helpFilterAllReferences',
+        actions: 'helpFilterActionReferences',
+        shortcuts: 'helpFilterShortcutReferences',
+        reference: 'helpFilterApiReferences'
+    };
 
     function getDashboardBrowserName() {
         return /Firefox\//.test(navigator.userAgent || '') ? 'firefox' : 'chromium';
@@ -2143,6 +2149,11 @@
     function getTrashFilterLabel(filter) {
         const labelKey = TRASH_FILTER_LABEL_KEYS[filter] || TRASH_FILTER_LABEL_KEYS.all;
         return tDashboard(labelKey, TRASH_FILTER_LABELS[filter] || TRASH_FILTER_LABELS.all);
+    }
+
+    function getHelpFilterLabel(filter) {
+        const labelKey = HELP_FILTER_LABEL_KEYS[filter] || HELP_FILTER_LABEL_KEYS.all;
+        return tDashboard(labelKey, HELP_FILTER_LABELS[filter] || HELP_FILTER_LABELS.all);
     }
 
     function getDashboardPluralLabel(count, singularKey, pluralKey, singularFallback, pluralFallback) {
@@ -6443,18 +6454,39 @@
         const theme = THEME_LABELS[state.settings.layout || 'dark'] || 'Dark';
 
         if (elements.helpActionSummary) {
-            elements.helpActionSummary.textContent = `${numberFormatter.format(actionCount)} launch${actionCount === 1 ? '' : 'es'}`;
+            elements.helpActionSummary.textContent = tDashboard('helpLaunchCount', '{count} {launchLabel}', {
+                count: numberFormatter.format(actionCount),
+                launchLabel: getDashboardPluralLabel(
+                    actionCount,
+                    'helpLaunchSingular',
+                    'helpLaunchPlural',
+                    'launch',
+                    'launches'
+                )
+            });
         }
         if (elements.helpVisibleSummary) {
-            elements.helpVisibleSummary.textContent = `${numberFormatter.format(resolvedVisibleCount)} section${resolvedVisibleCount === 1 ? '' : 's'}`;
+            elements.helpVisibleSummary.textContent = tDashboard('utilitiesVisibleSectionCount', '{count} {sectionLabel}', {
+                count: numberFormatter.format(resolvedVisibleCount),
+                sectionLabel: getDashboardPluralLabel(
+                    resolvedVisibleCount,
+                    'utilitiesSectionSingular',
+                    'utilitiesSectionPlural',
+                    'section',
+                    'sections'
+                )
+            });
         }
         if (elements.helpThemeSummary) {
             elements.helpThemeSummary.textContent = theme;
         }
         if (elements.helpScriptSummary) {
             elements.helpScriptSummary.textContent = total === 0
-                ? '0 installed'
-                : `${numberFormatter.format(active)}/${numberFormatter.format(total)} active`;
+                ? tDashboard('helpScriptsInstalledEmpty', '0 installed')
+                : tDashboard('helpActiveScriptsSummary', '{active}/{total} active', {
+                    active: numberFormatter.format(active),
+                    total: numberFormatter.format(total)
+                });
         }
     }
 
@@ -6481,9 +6513,21 @@
 
         if (elements.helpFilterStatus) {
             if (query) {
-                elements.helpFilterStatus.textContent = `Showing ${numberFormatter.format(visibleCount)} result${visibleCount === 1 ? '' : 's'} for "${elements.helpQuickFilter?.value?.trim() || ''}".`;
+                elements.helpFilterStatus.textContent = tDashboard('helpResultsForQuery', 'Showing {count} {resultLabel} for "{query}".', {
+                    count: numberFormatter.format(visibleCount),
+                    resultLabel: getDashboardPluralLabel(
+                        visibleCount,
+                        'utilitiesResultSingular',
+                        'utilitiesResultPlural',
+                        'result',
+                        'results'
+                    ),
+                    query: elements.helpQuickFilter?.value?.trim() || ''
+                });
             } else {
-                elements.helpFilterStatus.textContent = `Showing ${HELP_FILTER_LABELS[state.helpPanelFilter] || 'all references'}.`;
+                elements.helpFilterStatus.textContent = tDashboard('helpShowingFilter', 'Showing {filter}.', {
+                    filter: getHelpFilterLabel(state.helpPanelFilter)
+                });
             }
         }
         if (elements.helpEmptyState) {

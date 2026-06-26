@@ -7951,242 +7951,242 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
             <div class="help-shell">
                 <div class="help-hero">
                     <div class="help-hero-copy">
-                        <div class="help-eyebrow">Reference</div>
-                        <h2>Command desk for the whole vault.</h2>
-                        <p>Search the control surface, launch common flows, and keep API or shortcut details one step away while you work.</p>
+                        <div class="help-eyebrow" data-i18n="helpReferenceEyebrow">Reference</div>
+                        <h2 data-i18n="helpHeroTitle">Command desk for the whole vault.</h2>
+                        <p data-i18n="helpHeroDescription">Search the control surface, launch common flows, and keep API or shortcut details one step away while you work.</p>
                     </div>
                     <div class="help-overview">
                         <div class="help-summary">
-                            <span class="help-summary-label">Actions</span>
-                            <strong id="helpActionSummary">0 launches</strong>
+                            <span class="help-summary-label" data-i18n="helpActionsSummaryLabel">Actions</span>
+                            <strong id="helpActionSummary" data-i18n="helpActionSummaryEmpty">0 launches</strong>
                         </div>
                         <div class="help-summary">
-                            <span class="help-summary-label">Visible</span>
-                            <strong id="helpVisibleSummary">0 sections</strong>
+                            <span class="help-summary-label" data-i18n="helpVisibleSummaryLabel">Visible</span>
+                            <strong id="helpVisibleSummary" data-i18n="utilitiesVisibleSectionCount">0 sections</strong>
                         </div>
                         <div class="help-summary">
-                            <span class="help-summary-label">Theme</span>
+                            <span class="help-summary-label" data-i18n="helpThemeSummaryLabel">Theme</span>
                             <strong id="helpThemeSummary">Dark</strong>
                         </div>
                         <div class="help-summary">
-                            <span class="help-summary-label">Scripts</span>
-                            <strong id="helpScriptSummary">0 installed</strong>
+                            <span class="help-summary-label" data-i18n="helpScriptsSummaryLabel">Scripts</span>
+                            <strong id="helpScriptSummary" data-i18n="helpScriptsInstalledEmpty">0 installed</strong>
                         </div>
                     </div>
                 </div>
 
                 <div class="help-toolbar">
                     <label class="help-search" for="helpQuickFilter">
-                        <span class="help-search-icon">Search</span>
-                        <input type="search" class="help-search-input" id="helpQuickFilter" name="help_search" placeholder="Search commands, shortcuts, APIs, & matching tools" autocomplete="off" spellcheck="false">
+                        <span class="help-search-icon" data-i18n="helpSearchLabel">Search</span>
+                        <input type="search" class="help-search-input" id="helpQuickFilter" name="help_search" placeholder="Search commands, shortcuts, APIs, and matching tools" data-i18n-placeholder="helpSearchPlaceholder" autocomplete="off" spellcheck="false">
                     </label>
-                    <div class="help-filter-row" id="helpCategoryFilters" role="group" aria-label="Help category filters">
-                        <button type="button" class="help-filter active" data-help-filter="all">All</button>
-                        <button type="button" class="help-filter" data-help-filter="actions">Actions</button>
-                        <button type="button" class="help-filter" data-help-filter="shortcuts">Shortcuts</button>
-                        <button type="button" class="help-filter" data-help-filter="reference">Reference</button>
+                    <div class="help-filter-row" id="helpCategoryFilters" role="group" aria-label="Help category filters" data-i18n-aria-label="helpCategoryFilters">
+                        <button type="button" class="help-filter active" data-help-filter="all" data-i18n="helpFilterAll">All</button>
+                        <button type="button" class="help-filter" data-help-filter="actions" data-i18n="helpFilterActions">Actions</button>
+                        <button type="button" class="help-filter" data-help-filter="shortcuts" data-i18n="helpFilterShortcuts">Shortcuts</button>
+                        <button type="button" class="help-filter" data-help-filter="reference" data-i18n="helpFilterReference">Reference</button>
                     </div>
                 </div>
 
-                <div class="help-filter-status" id="helpFilterStatus">Showing all references.</div>
+                <div class="help-filter-status" id="helpFilterStatus" data-i18n="helpShowingAllStatic">Showing all references.</div>
 
                 <div class="help-sections" id="helpSections">
             <div class="help-section" data-help-group="actions">
-                <div class="shortcuts-title">Quick Actions</div>
+                <div class="shortcuts-title" data-i18n="helpQuickActionsTitle">Quick Actions</div>
                 <div class="help-section-body">
                     <div class="help-action-grid" id="helpActionGrid">
                         <button type="button" class="help-action-card" data-help-action="new-script">
-                            <strong>New Script</strong>
-                            <span>Create a fresh userscript from the dashboard.</span>
+                            <strong data-i18n="helpActionNewScriptTitle">New Script</strong>
+                            <span data-i18n="helpActionNewScriptDescription">Create a fresh userscript from the dashboard.</span>
                         </button>
                         <button type="button" class="help-action-card" data-help-action="import-script">
-                            <strong>Import Script</strong>
-                            <span>Pull in a local `.user.js` or archive file.</span>
+                            <strong data-i18n="helpActionImportScriptTitle">Import Script</strong>
+                            <span data-i18n="helpActionImportScriptDescription">Pull in a local .user.js or archive file.</span>
                         </button>
                         <button type="button" class="help-action-card" data-help-action="find-scripts">
-                            <strong>Find Scripts</strong>
-                            <span>Search GreasyFork and OpenUserJS without leaving the app.</span>
+                            <strong data-i18n="helpActionFindScriptsTitle">Find Scripts</strong>
+                            <span data-i18n="helpActionFindScriptsDescription">Search GreasyFork and OpenUserJS without leaving the app.</span>
                         </button>
                         <button type="button" class="help-action-card" data-help-action="command-palette">
-                            <strong>Command Palette</strong>
-                            <span>Jump to commands, scripts, and tools from one keyboard surface.</span>
+                            <strong data-i18n="helpActionCommandPaletteTitle">Command Palette</strong>
+                            <span data-i18n="helpActionCommandPaletteDescription">Jump to commands, scripts, and tools from one keyboard surface.</span>
                         </button>
                         <button type="button" class="help-action-card" data-help-action="open-settings">
-                            <strong>Open Settings</strong>
-                            <span>Adjust runtime, editor, and sync preferences.</span>
+                            <strong data-i18n="helpActionOpenSettingsTitle">Open Settings</strong>
+                            <span data-i18n="helpActionOpenSettingsDescription">Adjust runtime, editor, and sync preferences.</span>
                         </button>
                         <button type="button" class="help-action-card" data-help-action="open-utilities">
-                            <strong>Open Utilities</strong>
-                            <span>Go straight to backup, import, cloud, and diagnostics.</span>
+                            <strong data-i18n="helpActionOpenUtilitiesTitle">Open Utilities</strong>
+                            <span data-i18n="helpActionOpenUtilitiesDescription">Go straight to backup, import, cloud, and diagnostics.</span>
                         </button>
                         <button type="button" class="help-action-card" data-help-action="open-trash">
-                            <strong>Open Trash</strong>
-                            <span>Review deleted scripts and restore them if needed.</span>
+                            <strong data-i18n="helpActionOpenTrashTitle">Open Trash</strong>
+                            <span data-i18n="helpActionOpenTrashDescription">Review deleted scripts and restore them if needed.</span>
                         </button>
                         <button type="button" class="help-action-card" data-help-action="check-updates">
-                            <strong>Check Updates</strong>
-                            <span>Run an immediate update sweep across installed scripts.</span>
+                            <strong data-i18n="helpActionCheckUpdatesTitle">Check Updates</strong>
+                            <span data-i18n="helpActionCheckUpdatesDescription">Run an immediate update sweep across installed scripts.</span>
                         </button>
                     </div>
                 </div>
             </div>
 
             <div class="help-section" data-help-group="actions">
-                <div class="shortcuts-title">Operational Notes</div>
+                <div class="shortcuts-title" data-i18n="helpOperationalNotesTitle">Operational Notes</div>
                 <div class="help-content">
-                    <div class="help-step"><strong>Install scripts:</strong> Navigate to any <code>.user.js</code> URL, use Find Scripts, or drag files onto this dashboard.</div>
-                    <div class="help-step"><strong>Manage scripts:</strong> Toggle on/off, click name to edit, right-click update icon to force-update.</div>
-                    <div class="help-step"><strong>Templates:</strong> Click <strong>+ New</strong> to pick from 6 starter templates.</div>
-                    <div class="help-step"><strong>Cloud sync:</strong> Settings tab &rarr; Sync section. Supports WebDAV, Google Drive, Dropbox, OneDrive.</div>
-                    <div class="help-step"><strong>Bulk actions:</strong> Select scripts with checkboxes (Shift+click for range), then use the action dropdown.</div>
+                    <div class="help-step"><strong data-i18n="helpInstallScriptsLabel">Install scripts:</strong> <span data-i18n="helpInstallScriptsDescription">Navigate to any .user.js URL, use Find Scripts, or drag files onto this dashboard.</span></div>
+                    <div class="help-step"><strong data-i18n="helpManageScriptsLabel">Manage scripts:</strong> <span data-i18n="helpManageScriptsDescription">Toggle on/off, click name to edit, right-click update icon to force-update.</span></div>
+                    <div class="help-step"><strong data-i18n="helpTemplatesLabel">Templates:</strong> <span data-i18n="helpTemplatesDescription">Click + New to pick from 6 starter templates.</span></div>
+                    <div class="help-step"><strong data-i18n="helpCloudSyncLabel">Cloud sync:</strong> <span data-i18n="helpCloudSyncDescription">Settings tab, Sync section. Supports WebDAV, Google Drive, Dropbox, and OneDrive.</span></div>
+                    <div class="help-step"><strong data-i18n="helpBulkActionsLabel">Bulk actions:</strong> <span data-i18n="helpBulkActionsDescription">Select scripts with checkboxes, Shift+click for range, then use the action dropdown.</span></div>
                 </div>
             </div>
 
             <!-- Dashboard Shortcuts -->
             <div class="help-section" data-help-group="shortcuts">
-                <div class="shortcuts-title">Dashboard Shortcuts</div>
+                <div class="shortcuts-title" data-i18n="helpDashboardShortcutsTitle">Dashboard Shortcuts</div>
                 <div class="shortcuts-grid">
                     <span class="shortcut-key">Ctrl+N</span>
-                    <span class="shortcut-desc">New Script</span>
+                    <span class="shortcut-desc" data-i18n="shortcutNewScript">New Script</span>
                     <span class="shortcut-key">Ctrl+I</span>
-                    <span class="shortcut-desc">Import Script</span>
+                    <span class="shortcut-desc" data-i18n="shortcutImportScript">Import Script</span>
                     <span class="shortcut-key">Ctrl+/</span>
-                    <span class="shortcut-desc">Focus Search</span>
+                    <span class="shortcut-desc" data-i18n="shortcutFocusSearch">Focus Search</span>
                     <span class="shortcut-key">Alt+1-7</span>
-                    <span class="shortcut-desc">Switch Tabs</span>
+                    <span class="shortcut-desc" data-i18n="shortcutSwitchTabs">Switch Tabs</span>
                     <span class="shortcut-key">Ctrl+W</span>
-                    <span class="shortcut-desc">Close Script Tab</span>
+                    <span class="shortcut-desc" data-i18n="shortcutCloseScriptTab">Close Script Tab</span>
                     <span class="shortcut-key">Ctrl+Tab</span>
-                    <span class="shortcut-desc">Next Script Tab</span>
+                    <span class="shortcut-desc" data-i18n="shortcutNextScriptTab">Next Script Tab</span>
                     <span class="shortcut-key">Ctrl+Shift+Tab</span>
-                    <span class="shortcut-desc">Previous Script Tab</span>
+                    <span class="shortcut-desc" data-i18n="shortcutPreviousScriptTab">Previous Script Tab</span>
                 </div>
             </div>
 
             <!-- GM API Reference -->
             <div class="help-section" data-help-group="reference">
-                <div class="shortcuts-title">GM API Quick Reference</div>
+                <div class="shortcuts-title" data-i18n="helpGmApiTitle">GM API Quick Reference</div>
                 <div class="help-api-grid">
                     <div class="help-api-group">
-                        <div class="help-api-category">Storage</div>
+                        <div class="help-api-category" data-i18n="helpApiStorage">Storage</div>
                         <code>GM_getValue(key, default)</code>
                         <code>GM_setValue(key, value)</code>
                         <code>GM_deleteValue(key)</code>
                         <code>GM_listValues()</code>
                     </div>
                     <div class="help-api-group">
-                        <div class="help-api-category">Network</div>
+                        <div class="help-api-category" data-i18n="helpApiNetwork">Network</div>
                         <code>GM_xmlhttpRequest(details)</code>
                         <code>GM_download(details)</code>
                         <code>GM_fetch(url, options)</code>
                     </div>
                     <div class="help-api-group">
-                        <div class="help-api-category">UI</div>
+                        <div class="help-api-category" data-i18n="helpApiUi">UI</div>
                         <code>GM_addStyle(css)</code>
                         <code>GM_notification(details)</code>
                         <code>GM_registerMenuCommand(name, fn)</code>
                         <code>GM_addElement(tag, attrs)</code>
                     </div>
                     <div class="help-api-group">
-                        <div class="help-api-category">Utilities</div>
+                        <div class="help-api-category" data-i18n="helpApiUtilities">Utilities</div>
                         <code>GM_info</code>
                         <code>GM_openInTab(url, opts)</code>
                         <code>GM_setClipboard(data)</code>
                         <code>GM_getResourceText(name)</code>
                     </div>
                 </div>
-                <div class="help-inline-note">All functions also available as promise-based <code>GM.*</code> variants, such as <code>await GM.getValue()</code>.</div>
+                <div class="help-inline-note" data-i18n="helpGmApiNote">All functions are also available as promise-based GM.* variants, such as await GM.getValue().</div>
             </div>
 
             <div class="help-section" data-help-group="reference">
-                <div class="shortcuts-title">Trusted Types And MAIN-World Scripts</div>
+                <div class="shortcuts-title" data-i18n="helpTrustedTypesTitle">Trusted Types And MAIN-World Scripts</div>
                 <div class="help-content">
-                    <div class="help-step"><strong>Default path:</strong> ScriptVault runs scripts in <code>USER_SCRIPT</code> world, which is separate from page Trusted Types policy.</div>
-                    <div class="help-step"><strong>MAIN-world path:</strong> Scripts that use page context or <code>unsafeWindow</code> must obey the page policy for raw <code>innerHTML</code>, script URLs, and inline handlers.</div>
-                    <div class="help-step"><strong>Safer DOM writes:</strong> Prefer <code>textContent</code>, <code>append</code>, <code>createElement</code>, and <code>GM_addElement</code> with attributes.</div>
-                    <div class="help-step"><strong>TrustedHTML:</strong> Use a target-site approved policy when the page requires it; do not create broad passthrough policies to bypass CSP.</div>
+                    <div class="help-step"><strong data-i18n="helpTrustedTypesDefaultLabel">Default path:</strong> <span data-i18n="helpTrustedTypesDefaultDescription">ScriptVault runs scripts in USER_SCRIPT world, which is separate from page Trusted Types policy.</span></div>
+                    <div class="help-step"><strong data-i18n="helpTrustedTypesMainLabel">MAIN-world path:</strong> <span data-i18n="helpTrustedTypesMainDescription">Scripts that use page context or unsafeWindow must obey the page policy for raw innerHTML, script URLs, and inline handlers.</span></div>
+                    <div class="help-step"><strong data-i18n="helpTrustedTypesDomLabel">Safer DOM writes:</strong> <span data-i18n="helpTrustedTypesDomDescription">Prefer textContent, append, createElement, and GM_addElement with attributes.</span></div>
+                    <div class="help-step"><strong data-i18n="helpTrustedTypesHtmlLabel">TrustedHTML:</strong> <span data-i18n="helpTrustedTypesHtmlDescription">Use a target-site approved policy when the page requires it; do not create broad passthrough policies to bypass CSP.</span></div>
                 </div>
             </div>
 
             <!-- Pattern Tester -->
             <div class="help-section" data-help-group="reference">
-                <div class="shortcuts-title">Pattern Tester</div>
+                <div class="shortcuts-title" data-i18n="helpPatternTesterTitle">Pattern Tester</div>
                 <div class="help-content">
                     <div class="help-pattern-row">
-                        <input type="text" class="input-field" id="patternTestUrl" placeholder="Enter a URL to test (e.g., https://example.com/page)" style="flex:1">
-                        <button type="button" class="btn btn-primary" id="btnTestPattern">Test</button>
+                        <input type="text" class="input-field" id="patternTestUrl" placeholder="Enter a URL to test (e.g., https://example.com/page)" data-i18n-placeholder="helpPatternTesterPlaceholder" style="flex:1">
+                        <button type="button" class="btn btn-primary" id="btnTestPattern" data-i18n="testAction">Test</button>
                     </div>
-                    <div id="patternTestResults" class="help-pattern-results">Enter a URL to see which scripts would run on it.</div>
+                    <div id="patternTestResults" class="help-pattern-results" data-i18n="helpPatternResultsPrompt">Enter a URL to see which scripts would run on it.</div>
                 </div>
             </div>
 
             <div class="help-section shortcuts-container" data-help-group="shortcuts">
-                <div class="shortcuts-title">Editor Shortcuts</div>
+                <div class="shortcuts-title" data-i18n="helpEditorShortcutsTitle">Editor Shortcuts</div>
                 <div class="shortcuts-grid">
                     <span class="shortcut-key">Alt-Up</span>
-                    <span class="shortcut-desc">Move Line Up</span>
+                    <span class="shortcut-desc" data-i18n="shortcutMoveLineUp">Move Line Up</span>
                     <span class="shortcut-key">Alt-Down</span>
-                    <span class="shortcut-desc">Move Line Down</span>
+                    <span class="shortcut-desc" data-i18n="shortcutMoveLineDown">Move Line Down</span>
                     <span class="shortcut-key">Alt-Left</span>
-                    <span class="shortcut-desc">Previous Tab</span>
+                    <span class="shortcut-desc" data-i18n="shortcutPreviousTab">Previous Tab</span>
                     <span class="shortcut-key">Alt-Right</span>
-                    <span class="shortcut-desc">Next Tab</span>
+                    <span class="shortcut-desc" data-i18n="shortcutNextTab">Next Tab</span>
                     <span class="shortcut-key">Ctrl-Up</span>
-                    <span class="shortcut-desc">Line Up</span>
+                    <span class="shortcut-desc" data-i18n="shortcutLineUp">Line Up</span>
                     <span class="shortcut-key">Ctrl-Down</span>
-                    <span class="shortcut-desc">Line Down</span>
+                    <span class="shortcut-desc" data-i18n="shortcutLineDown">Line Down</span>
                     <span class="shortcut-key">Ctrl-Left</span>
-                    <span class="shortcut-desc">Group Left</span>
+                    <span class="shortcut-desc" data-i18n="shortcutGroupLeft">Group Left</span>
                     <span class="shortcut-key">Ctrl-Right</span>
-                    <span class="shortcut-desc">Group Right</span>
+                    <span class="shortcut-desc" data-i18n="shortcutGroupRight">Group Right</span>
                     <span class="shortcut-key">F2</span>
-                    <span class="shortcut-desc">Next Bookmark</span>
+                    <span class="shortcut-desc" data-i18n="shortcutNextBookmark">Next Bookmark</span>
                     <span class="shortcut-key">F3</span>
-                    <span class="shortcut-desc">Find Next</span>
+                    <span class="shortcut-desc" data-i18n="shortcutFindNext">Find Next</span>
                     <span class="shortcut-key">F4</span>
-                    <span class="shortcut-desc">Find Previous</span>
+                    <span class="shortcut-desc" data-i18n="shortcutFindPrevious">Find Previous</span>
                     <span class="shortcut-key">F8</span>
-                    <span class="shortcut-desc">Next Problem</span>
+                    <span class="shortcut-desc" data-i18n="shortcutNextProblem">Next Problem</span>
                     <span class="shortcut-key">Ctrl-F2</span>
-                    <span class="shortcut-desc">Select Bookmarks</span>
+                    <span class="shortcut-desc" data-i18n="shortcutSelectBookmarks">Select Bookmarks</span>
                     <span class="shortcut-key">Ctrl-Alt-F2</span>
-                    <span class="shortcut-desc">Toggle</span>
+                    <span class="shortcut-desc" data-i18n="shortcutToggle">Toggle</span>
                     <span class="shortcut-key">Shift-F2</span>
-                    <span class="shortcut-desc">Previous Bookmark</span>
+                    <span class="shortcut-desc" data-i18n="shortcutPreviousBookmark">Previous Bookmark</span>
                     <span class="shortcut-key">Shift-F3</span>
-                    <span class="shortcut-desc">Find Previous</span>
+                    <span class="shortcut-desc" data-i18n="shortcutFindPrevious">Find Previous</span>
                     <span class="shortcut-key">Shift-F8</span>
-                    <span class="shortcut-desc">Previous Problem</span>
+                    <span class="shortcut-desc" data-i18n="shortcutPreviousProblem">Previous Problem</span>
                     <span class="shortcut-key">Shift-Ctrl-F2</span>
-                    <span class="shortcut-desc">Clear All</span>
+                    <span class="shortcut-desc" data-i18n="shortcutClearAll">Clear All</span>
                     <span class="shortcut-key">Ctrl-Backspace</span>
-                    <span class="shortcut-desc">Delete to Previous Word Boundary</span>
+                    <span class="shortcut-desc" data-i18n="shortcutDeletePreviousWord">Delete to Previous Word Boundary</span>
                     <span class="shortcut-key">Ctrl-Delete</span>
-                    <span class="shortcut-desc">Delete to Next Word Boundary</span>
+                    <span class="shortcut-desc" data-i18n="shortcutDeleteNextWord">Delete to Next Word Boundary</span>
                     <span class="shortcut-key">Ctrl-Home</span>
-                    <span class="shortcut-desc">Document Start</span>
+                    <span class="shortcut-desc" data-i18n="shortcutDocumentStart">Document Start</span>
                     <span class="shortcut-key">Alt-Pause</span>
-                    <span class="shortcut-desc">Next Theme</span>
+                    <span class="shortcut-desc" data-i18n="shortcutNextTheme">Next Theme</span>
                     <span class="shortcut-key">Ctrl-Space</span>
-                    <span class="shortcut-desc">Autocomplete</span>
+                    <span class="shortcut-desc" data-i18n="shortcutAutocomplete">Autocomplete</span>
                     <span class="shortcut-key">Ctrl-End</span>
-                    <span class="shortcut-desc">Document End</span>
+                    <span class="shortcut-desc" data-i18n="shortcutDocumentEnd">Document End</span>
                     <span class="shortcut-key">Esc</span>
-                    <span class="shortcut-desc">Back or Close</span>
+                    <span class="shortcut-desc" data-i18n="shortcutBackOrClose">Back or Close</span>
                     <span class="shortcut-key">Tab</span>
-                    <span class="shortcut-desc">Indent</span>
+                    <span class="shortcut-desc" data-i18n="shortcutIndent">Indent</span>
                     <span class="shortcut-key">Ctrl-A</span>
-                    <span class="shortcut-desc">Select All</span>
+                    <span class="shortcut-desc" data-i18n="shortcutSelectAll">Select All</span>
                     <span class="shortcut-key">Ctrl-S</span>
-                    <span class="shortcut-desc">Save Script</span>
+                    <span class="shortcut-desc" data-i18n="shortcutSaveScript">Save Script</span>
                     <span class="shortcut-key">Ctrl-F</span>
-                    <span class="shortcut-desc">Find</span>
+                    <span class="shortcut-desc" data-i18n="shortcutFind">Find</span>
                     <span class="shortcut-key">Ctrl-H</span>
-                    <span class="shortcut-desc">Replace</span>
+                    <span class="shortcut-desc" data-i18n="shortcutReplace">Replace</span>
                     <span class="shortcut-key">Ctrl-Z</span>
-                    <span class="shortcut-desc">Undo</span>
+                    <span class="shortcut-desc" data-i18n="shortcutUndo">Undo</span>
                     <span class="shortcut-key">Ctrl-Y</span>
-                    <span class="shortcut-desc">Redo</span>
+                    <span class="shortcut-desc" data-i18n="shortcutRedo">Redo</span>
                 </div>
             </div>
 
@@ -8198,7 +8198,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                             <h2>ScriptVault</h2>
                             <p class="version" id="aboutVersion"></p>
                             <p class="version" id="aboutBrowserBuild"></p>
-                            <p>A lightweight userscript manager with a fast local control surface and a deliberate editing workspace.</p>
+                            <p data-i18n="helpAboutDescription">A lightweight userscript manager with a fast local control surface and a deliberate editing workspace.</p>
                         </div>
                     </div>
                     <div class="about-links">
@@ -8210,15 +8210,15 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 <div class="about-stats">
                     <div class="stat-item">
                         <div class="stat-value" id="statTotalScripts">0</div>
-                        <div class="stat-label">Total Scripts</div>
+                        <div class="stat-label" data-i18n="helpTotalScripts">Total Scripts</div>
                     </div>
                     <div class="stat-item">
                         <div class="stat-value" id="statActiveScripts">0</div>
-                        <div class="stat-label">Active Scripts</div>
+                        <div class="stat-label" data-i18n="helpActiveScripts">Active Scripts</div>
                     </div>
                     <div class="stat-item">
                         <div class="stat-value" id="statTotalStorage">0 B</div>
-                        <div class="stat-label">Storage Used</div>
+                        <div class="stat-label" data-i18n="helpStorageUsed">Storage Used</div>
                     </div>
                 </div>
                 <div class="quota-bar-container">
@@ -8230,8 +8230,8 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
             </div>
                 </div>
                 <div class="panel-empty" id="helpEmptyState" hidden>
-                    <strong>No help sections matched</strong>
-                    <span>Clear the search or switch categories to bring the reference surface back into view.</span>
+                    <strong data-i18n="helpNoMatchesTitle">No help sections matched</strong>
+                    <span data-i18n="helpNoMatchesDescription">Clear the search or switch categories to bring the reference surface back into view.</span>
                 </div>
             </div>
         </div>

@@ -233,4 +233,24 @@ describe('dashboard i18n-v2 removal', () => {
     expect(dashboardJs).toContain("'confirmDeleteForever'");
     expect(dashboardJs).toContain("'trashUnavailableDescription'");
   });
+
+  it('translates help panel hero, actions, shortcuts, reference, and empty states', () => {
+    expect(dashboardHtml).toContain('data-i18n="helpReferenceEyebrow"');
+    expect(dashboardHtml).toContain('data-i18n-placeholder="helpSearchPlaceholder"');
+    expect(dashboardHtml).toContain('data-i18n-aria-label="helpCategoryFilters"');
+    expect(dashboardHtml).toContain('data-i18n="helpQuickActionsTitle"');
+    expect(dashboardHtml).toContain('data-i18n="helpActionCommandPaletteDescription"');
+    expect(dashboardHtml).toContain('data-i18n="helpOperationalNotesTitle"');
+    expect(dashboardHtml).toContain('data-i18n="helpDashboardShortcutsTitle"');
+    expect(dashboardHtml).toContain('data-i18n="helpGmApiTitle"');
+    expect(dashboardHtml).toContain('data-i18n="helpTrustedTypesTitle"');
+    expect(dashboardHtml).toContain('data-i18n-placeholder="helpPatternTesterPlaceholder"');
+    expect(dashboardHtml).toContain('data-i18n="helpEditorShortcutsTitle"');
+    expect(dashboardHtml).toContain('data-i18n="shortcutFindPrevious"');
+    expect(dashboardHtml).toContain('data-i18n="helpAboutDescription"');
+    expect(dashboardHtml).toContain('data-i18n="helpNoMatchesTitle"');
+    expect(dashboardJs).toContain("'helpLaunchCount'");
+    expect(dashboardJs).toContain("'helpResultsForQuery'");
+    expect(dashboardJs).toContain("'helpShowingFilter'");
+  });
 });
