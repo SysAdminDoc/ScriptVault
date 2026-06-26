@@ -672,8 +672,8 @@ describe("dashboard accessibility markup", () => {
     expect(dashboardJs).toMatch(/Will auto-delete on/);
     expect(dashboardJs).toMatch(/next automatic purge is/);
     expect(dashboardJs).toMatch(/runButtonTask\(button, async \(\) => \{\s*try \{\s*const response = await chrome\.runtime\.sendMessage\(\{ action: 'restoreFromTrash', scriptId: script\.id \}\);/);
-    expect(dashboardJs).toMatch(/await Promise\.all\(\[loadTrash\(\), loadScripts\(\)\]\);\s*updateStats\(\);\s*showToast\('Script restored', 'success'\);/);
-    expect(dashboardJs).toMatch(/runButtonTask\(button, async \(\) => \{\s*const confirm = await showConfirmModal\(\s*'Delete Forever'/);
+    expect(dashboardJs).toMatch(/await Promise\.all\(\[loadTrash\(\), loadScripts\(\)\]\);\s*updateStats\(\);\s*showToast\(tDashboard\('scriptRestored', 'Script restored'\), 'success'\);/);
+    expect(dashboardJs).toMatch(/runButtonTask\(button, async \(\) => \{\s*const confirm = await showConfirmModal\(\s*tDashboard\('deleteForever', 'Delete Forever'\)/);
     expect(dashboardJs).toMatch(/role="listitem"\$\{ws\.id === active \? ' aria-current="true"' : ''\}/);
     expect(dashboardJs).toMatch(/data-ws-activate="\$\{escapeHtml\(ws\.id\)\}"\$\{ws\.id === active \? ' disabled aria-current="true" title="Current workspace"'/);
     expect(dashboardJs).toMatch(/\$\{ws\.id === active \? 'Current' : 'Switch'\}/);
