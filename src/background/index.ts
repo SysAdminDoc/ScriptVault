@@ -87,6 +87,13 @@ export {
   isGMNotificationAction,
 } from './gm-notification-handler';
 export type { GMNotificationAction } from './gm-notification-handler';
+export {
+  GM_RESOURCE_ACTIONS,
+  GMResourceHandler,
+  handleGMResourceMessage,
+  isGMResourceAction,
+} from './gm-resource-handler';
+export type { GMResourceAction } from './gm-resource-handler';
 export { createScriptTrustReceipt, sha256Hex } from './trust-receipt';
 
 export { CloudSync } from './cloud-sync';

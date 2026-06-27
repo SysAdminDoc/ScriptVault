@@ -7879,76 +7879,12 @@ async function handleMessage(message, sender) {
       case 'fetchResource':
         return await ResourceCache.fetchResource(data.url);
 
-      case 'GM_getResourceText': {
-        const script = await ScriptStorage.get(data.scriptId);
-        if (!script || !script.meta.resource) return null;
-        const url = script.meta.resource[data.name];
-        if (!url) return null;
-        try {
-          return await ResourceCache.fetchResource(url);
-        } catch (e) {
-          return null;
-        }
-      }
-
-      case 'GM_getResourceURL': {
-        const script2 = await ScriptStorage.get(data.scriptId);
-        if (!script2 || !script2.meta.resource) return null;
-        const url2 = script2.meta.resource[data.name];
-        if (!url2) return null;
-        try {
-          return await ResourceCache.getDataUri(url2);
-        } catch (e) {
-          return null;
-        }
-      }
-
-      // GM_loadScript - Fetch a script URL and return its source code
-      // Allows userscripts to dynamically load libraries at runtime
-      case 'GM_loadScript': {
-        try {
-          if (!data.url) return { error: 'No URL provided' };
-          if (!data.scriptId) return { error: 'Missing script context' };
-          const lsScript = await ScriptStorage.get(data.scriptId);
-          if (!lsScript) return { error: 'Script context not found' };
-
-          // Enforce @connect for GM_loadScript (same rules as GM_xmlhttpRequest)
-          const lsPolicy = evaluateConnectPolicy(lsScript, data.url);
-          if (!lsPolicy.allowed) {
-            return { error: lsPolicy.error };
-          }
-          const lsPreCheck = InternalHostGuard.classifyFetchUrl(data.url, ['http:', 'https:']);
-          if (!lsPreCheck.ok) {
-            return { error: 'GM_loadScript URL rejected: ' + lsPreCheck.message };
-          }
-
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), data.timeout || 30000);
-          let code;
-          try {
-            const response = await fetch(data.url, { signal: controller.signal });
-            if (!response.ok) return { error: `HTTP ${response.status}` };
-            const lsPostCheck = InternalHostGuard.classifyResponseUrl(response, ['http:', 'https:']);
-            if (!lsPostCheck.ok) {
-              return { error: 'GM_loadScript URL redirected to ' + lsPostCheck.message };
-            }
-            // Stream-bounded read so a remote script source can't OOM us
-            // by serving an unbounded body. See _fetchTextBounded for
-            // rationale.
-            try {
-              code = await _fetchTextBounded(response, MAX_SCRIPT_SIZE, 'Script');
-            } catch (sizeErr) {
-              return { error: sizeErr?.message || String(sizeErr) };
-            }
-          } finally {
-            clearTimeout(timeoutId);
-          }
-          if (!code || code.length === 0) return { error: 'Empty response' };
-          return { code };
-        } catch (e) {
-          return { error: e?.message || 'Fetch failed' };
-        }
-      }
+      // GM resources and GM_loadScript dynamic library loading
+      case 'GM_getResourceText':
+      case 'GM_getResourceURL':
+      case 'GM_loadScript':
+        if (typeof GMResourceHandler === 'undefined') return { error: 'GMResourceHandler not available' };
+        return await GMResourceHandler.handleGMResourceMessage(action, data);
 
       // XHR - Using fetch() since XMLHttpRequest is not available in Service Workers
       // Provides abort support via AbortController and simulates events

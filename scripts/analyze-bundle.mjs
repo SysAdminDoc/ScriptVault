@@ -55,6 +55,7 @@ const sourceModules = [
   "modules/gm-tabs-handler.js",
   "modules/gm-values-handler.js",
   "modules/gm-notification-handler.js",
+  "modules/gm-resource-handler.js",
   "modules/connect-policy.js",
   "modules/resources.js",
   "modules/npm-resolve.js",

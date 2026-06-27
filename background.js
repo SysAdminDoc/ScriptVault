@@ -18601,6 +18601,136 @@ if (typeof self !== 'undefined') {
 }
 
 // ============================================================================
+// Generated from src/background/gm-resource-handler.ts; do not edit by hand.
+// Run `node scripts/generate-ts-runtime-modules.mjs` or `npm run build:bg`.
+// ============================================================================
+
+const GMResourceHandler = (() => {
+  const module = { exports: {} };
+  const exports = module.exports;
+  "use strict";
+  var __defProp = Object.defineProperty;
+  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, { get: all[name], enumerable: true });
+  };
+  var __copyProps = (to, from, except, desc) => {
+    if (from && typeof from === "object" || typeof from === "function") {
+      for (let key of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(to, key) && key !== except)
+          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+    }
+    return to;
+  };
+  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+  // src/background/gm-resource-handler.ts
+  var gm_resource_handler_exports = {};
+  __export(gm_resource_handler_exports, {
+    GMResourceHandler: () => GMResourceHandler,
+    GM_RESOURCE_ACTIONS: () => GM_RESOURCE_ACTIONS,
+    default: () => gm_resource_handler_default,
+    handleGMResourceMessage: () => handleGMResourceMessage,
+    isGMResourceAction: () => isGMResourceAction
+  });
+  module.exports = __toCommonJS(gm_resource_handler_exports);
+  var GM_RESOURCE_ACTIONS = [
+    "GM_getResourceText",
+    "GM_getResourceURL",
+    "GM_loadScript"
+  ];
+  var GM_RESOURCE_ACTION_SET = new Set(GM_RESOURCE_ACTIONS);
+  function errorMessage(error, fallback) {
+    if (error && typeof error === "object" && "message" in error) {
+      const message = error.message;
+      if (typeof message === "string" && message) return message;
+    }
+    return fallback;
+  }
+  function isGMResourceAction(action) {
+    return typeof action === "string" && GM_RESOURCE_ACTION_SET.has(action);
+  }
+  async function handleGMResourceMessage(action, data = {}) {
+    switch (action) {
+      case "GM_getResourceText": {
+        const script = await ScriptStorage.get(data.scriptId);
+        if (!script || !script.meta?.resource) return null;
+        const url = data.name ? script.meta.resource[data.name] : void 0;
+        if (!url) return null;
+        try {
+          return await ResourceCache.fetchResource(url);
+        } catch (_) {
+          return null;
+        }
+      }
+      case "GM_getResourceURL": {
+        const script = await ScriptStorage.get(data.scriptId);
+        if (!script || !script.meta?.resource) return null;
+        const url = data.name ? script.meta.resource[data.name] : void 0;
+        if (!url) return null;
+        try {
+          return await ResourceCache.getDataUri(url);
+        } catch (_) {
+          return null;
+        }
+      }
+      case "GM_loadScript": {
+        try {
+          if (!data.url) return { error: "No URL provided" };
+          if (!data.scriptId) return { error: "Missing script context" };
+          const script = await ScriptStorage.get(data.scriptId);
+          if (!script) return { error: "Script context not found" };
+          const policy = evaluateConnectPolicy(script, data.url);
+          if (!policy.allowed) return { error: policy.error };
+          const preCheck = InternalHostGuard.classifyFetchUrl(data.url, ["http:", "https:"]);
+          if (!preCheck.ok) {
+            return { error: "GM_loadScript URL rejected: " + preCheck.message };
+          }
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), data.timeout || 3e4);
+          let code;
+          try {
+            const response = await fetch(data.url, { signal: controller.signal });
+            if (!response.ok) return { error: `HTTP ${response.status}` };
+            const postCheck = InternalHostGuard.classifyResponseUrl(response, ["http:", "https:"]);
+            if (!postCheck.ok) {
+              return { error: "GM_loadScript URL redirected to " + postCheck.message };
+            }
+            try {
+              code = await _fetchTextBounded(response, MAX_SCRIPT_SIZE, "Script");
+            } catch (sizeError) {
+              return { error: errorMessage(sizeError, String(sizeError)) };
+            }
+          } finally {
+            clearTimeout(timeoutId);
+          }
+          if (!code || code.length === 0) return { error: "Empty response" };
+          return { code };
+        } catch (error) {
+          return { error: errorMessage(error, "Fetch failed") };
+        }
+      }
+      default:
+        return { error: `Unsupported GM resource action: ${action}` };
+    }
+  }
+  var GMResourceHandler = Object.freeze({
+    GM_RESOURCE_ACTIONS,
+    handleGMResourceMessage,
+    isGMResourceAction
+  });
+  var gm_resource_handler_default = GMResourceHandler;
+  return module.exports.default || module.exports.GMResourceHandler || module.exports;
+})();
+
+if (typeof self !== 'undefined') {
+  self.GMResourceHandler = GMResourceHandler;
+}
+
+// ============================================================================
 // Generated from src/background/connect-policy.ts; do not edit by hand.
 // Run `node scripts/generate-ts-runtime-modules.mjs` or `npm run build:bg`.
 // ============================================================================
@@ -37270,76 +37400,12 @@ async function handleMessage(message, sender) {
       case 'fetchResource':
         return await ResourceCache.fetchResource(data.url);
 
-      case 'GM_getResourceText': {
-        const script = await ScriptStorage.get(data.scriptId);
-        if (!script || !script.meta.resource) return null;
-        const url = script.meta.resource[data.name];
-        if (!url) return null;
-        try {
-          return await ResourceCache.fetchResource(url);
-        } catch (e) {
-          return null;
-        }
-      }
-
-      case 'GM_getResourceURL': {
-        const script2 = await ScriptStorage.get(data.scriptId);
-        if (!script2 || !script2.meta.resource) return null;
-        const url2 = script2.meta.resource[data.name];
-        if (!url2) return null;
-        try {
-          return await ResourceCache.getDataUri(url2);
-        } catch (e) {
-          return null;
-        }
-      }
-
-      // GM_loadScript - Fetch a script URL and return its source code
-      // Allows userscripts to dynamically load libraries at runtime
-      case 'GM_loadScript': {
-        try {
-          if (!data.url) return { error: 'No URL provided' };
-          if (!data.scriptId) return { error: 'Missing script context' };
-          const lsScript = await ScriptStorage.get(data.scriptId);
-          if (!lsScript) return { error: 'Script context not found' };
-
-          // Enforce @connect for GM_loadScript (same rules as GM_xmlhttpRequest)
-          const lsPolicy = evaluateConnectPolicy(lsScript, data.url);
-          if (!lsPolicy.allowed) {
-            return { error: lsPolicy.error };
-          }
-          const lsPreCheck = InternalHostGuard.classifyFetchUrl(data.url, ['http:', 'https:']);
-          if (!lsPreCheck.ok) {
-            return { error: 'GM_loadScript URL rejected: ' + lsPreCheck.message };
-          }
-
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), data.timeout || 30000);
-          let code;
-          try {
-            const response = await fetch(data.url, { signal: controller.signal });
-            if (!response.ok) return { error: `HTTP ${response.status}` };
-            const lsPostCheck = InternalHostGuard.classifyResponseUrl(response, ['http:', 'https:']);
-            if (!lsPostCheck.ok) {
-              return { error: 'GM_loadScript URL redirected to ' + lsPostCheck.message };
-            }
-            // Stream-bounded read so a remote script source can't OOM us
-            // by serving an unbounded body. See _fetchTextBounded for
-            // rationale.
-            try {
-              code = await _fetchTextBounded(response, MAX_SCRIPT_SIZE, 'Script');
-            } catch (sizeErr) {
-              return { error: sizeErr?.message || String(sizeErr) };
-            }
-          } finally {
-            clearTimeout(timeoutId);
-          }
-          if (!code || code.length === 0) return { error: 'Empty response' };
-          return { code };
-        } catch (e) {
-          return { error: e?.message || 'Fetch failed' };
-        }
-      }
+      // GM resources and GM_loadScript dynamic library loading
+      case 'GM_getResourceText':
+      case 'GM_getResourceURL':
+      case 'GM_loadScript':
+        if (typeof GMResourceHandler === 'undefined') return { error: 'GMResourceHandler not available' };
+        return await GMResourceHandler.handleGMResourceMessage(action, data);
 
       // XHR - Using fetch() since XMLHttpRequest is not available in Service Workers
       // Provides abort support via AbortController and simulates events
