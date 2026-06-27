@@ -186,6 +186,13 @@ export const TS_RUNTIME_MODULES = [
     selfExportName: 'GMValuesHandler',
   },
   {
+    id: 'gm-notification-handler',
+    source: 'src/background/gm-notification-handler.ts',
+    output: 'modules/gm-notification-handler.js',
+    exportName: 'GMNotificationHandler',
+    selfExportName: 'GMNotificationHandler',
+  },
+  {
     id: 'connect-policy',
     source: 'src/background/connect-policy.ts',
     output: 'modules/connect-policy.js',

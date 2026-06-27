@@ -18421,6 +18421,186 @@ if (typeof self !== 'undefined') {
 }
 
 // ============================================================================
+// Generated from src/background/gm-notification-handler.ts; do not edit by hand.
+// Run `node scripts/generate-ts-runtime-modules.mjs` or `npm run build:bg`.
+// ============================================================================
+
+const GMNotificationHandler = (() => {
+  const module = { exports: {} };
+  const exports = module.exports;
+  "use strict";
+  var __defProp = Object.defineProperty;
+  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, { get: all[name], enumerable: true });
+  };
+  var __copyProps = (to, from, except, desc) => {
+    if (from && typeof from === "object" || typeof from === "function") {
+      for (let key of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(to, key) && key !== except)
+          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+    }
+    return to;
+  };
+  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+  // src/background/gm-notification-handler.ts
+  var gm_notification_handler_exports = {};
+  __export(gm_notification_handler_exports, {
+    GMNotificationHandler: () => GMNotificationHandler,
+    GM_NOTIFICATION_ACTIONS: () => GM_NOTIFICATION_ACTIONS,
+    default: () => gm_notification_handler_default,
+    handleGMNotificationMessage: () => handleGMNotificationMessage,
+    isGMNotificationAction: () => isGMNotificationAction
+  });
+  module.exports = __toCommonJS(gm_notification_handler_exports);
+  var GM_NOTIFICATION_ACTIONS = [
+    "GM_closeNotification",
+    "GM_notification",
+    "GM_updateNotification"
+  ];
+  var SV_NOTIF_TITLE_MAX = 96;
+  var SV_NOTIF_MESSAGE_MAX = 280;
+  var GM_NOTIFICATION_ACTION_SET = new Set(GM_NOTIFICATION_ACTIONS);
+  function notificationRuntime() {
+    return globalThis;
+  }
+  function clampString(value, max) {
+    const text = String(value ?? "");
+    return text.length > max ? text.slice(0, max - 1) + "\u2026" : text;
+  }
+  function normalizeButtons(buttons) {
+    if (!Array.isArray(buttons) || buttons.length === 0) return void 0;
+    return buttons.slice(0, 2).map((button) => ({
+      title: String(button?.title ?? "").slice(0, 200),
+      ...button?.iconUrl ? { iconUrl: button.iconUrl } : {}
+    }));
+  }
+  function persistNotifCallbacks() {
+    notificationRuntime().SessionState?.persistNotifCallbacks?.();
+  }
+  function createNotification() {
+    return chrome.notifications.create;
+  }
+  function updateNotification() {
+    return chrome.notifications.update;
+  }
+  function clearNotification() {
+    return chrome.notifications.clear;
+  }
+  function removeNotifCallback(id) {
+    const runtime = notificationRuntime();
+    if (runtime._notifCallbacks) {
+      runtime._notifCallbacks.delete(id);
+      persistNotifCallbacks();
+    }
+  }
+  function isGMNotificationAction(action) {
+    return typeof action === "string" && GM_NOTIFICATION_ACTION_SET.has(action);
+  }
+  async function handleGMNotificationMessage(action, data = {}, sender = {}) {
+    switch (action) {
+      case "GM_notification": {
+        const hasProgress = typeof data.progress === "number";
+        const notifOpts = {
+          type: hasProgress ? "progress" : "basic",
+          iconUrl: data.image || "images/icon128.png",
+          title: clampString(data.title || "ScriptVault", SV_NOTIF_TITLE_MAX),
+          message: clampString(data.text || "", SV_NOTIF_MESSAGE_MAX),
+          silent: data.silent || false
+        };
+        if (typeof data.requireInteraction === "boolean" && data.requireInteraction) {
+          notifOpts.requireInteraction = true;
+        }
+        if (hasProgress) {
+          notifOpts.progress = Math.max(0, Math.min(100, Math.floor(data.progress)));
+        }
+        const buttons = normalizeButtons(data.buttons);
+        if (buttons) notifOpts.buttons = buttons;
+        const notifId = data.tag ? await createNotification()(data.tag, notifOpts) : await createNotification()(notifOpts);
+        const tabId = sender.tab?.id;
+        if (tabId && (data.hasOnclick || data.hasOndone || data.hasOnbuttonclick)) {
+          const runtime = notificationRuntime();
+          if (!runtime._notifCallbacks) runtime._notifCallbacks = /* @__PURE__ */ new Map();
+          if (runtime._notifCallbacks.size > 500) {
+            const oldest = runtime._notifCallbacks.keys().next().value;
+            if (oldest !== void 0) runtime._notifCallbacks.delete(oldest);
+          }
+          runtime._notifCallbacks.set(notifId, {
+            tabId,
+            scriptId: data.scriptId,
+            hasOnclick: data.hasOnclick,
+            hasOndone: data.hasOndone,
+            hasOnbuttonclick: data.hasOnbuttonclick
+          });
+          persistNotifCallbacks();
+        }
+        if (data.timeout && data.timeout > 0) {
+          if (data.timeout >= 3e4) {
+            const alarmName = `notif_clear_${notifId}`;
+            chrome.alarms.create(alarmName, { delayInMinutes: data.timeout / 6e4 });
+          } else {
+            setTimeout(() => {
+              clearNotification()(notifId).catch(() => {
+              });
+              removeNotifCallback(notifId);
+            }, data.timeout);
+          }
+        }
+        return { success: true, id: notifId };
+      }
+      case "GM_updateNotification": {
+        if (!data.id) return { success: false, error: "Missing notification id" };
+        const updateOpts = {};
+        if (typeof data.title === "string") updateOpts.title = data.title;
+        if (typeof data.text === "string") updateOpts.message = data.text;
+        if (typeof data.image === "string") updateOpts.iconUrl = data.image;
+        if (typeof data.progress === "number") {
+          updateOpts.type = "progress";
+          updateOpts.progress = Math.max(0, Math.min(100, Math.floor(data.progress)));
+        }
+        const buttons = normalizeButtons(data.buttons);
+        if (buttons) updateOpts.buttons = buttons;
+        if (typeof data.silent === "boolean") updateOpts.silent = data.silent;
+        if (typeof data.requireInteraction === "boolean") updateOpts.requireInteraction = data.requireInteraction;
+        try {
+          const wasUpdated = await updateNotification()(data.id, updateOpts);
+          return { success: !!wasUpdated };
+        } catch (error) {
+          return { success: false, error: error instanceof Error ? error.message : "Update failed" };
+        }
+      }
+      case "GM_closeNotification": {
+        if (!data.id) return { success: false, error: "Missing notification id" };
+        try {
+          await clearNotification()(data.id);
+          removeNotifCallback(data.id);
+          return { success: true };
+        } catch (error) {
+          return { success: false, error: error instanceof Error ? error.message : "Close failed" };
+        }
+      }
+      default:
+        return { error: `Unsupported GM notification action: ${action}` };
+    }
+  }
+  var GMNotificationHandler = Object.freeze({
+    GM_NOTIFICATION_ACTIONS,
+    handleGMNotificationMessage,
+    isGMNotificationAction
+  });
+  var gm_notification_handler_default = GMNotificationHandler;
+  return module.exports.default || module.exports.GMNotificationHandler || module.exports;
+})();
+
+if (typeof self !== 'undefined') {
+  self.GMNotificationHandler = GMNotificationHandler;
+}
+
+// ============================================================================
 // Generated from src/background/connect-policy.ts; do not edit by hand.
 // Run `node scripts/generate-ts-runtime-modules.mjs` or `npm run build:bg`.
 // ============================================================================
@@ -37753,124 +37933,19 @@ async function handleMessage(message, sender) {
       
       // Notifications (with callbacks: onclick, ondone, timeout, tag)
       case 'GM_notification': {
-        // Phase 11.11 — progress + buttons (ScriptCat parity).
-        // Chrome's chrome.notifications API supports both natively:
-        //   - type: 'progress' + progress: 0..100 → progress bar
-        //   - buttons: [{ title, iconUrl }] up to 2 → action buttons with
-        //     chrome.notifications.onButtonClicked routing.
-        const hasProgress = typeof data.progress === 'number';
-        const notifOpts = {
-          type: hasProgress ? 'progress' : 'basic',
-          iconUrl: data.image || 'images/icon128.png',
-          // Phase 39.31 — clamp to documented Chrome notification limits
-          // so the future WECG #935 spec change can't break user scripts
-          // that pass long titles/messages.
-          title: _clampString(data.title || 'ScriptVault', SV_NOTIF_TITLE_MAX),
-          message: _clampString(data.text || '', SV_NOTIF_MESSAGE_MAX),
-          silent: data.silent || false
-        };
-        // Phase 41 — pass `requireInteraction` through so scripts can pin a
-        // notification until the user acts on it (Tampermonkey/ViolentMonkey
-        // parity). Chrome 50+ supports this for `basic` and `image` types;
-        // ignored on `progress`. Boolean coercion guards against truthy-but-
-        // non-boolean values producing unexpected chrome.notifications shape.
-        if (typeof data.requireInteraction === 'boolean' && data.requireInteraction) {
-          notifOpts.requireInteraction = true;
-        }
-        if (hasProgress) {
-          notifOpts.progress = Math.max(0, Math.min(100, Math.floor(data.progress)));
-        }
-        // Buttons — Chrome caps at 2; we silently truncate to honour the
-        // platform contract instead of failing the whole notification.
-        if (Array.isArray(data.buttons) && data.buttons.length > 0) {
-          notifOpts.buttons = data.buttons.slice(0, 2).map((b) => ({
-            title: String(b?.title ?? '').slice(0, 200),
-            ...(b?.iconUrl ? { iconUrl: b.iconUrl } : {})
-          }));
-        }
-        // Use tag as notification ID for updates
-        const notifId = data.tag
-          ? await chrome.notifications.create(data.tag, notifOpts)
-          : await chrome.notifications.create(notifOpts);
-        const tabId = sender.tab?.id;
-        // Track notification for callbacks
-        if (tabId && (data.hasOnclick || data.hasOndone || data.hasOnbuttonclick)) {
-          if (!self._notifCallbacks) self._notifCallbacks = new Map();
-          // Evict oldest if map grows too large (prevents unbounded growth)
-          if (self._notifCallbacks.size > 500) {
-            const oldest = self._notifCallbacks.keys().next().value;
-            self._notifCallbacks.delete(oldest);
-          }
-          self._notifCallbacks.set(notifId, {
-            tabId, scriptId: data.scriptId,
-            hasOnclick: data.hasOnclick,
-            hasOndone: data.hasOndone,
-            hasOnbuttonclick: data.hasOnbuttonclick
-          });
-          SessionState.persistNotifCallbacks();
-        }
-        // Auto-close after timeout
-        if (data.timeout && data.timeout > 0) {
-          if (data.timeout >= 30000) {
-            // Long timeouts use chrome.alarms to survive service worker shutdown
-            const alarmName = `notif_clear_${notifId}`;
-            chrome.alarms.create(alarmName, { delayInMinutes: data.timeout / 60000 });
-          } else {
-            setTimeout(() => {
-              chrome.notifications.clear(notifId).catch(() => {});
-              if (self._notifCallbacks) {
-                self._notifCallbacks.delete(notifId);
-                SessionState.persistNotifCallbacks();
-              }
-            }, data.timeout);
-          }
-        }
-        return { success: true, id: notifId };
+        if (typeof GMNotificationHandler === 'undefined') return { error: 'GMNotificationHandler not available' };
+        return await GMNotificationHandler.handleGMNotificationMessage(action, data, sender);
       }
 
       // Phase 11.11 — Update an existing notification by id (tag).
       // Skips fields the caller didn't specify so partial updates don't blank
       // out the title/message. Mirrors chrome.notifications.update() behaviour.
-      case 'GM_updateNotification': {
-        if (!data.id) return { success: false, error: 'Missing notification id' };
-        const updateOpts = {};
-        if (typeof data.title === 'string') updateOpts.title = data.title;
-        if (typeof data.text === 'string') updateOpts.message = data.text;
-        if (typeof data.image === 'string') updateOpts.iconUrl = data.image;
-        if (typeof data.progress === 'number') {
-          updateOpts.type = 'progress';
-          updateOpts.progress = Math.max(0, Math.min(100, Math.floor(data.progress)));
-        }
-        if (Array.isArray(data.buttons)) {
-          updateOpts.buttons = data.buttons.slice(0, 2).map((b) => ({
-            title: String(b?.title ?? '').slice(0, 200),
-            ...(b?.iconUrl ? { iconUrl: b.iconUrl } : {})
-          }));
-        }
-        if (typeof data.silent === 'boolean') updateOpts.silent = data.silent;
-        if (typeof data.requireInteraction === 'boolean') updateOpts.requireInteraction = data.requireInteraction;
-        try {
-          const wasUpdated = await chrome.notifications.update(data.id, updateOpts);
-          return { success: !!wasUpdated };
-        } catch (e) {
-          return { success: false, error: e?.message || 'Update failed' };
-        }
-      }
+      case 'GM_updateNotification':
 
       // Phase 11.11 — Programmatically close a notification by id (tag).
-      case 'GM_closeNotification': {
-        if (!data.id) return { success: false, error: 'Missing notification id' };
-        try {
-          await chrome.notifications.clear(data.id);
-          if (self._notifCallbacks) {
-            self._notifCallbacks.delete(data.id);
-            SessionState.persistNotifCallbacks();
-          }
-          return { success: true };
-        } catch (e) {
-          return { success: false, error: e?.message || 'Close failed' };
-        }
-      }
+      case 'GM_closeNotification':
+        if (typeof GMNotificationHandler === 'undefined') return { error: 'GMNotificationHandler not available' };
+        return await GMNotificationHandler.handleGMNotificationMessage(action, data, sender);
       
       // Open tab (with close tracking for onclose callback)
       // Focus tab / close opened tab

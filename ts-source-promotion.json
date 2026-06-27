@@ -116,6 +116,14 @@
       "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for the extracted GM value-storage background handler."
     },
     {
+      "runtime": "modules/gm-notification-handler.js",
+      "sources": [
+        "src/background/gm-notification-handler.ts"
+      ],
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for the extracted GM notification background handler."
+    },
+    {
       "runtime": "modules/connect-policy.js",
       "sources": [
         "src/background/connect-policy.ts"

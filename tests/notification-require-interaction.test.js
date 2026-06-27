@@ -8,6 +8,7 @@ const __dirname = dirname(__filename);
 const repoRoot = resolve(__dirname, '..');
 
 const bgCore = readFileSync(resolve(repoRoot, 'background.core.js'), 'utf8');
+const gmNotificationHandler = readFileSync(resolve(repoRoot, 'modules/gm-notification-handler.js'), 'utf8');
 const wrapperTs = readFileSync(resolve(repoRoot, 'src/background/wrapper-builder.ts'), 'utf8');
 
 /**
@@ -23,14 +24,14 @@ const wrapperTs = readFileSync(resolve(repoRoot, 'src/background/wrapper-builder
  */
 describe('GM_notification requireInteraction parity', () => {
   it('runtime background handler forwards requireInteraction to chrome.notifications.create', () => {
-    expect(bgCore).toMatch(/requireInteraction\s*=\s*true/);
-    expect(bgCore).toMatch(/data\.requireInteraction/);
+    expect(gmNotificationHandler).toMatch(/requireInteraction\s*=\s*true/);
+    expect(gmNotificationHandler).toMatch(/data\.requireInteraction/);
   });
 
   it('runtime background update handler forwards requireInteraction', () => {
     // The GM_updateNotification handler reads data.requireInteraction into
     // updateOpts so chrome.notifications.update mirrors the create path.
-    expect(bgCore).toMatch(/updateOpts\.requireInteraction\s*=\s*data\.requireInteraction/);
+    expect(gmNotificationHandler).toMatch(/updateOpts\.requireInteraction\s*=\s*data\.requireInteraction/);
   });
 
   it('runtime wrapper sends requireInteraction in GM_notification payload', () => {

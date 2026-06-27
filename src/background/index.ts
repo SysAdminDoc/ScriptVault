@@ -80,6 +80,13 @@ export {
   isGMValuesAction,
 } from './gm-values-handler';
 export type { GMValuesAction } from './gm-values-handler';
+export {
+  GM_NOTIFICATION_ACTIONS,
+  GMNotificationHandler,
+  handleGMNotificationMessage,
+  isGMNotificationAction,
+} from './gm-notification-handler';
+export type { GMNotificationAction } from './gm-notification-handler';
 export { createScriptTrustReceipt, sha256Hex } from './trust-receipt';
 
 export { CloudSync } from './cloud-sync';

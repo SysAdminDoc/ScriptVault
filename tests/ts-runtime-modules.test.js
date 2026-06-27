@@ -170,6 +170,13 @@ describe('TS runtime module generator', () => {
         selfExportName: 'GMValuesHandler',
       }),
       expect.objectContaining({
+        id: 'gm-notification-handler',
+        source: 'src/background/gm-notification-handler.ts',
+        output: 'modules/gm-notification-handler.js',
+        exportName: 'GMNotificationHandler',
+        selfExportName: 'GMNotificationHandler',
+      }),
+      expect.objectContaining({
         id: 'resources',
         source: 'src/modules/resources.ts',
         output: 'modules/resources.js',
@@ -326,6 +333,16 @@ describe('TS runtime module generator', () => {
     expect(text).toContain('const GMValuesHandler = (() => {');
     expect(text).toContain('self.GMValuesHandler = GMValuesHandler;');
     expect(text).toContain('GM_VALUES_ACTIONS');
+  });
+
+  it('generates the extracted GM notification handler before the raw core bridge', async () => {
+    const definition = TS_RUNTIME_MODULES.find((entry) => entry.id === 'gm-notification-handler');
+    const text = await buildTsRuntimeModuleText(definition, { rootDir: ROOT });
+
+    expect(text).toContain('Generated from src/background/gm-notification-handler.ts');
+    expect(text).toContain('const GMNotificationHandler = (() => {');
+    expect(text).toContain('self.GMNotificationHandler = GMNotificationHandler;');
+    expect(text).toContain('GM_NOTIFICATION_ACTIONS');
   });
 
   it('generates the raw background core bridge without hiding top-level functions', async () => {

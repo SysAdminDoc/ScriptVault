@@ -111,6 +111,7 @@ async function buildBackground() {
     readFile("modules/gm-menu-handler.js"),
     readFile("modules/gm-tabs-handler.js"),
     readFile("modules/gm-values-handler.js"),
+    readFile("modules/gm-notification-handler.js"),
     readFile("modules/connect-policy.js"),
     readFile("modules/resources.js"),
 

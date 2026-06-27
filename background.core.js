@@ -8542,124 +8542,19 @@ async function handleMessage(message, sender) {
       
       // Notifications (with callbacks: onclick, ondone, timeout, tag)
       case 'GM_notification': {
-        // Phase 11.11 — progress + buttons (ScriptCat parity).
-        // Chrome's chrome.notifications API supports both natively:
-        //   - type: 'progress' + progress: 0..100 → progress bar
-        //   - buttons: [{ title, iconUrl }] up to 2 → action buttons with
-        //     chrome.notifications.onButtonClicked routing.
-        const hasProgress = typeof data.progress === 'number';
-        const notifOpts = {
-          type: hasProgress ? 'progress' : 'basic',
-          iconUrl: data.image || 'images/icon128.png',
-          // Phase 39.31 — clamp to documented Chrome notification limits
-          // so the future WECG #935 spec change can't break user scripts
-          // that pass long titles/messages.
-          title: _clampString(data.title || 'ScriptVault', SV_NOTIF_TITLE_MAX),
-          message: _clampString(data.text || '', SV_NOTIF_MESSAGE_MAX),
-          silent: data.silent || false
-        };
-        // Phase 41 — pass `requireInteraction` through so scripts can pin a
-        // notification until the user acts on it (Tampermonkey/ViolentMonkey
-        // parity). Chrome 50+ supports this for `basic` and `image` types;
-        // ignored on `progress`. Boolean coercion guards against truthy-but-
-        // non-boolean values producing unexpected chrome.notifications shape.
-        if (typeof data.requireInteraction === 'boolean' && data.requireInteraction) {
-          notifOpts.requireInteraction = true;
-        }
-        if (hasProgress) {
-          notifOpts.progress = Math.max(0, Math.min(100, Math.floor(data.progress)));
-        }
-        // Buttons — Chrome caps at 2; we silently truncate to honour the
-        // platform contract instead of failing the whole notification.
-        if (Array.isArray(data.buttons) && data.buttons.length > 0) {
-          notifOpts.buttons = data.buttons.slice(0, 2).map((b) => ({
-            title: String(b?.title ?? '').slice(0, 200),
-            ...(b?.iconUrl ? { iconUrl: b.iconUrl } : {})
-          }));
-        }
-        // Use tag as notification ID for updates
-        const notifId = data.tag
-          ? await chrome.notifications.create(data.tag, notifOpts)
-          : await chrome.notifications.create(notifOpts);
-        const tabId = sender.tab?.id;
-        // Track notification for callbacks
-        if (tabId && (data.hasOnclick || data.hasOndone || data.hasOnbuttonclick)) {
-          if (!self._notifCallbacks) self._notifCallbacks = new Map();
-          // Evict oldest if map grows too large (prevents unbounded growth)
-          if (self._notifCallbacks.size > 500) {
-            const oldest = self._notifCallbacks.keys().next().value;
-            self._notifCallbacks.delete(oldest);
-          }
-          self._notifCallbacks.set(notifId, {
-            tabId, scriptId: data.scriptId,
-            hasOnclick: data.hasOnclick,
-            hasOndone: data.hasOndone,
-            hasOnbuttonclick: data.hasOnbuttonclick
-          });
-          SessionState.persistNotifCallbacks();
-        }
-        // Auto-close after timeout
-        if (data.timeout && data.timeout > 0) {
-          if (data.timeout >= 30000) {
-            // Long timeouts use chrome.alarms to survive service worker shutdown
-            const alarmName = `notif_clear_${notifId}`;
-            chrome.alarms.create(alarmName, { delayInMinutes: data.timeout / 60000 });
-          } else {
-            setTimeout(() => {
-              chrome.notifications.clear(notifId).catch(() => {});
-              if (self._notifCallbacks) {
-                self._notifCallbacks.delete(notifId);
-                SessionState.persistNotifCallbacks();
-              }
-            }, data.timeout);
-          }
-        }
-        return { success: true, id: notifId };
+        if (typeof GMNotificationHandler === 'undefined') return { error: 'GMNotificationHandler not available' };
+        return await GMNotificationHandler.handleGMNotificationMessage(action, data, sender);
       }
 
       // Phase 11.11 — Update an existing notification by id (tag).
       // Skips fields the caller didn't specify so partial updates don't blank
       // out the title/message. Mirrors chrome.notifications.update() behaviour.
-      case 'GM_updateNotification': {
-        if (!data.id) return { success: false, error: 'Missing notification id' };
-        const updateOpts = {};
-        if (typeof data.title === 'string') updateOpts.title = data.title;
-        if (typeof data.text === 'string') updateOpts.message = data.text;
-        if (typeof data.image === 'string') updateOpts.iconUrl = data.image;
-        if (typeof data.progress === 'number') {
-          updateOpts.type = 'progress';
-          updateOpts.progress = Math.max(0, Math.min(100, Math.floor(data.progress)));
-        }
-        if (Array.isArray(data.buttons)) {
-          updateOpts.buttons = data.buttons.slice(0, 2).map((b) => ({
-            title: String(b?.title ?? '').slice(0, 200),
-            ...(b?.iconUrl ? { iconUrl: b.iconUrl } : {})
-          }));
-        }
-        if (typeof data.silent === 'boolean') updateOpts.silent = data.silent;
-        if (typeof data.requireInteraction === 'boolean') updateOpts.requireInteraction = data.requireInteraction;
-        try {
-          const wasUpdated = await chrome.notifications.update(data.id, updateOpts);
-          return { success: !!wasUpdated };
-        } catch (e) {
-          return { success: false, error: e?.message || 'Update failed' };
-        }
-      }
+      case 'GM_updateNotification':
 
       // Phase 11.11 — Programmatically close a notification by id (tag).
-      case 'GM_closeNotification': {
-        if (!data.id) return { success: false, error: 'Missing notification id' };
-        try {
-          await chrome.notifications.clear(data.id);
-          if (self._notifCallbacks) {
-            self._notifCallbacks.delete(data.id);
-            SessionState.persistNotifCallbacks();
-          }
-          return { success: true };
-        } catch (e) {
-          return { success: false, error: e?.message || 'Close failed' };
-        }
-      }
+      case 'GM_closeNotification':
+        if (typeof GMNotificationHandler === 'undefined') return { error: 'GMNotificationHandler not available' };
+        return await GMNotificationHandler.handleGMNotificationMessage(action, data, sender);
       
       // Open tab (with close tracking for onclose callback)
       // Focus tab / close opened tab
