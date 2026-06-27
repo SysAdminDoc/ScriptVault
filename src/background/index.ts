@@ -59,6 +59,13 @@ export {
   isGMAudioAction,
 } from './gm-audio-handler';
 export type { GMAudioAction } from './gm-audio-handler';
+export {
+  GM_MENU_ACTIONS,
+  GMMenuHandler,
+  handleGMMenuMessage,
+  isGMMenuAction,
+} from './gm-menu-handler';
+export type { GMMenuAction } from './gm-menu-handler';
 export { createScriptTrustReceipt, sha256Hex } from './trust-receipt';
 
 export { CloudSync } from './cloud-sync';

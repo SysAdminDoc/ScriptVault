@@ -165,6 +165,13 @@ export const TS_RUNTIME_MODULES = [
     selfExportName: 'GMAudioHandler',
   },
   {
+    id: 'gm-menu-handler',
+    source: 'src/background/gm-menu-handler.ts',
+    output: 'modules/gm-menu-handler.js',
+    exportName: 'GMMenuHandler',
+    selfExportName: 'GMMenuHandler',
+  },
+  {
     id: 'connect-policy',
     source: 'src/background/connect-policy.ts',
     output: 'modules/connect-policy.js',

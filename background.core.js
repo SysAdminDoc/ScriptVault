@@ -8896,82 +8896,15 @@ async function handleMessage(message, sender) {
           scriptMetaStr: null
         };
         
-      // Register menu command (with extended options: id, accessKey, autoClose, title)
+      // GM menu commands and dashboard menu-command execution
       case 'registerMenuCommand':
-      case 'GM_registerMenuCommand': {
-        const commands = await chrome.storage.session.get('menuCommands') || {};
-        if (!commands.menuCommands) commands.menuCommands = {};
-        if (!commands.menuCommands[data.scriptId]) commands.menuCommands[data.scriptId] = [];
-
-        // If command with same id exists, update it instead of adding duplicate
-        const existing = commands.menuCommands[data.scriptId].findIndex(c => c.id === data.commandId);
-        const cmdEntry = {
-          id: data.commandId,
-          caption: data.caption,
-          accessKey: data.accessKey || '',
-          autoClose: data.autoClose !== false,
-          title: data.title || ''
-        };
-        if (existing >= 0) {
-          commands.menuCommands[data.scriptId][existing] = cmdEntry;
-        } else {
-          commands.menuCommands[data.scriptId].push(cmdEntry);
-        }
-
-        await chrome.storage.session.set(commands);
-        return { success: true };
-      }
-      
+      case 'GM_registerMenuCommand':
       case 'unregisterMenuCommand':
-      case 'GM_unregisterMenuCommand': {
-        const commands = await chrome.storage.session.get('menuCommands') || {};
-        if (commands.menuCommands?.[data.scriptId]) {
-          commands.menuCommands[data.scriptId] = commands.menuCommands[data.scriptId].filter(
-            c => c.id !== data.commandId
-          );
-          if (commands.menuCommands[data.scriptId].length === 0) {
-            delete commands.menuCommands[data.scriptId];
-          }
-          await chrome.storage.session.set(commands);
-        }
-        return { success: true };
-      }
-
-      // Get menu commands
-      case 'getMenuCommands': {
-        const result = await chrome.storage.session.get('menuCommands');
-        const allCommands = result?.menuCommands || {};
-        const commands = [];
-        
-        // Flatten commands and add script info
-        const scripts = await ScriptStorage.getAll();
-        for (const [scriptId, cmds] of Object.entries(allCommands)) {
-          const script = scripts.find(s => s.id === scriptId);
-          if (script && cmds) {
-            cmds.forEach(cmd => {
-              commands.push({
-                ...cmd,
-                scriptId,
-                scriptName: script.meta?.name || 'Unknown Script'
-              });
-            });
-          }
-        }
-        
-        return { commands };
-      }
-      
-      // Execute menu command
-      case 'executeMenuCommand': {
-        // Send to content script
-        if (sender.tab?.id) {
-          await chrome.tabs.sendMessage(sender.tab.id, {
-            action: 'executeMenuCommand',
-            data: { scriptId: data.scriptId, commandId: data.commandId }
-          });
-        }
-        return { success: true };
-      }
+      case 'GM_unregisterMenuCommand':
+      case 'getMenuCommands':
+      case 'executeMenuCommand':
+        if (typeof GMMenuHandler === 'undefined') return { error: 'GMMenuHandler not available' };
+        return await GMMenuHandler.handleGMMenuMessage(action, data, sender);
       
       // GM_cookie API
       // chrome.cookies.* only accepts http(s) URLs. Front-validate so blob:/

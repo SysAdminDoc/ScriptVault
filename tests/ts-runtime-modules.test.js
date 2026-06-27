@@ -149,6 +149,13 @@ describe('TS runtime module generator', () => {
         selfExportName: 'GMAudioHandler',
       }),
       expect.objectContaining({
+        id: 'gm-menu-handler',
+        source: 'src/background/gm-menu-handler.ts',
+        output: 'modules/gm-menu-handler.js',
+        exportName: 'GMMenuHandler',
+        selfExportName: 'GMMenuHandler',
+      }),
+      expect.objectContaining({
         id: 'resources',
         source: 'src/modules/resources.ts',
         output: 'modules/resources.js',
@@ -275,6 +282,16 @@ describe('TS runtime module generator', () => {
     expect(text).toContain('const GMAudioHandler = (() => {');
     expect(text).toContain('self.GMAudioHandler = GMAudioHandler;');
     expect(text).toContain('GM_AUDIO_ACTIONS');
+  });
+
+  it('generates the extracted GM menu handler before the raw core bridge', async () => {
+    const definition = TS_RUNTIME_MODULES.find((entry) => entry.id === 'gm-menu-handler');
+    const text = await buildTsRuntimeModuleText(definition, { rootDir: ROOT });
+
+    expect(text).toContain('Generated from src/background/gm-menu-handler.ts');
+    expect(text).toContain('const GMMenuHandler = (() => {');
+    expect(text).toContain('self.GMMenuHandler = GMMenuHandler;');
+    expect(text).toContain('GM_MENU_ACTIONS');
   });
 
   it('generates the raw background core bridge without hiding top-level functions', async () => {

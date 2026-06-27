@@ -92,6 +92,14 @@
       "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for the extracted GM_audio background handler."
     },
     {
+      "runtime": "modules/gm-menu-handler.js",
+      "sources": [
+        "src/background/gm-menu-handler.ts"
+      ],
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for the extracted GM menu-command background handler."
+    },
+    {
       "runtime": "modules/connect-policy.js",
       "sources": [
         "src/background/connect-policy.ts"
