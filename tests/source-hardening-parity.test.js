@@ -84,6 +84,7 @@ describe('source hardening parity guards', () => {
 
   it('keeps privileged GM network, cookie, and DNR APIs behind script host-scope policy', () => {
     const core = source('src/background/core.ts');
+    const cookieHandler = source('src/background/gm-cookie-handler.ts');
     const connectPolicy = source('src/background/connect-policy.ts');
     const dnr = source('src/background/dnr-rules.ts');
     const wrapper = source('src/background/wrapper-builder.ts');
@@ -92,7 +93,9 @@ describe('source hardening parity guards', () => {
     expect(connectPolicy).toContain('export function isScriptHostScopeAllowed(script: ScriptLike | null | undefined, requestUrl: string)');
     expect(connectPolicy).toContain('Connection to ${hostname} blocked by script host scope');
     expect(core).toContain("GM_download URL rejected");
-    expect(core).toContain('evaluateScriptHostScopePolicy(cookieScript, data.url,');
+    expect(core).toContain('return await GMCookieHandler.handleGMCookieMessage(action, data, sender);');
+    expect(cookieHandler).toContain("const policy = evaluateScriptHostScopePolicy(script, url, 'Cookie access', settings);");
+    expect(cookieHandler).toContain('const cookieTargetUrl = resolveCookiePolicyTarget(data, sender);');
     expect(core).toContain('_validateWebRequestRulesForScript(script, rules, settings)');
     expect(core).toContain('GM_webRequest CSP header changes require Modify CSP = yes');
     expect(core).toContain('dnr.condition.responseHeaders = responseHeaders;');

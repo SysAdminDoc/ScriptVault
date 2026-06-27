@@ -57,6 +57,7 @@ const sourceModules = [
   "modules/gm-notification-handler.js",
   "modules/gm-resource-handler.js",
   "modules/gm-webrequest-handler.js",
+  "modules/gm-cookie-handler.js",
   "modules/connect-policy.js",
   "modules/resources.js",
   "modules/npm-resolve.js",

@@ -8666,92 +8666,11 @@ async function handleMessage(message, sender) {
       // a clear error instead of leaking the raw Chrome error (and to make sure
       // we never pass an attacker-controlled URL into a future Chrome API that
       // is more permissive about schemes).
-      case 'GM_cookie_list': {
-        try {
-          const cookieScriptId = sender.userScriptId || data.scriptId;
-          if (!cookieScriptId) return { error: 'Missing script context' };
-          const cookieScript = await ScriptStorage.get(cookieScriptId);
-          if (!cookieScript) return { error: 'Script context not found' };
-          const details = {};
-          if (data.url) {
-            if (!isHttpCookieUrl(data.url)) return { error: 'url must be http(s)://' };
-            details.url = data.url;
-          }
-          if (data.domain) details.domain = data.domain;
-          if (data.name) details.name = data.name;
-          if (data.path) details.path = data.path;
-          const partition = normalizeCookiePartitionKey(data.partitionKey);
-          if (partition.error) return { error: partition.error };
-          if (partition.partitionKey) details.partitionKey = partition.partitionKey;
-          const cookieTargetUrl = resolveCookiePolicyTarget(data, sender);
-          if (!cookieTargetUrl) return { error: 'url or domain is required for cookie list' };
-          if (!isHttpCookieUrl(cookieTargetUrl)) return { error: 'url must be http(s)://' };
-          const cookieSettings = await SettingsManager.get();
-          const cookiePolicy = evaluateScriptHostScopePolicy(cookieScript, cookieTargetUrl, 'Cookie access', cookieSettings);
-          if (!cookiePolicy.allowed) return { error: cookiePolicy.error };
-          if (!details.url && !details.domain) details.url = cookieTargetUrl;
-          const cookies = await chrome.cookies.getAll(details);
-          return { success: true, cookies };
-        } catch (e) {
-          return { error: e.message };
-        }
-      }
-
-      case 'GM_cookie_set': {
-        try {
-          if (!data.url) return { error: 'url is required for cookie set' };
-          if (!data.name) return { error: 'name is required for cookie set' };
-          if (!isHttpCookieUrl(data.url)) return { error: 'url must be http(s)://' };
-          const cookieScriptId = sender.userScriptId || data.scriptId;
-          if (!cookieScriptId) return { error: 'Missing script context' };
-          const cookieScript = await ScriptStorage.get(cookieScriptId);
-          if (!cookieScript) return { error: 'Script context not found' };
-          const cookieSettings = await SettingsManager.get();
-          const cookiePolicy = evaluateScriptHostScopePolicy(cookieScript, data.url, 'Cookie access', cookieSettings);
-          if (!cookiePolicy.allowed) return { error: cookiePolicy.error };
-          const partition = normalizeCookiePartitionKey(data.partitionKey);
-          if (partition.error) return { error: partition.error };
-          const cookie = await chrome.cookies.set({
-            url: data.url,
-            name: data.name,
-            value: data.value || '',
-            domain: data.domain,
-            path: data.path || '/',
-            secure: data.secure || false,
-            httpOnly: data.httpOnly || false,
-            expirationDate: data.expirationDate,
-            sameSite: data.sameSite || 'unspecified',
-            ...(partition.partitionKey ? { partitionKey: partition.partitionKey } : {})
-          });
-          return { success: true, cookie };
-        } catch (e) {
-          return { error: e.message };
-        }
-      }
-
-      case 'GM_cookie_delete': {
-        try {
-          if (!data.url || !data.name) return { error: 'url and name are required for cookie delete' };
-          if (!isHttpCookieUrl(data.url)) return { error: 'url must be http(s)://' };
-          const cookieScriptId = sender.userScriptId || data.scriptId;
-          if (!cookieScriptId) return { error: 'Missing script context' };
-          const cookieScript = await ScriptStorage.get(cookieScriptId);
-          if (!cookieScript) return { error: 'Script context not found' };
-          const cookieSettings = await SettingsManager.get();
-          const cookiePolicy = evaluateScriptHostScopePolicy(cookieScript, data.url, 'Cookie access', cookieSettings);
-          if (!cookiePolicy.allowed) return { error: cookiePolicy.error };
-          const partition = normalizeCookiePartitionKey(data.partitionKey);
-          if (partition.error) return { error: partition.error };
-          await chrome.cookies.remove({
-            url: data.url,
-            name: data.name,
-            ...(partition.partitionKey ? { partitionKey: partition.partitionKey } : {})
-          });
-          return { success: true };
-        } catch (e) {
-          return { error: e.message };
-        }
-      }
+      case 'GM_cookie_list':
+      case 'GM_cookie_set':
+      case 'GM_cookie_delete':
+        if (typeof GMCookieHandler === 'undefined') return { error: 'GMCookieHandler not available' };
+        return await GMCookieHandler.handleGMCookieMessage(action, data, sender);
 
       // GM_webRequest — runtime rule update from script
       case 'GM_webRequest': {

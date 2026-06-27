@@ -101,6 +101,13 @@ export {
   isGMWebRequestAction,
 } from './gm-webrequest-handler';
 export type { GMWebRequestAction } from './gm-webrequest-handler';
+export {
+  GM_COOKIE_ACTIONS,
+  GMCookieHandler,
+  handleGMCookieMessage,
+  isGMCookieAction,
+} from './gm-cookie-handler';
+export type { GMCookieAction } from './gm-cookie-handler';
 export { createScriptTrustReceipt, sha256Hex } from './trust-receipt';
 
 export { CloudSync } from './cloud-sync';

@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const source = readFileSync(resolve(process.cwd(), 'background.core.js'), 'utf8');
+const cookieHandlerSource = readFileSync(resolve(process.cwd(), 'src/background/gm-cookie-handler.ts'), 'utf8');
 
 function extractFunction(src, name) {
   const marker = `function ${name}(`;
@@ -173,21 +174,22 @@ describe('GM_cookie handlers wire the validator', () => {
   // Source-level check so a future refactor that drops the scheme guard fails
   // loudly instead of silently re-introducing the bypass.
   it('GM_cookie_set, GM_cookie_delete, and GM_cookie_list all call isHttpCookieUrl', () => {
-    const setMatch = source.match(
+    const setMatch = cookieHandlerSource.match(
       /case 'GM_cookie_set':[\s\S]*?return\s*\{\s*success:\s*true/
     );
-    const delMatch = source.match(
+    const delMatch = cookieHandlerSource.match(
       /case 'GM_cookie_delete':[\s\S]*?return\s*\{\s*success:\s*true/
     );
-    const listMatch = source.match(
-      /case 'GM_cookie_list':[\s\S]*?await chrome\.cookies\.getAll/
+    const listMatch = cookieHandlerSource.match(
+      /case 'GM_cookie_list':[\s\S]*?const cookies = await cookieGetAll/
     );
     expect(setMatch?.[0]).toContain('isHttpCookieUrl');
     expect(delMatch?.[0]).toContain('isHttpCookieUrl');
     expect(listMatch?.[0]).toContain('isHttpCookieUrl');
-    expect(setMatch?.[0]).toContain('evaluateScriptHostScopePolicy');
-    expect(delMatch?.[0]).toContain('evaluateScriptHostScopePolicy');
-    expect(listMatch?.[0]).toContain('evaluateScriptHostScopePolicy');
+    expect(setMatch?.[0]).toContain('enforceCookiePolicy');
+    expect(delMatch?.[0]).toContain('enforceCookiePolicy');
+    expect(listMatch?.[0]).toContain('enforceCookiePolicy');
+    expect(cookieHandlerSource).toContain('evaluateScriptHostScopePolicy');
     expect(listMatch?.[0]).toContain('resolveCookiePolicyTarget');
     expect(setMatch?.[0]).toContain('normalizeCookiePartitionKey(data.partitionKey)');
     expect(delMatch?.[0]).toContain('normalizeCookiePartitionKey(data.partitionKey)');
