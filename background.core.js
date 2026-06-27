@@ -6860,16 +6860,10 @@ async function handleMessage(message, sender) {
         
       // Tab Storage
       case 'GM_getTab':
-        if (!sender.tab?.id) return {};
-        return TabStorage.get(sender.tab.id);
-        
       case 'GM_saveTab':
-        if (!sender.tab?.id) return { error: 'GM_saveTab requires a tab context' };
-        TabStorage.set(sender.tab.id, data.data);
-        return { success: true };
-        
       case 'GM_getTabs':
-        return TabStorage.getAll();
+        if (typeof GMTabsHandler === 'undefined') return { error: 'GMTabsHandler not available' };
+        return await GMTabsHandler.handleGMTabsMessage(action, data, sender);
         
       // Settings
       case 'prefetchResources': {
@@ -8694,57 +8688,12 @@ async function handleMessage(message, sender) {
       }
       
       // Open tab (with close tracking for onclose callback)
-      case 'GM_openInTab': {
-        const openUrl = String(data.url || '');
-        try {
-          const parsed = new URL(openUrl);
-          if (!['http:', 'https:', 'data:'].includes(parsed.protocol)) {
-            return { error: `GM_openInTab: scheme "${parsed.protocol}" is not allowed` };
-          }
-        } catch {
-          return { error: 'GM_openInTab: invalid URL' };
-        }
-        const newTabOpts = {
-          url: openUrl,
-          active: data.active !== undefined ? data.active : !data.background
-        };
-        // Insert next to current tab if requested
-        if (data.insert && sender.tab?.index !== undefined) {
-          newTabOpts.index = sender.tab.index + 1;
-        }
-        // Set opener tab
-        if (data.setParent && sender.tab?.id) {
-          newTabOpts.openerTabId = sender.tab.id;
-        }
-        const tab = await chrome.tabs.create(newTabOpts);
-        // Track tab for onclose notification via shared listener
-        const callerTabId = sender.tab?.id;
-        if (callerTabId && data.trackClose) {
-          if (!self._openTabTrackers) self._openTabTrackers = new Map();
-          // Evict oldest if map grows too large (prevents unbounded growth from orphaned tabs)
-          if (self._openTabTrackers.size > 1000) {
-            const oldest = self._openTabTrackers.keys().next().value;
-            self._openTabTrackers.delete(oldest);
-          }
-          self._openTabTrackers.set(tab.id, { callerTabId, scriptId: data.scriptId });
-          SessionState.persistOpenTabTrackers();
-        }
-        return { success: true, tabId: tab.id };
-      }
-      
-      // Focus tab
+      // Focus tab / close opened tab
+      case 'GM_openInTab':
       case 'GM_focusTab':
-        if (sender.tab?.id) {
-          await chrome.tabs.update(sender.tab.id, { active: true });
-        }
-        return { success: true };
-
-      // Close opened tab (from GM_openInTab handle.close())
       case 'GM_closeTab':
-        if (data.tabId) {
-          try { await chrome.tabs.remove(data.tabId); } catch (e) {}
-        }
-        return { success: true };
+        if (typeof GMTabsHandler === 'undefined') return { error: 'GMTabsHandler not available' };
+        return await GMTabsHandler.handleGMTabsMessage(action, data, sender);
 
       // Get scripts for URL
       case 'getScriptsForUrl': {

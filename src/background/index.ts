@@ -66,6 +66,13 @@ export {
   isGMMenuAction,
 } from './gm-menu-handler';
 export type { GMMenuAction } from './gm-menu-handler';
+export {
+  GM_TABS_ACTIONS,
+  GMTabsHandler,
+  handleGMTabsMessage,
+  isGMTabsAction,
+} from './gm-tabs-handler';
+export type { GMTabsAction } from './gm-tabs-handler';
 export { createScriptTrustReceipt, sha256Hex } from './trust-receipt';
 
 export { CloudSync } from './cloud-sync';

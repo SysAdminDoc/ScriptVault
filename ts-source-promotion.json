@@ -100,6 +100,14 @@
       "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for the extracted GM menu-command background handler."
     },
     {
+      "runtime": "modules/gm-tabs-handler.js",
+      "sources": [
+        "src/background/gm-tabs-handler.ts"
+      ],
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for the extracted GM tab background handler."
+    },
+    {
       "runtime": "modules/connect-policy.js",
       "sources": [
         "src/background/connect-policy.ts"

@@ -172,6 +172,13 @@ export const TS_RUNTIME_MODULES = [
     selfExportName: 'GMMenuHandler',
   },
   {
+    id: 'gm-tabs-handler',
+    source: 'src/background/gm-tabs-handler.ts',
+    output: 'modules/gm-tabs-handler.js',
+    exportName: 'GMTabsHandler',
+    selfExportName: 'GMTabsHandler',
+  },
+  {
     id: 'connect-policy',
     source: 'src/background/connect-policy.ts',
     output: 'modules/connect-policy.js',
