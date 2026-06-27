@@ -132,6 +132,14 @@
       "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for the extracted GM resource and load-script background handler."
     },
     {
+      "runtime": "modules/gm-webrequest-handler.js",
+      "sources": [
+        "src/background/gm-webrequest-handler.ts"
+      ],
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for the extracted GM_webRequest background dispatch handler."
+    },
+    {
       "runtime": "modules/connect-policy.js",
       "sources": [
         "src/background/connect-policy.ts"

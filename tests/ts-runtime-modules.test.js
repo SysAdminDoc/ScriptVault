@@ -184,6 +184,13 @@ describe('TS runtime module generator', () => {
         selfExportName: 'GMResourceHandler',
       }),
       expect.objectContaining({
+        id: 'gm-webrequest-handler',
+        source: 'src/background/gm-webrequest-handler.ts',
+        output: 'modules/gm-webrequest-handler.js',
+        exportName: 'GMWebRequestHandler',
+        selfExportName: 'GMWebRequestHandler',
+      }),
+      expect.objectContaining({
         id: 'resources',
         source: 'src/modules/resources.ts',
         output: 'modules/resources.js',
@@ -360,6 +367,16 @@ describe('TS runtime module generator', () => {
     expect(text).toContain('const GMResourceHandler = (() => {');
     expect(text).toContain('self.GMResourceHandler = GMResourceHandler;');
     expect(text).toContain('GM_RESOURCE_ACTIONS');
+  });
+
+  it('generates the extracted GM webRequest handler before the raw core bridge', async () => {
+    const definition = TS_RUNTIME_MODULES.find((entry) => entry.id === 'gm-webrequest-handler');
+    const text = await buildTsRuntimeModuleText(definition, { rootDir: ROOT });
+
+    expect(text).toContain('Generated from src/background/gm-webrequest-handler.ts');
+    expect(text).toContain('const GMWebRequestHandler = (() => {');
+    expect(text).toContain('self.GMWebRequestHandler = GMWebRequestHandler;');
+    expect(text).toContain('GM_WEBREQUEST_ACTIONS');
   });
 
   it('generates the raw background core bridge without hiding top-level functions', async () => {

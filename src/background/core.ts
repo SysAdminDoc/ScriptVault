@@ -8750,16 +8750,8 @@ async function handleMessage(message, sender) {
 
       // GM_webRequest — runtime rule update from script
       case 'GM_webRequest': {
-        const scriptId = sender.userScriptId || data.scriptId;
-        if (!scriptId) return { error: 'No script context' };
-        // Verify the script has @grant GM_webRequest
-        const script = await ScriptStorage.get(scriptId);
-        if (!script?.meta?.grant?.includes('GM_webRequest')) return { error: 'Not granted' };
-        const rules = Array.isArray(data.rules) ? data.rules : (data.rules ? [data.rules] : []);
-        const settings = await SettingsManager.get();
-        const result = await applyWebRequestRules(scriptId, rules, { script, settings });
-        if (!result?.success) return { error: result?.error || 'GM_webRequest rule rejected' };
-        return { success: true, count: result.count ?? rules.length };
+        if (typeof GMWebRequestHandler === 'undefined') return { error: 'GMWebRequestHandler not available' };
+        return await GMWebRequestHandler.handleGMWebRequestMessage(action, data, sender);
       }
 
       // Execution profiling - get stats for dashboard

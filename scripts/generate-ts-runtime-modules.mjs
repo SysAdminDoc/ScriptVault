@@ -200,6 +200,13 @@ export const TS_RUNTIME_MODULES = [
     selfExportName: 'GMResourceHandler',
   },
   {
+    id: 'gm-webrequest-handler',
+    source: 'src/background/gm-webrequest-handler.ts',
+    output: 'modules/gm-webrequest-handler.js',
+    exportName: 'GMWebRequestHandler',
+    selfExportName: 'GMWebRequestHandler',
+  },
+  {
     id: 'connect-policy',
     source: 'src/background/connect-policy.ts',
     output: 'modules/connect-policy.js',

@@ -94,6 +94,13 @@ export {
   isGMResourceAction,
 } from './gm-resource-handler';
 export type { GMResourceAction } from './gm-resource-handler';
+export {
+  GM_WEBREQUEST_ACTIONS,
+  GMWebRequestHandler,
+  handleGMWebRequestMessage,
+  isGMWebRequestAction,
+} from './gm-webrequest-handler';
+export type { GMWebRequestAction } from './gm-webrequest-handler';
 export { createScriptTrustReceipt, sha256Hex } from './trust-receipt';
 
 export { CloudSync } from './cloud-sync';
