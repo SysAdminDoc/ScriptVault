@@ -6813,45 +6813,19 @@ async function handleMessage(message, sender) {
         
       // Script Values
       case 'GM_getValue':
-        return await ScriptValues.get(data.scriptId, data.key, data.defaultValue);
-        
       case 'GM_setValue':
-        return await ScriptValues.set(data.scriptId, data.key, data.value, sender.tab?.id ?? null);
-        
       case 'GM_deleteValue':
-        await ScriptValues.delete(data.scriptId, data.key, sender.tab?.id ?? null);
-        return { success: true };
-
       case 'deleteScriptValue':
-        await ScriptValues.delete(data.scriptId, data.key);
-        return { success: true };
-        
       case 'GM_listValues':
-        return await ScriptValues.list(data.scriptId);
-        
       case 'GM_getValues':
-        return await ScriptValues.getAll(data.scriptId);
-        
       case 'GM_setValues':
-        await ScriptValues.setAll(data.scriptId, data.values, sender.tab?.id ?? null);
-        return { success: true };
-        
       case 'GM_deleteValues':
-        await ScriptValues.deleteMultiple(data.scriptId, data.keys, sender.tab?.id ?? null);
-        return { success: true };
-        
       case 'getScriptStorage':
-      case 'getScriptValues': {
-        const values = await ScriptValues.getAll(data.scriptId);
-        return { values };
-      }
-        
+      case 'getScriptValues':
       case 'setScriptStorage':
-        await ScriptValues.setAll(data.scriptId, data.values);
-        return { success: true };
-        
       case 'getStorageSize':
-        return await ScriptValues.getStorageSize(data.scriptId);
+        if (typeof GMValuesHandler === 'undefined') return { error: 'GMValuesHandler not available' };
+        return await GMValuesHandler.handleGMValuesMessage(action, data, sender);
         
       // Tab Storage
       case 'GM_getTab':

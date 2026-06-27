@@ -73,6 +73,13 @@ export {
   isGMTabsAction,
 } from './gm-tabs-handler';
 export type { GMTabsAction } from './gm-tabs-handler';
+export {
+  GM_VALUES_ACTIONS,
+  GMValuesHandler,
+  handleGMValuesMessage,
+  isGMValuesAction,
+} from './gm-values-handler';
+export type { GMValuesAction } from './gm-values-handler';
 export { createScriptTrustReceipt, sha256Hex } from './trust-receipt';
 
 export { CloudSync } from './cloud-sync';
