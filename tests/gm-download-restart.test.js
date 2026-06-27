@@ -20,8 +20,8 @@ describe('GM_download service-worker restart recovery', () => {
   });
 
   it('tracks GM_download callbacks without per-download onChanged listeners', () => {
-    const core = source('src/background/core.ts');
-    const gmDownloadBlock = core.match(/case 'GM_download': \{[\s\S]*?case 'GM_notification': \{/);
+    const networkHandler = source('src/background/gm-network-handler.ts');
+    const gmDownloadBlock = networkHandler.match(/case 'GM_download': \{[\s\S]*?default:/);
 
     expect(gmDownloadBlock?.[0]).toContain('trackPendingDownload(downloadId');
     expect(gmDownloadBlock?.[0]).toContain('await reconcilePendingDownload(downloadId, tracker, Date.now());');

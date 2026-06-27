@@ -77,7 +77,8 @@ describe('GM_download parity surface', () => {
 
   it('routes header and anonymous downloads through a bounded fetch bridge', () => {
     const core = source('src/background/core.ts');
-    const gmDownloadBlock = core.match(/case 'GM_download': \{[\s\S]*?case 'GM_notification': \{/);
+    const networkHandler = source('src/background/gm-network-handler.ts');
+    const gmDownloadBlock = networkHandler.match(/case 'GM_download': \{[\s\S]*?default:/);
 
     expect(core).toContain('const GM_DOWNLOAD_FETCH_MAX_BYTES = 50 * 1024 * 1024;');
     expect(core).toContain('function downloadNeedsFetchBridge(data = {})');
@@ -91,9 +92,10 @@ describe('GM_download parity surface', () => {
 
   it('routes partition-cookie options through the explicit fetch cookie bridge', () => {
     const core = source('src/background/core.ts');
+    const networkHandler = source('src/background/gm-network-handler.ts');
     const wrapper = source('src/background/wrapper-builder.ts');
-    const xhrBlock = core.match(/case 'GM_xmlhttpRequest': \{[\s\S]*?case 'GM_xmlhttpRequest_abort': \{/);
-    const gmDownloadBlock = core.match(/case 'GM_download': \{[\s\S]*?case 'GM_notification': \{/);
+    const xhrBlock = networkHandler.match(/case 'GM_xmlhttpRequest': \{[\s\S]*?case 'GM_xmlhttpRequest_abort': \{/);
+    const gmDownloadBlock = networkHandler.match(/case 'GM_download': \{[\s\S]*?default:/);
 
     expect(core).toContain('function hasCookieRoutingOptions(data = {})');
     expect(core).toContain('async function prepareCookieRoutingForFetch(data = {}, apiName =');

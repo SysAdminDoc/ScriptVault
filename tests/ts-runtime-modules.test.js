@@ -198,6 +198,13 @@ describe('TS runtime module generator', () => {
         selfExportName: 'GMCookieHandler',
       }),
       expect.objectContaining({
+        id: 'gm-network-handler',
+        source: 'src/background/gm-network-handler.ts',
+        output: 'modules/gm-network-handler.js',
+        exportName: 'GMNetworkHandler',
+        selfExportName: 'GMNetworkHandler',
+      }),
+      expect.objectContaining({
         id: 'resources',
         source: 'src/modules/resources.ts',
         output: 'modules/resources.js',
@@ -394,6 +401,16 @@ describe('TS runtime module generator', () => {
     expect(text).toContain('const GMCookieHandler = (() => {');
     expect(text).toContain('self.GMCookieHandler = GMCookieHandler;');
     expect(text).toContain('GM_COOKIE_ACTIONS');
+  });
+
+  it('generates the extracted GM network handler before the raw core bridge', async () => {
+    const definition = TS_RUNTIME_MODULES.find((entry) => entry.id === 'gm-network-handler');
+    const text = await buildTsRuntimeModuleText(definition, { rootDir: ROOT });
+
+    expect(text).toContain('Generated from src/background/gm-network-handler.ts');
+    expect(text).toContain('const GMNetworkHandler = (() => {');
+    expect(text).toContain('self.GMNetworkHandler = GMNetworkHandler;');
+    expect(text).toContain('GM_NETWORK_ACTIONS');
   });
 
   it('generates the raw background core bridge without hiding top-level functions', async () => {

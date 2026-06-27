@@ -195,14 +195,16 @@ GM_webSocket({
 
   it('keeps the background WebSocket bridge behind grant, @connect, and internal-host guards', () => {
     const core = readFileSync(resolve(process.cwd(), 'src/background/core.ts'), 'utf8');
+    const networkHandler = readFileSync(resolve(process.cwd(), 'src/background/gm-network-handler.ts'), 'utf8');
     const bridge = readFileSync(resolve(process.cwd(), 'content.js'), 'utf8');
     const wrapper = readFileSync(resolve(process.cwd(), 'src/background/wrapper-builder.ts'), 'utf8');
 
     expect(core).toContain("case 'GM_webSocket':");
-    expect(core).toContain("scriptHasGrant(wsScript, ['GM_webSocket', 'GM.webSocket'])");
-    expect(core).toContain('const connectPolicy = evaluateConnectPolicy(wsScript, wsUrl);');
-    expect(core).toContain("const wsPreCheck = InternalHostGuard.classifyFetchUrl(wsUrl, ['ws:', 'wss:']);");
-    expect(core).toContain("internalXhrError('GM_webSocket URL rejected', wsPreCheck)");
+    expect(core).toContain('return await GMNetworkHandler.handleGMNetworkMessage(action, data, sender);');
+    expect(networkHandler).toContain("scriptHasGrant(wsScript, ['GM_webSocket', 'GM.webSocket'])");
+    expect(networkHandler).toContain('const connectPolicy = evaluateConnectPolicy(wsScript, wsUrl);');
+    expect(networkHandler).toContain("const wsPreCheck = InternalHostGuard.classifyFetchUrl(wsUrl, ['ws:', 'wss:']);");
+    expect(networkHandler).toContain("internalXhrError('GM_webSocket URL rejected', wsPreCheck)");
     expect(core).toContain('closeGMWebSocketsForTab(tabId);');
     expect(bridge).toContain("message.action === 'webSocketEvent'");
     expect(wrapper).toContain("sendToBackground('GM_webSocket_send'");

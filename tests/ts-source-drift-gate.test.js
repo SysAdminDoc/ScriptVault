@@ -58,6 +58,7 @@ describe('TS source drift gate', () => {
     expect(map.entries.some((entry) => entry.runtime === 'modules/gm-resource-handler.js' && entry.status === 'promoted')).toBe(true);
     expect(map.entries.some((entry) => entry.runtime === 'modules/gm-webrequest-handler.js' && entry.status === 'promoted')).toBe(true);
     expect(map.entries.some((entry) => entry.runtime === 'modules/gm-cookie-handler.js' && entry.status === 'promoted')).toBe(true);
+    expect(map.entries.some((entry) => entry.runtime === 'modules/gm-network-handler.js' && entry.status === 'promoted')).toBe(true);
     expect(map.entries.some((entry) => entry.runtime === 'modules/connect-policy.js' && entry.status === 'promoted')).toBe(true);
     expect(map.entries.some((entry) => entry.runtime === 'modules/resources.js' && entry.status === 'promoted')).toBe(true);
     expect(map.entries.some((entry) => entry.runtime === 'modules/storage.js' && entry.status === 'promoted')).toBe(true);
@@ -81,7 +82,7 @@ describe('TS source drift gate', () => {
     const report = analyzeSourceDrift(map, []);
     const text = formatTextReport(report, { reportMode: true });
 
-    expect(report.totals.promoted).toBe(39);
+    expect(report.totals.promoted).toBe(40);
     expect(report.totals.candidate).toBe(0);
     expect(report.totals.mirrored).toBe(0);
     expect(report.totals['intentionally-divergent']).toBe(0);
@@ -95,6 +96,7 @@ describe('TS source drift gate', () => {
     expect(text).toContain('modules/gm-resource-handler.js -> src/background/gm-resource-handler.ts');
     expect(text).toContain('modules/gm-webrequest-handler.js -> src/background/gm-webrequest-handler.ts');
     expect(text).toContain('modules/gm-cookie-handler.js -> src/background/gm-cookie-handler.ts');
+    expect(text).toContain('modules/gm-network-handler.js -> src/background/gm-network-handler.ts');
     expect(text).toContain('modules/connect-policy.js -> src/background/connect-policy.ts');
     expect(text).toContain('modules/sync-crypto.js -> src/modules/sync-crypto.ts');
     expect(text).toContain('background.core.js -> src/background/core.ts');

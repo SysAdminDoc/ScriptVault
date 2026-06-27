@@ -148,6 +148,14 @@
       "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for the extracted GM_cookie background handler."
     },
     {
+      "runtime": "modules/gm-network-handler.js",
+      "sources": [
+        "src/background/gm-network-handler.ts"
+      ],
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for the extracted GM XHR, WebSocket, and download background handler."
+    },
+    {
       "runtime": "modules/connect-policy.js",
       "sources": [
         "src/background/connect-policy.ts"

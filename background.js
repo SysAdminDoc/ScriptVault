@@ -18973,6 +18973,619 @@ if (typeof self !== 'undefined') {
 }
 
 // ============================================================================
+// Generated from src/background/gm-network-handler.ts; do not edit by hand.
+// Run `node scripts/generate-ts-runtime-modules.mjs` or `npm run build:bg`.
+// ============================================================================
+
+const GMNetworkHandler = (() => {
+  const module = { exports: {} };
+  const exports = module.exports;
+  "use strict";
+  var __defProp = Object.defineProperty;
+  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, { get: all[name], enumerable: true });
+  };
+  var __copyProps = (to, from, except, desc) => {
+    if (from && typeof from === "object" || typeof from === "function") {
+      for (let key of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(to, key) && key !== except)
+          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+    }
+    return to;
+  };
+  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+  // src/background/gm-network-handler.ts
+  var gm_network_handler_exports = {};
+  __export(gm_network_handler_exports, {
+    GMNetworkHandler: () => GMNetworkHandler,
+    GM_NETWORK_ACTIONS: () => GM_NETWORK_ACTIONS,
+    default: () => gm_network_handler_default,
+    handleGMNetworkMessage: () => handleGMNetworkMessage,
+    isGMNetworkAction: () => isGMNetworkAction
+  });
+  module.exports = __toCommonJS(gm_network_handler_exports);
+  var GM_NETWORK_ACTIONS = [
+    "GM_download",
+    "GM_webSocket",
+    "GM_webSocket_close",
+    "GM_webSocket_send",
+    "GM_xmlhttpRequest",
+    "GM_xmlhttpRequest_abort"
+  ];
+  var GM_NETWORK_ACTION_SET = new Set(GM_NETWORK_ACTIONS);
+  function errorMessage(error, fallback = "Unexpected error") {
+    if (error instanceof Error && error.message) return error.message;
+    if (error && typeof error === "object" && "message" in error) {
+      const message = error.message;
+      if (typeof message === "string" && message) return message;
+    }
+    if (typeof error === "string" && error) return error;
+    return fallback;
+  }
+  function errorName(error) {
+    if (error && typeof error === "object" && "name" in error) {
+      const name = error.name;
+      if (typeof name === "string") return name;
+    }
+    return "";
+  }
+  function encodeBytesToBase64(bytes) {
+    let binary = "";
+    for (let offset = 0; offset < bytes.length; offset += 32768) {
+      binary += String.fromCharCode(...bytes.subarray(offset, offset + 32768));
+    }
+    return btoa(binary);
+  }
+  function deserializeRequestBody(rawBody) {
+    if (!rawBody || typeof rawBody !== "object" || ArrayBuffer.isView(rawBody) || rawBody instanceof ArrayBuffer) {
+      return rawBody;
+    }
+    if (rawBody.__sv_blob__) {
+      const bytes = Uint8Array.from(atob(rawBody.b64), (char) => char.charCodeAt(0));
+      return rawBody.name ? new File([bytes], rawBody.name, { type: rawBody.type || "" }) : new Blob([bytes], { type: rawBody.type || "" });
+    }
+    if (rawBody.__sv_formdata__) {
+      const formData = new FormData();
+      for (const entry of rawBody.entries || []) {
+        if (entry.b64 !== void 0) {
+          const bytes = Uint8Array.from(atob(entry.b64), (char) => char.charCodeAt(0));
+          formData.append(entry.name, new Blob([bytes], { type: entry.type || "" }), entry.filename || "blob");
+        } else {
+          formData.append(entry.name, entry.value);
+        }
+      }
+      return formData;
+    }
+    return rawBody;
+  }
+  async function blobToDataUrl(blob) {
+    return await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : null);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  }
+  function isGMNetworkAction(action) {
+    return typeof action === "string" && GM_NETWORK_ACTION_SET.has(action);
+  }
+  async function handleGMNetworkMessage(action, data = {}, sender = {}) {
+    switch (action) {
+      case "GM_xmlhttpRequest": {
+        try {
+          if (!data.url) {
+            return { error: "No URL provided", type: "error" };
+          }
+          if (!data.scriptId) {
+            return { error: "Missing script context", type: "error" };
+          }
+          const xhrScript = await ScriptStorage.get(data.scriptId);
+          if (!xhrScript) {
+            return { error: "Script context not found", type: "error" };
+          }
+          const connectPolicy = evaluateConnectPolicy(xhrScript, data.url);
+          if (!connectPolicy.allowed) {
+            if (connectPolicy.hostname) {
+              console.warn(`[ScriptVault] @connect blocked: ${connectPolicy.hostname} not in allowed list for ${xhrScript.meta.name}`);
+            }
+            return { error: connectPolicy.error, type: "error" };
+          }
+          const settings = await SettingsManager.get();
+          const xhrPreCheck = InternalHostGuard.classifyFetchUrl(data.url, ["http:", "https:"]);
+          if (!xhrPreCheck.ok && !shouldAllowInternalXhr(xhrScript, data.url, settings, xhrPreCheck)) {
+            return { error: internalXhrError("GM_xmlhttpRequest URL rejected", xhrPreCheck), type: "error" };
+          }
+          const cookieRouting = await prepareCookieRoutingForFetch(data, "GM_xmlhttpRequest");
+          if (cookieRouting.error) return { error: cookieRouting.error, type: "error" };
+          const tabId = sender.tab?.id;
+          const request = XhrManager.create(tabId, data.scriptId, data);
+          const { id: requestId } = request;
+          const netLogStartTime = Date.now();
+          const netLogEntry = {
+            scriptId: data.scriptId,
+            scriptName: "",
+            method: String(data.method || "GET").toUpperCase(),
+            url: data.url,
+            requestSize: data.data ? typeof data.data === "string" ? data.data.length : 0 : 0
+          };
+          try {
+            const script = await ScriptStorage.get(data.scriptId);
+            netLogEntry.scriptName = script?.meta?.name || data.scriptId;
+          } catch (_) {
+          }
+          const controller = new AbortController();
+          request.controller = controller;
+          const sendEvent = (type, eventData = {}) => {
+            if (request.aborted && type !== "abort") return;
+            try {
+              chrome.tabs.sendMessage(tabId, {
+                action: "xhrEvent",
+                data: {
+                  requestId,
+                  scriptId: data.scriptId,
+                  type,
+                  ...eventData
+                }
+              }).catch(() => {
+              });
+            } catch (_) {
+            }
+          };
+          const method = String(data.method || "GET").toUpperCase();
+          const fetchOptions = XhrManager.buildFetchOptions(data);
+          if (cookieRouting.applies) fetchOptions.credentials = "omit";
+          fetchOptions.signal = controller.signal;
+          if (data.data && method !== "GET" && method !== "HEAD") {
+            fetchOptions.body = deserializeRequestBody(data.data);
+          }
+          const timeoutMs = data.timeout || settings.xhrTimeout || 3e4;
+          const timeoutId = setTimeout(() => {
+            if (!request.aborted) {
+              request.aborted = true;
+              controller.abort();
+              sendEvent("timeout", {
+                readyState: 4,
+                status: 0,
+                statusText: "",
+                error: "Request timed out"
+              });
+              sendEvent("loadend", { readyState: 4 });
+              XhrManager.remove(requestId);
+            }
+          }, timeoutMs);
+          sendEvent("loadstart", {
+            readyState: 1,
+            status: 0,
+            lengthComputable: false,
+            loaded: 0,
+            total: 0
+          });
+          (async () => {
+            try {
+              const response = await withCookieHeaderSessionRule(data.url, cookieRouting.cookieHeader, () => fetch(data.url, fetchOptions));
+              if (request.aborted) return;
+              const xhrPostCheck = InternalHostGuard.classifyResponseUrl(response, ["http:", "https:"]);
+              if (!xhrPostCheck.ok && !shouldAllowInternalXhr(xhrScript, response.url || data.url, settings, xhrPostCheck)) {
+                throw new Error(internalXhrError("GM_xmlhttpRequest redirected to internal host", xhrPostCheck));
+              }
+              const responseHeaders = [...response.headers.entries()].map(([key, value]) => `${key}: ${value}`).join("\r\n");
+              sendEvent("readystatechange", {
+                readyState: 2,
+                status: response.status,
+                statusText: response.statusText,
+                responseHeaders,
+                finalUrl: response.url
+              });
+              const contentLength = parseInt(response.headers.get("content-length") || "0", 10);
+              const maxBytes = GM_DOWNLOAD_FETCH_MAX_BYTES;
+              if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+                throw new Error(`Response too large (${formatBytes(contentLength)}). Maximum is ${formatBytes(maxBytes)}.`);
+              }
+              let responseData;
+              let responseText = "";
+              if (data.responseType === "arraybuffer") {
+                const buffer = await response.arrayBuffer();
+                if (buffer.byteLength > maxBytes) throw new Error(`Response too large (${formatBytes(buffer.byteLength)}).`);
+                const bytes = new Uint8Array(buffer);
+                responseData = { __sv_base64__: true, data: encodeBytesToBase64(bytes) };
+                sendEvent("progress", {
+                  readyState: 3,
+                  lengthComputable: contentLength > 0,
+                  loaded: buffer.byteLength,
+                  total: contentLength || buffer.byteLength
+                });
+              } else if (data.responseType === "blob") {
+                const blob = await response.blob();
+                if (blob.size > maxBytes) throw new Error(`Response too large (${formatBytes(blob.size)}).`);
+                responseData = await blobToDataUrl(blob);
+                sendEvent("progress", {
+                  readyState: 3,
+                  lengthComputable: contentLength > 0,
+                  loaded: blob.size,
+                  total: contentLength || blob.size
+                });
+              } else if (data.responseType === "json") {
+                responseText = await response.text();
+                try {
+                  responseData = JSON.parse(responseText);
+                } catch (_) {
+                  responseData = responseText;
+                }
+                sendEvent("progress", {
+                  readyState: 3,
+                  lengthComputable: contentLength > 0,
+                  loaded: responseText.length,
+                  total: contentLength || responseText.length
+                });
+              } else if (data.responseType === "stream") {
+                const reader = response.body?.getReader();
+                if (reader) {
+                  let loaded = 0;
+                  const chunks = [];
+                  const decoder = new TextDecoder();
+                  try {
+                    while (true) {
+                      const { done, value } = await reader.read();
+                      if (done || request.aborted) break;
+                      loaded += value.byteLength;
+                      if (loaded > maxBytes) {
+                        await reader.cancel();
+                        throw new Error(`Streamed response exceeds ${formatBytes(maxBytes)} limit.`);
+                      }
+                      const chunkText = decoder.decode(value, { stream: true });
+                      chunks.push(chunkText);
+                      sendEvent("progress", {
+                        readyState: 3,
+                        lengthComputable: contentLength > 0,
+                        loaded,
+                        total: contentLength || 0,
+                        responseText: chunkText,
+                        streamChunk: true
+                      });
+                    }
+                  } finally {
+                    reader.releaseLock();
+                  }
+                  responseText = chunks.join("");
+                  responseData = responseText;
+                } else {
+                  responseText = await response.text();
+                  responseData = responseText;
+                }
+                sendEvent("progress", {
+                  readyState: 3,
+                  lengthComputable: contentLength > 0,
+                  loaded: responseText.length,
+                  total: contentLength || responseText.length
+                });
+              } else {
+                responseText = await response.text();
+                responseData = responseText;
+                sendEvent("progress", {
+                  readyState: 3,
+                  lengthComputable: contentLength > 0,
+                  loaded: responseText.length,
+                  total: contentLength || responseText.length
+                });
+              }
+              if (request.aborted) return;
+              const finalResponse = {
+                readyState: 4,
+                status: response.status,
+                statusText: response.statusText,
+                responseHeaders,
+                response: responseData,
+                responseText: responseText || (typeof responseData === "string" ? responseData : JSON.stringify(responseData)),
+                finalUrl: response.url,
+                lengthComputable: true,
+                loaded: responseText?.length || 0,
+                total: responseText?.length || 0
+              };
+              sendEvent("load", finalResponse);
+              NetworkLog.add({
+                ...netLogEntry,
+                status: finalResponse.status,
+                statusText: finalResponse.statusText,
+                responseSize: responseText?.length || 0,
+                duration: Date.now() - netLogStartTime,
+                finalUrl: finalResponse.finalUrl
+              });
+              sendEvent("loadend", finalResponse);
+              XhrManager.remove(requestId);
+            } catch (error) {
+              if (request.aborted) return;
+              const isAbort = errorName(error) === "AbortError";
+              const errorType = isAbort ? "abort" : "error";
+              const errorMsg = isAbort ? "Request aborted" : errorMessage(error, "Network error");
+              NetworkLog.add({
+                ...netLogEntry,
+                status: 0,
+                error: errorMsg,
+                duration: Date.now() - netLogStartTime
+              });
+              sendEvent(errorType, {
+                readyState: 4,
+                status: 0,
+                statusText: "",
+                error: errorMsg
+              });
+              sendEvent("loadend", {
+                readyState: 4,
+                status: 0
+              });
+              XhrManager.remove(requestId);
+            } finally {
+              clearTimeout(timeoutId);
+            }
+          })().catch((error) => {
+            console.error("[ScriptVault] Unexpected XHR handler error:", error);
+            XhrManager.remove(requestId);
+          });
+          return { requestId, started: true };
+        } catch (error) {
+          console.error("[ScriptVault] GM_xmlhttpRequest setup error:", error);
+          return { error: errorMessage(error, "Request setup failed"), type: "error" };
+        }
+      }
+      case "GM_xmlhttpRequest_abort": {
+        const request = XhrManager.get(data.requestId);
+        if (request && !request.aborted) {
+          request.aborted = true;
+          if (request.controller) {
+            request.controller.abort();
+          }
+          XhrManager.remove(data.requestId);
+          return { success: true };
+        }
+        return { success: false };
+      }
+      case "GM_webSocket": {
+        try {
+          if (typeof WebSocket !== "function") return { error: "WebSocket is not available in this browser context" };
+          if (!data.url) return { error: "No URL provided" };
+          if (!data.scriptId) return { error: "Missing script context" };
+          const wsScript = await ScriptStorage.get(data.scriptId);
+          if (!wsScript) return { error: "Script context not found" };
+          if (!scriptHasGrant(wsScript, ["GM_webSocket", "GM.webSocket"])) return { error: "Not granted" };
+          const wsUrl = normalizeGMWebSocketUrl(data.url);
+          const connectPolicy = evaluateConnectPolicy(wsScript, wsUrl);
+          if (!connectPolicy.allowed) {
+            if (connectPolicy.hostname) {
+              console.warn(`[ScriptVault] @connect blocked WebSocket: ${connectPolicy.hostname} not in allowed list for ${wsScript.meta.name}`);
+            }
+            return { error: connectPolicy.error };
+          }
+          const settings = await SettingsManager.get();
+          const wsPreCheck = InternalHostGuard.classifyFetchUrl(wsUrl, ["ws:", "wss:"]);
+          if (!wsPreCheck.ok && !shouldAllowInternalXhr(wsScript, wsUrl, settings, wsPreCheck)) {
+            return { error: internalXhrError("GM_webSocket URL rejected", wsPreCheck) };
+          }
+          const tabId = sender.tab?.id;
+          if (typeof tabId !== "number") return { error: "Missing tab context" };
+          const protocols = normalizeGMWebSocketProtocols(data.protocols);
+          const requestId = `ws_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+          const startTime = Date.now();
+          const sockets = getGMWebSocketMap();
+          let socket;
+          try {
+            socket = protocols ? new WebSocket(wsUrl, protocols) : new WebSocket(wsUrl);
+          } catch (error) {
+            return { error: errorMessage(error, "WebSocket setup failed") };
+          }
+          if (data.binaryType === "blob" || data.binaryType === "arraybuffer") {
+            try {
+              socket.binaryType = data.binaryType;
+            } catch (_) {
+            }
+          }
+          const record = {
+            requestId,
+            socket,
+            tabId,
+            scriptId: data.scriptId,
+            scriptName: wsScript.meta?.name || data.scriptId,
+            url: wsUrl,
+            bytesSent: 0,
+            bytesReceived: 0,
+            startTime
+          };
+          sockets.set(requestId, record);
+          socket.addEventListener("open", () => {
+            sendGMWebSocketEvent(record, "open", {
+              protocol: socket.protocol || "",
+              extensions: socket.extensions || ""
+            });
+            NetworkLog.add({
+              scriptId: record.scriptId,
+              scriptName: record.scriptName,
+              type: "websocket",
+              method: "WS",
+              url: wsUrl,
+              status: 101,
+              statusText: "Switching Protocols",
+              duration: Date.now() - startTime
+            });
+          });
+          socket.addEventListener("message", (event) => {
+            (async () => {
+              const size = estimateGMWebSocketPayloadBytes(event.data);
+              record.bytesReceived += size;
+              if (size > GM_WEBSOCKET_MAX_MESSAGE_BYTES) {
+                try {
+                  socket.close(1e3, "Message too large");
+                } catch (_) {
+                  try {
+                    socket.close();
+                  } catch (_2) {
+                  }
+                }
+                sendGMWebSocketEvent(record, "error", { error: `WebSocket message exceeds ${formatBytes(GM_WEBSOCKET_MAX_MESSAGE_BYTES)} limit` });
+                return;
+              }
+              const payload = await encodeGMWebSocketPayload(event.data);
+              sendGMWebSocketEvent(record, "message", {
+                payload,
+                origin: event.origin || ""
+              });
+            })().catch((error) => {
+              sendGMWebSocketEvent(record, "error", { error: errorMessage(error, "WebSocket message relay failed") });
+            });
+          });
+          socket.addEventListener("error", () => {
+            sendGMWebSocketEvent(record, "error", { error: "WebSocket error" });
+          });
+          socket.addEventListener("close", (event) => {
+            sockets.delete(requestId);
+            NetworkLog.add({
+              scriptId: record.scriptId,
+              scriptName: record.scriptName,
+              type: "websocket",
+              method: "WS_CLOSE",
+              url: wsUrl,
+              status: event.code || 0,
+              statusText: event.reason || "",
+              requestSize: record.bytesSent,
+              responseSize: record.bytesReceived,
+              duration: Date.now() - startTime
+            });
+            sendGMWebSocketEvent(record, "close", {
+              code: event.code || 1006,
+              reason: event.reason || "",
+              wasClean: event.wasClean === true
+            });
+          });
+          return { requestId, started: true };
+        } catch (error) {
+          console.error("[ScriptVault] GM_webSocket setup error:", error);
+          return { error: errorMessage(error, "WebSocket setup failed") };
+        }
+      }
+      case "GM_webSocket_send": {
+        try {
+          const record = getGMWebSocketMap().get(data.requestId);
+          if (!record || record.scriptId !== data.scriptId) return { error: "WebSocket request not found" };
+          if (record.socket.readyState !== WebSocket.OPEN) return { error: "WebSocket is not open" };
+          const size = estimateGMWebSocketPayloadBytes(data.payload);
+          if (size > GM_WEBSOCKET_MAX_MESSAGE_BYTES) {
+            return { error: `WebSocket payload exceeds ${formatBytes(GM_WEBSOCKET_MAX_MESSAGE_BYTES)} limit` };
+          }
+          record.socket.send(decodeGMWebSocketPayload(data.payload));
+          record.bytesSent += size;
+          return { success: true };
+        } catch (error) {
+          return { error: errorMessage(error, "WebSocket send failed") };
+        }
+      }
+      case "GM_webSocket_close": {
+        const record = getGMWebSocketMap().get(data.requestId);
+        if (!record || record.scriptId !== data.scriptId) return { success: false };
+        const code = normalizeGMWebSocketCloseCode(data.code);
+        const reason = normalizeGMWebSocketCloseReason(data.reason);
+        try {
+          if (code !== void 0) record.socket.close(code, reason);
+          else record.socket.close();
+        } catch (_) {
+        }
+        return { success: true };
+      }
+      case "GM_download": {
+        try {
+          if (!data.url) return { error: "url is required for download" };
+          if (!data.scriptId) return { error: "Missing script context" };
+          const downloadScript = await ScriptStorage.get(data.scriptId);
+          if (!downloadScript) return { error: "Script context not found" };
+          let downloadProtocol = "";
+          try {
+            downloadProtocol = new URL(data.url).protocol;
+          } catch (_) {
+            return { error: "Invalid URL" };
+          }
+          let downloadUrl = data.url;
+          let cookieRouting = { applies: false, cookieHeader: "" };
+          if (downloadProtocol === "http:" || downloadProtocol === "https:") {
+            const downloadPolicy = evaluateConnectPolicy(downloadScript, data.url);
+            if (!downloadPolicy.allowed) return { error: downloadPolicy.error };
+            const downloadSettings = await SettingsManager.get();
+            const downloadPreCheck = InternalHostGuard.classifyFetchUrl(data.url, ["http:", "https:"]);
+            if (!downloadPreCheck.ok && !shouldAllowInternalXhr(downloadScript, data.url, downloadSettings, downloadPreCheck)) {
+              return { error: internalXhrError("GM_download URL rejected", downloadPreCheck) };
+            }
+            cookieRouting = await prepareCookieRoutingForFetch(data, "GM_download");
+            if (cookieRouting.error) return { error: cookieRouting.error };
+            if (downloadNeedsFetchBridge(data) || cookieRouting.applies) {
+              const fetchOptions = XhrManager.buildFetchOptions({
+                ...data,
+                method: "GET",
+                noCache: data.noCache === true || data.nocache === true
+              });
+              if (cookieRouting.applies) fetchOptions.credentials = "omit";
+              const response = await withCookieHeaderSessionRule(data.url, cookieRouting.cookieHeader, () => fetch(data.url, fetchOptions));
+              const downloadPostCheck = InternalHostGuard.classifyResponseUrl(response, ["http:", "https:"]);
+              if (!downloadPostCheck.ok && !shouldAllowInternalXhr(downloadScript, response.url || data.url, downloadSettings, downloadPostCheck)) {
+                return { error: internalXhrError("GM_download redirected to internal host", downloadPostCheck) };
+              }
+              if (!response.ok) return { error: `HTTP ${response.status}` };
+              downloadUrl = await responseToDownloadDataUrl(response);
+            }
+          }
+          let hasDownloadPermission = false;
+          try {
+            hasDownloadPermission = !!chrome.downloads?.download && await chrome.permissions.contains({ permissions: ["downloads"] });
+          } catch (_) {
+          }
+          if (!hasDownloadPermission) {
+            return {
+              error: "Downloads permission not granted. Enable it in ScriptVault settings or reinstall the script that uses GM_download.",
+              code: "PERMISSION_REQUIRED"
+            };
+          }
+          const downloadOpts = {
+            url: downloadUrl,
+            filename: normalizeDownloadFilename(data.name, data.url, data.sourceName),
+            saveAs: data.saveAs || false,
+            conflictAction: data.conflictAction || "uniquify"
+          };
+          const downloadId = await chrome.downloads.download(downloadOpts);
+          const tabId = sender.tab?.id;
+          if (tabId && data.hasCallbacks) {
+            const tracker = trackPendingDownload(downloadId, {
+              tabId,
+              scriptId: data.scriptId,
+              url: data.url,
+              timeoutMs: data.timeout
+            });
+            if (tracker) {
+              await reconcilePendingDownload(downloadId, tracker, Date.now());
+            }
+          }
+          return { success: true, downloadId };
+        } catch (error) {
+          return { error: errorMessage(error) };
+        }
+      }
+      default:
+        return { error: `Unsupported GM network action: ${action}` };
+    }
+  }
+  var GMNetworkHandler = Object.freeze({
+    GM_NETWORK_ACTIONS,
+    handleGMNetworkMessage,
+    isGMNetworkAction
+  });
+  var gm_network_handler_default = GMNetworkHandler;
+  return module.exports.default || module.exports.GMNetworkHandler || module.exports;
+})();
+
+if (typeof self !== 'undefined') {
+  self.GMNetworkHandler = GMNetworkHandler;
+}
+
+// ============================================================================
 // Generated from src/background/connect-policy.ts; do not edit by hand.
 // Run `node scripts/generate-ts-runtime-modules.mjs` or `npm run build:bg`.
 // ============================================================================
@@ -37637,7 +38250,7 @@ async function handleMessage(message, sender) {
 
       case 'verifyRequireProvenancePreview':
         return await previewRequireProvenance(data);
-        
+
       // Resources
       case 'fetchResource':
         return await ResourceCache.fetchResource(data.url);
@@ -37649,596 +38262,15 @@ async function handleMessage(message, sender) {
         if (typeof GMResourceHandler === 'undefined') return { error: 'GMResourceHandler not available' };
         return await GMResourceHandler.handleGMResourceMessage(action, data);
 
-      // XHR - Using fetch() since XMLHttpRequest is not available in Service Workers
-      // Provides abort support via AbortController and simulates events
-      case 'GM_xmlhttpRequest': {
-        try {
-          if (!data.url) {
-            return { error: 'No URL provided', type: 'error' };
-          }
-
-          if (!data.scriptId) {
-            return { error: 'Missing script context', type: 'error' };
-          }
-          const xhrScript = await ScriptStorage.get(data.scriptId);
-          if (!xhrScript) {
-            return { error: 'Script context not found', type: 'error' };
-          }
-
-          // @connect enforcement
-          const connectPolicy = evaluateConnectPolicy(xhrScript, data.url);
-          if (!connectPolicy.allowed) {
-            if (connectPolicy.hostname) {
-              console.warn(`[ScriptVault] @connect blocked: ${connectPolicy.hostname} not in allowed list for ${xhrScript.meta.name}`);
-            }
-            return { error: connectPolicy.error, type: 'error' };
-          }
-
-          const settings = await SettingsManager.get();
-          const xhrPreCheck = InternalHostGuard.classifyFetchUrl(data.url, ['http:', 'https:']);
-          if (!xhrPreCheck.ok && !shouldAllowInternalXhr(xhrScript, data.url, settings, xhrPreCheck)) {
-            return { error: internalXhrError('GM_xmlhttpRequest URL rejected', xhrPreCheck), type: 'error' };
-          }
-          const cookieRouting = await prepareCookieRoutingForFetch(data, 'GM_xmlhttpRequest');
-          if (cookieRouting.error) return { error: cookieRouting.error, type: 'error' };
-
-          const tabId = sender.tab?.id;
-          const request = XhrManager.create(tabId, data.scriptId, data);
-          const { id: requestId } = request;
-
-          // Log to network log
-          const _netLogStartTime = Date.now();
-          const _netLogEntry = {
-            scriptId: data.scriptId,
-            scriptName: '',
-            method: (data.method || 'GET').toUpperCase(),
-            url: data.url,
-            requestSize: data.data ? (typeof data.data === 'string' ? data.data.length : 0) : 0
-          };
-          // Resolve script name
-          try {
-            const _xhrScript = await ScriptStorage.get(data.scriptId);
-            _netLogEntry.scriptName = _xhrScript?.meta?.name || data.scriptId;
-          } catch {};
-          
-          // Create AbortController for this request
-          const controller = new AbortController();
-          request.controller = controller;
-          
-          // Function to send event to content script
-          const sendEvent = (type, eventData = {}) => {
-            if (request.aborted && type !== 'abort') return;
-            
-            try {
-              chrome.tabs.sendMessage(tabId, {
-                action: 'xhrEvent',
-                data: {
-                  requestId,
-                  scriptId: data.scriptId,
-                  type,
-                  ...eventData
-                }
-              }).catch(() => {});
-            } catch (e) {
-              // Tab might be closed
-            }
-          };
-          
-          // Build fetch options via the shared helper so the noCache /
-          // redirect / credentials translation rules stay unit-testable.
-          // No 'mode' override — Chrome extensions with <all_urls> host
-          // permissions bypass CORS automatically. Forcing mode:'cors'
-          // breaks requests to servers that don't echo the extension origin
-          // (e.g. localhost with null CORS).
-          const method = String(data.method || 'GET').toUpperCase();
-          const fetchOptions = XhrManager.buildFetchOptions(data);
-          if (cookieRouting.applies) fetchOptions.credentials = 'omit';
-          fetchOptions.signal = controller.signal;
-
-          // Add body for non-GET/HEAD requests; deserialize tagged body objects
-          if (data.data && method !== 'GET' && method !== 'HEAD') {
-            const rawBody = data.data;
-            if (rawBody && typeof rawBody === 'object' && !ArrayBuffer.isView(rawBody) && !(rawBody instanceof ArrayBuffer)) {
-              if (rawBody.__sv_blob__) {
-                const bytes = Uint8Array.from(atob(rawBody.b64), c => c.charCodeAt(0));
-                fetchOptions.body = rawBody.name
-                  ? new File([bytes], rawBody.name, { type: rawBody.type || '' })
-                  : new Blob([bytes], { type: rawBody.type || '' });
-              } else if (rawBody.__sv_formdata__) {
-                const fd = new FormData();
-                for (const entry of rawBody.entries) {
-                  if (entry.b64 !== undefined) {
-                    const bytes = Uint8Array.from(atob(entry.b64), c => c.charCodeAt(0));
-                    fd.append(entry.name, new Blob([bytes], { type: entry.type || '' }), entry.filename || 'blob');
-                  } else {
-                    fd.append(entry.name, entry.value);
-                  }
-                }
-                fetchOptions.body = fd;
-              } else {
-                fetchOptions.body = rawBody;
-              }
-            } else {
-              fetchOptions.body = rawBody;
-            }
-          }
-          
-          // Set timeout
-          const timeoutMs = data.timeout || settings.xhrTimeout || 30000;
-          const timeoutId = setTimeout(() => {
-            if (!request.aborted) {
-              request.aborted = true;
-              controller.abort();
-              sendEvent('timeout', {
-                readyState: 4,
-                status: 0,
-                statusText: '',
-                error: 'Request timed out'
-              });
-              sendEvent('loadend', { readyState: 4 });
-              XhrManager.remove(requestId);
-            }
-          }, timeoutMs);
-          
-          // Send loadstart event
-          sendEvent('loadstart', {
-            readyState: 1,
-            status: 0,
-            lengthComputable: false,
-            loaded: 0,
-            total: 0
-          });
-          
-          // Execute the fetch
-          (async () => {
-            try {
-              const response = await withCookieHeaderSessionRule(data.url, cookieRouting.cookieHeader, () => fetch(data.url, fetchOptions));
-              
-              if (request.aborted) return;
-              const xhrPostCheck = InternalHostGuard.classifyResponseUrl(response, ['http:', 'https:']);
-              if (!xhrPostCheck.ok && !shouldAllowInternalXhr(xhrScript, response.url || data.url, settings, xhrPostCheck)) {
-                throw new Error(internalXhrError('GM_xmlhttpRequest redirected to internal host', xhrPostCheck));
-              }
-              
-              // Get response headers as string
-              const responseHeaders = [...response.headers.entries()]
-                .map(([k, v]) => `${k}: ${v}`)
-                .join('\r\n');
-              
-              // Send readystatechange for headers received
-              sendEvent('readystatechange', {
-                readyState: 2,
-                status: response.status,
-                statusText: response.statusText,
-                responseHeaders,
-                finalUrl: response.url
-              });
-              
-              // Get content length for progress
-              const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
-              const GM_XHR_MAX_BYTES = GM_DOWNLOAD_FETCH_MAX_BYTES;
-              if (Number.isFinite(contentLength) && contentLength > GM_XHR_MAX_BYTES) {
-                throw new Error(`Response too large (${formatBytes(contentLength)}). Maximum is ${formatBytes(GM_XHR_MAX_BYTES)}.`);
-              }
-
-              // Read response based on responseType
-              let responseData;
-              let responseText = '';
-
-              if (data.responseType === 'arraybuffer') {
-                const buffer = await response.arrayBuffer();
-                if (buffer.byteLength > GM_XHR_MAX_BYTES) throw new Error(`Response too large (${formatBytes(buffer.byteLength)}).`);
-                // Encode as base64 for efficient transfer (33% overhead vs 800%+ for number arrays)
-                const bytes = new Uint8Array(buffer);
-                let binary = '';
-                // Process in 32KB chunks to avoid call stack overflow
-                for (let offset = 0; offset < bytes.length; offset += 32768) {
-                  binary += String.fromCharCode.apply(null, bytes.subarray(offset, offset + 32768));
-                }
-                responseData = { __sv_base64__: true, data: btoa(binary) };
-                sendEvent('progress', {
-                  readyState: 3,
-                  lengthComputable: contentLength > 0,
-                  loaded: buffer.byteLength,
-                  total: contentLength || buffer.byteLength
-                });
-              } else if (data.responseType === 'blob') {
-                const blob = await response.blob();
-                if (blob.size > GM_XHR_MAX_BYTES) throw new Error(`Response too large (${formatBytes(blob.size)}).`);
-                // Convert blob to data URL for transfer
-                responseData = await new Promise((resolve) => {
-                  const reader = new FileReader();
-                  reader.onload = () => resolve(reader.result);
-                  reader.onerror = () => resolve(null);
-                  reader.readAsDataURL(blob);
-                });
-                sendEvent('progress', {
-                  readyState: 3,
-                  lengthComputable: contentLength > 0,
-                  loaded: blob.size,
-                  total: contentLength || blob.size
-                });
-              } else if (data.responseType === 'json') {
-                responseText = await response.text();
-                try {
-                  responseData = JSON.parse(responseText);
-                } catch (e) {
-                  responseData = responseText;
-                }
-                sendEvent('progress', {
-                  readyState: 3,
-                  lengthComputable: contentLength > 0,
-                  loaded: responseText.length,
-                  total: contentLength || responseText.length
-                });
-              } else if (data.responseType === 'stream') {
-                // Stream response - send chunks as progress events
-                const reader = response.body?.getReader();
-                if (reader) {
-                  let loaded = 0;
-                  const chunks = [];
-                  const decoder = new TextDecoder();
-                  try {
-                    while (true) {
-                      const { done, value } = await reader.read();
-                      if (done || request.aborted) break;
-                      loaded += value.byteLength;
-                      if (loaded > GM_XHR_MAX_BYTES) { reader.cancel(); throw new Error(`Streamed response exceeds ${formatBytes(GM_XHR_MAX_BYTES)} limit.`); }
-                      const chunkText = decoder.decode(value, { stream: true });
-                      chunks.push(chunkText);
-                      sendEvent('progress', {
-                        readyState: 3,
-                        lengthComputable: contentLength > 0,
-                        loaded,
-                        total: contentLength || 0,
-                        responseText: chunkText,
-                        streamChunk: true
-                      });
-                    }
-                  } finally {
-                    reader.releaseLock();
-                  }
-                  responseText = chunks.join('');
-                  responseData = responseText;
-                } else {
-                  responseText = await response.text();
-                  responseData = responseText;
-                }
-                sendEvent('progress', {
-                  readyState: 3,
-                  lengthComputable: contentLength > 0,
-                  loaded: responseText.length,
-                  total: contentLength || responseText.length
-                });
-              } else {
-                // Default: text
-                responseText = await response.text();
-                responseData = responseText;
-                sendEvent('progress', {
-                  readyState: 3,
-                  lengthComputable: contentLength > 0,
-                  loaded: responseText.length,
-                  total: contentLength || responseText.length
-                });
-              }
-              
-              if (request.aborted) return;
-              
-              // Build final response object
-              const finalResponse = {
-                readyState: 4,
-                status: response.status,
-                statusText: response.statusText,
-                responseHeaders,
-                response: responseData,
-                responseText: responseText || (typeof responseData === 'string' ? responseData : JSON.stringify(responseData)),
-                finalUrl: response.url,
-                lengthComputable: true,
-                loaded: responseText?.length || 0,
-                total: responseText?.length || 0
-              };
-              
-              // Send load event
-              sendEvent('load', finalResponse);
-
-              // Log successful request
-              NetworkLog.add({
-                ..._netLogEntry,
-                status: finalResponse.status,
-                statusText: finalResponse.statusText,
-                responseSize: responseText?.length || 0,
-                duration: Date.now() - _netLogStartTime,
-                finalUrl: finalResponse.finalUrl
-              });
-
-              // Send loadend event
-              sendEvent('loadend', finalResponse);
-
-              // Clean up
-              XhrManager.remove(requestId);
-              
-            } catch (e) {
-              if (request.aborted) {
-                // Already handled by abort
-                return;
-              }
-              
-              const isAbort = e.name === 'AbortError';
-              const errorType = isAbort ? 'abort' : 'error';
-              const errorMsg = isAbort ? 'Request aborted' : (e.message || 'Network error');
-              
-              // Log failed request
-              NetworkLog.add({ ..._netLogEntry, status: 0, error: errorMsg, duration: Date.now() - _netLogStartTime });
-
-              sendEvent(errorType, {
-                readyState: 4,
-                status: 0,
-                statusText: '',
-                error: errorMsg
-              });
-              
-              sendEvent('loadend', {
-                readyState: 4,
-                status: 0
-              });
-              
-              XhrManager.remove(requestId);
-            } finally {
-              clearTimeout(timeoutId);
-            }
-          })().catch(e => {
-            // Guard against any unexpected exception escaping the try/catch above
-            console.error('[ScriptVault] Unexpected XHR handler error:', e);
-            XhrManager.remove(requestId);
-          });
-
-          // Return request ID immediately so content script can track/abort
-          return { requestId, started: true };
-          
-        } catch (e) {
-          console.error('[ScriptVault] GM_xmlhttpRequest setup error:', e);
-          return { error: e.message || 'Request setup failed', type: 'error' };
-        }
-      }
-      
-      // Abort an XHR request
-      case 'GM_xmlhttpRequest_abort': {
-        const request = XhrManager.get(data.requestId);
-        if (request && !request.aborted) {
-          request.aborted = true;
-          if (request.controller) {
-            request.controller.abort();
-          }
-          XhrManager.remove(data.requestId);
-          return { success: true };
-        }
-        return { success: false };
-      }
-
-      // GM_webSocket - background-owned WebSocket with @connect enforcement.
-      case 'GM_webSocket': {
-        try {
-          if (typeof WebSocket !== 'function') return { error: 'WebSocket is not available in this browser context' };
-          if (!data.url) return { error: 'No URL provided' };
-          if (!data.scriptId) return { error: 'Missing script context' };
-
-          const wsScript = await ScriptStorage.get(data.scriptId);
-          if (!wsScript) return { error: 'Script context not found' };
-          if (!scriptHasGrant(wsScript, ['GM_webSocket', 'GM.webSocket'])) return { error: 'Not granted' };
-
-          const wsUrl = normalizeGMWebSocketUrl(data.url);
-          const connectPolicy = evaluateConnectPolicy(wsScript, wsUrl);
-          if (!connectPolicy.allowed) {
-            if (connectPolicy.hostname) {
-              console.warn(`[ScriptVault] @connect blocked WebSocket: ${connectPolicy.hostname} not in allowed list for ${wsScript.meta.name}`);
-            }
-            return { error: connectPolicy.error };
-          }
-
-          const settings = await SettingsManager.get();
-          const wsPreCheck = InternalHostGuard.classifyFetchUrl(wsUrl, ['ws:', 'wss:']);
-          if (!wsPreCheck.ok && !shouldAllowInternalXhr(wsScript, wsUrl, settings, wsPreCheck)) {
-            return { error: internalXhrError('GM_webSocket URL rejected', wsPreCheck) };
-          }
-
-          const tabId = sender.tab?.id;
-          if (typeof tabId !== 'number') return { error: 'Missing tab context' };
-
-          const protocols = normalizeGMWebSocketProtocols(data.protocols);
-          const requestId = `ws_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-          const startTime = Date.now();
-          const sockets = getGMWebSocketMap();
-          let socket;
-          try {
-            socket = protocols ? new WebSocket(wsUrl, protocols) : new WebSocket(wsUrl);
-          } catch (error) {
-            return { error: error?.message || 'WebSocket setup failed' };
-          }
-          if (data.binaryType === 'blob' || data.binaryType === 'arraybuffer') {
-            try { socket.binaryType = data.binaryType; } catch (_) {}
-          }
-
-          const record = {
-            requestId,
-            socket,
-            tabId,
-            scriptId: data.scriptId,
-            scriptName: wsScript.meta?.name || data.scriptId,
-            url: wsUrl,
-            bytesSent: 0,
-            bytesReceived: 0,
-            startTime,
-          };
-          sockets.set(requestId, record);
-
-          socket.addEventListener('open', () => {
-            sendGMWebSocketEvent(record, 'open', {
-              protocol: socket.protocol || '',
-              extensions: socket.extensions || ''
-            });
-            NetworkLog.add({
-              scriptId: record.scriptId,
-              scriptName: record.scriptName,
-              type: 'websocket',
-              method: 'WS',
-              url: wsUrl,
-              status: 101,
-              statusText: 'Switching Protocols',
-              duration: Date.now() - startTime,
-            });
-          });
-
-          socket.addEventListener('message', (event) => {
-            (async () => {
-              const size = estimateGMWebSocketPayloadBytes(event.data);
-              record.bytesReceived += size;
-              if (size > GM_WEBSOCKET_MAX_MESSAGE_BYTES) {
-                try { socket.close(1000, 'Message too large'); } catch (_) { try { socket.close(); } catch (_) {} }
-                sendGMWebSocketEvent(record, 'error', { error: `WebSocket message exceeds ${formatBytes(GM_WEBSOCKET_MAX_MESSAGE_BYTES)} limit` });
-                return;
-              }
-              const payload = await encodeGMWebSocketPayload(event.data);
-              sendGMWebSocketEvent(record, 'message', {
-                payload,
-                origin: event.origin || '',
-              });
-            })().catch(error => {
-              sendGMWebSocketEvent(record, 'error', { error: error?.message || 'WebSocket message relay failed' });
-            });
-          });
-
-          socket.addEventListener('error', () => {
-            sendGMWebSocketEvent(record, 'error', { error: 'WebSocket error' });
-          });
-
-          socket.addEventListener('close', (event) => {
-            sockets.delete(requestId);
-            NetworkLog.add({
-              scriptId: record.scriptId,
-              scriptName: record.scriptName,
-              type: 'websocket',
-              method: 'WS_CLOSE',
-              url: wsUrl,
-              status: event.code || 0,
-              statusText: event.reason || '',
-              requestSize: record.bytesSent,
-              responseSize: record.bytesReceived,
-              duration: Date.now() - startTime,
-            });
-            sendGMWebSocketEvent(record, 'close', {
-              code: event.code || 1006,
-              reason: event.reason || '',
-              wasClean: event.wasClean === true,
-            });
-          });
-
-          return { requestId, started: true };
-        } catch (e) {
-          console.error('[ScriptVault] GM_webSocket setup error:', e);
-          return { error: e?.message || 'WebSocket setup failed' };
-        }
-      }
-
-      case 'GM_webSocket_send': {
-        try {
-          const record = getGMWebSocketMap().get(data.requestId);
-          if (!record || record.scriptId !== data.scriptId) return { error: 'WebSocket request not found' };
-          if (record.socket.readyState !== WebSocket.OPEN) return { error: 'WebSocket is not open' };
-          const size = estimateGMWebSocketPayloadBytes(data.payload);
-          if (size > GM_WEBSOCKET_MAX_MESSAGE_BYTES) {
-            return { error: `WebSocket payload exceeds ${formatBytes(GM_WEBSOCKET_MAX_MESSAGE_BYTES)} limit` };
-          }
-          record.socket.send(decodeGMWebSocketPayload(data.payload));
-          record.bytesSent += size;
-          return { success: true };
-        } catch (e) {
-          return { error: e?.message || 'WebSocket send failed' };
-        }
-      }
-
-      case 'GM_webSocket_close': {
-        const record = getGMWebSocketMap().get(data.requestId);
-        if (!record || record.scriptId !== data.scriptId) return { success: false };
-        const code = normalizeGMWebSocketCloseCode(data.code);
-        const reason = normalizeGMWebSocketCloseReason(data.reason);
-        try {
-          if (code !== undefined) record.socket.close(code, reason);
-          else record.socket.close();
-        } catch (_) {}
-        return { success: true };
-      }
-      
-      // Download (with callbacks: onload, onerror, onprogress, ontimeout)
-      case 'GM_download': {
-        try {
-          if (!data.url) return { error: 'url is required for download' };
-          if (!data.scriptId) return { error: 'Missing script context' };
-          const downloadScript = await ScriptStorage.get(data.scriptId);
-          if (!downloadScript) return { error: 'Script context not found' };
-          let downloadProtocol = '';
-          try { downloadProtocol = new URL(data.url).protocol; } catch (_) { return { error: 'Invalid URL' }; }
-          let downloadUrl = data.url;
-          let cookieRouting = { applies: false, cookieHeader: '' };
-          if (downloadProtocol === 'http:' || downloadProtocol === 'https:') {
-            const downloadPolicy = evaluateConnectPolicy(downloadScript, data.url);
-            if (!downloadPolicy.allowed) return { error: downloadPolicy.error };
-            const downloadSettings = await SettingsManager.get();
-            const downloadPreCheck = InternalHostGuard.classifyFetchUrl(data.url, ['http:', 'https:']);
-            if (!downloadPreCheck.ok && !shouldAllowInternalXhr(downloadScript, data.url, downloadSettings, downloadPreCheck)) {
-              return { error: internalXhrError('GM_download URL rejected', downloadPreCheck) };
-            }
-            cookieRouting = await prepareCookieRoutingForFetch(data, 'GM_download');
-            if (cookieRouting.error) return { error: cookieRouting.error };
-            if (downloadNeedsFetchBridge(data) || cookieRouting.applies) {
-              const fetchOptions = XhrManager.buildFetchOptions({
-                ...data,
-                method: 'GET',
-                noCache: data.noCache === true || data.nocache === true
-              });
-              if (cookieRouting.applies) fetchOptions.credentials = 'omit';
-              const response = await withCookieHeaderSessionRule(data.url, cookieRouting.cookieHeader, () => fetch(data.url, fetchOptions));
-              const downloadPostCheck = InternalHostGuard.classifyResponseUrl(response, ['http:', 'https:']);
-              if (!downloadPostCheck.ok && !shouldAllowInternalXhr(downloadScript, response.url || data.url, downloadSettings, downloadPostCheck)) {
-                return { error: internalXhrError('GM_download redirected to internal host', downloadPostCheck) };
-              }
-              if (!response.ok) return { error: `HTTP ${response.status}` };
-              downloadUrl = await responseToDownloadDataUrl(response);
-            }
-          }
-          let hasDownloadPermission = false;
-          try {
-            hasDownloadPermission = !!chrome.downloads?.download && await chrome.permissions.contains({ permissions: ['downloads'] });
-          } catch (_) { /* treat as not granted */ }
-          if (!hasDownloadPermission) {
-            return { error: 'Downloads permission not granted. Enable it in ScriptVault settings or reinstall the script that uses GM_download.', code: 'PERMISSION_REQUIRED' };
-          }
-          const downloadOpts = {
-            url: downloadUrl,
-            filename: normalizeDownloadFilename(data.name, data.url, data.sourceName),
-            saveAs: data.saveAs || false,
-            conflictAction: data.conflictAction || 'uniquify'
-          };
-          const downloadId = await chrome.downloads.download(downloadOpts);
-          const tabId = sender.tab?.id;
-          // Track download callbacks in chrome.storage.session so terminal
-          // events can be reconciled after MV3 service-worker restart.
-          if (tabId && data.hasCallbacks) {
-            const tracker = trackPendingDownload(downloadId, {
-              tabId,
-              scriptId: data.scriptId,
-              url: data.url,
-              timeoutMs: data.timeout
-            });
-            if (tracker) {
-              await reconcilePendingDownload(downloadId, tracker, Date.now());
-            }
-          }
-          return { success: true, downloadId };
-        } catch (e) {
-          return { error: e.message };
-        }
-      }
-      
+      // GM network APIs: XHR, WebSocket, and download handling live in the promoted TypeScript module.
+      case 'GM_xmlhttpRequest':
+      case 'GM_xmlhttpRequest_abort':
+      case 'GM_webSocket':
+      case 'GM_webSocket_send':
+      case 'GM_webSocket_close':
+      case 'GM_download':
+        if (typeof GMNetworkHandler === 'undefined') return { error: 'GMNetworkHandler not available' };
+        return await GMNetworkHandler.handleGMNetworkMessage(action, data, sender);
       // Notifications (with callbacks: onclick, ondone, timeout, tag)
       case 'GM_notification': {
         if (typeof GMNotificationHandler === 'undefined') return { error: 'GMNotificationHandler not available' };

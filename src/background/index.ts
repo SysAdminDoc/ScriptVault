@@ -108,6 +108,13 @@ export {
   isGMCookieAction,
 } from './gm-cookie-handler';
 export type { GMCookieAction } from './gm-cookie-handler';
+export {
+  GM_NETWORK_ACTIONS,
+  GMNetworkHandler,
+  handleGMNetworkMessage,
+  isGMNetworkAction,
+} from './gm-network-handler';
+export type { GMNetworkAction } from './gm-network-handler';
 export { createScriptTrustReceipt, sha256Hex } from './trust-receipt';
 
 export { CloudSync } from './cloud-sync';

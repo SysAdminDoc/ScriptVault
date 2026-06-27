@@ -214,6 +214,13 @@ export const TS_RUNTIME_MODULES = [
     selfExportName: 'GMCookieHandler',
   },
   {
+    id: 'gm-network-handler',
+    source: 'src/background/gm-network-handler.ts',
+    output: 'modules/gm-network-handler.js',
+    exportName: 'GMNetworkHandler',
+    selfExportName: 'GMNetworkHandler',
+  },
+  {
     id: 'connect-policy',
     source: 'src/background/connect-policy.ts',
     output: 'modules/connect-policy.js',
