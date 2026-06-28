@@ -41,11 +41,6 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 
 ## Later
 
-### L-6. Sigstore Keyless Signing for Script Authors
-- **Priority:** P3 | **Effort:** L | **Source:** [S33, S34, S35]
-- **Problem:** Ed25519 signing requires manual key management. Sigstore's keyless model eliminates key custody.
-- **Progress:** Sigstore bundle parser, verifier, and Fulcio root checks already shipped for `@require-provenance`.
-
 ## Under Consideration
 
 - **UC-1. Safari via Native App Container** [S40, S41] — Safari lacks `userScripts` API. Requires separate Swift project. Reconsider when user demand justifies it.
