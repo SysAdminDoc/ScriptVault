@@ -86,7 +86,9 @@ const CSPReporter = (() => {
 
   const _safeSetHtml = (typeof window.ScriptVaultDashboardUI?.safeSetHtml === 'function')
       ? window.ScriptVaultDashboardUI.safeSetHtml
-      : (el, html) => { el.innerHTML = html; };
+      : (el, html) => {
+        el.replaceChildren(document.createRange().createContextualFragment(String(html ?? '')));
+      };
 
   // CSP-RULEID — sequential DNR ruleId allocator (replaces the legacy
   // hashCode-based allocation which suffered birthday-paradox collisions

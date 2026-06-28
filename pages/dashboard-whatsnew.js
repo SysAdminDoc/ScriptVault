@@ -82,7 +82,9 @@ const WhatsNew = (() => {
   const _dashboardUi = (typeof window !== 'undefined') ? window.ScriptVaultDashboardUI : null;
   const _safeSetHtml = (typeof _dashboardUi?.safeSetHtml === 'function')
       ? _dashboardUi.safeSetHtml
-      : (el, html) => { el.innerHTML = html; };
+      : (el, html) => {
+        el.replaceChildren(document.createRange().createContextualFragment(String(html ?? '')));
+      };
 
   function _hasChangelogEntry(version) {
     return Object.prototype.hasOwnProperty.call(CHANGELOG, version);

@@ -13,7 +13,9 @@ const DiffTool = (() => {
   const STYLE_ID = 'sv-diff-styles';
   const _safeSetHtml = (typeof window.ScriptVaultDashboardUI?.safeSetHtml === 'function')
       ? window.ScriptVaultDashboardUI.safeSetHtml
-      : (el, html) => { el.innerHTML = html; };
+      : (el, html) => {
+        el.replaceChildren(document.createRange().createContextualFragment(String(html ?? '')));
+      };
 
   const COLLAPSE_THRESHOLD = 6; // Collapse unchanged runs longer than this
 

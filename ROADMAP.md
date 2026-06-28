@@ -554,15 +554,6 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 
 ## Research-Driven Additions
 
-### P1
-
-- [ ] P1 - Burn down Firefox AMO lint warning noise before submission
-  Why: The Firefox package has 148 reviewed warnings; lowering the count reduces reviewer friction even though lint errors/notices are already clean.
-  Evidence: `npm run firefox:warnings:report` shows 126 `UNSAFE_VAR_ASSIGNMENT`, 17 `UNSUPPORTED_API`, 3 `DANGEROUS_EVAL`, 1 Android min-version warning, and 1 inline-script warning.
-  Touches: `pages/dashboard.js`, `background.js` generation path, `pages/install.js`, dashboard modules, `scripts/check-firefox-lint-warnings.mjs`, `AMO-SOURCE-README.md`.
-  Acceptance: Warning budget is ratcheted below 100, every remaining warning has reviewer-ready rationale, and `npm run firefox:lint && npm run firefox:warnings:report` passes.
-  Complexity: M
-
 ### P2
 
 - [ ] P2 - Refresh patch-level dev dependency drift

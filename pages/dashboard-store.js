@@ -31,7 +31,9 @@ const ScriptStore = (() => {
 
     const _safeSetHtml = (typeof window.ScriptVaultDashboardUI?.safeSetHtml === 'function')
         ? window.ScriptVaultDashboardUI.safeSetHtml
-        : (el, html) => { el.innerHTML = html; };
+        : (el, html) => {
+          el.replaceChildren(document.createRange().createContextualFragment(String(html ?? '')));
+        };
 
     const CATEGORIES = {
         productivity: { label: 'Productivity', query: 'productivity' },

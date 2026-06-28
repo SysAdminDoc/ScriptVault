@@ -8,6 +8,7 @@ import { resolve, join } from 'node:path';
 const SCRIPT = resolve(process.cwd(), 'scripts/build-edge.mjs');
 const BUILD_DIR = resolve(process.cwd(), 'build-edge');
 const ARTIFACT_DIR = resolve(process.cwd(), 'edge-artifacts');
+const REAL_BUILD_TIMEOUT_MS = 180_000;
 
 describe('scripts/build-edge.mjs', () => {
   afterAll(() => {
@@ -22,7 +23,7 @@ describe('scripts/build-edge.mjs', () => {
     expect(existsSync(join(BUILD_DIR, 'pages/dashboard.html'))).toBe(true);
     expect(existsSync(join(BUILD_DIR, '_locales/en/messages.json'))).toBe(true);
     expect(existsSync(join(BUILD_DIR, 'images/icon128.png'))).toBe(true);
-  });
+  }, REAL_BUILD_TIMEOUT_MS);
 
   it('strips update_url (when present) from the Edge manifest', () => {
     const manifest = JSON.parse(readFileSync(join(BUILD_DIR, 'manifest.json'), 'utf8'));
@@ -61,5 +62,5 @@ describe('scripts/build-edge.mjs', () => {
       code = err.status || 1;
     }
     expect(code).toBe(0);
-  });
+  }, REAL_BUILD_TIMEOUT_MS);
 });

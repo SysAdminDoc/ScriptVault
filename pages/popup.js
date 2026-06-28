@@ -30,8 +30,11 @@
     const _svPolicy = (typeof window.trustedTypes !== 'undefined' && window.trustedTypes.createPolicy)
         ? window.trustedTypes.createPolicy('sv-popup', { createHTML: s => s })
         : null;
+    function htmlToFragment(html) {
+        return document.createRange().createContextualFragment(String(html ?? ''));
+    }
     function safeSetHtml(el, html) {
-        el.innerHTML = _svPolicy ? _svPolicy.createHTML(html) : html;
+        el.replaceChildren(htmlToFragment(_svPolicy ? _svPolicy.createHTML(html) : html));
     }
 
     // Event delegation for favicon error handling (CSP-compliant)

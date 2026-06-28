@@ -269,7 +269,13 @@ $CURSOR$`
         background: '#2a2a2a', color: '#e0e0e0', borderRadius: '8px',
         padding: '20px', minWidth: '300px', maxWidth: '500px', boxShadow: '0 8px 32px rgba(0,0,0,0.4)'
     });
-    modal.innerHTML = \`<h3 style="margin:0 0 12px">\${title}</h3><div style="margin-bottom:16px">\${body}</div>\`;
+    const heading = document.createElement('h3');
+    heading.textContent = title;
+    heading.style.cssText = 'margin:0 0 12px';
+    const bodyEl = document.createElement('div');
+    bodyEl.textContent = body;
+    bodyEl.style.cssText = 'margin-bottom:16px';
+    modal.append(heading, bodyEl);
     const btnRow = document.createElement('div');
     btnRow.style.cssText = 'display:flex;gap:8px;justify-content:flex-end';
     buttons.forEach((label, i) => {
@@ -320,13 +326,28 @@ $CURSOR$`
             category: 'ui',
             code: `function createFloatingPanel({ title = 'Panel', width = 300, height = 200, content = '' }) {
     const panel = document.createElement('div');
-    panel.innerHTML = \`
-        <div class="fp-header" style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:#333;cursor:move;border-radius:8px 8px 0 0;user-select:none">
-            <span style="font-weight:600">\${title}</span>
-            <div><button class="fp-min" style="background:none;border:none;color:#e0e0e0;cursor:pointer;font-size:1rem">_</button>
-            <button class="fp-close" style="background:none;border:none;color:#f87171;cursor:pointer;font-size:1rem">x</button></div>
-        </div>
-        <div class="fp-body" style="padding:12px;overflow:auto;height:calc(100% - 40px)">\${content}</div>\`;
+    const header = document.createElement('div');
+    header.className = 'fp-header';
+    header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:#333;cursor:move;border-radius:8px 8px 0 0;user-select:none';
+    const titleEl = document.createElement('span');
+    titleEl.textContent = title;
+    titleEl.style.cssText = 'font-weight:600';
+    const controls = document.createElement('div');
+    const minBtn = document.createElement('button');
+    minBtn.className = 'fp-min';
+    minBtn.textContent = '_';
+    minBtn.style.cssText = 'background:none;border:none;color:#e0e0e0;cursor:pointer;font-size:1rem';
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'fp-close';
+    closeBtn.textContent = 'x';
+    closeBtn.style.cssText = 'background:none;border:none;color:#f87171;cursor:pointer;font-size:1rem';
+    controls.append(minBtn, closeBtn);
+    header.append(titleEl, controls);
+    const body = document.createElement('div');
+    body.className = 'fp-body';
+    body.textContent = content;
+    body.style.cssText = 'padding:12px;overflow:auto;height:calc(100% - 40px)';
+    panel.append(header, body);
     Object.assign(panel.style, {
         position: 'fixed', top: '50px', right: '20px', width: width + 'px', height: height + 'px',
         background: '#2a2a2a', color: '#e0e0e0', borderRadius: '8px', zIndex: '99999',
@@ -762,7 +783,9 @@ $CURSOR$`
 
     const _safeSetHtml = (typeof window.ScriptVaultDashboardUI?.safeSetHtml === 'function')
         ? window.ScriptVaultDashboardUI.safeSetHtml
-        : (el, html) => { el.innerHTML = html; };
+        : (el, html) => {
+          el.replaceChildren(document.createRange().createContextualFragment(String(html ?? '')));
+        };
 
     const CATEGORIES = {
         all:     { label: 'All',              icon: '\u2726' },
