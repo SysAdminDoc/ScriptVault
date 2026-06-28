@@ -295,13 +295,6 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 > Duplicates against existing Now/Next/Later/UC/Rejected tiers were filtered.
 > Each item carries impact (1-5), effort (S/M/L/XL), and tier recommendation.
 
-### RD-6. background.core.ts Extraction Roadmap
-- **Tier:** Later | **Priority:** P2 | **Impact:** 4 | **Effort:** XL
-- **Source:** CLAUDE.md "TypeScript Source" section, ts-source-promotion.json (0 mirrored remaining but core.ts is the 12K-line bridge)
-- **Problem:** `src/background/core.ts` is a 12,002-line monolith that generates `background.core.js`. It contains install, update, sync, registration, toggle, save, cron, GM handler, and message routing logic interleaved. New feature work requires careful cross-reference navigation, and type coverage remains incomplete (ResponseMap covers ~25 of 135+ actions).
-- **Deliverable:** Multi-phase extraction: (1) Complete ResponseMap type coverage for all 135+ actions; (2) Extract GM handler dispatch into typed per-API modules; (3) Extract sync orchestration into a standalone module; (4) Extract the message router into a typed dispatcher with exhaustive action matching. Each phase is independently shippable and testable.
-- **Risk:** Very large refactor. Each phase must maintain byte-for-byte runtime parity with the generated JS output. Use the existing ts-runtime drift gate to prevent regressions.
-
 ### RD-7. IndexedDB Storage Bucket Partitioning
 - **Tier:** Later | **Priority:** P3 | **Impact:** 3 | **Effort:** L
 - **Source:** Chrome IndexedDB storage improvements blog, RxDB performance research
