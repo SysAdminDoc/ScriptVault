@@ -298,13 +298,6 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 - **Deliverable:** Partition ScriptStorage, ScriptValues, and BackupScheduler into separate storage buckets. Measure write throughput for libraries >500 scripts. Fall back to single-bucket on browsers that don't support the Storage Buckets API.
 - **Acceptance:** `navigator.storageBuckets` feature-detected. Backup restore and sync merge still work after partitioning. Large-library perf harness shows improvement.
 
-### RD-11. Monaco v0.55+ Upgrade for LSP Namespace
-- **Tier:** Under Consideration | **Priority:** P3 | **Impact:** 3 | **Effort:** M
-- **Source:** Monaco ESM migration plan, Monaco v0.55 changelog (LSP namespace)
-- **Problem:** ScriptVault ships Monaco v0.52.2. v0.55+ adds a native LSP namespace that could improve userscript IntelliSense beyond the current autocomplete (GM API completions, @metadata directive completions). v0.55 also renamed `EditorAutoClosingOvertypeStrategy` to `EditorAutoClosingEditStrategy`.
-- **Deliverable:** Evaluate: does the LSP namespace enable richer userscript editing (e.g., type-aware GM API completions from `lib/scriptvault.d.ts`)? If yes, upgrade Monaco, update ESM build budget, and verify sandbox CSP compatibility. If no, defer until a compelling reason appears.
-- **Risk:** Breaking API changes in v0.55. ESM bundle size may grow. Requires separate dependency-budget and browser-proof cycle.
-
 ### Appendix: Research-Driven Sources
 
 | ID | Source | URL |

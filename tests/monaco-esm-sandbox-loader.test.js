@@ -15,6 +15,9 @@ function sandboxScript() {
 }
 
 function createFakeMonaco() {
+  const javascriptDefaults = {
+    addExtraLib: vi.fn(),
+  };
   const editorInstance = {
     addCommand: vi.fn(),
     onDidChangeModelContent: vi.fn(),
@@ -43,6 +46,9 @@ function createFakeMonaco() {
         CompletionItemKind: { Keyword: 1, Value: 2 },
         registerCompletionItemProvider: vi.fn(),
       },
+      typescript: {
+        javascriptDefaults,
+      },
       editor: {
         EditorOption: { wordWrap: 'wordWrap' },
         create: vi.fn(() => editorInstance),
@@ -53,7 +59,7 @@ function createFakeMonaco() {
   };
 }
 
-function createHarness({ moduleFails = false, stylesheetFails = false } = {}) {
+function createHarness({ moduleFails = false, stylesheetFails = false, typeDefinitions = 'declare const GM_info: unknown;' } = {}) {
   const messages = [];
   const appendedLinks = [];
   const loading = { style: {}, innerHTML: '' };
@@ -90,6 +96,11 @@ function createHarness({ moduleFails = false, stylesheetFails = false } = {}) {
     Promise,
     queueMicrotask,
     location: { origin: 'https://scriptvault.local' },
+    fetch: vi.fn(async (url) => ({
+      ok: true,
+      url,
+      text: async () => typeDefinitions,
+    })),
     parent: {
       postMessage(message) {
         messages.push(message);
@@ -109,7 +120,7 @@ function createHarness({ moduleFails = false, stylesheetFails = false } = {}) {
 
 async function runSandbox(context) {
   vm.runInNewContext(sandboxScript(), context);
-  for (let i = 0; i < 6; i += 1) await Promise.resolve();
+  for (let i = 0; i < 12; i += 1) await Promise.resolve();
 }
 
 describe('Monaco ESM sandbox loader', () => {
@@ -126,6 +137,18 @@ describe('Monaco ESM sandbox loader', () => {
       theme: 'vs-dark',
     }));
     expect(harness.messages).toContainEqual({ type: 'ready' });
+  });
+
+  it('loads ScriptVault GM declarations through the Monaco TypeScript namespace', async () => {
+    const harness = createHarness({ typeDefinitions: 'declare function GM_getValue(name: string): unknown;' });
+
+    await runSandbox(harness.context);
+
+    expect(harness.context.fetch).toHaveBeenCalledWith('../lib/scriptvault.d.ts', { cache: 'force-cache' });
+    expect(harness.monaco.typescript.javascriptDefaults.addExtraLib).toHaveBeenCalledWith(
+      'declare function GM_getValue(name: string): unknown;',
+      'file:///scriptvault/lib/scriptvault.d.ts',
+    );
   });
 
   it('posts the existing fallback message when the ESM bundle is missing', async () => {

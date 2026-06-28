@@ -27,11 +27,29 @@ describe('Monaco ESM migration plan', () => {
       expect(plan).toContain(heading);
     }
 
-    expect(plan).toContain('monaco-editor@^0.52.0');
+    expect(plan).toContain('monaco-editor@^0.55.1');
     expect(plan).toContain('Monaco 0.53.0 deprecated AMD support');
-    expect(plan).toContain('Monaco 0.55.0');
+    expect(plan).toContain('Monaco 0.55.1');
     expect(plan).toContain('lib/monaco-esm/editor.js');
     expect(plan).toContain('lib/monaco-esm/workers/');
+  });
+
+  it('pins the Monaco 0.55 namespace contract used by the sandbox', () => {
+    const packageJson = JSON.parse(read('package.json'));
+    const packageLock = JSON.parse(read('package-lock.json'));
+    const editorTypes = read('node_modules/monaco-editor/esm/vs/editor/editor.main.d.ts');
+    const apiTypes = read('node_modules/monaco-editor/esm/vs/editor/editor.api.d.ts');
+    const sandbox = read('pages/editor-sandbox.html');
+
+    expect(packageJson.devDependencies['monaco-editor']).toBe('^0.55.1');
+    expect(packageLock.packages['node_modules/monaco-editor'].version).toBe('0.55.1');
+    expect(packageJson.overrides.dompurify).toBe('3.4.11');
+    expect(editorTypes).toContain('as lsp');
+    expect(editorTypes).toContain('as typescript');
+    expect(apiTypes).toContain('EditorAutoClosingEditStrategy');
+    expect(apiTypes).not.toContain('EditorAutoClosingOvertypeStrategy');
+    expect(sandbox).toContain('monaco.typescript?.javascriptDefaults');
+    expect(sandbox).not.toContain('monaco.languages.typescript');
   });
 
   it('keeps extension packaging constraints explicit', () => {

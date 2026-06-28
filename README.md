@@ -175,7 +175,7 @@ Two additional zero-config flows ship as separate modules: **Easy Cloud** for on
 - **Unsaved indicators** &mdash; Visual dot on tabs with pending changes
 - **5 editor themes** &mdash; Auto (system, follows OS dark/light preference), Dark, Light, Catppuccin Mocha, OLED
 - **Status bar** &mdash; Line count and cursor position display
-- **IntelliSense** &mdash; Autocomplete for GM API functions and `@metadata` directives
+- **IntelliSense** &mdash; Autocomplete for GM API functions and `@metadata` directives, backed by generated ScriptVault GM declarations in the Monaco sandbox
 - Code folding, bracket matching, bracket pair colorization, auto-close
 - Search & replace (`Ctrl+F` / `Ctrl+H`)
 - Real-time userscript metadata linting

@@ -86,6 +86,7 @@
   function initMonaco(monaco) {
     if (!monaco || !monaco.editor || !monaco.languages) throw new Error('Monaco ESM API unavailable');
     monacoApi = monaco;
+      registerScriptVaultTypes(monaco);
       // ── Custom userscript language extension ──────────────────────────────
       // Register @metadata keywords in the completion provider
       monaco.languages.registerCompletionItemProvider('javascript', {
@@ -373,6 +374,18 @@
   }
 
   // ── Message handler (from dashboard) ──────────────────────────────────────
+  async function registerScriptVaultTypes(monaco) {
+    const defaults = monaco.typescript?.javascriptDefaults || monaco.languages?.typescript?.javascriptDefaults;
+    if (!defaults || typeof defaults.addExtraLib !== 'function' || typeof fetch !== 'function') return;
+
+    try {
+      const response = await fetch('../lib/scriptvault.d.ts', { cache: 'force-cache' });
+      if (!response || !response.ok) return;
+      const source = await response.text();
+      defaults.addExtraLib(source, 'file:///scriptvault/lib/scriptvault.d.ts');
+    } catch (_) { /* local type hints are best-effort; editor loading must not fail */ }
+  }
+
   window.addEventListener('message', function (e) {
     const msg = e.data;
     if (!msg || typeof msg !== 'object') return;

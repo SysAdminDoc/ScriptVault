@@ -100,13 +100,14 @@
     "esbuild": "^0.28.0",
     "fake-indexeddb": "^6.2.5",
     "jsdom": "^29.0.1",
-    "monaco-editor": "^0.52.0",
+    "monaco-editor": "^0.55.1",
     "puppeteer-core": "^25.2.1",
     "typescript": "^6.0.2",
     "vitest": "^4.1.9",
     "web-ext": "^10.3.0"
   },
   "overrides": {
+    "dompurify": "3.4.11",
     "web-ext": {
       "fx-runner": "1.5.0"
     }

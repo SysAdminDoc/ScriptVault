@@ -1,58 +1,58 @@
 {
-  "generatedAt": "2026-06-06T20:00:34.508Z",
+  "generatedAt": "2026-06-28T02:34:13.452Z",
   "root": "lib/monaco-esm",
   "sizeBudgets": {
-    "maxTotalBytes": 26000000,
+    "maxTotalBytes": 28000000,
     "maxTotalGzipBytes": 5000000,
     "maxFileBytes": {
-      "lib/monaco-esm/editor.js": 9000000,
-      "lib/monaco-esm/workers/ts.worker.js": 13000000
+      "lib/monaco-esm/editor.js": 9600000,
+      "lib/monaco-esm/workers/ts.worker.js": 13500000
     }
   },
   "totals": {
-    "totalBytes": 25186387,
-    "totalGzipBytes": 4279263
+    "totalBytes": 27717062,
+    "totalGzipBytes": 4702243
   },
   "outputs": [
     {
-      "path": "lib/monaco-esm/assets/codicon-37A3DWZT.ttf",
-      "bytes": 80340,
-      "gzipBytes": 44393
+      "path": "lib/monaco-esm/assets/codicon-LN6W7LCM.ttf",
+      "bytes": 121972,
+      "gzipBytes": 59203
     },
     {
       "path": "lib/monaco-esm/editor.css",
-      "bytes": 158378,
-      "gzipBytes": 23224
+      "bytes": 172300,
+      "gzipBytes": 25407
     },
     {
       "path": "lib/monaco-esm/editor.js",
-      "bytes": 8231464,
-      "gzipBytes": 1433472
+      "bytes": 9405086,
+      "gzipBytes": 1618107
     },
     {
       "path": "lib/monaco-esm/workers/css.worker.js",
-      "bytes": 1883186,
-      "gzipBytes": 303112
+      "bytes": 1919513,
+      "gzipBytes": 308677
     },
     {
       "path": "lib/monaco-esm/workers/editor.worker.js",
-      "bytes": 555624,
-      "gzipBytes": 116865
+      "bytes": 589593,
+      "gzipBytes": 121849
     },
     {
       "path": "lib/monaco-esm/workers/html.worker.js",
-      "bytes": 1264765,
-      "gzipBytes": 242013
+      "bytes": 1300500,
+      "gzipBytes": 247008
     },
     {
       "path": "lib/monaco-esm/workers/json.worker.js",
-      "bytes": 856164,
-      "gzipBytes": 170016
+      "bytes": 891272,
+      "gzipBytes": 175214
     },
     {
       "path": "lib/monaco-esm/workers/ts.worker.js",
-      "bytes": 12156466,
-      "gzipBytes": 1946168
+      "bytes": 13316826,
+      "gzipBytes": 2146778
     }
   ],
   "failures": []

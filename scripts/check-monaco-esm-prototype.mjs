@@ -18,11 +18,11 @@ const REQUIRED_OUTPUTS = [
 ];
 
 export const DEFAULT_SIZE_BUDGETS = Object.freeze({
-  maxTotalBytes: 26_000_000,
+  maxTotalBytes: 28_000_000,
   maxTotalGzipBytes: 5_000_000,
   maxFileBytes: Object.freeze({
-    'lib/monaco-esm/editor.js': 9_000_000,
-    'lib/monaco-esm/workers/ts.worker.js': 13_000_000,
+    'lib/monaco-esm/editor.js': 9_600_000,
+    'lib/monaco-esm/workers/ts.worker.js': 13_500_000,
   }),
 });
 
