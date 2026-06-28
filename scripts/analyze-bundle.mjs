@@ -67,6 +67,7 @@ const sourceModules = [
   "modules/event-log.js",
   "modules/notifications.js",
   "modules/sync-crypto.js",
+  "modules/cloud-sync.js",
   "modules/sync-easycloud.js",
   "modules/script-config.js",
   "modules/backup-scheduler.js",

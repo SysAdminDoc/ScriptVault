@@ -41,6 +41,7 @@ describe('TS source drift gate', () => {
     expect(map.entries.some((entry) => entry.runtime === 'shared/utils.js' && entry.status === 'promoted')).toBe(true);
     expect(map.entries.some((entry) => entry.runtime === 'modules/sync-providers.js' && entry.status === 'promoted')).toBe(true);
     expect(map.entries.some((entry) => entry.runtime === 'modules/sync-crypto.js' && entry.status === 'promoted')).toBe(true);
+    expect(map.entries.some((entry) => entry.runtime === 'modules/cloud-sync.js' && entry.status === 'promoted')).toBe(true);
     expect(map.entries.some((entry) => entry.runtime === 'modules/error-log.js' && entry.status === 'promoted')).toBe(true);
     expect(map.entries.some((entry) => entry.runtime === 'modules/notifications.js' && entry.status === 'promoted')).toBe(true);
     expect(map.entries.some((entry) => entry.runtime === 'modules/npm-resolve.js' && entry.status === 'promoted')).toBe(true);
@@ -82,7 +83,7 @@ describe('TS source drift gate', () => {
     const report = analyzeSourceDrift(map, []);
     const text = formatTextReport(report, { reportMode: true });
 
-    expect(report.totals.promoted).toBe(40);
+    expect(report.totals.promoted).toBe(41);
     expect(report.totals.candidate).toBe(0);
     expect(report.totals.mirrored).toBe(0);
     expect(report.totals['intentionally-divergent']).toBe(0);
@@ -99,6 +100,7 @@ describe('TS source drift gate', () => {
     expect(text).toContain('modules/gm-network-handler.js -> src/background/gm-network-handler.ts');
     expect(text).toContain('modules/connect-policy.js -> src/background/connect-policy.ts');
     expect(text).toContain('modules/sync-crypto.js -> src/modules/sync-crypto.ts');
+    expect(text).toContain('modules/cloud-sync.js -> src/background/cloud-sync.ts');
     expect(text).toContain('background.core.js -> src/background/core.ts');
   });
 

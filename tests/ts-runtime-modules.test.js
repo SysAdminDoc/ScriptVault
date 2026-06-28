@@ -44,6 +44,13 @@ describe('TS runtime module generator', () => {
         selfExportName: 'SyncCrypto',
       }),
       expect.objectContaining({
+        id: 'cloud-sync',
+        source: 'src/background/cloud-sync.ts',
+        output: 'modules/cloud-sync.js',
+        exportName: 'CloudSync',
+        selfExportName: 'CloudSync',
+      }),
+      expect.objectContaining({
         id: 'error-log',
         source: 'src/modules/error-log.ts',
         output: 'modules/error-log.js',
@@ -311,6 +318,16 @@ describe('TS runtime module generator', () => {
     expect(text).toContain('const installBrowserNamespaceAlias = SharedUtils.installBrowserNamespaceAlias;');
     expect(text).toContain('installBrowserNamespaceAlias(globalThis);');
     expect(text).toContain('const classifyInstallSource = SharedUtils.classifyInstallSource;');
+  });
+
+  it('generates the extracted CloudSync orchestrator before the raw core bridge', async () => {
+    const definition = TS_RUNTIME_MODULES.find((entry) => entry.id === 'cloud-sync');
+    const text = await buildTsRuntimeModuleText(definition, { rootDir: ROOT });
+
+    expect(text).toContain('Generated from src/background/cloud-sync.ts');
+    expect(text).toContain('const CloudSync = (() => {');
+    expect(text).toContain('self.CloudSync = CloudSync;');
+    expect(text).toContain('syncTimeoutAlarm');
   });
 
   it('generates the background message router before the raw core bridge', async () => {

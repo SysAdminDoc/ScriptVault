@@ -60,8 +60,8 @@ declare const ScriptAnalyzer: {
 // ---------------------------------------------------------------------------
 
 interface CloudSyncProvider {
-  download(settings: Settings): Promise<RemoteSyncEnvelope | null>;
-  upload(data: SyncEnvelope | RemoteSyncEnvelope, settings: Settings): Promise<void>;
+  download(settings: Settings, options?: { signal?: AbortSignal }): Promise<RemoteSyncEnvelope | null>;
+  upload(data: SyncEnvelope | RemoteSyncEnvelope, settings: Settings, options?: { signal?: AbortSignal }): Promise<void>;
   name?: string;
   supportsDryRun?: boolean;
 }
@@ -1238,6 +1238,7 @@ export const CloudSync = {
   },
 
   _syncInProgress: false,
+  _abortController: null as AbortController | null,
 
   async sync(): Promise<SyncResult> {
     // Prevent concurrent syncs — second call defers until first completes
@@ -1246,20 +1247,46 @@ export const CloudSync = {
       return { skipped: true };
     }
     this._syncInProgress = true;
+    this._abortController = new AbortController();
 
-    let _timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const syncTimeoutAlarm = 'sv_sync_timeout_' + Date.now();
+    let onTimeoutAlarm: ((alarm: chrome.alarms.Alarm) => void) | null = null;
+    const removeTimeoutAlarmListener = () => {
+      if (!onTimeoutAlarm) return;
+      try {
+        chrome.alarms.onAlarm.removeListener?.(onTimeoutAlarm);
+      } catch (_) {}
+      onTimeoutAlarm = null;
+    };
+
     try {
       const timeoutPromise = new Promise<never>((_, reject) => {
-        _timeoutId = setTimeout(() => reject(new Error('Sync timed out after 90s')), 90000);
+        chrome.alarms.create(syncTimeoutAlarm, { delayInMinutes: 1.5 });
+        onTimeoutAlarm = (alarm: chrome.alarms.Alarm) => {
+          if (alarm.name !== syncTimeoutAlarm) return;
+          removeTimeoutAlarmListener();
+          try {
+            this._abortController?.abort(new Error('Sync timed out after 90s'));
+          } catch (_) {}
+          reject(new Error('Sync timed out after 90s'));
+        };
+        chrome.alarms.onAlarm.addListener(onTimeoutAlarm);
       });
-      return await Promise.race([this._performSync(), timeoutPromise]);
+      return await Promise.race([
+        this._performSync({ signal: this._abortController.signal }),
+        timeoutPromise,
+      ]);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       console.error('[ScriptVault] Sync failed:', e);
       return { error: msg };
     } finally {
-      clearTimeout(_timeoutId);
+      removeTimeoutAlarmListener();
+      try {
+        await Promise.resolve(chrome.alarms.clear(syncTimeoutAlarm));
+      } catch (_) {}
       this._syncInProgress = false;
+      this._abortController = null;
     }
   },
 
@@ -1485,9 +1512,11 @@ export const CloudSync = {
     };
   },
 
-  async _performSync(): Promise<SyncResult> {
+  async _performSync(opts: { signal?: AbortSignal } = {}): Promise<SyncResult> {
+    const { signal } = opts;
     const settings = await resolveSyncCredentialSettings(await SettingsManager.get());
     if (!settings.syncEnabled || settings.syncProvider === 'none') return {};
+    if (signal?.aborted) throw new Error('Sync aborted');
 
     const provider: CloudSyncProvider | undefined = this.providers[settings.syncProvider];
     if (!provider) return {};
@@ -1520,8 +1549,9 @@ export const CloudSync = {
     };
 
     // Get remote data
-    const remoteEnvelope = await provider.download(settings);
+    const remoteEnvelope = await provider.download(settings, { signal });
     const remoteData = await readSyncEnvelopeFromRemote(remoteEnvelope, settings);
+    if (signal?.aborted) throw new Error('Sync aborted');
 
     if (remoteData) {
       // Merge tombstones from remote so deletions propagate across devices
@@ -1669,14 +1699,16 @@ export const CloudSync = {
           ? { valueBundles: uploadValueBundles }
           : {}),
       };
-      await provider.upload(await prepareSyncEnvelopeForRemoteUpload(uploadData, settings), settings);
+      if (signal?.aborted) throw new Error('Sync aborted');
+      await provider.upload(await prepareSyncEnvelopeForRemoteUpload(uploadData, settings), settings, { signal });
     } else {
       // First sync, just upload (include tombstones and syncBaseCode)
+      if (signal?.aborted) throw new Error('Sync aborted');
       localData.scripts = localData.scripts.map((s): SyncScript => ({
         ...s,
         syncBaseCode: s.syncBaseCode ?? null,
       }));
-      await provider.upload(await prepareSyncEnvelopeForRemoteUpload(localData, settings), settings);
+      await provider.upload(await prepareSyncEnvelopeForRemoteUpload(localData, settings), settings, { signal });
     }
 
     await SettingsManager.set('lastSync', Date.now());

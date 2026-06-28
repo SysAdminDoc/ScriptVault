@@ -210,10 +210,10 @@ describe('Backup retention hardening', () => {
   });
 });
 
-describe('Cross-device delete propagation (background.core.js sync)', () => {
+describe('Cross-device delete propagation (CloudSync runtime)', () => {
   it('applies remote tombstone deletions locally and aligns empty-base merge', () => {
-    const src = read('background.core.js');
-    expect(src).toContain('Apply remote tombstone deletions locally');
+    const src = read('modules/cloud-sync.js');
+    expect(src).toContain('await deleteSyncedScript(localScript.id)');
     expect(src).toContain('existing.syncBaseCode ?? existing.code');
     expect(src).toContain('base != null && base !== localScript.code');
   });

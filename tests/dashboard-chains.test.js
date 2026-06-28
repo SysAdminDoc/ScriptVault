@@ -22,7 +22,13 @@ describe('ScriptChains module', () => {
         },
       },
       runtime: {
-        sendMessage: vi.fn(() => Promise.resolve({ success: true })),
+        sendMessage: vi.fn((_message, callback) => {
+          if (typeof callback === 'function') {
+            queueMicrotask(() => callback({ success: true }));
+            return undefined;
+          }
+          return Promise.resolve({ success: true });
+        }),
       },
     };
     globalThis.ScriptVaultDashboardUI = { toast: vi.fn() };

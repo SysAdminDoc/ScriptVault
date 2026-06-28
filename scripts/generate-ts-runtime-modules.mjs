@@ -41,6 +41,13 @@ export const TS_RUNTIME_MODULES = [
     selfExportName: 'SyncCrypto',
   },
   {
+    id: 'cloud-sync',
+    source: 'src/background/cloud-sync.ts',
+    output: 'modules/cloud-sync.js',
+    exportName: 'CloudSync',
+    selfExportName: 'CloudSync',
+  },
+  {
     id: 'error-log',
     source: 'src/modules/error-log.ts',
     output: 'modules/error-log.js',

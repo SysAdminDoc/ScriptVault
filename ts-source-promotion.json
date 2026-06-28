@@ -33,6 +33,14 @@
       "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for optional sync envelope encryption."
     },
     {
+      "runtime": "modules/cloud-sync.js",
+      "sources": [
+        "src/background/cloud-sync.ts"
+      ],
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for the extracted CloudSync orchestration module."
+    },
+    {
       "runtime": "modules/i18n.js",
       "sources": [
         "src/modules/i18n.ts"

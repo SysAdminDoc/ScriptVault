@@ -218,10 +218,9 @@ describe('source hardening parity guards', () => {
   });
 
   it('keeps downloaded GM value bundles behind the non-writing opt-in apply gate', () => {
-    const core = source('src/background/core.ts');
     const cloudSync = source('src/background/cloud-sync.ts');
 
-    for (const text of [core, cloudSync]) {
+    for (const text of [cloudSync]) {
       expect(text).toContain('selectApplicableRemoteValueBundles');
       expect(text).toContain('applyRemoteValueBundlesWhenLocalEmpty');
       expect(text).toContain('summarizeRemoteValueBundleApplyResult');

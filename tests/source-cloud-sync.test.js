@@ -351,6 +351,7 @@ describe('source cloud sync module', () => {
         tombstones: { script_alpha: 2222 },
       }),
       expect.objectContaining({ syncProvider: 'googledrive' }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     await expect(chrome.storage.local.get('syncTombstones')).resolves.toEqual({
       syncTombstones: { script_alpha: 2222 },
@@ -442,6 +443,7 @@ describe('source cloud sync module', () => {
         ],
       }),
       expect.objectContaining({ syncProvider: 'googledrive' }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(SettingsManager.set).toHaveBeenCalledWith('lastSync', expect.any(Number));
     expect(scriptState).toEqual([

@@ -15,18 +15,21 @@ const ROOT = path.resolve(import.meta.dirname, '..');
 
 describe('cloud sync post-merge upload (2026-06-04 p2)', () => {
   it('rebuilds upload envelope from post-merge ScriptStorage.getAll()', () => {
-    const src = fs.readFileSync(path.join(ROOT, 'background.core.js'), 'utf8');
+    const src = fs.readFileSync(path.join(ROOT, 'modules/cloud-sync.js'), 'utf8');
     expect(src).toContain('postMergeScripts');
     expect(src).toContain('ScriptStorage.getAll()');
     expect(src).toContain('syncBaseCode: s.syncBaseCode');
   });
 
   it('includes syncBaseCode in first-sync upload envelope', () => {
-    const src = fs.readFileSync(path.join(ROOT, 'background.core.js'), 'utf8');
-    // First sync path should also include syncBaseCode
+    const src = fs.readFileSync(path.join(ROOT, 'modules/cloud-sync.js'), 'utf8');
+    // First sync path should also include syncBaseCode. esbuild strips the
+    // source comment, so anchor on the generated first-sync mapping.
+    const firstSyncStart = src.indexOf('localData.scripts = localData.scripts.map');
+    expect(firstSyncStart).toBeGreaterThan(-1);
     const firstSyncSection = src.slice(
-      src.indexOf('First sync, just upload'),
-      src.indexOf('First sync, just upload') + 500
+      firstSyncStart,
+      firstSyncStart + 500
     );
     expect(firstSyncSection).toContain('syncBaseCode');
   });

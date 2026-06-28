@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 const dashboardHtml = readFileSync(resolve(process.cwd(), 'pages/dashboard.html'), 'utf8');
 const dashboardJs = readFileSync(resolve(process.cwd(), 'pages/dashboard.js'), 'utf8');
 const backgroundCore = readFileSync(resolve(process.cwd(), 'background.core.js'), 'utf8');
+const cloudSyncRuntime = readFileSync(resolve(process.cwd(), 'modules/cloud-sync.js'), 'utf8');
 const gistJs = readFileSync(resolve(process.cwd(), 'pages/dashboard-gist.js'), 'utf8');
 
 function extractFunction(source, name) {
@@ -197,9 +198,9 @@ describe('sync safety cockpit wiring', () => {
     expect(backgroundCore).toContain('async function buildSyncProviderHealth');
     expect(backgroundCore).toContain("case 'syncProviderHealth'");
     expect(backgroundCore).toContain("case 'syncDryRunPreview'");
-    expect(backgroundCore).toContain('previewData(local, remote, options = {})');
-    expect(backgroundCore).toContain('dryRun: true');
-    expect(backgroundCore).toContain('noWrites: true');
+    expect(cloudSyncRuntime).toContain('previewData(local, remote, options = {})');
+    expect(cloudSyncRuntime).toContain('dryRun: true');
+    expect(cloudSyncRuntime).toContain('noWrites: true');
   });
 
   it('exports sync previews without script identifiers, value keys, or values', () => {

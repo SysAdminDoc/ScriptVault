@@ -50,12 +50,6 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 - **Priority:** P3 | **Effort:** M | **Source:** [S36]
 - **Problem:** UI changes lack automated visual verification. Vitest 4.0 graduated Browser Mode with `toMatchScreenshot`.
 
-### L-9. WebSocket Support in GM API
-- **Priority:** P3 | **Effort:** M | **Source:** [S38]
-- **Problem:** TM #1483 requests WebSocket support.
-- **Deliverable:** `GM_webSocket` with `@connect` enforcement and abort support.
-
-
 ## Under Consideration
 
 - **UC-1. Safari via Native App Container** [S40, S41] — Safari lacks `userScripts` API. Requires separate Swift project. Reconsider when user demand justifies it.
@@ -300,13 +294,6 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 > Items below were identified by exhaustive repo walk + 35+ external sources.
 > Duplicates against existing Now/Next/Later/UC/Rejected tiers were filtered.
 > Each item carries impact (1-5), effort (S/M/L/XL), and tier recommendation.
-
-### RD-2. Dashboard i18n DOM Translation Pass
-- **Tier:** Next | **Priority:** P2 | **Impact:** 4 | **Effort:** L
-- **Source:** README ("dashboard interface is currently English-only"), locale:check:strict failure (~70 keys/locale missing)
-- **Problem:** Manifest and extension messages are localized in 8 languages, but the dashboard UI (~5,190 lines) is entirely English. This blocks international adoption during the once-in-a-decade MV3 window.
-- **Deliverable:** Wire `dashboard-i18n-v2.js` (already has 600 keys in 8 languages) into dashboard DOM. Add missing ~70 keys per locale. Gate with `npm run locale:check:strict` passing in CI.
-- **Acceptance:** Dashboard renders translated strings for all 8 locales. `locale:check:strict` exits 0. No untranslated hardcoded English strings in UI-visible dashboard elements.
 
 ### RD-6. background.core.ts Extraction Roadmap
 - **Tier:** Later | **Priority:** P2 | **Impact:** 4 | **Effort:** XL
@@ -594,17 +581,3 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 | RD26-08 | Monaco v0.55.1 stable / v0.56-dev | https://github.com/microsoft/monaco-editor/releases |
 | RD26-09 | Vitest CVE-2026-47429 (CVSS 9.8) | https://github.com/advisories/GHSA-5xrq-8626-4rwp |
 | RD26-10 | W3C WebExtensions WG draft charter | https://w3c.github.io/charter-drafts/2025/webextensions-wg.html |
-
-## Improvement Pass (2026-06-26)
-
-> Items below identified by systematic code-level audit of build pipeline,
-> test infrastructure, CSS architecture, and accessibility compliance.
-> Deduplicated against all existing tiers and prior RD additions.
-
-### Next
-
-#### IMP-7. Coverage Threshold Ratchet
-- **Priority:** P2 | **Effort:** L
-- **Problem:** Coverage thresholds sit at lines 36%, functions 39%, branches 25%, statements 34% — the measured baseline. Critical service worker code (storage, sync, GM API) should have higher coverage to prevent regressions.
-- **Deliverable:** Phase 1 (v3.12.0): raise to 45/48/32/42. Phase 2 (v3.13.0): raise to 55/58/40/52. Phase 3: raise to 65/68/50/62. Each phase requires writing tests to fill gaps before ratcheting.
-- **Acceptance:** Each phase's thresholds pass in CI before the next phase begins.
