@@ -62,3 +62,9 @@ assets/screenshots/
 # Markdown files local-only (except README)
 *.md
 !README.md
+
+# AI config
+.codex/
+.ai/
+PROJECT_CONTEXT.md
+CONTINUATION_PROMPT.md
