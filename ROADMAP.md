@@ -556,13 +556,6 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 
 ### P1
 
-- [ ] P1 - Make public release verification deterministic without GitHub CLI auth
-  Why: `npm run release:check:public` currently fails when `gh` auth is invalid or public GitHub API quota is exhausted, which makes local release verification unreliable.
-  Evidence: `npm run release:check:public` failed with HTTP 403 rate limit and unreadable `v3.11.0` release; `gh auth status` reports an invalid token.
-  Touches: `scripts/check-release-artifacts.mjs`, `docs/release-runbook.md`, `package.json`, release artifact tests.
-  Acceptance: Public release checks use unauthenticated/public fallback sources or a clear skipped-auth mode, report unsigned tags separately from network failures, and pass or fail deterministically on a clean machine without valid `gh` auth.
-  Complexity: M
-
 - [ ] P1 - Burn down Firefox AMO lint warning noise before submission
   Why: The Firefox package has 148 reviewed warnings; lowering the count reduces reviewer friction even though lint errors/notices are already clean.
   Evidence: `npm run firefox:warnings:report` shows 126 `UNSAFE_VAR_ASSIGNMENT`, 17 `UNSUPPORTED_API`, 3 `DANGEROUS_EVAL`, 1 Android min-version warning, and 1 inline-script warning.
