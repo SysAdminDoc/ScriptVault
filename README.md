@@ -108,6 +108,7 @@ create a broad passthrough policy just to bypass CSP.
 - **Script templates** &mdash; 6 starter templates (blank, page modifier, CSS injector, API interceptor, SPA script, cross-site request)
 - **Version rollback** &mdash; Auto-saves last 3 versions on update; one-click rollback from info panel
 - **Storage quota monitor** &mdash; Visual quota bar with warning when approaching Chrome's 10MB limit
+- **Bucketed IndexedDB storage** &mdash; Separates script records, GM values, and backup blobs through Storage Buckets when Chrome exposes `navigator.storageBuckets`, with single-DB fallback elsewhere
 - **Tag filtering** &mdash; Filter scripts by `@tag` metadata in the dashboard dropdown
 - **Drag-and-drop install** &mdash; Drop `.user.js` or `.zip` files onto the dashboard to install
 - **Shift+click multi-select** &mdash; Select ranges of scripts with Shift+click
@@ -295,9 +296,10 @@ Deep dashboard content is still being migrated to DOM translation coverage.
 - **Lazy Module Loading** &mdash; Dashboard loads 7 eager scripts, defers 30+ until needed
 - **Automatic Migration** &mdash; Seamless v1.x → v2.0 data migration
 - **Storage Quota Manager** &mdash; Auto-cleanup when approaching Chrome's 10MB limit
+- **Storage Bucket Partitioning** &mdash; Feature-detected IndexedDB partitions isolate script metadata, GM value bags, and backup scheduler blobs while preserving backup restore and sync merge flows
 
 #### Quality & Testing
-- **1700+ Vitest Tests** &mdash; Coverage for parser, utilities, storage, update flows, UI modules, accessibility, and security boundaries
+- **1800+ Vitest Tests** &mdash; Coverage for parser, utilities, storage, update flows, UI modules, accessibility, and security boundaries
 - **Browser visual regression gate** &mdash; `npm run test:visual` runs Vitest Browser Mode in Chromium and checks the dashboard list-view screenshot baseline
 - **JSDoc Type Annotations** &mdash; @ts-check compatible on critical functions
 - **esbuild Build System** &mdash; Modern bundler with minification and source maps

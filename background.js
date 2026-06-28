@@ -16066,6 +16066,7 @@ const StorageModule = (() => {
   // src/modules/storage.ts
   var storage_exports = {};
   __export(storage_exports, {
+    BackupsDAO: () => BackupsDAO,
     FolderStorage: () => FolderStorage,
     LocalWorkspaceBindings: () => LocalWorkspaceBindings,
     ScriptStorage: () => ScriptStorage,
@@ -16167,6 +16168,11 @@ const StorageModule = (() => {
   // src/storage/idb.ts
   var DB_NAME = "scriptvault";
   var DB_VERSION = 3;
+  var StorageBucketNames = {
+    scripts: "scriptvault-script-storage",
+    values: "scriptvault-script-values",
+    backups: "scriptvault-backup-scheduler"
+  };
   var Stores = {
     scripts: "scripts",
     values: "values",
@@ -16175,34 +16181,100 @@ const StorageModule = (() => {
     localWorkspaceBindings: "localWorkspaceBindings",
     publicationReceipts: "publicationReceipts"
   };
-  var _db = null;
-  var _opening = null;
-  var _dbFactory = null;
-  async function openDB(options = {}) {
-    if (_db && _dbFactory && typeof indexedDB !== "undefined" && _dbFactory !== indexedDB) {
+  var StorePartitions = {
+    [Stores.scripts]: "scripts",
+    [Stores.values]: "values",
+    [Stores.stats]: "scripts",
+    [Stores.backups]: "backups",
+    [Stores.localWorkspaceBindings]: "scripts",
+    [Stores.publicationReceipts]: "backups"
+  };
+  var _connections = /* @__PURE__ */ new Map();
+  var _bucketModeProbe = null;
+  var _bucketMode = null;
+  function connectionFor(partition) {
+    const existing = _connections.get(partition);
+    if (existing) return existing;
+    const state = {
+      db: null,
+      opening: null,
+      factory: null,
+      name: null,
+      bucketed: false
+    };
+    _connections.set(partition, state);
+    return state;
+  }
+  function globalIndexedDBFactory() {
+    return typeof indexedDB !== "undefined" ? indexedDB : null;
+  }
+  function hasStorageBucketsAPI() {
+    const storageBuckets = typeof navigator !== "undefined" ? navigator.storageBuckets : void 0;
+    return !!storageBuckets && typeof storageBuckets.open === "function";
+  }
+  async function resolveOpenTarget(partition, name) {
+    const globalFactory = globalIndexedDBFactory();
+    const storageBuckets = typeof navigator !== "undefined" ? navigator.storageBuckets : void 0;
+    if (storageBuckets && typeof storageBuckets.open === "function") {
       try {
-        _db.close();
+        const bucketName = StorageBucketNames[partition];
+        const bucket = await storageBuckets.open(bucketName);
+        if (bucket?.indexedDB && typeof bucket.indexedDB.open === "function") {
+          _bucketMode = true;
+          return { partition, bucketName, bucketed: true, name, factory: bucket.indexedDB };
+        }
       } catch {
       }
-      _db = null;
-      _dbFactory = null;
     }
-    if (_db) return _db;
-    if (_opening) return _opening;
+    if (!globalFactory) {
+      throw new Error("IndexedDB is not available in this context");
+    }
+    if (_bucketMode !== true) _bucketMode = false;
+    return { partition, bucketName: null, bucketed: false, name, factory: globalFactory };
+  }
+  async function isStorageBucketPartitioningActive() {
+    if (!hasStorageBucketsAPI()) {
+      _bucketMode = false;
+      return false;
+    }
+    if (_bucketMode !== null) return _bucketMode;
+    if (!_bucketModeProbe) {
+      _bucketModeProbe = resolveOpenTarget("scripts", DB_NAME).then((target) => target.bucketed).catch(() => false).finally(() => {
+        _bucketModeProbe = null;
+      });
+    }
+    _bucketMode = await _bucketModeProbe;
+    return _bucketMode;
+  }
+  async function openDB(options = {}) {
+    const partition = options.partition ?? "scripts";
+    const state = connectionFor(partition);
     const name = options.name ?? DB_NAME;
     const version = options.version ?? DB_VERSION;
-    _opening = new Promise((resolve, reject) => {
-      if (typeof indexedDB === "undefined") {
-        reject(new Error("IndexedDB is not available in this context"));
-        return;
+    if (state.db && state.name === name) {
+      if (state.bucketed) return state.db;
+      if (state.factory && state.factory === globalIndexedDBFactory()) return state.db;
+    }
+    const target = await resolveOpenTarget(partition, name);
+    if (state.db && (state.factory !== target.factory || state.name !== name || state.bucketed !== target.bucketed)) {
+      try {
+        state.db.close();
+      } catch {
       }
-      const req = indexedDB.open(name, version);
+      state.db = null;
+      state.factory = null;
+      state.name = null;
+    }
+    if (state.db) return state.db;
+    if (state.opening) return state.opening;
+    state.opening = new Promise((resolve, reject) => {
+      const req = target.factory.open(name, version);
       req.onupgradeneeded = (ev) => {
         const db = req.result;
         const tx = req.transaction;
         if (!tx) return;
         try {
-          options.upgrade?.(db, ev.oldVersion, ev.newVersion ?? version, tx);
+          options.upgrade?.(db, ev.oldVersion, ev.newVersion ?? version, tx, target);
         } catch (e) {
           try {
             tx.abort();
@@ -16218,10 +16290,10 @@ const StorageModule = (() => {
             db.close();
           } catch {
           }
-          if (_db === db) _db = null;
+          if (state.db === db) state.db = null;
         };
         db.onclose = () => {
-          if (_db === db) _db = null;
+          if (state.db === db) state.db = null;
         };
         resolve(db);
       };
@@ -16229,11 +16301,13 @@ const StorageModule = (() => {
       req.onblocked = () => reject(new Error("IndexedDB open blocked by another connection"));
     });
     try {
-      _db = await _opening;
-      _dbFactory = typeof indexedDB !== "undefined" ? indexedDB : null;
-      return _db;
+      state.db = await state.opening;
+      state.factory = target.factory;
+      state.name = name;
+      state.bucketed = target.bucketed;
+      return state.db;
     } finally {
-      _opening = null;
+      state.opening = null;
     }
   }
   function reqToPromise(req) {
@@ -16275,7 +16349,12 @@ const StorageModule = (() => {
 
   // src/storage/transaction.ts
   async function withTransaction(stores, mode, fn) {
-    const db = await openDB();
+    const storeList = Array.isArray(stores) ? stores : [stores];
+    const partition = sharedPartition(storeList);
+    if (!partition && await isStorageBucketPartitioningActive()) {
+      throw new Error("Cannot run one IndexedDB transaction across storage bucket partitions");
+    }
+    const db = await openDB({ partition: partition ?? "scripts" });
     const tx = db.transaction(stores, mode);
     let result;
     try {
@@ -16290,6 +16369,18 @@ const StorageModule = (() => {
     await txComplete(tx);
     return result;
   }
+  function sharedPartition(stores) {
+    let partition = null;
+    for (const store of stores) {
+      const next = StorePartitions[store];
+      if (!partition) {
+        partition = next;
+        continue;
+      }
+      if (partition !== next) return null;
+    }
+    return partition;
+  }
 
   // src/storage/script-db.ts
   function setRecordKey(record, key, value) {
@@ -16300,32 +16391,62 @@ const StorageModule = (() => {
       writable: true
     });
   }
-  function upgradeSchema(db, oldVersion, _newVersion, _tx) {
+  var ALL_SCHEMA_STORES = Object.values(Stores);
+  var PARTITION_SCHEMA_STORES = {
+    scripts: [Stores.scripts, Stores.stats, Stores.localWorkspaceBindings],
+    values: [Stores.values],
+    backups: [Stores.backups, Stores.publicationReceipts]
+  };
+  function targetStores(target) {
+    return new Set(target.bucketed ? PARTITION_SCHEMA_STORES[target.partition] : ALL_SCHEMA_STORES);
+  }
+  function shouldCreateStore(db, stores, store) {
+    return stores.has(store) && !db.objectStoreNames.contains(store);
+  }
+  function upgradeSchema(db, oldVersion, _newVersion, _tx, target) {
+    const stores = targetStores(target);
     if (oldVersion < 1) {
-      const scripts = db.createObjectStore(Stores.scripts, { keyPath: "id" });
-      scripts.createIndex("by-enabled", "enabled", { unique: false });
-      scripts.createIndex("by-position", "position", { unique: false });
-      scripts.createIndex("by-namespace", "meta.namespace", { unique: false });
-      const values = db.createObjectStore(Stores.values, {
-        keyPath: ["scriptId", "key"]
-      });
-      values.createIndex("by-script", "scriptId", { unique: false });
-      db.createObjectStore(Stores.stats, { keyPath: "scriptId" });
-      const backups = db.createObjectStore(Stores.backups, { keyPath: "id" });
-      backups.createIndex("by-created", "createdAt", { unique: false });
+      if (shouldCreateStore(db, stores, Stores.scripts)) {
+        const scripts = db.createObjectStore(Stores.scripts, { keyPath: "id" });
+        scripts.createIndex("by-enabled", "enabled", { unique: false });
+        scripts.createIndex("by-position", "position", { unique: false });
+        scripts.createIndex("by-namespace", "meta.namespace", { unique: false });
+      }
+      if (shouldCreateStore(db, stores, Stores.values)) {
+        const values = db.createObjectStore(Stores.values, {
+          keyPath: ["scriptId", "key"]
+        });
+        values.createIndex("by-script", "scriptId", { unique: false });
+      }
+      if (shouldCreateStore(db, stores, Stores.stats)) {
+        db.createObjectStore(Stores.stats, { keyPath: "scriptId" });
+      }
+      if (shouldCreateStore(db, stores, Stores.backups)) {
+        const backups = db.createObjectStore(Stores.backups, { keyPath: "id" });
+        backups.createIndex("by-created", "createdAt", { unique: false });
+      }
     }
-    if (oldVersion < 2 && !db.objectStoreNames.contains(Stores.localWorkspaceBindings)) {
+    if (oldVersion < 2 && shouldCreateStore(db, stores, Stores.localWorkspaceBindings)) {
       const bindings = db.createObjectStore(Stores.localWorkspaceBindings, { keyPath: "bindingId" });
       bindings.createIndex("by-script", "scriptId", { unique: false });
     }
-    if (oldVersion < 3 && !db.objectStoreNames.contains(Stores.publicationReceipts)) {
+    if (oldVersion < 3 && shouldCreateStore(db, stores, Stores.publicationReceipts)) {
       const receipts = db.createObjectStore(Stores.publicationReceipts, { keyPath: "receiptId" });
       receipts.createIndex("by-script", "scriptId", { unique: false });
       receipts.createIndex("by-created", "createdAt", { unique: false });
     }
   }
   async function openScriptDB() {
-    return openDB({ name: DB_NAME, version: DB_VERSION, upgrade: upgradeSchema });
+    return openStoragePartitionDB("scripts");
+  }
+  async function openStoragePartitionDB(partition) {
+    return openDB({ name: DB_NAME, version: DB_VERSION, upgrade: upgradeSchema, partition });
+  }
+  async function openValuesDB() {
+    return openStoragePartitionDB("values");
+  }
+  async function openBackupsDB() {
+    return openStoragePartitionDB("backups");
   }
   var ScriptsDAO = {
     async get(id) {
@@ -16350,6 +16471,22 @@ const StorageModule = (() => {
     },
     async delete(id) {
       await openScriptDB();
+      if (await isStorageBucketPartitioningActive()) {
+        await ValuesDAO.deleteAll(id);
+        await withTransaction(
+          [Stores.scripts, Stores.stats, Stores.localWorkspaceBindings],
+          "readwrite",
+          async (tx) => {
+            await reqToPromise(tx.objectStore(Stores.scripts).delete(id));
+            await reqToPromise(tx.objectStore(Stores.stats).delete(id));
+            const bindingIdx = tx.objectStore(Stores.localWorkspaceBindings).index("by-script");
+            await forEachCursor(bindingIdx, (_v, _k, primaryKey) => {
+              tx.objectStore(Stores.localWorkspaceBindings).delete(primaryKey);
+            }, IDBKeyRange.only(id));
+          }
+        );
+        return;
+      }
       await withTransaction(
         [Stores.scripts, Stores.values, Stores.stats, Stores.localWorkspaceBindings],
         "readwrite",
@@ -16369,6 +16506,19 @@ const StorageModule = (() => {
     },
     async clear() {
       await openScriptDB();
+      if (await isStorageBucketPartitioningActive()) {
+        await ValuesDAO.clear();
+        await withTransaction(
+          [Stores.scripts, Stores.stats, Stores.localWorkspaceBindings],
+          "readwrite",
+          async (tx) => {
+            await reqToPromise(tx.objectStore(Stores.scripts).clear());
+            await reqToPromise(tx.objectStore(Stores.stats).clear());
+            await reqToPromise(tx.objectStore(Stores.localWorkspaceBindings).clear());
+          }
+        );
+        return;
+      }
       await withTransaction(
         [Stores.scripts, Stores.values, Stores.stats, Stores.localWorkspaceBindings],
         "readwrite",
@@ -16401,7 +16551,7 @@ const StorageModule = (() => {
   };
   var ValuesDAO = {
     async get(scriptId, key) {
-      await openScriptDB();
+      await openValuesDB();
       return withTransaction(Stores.values, "readonly", async (tx) => {
         const row = await reqToPromise(
           tx.objectStore(Stores.values).get([scriptId, key])
@@ -16410,20 +16560,20 @@ const StorageModule = (() => {
       });
     },
     async set(scriptId, key, value) {
-      await openScriptDB();
+      await openValuesDB();
       await withTransaction(Stores.values, "readwrite", async (tx) => {
         const row = { scriptId, key, value, updatedAt: Date.now() };
         await reqToPromise(tx.objectStore(Stores.values).put(row));
       });
     },
     async delete(scriptId, key) {
-      await openScriptDB();
+      await openValuesDB();
       await withTransaction(Stores.values, "readwrite", async (tx) => {
         await reqToPromise(tx.objectStore(Stores.values).delete([scriptId, key]));
       });
     },
     async getAll(scriptId) {
-      await openScriptDB();
+      await openValuesDB();
       return withTransaction(Stores.values, "readonly", async (tx) => {
         const out = {};
         const idx = tx.objectStore(Stores.values).index("by-script");
@@ -16434,7 +16584,7 @@ const StorageModule = (() => {
       });
     },
     async getAllMetadata(scriptId) {
-      await openScriptDB();
+      await openValuesDB();
       return withTransaction(Stores.values, "readonly", async (tx) => {
         let valueCount = 0;
         let lastUpdatedAt = null;
@@ -16450,7 +16600,7 @@ const StorageModule = (() => {
       });
     },
     async getAllKeyMetadata(scriptId) {
-      await openScriptDB();
+      await openValuesDB();
       return withTransaction(Stores.values, "readonly", async (tx) => {
         const out = {};
         const idx = tx.objectStore(Stores.values).index("by-script");
@@ -16468,7 +16618,7 @@ const StorageModule = (() => {
       return Object.keys(all);
     },
     async setAll(scriptId, values) {
-      await openScriptDB();
+      await openValuesDB();
       await withTransaction(Stores.values, "readwrite", async (tx) => {
         const store = tx.objectStore(Stores.values);
         const updatedAt = Date.now();
@@ -16479,7 +16629,7 @@ const StorageModule = (() => {
     },
     async deleteMultiple(scriptId, keys) {
       if (keys.length === 0) return;
-      await openScriptDB();
+      await openValuesDB();
       await withTransaction(Stores.values, "readwrite", async (tx) => {
         const store = tx.objectStore(Stores.values);
         for (const key of keys) {
@@ -16488,13 +16638,19 @@ const StorageModule = (() => {
       });
     },
     async deleteAll(scriptId) {
-      await openScriptDB();
+      await openValuesDB();
       await withTransaction(Stores.values, "readwrite", async (tx) => {
         const store = tx.objectStore(Stores.values);
         const idx = store.index("by-script");
         await forEachCursor(idx, (_row, _k, primaryKey) => {
           store.delete(primaryKey);
         }, IDBKeyRange.only(scriptId));
+      });
+    },
+    async clear() {
+      await openValuesDB();
+      await withTransaction(Stores.values, "readwrite", async (tx) => {
+        await reqToPromise(tx.objectStore(Stores.values).clear());
       });
     },
     async byteSize(scriptId) {
@@ -16605,6 +16761,40 @@ const StorageModule = (() => {
       await openScriptDB();
       await withTransaction(Stores.localWorkspaceBindings, "readwrite", async (tx) => {
         await reqToPromise(tx.objectStore(Stores.localWorkspaceBindings).clear());
+      });
+    }
+  };
+  var BackupsDAO = {
+    async list() {
+      await openBackupsDB();
+      return withTransaction(Stores.backups, "readonly", async (tx) => {
+        const out = [];
+        await forEachCursor(tx.objectStore(Stores.backups).index("by-created"), (row) => {
+          const { data: _data, ...meta } = row;
+          out.push(meta);
+        }, void 0, "prev");
+        return out;
+      });
+    },
+    async get(id) {
+      await openBackupsDB();
+      return withTransaction(Stores.backups, "readonly", async (tx) => {
+        const row = await reqToPromise(
+          tx.objectStore(Stores.backups).get(id)
+        );
+        return row ?? null;
+      });
+    },
+    async put(record) {
+      await openBackupsDB();
+      await withTransaction(Stores.backups, "readwrite", async (tx) => {
+        await reqToPromise(tx.objectStore(Stores.backups).put(record));
+      });
+    },
+    async delete(id) {
+      await openBackupsDB();
+      await withTransaction(Stores.backups, "readwrite", async (tx) => {
+        await reqToPromise(tx.objectStore(Stores.backups).delete(id));
       });
     }
   };
@@ -17309,6 +17499,7 @@ const SettingsManager = StorageModule.SettingsManager;
 const ScriptStorage = StorageModule.ScriptStorage;
 const LocalWorkspaceBindings = StorageModule.LocalWorkspaceBindings;
 const ScriptValues = StorageModule.ScriptValues;
+const BackupsDAO = StorageModule.BackupsDAO;
 const TabStorage = StorageModule.TabStorage;
 const FolderStorage = StorageModule.FolderStorage;
 const _openTabTrackers = StorageModule._openTabTrackers;

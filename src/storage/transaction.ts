@@ -7,7 +7,14 @@
 // has fully committed (we wait for `oncomplete`, not just the last request).
 // ============================================================================
 
-import { openDB, txComplete, type StoreName } from './idb';
+import {
+  StorePartitions,
+  isStorageBucketPartitioningActive,
+  openDB,
+  txComplete,
+  type StoreName,
+  type StoragePartition,
+} from './idb';
 
 export type TxMode = 'readonly' | 'readwrite';
 
@@ -16,7 +23,12 @@ export async function withTransaction<T>(
   mode: TxMode,
   fn: (tx: IDBTransaction) => T | Promise<T>,
 ): Promise<T> {
-  const db = await openDB();
+  const storeList = Array.isArray(stores) ? stores : [stores];
+  const partition = sharedPartition(storeList);
+  if (!partition && await isStorageBucketPartitioningActive()) {
+    throw new Error('Cannot run one IndexedDB transaction across storage bucket partitions');
+  }
+  const db = await openDB({ partition: partition ?? 'scripts' });
   const tx = db.transaction(stores, mode);
 
   let result: T;
@@ -30,4 +42,17 @@ export async function withTransaction<T>(
   // Wait for the transaction to fully commit before returning.
   await txComplete(tx);
   return result;
+}
+
+function sharedPartition(stores: StoreName[]): StoragePartition | null {
+  let partition: StoragePartition | null = null;
+  for (const store of stores) {
+    const next = StorePartitions[store];
+    if (!partition) {
+      partition = next;
+      continue;
+    }
+    if (partition !== next) return null;
+  }
+  return partition;
 }

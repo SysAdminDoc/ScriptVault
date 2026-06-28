@@ -286,13 +286,6 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 > Duplicates against existing Now/Next/Later/UC/Rejected tiers were filtered.
 > Each item carries impact (1-5), effort (S/M/L/XL), and tier recommendation.
 
-### RD-7. IndexedDB Storage Bucket Partitioning
-- **Tier:** Later | **Priority:** P3 | **Impact:** 3 | **Effort:** L
-- **Source:** Chrome IndexedDB storage improvements blog, RxDB performance research
-- **Problem:** All IndexedDB data (scripts, values, stats, backups) lives in a single database. Chrome now supports storage buckets that allow separate IndexedDB instances on separate threads, with documented 28-43% read/write improvements.
-- **Deliverable:** Partition ScriptStorage, ScriptValues, and BackupScheduler into separate storage buckets. Measure write throughput for libraries >500 scripts. Fall back to single-bucket on browsers that don't support the Storage Buckets API.
-- **Acceptance:** `navigator.storageBuckets` feature-detected. Backup restore and sync merge still work after partitioning. Large-library perf harness shows improvement.
-
 ### Appendix: Research-Driven Sources
 
 | ID | Source | URL |

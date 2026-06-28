@@ -6,6 +6,7 @@
 //   - building MatchSet from the dataset
 //   - getCandidates() / getMatching() over a basket of representative URLs
 //   - text + match-pattern search (sort by name)
+//   - IndexedDB script/value/backup writes with and without Storage Buckets
 //
 // Designed to stay within a few hundred ms even on a VMware shared drive so
 // it can run in CI. Pass --check to fail the process when any measurement
@@ -59,10 +60,23 @@ const THRESHOLDS = {
   sort1k: 20,
   sort10k: 200,
   dashboardRender1k_p99: 50,
-  dashboardRender10k_p99: 100
+  dashboardRender10k_p99: 100,
+  storageSingle1k: 5000,
+  storageBucketed1k: 5000
 };
 
 const { MatchSet } = await import('../src/background/url-matcher.ts');
+const { IDBFactory, IDBKeyRange } = await import('fake-indexeddb');
+const {
+  BackupsDAO,
+  ScriptsDAO,
+  ValuesDAO
+} = await import('../src/storage/script-db.ts');
+const {
+  DB_NAME,
+  StorageBucketNames,
+  closeDB
+} = await import('../src/storage/idb.ts');
 const virtualRowsCode = readFileSync(new URL('../pages/dashboard-virtual-rows.js', import.meta.url), 'utf8');
 
 function loadVirtualRows(window) {
@@ -236,6 +250,90 @@ function measureDashboardRender(scripts) {
   };
 }
 
+function setNavigatorStorageBuckets(storageBuckets) {
+  const current = typeof globalThis.navigator === 'object' && globalThis.navigator
+    ? globalThis.navigator
+    : {};
+  Object.defineProperty(globalThis, 'navigator', {
+    configurable: true,
+    value: { ...current, storageBuckets }
+  });
+}
+
+function resetIndexedDBHarness({ bucketed }) {
+  closeDB();
+  Object.defineProperty(globalThis, 'indexedDB', {
+    configurable: true,
+    value: new IDBFactory()
+  });
+  Object.defineProperty(globalThis, 'IDBKeyRange', {
+    configurable: true,
+    value: IDBKeyRange
+  });
+  if (!bucketed) {
+    setNavigatorStorageBuckets(undefined);
+    return;
+  }
+  const factories = Object.fromEntries(
+    Object.values(StorageBucketNames).map((name) => [name, new IDBFactory()])
+  );
+  setNavigatorStorageBuckets({
+    open: async (name) => ({ indexedDB: factories[name] })
+  });
+}
+
+async function writeValueBags(scripts) {
+  for (const script of scripts) {
+    await ValuesDAO.setAll(script.id, {
+      enabled: script.enabled,
+      namespace: script.meta?.namespace || '',
+      updatedAt: script.updatedAt || 0
+    });
+  }
+}
+
+async function writeBackupBlob(scripts) {
+  const payload = new TextEncoder().encode(JSON.stringify({
+    schema: 'scriptvault-storage-write-benchmark/v1',
+    count: scripts.length,
+    scripts: scripts.map((script) => ({
+      id: script.id,
+      name: script.meta?.name,
+      namespace: script.meta?.namespace,
+      code: `${script.code}\n`.repeat(120)
+    }))
+  }));
+  await BackupsDAO.put({
+    id: `perf-backup-${scripts.length}`,
+    name: `perf-backup-${scripts.length}`,
+    createdAt: Date.now(),
+    byteSize: payload.byteLength,
+    data: payload.buffer
+  });
+}
+
+async function measureStorageWrites(scripts, { bucketed }) {
+  resetIndexedDBHarness({ bucketed });
+  const t0 = performance.now();
+  const scriptStart = performance.now();
+  const scriptsWrite = ScriptsDAO.bulkPut(scripts).then(() => performance.now() - scriptStart);
+  const valuesStart = performance.now();
+  const valuesWrite = writeValueBags(scripts).then(() => performance.now() - valuesStart);
+  const backupStart = performance.now();
+  const backupWrite = writeBackupBlob(scripts).then(() => performance.now() - backupStart);
+  const [scriptsMs, valuesMs, backupMs] = await Promise.all([scriptsWrite, valuesWrite, backupWrite]);
+  const total = performance.now() - t0;
+  closeDB();
+  return {
+    mode: bucketed ? 'storage-buckets' : 'single-indexeddb',
+    total,
+    scripts: scriptsMs,
+    values: valuesMs,
+    backup: backupMs,
+    scriptsPerSecond: scripts.length / (total / 1000)
+  };
+}
+
 async function runFor(count) {
   const scripts = generateScripts(count);
   const build = measureBuild(scripts);
@@ -250,13 +348,21 @@ async function runFor(count) {
 const datasets = [];
 datasets.push(await runFor(1000));
 datasets.push(await runFor(10000));
+const storageWriteScripts = generateScripts(1000, { seed: 99 });
+const storageWrites = {
+  count: storageWriteScripts.length,
+  single: await measureStorageWrites(storageWriteScripts, { bucketed: false }),
+  bucketed: await measureStorageWrites(storageWriteScripts, { bucketed: true })
+};
+storageWrites.improvement = storageWrites.single.total / storageWrites.bucketed.total;
 
 const report = {
   generatedAt: new Date().toISOString(),
   node: process.version,
   platform: process.platform,
   thresholds: THRESHOLDS,
-  datasets
+  datasets,
+  storageWrites
 };
 
 const checks = [];
@@ -278,6 +384,8 @@ check('localeCompare sort 1k',         datasets[0].sort,              get('sort1
 check('localeCompare sort 10k',        datasets[1].sort,              get('sort10k'));
 check('dashboard render p99 1k',       datasets[0].dashboardRender.p99, get('dashboardRender1k_p99'));
 check('dashboard render p99 10k',      datasets[1].dashboardRender.p99, get('dashboardRender10k_p99'));
+check('storage writes total 1k single', storageWrites.single.total,       get('storageSingle1k'));
+check('storage writes total 1k buckets', storageWrites.bucketed.total,    get('storageBucketed1k'));
 
 report.checks = checks;
 
@@ -298,6 +406,13 @@ if (wantJson) {
     console.log(`    dashboard render p50/p99 ${fmt(ds.dashboardRender.median)} / ${fmt(ds.dashboardRender.p99)}`);
     console.log('');
   }
+  console.log('  IndexedDB write throughput N=1000');
+  console.log(`    single DB total        ${fmt(storageWrites.single.total)} (${storageWrites.single.scriptsPerSecond.toFixed(0)} scripts/sec)`);
+  console.log(`      scripts/values/backup ${fmt(storageWrites.single.scripts)} / ${fmt(storageWrites.single.values)} / ${fmt(storageWrites.single.backup)}`);
+  console.log(`    Storage Buckets total  ${fmt(storageWrites.bucketed.total)} (${storageWrites.bucketed.scriptsPerSecond.toFixed(0)} scripts/sec)`);
+  console.log(`      scripts/values/backup ${fmt(storageWrites.bucketed.scripts)} / ${fmt(storageWrites.bucketed.values)} / ${fmt(storageWrites.bucketed.backup)}`);
+  console.log(`    bucketed improvement   ${storageWrites.improvement.toFixed(2)}x`);
+  console.log('');
   console.log('  Threshold checks');
   for (const c of checks) {
     const status = c.pass ? 'OK    ' : 'FAIL  ';

@@ -227,6 +227,7 @@ describe('TS runtime module generator', () => {
           'ScriptStorage',
           'LocalWorkspaceBindings',
           'ScriptValues',
+          'BackupsDAO',
           'TabStorage',
           'FolderStorage',
           '_openTabTrackers',
@@ -304,6 +305,7 @@ describe('TS runtime module generator', () => {
     expect(text).toContain('const SettingsManager = StorageModule.SettingsManager;');
     expect(text).toContain('const ScriptStorage = StorageModule.ScriptStorage;');
     expect(text).toContain('const LocalWorkspaceBindings = StorageModule.LocalWorkspaceBindings;');
+    expect(text).toContain('const BackupsDAO = StorageModule.BackupsDAO;');
     expect(text).toContain('const setScriptChangeListener = StorageModule.setScriptChangeListener;');
     expect(text).not.toContain('const debugLog = StorageModule.debugLog;');
   });

@@ -12,6 +12,7 @@ const _storageBody = storageCode + `
     ScriptStorage,
     LocalWorkspaceBindings,
     ScriptValues,
+    BackupsDAO,
     FolderStorage,
     TabStorage,
     _openTabTrackers,
@@ -26,6 +27,7 @@ const {
   ScriptStorage,
   LocalWorkspaceBindings,
   ScriptValues,
+  BackupsDAO,
   FolderStorage,
   TabStorage,
   _openTabTrackers,
@@ -80,6 +82,7 @@ describe('generated storage artifact', () => {
     expect(storageCode).toContain('const SettingsManager = StorageModule.SettingsManager;');
     expect(storageCode).toContain('const ScriptStorage = StorageModule.ScriptStorage;');
     expect(storageCode).toContain('const LocalWorkspaceBindings = StorageModule.LocalWorkspaceBindings;');
+    expect(storageCode).toContain('const BackupsDAO = StorageModule.BackupsDAO;');
   });
 
   it('does not register duplicate notification click/close listeners', () => {

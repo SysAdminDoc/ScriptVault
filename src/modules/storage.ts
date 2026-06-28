@@ -5,7 +5,7 @@
 import type { Script, Settings } from '../types/index';
 import { generateId } from '../shared/utils';
 import settingsDefaultsData from '../config/settings-defaults.json';
-import { LocalWorkspaceBindingsDAO, ScriptsDAO, ValuesDAO } from '../storage/script-db';
+import { BackupsDAO, LocalWorkspaceBindingsDAO, ScriptsDAO, ValuesDAO } from '../storage/script-db';
 import { ensureV3Migration } from '../storage/migration-v3';
 
 // ============================================================================
@@ -312,8 +312,8 @@ export const ScriptStorage = {
     const prev = this.cache![id];
     if (prev === undefined) return;
     try {
-      // ScriptsDAO.delete() runs script + values + stats removal in one IDB
-      // transaction, so a SW kill mid-delete leaves no orphans.
+      // ScriptsDAO.delete() uses one transaction in the legacy single-DB path
+      // and ordered cleanup when Storage Buckets split the stores.
       await ScriptsDAO.delete(id);
     } catch (e) {
       throw e;
@@ -414,6 +414,8 @@ export const LocalWorkspaceBindings = {
   deleteForScript: LocalWorkspaceBindingsDAO.deleteForScript.bind(LocalWorkspaceBindingsDAO),
   clear: LocalWorkspaceBindingsDAO.clear.bind(LocalWorkspaceBindingsDAO),
 };
+
+export { BackupsDAO };
 
 // ============================================================================
 // Script Values Storage (GM_getValue/setValue)

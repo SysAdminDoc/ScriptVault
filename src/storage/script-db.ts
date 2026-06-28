@@ -11,10 +11,13 @@ import {
   DB_NAME,
   DB_VERSION,
   Stores,
+  isStorageBucketPartitioningActive,
   openDB,
   reqToPromise,
   forEachCursor,
+  type OpenTarget,
   type StoreName,
+  type StoragePartition,
 } from './idb';
 import { withTransaction } from './transaction';
 
@@ -108,33 +111,59 @@ function setRecordKey<T>(record: Record<string, T>, key: string, value: T): void
   });
 }
 
+const ALL_SCHEMA_STORES = Object.values(Stores) as StoreName[];
+const PARTITION_SCHEMA_STORES: Record<StoragePartition, StoreName[]> = {
+  scripts: [Stores.scripts, Stores.stats, Stores.localWorkspaceBindings],
+  values: [Stores.values],
+  backups: [Stores.backups, Stores.publicationReceipts],
+};
+
+function targetStores(target: OpenTarget): Set<StoreName> {
+  return new Set(target.bucketed ? PARTITION_SCHEMA_STORES[target.partition] : ALL_SCHEMA_STORES);
+}
+
+function shouldCreateStore(db: IDBDatabase, stores: Set<StoreName>, store: StoreName): boolean {
+  return stores.has(store) && !db.objectStoreNames.contains(store);
+}
+
 function upgradeSchema(
   db: IDBDatabase,
   oldVersion: number,
   _newVersion: number,
   _tx: IDBTransaction,
+  target: OpenTarget,
 ): void {
+  const stores = targetStores(target);
+
   if (oldVersion < 1) {
-    const scripts = db.createObjectStore(Stores.scripts, { keyPath: 'id' });
-    scripts.createIndex('by-enabled', 'enabled', { unique: false });
-    scripts.createIndex('by-position', 'position', { unique: false });
-    scripts.createIndex('by-namespace', 'meta.namespace', { unique: false });
+    if (shouldCreateStore(db, stores, Stores.scripts)) {
+      const scripts = db.createObjectStore(Stores.scripts, { keyPath: 'id' });
+      scripts.createIndex('by-enabled', 'enabled', { unique: false });
+      scripts.createIndex('by-position', 'position', { unique: false });
+      scripts.createIndex('by-namespace', 'meta.namespace', { unique: false });
+    }
 
-    const values = db.createObjectStore(Stores.values, {
-      keyPath: ['scriptId', 'key'],
-    });
-    values.createIndex('by-script', 'scriptId', { unique: false });
+    if (shouldCreateStore(db, stores, Stores.values)) {
+      const values = db.createObjectStore(Stores.values, {
+        keyPath: ['scriptId', 'key'],
+      });
+      values.createIndex('by-script', 'scriptId', { unique: false });
+    }
 
-    db.createObjectStore(Stores.stats, { keyPath: 'scriptId' });
+    if (shouldCreateStore(db, stores, Stores.stats)) {
+      db.createObjectStore(Stores.stats, { keyPath: 'scriptId' });
+    }
 
-    const backups = db.createObjectStore(Stores.backups, { keyPath: 'id' });
-    backups.createIndex('by-created', 'createdAt', { unique: false });
+    if (shouldCreateStore(db, stores, Stores.backups)) {
+      const backups = db.createObjectStore(Stores.backups, { keyPath: 'id' });
+      backups.createIndex('by-created', 'createdAt', { unique: false });
+    }
   }
-  if (oldVersion < 2 && !db.objectStoreNames.contains(Stores.localWorkspaceBindings)) {
+  if (oldVersion < 2 && shouldCreateStore(db, stores, Stores.localWorkspaceBindings)) {
     const bindings = db.createObjectStore(Stores.localWorkspaceBindings, { keyPath: 'bindingId' });
     bindings.createIndex('by-script', 'scriptId', { unique: false });
   }
-  if (oldVersion < 3 && !db.objectStoreNames.contains(Stores.publicationReceipts)) {
+  if (oldVersion < 3 && shouldCreateStore(db, stores, Stores.publicationReceipts)) {
     const receipts = db.createObjectStore(Stores.publicationReceipts, { keyPath: 'receiptId' });
     receipts.createIndex('by-script', 'scriptId', { unique: false });
     receipts.createIndex('by-created', 'createdAt', { unique: false });
@@ -145,7 +174,19 @@ function upgradeSchema(
 // caller in this module routes through this so we never accidentally open
 // without the upgrade callback.
 export async function openScriptDB(): Promise<IDBDatabase> {
-  return openDB({ name: DB_NAME, version: DB_VERSION, upgrade: upgradeSchema });
+  return openStoragePartitionDB('scripts');
+}
+
+export async function openStoragePartitionDB(partition: StoragePartition): Promise<IDBDatabase> {
+  return openDB({ name: DB_NAME, version: DB_VERSION, upgrade: upgradeSchema, partition });
+}
+
+async function openValuesDB(): Promise<IDBDatabase> {
+  return openStoragePartitionDB('values');
+}
+
+async function openBackupsDB(): Promise<IDBDatabase> {
+  return openStoragePartitionDB('backups');
 }
 
 // ----------------------------------------------------------------------------
@@ -178,28 +219,57 @@ export const ScriptsDAO = {
 
   async delete(id: string): Promise<void> {
     await openScriptDB();
-    // Wipe both the script row and any associated values/stats in one txn so
-    // a SW kill mid-delete leaves no orphans.
-    await withTransaction(
-        [Stores.scripts, Stores.values, Stores.stats, Stores.localWorkspaceBindings] as StoreName[],
+    if (await isStorageBucketPartitioningActive()) {
+      await ValuesDAO.deleteAll(id);
+      await withTransaction(
+        [Stores.scripts, Stores.stats, Stores.localWorkspaceBindings] as StoreName[],
         'readwrite',
         async (tx) => {
           await reqToPromise(tx.objectStore(Stores.scripts).delete(id));
           await reqToPromise(tx.objectStore(Stores.stats).delete(id));
-          const valuesIdx = tx.objectStore(Stores.values).index('by-script');
-          await forEachCursor<ScriptValueRow>(valuesIdx, (_v, _k, primaryKey) => {
-            tx.objectStore(Stores.values).delete(primaryKey);
-          }, IDBKeyRange.only(id));
           const bindingIdx = tx.objectStore(Stores.localWorkspaceBindings).index('by-script');
           await forEachCursor<LocalWorkspaceBindingRecord>(bindingIdx, (_v, _k, primaryKey) => {
             tx.objectStore(Stores.localWorkspaceBindings).delete(primaryKey);
           }, IDBKeyRange.only(id));
         },
       );
+      return;
+    }
+    // Legacy single-DB fallback can still wipe the script row and associated
+    // values/stats in one transaction.
+    await withTransaction(
+      [Stores.scripts, Stores.values, Stores.stats, Stores.localWorkspaceBindings] as StoreName[],
+      'readwrite',
+      async (tx) => {
+        await reqToPromise(tx.objectStore(Stores.scripts).delete(id));
+        await reqToPromise(tx.objectStore(Stores.stats).delete(id));
+        const valuesIdx = tx.objectStore(Stores.values).index('by-script');
+        await forEachCursor<ScriptValueRow>(valuesIdx, (_v, _k, primaryKey) => {
+          tx.objectStore(Stores.values).delete(primaryKey);
+        }, IDBKeyRange.only(id));
+        const bindingIdx = tx.objectStore(Stores.localWorkspaceBindings).index('by-script');
+        await forEachCursor<LocalWorkspaceBindingRecord>(bindingIdx, (_v, _k, primaryKey) => {
+          tx.objectStore(Stores.localWorkspaceBindings).delete(primaryKey);
+        }, IDBKeyRange.only(id));
+      },
+    );
   },
 
   async clear(): Promise<void> {
     await openScriptDB();
+    if (await isStorageBucketPartitioningActive()) {
+      await ValuesDAO.clear();
+      await withTransaction(
+        [Stores.scripts, Stores.stats, Stores.localWorkspaceBindings] as StoreName[],
+        'readwrite',
+        async (tx) => {
+          await reqToPromise(tx.objectStore(Stores.scripts).clear());
+          await reqToPromise(tx.objectStore(Stores.stats).clear());
+          await reqToPromise(tx.objectStore(Stores.localWorkspaceBindings).clear());
+        },
+      );
+      return;
+    }
     await withTransaction(
       [Stores.scripts, Stores.values, Stores.stats, Stores.localWorkspaceBindings] as StoreName[],
       'readwrite',
@@ -239,7 +309,7 @@ export const ScriptsDAO = {
 
 export const ValuesDAO = {
   async get(scriptId: string, key: string): Promise<unknown> {
-    await openScriptDB();
+    await openValuesDB();
     return withTransaction(Stores.values, 'readonly', async (tx) => {
       const row = await reqToPromise(
         tx.objectStore(Stores.values).get([scriptId, key]) as IDBRequest<ScriptValueRow | undefined>,
@@ -249,7 +319,7 @@ export const ValuesDAO = {
   },
 
   async set(scriptId: string, key: string, value: unknown): Promise<void> {
-    await openScriptDB();
+    await openValuesDB();
     await withTransaction(Stores.values, 'readwrite', async (tx) => {
       const row: ScriptValueRow = { scriptId, key, value, updatedAt: Date.now() };
       await reqToPromise(tx.objectStore(Stores.values).put(row));
@@ -257,14 +327,14 @@ export const ValuesDAO = {
   },
 
   async delete(scriptId: string, key: string): Promise<void> {
-    await openScriptDB();
+    await openValuesDB();
     await withTransaction(Stores.values, 'readwrite', async (tx) => {
       await reqToPromise(tx.objectStore(Stores.values).delete([scriptId, key]));
     });
   },
 
   async getAll(scriptId: string): Promise<Record<string, unknown>> {
-    await openScriptDB();
+    await openValuesDB();
     return withTransaction(Stores.values, 'readonly', async (tx) => {
       const out: Record<string, unknown> = {};
       const idx = tx.objectStore(Stores.values).index('by-script');
@@ -276,7 +346,7 @@ export const ValuesDAO = {
   },
 
   async getAllMetadata(scriptId: string): Promise<{ valueCount: number; lastUpdatedAt: number | null }> {
-    await openScriptDB();
+    await openValuesDB();
     return withTransaction(Stores.values, 'readonly', async (tx) => {
       let valueCount = 0;
       let lastUpdatedAt: number | null = null;
@@ -293,7 +363,7 @@ export const ValuesDAO = {
   },
 
   async getAllKeyMetadata(scriptId: string): Promise<Record<string, { updatedAt: number }>> {
-    await openScriptDB();
+    await openValuesDB();
     return withTransaction(Stores.values, 'readonly', async (tx) => {
       const out: Record<string, { updatedAt: number }> = {};
       const idx = tx.objectStore(Stores.values).index('by-script');
@@ -313,7 +383,7 @@ export const ValuesDAO = {
   },
 
   async setAll(scriptId: string, values: Record<string, unknown>): Promise<void> {
-    await openScriptDB();
+    await openValuesDB();
     await withTransaction(Stores.values, 'readwrite', async (tx) => {
       const store = tx.objectStore(Stores.values);
       const updatedAt = Date.now();
@@ -325,7 +395,7 @@ export const ValuesDAO = {
 
   async deleteMultiple(scriptId: string, keys: string[]): Promise<void> {
     if (keys.length === 0) return;
-    await openScriptDB();
+    await openValuesDB();
     await withTransaction(Stores.values, 'readwrite', async (tx) => {
       const store = tx.objectStore(Stores.values);
       for (const key of keys) {
@@ -335,13 +405,20 @@ export const ValuesDAO = {
   },
 
   async deleteAll(scriptId: string): Promise<void> {
-    await openScriptDB();
+    await openValuesDB();
     await withTransaction(Stores.values, 'readwrite', async (tx) => {
       const store = tx.objectStore(Stores.values);
       const idx = store.index('by-script');
       await forEachCursor<ScriptValueRow>(idx, (_row, _k, primaryKey) => {
         store.delete(primaryKey);
       }, IDBKeyRange.only(scriptId));
+    });
+  },
+
+  async clear(): Promise<void> {
+    await openValuesDB();
+    await withTransaction(Stores.values, 'readwrite', async (tx) => {
+      await reqToPromise(tx.objectStore(Stores.values).clear());
     });
   },
 
@@ -537,7 +614,7 @@ export const StatsDAO = {
 
 export const BackupsDAO = {
   async list(): Promise<Array<Omit<BackupRecord, 'data'>>> {
-    await openScriptDB();
+    await openBackupsDB();
     return withTransaction(Stores.backups, 'readonly', async (tx) => {
       const out: Array<Omit<BackupRecord, 'data'>> = [];
       await forEachCursor<BackupRecord>(tx.objectStore(Stores.backups).index('by-created'), (row) => {
@@ -550,7 +627,7 @@ export const BackupsDAO = {
   },
 
   async get(id: string): Promise<BackupRecord | null> {
-    await openScriptDB();
+    await openBackupsDB();
     return withTransaction(Stores.backups, 'readonly', async (tx) => {
       const row = await reqToPromise(
         tx.objectStore(Stores.backups).get(id) as IDBRequest<BackupRecord | undefined>,
@@ -560,14 +637,14 @@ export const BackupsDAO = {
   },
 
   async put(record: BackupRecord): Promise<void> {
-    await openScriptDB();
+    await openBackupsDB();
     await withTransaction(Stores.backups, 'readwrite', async (tx) => {
       await reqToPromise(tx.objectStore(Stores.backups).put(record));
     });
   },
 
   async delete(id: string): Promise<void> {
-    await openScriptDB();
+    await openBackupsDB();
     await withTransaction(Stores.backups, 'readwrite', async (tx) => {
       await reqToPromise(tx.objectStore(Stores.backups).delete(id));
     });

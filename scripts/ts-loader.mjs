@@ -8,7 +8,7 @@
 // `resolve` returning `null`). Does not chase node_modules — only source
 // files under the repo are transpiled.
 
-import { readFile } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { transform } from 'esbuild';
 
@@ -20,6 +20,19 @@ export async function resolve(specifier, context, nextResolve) {
   if (TS_EXTENSIONS.test(specifier) || TSX_EXTENSIONS.test(specifier)) {
     const base = context.parentURL ? new URL(specifier, context.parentURL) : new URL(specifier);
     return { url: base.href, shortCircuit: true, format: 'module' };
+  }
+  if (
+    context.parentURL &&
+    (specifier.startsWith('./') || specifier.startsWith('../')) &&
+    !/\.[cm]?[jt]sx?$/.test(specifier)
+  ) {
+    const tsCandidate = new URL(`${specifier}.ts`, context.parentURL);
+    try {
+      await access(fileURLToPath(tsCandidate));
+      return { url: tsCandidate.href, shortCircuit: true, format: 'module' };
+    } catch {
+      // Fall through to Node's resolver.
+    }
   }
   return nextResolve(specifier, context);
 }

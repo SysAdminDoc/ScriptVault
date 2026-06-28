@@ -249,6 +249,7 @@ export const TS_RUNTIME_MODULES = [
       'ScriptStorage',
       'LocalWorkspaceBindings',
       'ScriptValues',
+      'BackupsDAO',
       'TabStorage',
       'FolderStorage',
       '_openTabTrackers',
