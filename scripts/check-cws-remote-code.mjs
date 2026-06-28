@@ -322,13 +322,13 @@ function checkDocumentation(projectRoot) {
     });
   }
 
-  const ci = readFileSync(join(projectRoot, '.github/workflows/ci.yml'), 'utf8');
-  if (!ci.includes('npm run cws:remote-code:check')) {
+  const runbook = readFileSync(join(projectRoot, 'docs/release-runbook.md'), 'utf8');
+  if (!runbook.includes('npm run cws:remote-code:check')) {
     failures.push({
-      ruleId: 'ci-step-missing',
-      path: '.github/workflows/ci.yml',
+      ruleId: 'runbook-step-missing',
+      path: 'docs/release-runbook.md',
       line: 1,
-      message: 'CI does not run npm run cws:remote-code:check',
+      message: 'release runbook does not run npm run cws:remote-code:check',
       excerpt: 'npm run cws:remote-code:check',
     });
   }

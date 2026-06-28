@@ -36,11 +36,10 @@ export function analyzeToolchainContract({ rootDir = process.cwd() } = {}) {
   const nodeVersionPath = resolve(rootDir, '.node-version');
   const nvmrcPath = resolve(rootDir, '.nvmrc');
   const npmrcPath = resolve(rootDir, '.npmrc');
-  const ciPath = resolve(rootDir, '.github/workflows/ci.yml');
   const contributingPath = resolve(rootDir, 'CONTRIBUTING.md');
   const runbookPath = resolve(rootDir, 'docs/release-runbook.md');
 
-  for (const path of [packageJsonPath, packageLockPath, nodeVersionPath, nvmrcPath, npmrcPath, ciPath]) {
+  for (const path of [packageJsonPath, packageLockPath, nodeVersionPath, nvmrcPath, npmrcPath]) {
     if (!existsSync(path)) {
       errors.push(`Missing required toolchain file: ${path}`);
     }
@@ -53,7 +52,6 @@ export function analyzeToolchainContract({ rootDir = process.cwd() } = {}) {
   const packageJson = readJson(packageJsonPath);
   const packageLock = readJson(packageLockPath);
   const rootPackage = packageLock.packages?.[''] || {};
-  const ci = readText(ciPath);
   const npmrc = readText(npmrcPath);
   const contributing = existsSync(contributingPath) ? readText(contributingPath) : '';
   const runbook = existsSync(runbookPath) ? readText(runbookPath) : '';
@@ -66,7 +64,6 @@ export function analyzeToolchainContract({ rootDir = process.cwd() } = {}) {
   assertEqual(errors, 'package-lock engines.node', rootPackage.engines?.node, NODE_ENGINE);
   assertEqual(errors, 'package-lock engines.npm', rootPackage.engines?.npm, NPM_ENGINE);
   assertContains(errors, '.npmrc', npmrc, 'engine-strict=true');
-  assertContains(errors, '.github/workflows/ci.yml', ci, 'node-version-file: .node-version');
   assertContains(errors, 'CONTRIBUTING.md', contributing, `Node.js version in \`.node-version\` (currently ${NODE_VERSION})`);
   assertContains(errors, 'docs/release-runbook.md', runbook, `Node ${NODE_VERSION}+ / npm ${NPM_VERSION}+`);
 

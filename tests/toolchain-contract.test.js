@@ -11,19 +11,15 @@ import {
 const ROOT = process.cwd();
 const SCRIPT = resolve(ROOT, 'scripts/check-toolchain-contract.mjs');
 
-function makeFixture({ nodeVersion = '24.16.0', ciNodeVersionFile = true } = {}) {
+function makeFixture({ nodeVersion = '24.16.0', runbookNodeVersion = '24.16.0' } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'scriptvault-toolchain-'));
-  mkdirSync(resolve(root, '.github/workflows'), { recursive: true });
   mkdirSync(resolve(root, 'docs'), { recursive: true });
 
   writeFileSync(resolve(root, '.node-version'), `${nodeVersion}\n`);
   writeFileSync(resolve(root, '.nvmrc'), `${nodeVersion}\n`);
   writeFileSync(resolve(root, '.npmrc'), 'engine-strict=true\n');
-  writeFileSync(resolve(root, '.github/workflows/ci.yml'), ciNodeVersionFile
-    ? 'with:\n  node-version-file: .node-version\n'
-    : 'with:\n  node-version: 20\n');
   writeFileSync(resolve(root, 'CONTRIBUTING.md'), 'Install the Node.js version in `.node-version` (currently 24.16.0) with npm 11.13.0 or newer.\n');
-  writeFileSync(resolve(root, 'docs/release-runbook.md'), 'ScriptVault itself requires Node 24.16.0+ / npm 11.13.0+.\n');
+  writeFileSync(resolve(root, 'docs/release-runbook.md'), `ScriptVault itself requires Node ${runbookNodeVersion}+ / npm 11.13.0+.\n`);
   writeFileSync(resolve(root, 'package.json'), JSON.stringify({
     packageManager: 'npm@11.13.0',
     engines: {
@@ -61,11 +57,11 @@ describe('toolchain contract gate', () => {
     expect(report.errors).toContain('.nvmrc: expected 24.16.0, got 22.0.0');
   });
 
-  it('detects CI falling back to a literal setup-node version', () => {
-    const report = analyzeToolchainContract({ rootDir: makeFixture({ ciNodeVersionFile: false }) });
+  it('detects release runbook toolchain drift', () => {
+    const report = analyzeToolchainContract({ rootDir: makeFixture({ runbookNodeVersion: '22.0.0' }) });
 
     expect(report.ok).toBe(false);
-    expect(report.errors).toContain('.github/workflows/ci.yml: missing node-version-file: .node-version');
+    expect(report.errors).toContain('docs/release-runbook.md: missing Node 24.16.0+ / npm 11.13.0+');
   });
 
   it('returns a non-zero CLI exit code when the repository contract drifts', () => {

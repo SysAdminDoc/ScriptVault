@@ -80,11 +80,11 @@ describe('CWS remote-code scanner', () => {
     expect(result.scannedCount).toBeGreaterThan(20);
   });
 
-  it('wires package and CI commands', () => {
+  it('wires package and local release commands', () => {
     const packageJson = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf8'));
-    const ci = readFileSync(resolve(ROOT, '.github/workflows/ci.yml'), 'utf8');
+    const runbook = readFileSync(resolve(ROOT, 'docs/release-runbook.md'), 'utf8');
     expect(packageJson.scripts['cws:remote-code:check']).toBe('node scripts/check-cws-remote-code.mjs');
-    expect(ci).toContain('npm run cws:remote-code:check');
-    expect(ci).toContain('--target ScriptVault-v${{ steps.package.outputs.version }}.zip');
+    expect(runbook).toContain('npm run cws:remote-code:check');
+    expect(runbook).toContain('npm run cws:remote-code:check -- --target ScriptVault-vX.Y.Z.zip');
   });
 });

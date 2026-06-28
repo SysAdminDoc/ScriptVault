@@ -175,10 +175,10 @@ async function main() {
       chromeCompatibilityReviewed: true,
       updateUrlRemoved: !Object.prototype.hasOwnProperty.call(transformResult.manifest, 'update_url'),
       unsupportedApiReview: 'No Edge-specific unsupported APIs identified by the current manifest/package transform; API support remains reviewed through docs/edge-submission.md.',
-      packageAutomation: 'Local and CI package generation is automated by npm run build:edge:check.',
+      packageAutomation: 'Local package generation is automated by npm run build:edge:check.',
       initialPublication: 'Manual Partner Center upload remains required until a live Edge Add-ons listing exists.',
       updateAutomation: 'Microsoft Edge Add-ons REST update automation is deferred until listing identifiers and publisher credentials are provisioned.',
-      browserSmoke: 'Dedicated local Edge sideload smoke is wired via npm run smoke:edge; CI still keeps Edge at package-ready unless a maintainer runs that command on Microsoft Edge.',
+      browserSmoke: 'Dedicated local Edge sideload smoke is wired via npm run smoke:edge; release readiness requires a maintainer to run that command on Microsoft Edge.',
       browserSmokeCommand: 'npm run smoke:edge',
       browserSmokeEvidence: `edge-artifacts/edge-smoke-${version}.json`
     },

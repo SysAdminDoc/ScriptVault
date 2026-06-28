@@ -87,7 +87,7 @@ function edgeBuildSummary(version) {
     packageCommand: report.packageCommand || 'npm run build:edge:check',
     browserSmoke: smokePassed
       ? `Dedicated local Edge sideload smoke passed on ${smoke.edgeVersion || 'Microsoft Edge'}; dashboard, popup, userScripts toggle, save/toggle, and local target execution were verified`
-      : report.edgeReadiness?.browserSmoke || 'No dedicated Edge browser smoke is wired in CI.',
+      : report.edgeReadiness?.browserSmoke || 'No dedicated Edge browser smoke evidence is present.',
     browserSmokeCommand: report.edgeReadiness?.browserSmokeCommand || null,
     browserSmokeEvidence: smokePassed ? smoke.path : report.edgeReadiness?.browserSmokeEvidence || null,
     browserSmokePassed: smokePassed,
@@ -143,18 +143,18 @@ function matrixMarkdown(date) {
 
   const edgeLastVerification = edgeEvidence.browserSmokePassed
     ? `${edgeEvidence.browserSmokeGeneratedAt?.slice(0, 10) || date} Edge sideload smoke passed; package/report generated`
-    : `${date} generated package/report; local Edge smoke command is available but not CI-gated`;
+    : `${date} generated package/report; local Edge smoke command is available but has no current evidence`;
 
   return `<!-- SCRIPT_VAULT_BROWSER_SUPPORT_MATRIX:START -->
 _Last generated: ${date} with \`npm run support:matrix\`. Version source: \`manifest.json\` / \`manifest-firefox.json\` ${version}._
 
 | Browser | Support level | Tested version / target | Last successful verification | Verification evidence | Unsupported or deferred APIs |
 |---|---|---|---|---|---|
-| Chrome / Chromium | Tier 1 published target | Chrome ${chromeMin}+ MV3 | ${date} | \`npm run smoke:dashboard\`, \`npm run cws:check\`, Chrome ZIP packaging in CI | Chrome 138+ requires per-extension Allow User Scripts; current-site recovery uses Chrome 133+ \`permissions.addHostAccessRequest\` when available and falls back to \`permissions.request({ origins })\`; per-script \`worldId\` is Chrome 133+ and feature-gated |
-| Microsoft Edge | Tier 1 compatible package; Partner Center publication manual | Edge ${chromeMin}+ Chromium MV3 package | ${edgeLastVerification} | \`${edgeEvidence.packageCommand}\`, \`${edgeEvidence.artifact}\`, \`${edgeEvidence.reportPath}\`${edgeEvidence.browserSmokeCommand ? `, \`${edgeEvidence.browserSmokeCommand}\`` : ''}${edgeEvidence.browserSmokeEvidence ? `, \`${edgeEvidence.browserSmokeEvidence}\`` : ''}; CI uploads \`edge-artifacts/*\` | ${trimSentence(edgeEvidence.initialPublication)}; ${trimSentence(edgeEvidence.updateAutomation)}; ${trimSentence(edgeEvidence.browserSmoke)} |
+| Chrome / Chromium | Tier 1 published target | Chrome ${chromeMin}+ MV3 | ${date} | \`npm run smoke:dashboard\`, \`npm run cws:check\`, local Chrome ZIP packaging with \`npm run build:prod\` then \`bash build.sh\` | Chrome 138+ requires per-extension Allow User Scripts; current-site recovery uses Chrome 133+ \`permissions.addHostAccessRequest\` when available and falls back to \`permissions.request({ origins })\`; per-script \`worldId\` is Chrome 133+ and feature-gated |
+| Microsoft Edge | Tier 1 compatible package; Partner Center publication manual | Edge ${chromeMin}+ Chromium MV3 package | ${edgeLastVerification} | \`${edgeEvidence.packageCommand}\`, \`${edgeEvidence.artifact}\`, \`${edgeEvidence.reportPath}\`${edgeEvidence.browserSmokeCommand ? `, \`${edgeEvidence.browserSmokeCommand}\`` : ''}${edgeEvidence.browserSmokeEvidence ? `, \`${edgeEvidence.browserSmokeEvidence}\`` : ''}; local release attaches \`edge-artifacts/*\` manually | ${trimSentence(edgeEvidence.initialPublication)}; ${trimSentence(edgeEvidence.updateAutomation)}; ${trimSentence(edgeEvidence.browserSmoke)} |
 | Firefox Desktop | AMO validation target, not a published listing | Firefox ${firefoxMin}+ MV3 | ${date} | ${firefoxEvidence} | \`sidePanel\`, \`offscreen\`, \`identity\` OAuth, and some \`userScripts.execute\` flows are unsupported/deferred; host grant/revoke diagnostics listen to permissions events; Firefox package omits Monaco until the Firefox editor-loading pass |
 ${firefoxAndroidRow}
-| Brave / Vivaldi / Opera / Arc | Chromium derivative watchlist | Chrome ${chromeMin}+ package may load | Not release-verified | No CI smoke or store package for these browsers | Store policy, shields/sidebar behavior, and extension UI chrome are unverified |
+| Brave / Vivaldi / Opera / Arc | Chromium derivative watchlist | Chrome ${chromeMin}+ package may load | Not release-verified | No local smoke or store package for these browsers | Store policy, shields/sidebar behavior, and extension UI chrome are unverified |
 | Orion / Safari | Not supported | Not a current target | Not verified | No build, smoke, or package path | Requires separate WebKit/Orion validation and likely native Safari extension work |
 <!-- SCRIPT_VAULT_BROWSER_SUPPORT_MATRIX:END -->`;
 }

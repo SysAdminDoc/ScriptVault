@@ -554,15 +554,6 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 
 ## Research-Driven Additions
 
-### P0
-
-- [ ] P0 - Remove resurrected remote CI surface
-  Why: The repo has `.github/workflows/ci.yml` again despite the local-build/no-GitHub-Actions policy and the recent `cef8dec` removal commit.
-  Evidence: `.github/workflows/ci.yml`; `package.json` `actions:pins:check`; `RESEARCH.md` 2026-06-28 security/process assessment.
-  Touches: `.github/workflows/ci.yml`, `package.json`, `scripts/check-github-actions-pins.mjs`, `tests/*actions*`, `docs/release-runbook.md`, `FIREFOX-PORT.md`.
-  Acceptance: No `.github/workflows/` files remain, `npm run check` no longer calls an actions-pin gate, docs describe local artifact builds only, and tests cover the no-workflows invariant locally.
-  Complexity: S
-
 ### P1
 
 - [ ] P1 - Make public release verification deterministic without GitHub CLI auth
@@ -586,11 +577,4 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
   Evidence: `npm outdated --long` reports `@playwright/test` 1.60.0 -> 1.61.1, `chrome-types` 0.1.425 -> 0.1.431, `chrome-webstore-upload-cli` 4.0.0 -> 4.0.1, `jsdom` 29.0.1 -> 29.1.1, and `typescript` 6.0.2 -> 6.0.3.
   Touches: `package.json`, `package-lock.json`, Playwright smoke helpers, typecheck/test tooling.
   Acceptance: Lockfile is refreshed, `npm run toolchain:check`, `npm run typecheck`, `npm test`, and the relevant Playwright/Firefox smoke checks pass with the updated dependency set.
-  Complexity: S
-
-- [ ] P2 - Align release and Firefox docs with local-only build policy
-  Why: `FIREFOX-PORT.md` still describes a CI matrix while project policy and repo practice require local builds and direct artifact upload.
-  Evidence: `FIREFOX-PORT.md` Phase 6 CI matrix item; `.github/workflows/ci.yml`; shared no-GitHub-Actions memory.
-  Touches: `FIREFOX-PORT.md`, `docs/cross-browser-pipeline.md`, `docs/release-runbook.md`, `README.md`.
-  Acceptance: Public/internal docs consistently describe local Chrome/Firefox/Edge artifact creation, no remote runner requirement remains except platform-required exceptions, and doc checks pass.
   Complexity: S

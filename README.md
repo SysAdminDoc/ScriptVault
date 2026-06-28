@@ -349,15 +349,15 @@ Artifacts are written to `firefox-artifacts/`: the Firefox package ZIP, a source
 ## Browser Support Matrix
 
 <!-- SCRIPT_VAULT_BROWSER_SUPPORT_MATRIX:START -->
-_Last generated: 2026-06-11 with `npm run support:matrix`. Version source: `manifest.json` / `manifest-firefox.json` 3.11.0._
+_Last generated: 2026-06-28 with `npm run support:matrix`. Version source: `manifest.json` / `manifest-firefox.json` 3.11.0._
 
 | Browser | Support level | Tested version / target | Last successful verification | Verification evidence | Unsupported or deferred APIs |
 |---|---|---|---|---|---|
-| Chrome / Chromium | Tier 1 published target | Chrome 130+ MV3 | 2026-06-11 | `npm run smoke:dashboard`, `npm run cws:check`, Chrome ZIP packaging in CI | Chrome 138+ requires per-extension Allow User Scripts; current-site recovery uses Chrome 133+ `permissions.addHostAccessRequest` when available and falls back to `permissions.request({ origins })`; per-script `worldId` is Chrome 133+ and feature-gated |
-| Microsoft Edge | Tier 1 compatible package; Partner Center publication manual | Edge 130+ Chromium MV3 package | 2026-06-06 Edge sideload smoke passed; package/report generated | `npm run build:edge:check`, `edge-artifacts/scriptvault-edge-v3.11.0.zip`, `edge-artifacts/edge-build-3.11.0.json`, `npm run smoke:edge`, `docs/audit/edge-smoke-3.11.0.json`; CI uploads `edge-artifacts/*` | Manual Partner Center upload remains required until a live Edge Add-ons listing exists; Microsoft Edge Add-ons REST update automation is deferred until listing identifiers and publisher credentials are provisioned; Dedicated local Edge sideload smoke passed on Edg/146.0.3856.97; dashboard, popup, userScripts toggle, save/toggle, and local target execution were verified |
-| Firefox Desktop | AMO validation target, not a published listing | Firefox 140.0+ MV3 | 2026-06-11 | `npm run firefox:package`, `npm run smoke:firefox`; web-ext lint 0 errors / 0 notices / 147 warnings | `sidePanel`, `offscreen`, `identity` OAuth, and some `userScripts.execute` flows are unsupported/deferred; host grant/revoke diagnostics listen to permissions events; Firefox package omits Monaco until the Firefox editor-loading pass |
-| Firefox for Android | Deferred; not an AMO compatibility target | No current `gecko_android` manifest target | 2026-06-11 | `manifest-firefox.json` intentionally omits `gecko_android` until an Android smoke gate exists | Android UI/runtime, extension-action overlay, host-permission, import/export, and WebDAV paths are unverified |
-| Brave / Vivaldi / Opera / Arc | Chromium derivative watchlist | Chrome 130+ package may load | Not release-verified | No CI smoke or store package for these browsers | Store policy, shields/sidebar behavior, and extension UI chrome are unverified |
+| Chrome / Chromium | Tier 1 published target | Chrome 130+ MV3 | 2026-06-28 | `npm run smoke:dashboard`, `npm run cws:check`, local Chrome ZIP packaging with `npm run build:prod` then `bash build.sh` | Chrome 138+ requires per-extension Allow User Scripts; current-site recovery uses Chrome 133+ `permissions.addHostAccessRequest` when available and falls back to `permissions.request({ origins })`; per-script `worldId` is Chrome 133+ and feature-gated |
+| Microsoft Edge | Tier 1 compatible package; Partner Center publication manual | Edge 130+ Chromium MV3 package | 2026-06-06 Edge sideload smoke passed; package/report generated | `npm run build:edge:check`, `edge-artifacts/scriptvault-edge-v3.11.0.zip`, `edge-artifacts/edge-build-3.11.0.json`, `npm run smoke:edge`, `docs/audit/edge-smoke-3.11.0.json`; local release attaches `edge-artifacts/*` manually | Manual Partner Center upload remains required until a live Edge Add-ons listing exists; Microsoft Edge Add-ons REST update automation is deferred until listing identifiers and publisher credentials are provisioned; Dedicated local Edge sideload smoke passed on Edg/146.0.3856.97; dashboard, popup, userScripts toggle, save/toggle, and local target execution were verified |
+| Firefox Desktop | AMO validation target, not a published listing | Firefox 140.0+ MV3 | 2026-06-28 | `npm run firefox:package`, `npm run smoke:firefox`; web-ext lint 0 errors / 0 notices / 148 warnings | `sidePanel`, `offscreen`, `identity` OAuth, and some `userScripts.execute` flows are unsupported/deferred; host grant/revoke diagnostics listen to permissions events; Firefox package omits Monaco until the Firefox editor-loading pass |
+| Firefox for Android | Deferred; not an AMO compatibility target | No current `gecko_android` manifest target | 2026-06-28 | `manifest-firefox.json` intentionally omits `gecko_android` until an Android smoke gate exists | Android UI/runtime, extension-action overlay, host-permission, import/export, and WebDAV paths are unverified |
+| Brave / Vivaldi / Opera / Arc | Chromium derivative watchlist | Chrome 130+ package may load | Not release-verified | No local smoke or store package for these browsers | Store policy, shields/sidebar behavior, and extension UI chrome are unverified |
 | Orion / Safari | Not supported | Not a current target | Not verified | No build, smoke, or package path | Requires separate WebKit/Orion validation and likely native Safari extension work |
 <!-- SCRIPT_VAULT_BROWSER_SUPPORT_MATRIX:END -->
 
@@ -374,7 +374,7 @@ npm run store-copy:check
 npm run cws:remote-code:check
 ```
 
-These checks compare `manifest.json` and `manifest-firefox.json` against the privacy policy, store copy, release runbook, package scripts, CI, and the CWS remote-code scanner so a new permission or remote-code-capable path cannot ship without matching reviewer evidence.
+These checks compare `manifest.json` and `manifest-firefox.json` against the privacy policy, store copy, release runbook, package scripts, local release gates, and the CWS remote-code scanner so a new permission or remote-code-capable path cannot ship without matching reviewer evidence.
 
 ---
 

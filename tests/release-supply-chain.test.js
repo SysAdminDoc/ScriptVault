@@ -8,7 +8,7 @@ const packageLock = JSON.parse(readFileSync(resolve(process.cwd(), 'package-lock
 const cwsCheck = readFileSync(resolve(process.cwd(), 'scripts/check-cws-publish-tooling.mjs'), 'utf8');
 const releaseCheck = readFileSync(resolve(process.cwd(), 'scripts/check-release-artifacts.mjs'), 'utf8');
 const reproducibleBuildCheck = readFileSync(resolve(process.cwd(), 'scripts/check-reproducible-build.mjs'), 'utf8');
-const ciWorkflow = readFileSync(resolve(process.cwd(), '.github/workflows/ci.yml'), 'utf8');
+const releaseRunbook = readFileSync(resolve(process.cwd(), 'docs/release-runbook.md'), 'utf8');
 
 function makeTagVerifierFailure(stderr) {
   const error = new Error('git tag verification failed');
@@ -49,7 +49,7 @@ describe('release supply-chain gates', () => {
 
   it('wires an independently runnable reproducible Chrome ZIP check', () => {
     expect(packageJson.scripts['release:reproducible-build:check']).toBe('node scripts/check-reproducible-build.mjs');
-    expect(ciWorkflow).toContain('npm run release:reproducible-build:check');
+    expect(releaseRunbook).toContain('npm run release:reproducible-build:check');
     expect(reproducibleBuildCheck).toContain("comparison: 'normalized-zip-entry-sha256'");
     expect(reproducibleBuildCheck).toContain("['scripts/run-bash.mjs', 'build.sh']");
     expect(reproducibleBuildCheck).toContain('zipContentDigest(backupPath)');

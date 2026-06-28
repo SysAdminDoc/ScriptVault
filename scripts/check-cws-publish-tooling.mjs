@@ -199,18 +199,15 @@ for (const staleEndpoint of [
   }
 }
 
-const ci = readText('.github/workflows/ci.yml');
-const auditStep = ci.match(/- name: npm audit \(high\+ severity\)[\s\S]*?(?=\n      - name: |\n$)/);
-if (!auditStep) {
-  fail('.github/workflows/ci.yml is missing the high+ npm audit step');
-} else if (/continue-on-error:\s*true/.test(auditStep[0])) {
-  fail('.github/workflows/ci.yml marks the high+ npm audit step continue-on-error');
+const highAuditCommand = 'npm audit --audit-level=high --omit=optional';
+if (!runbook.includes(highAuditCommand)) {
+  fail(`docs/release-runbook.md is missing the high+ dependency audit gate: ${highAuditCommand}`);
 }
-if (!ci.includes('npm run cws:check')) {
-  fail('.github/workflows/ci.yml does not run npm run cws:check');
+if (!runbook.includes('npm run cws:check')) {
+  fail('docs/release-runbook.md does not run npm run cws:check');
 }
-if (!ci.includes('npm run release:check')) {
-  fail('.github/workflows/ci.yml does not run npm run release:check');
+if (!runbook.includes('npm run release:check')) {
+  fail('docs/release-runbook.md does not run npm run release:check');
 }
 
 if (failures.length > 0) {

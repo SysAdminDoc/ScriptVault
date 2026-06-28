@@ -79,7 +79,7 @@ describe('CRA SBOM gate', () => {
     expect(report.failures).toContain('Direct dependency acorn must include license');
   });
 
-  it('keeps the release trust generator and CI wired to the CRA SBOM check', () => {
+  it('keeps the release trust generator and local release runbook wired to the CRA SBOM check', () => {
     const pkg = JSON.parse(read('package.json'));
     expect(pkg.license).toBe('MIT');
     expect(pkg.repository?.url).toBe('https://github.com/SysAdminDoc/ScriptVault.git');
@@ -91,8 +91,8 @@ describe('CRA SBOM gate', () => {
     expect(releaseTrust).toContain("'bom-ref': purl");
     expect(releaseTrust).toContain('dependencies,');
 
-    const ci = read('.github/workflows/ci.yml');
-    expect(ci).toContain('npm run release:trust');
-    expect(ci).toContain('npm run release:trust:cra');
+    const runbook = read('docs/release-runbook.md');
+    expect(runbook).toContain('npm run release:trust');
+    expect(runbook).toContain('npm run release:trust:cra');
   });
 });

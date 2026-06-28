@@ -174,11 +174,6 @@ if (packageJson.scripts?.['store-copy:check'] !== 'node scripts/check-permission
   failures.push('package.json is missing script "store-copy:check": "node scripts/check-permission-copy.mjs"');
 }
 
-const ci = readText('.github/workflows/ci.yml');
-if (!ci.includes('npm run store-copy:check')) {
-  failures.push('.github/workflows/ci.yml does not run npm run store-copy:check');
-}
-
 if (failures.length > 0) {
   console.error('Permission/store copy check failed:');
   for (const failure of failures) console.error(`- ${failure}`);

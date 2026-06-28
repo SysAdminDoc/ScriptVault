@@ -56,7 +56,6 @@ function requireText(result, label, text, needle) {
 
 function checkReleaseWiring(rootDir, result) {
   const pkg = readJson(rootDir, 'package.json');
-  const ci = readText(rootDir, '.github/workflows/ci.yml');
   const runbook = readText(rootDir, 'docs/release-runbook.md');
 
   for (const script of [
@@ -77,7 +76,6 @@ function checkReleaseWiring(rootDir, result) {
     'npm run release:store-status',
     'npm run firefox:package',
   ]) {
-    requireText(result, '.github/workflows/ci.yml', ci, command);
     requireText(result, 'docs/release-runbook.md', runbook, command);
   }
 

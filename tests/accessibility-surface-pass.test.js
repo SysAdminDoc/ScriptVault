@@ -15,7 +15,6 @@ const devtoolsHtml = readFileSync(resolve(process.cwd(), "pages/devtools-panel.h
 const installHtml = readFileSync(resolve(process.cwd(), "pages/install.html"), "utf8");
 const installJs = readFileSync(resolve(process.cwd(), "pages/install.js"), "utf8");
 const packageJson = JSON.parse(readFileSync(resolve(process.cwd(), "package.json"), "utf8"));
-const ciWorkflow = readFileSync(resolve(process.cwd(), ".github/workflows/ci.yml"), "utf8");
 
 function expectForcedColorsSurface(source) {
   expect(source).toContain("@media (forced-colors: active)");
@@ -60,7 +59,7 @@ describe("accessibility surface pass", () => {
     expect(packageJson.scripts["test:a11y"]).toContain("tests/popup-a11y.test.js");
     expect(packageJson.scripts["test:a11y"]).toContain("tests/gui-ux-audit.test.js");
     expect(packageJson.scripts["test:a11y"]).toContain("tests/accessibility-surface-pass.test.js");
-    expect(ciWorkflow).toContain("npm run readability:check");
+    expect(packageJson.scripts.check).toContain("node scripts/check-readability.mjs --check");
   });
 
   test("plain-language audit keeps setup and install copy readable", () => {

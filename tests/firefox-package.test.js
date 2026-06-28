@@ -6,7 +6,6 @@ const packageJson = JSON.parse(readFileSync(resolve(process.cwd(), 'package.json
 const buildFirefox = readFileSync(resolve(process.cwd(), 'build-firefox.sh'), 'utf8');
 const runBash = readFileSync(resolve(process.cwd(), 'scripts/run-bash.mjs'), 'utf8');
 const firefoxSmoke = readFileSync(resolve(process.cwd(), 'scripts/smoke-firefox-sideload.mjs'), 'utf8');
-const ciWorkflow = readFileSync(resolve(process.cwd(), '.github/workflows/ci.yml'), 'utf8');
 const backgroundCore = readFileSync(resolve(process.cwd(), 'background.core.js'), 'utf8');
 const registrationTs = readFileSync(resolve(process.cwd(), 'src/background/registration.ts'), 'utf8');
 const dashboardHtml = readFileSync(resolve(process.cwd(), 'pages/dashboard.html'), 'utf8');
@@ -65,8 +64,7 @@ describe('Firefox AMO validation gate', () => {
     expect(buildFirefox).toContain('lib/acorn.min.js');
     expect(buildFirefox).toContain('lib/diff.min.js');
     expect(buildFirefox).not.toMatch(/^\s+lib\s*$/m);
-    expect(ciWorkflow).toContain('npm run firefox:package');
-    expect(ciWorkflow).toContain('scriptvault-firefox-package');
+    expect(packageJson.scripts.check).toContain('npm run local-build-policy:check');
   });
 
   it('automates temporary Firefox sideload smoke through geckodriver', () => {
