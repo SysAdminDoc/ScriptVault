@@ -9,8 +9,8 @@ const projectRoot = resolve(scriptDir, '..');
 const failures = [];
 const warnings = [];
 const CWS_CLI_PACKAGE_NAME = 'chrome-webstore-upload-cli';
-const REQUIRED_CWS_CLI_VERSION = '4.0.0';
-const REQUIRED_CWS_CLI_INTEGRITY = 'sha512-6MjMTLeGswORVNMS/Wa40s0HHWJdQG7MX1hVRzpg5RaqyjoFWp/tdqgHANTcwSPftT9HVOZOibKvd+k2XOvQCg==';
+const REQUIRED_CWS_CLI_VERSION = '4.0.1';
+const REQUIRED_CWS_CLI_INTEGRITY = 'sha512-UGmvbEGTqNCD+W9HDEoYnZwrbp++v5WcIyVVZWxK7AxFMfxtZF/yiNtxWCcAetNg4z0m/CNhf+Qt3b0aitDEWw==';
 
 function readText(path) {
   return readFileSync(join(projectRoot, path), 'utf8');

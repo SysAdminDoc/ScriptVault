@@ -553,12 +553,3 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 | RD26-10 | W3C WebExtensions WG draft charter | https://w3c.github.io/charter-drafts/2025/webextensions-wg.html |
 
 ## Research-Driven Additions
-
-### P2
-
-- [ ] P2 - Refresh patch-level dev dependency drift
-  Why: Current dependency drift is routine but should be cleared before the next release artifact pass.
-  Evidence: `npm outdated --long` reports `@playwright/test` 1.60.0 -> 1.61.1, `chrome-types` 0.1.425 -> 0.1.431, `chrome-webstore-upload-cli` 4.0.0 -> 4.0.1, `jsdom` 29.0.1 -> 29.1.1, and `typescript` 6.0.2 -> 6.0.3.
-  Touches: `package.json`, `package-lock.json`, Playwright smoke helpers, typecheck/test tooling.
-  Acceptance: Lockfile is refreshed, `npm run toolchain:check`, `npm run typecheck`, `npm test`, and the relevant Playwright/Firefox smoke checks pass with the updated dependency set.
-  Complexity: S

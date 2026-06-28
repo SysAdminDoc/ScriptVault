@@ -41,14 +41,14 @@ describe('release supply-chain gates', () => {
     const lockRoot = packageLock.packages[''].devDependencies['chrome-webstore-upload-cli'];
     const lockPackage = packageLock.packages['node_modules/chrome-webstore-upload-cli'];
 
-    expect(packageJson.devDependencies['chrome-webstore-upload-cli']).toBe('4.0.0');
-    expect(lockRoot).toBe('4.0.0');
-    expect(lockPackage.version).toBe('4.0.0');
-    expect(lockPackage.integrity).toBe('sha512-6MjMTLeGswORVNMS/Wa40s0HHWJdQG7MX1hVRzpg5RaqyjoFWp/tdqgHANTcwSPftT9HVOZOibKvd+k2XOvQCg==');
+    expect(packageJson.devDependencies['chrome-webstore-upload-cli']).toBe('4.0.1');
+    expect(lockRoot).toBe('4.0.1');
+    expect(lockPackage.version).toBe('4.0.1');
+    expect(lockPackage.integrity).toBe('sha512-UGmvbEGTqNCD+W9HDEoYnZwrbp++v5WcIyVVZWxK7AxFMfxtZF/yiNtxWCcAetNg4z0m/CNhf+Qt3b0aitDEWw==');
   });
 
   it('keeps CWS tooling checks tied to the exact version and lock integrity', () => {
-    expect(cwsCheck).toContain("const REQUIRED_CWS_CLI_VERSION = '4.0.0'");
+    expect(cwsCheck).toContain("const REQUIRED_CWS_CLI_VERSION = '4.0.1'");
     expect(cwsCheck).toContain('const REQUIRED_CWS_CLI_INTEGRITY =');
     expect(cwsCheck).toContain('expected exact ${REQUIRED_CWS_CLI_VERSION}');
     expect(cwsCheck).toContain('package-lock.json integrity for ${CWS_CLI_PACKAGE_NAME} changed');
