@@ -30,6 +30,7 @@
     "typecheck:preview": "node scripts/check-typescript-preview.mjs",
     "typecheck:preview:report": "node scripts/check-typescript-preview.mjs --report",
     "test": "vitest run",
+    "test:visual": "vitest run --config vitest.visual.config.mjs",
     "test:e2e": "playwright test",
     "test:a11y": "node scripts/check-readability.mjs --check && vitest run tests/dashboard-a11y.test.js tests/popup-a11y.test.js tests/gui-ux-audit.test.js tests/accessibility-surface-pass.test.js",
     "smoke:dashboard": "node scripts/smoke-dashboard.mjs",
@@ -89,7 +90,9 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0",
-    "@vitest/coverage-v8": "^4.1.3",
+    "@vitest/browser": "^4.1.9",
+    "@vitest/browser-playwright": "^4.1.9",
+    "@vitest/coverage-v8": "^4.1.9",
     "acorn": "8.17.0",
     "chrome-types": "^0.1.425",
     "chrome-webstore-upload-cli": "4.0.0",
@@ -100,7 +103,7 @@
     "monaco-editor": "^0.52.0",
     "puppeteer-core": "^25.2.1",
     "typescript": "^6.0.2",
-    "vitest": "^4.1.3",
+    "vitest": "^4.1.9",
     "web-ext": "^10.3.0"
   },
   "overrides": {

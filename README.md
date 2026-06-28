@@ -298,6 +298,7 @@ Deep dashboard content is still being migrated to DOM translation coverage.
 
 #### Quality & Testing
 - **1700+ Vitest Tests** &mdash; Coverage for parser, utilities, storage, update flows, UI modules, accessibility, and security boundaries
+- **Browser visual regression gate** &mdash; `npm run test:visual` runs Vitest Browser Mode in Chromium and checks the dashboard list-view screenshot baseline
 - **JSDoc Type Annotations** &mdash; @ts-check compatible on critical functions
 - **esbuild Build System** &mdash; Modern bundler with minification and source maps
 - **Accessibility (WCAG 2.1 AA)** &mdash; ARIA labels, focus trapping, high contrast, reduced motion
@@ -566,6 +567,7 @@ ScriptVault/
 │   └── fflate.js              # ZIP compression
 ├── images/                    # Extension icons
 ├── tests/e2e/                 # Playwright install/update/restore/sync flows
+├── tests/visual/              # Vitest Browser Mode screenshot baselines
 └── _locales/                  # 8 language translations
 ```
 
