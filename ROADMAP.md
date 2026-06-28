@@ -551,3 +551,46 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 | RD26-08 | Monaco v0.55.1 stable / v0.56-dev | https://github.com/microsoft/monaco-editor/releases |
 | RD26-09 | Vitest CVE-2026-47429 (CVSS 9.8) | https://github.com/advisories/GHSA-5xrq-8626-4rwp |
 | RD26-10 | W3C WebExtensions WG draft charter | https://w3c.github.io/charter-drafts/2025/webextensions-wg.html |
+
+## Research-Driven Additions
+
+### P0
+
+- [ ] P0 - Remove resurrected remote CI surface
+  Why: The repo has `.github/workflows/ci.yml` again despite the local-build/no-GitHub-Actions policy and the recent `cef8dec` removal commit.
+  Evidence: `.github/workflows/ci.yml`; `package.json` `actions:pins:check`; `RESEARCH.md` 2026-06-28 security/process assessment.
+  Touches: `.github/workflows/ci.yml`, `package.json`, `scripts/check-github-actions-pins.mjs`, `tests/*actions*`, `docs/release-runbook.md`, `FIREFOX-PORT.md`.
+  Acceptance: No `.github/workflows/` files remain, `npm run check` no longer calls an actions-pin gate, docs describe local artifact builds only, and tests cover the no-workflows invariant locally.
+  Complexity: S
+
+### P1
+
+- [ ] P1 - Make public release verification deterministic without GitHub CLI auth
+  Why: `npm run release:check:public` currently fails when `gh` auth is invalid or public GitHub API quota is exhausted, which makes local release verification unreliable.
+  Evidence: `npm run release:check:public` failed with HTTP 403 rate limit and unreadable `v3.11.0` release; `gh auth status` reports an invalid token.
+  Touches: `scripts/check-release-artifacts.mjs`, `docs/release-runbook.md`, `package.json`, release artifact tests.
+  Acceptance: Public release checks use unauthenticated/public fallback sources or a clear skipped-auth mode, report unsigned tags separately from network failures, and pass or fail deterministically on a clean machine without valid `gh` auth.
+  Complexity: M
+
+- [ ] P1 - Burn down Firefox AMO lint warning noise before submission
+  Why: The Firefox package has 148 reviewed warnings; lowering the count reduces reviewer friction even though lint errors/notices are already clean.
+  Evidence: `npm run firefox:warnings:report` shows 126 `UNSAFE_VAR_ASSIGNMENT`, 17 `UNSUPPORTED_API`, 3 `DANGEROUS_EVAL`, 1 Android min-version warning, and 1 inline-script warning.
+  Touches: `pages/dashboard.js`, `background.js` generation path, `pages/install.js`, dashboard modules, `scripts/check-firefox-lint-warnings.mjs`, `AMO-SOURCE-README.md`.
+  Acceptance: Warning budget is ratcheted below 100, every remaining warning has reviewer-ready rationale, and `npm run firefox:lint && npm run firefox:warnings:report` passes.
+  Complexity: M
+
+### P2
+
+- [ ] P2 - Refresh patch-level dev dependency drift
+  Why: Current dependency drift is routine but should be cleared before the next release artifact pass.
+  Evidence: `npm outdated --long` reports `@playwright/test` 1.60.0 -> 1.61.1, `chrome-types` 0.1.425 -> 0.1.431, `chrome-webstore-upload-cli` 4.0.0 -> 4.0.1, `jsdom` 29.0.1 -> 29.1.1, and `typescript` 6.0.2 -> 6.0.3.
+  Touches: `package.json`, `package-lock.json`, Playwright smoke helpers, typecheck/test tooling.
+  Acceptance: Lockfile is refreshed, `npm run toolchain:check`, `npm run typecheck`, `npm test`, and the relevant Playwright/Firefox smoke checks pass with the updated dependency set.
+  Complexity: S
+
+- [ ] P2 - Align release and Firefox docs with local-only build policy
+  Why: `FIREFOX-PORT.md` still describes a CI matrix while project policy and repo practice require local builds and direct artifact upload.
+  Evidence: `FIREFOX-PORT.md` Phase 6 CI matrix item; `.github/workflows/ci.yml`; shared no-GitHub-Actions memory.
+  Touches: `FIREFOX-PORT.md`, `docs/cross-browser-pipeline.md`, `docs/release-runbook.md`, `README.md`.
+  Acceptance: Public/internal docs consistently describe local Chrome/Firefox/Edge artifact creation, no remote runner requirement remains except platform-required exceptions, and doc checks pass.
+  Complexity: S
