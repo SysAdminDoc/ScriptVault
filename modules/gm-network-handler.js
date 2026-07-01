@@ -397,6 +397,9 @@ const GMNetworkHandler = (() => {
           const requestId = `ws_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
           const startTime = Date.now();
           const sockets = getGMWebSocketMap();
+          if (sockets.size >= 500) {
+            return { error: "Too many open WebSocket connections (limit: 500)" };
+          }
           let socket;
           try {
             socket = protocols ? new WebSocket(wsUrl, protocols) : new WebSocket(wsUrl);

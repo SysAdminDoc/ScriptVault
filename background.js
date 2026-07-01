@@ -19562,6 +19562,9 @@ const GMNetworkHandler = (() => {
           const requestId = `ws_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
           const startTime = Date.now();
           const sockets = getGMWebSocketMap();
+          if (sockets.size >= 500) {
+            return { error: "Too many open WebSocket connections (limit: 500)" };
+          }
           let socket;
           try {
             socket = protocols ? new WebSocket(wsUrl, protocols) : new WebSocket(wsUrl);
@@ -38098,7 +38101,9 @@ async function handleMessage(message, sender) {
       }
       
       case 'createScript': {
-        // Create a new script - similar to saveScript but always generates new ID
+        if (data.code && data.code.length > MAX_SCRIPT_SIZE) {
+          return { error: `Script too large (${formatBytes(data.code.length)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.` };
+        }
         const parsed = parseUserscript(data.code);
         if (parsed.error) return { error: parsed.error };
         
@@ -38521,39 +38526,37 @@ async function handleMessage(message, sender) {
       }
 
       case 'rollbackScript': {
-        const script = await ScriptStorage.get(data.scriptId);
-        if (!script) return { error: 'Script not found' };
-        if (!script.versionHistory || script.versionHistory.length === 0) {
-          return { error: 'No version history available' };
-        }
-        const targetIdx = data.index !== undefined ? data.index : script.versionHistory.length - 1;
-        const target = script.versionHistory[targetIdx];
-        if (!target) return { error: 'Version not found' };
+        return await _runExclusiveScriptOperation(data.scriptId, async () => {
+          const script = await ScriptStorage.get(data.scriptId);
+          if (!script) return { error: 'Script not found' };
+          if (!script.versionHistory || script.versionHistory.length === 0) {
+            return { error: 'No version history available' };
+          }
+          const targetIdx = data.index !== undefined ? data.index : script.versionHistory.length - 1;
+          const target = script.versionHistory[targetIdx];
+          if (!target) return { error: 'Version not found' };
 
-        const parsed = parseUserscript(target.code);
-        if (parsed.error) return parsed;
+          const parsed = parseUserscript(target.code);
+          if (parsed.error) return parsed;
 
-        // Save current version before rolling back (so user can undo the rollback)
-        script.versionHistory.push({
-          version: script.meta.version,
-          code: script.code,
-          updatedAt: script.updatedAt || Date.now()
+          script.versionHistory.push({
+            version: script.meta.version,
+            code: script.code,
+            updatedAt: script.updatedAt || Date.now()
+          });
+          script.versionHistory.splice(targetIdx, 1);
+          if (script.versionHistory.length > 5) {
+            script.versionHistory = script.versionHistory.slice(-5);
+          }
+
+          script.code = target.code;
+          script.meta = parsed.meta;
+          script.updatedAt = Date.now();
+
+          await ScriptStorage.set(data.scriptId, script);
+          await reregisterScript(script);
+          return { success: true, script: { ...script, metadata: script.meta } };
         });
-        // Remove the target entry we're rolling back to (prevents duplicates)
-        script.versionHistory.splice(targetIdx, 1);
-        // Trim to last 5 versions
-        if (script.versionHistory.length > 5) {
-          script.versionHistory = script.versionHistory.slice(-5);
-        }
-
-        script.code = target.code;
-        script.meta = parsed.meta;
-        script.updatedAt = Date.now();
-
-        await ScriptStorage.set(data.scriptId, script);
-        // Same Chrome 138+ in-place swap behavior as saveScript above.
-        await reregisterScript(script);
-        return { success: true, script: { ...script, metadata: script.meta } };
       }
 
       // Sync
@@ -38827,9 +38830,10 @@ async function handleMessage(message, sender) {
           await ScriptStorage.set(data.scriptId, script);
 
           if ('enabled' in data.settings && script.enabled !== oldEnabled) {
-            await unregisterScript(data.scriptId);
             if (script.enabled) {
-              await registerScript(script);
+              await reregisterScript(script);
+            } else {
+              await unregisterScript(data.scriptId);
             }
             await updateBadge();
             try {
@@ -38851,8 +38855,7 @@ async function handleMessage(message, sender) {
             JSON.stringify(oldSettings[k]) !== JSON.stringify(data.settings[k])
           );
           if (needsReregister && script.enabled !== false) {
-            await unregisterScript(data.scriptId);
-            await registerScript(script);
+            await reregisterScript(script);
           }
 
           return { success: true };
@@ -39025,8 +39028,7 @@ async function handleMessage(message, sender) {
         for (const script of scripts) {
           const newEnabled = profile.scriptStates?.[script.id] ?? script.enabled;
           if (script.enabled !== newEnabled) {
-            script.enabled = newEnabled;
-            updates.push(ScriptStorage.set(script.id, script));
+            updates.push(ScriptStorage.set(script.id, { ...script, enabled: newEnabled }));
           }
         }
         if (updates.length) await Promise.all(updates);
@@ -39865,8 +39867,15 @@ async function handleMessage(message, sender) {
       case 'resetScriptSettings': {
         const script = await ScriptStorage.get(data.scriptId);
         if (!script) return { error: 'Script not found' };
+        const hadExecKeys = script.settings && Object.keys(script.settings).some(k =>
+          ['runAt', 'frameMode', 'userMatches', 'userIncludes', 'userExcludes',
+           'useOriginalMatches', 'useOriginalIncludes', 'useOriginalExcludes',
+           'injectInto', 'userConfig'].includes(k));
         script.settings = {};
         await ScriptStorage.set(data.scriptId, script);
+        if (hadExecKeys && script.enabled) {
+          await reregisterScript(script);
+        }
         return { success: true };
       }
 
