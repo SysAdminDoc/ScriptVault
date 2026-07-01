@@ -31,6 +31,9 @@ INCLUDE=(
   offscreen.html
   offscreen.js
   shared
+  modules/i18n.js
+  modules/script-config.js
+  modules/user-scripts-setup.js
   pages
   images/icon16.png
   images/icon32.png

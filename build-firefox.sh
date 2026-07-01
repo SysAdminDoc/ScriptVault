@@ -70,6 +70,9 @@ INCLUDE=(
   background.js
   content.js
   shared
+  modules/i18n.js
+  modules/script-config.js
+  modules/user-scripts-setup.js
   lib/acorn.min.js
   lib/diff.min.js
   pages

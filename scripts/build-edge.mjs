@@ -41,19 +41,29 @@ const EDGE_DOCS = {
   updateApi: 'https://learn.microsoft.com/en-us/microsoft-edge/extensions/update/api/using-addons-api'
 };
 
-// Files + directories to package. Mirrors build.sh INCLUDE[] for Chrome.
+// Files + directories to package. Mirrors build.sh INCLUDE[] for Chrome —
+// keep the two lists in sync (tests/package-page-assets.test.js gates both).
 const INCLUDE = [
   'background.js',
   'content.js',
   'offscreen.html',
   'offscreen.js',
   'shared',
+  'modules/i18n.js',
+  'modules/script-config.js',
+  'modules/user-scripts-setup.js',
   'pages',
   'images/icon16.png',
   'images/icon32.png',
   'images/icon48.png',
   'images/icon128.png',
-  'lib',
+  'lib/codemirror',
+  'lib/monaco-esm',
+  'lib/acorn.min.js',
+  'lib/diff.min.js',
+  'lib/fflate.js',
+  'lib/scriptvault.d.ts',
+  'managed-storage-schema.json',
   '_locales'
 ];
 
