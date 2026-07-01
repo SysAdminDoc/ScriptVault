@@ -15514,7 +15514,9 @@
         // Handle regex patterns (/regex/)
         if (pattern.startsWith('/') && pattern.endsWith('/')) {
             try {
-                return new RegExp(pattern.slice(1, -1)).test(url);
+                const src = pattern.slice(1, -1);
+                if (src.length > 1000) return false;
+                return new RegExp(src).test(url);
             } catch { return false; }
         }
 

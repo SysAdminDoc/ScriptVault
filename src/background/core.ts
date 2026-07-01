@@ -6827,9 +6827,10 @@ async function handleMessage(message, sender) {
           await ScriptStorage.set(data.scriptId, script);
 
           if ('enabled' in data.settings && script.enabled !== oldEnabled) {
-            await unregisterScript(data.scriptId);
             if (script.enabled) {
-              await registerScript(script);
+              await reregisterScript(script);
+            } else {
+              await unregisterScript(data.scriptId);
             }
             await updateBadge();
             try {
@@ -6851,8 +6852,7 @@ async function handleMessage(message, sender) {
             JSON.stringify(oldSettings[k]) !== JSON.stringify(data.settings[k])
           );
           if (needsReregister && script.enabled !== false) {
-            await unregisterScript(data.scriptId);
-            await registerScript(script);
+            await reregisterScript(script);
           }
 
           return { success: true };
