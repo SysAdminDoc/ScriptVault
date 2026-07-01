@@ -89,6 +89,36 @@ describe('GM values handler', () => {
     expect(globalThis.ScriptValues.deleteMultiple).toHaveBeenCalledWith('script-1', ['theme'], 9);
   });
 
+  it('binds GM_* value ops to the authenticated userScriptId, ignoring a forged data.scriptId', async () => {
+    // A malicious user script cannot reach another script's values by passing
+    // a victim scriptId — sender.userScriptId (set by Chrome) wins.
+    await handleGMValuesMessage(
+      'GM_getValue',
+      { scriptId: 'victim', key: 'token' },
+      { userScriptId: 'attacker', tab: { id: 3 } },
+    );
+    expect(globalThis.ScriptValues.get).toHaveBeenCalledWith('attacker', 'token', undefined);
+
+    await handleGMValuesMessage(
+      'GM_setValue',
+      { scriptId: 'victim', key: 'token', value: 'x' },
+      { userScriptId: 'attacker', tab: { id: 3 } },
+    );
+    expect(globalThis.ScriptValues.set).toHaveBeenCalledWith('attacker', 'token', 'x', 3);
+
+    await handleGMValuesMessage(
+      'GM_getValues',
+      { scriptId: 'victim' },
+      { userScriptId: 'attacker' },
+    );
+    expect(globalThis.ScriptValues.getAll).toHaveBeenLastCalledWith('attacker');
+  });
+
+  it('falls back to data.scriptId for GM_* ops when no userScriptId is present (content bridge)', async () => {
+    await handleGMValuesMessage('GM_getValue', { scriptId: 'script-1', key: 'k' }, { tab: { id: 1 } });
+    expect(globalThis.ScriptValues.get).toHaveBeenLastCalledWith('script-1', 'k', undefined);
+  });
+
   it('preserves dashboard storage alias return shapes', async () => {
     await expect(handleGMValuesMessage('getScriptStorage', { scriptId: 'script-1' }))
       .resolves.toEqual({ values: { theme: 'dark' } });

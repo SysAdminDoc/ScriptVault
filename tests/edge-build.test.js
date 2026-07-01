@@ -9,6 +9,8 @@ const SCRIPT = resolve(process.cwd(), 'scripts/build-edge.mjs');
 const BUILD_DIR = resolve(process.cwd(), 'build-edge');
 const ARTIFACT_DIR = resolve(process.cwd(), 'edge-artifacts');
 const REAL_BUILD_TIMEOUT_MS = 180_000;
+// Derive from the manifest so the fixture survives version bumps.
+const MANIFEST_VERSION = JSON.parse(readFileSync(resolve(process.cwd(), 'manifest.json'), 'utf8')).version;
 
 describe('scripts/build-edge.mjs', () => {
   afterAll(() => {
@@ -39,11 +41,11 @@ describe('scripts/build-edge.mjs', () => {
   });
 
   it('writes a build summary JSON next to the artifact', () => {
-    const reportPath = join(ARTIFACT_DIR, 'edge-build-3.11.0.json');
+    const reportPath = join(ARTIFACT_DIR, `edge-build-${MANIFEST_VERSION}.json`);
     expect(existsSync(reportPath)).toBe(true);
     const report = JSON.parse(readFileSync(reportPath, 'utf8'));
     expect(report.schemaVersion).toBe(2);
-    expect(report.version).toBe('3.11.0');
+    expect(report.version).toBe(MANIFEST_VERSION);
     expect(report.buildDir).toBe('build-edge');
     expect(report.missingFiles).toEqual([]);
     expect(report.edgeReadiness.updateUrlRemoved).toBe(true);

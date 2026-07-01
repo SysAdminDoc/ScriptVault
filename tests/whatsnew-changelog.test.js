@@ -58,7 +58,10 @@ describe('dashboard WhatsNew changelog', () => {
     const dismiss = document.querySelector('#svWnDismiss');
 
     expect(modal?.textContent).toContain(`ScriptVault ${manifest.version}`);
-    expect(modal?.textContent).toContain('Rollback-Safe Storage');
+    // Assert the first highlight of the current entry rather than a fixed
+    // string so the test survives version bumps.
+    const currentEntry = WhatsNew.getEntry(manifest.version);
+    expect(modal?.textContent).toContain(currentEntry.highlights[0].title);
 
     dismiss.click();
     expect(storageSet).toHaveBeenCalledWith({ lastSeenVersion: manifest.version });

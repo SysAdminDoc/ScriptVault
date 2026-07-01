@@ -1,51 +1,7 @@
 import { describe, it, expect } from 'vitest';
+import { UpdateSystem } from '../src/background/update-checker.ts';
 
-// Re-implement compareVersions for testing (extracted from background.core.js UpdateSystem)
-
-function compareVersions(v1, v2) {
-  const preRelease1 = v1.includes('-');
-  const preRelease2 = v2.includes('-');
-  const clean1 = (typeof v1 === 'string' ? v1 : String(v1)).replace(/-.*$/, '');
-  const clean2 = (typeof v2 === 'string' ? v2 : String(v2)).replace(/-.*$/, '');
-  const parts1 = clean1.split('.').map(n => parseInt(n, 10) || 0);
-  const parts2 = clean2.split('.').map(n => parseInt(n, 10) || 0);
-
-  for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
-    const p1 = parts1[i] || 0;
-    const p2 = parts2[i] || 0;
-    if (p1 > p2) return 1;
-    if (p1 < p2) return -1;
-  }
-  if (preRelease1 && !preRelease2) return -1;
-  if (!preRelease1 && preRelease2) return 1;
-  if (preRelease1 && preRelease2) {
-    const pre1 = v1.replace(/^[^-]*-/, '').split('.');
-    const pre2 = v2.replace(/^[^-]*-/, '').split('.');
-    for (let i = 0; i < Math.max(pre1.length, pre2.length); i++) {
-      const hasA = i < pre1.length;
-      const hasB = i < pre2.length;
-      if (!hasA && hasB) return -1;
-      if (hasA && !hasB) return 1;
-
-      const a = pre1[i] ?? '';
-      const b = pre2[i] ?? '';
-      const aNum = /^\d+$/.test(a) ? parseInt(a, 10) : NaN;
-      const bNum = /^\d+$/.test(b) ? parseInt(b, 10) : NaN;
-      if (!Number.isNaN(aNum) && !Number.isNaN(bNum)) {
-        if (aNum > bNum) return 1;
-        if (aNum < bNum) return -1;
-      } else if (!Number.isNaN(aNum)) {
-        return -1;
-      } else if (!Number.isNaN(bNum)) {
-        return 1;
-      } else {
-        if (a > b) return 1;
-        if (a < b) return -1;
-      }
-    }
-  }
-  return 0;
-}
+const compareVersions = UpdateSystem.compareVersions.bind(UpdateSystem);
 
 describe('compareVersions', () => {
   // ── Equal versions ──────────────────────────────────────────────────────

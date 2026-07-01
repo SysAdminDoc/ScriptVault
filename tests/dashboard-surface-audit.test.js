@@ -465,9 +465,14 @@ describe('dashboard audit surfaces', () => {
 
     const executeDeferred = createDeferred();
     chrome.runtime.sendMessage = vi.fn((message, callback) => {
-      if (typeof callback === 'function' && message.action === 'executeScript') {
+      // Chain steps run via the real `runScriptNow` background action.
+      if (typeof callback === 'function' && message.action === 'runScriptNow') {
         executeDeferred.promise.then((response) => callback(response));
         return undefined;
+      }
+      // Step dropdowns load the script list via the `getScripts` action.
+      if (message.action === 'getScripts') {
+        return Promise.resolve({ scripts: [{ id: 'alpha', meta: { name: 'Alpha Script' } }] });
       }
       return Promise.resolve({});
     });

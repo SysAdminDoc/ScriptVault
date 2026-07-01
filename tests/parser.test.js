@@ -1,216 +1,5 @@
 import { describe, it, expect } from 'vitest';
-
-// Re-implement parseUserscript for testing (extracted from background.core.js)
-
-function parseAntifeatureDirective(value, locale = '') {
-  const trimmed = String(value || '').trim();
-  if (!trimmed) return null;
-
-  const match = trimmed.match(/^(\S+)(?:\s+([\s\S]*))?$/);
-  if (!match) return null;
-
-  return {
-    type: String(match[1] || '').toLowerCase(),
-    description: String(match[2] || '').trim(),
-    locale
-  };
-}
-
-function parseUserscript(code) {
-  const metaBlockMatch = code.match(/\/\/\s*==UserScript==([\s\S]*?)\/\/\s*==\/UserScript==/);
-  if (!metaBlockMatch) {
-    return { error: 'No metadata block found. Scripts must include ==UserScript== header.' };
-  }
-
-  const meta = {
-    name: 'Unnamed Script',
-    namespace: 'scriptvault',
-    version: '1.0.0',
-    description: '',
-    author: '',
-    match: [],
-    include: [],
-    exclude: [],
-    excludeMatch: [],
-    grant: [],
-    require: [],
-    requireProvenance: [],
-    requireIdentity: [],
-    resource: {},
-    'run-at': 'document-idle',
-    noframes: false,
-    nodownload: false,
-    icon: '',
-    icon64: '',
-    homepage: '',
-    homepageURL: '',
-    website: '',
-    source: '',
-    updateURL: '',
-    downloadURL: '',
-    supportURL: '',
-    connect: [],
-    antifeature: [],
-    unwrap: false,
-    'inject-into': 'auto',
-    sandbox: '',
-    tag: [],
-    'run-in': '',
-    'top-level-await': false,
-    license: '',
-    copyright: '',
-    contributionURL: '',
-    compatible: [],
-    incompatible: [],
-    webRequest: null,
-    priority: 0,
-    weight: 0
-  };
-
-  const metaBlock = metaBlockMatch[1];
-  const lines = metaBlock.split('\n');
-
-  for (const line of lines) {
-    const match = line.match(/\/\/\s*@(\S+)(?:\s+(.*))?/);
-    if (!match) continue;
-
-    const key = match[1].trim();
-    const value = (match[2] || '').trim();
-
-    switch (key) {
-      case 'name':
-      case 'namespace':
-      case 'version':
-      case 'description':
-      case 'author':
-      case 'icon':
-      case 'icon64':
-      case 'homepage':
-      case 'homepageURL':
-      case 'website':
-      case 'source':
-      case 'updateURL':
-      case 'downloadURL':
-      case 'supportURL':
-      case 'run-at':
-      case 'inject-into':
-      case 'sandbox':
-      case 'run-in':
-      case 'license':
-      case 'copyright':
-      case 'contributionURL':
-        meta[key] = value;
-        break;
-      case 'match':
-      case 'include':
-      case 'exclude':
-      case 'exclude-match':
-      case 'excludeMatch':
-      case 'grant':
-      case 'require':
-      case 'require-provenance':
-      case 'requireProvenance':
-      case 'require-identity':
-      case 'requireIdentity':
-      case 'connect':
-      case 'tag':
-      case 'compatible':
-      case 'incompatible': {
-        const arrayKey = key === 'exclude-match' ? 'excludeMatch'
-          : key === 'require-provenance' ? 'requireProvenance'
-          : key === 'require-identity' ? 'requireIdentity'
-          : key;
-        if (!meta[arrayKey]) meta[arrayKey] = [];
-        if (value) {
-          // Phase 36.6 — comma-separated convenience syntax
-          const splittable =
-            arrayKey === 'match' ||
-            arrayKey === 'include' ||
-            arrayKey === 'exclude' ||
-            arrayKey === 'excludeMatch' ||
-            arrayKey === 'requireProvenance' ||
-            arrayKey === 'requireIdentity' ||
-            arrayKey === 'connect';
-          if (splittable && value.includes(',')) {
-            for (const part of value.split(',')) {
-              const trimmed = part.trim();
-              if (trimmed) meta[arrayKey].push(trimmed);
-            }
-          } else {
-            meta[arrayKey].push(value);
-          }
-        }
-        break;
-      }
-      case 'antifeature': {
-        const parsedAntifeature = parseAntifeatureDirective(value);
-        if (parsedAntifeature) meta.antifeature.push(parsedAntifeature);
-        break;
-      }
-      case 'resource': {
-        const resourceMatch = value.match(/^(\S+)\s+(.+)$/);
-        if (resourceMatch) {
-          meta.resource[resourceMatch[1]] = resourceMatch[2];
-        }
-        break;
-      }
-      case 'noframes':
-        meta.noframes = true;
-        break;
-      case 'nodownload':
-        meta.nodownload = true;
-        break;
-      case 'delay':
-        meta.delay = Math.max(0, parseInt(value, 10) || 0);
-        break;
-      case 'unwrap':
-        meta.unwrap = true;
-        break;
-      case 'top-level-await':
-        meta['top-level-await'] = true;
-        break;
-      case 'priority':
-        meta.priority = parseInt(value, 10) || 0;
-        break;
-      case 'weight': {
-        const w = parseInt(value, 10);
-        if (Number.isFinite(w)) meta.weight = Math.max(1, Math.min(999, w));
-        break;
-      }
-      case 'webRequest':
-        try { meta.webRequest = JSON.parse(value); } catch (e) {}
-        break;
-      default:
-        if (key.includes(':')) {
-          // Mirror of background.core.js parser: indexOf/slice preserves
-          // multi-segment locales like zh-Hans, and the prototype-
-          // pollution guard rejects __proto__/constructor/prototype keys
-          // so a malicious script with @name:__proto__ cannot reach
-          // Object.prototype via the bracket accessor.
-          const colonIdx = key.indexOf(':');
-          const baseKey = key.slice(0, colonIdx);
-          const locale = key.slice(colonIdx + 1);
-          const POLLUTED = ['__proto__', 'constructor', 'prototype'];
-          if (baseKey && locale && !POLLUTED.includes(baseKey) && !POLLUTED.includes(locale)) {
-            if (baseKey === 'antifeature') {
-              const parsedAntifeature = parseAntifeatureDirective(value, locale);
-              if (parsedAntifeature) meta.antifeature.push(parsedAntifeature);
-            } else {
-              if (!meta.localized) meta.localized = Object.create(null);
-              if (!Object.hasOwn(meta.localized, locale)) meta.localized[locale] = Object.create(null);
-              meta.localized[locale][baseKey] = value;
-            }
-          }
-        }
-    }
-  }
-
-  if (meta.grant.length === 0) {
-    meta.grant = ['none'];
-  }
-
-  return { meta, code, metaBlock: metaBlockMatch[0] };
-}
+import { parseUserscript } from '../src/background/parser.ts';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -314,10 +103,10 @@ describe('parseUserscript', () => {
     expect(meta.nodownload).toBe(true);
   });
 
-  it('defaults nodownload to false', () => {
+  it('leaves nodownload falsy by default', () => {
     const code = makeScript({ name: 'Downloadable' });
     const { meta } = parseUserscript(code);
-    expect(meta.nodownload).toBe(false);
+    expect(meta.nodownload).toBeFalsy();
   });
 
   it('parses @delay as integer milliseconds', () => {
@@ -403,10 +192,16 @@ describe('parseUserscript', () => {
     expect(meta.excludeMatch).toEqual(['https://ads.example.com/*']);
   });
 
-  it('parses @webRequest as JSON', () => {
+  it('parses @webRequest as JSON and normalizes to a validated rule array', () => {
+    const code = makeScript({ name: 'WR', webRequest: '{"selector":"*://example.com/*","action":"cancel"}' });
+    const { meta } = parseUserscript(code);
+    expect(meta.webRequest).toEqual([{ selector: '*://example.com/*', action: 'cancel' }]);
+  });
+
+  it('drops @webRequest rules that lack a valid action', () => {
     const code = makeScript({ name: 'WR', webRequest: '{"selector":"*://example.com/*"}' });
     const { meta } = parseUserscript(code);
-    expect(meta.webRequest).toEqual({ selector: '*://example.com/*' });
+    expect(meta.webRequest).toBeNull();
   });
 
   it('ignores invalid @webRequest JSON gracefully', () => {

@@ -13,7 +13,7 @@ function extractCronSource(src) {
 }
 
 function extractCrontabExecutionSource(src) {
-  const start = src.indexOf('async function executeCrontabScriptInTab');
+  const start = src.indexOf('async function executeWrappedScriptInTab');
   const end = src.indexOf('/** Create/refresh chrome alarms', start);
   if (start < 0 || end < 0) throw new Error('Unable to extract crontab execution source');
   return src.slice(start, end);
@@ -154,6 +154,18 @@ describe('@crontab next-fire engine', () => {
     expect(runNowSource).toContain('wantsPageContext');
     expect(runNowSource).toContain('MAIN-world fallback is not allowed');
     expect(runNowSource).toContain("inject-into");
+  });
+
+  it('routes context-menu script execution through the shared USER_SCRIPT-world helper', () => {
+    const ctxStart = backgroundCore.indexOf("info.menuItemId.startsWith('scriptvault-ctx-')");
+    const ctxEnd = backgroundCore.indexOf('// Feedback notification', ctxStart);
+    expect(ctxStart).toBeGreaterThan(-1);
+    expect(ctxEnd).toBeGreaterThan(ctxStart);
+    const ctxSource = backgroundCore.slice(ctxStart, ctxEnd);
+
+    expect(ctxSource).toContain('executeWrappedScriptInTab');
+    expect(ctxSource).toContain('ctxWantsPage');
+    expect(ctxSource).not.toContain('chrome.scripting.executeScript');
   });
 });
 

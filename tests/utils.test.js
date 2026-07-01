@@ -1,41 +1,5 @@
 import { describe, it, expect } from 'vitest';
-
-// Re-implement functions for testing (extracted from shared/utils.js)
-
-function escapeHtml(str) {
-  if (!str) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function generateId() {
-  return 'script_' + crypto.randomUUID();
-}
-
-function sanitizeUrl(url) {
-  if (!url) return null;
-  const trimmed = String(url).replace(/[\u0000-\u0020\u007f]+/g, '');
-  if (!trimmed) return null;
-  if (/^(javascript|data|vbscript|blob|file):/i.test(trimmed)) return null;
-  if (/^(https?|ftp|mailto):/i.test(trimmed) || trimmed.startsWith('/') || trimmed.startsWith('#')) {
-    return trimmed;
-  }
-  if (trimmed.startsWith('//')) return trimmed;
-  if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) return null;
-  return trimmed;
-}
-
-function formatBytes(bytes) {
-  if (!bytes || bytes <= 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(k)), sizes.length - 1);
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-}
+import { escapeHtml, generateId, sanitizeUrl, formatBytes } from '../src/shared/utils.ts';
 
 // ── escapeHtml ──────────────────────────────────────────────────────────────
 
