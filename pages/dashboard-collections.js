@@ -86,7 +86,7 @@ const CollectionManager = (() => {
   const _safeSetHtml = (typeof window.ScriptVaultDashboardUI?.safeSetHtml === 'function')
       ? window.ScriptVaultDashboardUI.safeSetHtml
       : (el, html) => {
-        el.replaceChildren(document.createRange().createContextualFragment(String(html ?? '')));
+        { const _r = document.createRange(); _r.selectNodeContents(el); el.replaceChildren(_r.createContextualFragment(String(html ?? ''))); }
       };
 
   /* ------------------------------------------------------------------ */
@@ -175,6 +175,9 @@ const CollectionManager = (() => {
   letter-spacing: 0.08em;
   flex-shrink: 0;
 }
+/* Pale mint text is legible on the dark themes' green tint but not on the
+   light theme's near-white badge; use a dark green there. */
+[data-theme="light"] .sv-coll-badge { color: #065f46; }
 .sv-coll-desc {
   font-size: 0.75rem;
   color: var(--text-secondary, #a0a0a0);
@@ -760,7 +763,10 @@ const CollectionManager = (() => {
       return { scriptId: resolvedId, script: result?.script || null };
     }
 
-    const installUrl = script.installUrl || await fetchGreasyForkCodeUrl(script.greasyForkId);
+    // Import/export round-trips the direct install URL as `url`; older code
+    // paths used `installUrl`. Accept both so URL-based collection entries
+    // install instead of falling through to a missing-GF-ID error.
+    const installUrl = script.installUrl || script.url || await fetchGreasyForkCodeUrl(script.greasyForkId);
     const result = await chrome.runtime.sendMessage({ action: 'installFromUrl', url: installUrl });
     if (!result?.success) {
       throw new Error(result?.error || 'Install failed');
@@ -786,10 +792,13 @@ const CollectionManager = (() => {
 
     const allCollections = [...BUILT_IN_COLLECTIONS, ..._collections];
     const expandedCollectionId = options.expandedCollectionId || null;
-    const filtered = filter
+    // `filter` is the raw query as typed (preserved for display); match
+    // case-insensitively here rather than force-lowercasing the input value.
+    const needle = filter.trim().toLowerCase();
+    const filtered = needle
       ? allCollections.filter(c =>
-          c.name.toLowerCase().includes(filter) ||
-          c.description.toLowerCase().includes(filter))
+          c.name.toLowerCase().includes(needle) ||
+          c.description.toLowerCase().includes(needle))
       : allCollections;
 
     const installed = getInstalledScripts();
@@ -810,7 +819,18 @@ const CollectionManager = (() => {
 
     const searchInput = toolbar.querySelector('.sv-coll-search');
     searchInput.addEventListener('input', () => {
-      render(searchInput.value.trim().toLowerCase());
+      // render() rebuilds the toolbar (and this input), so capture the caret,
+      // pass the raw value through, then restore focus + caret on the new
+      // input. Without this the field lost focus after every keystroke.
+      const caret = searchInput.selectionStart;
+      const raw = searchInput.value;
+      render(raw);
+      const next = _container.querySelector('.sv-coll-search');
+      if (next) {
+        next.focus();
+        const pos = caret == null ? next.value.length : Math.min(caret, next.value.length);
+        try { next.setSelectionRange(pos, pos); } catch { /* type=search may reject */ }
+      }
     });
 
     toolbar.querySelector('[data-action="create"]').addEventListener('click', () => openCreateModal());
@@ -897,7 +917,7 @@ const CollectionManager = (() => {
     const currentInstalled = Array.isArray(installed) ? installed : (getInstalledScripts() || []);
 
     let html = '';
-    for (const s of scripts) {
+    scripts.forEach((s, idx) => {
       const inst = (s.scriptId ? currentInstalled.find(i => i.id === s.scriptId) : null) || s._localInstalled || null;
       const isInstalled = !!inst;
       const isEnabled = inst ? inst.enabled !== false : false;
@@ -909,10 +929,10 @@ const CollectionManager = (() => {
           ${s.note ? `<span class="sv-coll-script-note" title="${escapeHtml(s.note)}">${escapeHtml(s.note)}</span>` : ''}
           ${isInstalled
             ? `<button type="button" class="sv-coll-script-toggle ${isEnabled ? 'on' : ''}" data-toggle-id="${escapeHtml(s.scriptId)}" aria-pressed="${String(isEnabled)}" aria-label="${isEnabled ? 'Disable' : 'Enable'} ${scriptName}" title="${isEnabled ? 'Disable' : 'Enable'} ${scriptName}"></button>`
-            : `<button type="button" class="sv-coll-btn inline-install" data-install-gf="${escapeHtml(s.greasyForkId || '')}" data-install-name="${escapeHtml(s.name || '')}">Install</button>`}
+            : `<button type="button" class="sv-coll-btn inline-install" data-install-idx="${idx}" data-install-name="${escapeHtml(s.name || '')}">Install</button>`}
         </div>
       `;
-    }
+    });
 
     // Action buttons
     html += `
@@ -945,11 +965,13 @@ const CollectionManager = (() => {
       });
     });
 
-    // Install individual
-    container.querySelectorAll('[data-install-gf]').forEach(btn => {
+    // Install individual. Match by row index — matching on greasyForkId broke
+    // when several entries had no GF ID (URL-based imports), since they all
+    // compared equal to '' and every button installed the first such row.
+    container.querySelectorAll('[data-install-idx]').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        const script = scripts.find(s => String(s.greasyForkId || '') === String(btn.dataset.installGf || ''));
+        const script = scripts[Number(btn.dataset.installIdx)];
         if (!script) return;
 
         const originalText = btn.textContent;

@@ -45,7 +45,7 @@ const ActivityHeatmap = (() => {
   const _safeSetHtml = (typeof window.ScriptVaultDashboardUI?.safeSetHtml === 'function')
       ? window.ScriptVaultDashboardUI.safeSetHtml
       : (el, html) => {
-        el.replaceChildren(document.createRange().createContextualFragment(String(html ?? '')));
+        { const _r = document.createRange(); _r.selectNodeContents(el); el.replaceChildren(_r.createContextualFragment(String(html ?? ''))); }
       };
 
   let _container = null;
@@ -181,8 +181,16 @@ const ActivityHeatmap = (() => {
   /* ------------------------------------------------------------------ */
 
   function _dateKey(date) {
+    // Use LOCAL date components, not toISOString() (UTC). The heatmap grid is
+    // built from local midnights, so a UTC key shifted "today" to the wrong
+    // cell in non-UTC timezones — activity landed on an adjacent day and the
+    // current-streak check (last grid cell vs. today) never matched, pinning
+    // the streak at 0.
     const d = new Date(date);
-    return d.toISOString().split('T')[0];
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
   }
 
   async function _loadData() {
@@ -305,15 +313,23 @@ const ActivityHeatmap = (() => {
     _ctx.clearRect(0, 0, canvasWidth, canvasHeight);
     _dayMap.clear();
 
+    // Resolve theme-aware colors once per draw. The canvas can't read CSS
+    // tokens, so pull them from the computed style. The empty-cell tint
+    // (rgba white 0.04) was invisible on the light theme's white background —
+    // fall back to the border token, which reads on every theme.
+    const rootStyle = getComputedStyle(document.documentElement);
+    const labelColor = rootStyle.getPropertyValue('--text-muted').trim() || '#707070';
+    const emptyCellColor = rootStyle.getPropertyValue('--border-color').trim() || COLOR_LEVELS[0];
+    const cellColors = [emptyCellColor, ...COLOR_LEVELS.slice(1)];
+
     // Day labels
     _ctx.font = '10px -apple-system, BlinkMacSystemFont, sans-serif';
-    _ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim() || '#707070';
     _ctx.textAlign = 'right';
     _ctx.textBaseline = 'middle';
     const labelDays = [1, 3, 5]; // Mon, Wed, Fri
     for (const di of labelDays) {
       const y = HEADER_HEIGHT + di * (CELL_SIZE + CELL_GAP) + CELL_SIZE / 2;
-      _ctx.fillStyle = '#707070';
+      _ctx.fillStyle = labelColor;
       _ctx.fillText(DAY_LABELS[di], LABEL_WIDTH - 4, y);
     }
 
@@ -327,7 +343,7 @@ const ActivityHeatmap = (() => {
         if (month !== lastMonth) {
           lastMonth = month;
           const x = LABEL_WIDTH + wi * (CELL_SIZE + CELL_GAP);
-          _ctx.fillStyle = '#707070';
+          _ctx.fillStyle = labelColor;
           _ctx.fillText(MONTH_LABELS[month], x, 12);
         }
       }
@@ -344,7 +360,7 @@ const ActivityHeatmap = (() => {
       const dayData = _getFilteredDayData(key);
       const level = _getActivityLevel(dayData);
 
-      _ctx.fillStyle = COLOR_LEVELS[level];
+      _ctx.fillStyle = cellColors[level] || COLOR_LEVELS[level];
       _ctx.beginPath();
       _roundRect(_ctx, x, y, CELL_SIZE, CELL_SIZE, 2);
       _ctx.fill();

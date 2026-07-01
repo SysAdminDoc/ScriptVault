@@ -91,13 +91,25 @@ const A11y = (() => {
   border: 0;
 }
 
-/* High contrast overrides */
+/* High contrast overrides.
+   The default values suit the dark themes (dark/catppuccin/oled). On the
+   light theme these light-on-light values made the UI unreadable — exactly
+   for the users who enable high contrast — so the light theme gets its own
+   dark-on-light override. The class is set on <html> alongside data-theme,
+   so the compound selector matches. */
 .a11y-high-contrast {
   --border-color: #888888;
   --text-primary: #f5f5f5;
   --text-secondary: #cccccc;
   --text-muted: #999999;
   --bg-row-hover: #3a3a3a;
+}
+[data-theme="light"].a11y-high-contrast {
+  --border-color: #333333;
+  --text-primary: #000000;
+  --text-secondary: #1a1a1a;
+  --text-muted: #444444;
+  --bg-row-hover: #e0e0e0;
 }
 .a11y-high-contrast .toggle-slider,
 .a11y-high-contrast .cv-toggle-slider {

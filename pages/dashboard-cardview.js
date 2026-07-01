@@ -21,7 +21,7 @@ const CardView = (() => {
   const _safeSetHtml = (typeof window.ScriptVaultDashboardUI?.safeSetHtml === 'function')
       ? window.ScriptVaultDashboardUI.safeSetHtml
       : (el, html) => {
-        el.replaceChildren(document.createRange().createContextualFragment(String(html ?? '')));
+        { const _r = document.createRange(); _r.selectNodeContents(el); el.replaceChildren(_r.createContextualFragment(String(html ?? ''))); }
       };
 
   let _container = null;
@@ -996,7 +996,12 @@ const CardView = (() => {
     const selectBtn = card.querySelector(`[data-select-id="${selectorId}"]`);
     selectBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
-      invokeCardAction(_options.onSelect, script.id, !selected, { triggerEl: selectBtn });
+      // Read current selection at click time. Using the build-time `selected`
+      // closure meant syncSelection() (which updates the DOM without rebuilding
+      // the card) never refreshed it, so repeat clicks always passed the same
+      // value and the button could select but never unselect.
+      const isNowSelected = Boolean(_options.isSelected?.(script.id));
+      invokeCardAction(_options.onSelect, script.id, !isNowSelected, { triggerEl: selectBtn });
     });
 
     // Toggle switch

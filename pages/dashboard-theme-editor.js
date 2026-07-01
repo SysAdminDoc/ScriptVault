@@ -213,7 +213,7 @@ const ThemeEditor = (() => {
   const _safeSetHtml = (typeof window.ScriptVaultDashboardUI?.safeSetHtml === 'function')
       ? window.ScriptVaultDashboardUI.safeSetHtml
       : (el, html) => {
-        el.replaceChildren(document.createRange().createContextualFragment(String(html ?? '')));
+        { const _r = document.createRange(); _r.selectNodeContents(el); el.replaceChildren(_r.createContextualFragment(String(html ?? ''))); }
       };
 
   /* ------------------------------------------------------------------ */
@@ -630,7 +630,10 @@ const ThemeEditor = (() => {
   function buildSectionHeader(title, section, startsExpanded = true) {
     const header = el('button', {
       className: 'sv-te-section-header',
-      html: `<h4>${title}</h4><span class="sv-te-chevron">&#9660;</span>`,
+      // Key must be `innerHTML` — el() routes any other key to setAttribute,
+      // which turned this into a dead `html="..."` attribute and left every
+      // section header blank (no title, no chevron).
+      innerHTML: `<h4>${title}</h4><span class="sv-te-chevron">&#9660;</span>`,
       'aria-expanded': String(startsExpanded),
     });
     header.addEventListener('click', () => {

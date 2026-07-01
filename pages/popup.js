@@ -30,11 +30,16 @@
     const _svPolicy = (typeof window.trustedTypes !== 'undefined' && window.trustedTypes.createPolicy)
         ? window.trustedTypes.createPolicy('sv-popup', { createHTML: s => s })
         : null;
-    function htmlToFragment(html) {
-        return document.createRange().createContextualFragment(String(html ?? ''));
+    function htmlToFragment(html, contextEl) {
+        // Anchor the parse range in the target element so context-sensitive
+        // tags (<td>/<tr>/<option>/<li>) parse correctly instead of being
+        // dropped in document context (regression fixed 2026-07-01).
+        const range = document.createRange();
+        if (contextEl) range.selectNodeContents(contextEl);
+        return range.createContextualFragment(String(html ?? ''));
     }
     function safeSetHtml(el, html) {
-        el.replaceChildren(htmlToFragment(_svPolicy ? _svPolicy.createHTML(html) : html));
+        el.replaceChildren(htmlToFragment(_svPolicy ? _svPolicy.createHTML(html) : html, el));
     }
 
     // Event delegation for favicon error handling (CSP-compliant)
@@ -1385,7 +1390,13 @@
             } catch (error) {
                 console.error('Failed to toggle script:', error);
                 showPopupToast(error.message || 'Failed to update script', 'error');
-                updateLocalScriptState(scriptId, !enabled);
+                // Toggle failed — restore both arrays to the pre-toggle state so
+                // the re-render puts the checkbox back. (Local state is only
+                // mutated on success above, but keep this explicit and correct.)
+                const revScript = pageScripts.find(s => s.id === scriptId);
+                if (revScript) revScript.enabled = !enabled;
+                const revAll = allScripts.find(s => s.id === scriptId);
+                if (revAll) revAll.enabled = !enabled;
                 renderScriptList();
             }
         });

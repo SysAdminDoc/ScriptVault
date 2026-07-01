@@ -32,7 +32,7 @@ const ScriptStore = (() => {
     const _safeSetHtml = (typeof window.ScriptVaultDashboardUI?.safeSetHtml === 'function')
         ? window.ScriptVaultDashboardUI.safeSetHtml
         : (el, html) => {
-          el.replaceChildren(document.createRange().createContextualFragment(String(html ?? '')));
+          { const _r = document.createRange(); _r.selectNodeContents(el); el.replaceChildren(_r.createContextualFragment(String(html ?? ''))); }
         };
 
     const CATEGORIES = {
@@ -787,6 +787,9 @@ const ScriptStore = (() => {
     border: 1px solid rgba(52, 211, 153, 0.18);
     background: rgba(52, 211, 153, 0.14);
 }
+/* Legible text on the light theme's near-white tints. */
+[data-theme="light"] .ss-installed-badge { color: #065f46; }
+[data-theme="light"] .ss-btn.ghost.active { color: #1e40af; }
 .ss-card-desc {
     margin-bottom: 8px;
     font-size: 0.75rem;
@@ -1545,7 +1548,7 @@ const ScriptStore = (() => {
             <span title="Author">${escapeHtml(author)}</span>
             <span title="Total installs">${formatNumber(totalInstalls)} installs</span>
             ${dailyInstalls > 0 ? `<span title="Daily installs">${formatNumber(dailyInstalls)}/day</span>` : ''}
-            <span title="Rating">${rating}</span>
+            <span title="Rating">${escapeHtml(String(rating))}</span>
             <span title="Last updated">${updated}</span>
         </div>
     </div>

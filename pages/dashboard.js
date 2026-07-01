@@ -5,11 +5,17 @@
     const _svPolicy = (typeof window.trustedTypes !== 'undefined' && window.trustedTypes.createPolicy)
         ? window.trustedTypes.createPolicy('sv-dashboard', { createHTML: s => s })
         : null;
-    function htmlToFragment(html) {
-        return document.createRange().createContextualFragment(String(html ?? ''));
+    function htmlToFragment(html, contextEl) {
+        // Anchor the parse range in the target element so context-sensitive
+        // tags (<td>/<tr>/<option>/<li>) parse correctly. A bare
+        // document.createRange() parses in document context and silently
+        // drops table cells (regression fixed 2026-07-01).
+        const range = document.createRange();
+        if (contextEl) range.selectNodeContents(contextEl);
+        return range.createContextualFragment(String(html ?? ''));
     }
     function safeSetHtml(el, html) {
-        el.replaceChildren(htmlToFragment(_svPolicy ? _svPolicy.createHTML(html) : html));
+        el.replaceChildren(htmlToFragment(_svPolicy ? _svPolicy.createHTML(html) : html, el));
     }
 
     // State

@@ -89,7 +89,7 @@ const Gamification = (() => {
   const _safeSetHtml = (typeof window.ScriptVaultDashboardUI?.safeSetHtml === 'function')
       ? window.ScriptVaultDashboardUI.safeSetHtml
       : (el, html) => {
-        el.replaceChildren(document.createRange().createContextualFragment(String(html ?? '')));
+        { const _r = document.createRange(); _r.selectNodeContents(el); el.replaceChildren(_r.createContextualFragment(String(html ?? ''))); }
       };
 
   let _container = null;
@@ -353,7 +353,14 @@ const Gamification = (() => {
   /* ------------------------------------------------------------------ */
 
   function todayKey() {
-    return new Date().toISOString().slice(0, 10);
+    // Local date, not UTC. toISOString() rolls the "day" over at UTC midnight,
+    // which is mid-afternoon/evening for most users — so streak day-boundaries
+    // fell at the wrong local time and could double-count or break streaks.
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
   }
 
   function defaultData() {

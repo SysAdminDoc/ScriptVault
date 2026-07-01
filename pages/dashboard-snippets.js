@@ -353,13 +353,20 @@ $CURSOR$`
         background: '#2a2a2a', color: '#e0e0e0', borderRadius: '8px', zIndex: '99999',
         border: '1px solid #404040', boxShadow: '0 8px 32px rgba(0,0,0,0.4)', fontSize: '13px'
     });
-    // Drag logic
+    // Drag logic. Reuse the header element created above (redeclaring it here
+    // with 'const' would be a duplicate-declaration SyntaxError). Keep named
+    // handlers so they can be detached when the panel closes.
     let dragging = false, dx, dy;
-    const header = panel.querySelector('.fp-header');
     header.onmousedown = (e) => { dragging = true; dx = e.clientX - panel.offsetLeft; dy = e.clientY - panel.offsetTop; };
-    document.addEventListener('mousemove', (e) => { if (dragging) { panel.style.left = (e.clientX - dx) + 'px'; panel.style.top = (e.clientY - dy) + 'px'; panel.style.right = 'auto'; } });
-    document.addEventListener('mouseup', () => { dragging = false; });
-    panel.querySelector('.fp-close').onclick = () => panel.remove();
+    const onMove = (e) => { if (dragging) { panel.style.left = (e.clientX - dx) + 'px'; panel.style.top = (e.clientY - dy) + 'px'; panel.style.right = 'auto'; } };
+    const onUp = () => { dragging = false; };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    panel.querySelector('.fp-close').onclick = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        panel.remove();
+    };
     panel.querySelector('.fp-min').onclick = () => {
         const body = panel.querySelector('.fp-body');
         body.style.display = body.style.display === 'none' ? '' : 'none';
@@ -784,7 +791,7 @@ $CURSOR$`
     const _safeSetHtml = (typeof window.ScriptVaultDashboardUI?.safeSetHtml === 'function')
         ? window.ScriptVaultDashboardUI.safeSetHtml
         : (el, html) => {
-          el.replaceChildren(document.createRange().createContextualFragment(String(html ?? '')));
+          { const _r = document.createRange(); _r.selectNodeContents(el); el.replaceChildren(_r.createContextualFragment(String(html ?? ''))); }
         };
 
     const CATEGORIES = {

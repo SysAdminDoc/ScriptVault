@@ -9,6 +9,28 @@ const WhatsNew = (() => {
     : '2.0.0';
 
   const CHANGELOG = {
+    '3.12.0': {
+      title: 'ScriptVault 3.12.0 — Deep Audit Hardening',
+      date: '2026-07-01',
+      highlights: [
+        { icon: 'FIX', title: 'Tables Render Again', desc: 'A fragment-parsing regression that dropped every table cell in the DevTools network/execution views and the dashboard script table is fixed.' },
+        { icon: 'SEC', title: 'Isolated GM Values', desc: 'A script can no longer read or overwrite another script’s stored GM values — value operations are now bound to the authenticated calling script.' },
+        { icon: 'RUN', title: 'Script Chains Work', desc: 'Chains now run steps through the real execution path and load your installed scripts, so chains you build actually execute.' },
+        { icon: 'SYNC', title: 'Reliable Sync Merges', desc: 'Concurrent edits on two devices now 3-way merge instead of silently overwriting, and a restored script is no longer re-deleted by an old sync tombstone.' },
+        { icon: 'CM', title: 'Context-Menu Isolation', desc: '@run-at context-menu scripts now run in the USER_SCRIPT world like every other injection, closing an isolation gap.' },
+        { icon: 'A11Y', title: 'Readable High Contrast', desc: 'High-contrast mode on the light theme no longer renders light text on light backgrounds.' }
+      ],
+      improvements: [
+        'Fixed empty Theme Editor section headers',
+        'Collections search keeps focus while typing; per-row install targets the right script',
+        'Card view select button toggles correctly on repeat clicks',
+        'Activity heatmap and achievement streaks use local dates so streaks count correctly',
+        'DevTools panel follows your chosen theme; long URLs only get an ellipsis when truncated',
+        '"Don’t show again" on this dialog now persists',
+        'Packaged builds ship the page i18n and script-config modules that were missing',
+        'Capped sync KDF iterations to prevent a crafted envelope from stalling sync'
+      ]
+    },
     '3.11.0': {
       title: 'ScriptVault 3.11.0 — Storage & Runtime Hardening',
       date: '2026-05-19',
@@ -83,7 +105,7 @@ const WhatsNew = (() => {
   const _safeSetHtml = (typeof _dashboardUi?.safeSetHtml === 'function')
       ? _dashboardUi.safeSetHtml
       : (el, html) => {
-        el.replaceChildren(document.createRange().createContextualFragment(String(html ?? '')));
+        { const _r = document.createRange(); _r.selectNodeContents(el); el.replaceChildren(_r.createContextualFragment(String(html ?? ''))); }
       };
 
   function _hasChangelogEntry(version) {
@@ -140,7 +162,9 @@ const WhatsNew = (() => {
   return {
     async shouldShow() {
       try {
-        const data = await chrome.storage.local.get('lastSeenVersion');
+        const data = await chrome.storage.local.get(['lastSeenVersion', 'whatsNewDisabled']);
+        // Persistent opt-out set by the "Don't show again" button.
+        if (data.whatsNewDisabled === true) return false;
         const lastSeen = data.lastSeenVersion || '0.0.0';
         // Only show for major/minor version changes (not patch bumps)
         const lastMajorMinor = lastSeen.split('.').slice(0, 2).join('.');
@@ -206,14 +230,18 @@ const WhatsNew = (() => {
         if (e.key === 'Escape') dismiss();
       };
 
-      const dismiss = () => {
-        chrome.storage.local.set({ lastSeenVersion: CURRENT_VERSION });
+      const dismiss = (disablePermanently) => {
+        const patch = { lastSeenVersion: CURRENT_VERSION };
+        // "Don't show again" persists an opt-out so the modal never reappears
+        // on future version bumps; "Continue" only marks this version seen.
+        if (disablePermanently === true) patch.whatsNewDisabled = true;
+        chrome.storage.local.set(patch);
         document.removeEventListener('keydown', escHandler);
         overlay.remove();
       };
 
-      overlay.querySelector('#svWnDismiss').addEventListener('click', dismiss);
-      overlay.querySelector('#svWnSkip').addEventListener('click', dismiss);
+      overlay.querySelector('#svWnDismiss').addEventListener('click', () => dismiss(false));
+      overlay.querySelector('#svWnSkip').addEventListener('click', () => dismiss(true));
       overlay.addEventListener('click', (e) => { if (e.target === overlay) dismiss(); });
       document.addEventListener('keydown', escHandler);
       overlay.querySelector('#svWnDismiss')?.focus({ preventScroll: true });

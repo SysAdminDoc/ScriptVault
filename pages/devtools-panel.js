@@ -7,11 +7,16 @@
   const _svPolicy = (typeof window.trustedTypes !== 'undefined' && window.trustedTypes.createPolicy)
       ? window.trustedTypes.createPolicy('sv-devtools', { createHTML: s => s })
       : null;
-  function htmlToFragment(html) {
-      return document.createRange().createContextualFragment(String(html ?? ''));
+  function htmlToFragment(html, contextEl) {
+      // Anchor the parse range in the target element so context-sensitive tags
+      // (<td>/<tr> table cells especially) parse correctly instead of being
+      // dropped in document context (regression fixed 2026-07-01).
+      const range = document.createRange();
+      if (contextEl) range.selectNodeContents(contextEl);
+      return range.createContextualFragment(String(html ?? ''));
   }
   function safeSetHtml(el, html) {
-      el.replaceChildren(htmlToFragment(_svPolicy ? _svPolicy.createHTML(html) : html));
+      el.replaceChildren(htmlToFragment(_svPolicy ? _svPolicy.createHTML(html) : html, el));
   }
 
   function getDevtoolsI18n() {
@@ -140,7 +145,9 @@
   }
 
   function renderDetailContent(entry) {
-    $('netDetailTitle').textContent = (entry.method || 'GET') + ' ' + (entry.url || '').slice(0, 40) + '…';
+    const detailUrl = entry.url || '';
+    $('netDetailTitle').textContent = (entry.method || 'GET') + ' '
+      + (detailUrl.length > 40 ? detailUrl.slice(0, 40) + '…' : detailUrl);
 
     let html = '';
     html += section(tDevtools('devtoolsGeneralSection', 'General'), [
@@ -247,7 +254,28 @@
   }
 
   // ── Init ─────────────────────────────────────────────────────────────────
+  async function applyTheme() {
+    // The panel HTML hardcodes data-theme="dark"; without this the panel
+    // stayed dark for light/catppuccin/oled users (and its per-theme CSS
+    // overrides were dead). Mirror the popup/install/sidepanel theme logic.
+    try {
+      const settings = await chrome.runtime.sendMessage({ action: 'getSettings' });
+      const themeSettings = settings?.settings || settings || {};
+      const layoutPref = themeSettings.layout || 'dark';
+      const resolve = () => layoutPref === 'auto'
+        ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+        : layoutPref;
+      document.documentElement.setAttribute('data-theme', resolve());
+      if (layoutPref === 'auto') {
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+          document.documentElement.setAttribute('data-theme', resolve());
+        });
+      }
+    } catch (_e) { /* keep the default dark theme on failure */ }
+  }
+
   async function init() {
+    await applyTheme();
     applyDevtoolsI18n();
     setupTabs();
     setupToolbar();

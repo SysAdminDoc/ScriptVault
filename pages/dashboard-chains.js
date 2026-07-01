@@ -77,7 +77,7 @@ const ScriptChains = (() => {
   const _safeSetHtml = (typeof window.ScriptVaultDashboardUI?.safeSetHtml === 'function')
       ? window.ScriptVaultDashboardUI.safeSetHtml
       : (el, html) => {
-        el.replaceChildren(document.createRange().createContextualFragment(String(html ?? '')));
+        { const _r = document.createRange(); _r.selectNodeContents(el); el.replaceChildren(_r.createContextualFragment(String(html ?? ''))); }
       };
 
   /* ------------------------------------------------------------------ */
@@ -537,14 +537,14 @@ const ScriptChains = (() => {
 
   async function _loadAvailableScripts() {
     try {
-      // Storage key is `userscripts` (see modules/storage.js), not `scripts`.
-      // Reading the wrong key left `_availableScripts` empty, so chain step
-      // dropdowns had no scripts to pick from.
-      const data = await chrome.storage.local.get('userscripts');
-      const scripts = data.userscripts || {};
-      _availableScripts = Object.entries(scripts).map(([id, s]) => ({
-        id,
-        name: (s.meta && s.meta.name) || s.name || id,
+      // Scripts live in IndexedDB since v3.0.0, not chrome.storage.local.
+      // Query the background, which returns { scripts: [...] }. Reading the
+      // legacy `userscripts` key left the step dropdowns permanently empty.
+      const res = await chrome.runtime.sendMessage({ action: 'getScripts' });
+      const scripts = Array.isArray(res?.scripts) ? res.scripts : [];
+      _availableScripts = scripts.map((s) => ({
+        id: s.id,
+        name: (s.meta && s.meta.name) || s.name || s.id,
       }));
       _availableScripts.sort((a, b) => a.name.localeCompare(b.name));
     } catch {
@@ -695,18 +695,23 @@ const ScriptChains = (() => {
       return { success: false, error: 'No script assigned to step' };
     }
 
-    // Send execution request to background via message passing
-    return new Promise((resolve) => {
+    // Run the script one-shot on the active tab. The background action is
+    // `runScriptNow` (there is no `executeScript` action); it returns
+    // { success: true, mode } or { success: false, error }. Reject on error
+    // so the chain's retry loop (which lives in the catch block) can engage.
+    return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
-        resolve({ success: false, error: 'Script execution timed out (30s)' });
+        reject(new Error('Script execution timed out (30s)'));
       }, 30000);
 
       chrome.runtime.sendMessage(
-        { action: 'executeScript', scriptId: step.scriptId },
+        { action: 'runScriptNow', scriptId: step.scriptId },
         (response) => {
           clearTimeout(timeout);
           if (chrome.runtime.lastError) {
-            resolve({ success: false, error: chrome.runtime.lastError.message });
+            reject(new Error(chrome.runtime.lastError.message));
+          } else if (response && response.success === false) {
+            reject(new Error(response.error || 'Script execution failed'));
           } else {
             resolve(response || { success: true });
           }
@@ -752,7 +757,7 @@ const ScriptChains = (() => {
     const header = document.createElement('div');
     header.className = 'sv-chains-header';
     _safeSetHtml(header, `
-      <h3><span class="icon">&#9918;</span> Script Chains</h3>
+      <h3><span class="icon">&#9939;</span> Script Chains</h3>
     `);
     const addBtn = document.createElement('button');
     addBtn.type = 'button';
@@ -781,7 +786,7 @@ const ScriptChains = (() => {
     if (allChains.length === 0) {
       _safeSetHtml(listEl, `
         <div class="sv-chains-empty">
-          <div class="empty-icon">&#9918;</div>
+          <div class="empty-icon">&#9939;</div>
           No chains defined yet. Create one to automate script execution.
         </div>
       `);
