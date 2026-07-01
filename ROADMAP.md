@@ -43,11 +43,53 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 - **P2 — Unify install page theme variables with theme-tokens.css.** The install page defines its own parallel set of CSS custom properties (`--bg-primary`, `--bg-secondary`, etc.) independent of `theme-tokens.css` used by all other pages. Any theme change must be applied to both systems. Consolidate to a single source.
   Where: `pages/install.html` lines 20-98
 
-- **P2 — Tests that re-implement production code.** `tests/utils.test.js`, `tests/versions.test.js`, and `tests/parser.test.js` contain full re-implementations of `escapeHtml`, `compareVersions`, and `parseUserscript` instead of importing from the TypeScript sources. Drift between test copies and production code means regressions go undetected.
-  Where: `tests/utils.test.js`, `tests/versions.test.js`, `tests/parser.test.js`
+- **P1 — Scheduler enforcement engine is not wired.** `dashboard-scheduler.js` saves `sv_schedules` and creates `sv_sched_` alarms, but no background `onAlarm` handler matches that prefix, and `generateGuardCode`/`shouldRunNow` have no callers. Interval/one-time/time-range schedules are configured but never fire or gate execution; the preview text promises behavior that does not happen. Needs a background alarm handler + injection guard wiring (and local-vs-UTC date handling in the date-range comparison).
+  Where: `pages/dashboard-scheduler.js` (syncAlarms, generateGuardCode, shouldRunNow); background alarm dispatch in `src/background/core.ts`
 
-- **P3 — Keyboard alternative for script reorder.** The drag-and-drop reorder handle in the dashboard table only supports mouse drag events. Users who cannot use a mouse have no way to change script execution order.
-  Where: `pages/dashboard.js` createScriptRow drag handle
+- **P1 — Monaco editor Ctrl+S / Escape do nothing.** The sandbox posts `save`/`close` to `monaco-adapter.js`, which calls IIFE-scoped `saveCurrentScript`/`closeEditor` (not global) and a `[data-action="save"]` fallback that matches no element (the button is `#btnEditorSave`). The UI instructs "Press Ctrl+S to save." Expose the handlers (e.g. via `window.ScriptVaultDashboardUI`) or click the real button ids.
+  Where: `pages/monaco-adapter.js` save/close cases; `pages/dashboard.js` saveCurrentScript/closeEditor
+
+- **P1 — Theme Editor "Apply Theme" does not persist and extra presets set invalid `layout`.** Applied custom themes revert on reload (nothing reads `sv_active_custom_theme` at startup), and the six extra built-in presets (Nord/Dracula/Solarized×2/Monokai/Gruvbox) save `settings.layout` values that match no CSS block and fall back to dark, blanking the Layout select and desyncing the theme-cycle button.
+  Where: `pages/dashboard-theme-editor.js` applyAndPersist; `pages/dashboard.js` startup theme resolution + `validateSettingsValue`
+
+- **P2 — KeyboardNav hijacks Enter/Space/Delete on focused row buttons.** The capture-phase document keydown handler treats a focused action button inside a script row as the row itself: Enter opens the editor, Space toggles enabled, Delete deletes — instead of activating the button. `isModalOpen()` is defined but never consulted. WCAG 2.1.1 defect.
+  Where: `pages/dashboard-keyboard.js` handleKeydown/isInputFocused/handleFocusin
+
+- **P2 — QR share encoder corrupts payloads of 107-271 bytes (versions 6-10).** `VERSION_TABLE` stores per-block data codewords but `encode()` treats them as the total, truncating the bit stream and leaving the module grid unfilled. Most real share payloads (base64 data URLs) land in this range and produce unscannable codes. V1-V5 are correct.
+  Where: `pages/dashboard-sharing.js` VERSION_TABLE / encode()
+
+- **P2 — E2EE plaintext-downgrade latch.** `decryptSyncEnvelope` accepts a plaintext remote envelope even when sync encryption is enabled, so an attacker with storage-backend write access can replace the encrypted blob with attacker-authored plaintext scripts. Needs a migration-safe latch (e.g. a persisted "encryption established" marker so the one-time plaintext→encrypted migration is allowed but later plaintext is rejected).
+  Where: `src/modules/sync-crypto.ts` decryptSyncEnvelope
+
+- **P2 — Chain non-manual triggers are decorative.** The chain editor offers URL Match / Schedule / DOM Event / After Script triggers, but no trigger engine consumes them — only manual Run works. Either implement the trigger engine or hide the unsupported trigger types.
+  Where: `pages/dashboard-chains.js` editor trigger UI
+
+- **P2 — "Key Mapping: Vim" setting is inert.** `keyMapping='vim'` persists but nothing consumes it; `KeyboardNav.setVimMode()` has no callers and vim list-nav only activates via the private `sv_vimMode` localStorage key no UI writes. Wire the setting to `setVimMode`, or remove the option and its help text.
+  Where: `pages/dashboard.js` settings apply; `pages/dashboard-keyboard.js` setVimMode
+
+- **P2 — Install page never parses `@require-provenance` / `@require-identity`.** The install page's local metadata parser omits these keys, so the Sigstore provenance review row always shows "Not declared" and the preview verification never runs (save-time enforcement in the background still works). Add the keys to the install parser or reuse the shared parser.
+  Where: `pages/install.js` parseMetadata
+
+- **P2 — Unify install page theme variables with theme-tokens.css.** The install page defines its own parallel set of CSS custom properties (`--bg-primary`, `--bg-secondary`, etc.) independent of `theme-tokens.css` used by all other pages. Any theme change must be applied to both systems. Consolidate to a single source.
+  Where: `pages/install.html` lines 20-98
+
+- **P3 — Keyboard alternative for script reorder.** The drag-and-drop reorder handle in the dashboard table only supports mouse drag events, and the reorder is computed against the unfiltered/unsorted array so a drag while sorted or filtered lands in the wrong position. Add keyboard reordering and compute against the visible order.
+  Where: `pages/dashboard.js` createScriptRow drag handle, reorderScripts
+
+- **P3 — Editor status bar cursor position is stuck at "Ln 1, Col 1".** `monaco-adapter.getCursor()` returns a hardcoded stub and the dashboard ignores the cursor event payload it is sent.
+  Where: `pages/monaco-adapter.js` getCursor; `pages/dashboard.js` updateCursorPos
+
+- **P3 — Remaining hardcoded dark colors on light theme.** The Monaco fallback textarea (`dashboard.html`), and the floating-panel/template snippet code strings hardcode dark backgrounds/colors that ignore the light theme.
+  Where: `pages/dashboard.html` #editorTextarea; `pages/dashboard-snippets.js`; `pages/dashboard-templates.js`
+
+- **P3 — GM_webRequest DNR rule IDs use a 21-bit hash of scriptId.** Two scripts whose hashes collide produce overlapping rule-ID ranges and an `updateDynamicRules` failure. The dashboard CSP path already moved off hash-based IDs; GM_webRequest should too.
+  Where: `src/background/dnr-rules.ts` _makeRuleId
+
+- **P3 — Partial i18n coverage on popup and install pages.** Many toasts, empty states, and the entire install review UI are hardcoded English while the surrounding surfaces are keyed, so non-English users get half-translated pages.
+  Where: `pages/popup.js`, `pages/install.js`
+
+- **P3 — README advertises the browser-reserved Ctrl+Tab shortcut.** Chrome reserves Ctrl+Tab / Ctrl+Shift+Tab, so the dashboard tab-cycling handler and help text never fire; the toolbar-cycling selectors (`.toolbar`/`.tm-toolbar`/`.bulk-actions`) also match no element.
+  Where: `README.md` keyboard shortcuts; `pages/dashboard-keyboard.js` getToolbarButtons
 
 ## Later
 
