@@ -322,12 +322,12 @@ const CardView = (() => {
 
 .cv-badge.remote {
   background: rgba(96, 165, 250, 0.12);
-  color: #bfdbfe;
+  color: var(--accent-blue, #60a5fa);
 }
 
 .cv-badge.local {
   background: rgba(148, 163, 184, 0.12);
-  color: #cbd5e1;
+  color: var(--text-secondary, #a0a0a0);
 }
 
 .cv-badge.warning {

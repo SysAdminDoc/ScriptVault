@@ -42,6 +42,7 @@ INCLUDE=(
   lib/diff.min.js
   lib/fflate.js
   lib/scriptvault.d.ts
+  managed-storage-schema.json
   _locales
 )
 

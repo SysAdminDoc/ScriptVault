@@ -139,16 +139,16 @@ globalThis.chrome = {
     onClosed: { addListener: vi.fn() },
   },
   alarms: {
-    create: vi.fn(),
-    clear: vi.fn(),
+    create: vi.fn().mockResolvedValue(),
+    clear: vi.fn().mockResolvedValue(),
     clearAll: vi.fn().mockResolvedValue(),
     get: vi.fn().mockResolvedValue(null),
     getAll: vi.fn().mockResolvedValue([]),
     onAlarm: { addListener: vi.fn() },
   },
   contextMenus: {
-    create: vi.fn(),
-    removeAll: vi.fn(),
+    create: vi.fn().mockReturnValue(1),
+    removeAll: vi.fn().mockResolvedValue(),
     onClicked: { addListener: vi.fn() },
   },
   userScripts: {

@@ -31,14 +31,13 @@ const DependencyGraph = (() => {
         simulationAlpha: 1,
         width: 0,
         height: 0,
-        edgeTypeColors: {
-            require: '#60a5fa',   // --accent-blue
-            match: '#4ade80',     // --accent-green
-            resource: '#fb923c',  // --accent-orange
-            connect: '#c084fc'    // --accent-purple
-        },
-        conflictColor: '#f87171', // --accent-red
-        warningColor: '#fbbf24',  // --accent-yellow
+        edgeTypeColors: {},
+        conflictColor: '',
+        warningColor: '',
+        bgColor: '',
+        textColor: '',
+        textDimColor: '',
+        fallbackEdgeColor: '',
         onOpenEditor: null
     };
 
@@ -47,6 +46,24 @@ const DependencyGraph = (() => {
         : (el, html) => {
           el.replaceChildren(document.createRange().createContextualFragment(String(html ?? '')));
         };
+
+    function _resolveThemeColors() {
+        const el = _state.container || document.documentElement;
+        const cs = getComputedStyle(el);
+        const v = (name, fb) => cs.getPropertyValue(name).trim() || fb;
+        _state.edgeTypeColors = {
+            require: v('--accent-blue', '#60a5fa'),
+            match:   v('--accent-green', '#4ade80'),
+            resource: v('--accent-orange', '#fb923c'),
+            connect: v('--accent-purple', '#c084fc')
+        };
+        _state.conflictColor = v('--accent-red', '#f87171');
+        _state.warningColor = v('--accent-yellow', '#fbbf24');
+        _state.bgColor = v('--bg-body', '#1a1a1a');
+        _state.textColor = v('--text-primary', '#e0e0e0');
+        _state.textDimColor = v('--text-muted', '#707070');
+        _state.fallbackEdgeColor = v('--border-color', '#555');
+    }
 
     // =========================================
     // CSS
@@ -589,7 +606,7 @@ const DependencyGraph = (() => {
                 ctx.lineWidth = 2.5;
                 ctx.setLineDash([6, 4]);
             } else {
-                ctx.strokeStyle = _state.edgeTypeColors[edge.type] || '#555';
+                ctx.strokeStyle = _state.edgeTypeColors[edge.type] || _state.fallbackEdgeColor;
                 ctx.lineWidth = 1.5;
                 ctx.setLineDash([]);
             }
@@ -613,7 +630,7 @@ const DependencyGraph = (() => {
                 ctx.beginPath();
                 ctx.arc(mx, my, 8, 0, Math.PI * 2);
                 ctx.fill();
-                ctx.fillStyle = '#fff';
+                ctx.fillStyle = _state.bgColor;
                 ctx.font = 'bold 10px sans-serif';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
@@ -644,23 +661,23 @@ const DependencyGraph = (() => {
             } else if (isSelected) {
                 ctx.fillStyle = 'rgba(96, 165, 250, 0.2)';
                 ctx.fill();
-                ctx.strokeStyle = '#60a5fa';
+                ctx.strokeStyle = _state.edgeTypeColors.require;
                 ctx.lineWidth = 2.5;
             } else if (isHovered) {
                 ctx.fillStyle = 'rgba(74, 222, 128, 0.15)';
                 ctx.fill();
-                ctx.strokeStyle = '#4ade80';
+                ctx.strokeStyle = _state.edgeTypeColors.match;
                 ctx.lineWidth = 2;
             } else {
                 ctx.fillStyle = node.enabled ? 'rgba(74, 222, 128, 0.12)' : 'rgba(85, 85, 85, 0.15)';
                 ctx.fill();
-                ctx.strokeStyle = node.enabled ? '#4ade80' : '#555';
+                ctx.strokeStyle = node.enabled ? _state.edgeTypeColors.match : _state.fallbackEdgeColor;
                 ctx.lineWidth = 1.5;
             }
             ctx.stroke();
 
             // Node label
-            ctx.fillStyle = node.enabled ? '#e0e0e0' : '#707070';
+            ctx.fillStyle = node.enabled ? _state.textColor : _state.textDimColor;
             ctx.font = `${isSelected || isHovered ? 'bold ' : ''}11px -apple-system, BlinkMacSystemFont, sans-serif`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'top';
@@ -676,7 +693,7 @@ const DependencyGraph = (() => {
                 ctx.beginPath();
                 ctx.arc(bx, by, 7, 0, Math.PI * 2);
                 ctx.fill();
-                ctx.fillStyle = '#fff';
+                ctx.fillStyle = _state.bgColor;
                 ctx.font = 'bold 9px sans-serif';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
@@ -916,7 +933,7 @@ const DependencyGraph = (() => {
 
         // Overlapping scripts
         for (const [type, items] of Object.entries(overlaps)) {
-            const color = _state.edgeTypeColors[type] || '#888';
+            const color = _state.edgeTypeColors[type] || _state.fallbackEdgeColor;
             const typeLabel = { require: 'Shared @require', match: '@match Overlap', resource: 'Shared @resource', connect: '@connect Overlap' }[type] || type;
             html += `<div class="dg-detail-section">
                 <h4>${typeLabel}</h4>
@@ -1078,7 +1095,7 @@ const DependencyGraph = (() => {
         exportCanvas.height = Math.max(h, 300);
 
         const ctx = exportCanvas.getContext('2d');
-        ctx.fillStyle = '#1a1a1a';
+        ctx.fillStyle = _state.bgColor;
         ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
 
         ctx.save();
@@ -1106,7 +1123,7 @@ const DependencyGraph = (() => {
         const oy = -bounds.minY + padding;
 
         let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${Math.max(w, 400)}" height="${Math.max(h, 300)}" viewBox="0 0 ${Math.max(w, 400)} ${Math.max(h, 300)}">`;
-        svg += `<rect width="100%" height="100%" fill="#1a1a1a"/>`;
+        svg += `<rect width="100%" height="100%" fill="${_state.bgColor}"/>`;
         svg += `<g transform="translate(${ox},${oy})">`;
 
         // Edges
@@ -1115,7 +1132,7 @@ const DependencyGraph = (() => {
             const b = _state.nodes.find(n => n.id === edge.target);
             if (!a || !b) continue;
             const isConflict = edge.type === 'match' && a.enabled && b.enabled;
-            const color = isConflict ? _state.conflictColor : (_state.edgeTypeColors[edge.type] || '#555');
+            const color = isConflict ? _state.conflictColor : (_state.edgeTypeColors[edge.type] || _state.fallbackEdgeColor);
             const dash = isConflict ? ' stroke-dasharray="6,4"' : '';
             svg += `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${color}" stroke-width="${isConflict ? 2.5 : 1.5}" opacity="0.7"${dash}/>`;
         }
@@ -1123,10 +1140,10 @@ const DependencyGraph = (() => {
         // Nodes
         for (const node of _state.nodes) {
             const hasConflict = node.conflicts.length > 0 && node.enabled;
-            const stroke = hasConflict ? _state.conflictColor : (node.enabled ? '#4ade80' : '#555');
+            const stroke = hasConflict ? _state.conflictColor : (node.enabled ? _state.edgeTypeColors.match : _state.fallbackEdgeColor);
             const fill = hasConflict ? 'rgba(248,113,113,0.15)' : (node.enabled ? 'rgba(74,222,128,0.12)' : 'rgba(85,85,85,0.15)');
             svg += `<circle cx="${node.x}" cy="${node.y}" r="${node.radius}" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>`;
-            const labelColor = node.enabled ? '#e0e0e0' : '#707070';
+            const labelColor = node.enabled ? _state.textColor : _state.textDimColor;
             svg += `<text x="${node.x}" y="${node.y + node.radius + 14}" fill="${labelColor}" font-size="11" text-anchor="middle" font-family="sans-serif">${escapeHtml(truncateLabel(node.label, 20))}</text>`;
         }
 
@@ -1166,7 +1183,7 @@ const DependencyGraph = (() => {
             ctx.beginPath();
             ctx.moveTo(a.x, a.y);
             ctx.lineTo(b.x, b.y);
-            ctx.strokeStyle = isConflict ? _state.conflictColor : (_state.edgeTypeColors[edge.type] || '#555');
+            ctx.strokeStyle = isConflict ? _state.conflictColor : (_state.edgeTypeColors[edge.type] || _state.fallbackEdgeColor);
             ctx.lineWidth = isConflict ? 2.5 : 1.5;
             if (isConflict) ctx.setLineDash([6, 4]);
             ctx.globalAlpha = 0.7;
@@ -1182,10 +1199,10 @@ const DependencyGraph = (() => {
             ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
             ctx.fillStyle = hasConflict ? 'rgba(248,113,113,0.15)' : (node.enabled ? 'rgba(74,222,128,0.12)' : 'rgba(85,85,85,0.15)');
             ctx.fill();
-            ctx.strokeStyle = hasConflict ? _state.conflictColor : (node.enabled ? '#4ade80' : '#555');
+            ctx.strokeStyle = hasConflict ? _state.conflictColor : (node.enabled ? _state.edgeTypeColors.match : _state.fallbackEdgeColor);
             ctx.lineWidth = 1.5;
             ctx.stroke();
-            ctx.fillStyle = node.enabled ? '#e0e0e0' : '#707070';
+            ctx.fillStyle = node.enabled ? _state.textColor : _state.textDimColor;
             ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'top';
@@ -1201,6 +1218,7 @@ const DependencyGraph = (() => {
         injectStyles();
         _state.onOpenEditor = options.onOpenEditor || null;
         buildUI(containerEl);
+        _resolveThemeColors();
         _state.animFrameId = requestAnimationFrame(animationLoop);
     }
 
