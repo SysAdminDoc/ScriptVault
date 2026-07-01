@@ -7030,8 +7030,7 @@ async function handleMessage(message, sender) {
         for (const script of scripts) {
           const newEnabled = profile.scriptStates?.[script.id] ?? script.enabled;
           if (script.enabled !== newEnabled) {
-            script.enabled = newEnabled;
-            updates.push(ScriptStorage.set(script.id, script));
+            updates.push(ScriptStorage.set(script.id, { ...script, enabled: newEnabled }));
           }
         }
         if (updates.length) await Promise.all(updates);

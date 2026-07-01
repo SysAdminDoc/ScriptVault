@@ -1000,11 +1000,11 @@ const DependencyGraph = (() => {
         const legend = document.createElement('div');
         legend.className = 'dg-legend';
         _safeSetHtml(legend, `
-            <div class="dg-legend-item"><span class="dg-legend-dot" style="background:#60a5fa"></span>@require</div>
-            <div class="dg-legend-item"><span class="dg-legend-dot" style="background:#4ade80"></span>@match</div>
-            <div class="dg-legend-item"><span class="dg-legend-dot" style="background:#fb923c"></span>@resource</div>
-            <div class="dg-legend-item"><span class="dg-legend-dot" style="background:#c084fc"></span>@connect</div>
-            <div class="dg-legend-item"><span class="dg-legend-dot" style="background:#f87171"></span>Conflict</div>
+            <div class="dg-legend-item"><span class="dg-legend-dot" style="background:var(--accent-blue, #60a5fa)"></span>@require</div>
+            <div class="dg-legend-item"><span class="dg-legend-dot" style="background:var(--accent-green, #4ade80)"></span>@match</div>
+            <div class="dg-legend-item"><span class="dg-legend-dot" style="background:var(--accent-orange, #fb923c)"></span>@resource</div>
+            <div class="dg-legend-item"><span class="dg-legend-dot" style="background:var(--accent-purple, #c084fc)"></span>@connect</div>
+            <div class="dg-legend-item"><span class="dg-legend-dot" style="background:var(--accent-red, #f87171)"></span>Conflict</div>
         `);
         canvasArea.appendChild(legend);
 
