@@ -38,6 +38,16 @@ Priority labels within tiers: **P0** safety/security/data-loss, **P1** core work
 
 _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.md`.)_
 
+## Next
+
+- **P2 — Unify install page theme variables with theme-tokens.css.** The install page defines its own parallel set of CSS custom properties (`--bg-primary`, `--bg-secondary`, etc.) independent of `theme-tokens.css` used by all other pages. Any theme change must be applied to both systems. Consolidate to a single source.
+  Where: `pages/install.html` lines 20-98
+
+- **P2 — Tests that re-implement production code.** `tests/utils.test.js`, `tests/versions.test.js`, and `tests/parser.test.js` contain full re-implementations of `escapeHtml`, `compareVersions`, and `parseUserscript` instead of importing from the TypeScript sources. Drift between test copies and production code means regressions go undetected.
+  Where: `tests/utils.test.js`, `tests/versions.test.js`, `tests/parser.test.js`
+
+- **P3 — Keyboard alternative for script reorder.** The drag-and-drop reorder handle in the dashboard table only supports mouse drag events. Users who cannot use a mouse have no way to change script execution order.
+  Where: `pages/dashboard.js` createScriptRow drag handle
 
 ## Later
 
