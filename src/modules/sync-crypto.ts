@@ -31,6 +31,12 @@ export interface SyncCryptoSettings {
 }
 
 const DEFAULT_KDF_ITERATIONS = 210_000;
+// Upper bound applied to a remote envelope's declared iteration count on
+// decrypt. A forged envelope could otherwise set iterations to e.g. 1e9 and
+// pin the service worker in PBKDF2 for minutes on every sync attempt (DoS).
+// Legitimate envelopes are written with DEFAULT_KDF_ITERATIONS or the user's
+// configured value; 10M leaves generous headroom above any real setting.
+const MAX_KDF_ITERATIONS = 10_000_000;
 const SALT_BYTES = 16;
 const IV_BYTES = 12;
 const TEXT_ENCODER = new TextEncoder();
@@ -193,10 +199,15 @@ async function decryptSyncEnvelope(
 
   const salt = base64ToBytes(envelope.salt);
   const iv = base64ToBytes(envelope.iv);
+  const declaredIterations = envelope.iterations || DEFAULT_KDF_ITERATIONS;
+  if (!Number.isFinite(declaredIterations) || declaredIterations <= 0
+      || declaredIterations > MAX_KDF_ITERATIONS) {
+    throw new Error('Sync envelope declares an out-of-range KDF iteration count.');
+  }
   const key = await deriveAesGcmKey(
     getPassphrase(settings),
     salt,
-    envelope.iterations || DEFAULT_KDF_ITERATIONS,
+    declaredIterations,
     ['decrypt'],
   );
 

@@ -34,6 +34,7 @@ const CloudSync = (() => {
 
   // src/modules/sync-crypto.ts
   var DEFAULT_KDF_ITERATIONS = 21e4;
+  var MAX_KDF_ITERATIONS = 1e7;
   var SALT_BYTES = 16;
   var IV_BYTES = 12;
   var TEXT_ENCODER = new TextEncoder();
@@ -159,10 +160,14 @@ const CloudSync = (() => {
     }
     const salt = base64ToBytes(envelope.salt);
     const iv = base64ToBytes(envelope.iv);
+    const declaredIterations = envelope.iterations || DEFAULT_KDF_ITERATIONS;
+    if (!Number.isFinite(declaredIterations) || declaredIterations <= 0 || declaredIterations > MAX_KDF_ITERATIONS) {
+      throw new Error("Sync envelope declares an out-of-range KDF iteration count.");
+    }
     const key = await deriveAesGcmKey(
       getPassphrase(settings),
       salt,
-      envelope.iterations || DEFAULT_KDF_ITERATIONS,
+      declaredIterations,
       ["decrypt"]
     );
     try {
@@ -1269,6 +1274,14 @@ const CloudSync = (() => {
       if (remoteData) {
         const mergedTombstones = { ...tombstones, ...remoteData.tombstones ?? {} };
         const merged = this.mergeData(localData, remoteData);
+        for (const tombstoneId of Object.keys(mergedTombstones)) {
+          const tombstoneTs = mergedTombstones[tombstoneId];
+          if (typeof tombstoneTs !== "number") continue;
+          const candidate = merged.scripts.find((s) => s.id === tombstoneId);
+          if (candidate && candidate.updatedAt > tombstoneTs) {
+            delete mergedTombstones[tombstoneId];
+          }
+        }
         merged.scripts = merged.scripts.filter((script) => !mergedTombstones[script.id]);
         const remoteValueBundleSelection = selectApplicableRemoteValueBundles(remoteData, merged.scripts);
         if (Object.keys(remoteValueBundleSelection.valueBundles).length > 0 || remoteValueBundleSelection.ignored > 0 || remoteValueBundleSelection.warnings > 0) {
@@ -1287,21 +1300,23 @@ const CloudSync = (() => {
           localMutated = true;
         }
         for (const script of merged.scripts) {
+          if (signal?.aborted) throw new Error("Sync aborted");
           if (mergedTombstones[script.id]) continue;
           const existing = await ScriptStorage.get(script.id);
           if (existing?.settings?.userModified) continue;
           const remoteScript = remoteData.scripts?.find((s) => s.id === script.id);
-          const localScript = localData.scripts?.find((s) => s.id === script.id);
           let codeToSave = script.code;
           let mergeConflict = false;
-          if (existing && remoteScript && localScript && existing.code !== remoteScript.code && existing.code !== localScript.code) {
-            const base = existing.syncBaseCode ?? existing.code;
-            if (base != null && base !== localScript.code && base !== remoteScript.code) {
+          let didThreeWayMerge = false;
+          if (existing && remoteScript && existing.code !== remoteScript.code) {
+            const base = existing.syncBaseCode ?? null;
+            if (base != null && base !== existing.code && base !== remoteScript.code) {
               try {
-                const mergeResult = await mergeScriptText(base, localScript.code, remoteScript.code);
+                const mergeResult = await mergeScriptText(base, existing.code, remoteScript.code);
                 if (mergeResult && !mergeResult.error) {
                   codeToSave = mergeResult.merged ?? script.code;
                   mergeConflict = mergeResult.conflicts ?? false;
+                  didThreeWayMerge = true;
                   debugLog(`[CloudSync] 3-way merge for ${script.id}: conflicts=${String(mergeConflict)}`);
                 }
               } catch (e) {
@@ -1310,7 +1325,8 @@ const CloudSync = (() => {
               }
             }
           }
-          if (!existing || script.updatedAt > existing.updatedAt || mergeConflict) {
+          const mergeChangedCode = didThreeWayMerge && existing != null && codeToSave !== existing.code;
+          if (!existing || script.updatedAt > existing.updatedAt || mergeConflict || mergeChangedCode) {
             const parsed = parseUserscript(codeToSave);
             if (!parsed.error && parsed.meta) {
               const nextScript = {

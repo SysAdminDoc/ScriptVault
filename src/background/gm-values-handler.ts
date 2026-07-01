@@ -41,6 +41,11 @@ interface RuntimeMessageSender {
   tab?: {
     id?: number;
   };
+  // Set by Chrome for chrome.runtime.onUserScriptMessage senders. When
+  // present it is the authenticated ID of the calling user script and MUST
+  // override any caller-supplied scriptId, so a script cannot read or write
+  // another script's GM values by passing a forged data.scriptId.
+  userScriptId?: string;
 }
 
 interface GMValuesPayload {
@@ -80,15 +85,23 @@ export async function handleGMValuesMessage(
   data: GMValuesPayload = {},
   sender: RuntimeMessageSender = {},
 ): Promise<unknown> {
+  // For GM_* value actions, bind the operation to the authenticated caller
+  // when the message came directly from a user script. sender.userScriptId is
+  // set by Chrome for onUserScriptMessage and cannot be spoofed by page/script
+  // code; it overrides any data.scriptId a malicious script might pass to reach
+  // another script's stored values. Falls back to data.scriptId for the
+  // content-bridge path (older Chrome) where the bridge supplies the ID.
+  const ownedScriptId = sender.userScriptId || data.scriptId;
+
   switch (action) {
     case 'GM_getValue':
-      return await ScriptValues.get(data.scriptId, data.key, data.defaultValue);
+      return await ScriptValues.get(ownedScriptId, data.key, data.defaultValue);
 
     case 'GM_setValue':
-      return await ScriptValues.set(data.scriptId, data.key, data.value, senderTabId(sender));
+      return await ScriptValues.set(ownedScriptId, data.key, data.value, senderTabId(sender));
 
     case 'GM_deleteValue':
-      await ScriptValues.delete(data.scriptId, data.key, senderTabId(sender));
+      await ScriptValues.delete(ownedScriptId, data.key, senderTabId(sender));
       return { success: true };
 
     case 'deleteScriptValue':
@@ -96,17 +109,17 @@ export async function handleGMValuesMessage(
       return { success: true };
 
     case 'GM_listValues':
-      return await ScriptValues.list(data.scriptId);
+      return await ScriptValues.list(ownedScriptId);
 
     case 'GM_getValues':
-      return await ScriptValues.getAll(data.scriptId);
+      return await ScriptValues.getAll(ownedScriptId);
 
     case 'GM_setValues':
-      await ScriptValues.setAll(data.scriptId, data.values, senderTabId(sender));
+      await ScriptValues.setAll(ownedScriptId, data.values, senderTabId(sender));
       return { success: true };
 
     case 'GM_deleteValues':
-      await ScriptValues.deleteMultiple(data.scriptId, data.keys, senderTabId(sender));
+      await ScriptValues.deleteMultiple(ownedScriptId, data.keys, senderTabId(sender));
       return { success: true };
 
     case 'getScriptStorage':

@@ -48,6 +48,11 @@ declare function buildWrappedScript(
   regexExcludes: string[],
 ): string;
 declare function debugLog(...args: unknown[]): void;
+declare function executeWrappedScriptInTab(
+  tabId: number,
+  wrappedCode: string,
+  wantsPageContext: boolean,
+): Promise<string>;
 
 const LINK_INSTALL_MAX_BYTES = 5 * 1024 * 1024;
 
@@ -254,15 +259,14 @@ export function registerContextMenuClickListener(): void {
                   [],
                   [],
                 );
-                // Execute in ISOLATED world (content script context) which has chrome.runtime access
-                // The wrapper's sendToBackground uses chrome.runtime.sendMessage directly
-                await chrome.scripting.executeScript({
-                  target: { tabId: tab.id },
-                  func: ((code: string) => {
-                    (0, eval)(code);
-                  }) as unknown as () => void,
-                  args: [wrappedCode],
-                });
+                // Execute in the USER_SCRIPT world like every other injection
+                // path (page-load registration, @crontab, runScriptNow). The
+                // MAIN-world fallback stays gated behind an explicit
+                // @inject-into page / @sandbox raw declaration.
+                const ctxInjectInto: string = meta['inject-into'] || 'auto';
+                const ctxSandbox: string = meta.sandbox || '';
+                const ctxWantsPage: boolean = ctxInjectInto === 'page' || ctxSandbox === 'raw';
+                await executeWrappedScriptInTab(tab.id, wrappedCode, ctxWantsPage);
                 // Feedback notification
                 const settings: Settings = await SettingsManager.get();
                 if (settings.notifyOnError !== false) {

@@ -34,6 +34,7 @@ const EasyCloudSync = (() => {
 
   // src/modules/sync-crypto.ts
   var DEFAULT_KDF_ITERATIONS = 21e4;
+  var MAX_KDF_ITERATIONS = 1e7;
   var SALT_BYTES = 16;
   var IV_BYTES = 12;
   var TEXT_ENCODER = new TextEncoder();
@@ -159,10 +160,14 @@ const EasyCloudSync = (() => {
     }
     const salt = base64ToBytes(envelope.salt);
     const iv = base64ToBytes(envelope.iv);
+    const declaredIterations = envelope.iterations || DEFAULT_KDF_ITERATIONS;
+    if (!Number.isFinite(declaredIterations) || declaredIterations <= 0 || declaredIterations > MAX_KDF_ITERATIONS) {
+      throw new Error("Sync envelope declares an out-of-range KDF iteration count.");
+    }
     const key = await deriveAesGcmKey(
       getPassphrase(settings),
       salt,
-      envelope.iterations || DEFAULT_KDF_ITERATIONS,
+      declaredIterations,
       ["decrypt"]
     );
     try {

@@ -8517,13 +8517,14 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
             }
             const storedValues = await ScriptValues.getAll(script.id) || {};
             const wrappedCode = buildWrappedScript(script, requireScripts, storedValues, [], []);
-            // Execute in ISOLATED world (content script context) which has chrome.runtime access
-            // The wrapper's sendToBackground uses chrome.runtime.sendMessage directly
-            await chrome.scripting.executeScript({
-              target: { tabId: tab.id },
-              func: (code) => { (0, eval)(code); },
-              args: [wrappedCode]
-            });
+            // Execute in the USER_SCRIPT world like every other injection
+            // path (page-load registration, @crontab, runScriptNow). The
+            // MAIN-world fallback stays gated behind an explicit
+            // @inject-into page / @sandbox raw declaration.
+            const ctxInjectInto = meta['inject-into'] || 'auto';
+            const ctxSandbox = meta.sandbox || '';
+            const ctxWantsPage = (ctxInjectInto === 'page' || ctxSandbox === 'raw');
+            await executeWrappedScriptInTab(tab.id, wrappedCode, ctxWantsPage);
             // Feedback notification
             const settings = await SettingsManager.get();
             if (settings.notifyOnError !== false) {
@@ -8939,7 +8940,7 @@ function scheduleCrontabAlarm(script, from = new Date()) {
   return next;
 }
 
-async function executeCrontabScriptInTab(tabId, wrappedCode, wantsPageContext) {
+async function executeWrappedScriptInTab(tabId, wrappedCode, wantsPageContext) {
   if (typeof chrome.userScripts?.execute === 'function') {
     try {
       await chrome.userScripts.execute({
@@ -8949,7 +8950,7 @@ async function executeCrontabScriptInTab(tabId, wrappedCode, wantsPageContext) {
       });
       return 'userScripts.execute';
     } catch (e) {
-      debugLog('crontab userScripts.execute failed, falling back:', e?.message);
+      debugLog('userScripts.execute failed, falling back:', e?.message);
     }
   }
 
@@ -8961,7 +8962,7 @@ async function executeCrontabScriptInTab(tabId, wrappedCode, wantsPageContext) {
     target: { tabId },
     world: 'MAIN',
     func: (code) => {
-      try { (0, eval)(code); } catch (err) { console.error('[ScriptVault Crontab]', err); }
+      try { (0, eval)(code); } catch (err) { console.error('[ScriptVault]', err); }
     },
     args: [wrappedCode]
   });
@@ -9015,7 +9016,7 @@ async function handleCrontabAlarm(scriptId) {
     if (!tab.url || !tab.id) continue;
     if (!doesScriptMatchUrl(script, tab.url)) continue;
     try {
-      const mode = await executeCrontabScriptInTab(tab.id, wrappedCode, crontabWantsPage);
+      const mode = await executeWrappedScriptInTab(tab.id, wrappedCode, crontabWantsPage);
       debugLog(`@crontab ${meta.name}: executed in tab ${tab.id} via ${mode}`);
     } catch (e) {
       debugLog(`@crontab ${meta.name}: failed in tab ${tab.id}: ${e.message}`);

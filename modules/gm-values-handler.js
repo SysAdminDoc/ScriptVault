@@ -57,26 +57,27 @@ const GMValuesHandler = (() => {
     return typeof action === "string" && GM_VALUES_ACTION_SET.has(action);
   }
   async function handleGMValuesMessage(action, data = {}, sender = {}) {
+    const ownedScriptId = sender.userScriptId || data.scriptId;
     switch (action) {
       case "GM_getValue":
-        return await ScriptValues.get(data.scriptId, data.key, data.defaultValue);
+        return await ScriptValues.get(ownedScriptId, data.key, data.defaultValue);
       case "GM_setValue":
-        return await ScriptValues.set(data.scriptId, data.key, data.value, senderTabId(sender));
+        return await ScriptValues.set(ownedScriptId, data.key, data.value, senderTabId(sender));
       case "GM_deleteValue":
-        await ScriptValues.delete(data.scriptId, data.key, senderTabId(sender));
+        await ScriptValues.delete(ownedScriptId, data.key, senderTabId(sender));
         return { success: true };
       case "deleteScriptValue":
         await ScriptValues.delete(data.scriptId, data.key);
         return { success: true };
       case "GM_listValues":
-        return await ScriptValues.list(data.scriptId);
+        return await ScriptValues.list(ownedScriptId);
       case "GM_getValues":
-        return await ScriptValues.getAll(data.scriptId);
+        return await ScriptValues.getAll(ownedScriptId);
       case "GM_setValues":
-        await ScriptValues.setAll(data.scriptId, data.values, senderTabId(sender));
+        await ScriptValues.setAll(ownedScriptId, data.values, senderTabId(sender));
         return { success: true };
       case "GM_deleteValues":
-        await ScriptValues.deleteMultiple(data.scriptId, data.keys, senderTabId(sender));
+        await ScriptValues.deleteMultiple(ownedScriptId, data.keys, senderTabId(sender));
         return { success: true };
       case "getScriptStorage":
       case "getScriptValues": {

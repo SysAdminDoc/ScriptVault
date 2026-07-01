@@ -1,4 +1,4 @@
-// ScriptVault v3.11.0 - Background Service Worker
+// ScriptVault v3.12.0 - Background Service Worker
 // Comprehensive userscript manager with cloud sync and auto-updates
 // NOTE: This file is built from source modules. Edit the individual files in
 // shared/, modules/, and lib/, then run `npm run build` to regenerate.
@@ -18563,26 +18563,27 @@ const GMValuesHandler = (() => {
     return typeof action === "string" && GM_VALUES_ACTION_SET.has(action);
   }
   async function handleGMValuesMessage(action, data = {}, sender = {}) {
+    const ownedScriptId = sender.userScriptId || data.scriptId;
     switch (action) {
       case "GM_getValue":
-        return await ScriptValues.get(data.scriptId, data.key, data.defaultValue);
+        return await ScriptValues.get(ownedScriptId, data.key, data.defaultValue);
       case "GM_setValue":
-        return await ScriptValues.set(data.scriptId, data.key, data.value, senderTabId(sender));
+        return await ScriptValues.set(ownedScriptId, data.key, data.value, senderTabId(sender));
       case "GM_deleteValue":
-        await ScriptValues.delete(data.scriptId, data.key, senderTabId(sender));
+        await ScriptValues.delete(ownedScriptId, data.key, senderTabId(sender));
         return { success: true };
       case "deleteScriptValue":
         await ScriptValues.delete(data.scriptId, data.key);
         return { success: true };
       case "GM_listValues":
-        return await ScriptValues.list(data.scriptId);
+        return await ScriptValues.list(ownedScriptId);
       case "GM_getValues":
-        return await ScriptValues.getAll(data.scriptId);
+        return await ScriptValues.getAll(ownedScriptId);
       case "GM_setValues":
-        await ScriptValues.setAll(data.scriptId, data.values, senderTabId(sender));
+        await ScriptValues.setAll(ownedScriptId, data.values, senderTabId(sender));
         return { success: true };
       case "GM_deleteValues":
-        await ScriptValues.deleteMultiple(data.scriptId, data.keys, senderTabId(sender));
+        await ScriptValues.deleteMultiple(ownedScriptId, data.keys, senderTabId(sender));
         return { success: true };
       case "getScriptStorage":
       case "getScriptValues": {
@@ -21906,6 +21907,7 @@ const SyncCrypto = (() => {
   });
   module.exports = __toCommonJS(sync_crypto_exports);
   var DEFAULT_KDF_ITERATIONS = 21e4;
+  var MAX_KDF_ITERATIONS = 1e7;
   var SALT_BYTES = 16;
   var IV_BYTES = 12;
   var TEXT_ENCODER = new TextEncoder();
@@ -22031,10 +22033,14 @@ const SyncCrypto = (() => {
     }
     const salt = base64ToBytes(envelope.salt);
     const iv = base64ToBytes(envelope.iv);
+    const declaredIterations = envelope.iterations || DEFAULT_KDF_ITERATIONS;
+    if (!Number.isFinite(declaredIterations) || declaredIterations <= 0 || declaredIterations > MAX_KDF_ITERATIONS) {
+      throw new Error("Sync envelope declares an out-of-range KDF iteration count.");
+    }
     const key = await deriveAesGcmKey(
       getPassphrase(settings),
       salt,
-      envelope.iterations || DEFAULT_KDF_ITERATIONS,
+      declaredIterations,
       ["decrypt"]
     );
     try {
@@ -22108,6 +22114,7 @@ const CloudSync = (() => {
 
   // src/modules/sync-crypto.ts
   var DEFAULT_KDF_ITERATIONS = 21e4;
+  var MAX_KDF_ITERATIONS = 1e7;
   var SALT_BYTES = 16;
   var IV_BYTES = 12;
   var TEXT_ENCODER = new TextEncoder();
@@ -22233,10 +22240,14 @@ const CloudSync = (() => {
     }
     const salt = base64ToBytes(envelope.salt);
     const iv = base64ToBytes(envelope.iv);
+    const declaredIterations = envelope.iterations || DEFAULT_KDF_ITERATIONS;
+    if (!Number.isFinite(declaredIterations) || declaredIterations <= 0 || declaredIterations > MAX_KDF_ITERATIONS) {
+      throw new Error("Sync envelope declares an out-of-range KDF iteration count.");
+    }
     const key = await deriveAesGcmKey(
       getPassphrase(settings),
       salt,
-      envelope.iterations || DEFAULT_KDF_ITERATIONS,
+      declaredIterations,
       ["decrypt"]
     );
     try {
@@ -23343,6 +23354,14 @@ const CloudSync = (() => {
       if (remoteData) {
         const mergedTombstones = { ...tombstones, ...remoteData.tombstones ?? {} };
         const merged = this.mergeData(localData, remoteData);
+        for (const tombstoneId of Object.keys(mergedTombstones)) {
+          const tombstoneTs = mergedTombstones[tombstoneId];
+          if (typeof tombstoneTs !== "number") continue;
+          const candidate = merged.scripts.find((s) => s.id === tombstoneId);
+          if (candidate && candidate.updatedAt > tombstoneTs) {
+            delete mergedTombstones[tombstoneId];
+          }
+        }
         merged.scripts = merged.scripts.filter((script) => !mergedTombstones[script.id]);
         const remoteValueBundleSelection = selectApplicableRemoteValueBundles(remoteData, merged.scripts);
         if (Object.keys(remoteValueBundleSelection.valueBundles).length > 0 || remoteValueBundleSelection.ignored > 0 || remoteValueBundleSelection.warnings > 0) {
@@ -23361,21 +23380,23 @@ const CloudSync = (() => {
           localMutated = true;
         }
         for (const script of merged.scripts) {
+          if (signal?.aborted) throw new Error("Sync aborted");
           if (mergedTombstones[script.id]) continue;
           const existing = await ScriptStorage.get(script.id);
           if (existing?.settings?.userModified) continue;
           const remoteScript = remoteData.scripts?.find((s) => s.id === script.id);
-          const localScript = localData.scripts?.find((s) => s.id === script.id);
           let codeToSave = script.code;
           let mergeConflict = false;
-          if (existing && remoteScript && localScript && existing.code !== remoteScript.code && existing.code !== localScript.code) {
-            const base = existing.syncBaseCode ?? existing.code;
-            if (base != null && base !== localScript.code && base !== remoteScript.code) {
+          let didThreeWayMerge = false;
+          if (existing && remoteScript && existing.code !== remoteScript.code) {
+            const base = existing.syncBaseCode ?? null;
+            if (base != null && base !== existing.code && base !== remoteScript.code) {
               try {
-                const mergeResult = await mergeScriptText(base, localScript.code, remoteScript.code);
+                const mergeResult = await mergeScriptText(base, existing.code, remoteScript.code);
                 if (mergeResult && !mergeResult.error) {
                   codeToSave = mergeResult.merged ?? script.code;
                   mergeConflict = mergeResult.conflicts ?? false;
+                  didThreeWayMerge = true;
                   debugLog(`[CloudSync] 3-way merge for ${script.id}: conflicts=${String(mergeConflict)}`);
                 }
               } catch (e) {
@@ -23384,7 +23405,8 @@ const CloudSync = (() => {
               }
             }
           }
-          if (!existing || script.updatedAt > existing.updatedAt || mergeConflict) {
+          const mergeChangedCode = didThreeWayMerge && existing != null && codeToSave !== existing.code;
+          if (!existing || script.updatedAt > existing.updatedAt || mergeConflict || mergeChangedCode) {
             const parsed = parseUserscript(codeToSave);
             if (!parsed.error && parsed.meta) {
               const nextScript = {
@@ -23536,6 +23558,7 @@ const EasyCloudSync = (() => {
 
   // src/modules/sync-crypto.ts
   var DEFAULT_KDF_ITERATIONS = 21e4;
+  var MAX_KDF_ITERATIONS = 1e7;
   var SALT_BYTES = 16;
   var IV_BYTES = 12;
   var TEXT_ENCODER = new TextEncoder();
@@ -23661,10 +23684,14 @@ const EasyCloudSync = (() => {
     }
     const salt = base64ToBytes(envelope.salt);
     const iv = base64ToBytes(envelope.iv);
+    const declaredIterations = envelope.iterations || DEFAULT_KDF_ITERATIONS;
+    if (!Number.isFinite(declaredIterations) || declaredIterations <= 0 || declaredIterations > MAX_KDF_ITERATIONS) {
+      throw new Error("Sync envelope declares an out-of-range KDF iteration count.");
+    }
     const key = await deriveAesGcmKey(
       getPassphrase(settings),
       salt,
-      envelope.iterations || DEFAULT_KDF_ITERATIONS,
+      declaredIterations,
       ["decrypt"]
     );
     try {
@@ -40520,13 +40547,14 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
             }
             const storedValues = await ScriptValues.getAll(script.id) || {};
             const wrappedCode = buildWrappedScript(script, requireScripts, storedValues, [], []);
-            // Execute in ISOLATED world (content script context) which has chrome.runtime access
-            // The wrapper's sendToBackground uses chrome.runtime.sendMessage directly
-            await chrome.scripting.executeScript({
-              target: { tabId: tab.id },
-              func: (code) => { (0, eval)(code); },
-              args: [wrappedCode]
-            });
+            // Execute in the USER_SCRIPT world like every other injection
+            // path (page-load registration, @crontab, runScriptNow). The
+            // MAIN-world fallback stays gated behind an explicit
+            // @inject-into page / @sandbox raw declaration.
+            const ctxInjectInto = meta['inject-into'] || 'auto';
+            const ctxSandbox = meta.sandbox || '';
+            const ctxWantsPage = (ctxInjectInto === 'page' || ctxSandbox === 'raw');
+            await executeWrappedScriptInTab(tab.id, wrappedCode, ctxWantsPage);
             // Feedback notification
             const settings = await SettingsManager.get();
             if (settings.notifyOnError !== false) {
@@ -40942,7 +40970,7 @@ function scheduleCrontabAlarm(script, from = new Date()) {
   return next;
 }
 
-async function executeCrontabScriptInTab(tabId, wrappedCode, wantsPageContext) {
+async function executeWrappedScriptInTab(tabId, wrappedCode, wantsPageContext) {
   if (typeof chrome.userScripts?.execute === 'function') {
     try {
       await chrome.userScripts.execute({
@@ -40952,7 +40980,7 @@ async function executeCrontabScriptInTab(tabId, wrappedCode, wantsPageContext) {
       });
       return 'userScripts.execute';
     } catch (e) {
-      debugLog('crontab userScripts.execute failed, falling back:', e?.message);
+      debugLog('userScripts.execute failed, falling back:', e?.message);
     }
   }
 
@@ -40964,7 +40992,7 @@ async function executeCrontabScriptInTab(tabId, wrappedCode, wantsPageContext) {
     target: { tabId },
     world: 'MAIN',
     func: (code) => {
-      try { (0, eval)(code); } catch (err) { console.error('[ScriptVault Crontab]', err); }
+      try { (0, eval)(code); } catch (err) { console.error('[ScriptVault]', err); }
     },
     args: [wrappedCode]
   });
@@ -41018,7 +41046,7 @@ async function handleCrontabAlarm(scriptId) {
     if (!tab.url || !tab.id) continue;
     if (!doesScriptMatchUrl(script, tab.url)) continue;
     try {
-      const mode = await executeCrontabScriptInTab(tab.id, wrappedCode, crontabWantsPage);
+      const mode = await executeWrappedScriptInTab(tab.id, wrappedCode, crontabWantsPage);
       debugLog(`@crontab ${meta.name}: executed in tab ${tab.id} via ${mode}`);
     } catch (e) {
       debugLog(`@crontab ${meta.name}: failed in tab ${tab.id}: ${e.message}`);
