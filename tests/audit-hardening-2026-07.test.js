@@ -17,7 +17,6 @@ describe('safeSetHtml fragment context (2026-07 regression)', () => {
     'pages/dashboard-cardview.js',
     'pages/dashboard-chains.js',
     'pages/dashboard-collections.js',
-    'pages/dashboard-store.js',
     'pages/dashboard-snippets.js',
     'pages/dashboard-heatmap.js',
     'pages/dashboard-scheduler.js',

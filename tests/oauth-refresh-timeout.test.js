@@ -5,9 +5,8 @@
 //   3. Return null when fetch rejects with a network error
 //   4. Always clearTimeout in the finally path (no leaked timer)
 //
-// Extracted from the runtime file via the same helper pattern used in
-// tests/dashboard-store-url-safety.test.js so a refactor that drops the
-// guard fails CI loudly.
+// Extracted from the runtime file via source-text function extraction so a
+// refactor that drops the guard fails CI loudly.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';

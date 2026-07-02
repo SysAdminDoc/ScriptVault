@@ -46,7 +46,7 @@ function createDashboardRouteParser() {
     throw new Error('Unable to locate getDashboardRoute in dashboard.js');
   }
   const _body = `${match[0]}; return getDashboardRoute;`;
-  return _invoke(_body, ['window', 'DASHBOARD_TABS'], [window, ['scripts', 'settings', 'utilities', 'trash', 'store']], resolve(process.cwd(), 'pages/dashboard.js'));
+  return _invoke(_body, ['window', 'DASHBOARD_TABS'], [window, ['scripts', 'settings', 'utilities', 'trash']], resolve(process.cwd(), 'pages/dashboard.js'));
 }
 
 function createDeferred() {

@@ -6241,7 +6241,6 @@
                     <button type="button" class="tm-tab" id="dashboardTabSettings" role="tab" aria-selected="false" aria-controls="settingsPanel" tabindex="-1" data-tab="settings"><span data-i18n="tabSettings">Settings</span></button>
                     <button type="button" class="tm-tab" id="dashboardTabUtilities" role="tab" aria-selected="false" aria-controls="utilitiesPanel" tabindex="-1" data-tab="utilities"><span data-i18n="tabUtilities">Utilities</span></button>
                     <button type="button" class="tm-tab" id="dashboardTabTrash" role="tab" aria-selected="false" aria-controls="trashPanel" tabindex="-1" data-tab="trash"><span data-i18n="tabTrash">Trash</span></button>
-                    <button type="button" class="tm-tab" id="dashboardTabStore" role="tab" aria-selected="false" aria-controls="storePanel" tabindex="-1" data-tab="store"><span data-i18n="tabStore">Script Store</span></button>
                 </div>
             </div>
         </nav>
@@ -7938,14 +7937,6 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
             </div>
         </div>
 
-        <!-- Script Store Panel -->
-        <div id="storePanel" class="tm-panel" role="tabpanel" aria-labelledby="dashboardTabStore" hidden>
-            <div id="storeContainer" style="min-height:calc(100vh - 120px);">
-                <div class="lazy-loading-state"><div class="lazy-spinner"></div><div data-i18n="loadingScriptStore">Loading Script Store...</div></div>
-            </div>
-        </div>
-
-
         <!-- Help Panel -->
         <div id="helpPanel" class="tm-panel" role="region" aria-labelledby="btnHelpTab" hidden>
             <div class="help-shell">
@@ -8824,7 +8815,6 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
     <script src="dashboard-firefox-compat.js"></script>
     <script src="dashboard-a11y.js"></script>
     <script src="dashboard-keyboard.js"></script>
-    <script src="dashboard-store.js"></script>
     <script src="monaco-adapter.js"></script>
     <script src="dashboard-virtual-rows.js"></script>
     <script src="dashboard.js"></script>

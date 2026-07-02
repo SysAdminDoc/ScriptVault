@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-3.14.0-22c55e?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/version-3.15.0-22c55e?style=flat-square" alt="Version">
   <img src="https://img.shields.io/badge/manifest-v3-60a5fa?style=flat-square" alt="Manifest V3">
   <img src="https://img.shields.io/badge/license-MIT-orange?style=flat-square" alt="License">
   <img src="https://img.shields.io/badge/chrome-130%2B-blue?style=flat-square" alt="Chrome 130+">
@@ -107,7 +107,7 @@ create a broad passthrough policy just to bypass CSP.
 - **Per-script export** &mdash; Export individual scripts as `.user.js` files
 - **Script templates** &mdash; 6 starter templates (blank, page modifier, CSS injector, API interceptor, SPA script, cross-site request)
 - **Version rollback** &mdash; Auto-saves last 3 versions on update; one-click rollback from info panel
-- **Storage quota monitor** &mdash; Visual quota bar with warning when approaching Chrome's 10MB limit
+- **Storage quota monitor** &mdash; Visual quota bar with warning when approaching the real storage quota (unlimitedStorage-aware)
 - **Bucketed IndexedDB storage** &mdash; Separates script records, GM values, and backup blobs through Storage Buckets when Chrome exposes `navigator.storageBuckets`, with single-DB fallback elsewhere
 - **Tag filtering** &mdash; Filter scripts by `@tag` metadata in the dashboard dropdown
 - **Drag-and-drop install** &mdash; Drop `.user.js` or `.zip` files onto the dashboard to install
@@ -246,10 +246,9 @@ Deep dashboard content is still being migrated to DOM translation coverage.
 ### v2.0 — New Features
 
 <details>
-<summary><strong>Click to expand all v2.0 features (58 major features)</strong></summary>
+<summary><strong>Click to expand all v2.0 features (57 major features)</strong></summary>
 
-#### Discovery & Store
-- **Built-in Script Store** &mdash; Search, browse, and install scripts from Greasy Fork directly in the dashboard
+#### Discovery
 - **OpenUserJS Integration** &mdash; Additional script source alongside Greasy Fork
 - **Script Collections** &mdash; Group scripts into installable bundles with 4 built-in packs
 - **Recommendations Panel** &mdash; Heuristic script suggestions derived from installed scripts and Greasy Fork categories

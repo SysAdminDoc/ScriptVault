@@ -9,6 +9,18 @@ const WhatsNew = (() => {
     : '2.0.0';
 
   const CHANGELOG = {
+    '3.15.0': {
+      title: 'ScriptVault 3.15.0 — Leaner Dashboard & Honest Storage Meter',
+      date: '2026-07-02',
+      highlights: [
+        { icon: 'TRIM', title: 'Script Store Removed', desc: 'The Script Store tab is gone — a lighter dashboard that loads less on every open. Use Find Scripts in the toolbar (or popup/side panel) to search GreasyFork and OpenUserJS.' },
+        { icon: 'METER', title: 'Accurate Storage Meter', desc: 'The storage bar now measures against your real disk-based quota instead of a fictional 10 MB cap, so the false "Storage at 100% capacity" warning is gone.' }
+      ],
+      improvements: [
+        'Dashboard startup no longer eagerly loads the ~2,100-line store module',
+        'Command palette and tab navigation trimmed to the surfaces that remain'
+      ]
+    },
     '3.14.0': {
       title: 'ScriptVault 3.14.0 — Sync Merge Restored & Deep Audit',
       date: '2026-07-02',

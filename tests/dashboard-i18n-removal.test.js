@@ -228,7 +228,7 @@ describe('dashboard i18n-v2 removal', () => {
     expect(dashboardJs).toContain("'subscriptionStatusCounts'");
   });
 
-  it('translates trash recovery and script store loading states', () => {
+  it('translates trash recovery states', () => {
     expect(dashboardHtml).toContain('data-i18n="trashRecovery"');
     expect(dashboardHtml).toContain('data-i18n="trashHeroTitle"');
     expect(dashboardHtml).toContain('data-i18n-aria-label="trashOverviewAria"');
@@ -237,7 +237,6 @@ describe('dashboard i18n-v2 removal', () => {
     expect(dashboardHtml).toContain('data-i18n="emptyTrash"');
     expect(dashboardHtml).toContain('data-i18n="trashShowingAllStatic"');
     expect(dashboardHtml).toContain('data-i18n="trashEmptyTitle"');
-    expect(dashboardHtml).toContain('data-i18n="loadingScriptStore"');
     expect(dashboardJs).toContain("'trashRetentionNextPurge'");
     expect(dashboardJs).toContain("'trashResultsForQuery'");
     expect(dashboardJs).toContain("'confirmDeleteForever'");

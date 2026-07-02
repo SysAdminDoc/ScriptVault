@@ -210,13 +210,6 @@ describe("cross-surface UX audit", () => {
   });
 
   test("dashboard keeps the updated column on a real button control", () => {
-    expect(readFileSync(resolve(process.cwd(), "pages/dashboard-store.js"), "utf8")).toContain("pendingFocusRestore: null");
-    expect(readFileSync(resolve(process.cwd(), "pages/dashboard-store.js"), "utf8")).toContain("function getStoreFocusDescriptor(control = document.activeElement)");
-    expect(readFileSync(resolve(process.cwd(), "pages/dashboard-store.js"), "utf8")).toContain("function resolveStoreFocusTarget(descriptor)");
-    expect(readFileSync(resolve(process.cwd(), "pages/dashboard-store.js"), "utf8")).toContain("function restoreStoreFocus(descriptor)");
-    expect(readFileSync(resolve(process.cwd(), "pages/dashboard-store.js"), "utf8")).toContain("function restoreStoreFallbackFocus()");
-    expect(readFileSync(resolve(process.cwd(), "pages/dashboard-store.js"), "utf8")).toContain("queueStoreFocusRestore(getStoreFocusDescriptor(btn));");
-    expect(readFileSync(resolve(process.cwd(), "pages/dashboard-store.js"), "utf8")).toContain("queueMicrotask(() => restoreStoreFocus(focusDescriptor));");
     expect(dashboardJs).toContain('<button type="button" class="updated-link"');
     expect(dashboardJs).toContain("triggerEl.disabled = true");
     expect(dashboardJs).toContain("triggerEl.textContent = force ? 'Forcing…' : 'Checking…'");

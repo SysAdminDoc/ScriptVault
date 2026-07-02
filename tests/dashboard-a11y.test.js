@@ -115,7 +115,6 @@ describe("dashboard accessibility markup", () => {
       "settings",
       "utilities",
       "trash",
-      "store",
     ]);
     expect(selectedTabs).toHaveLength(1);
     expect(selectedTabs[0]?.dataset.tab).toBe("scripts");
@@ -135,7 +134,6 @@ describe("dashboard accessibility markup", () => {
     expect(doc.getElementById("settingsPanel")?.hasAttribute("hidden")).toBe(true);
     expect(doc.getElementById("utilitiesPanel")?.hasAttribute("hidden")).toBe(true);
     expect(doc.getElementById("trashPanel")?.hasAttribute("hidden")).toBe(true);
-    expect(doc.getElementById("storePanel")?.hasAttribute("hidden")).toBe(true);
 
     expect(helpButton).not.toBeNull();
     expect(helpButton?.hasAttribute("data-help")).toBe(true);

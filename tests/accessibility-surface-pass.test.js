@@ -97,7 +97,7 @@ describe("accessibility surface pass", () => {
     expectHelpControl(sidepanelHtml, "btnHelp");
     expectHelpControl(installHtml, "btnHelp");
 
-    expect(dashboardJs).toContain("const DASHBOARD_TABS = ['scripts', 'updates', 'settings', 'utilities', 'trash', 'store', 'help']");
+    expect(dashboardJs).toContain("const DASHBOARD_TABS = ['scripts', 'updates', 'settings', 'utilities', 'trash', 'help']");
     expect(dashboardJs).toContain("await switchTab('help')");
     expect(popupJs).toContain("data: { tab: 'help' }");
     expect(popupJs).toContain("pages/dashboard.html#tab=help");

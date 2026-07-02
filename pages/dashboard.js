@@ -351,7 +351,6 @@
         'dashboard-sharing.js': { surface: 'editor', initializer: 'ScriptSharing.init', trigger: 'tbtnShare' },
         'dashboard-snippets.js': { surface: 'editor', initializer: 'SnippetLibrary.init', trigger: 'tbtnSnippet' },
         'dashboard-standalone.js': { surface: 'utilities-service', initializer: 'StandaloneExport.init', mount: 'standaloneScriptSelect' },
-        'dashboard-store.js': { surface: 'store', initializer: 'ScriptStore.init', mount: 'storeContainer' },
         'dashboard-templates.js': { surface: 'editor', initializer: 'TemplateManager.init', trigger: 'tbtnTemplate' },
         'dashboard-theme-editor.js': { surface: 'settings', initializer: 'ThemeEditor.init', mount: 'themeEditorContainer' },
         'dashboard-viewsettings.js': { surface: 'html-self-init', initializer: 'dashboard-viewsettings.js' },
@@ -361,7 +360,7 @@
     const SCRIPT_SEARCH_DEBOUNCE_MS = 90;
     const SCRIPT_TABLE_VIRTUAL_ROW_HEIGHT = 72;
     const SCRIPT_TABLE_VIRTUAL_MAX_ROWS = 60;
-    const DASHBOARD_TABS = ['scripts', 'updates', 'settings', 'utilities', 'trash', 'store', 'help'];
+    const DASHBOARD_TABS = ['scripts', 'updates', 'settings', 'utilities', 'trash', 'help'];
     const OAUTH_SYNC_PROVIDERS = ['googledrive', 'dropbox', 'onedrive'];
     const ALL_SYNC_PROVIDERS = ['none', 'webdav', 'googledrive', 'dropbox', 'onedrive', 's3'];
     let modalLastFocusedElement = null;
@@ -1574,8 +1573,7 @@
             settings: document.getElementById('settingsPanel'),
             utilities: document.getElementById('utilitiesPanel'),
             trash: document.getElementById('trashPanel'),
-            help: document.getElementById('helpPanel'),
-            store: document.getElementById('storePanel')
+            help: document.getElementById('helpPanel')
         };
 
         // Scripts tab
@@ -2116,7 +2114,6 @@
         dashboardTabSettings: 'tabSettings',
         dashboardTabUtilities: 'tabUtilities',
         dashboardTabTrash: 'tabTrash',
-        dashboardTabStore: 'tabStore',
         btnNewScript: 'newScript',
         btnImportScript: 'importScript',
         btnCheckUpdates: 'checkUpdates',
@@ -2332,7 +2329,6 @@
     // Safe module initializer with error boundary
     // Container ID mapping for multi-word module names
     const _containerIds = {
-        'Store': 'storeContainer',
         'CardView': 'cardViewContainer', 'PatternBuilder': 'patternBuilderContainer',
         'ThemeEditor': 'themeEditorContainer', 'DepGraph': 'depGraphContainer',
 
@@ -2539,24 +2535,6 @@
         }
 
         switch (tabName) {
-            case 'store':
-                if (typeof ScriptStore !== 'undefined') {
-                    safeInit('Store', () => {
-                        ScriptStore.init(document.getElementById('storeContainer'), {
-                            getInstalledScripts: async () => {
-                                const res = await chrome.runtime.sendMessage({ action: 'getScripts' });
-                                return res?.scripts || Object.values(res || {});
-                            },
-                            onInstalled: async () => {
-                                await loadScripts();
-                            }
-                        });
-                    });
-                } else {
-                    const c = document.getElementById('storeContainer');
-                    if (c) safeSetHtml(c, '<div style="padding:40px;text-align:center;color:var(--text-muted)"><div style="font-size:1rem;margin-bottom:8px">Script Store failed to load</div><div style="font-size:0.75rem">Check the browser console for errors. The module file may be missing.</div></div>');
-                }
-                break;
             case 'settings':
                 await initDashboardModuleOnce('theme-editor', 'ThemeEditor', async () => {
                     if (typeof ThemeEditor !== 'undefined' && elements.themeEditorContainer) {
@@ -16689,7 +16667,6 @@
             { category: 'Navigation', label: 'Settings Tab', desc: 'Open settings', action: () => { closeCommandPalette(); switchTab('settings'); } },
             { category: 'Navigation', label: 'Utilities Tab', desc: 'Import/export tools', action: () => { closeCommandPalette(); switchTab('utilities'); } },
             { category: 'Navigation', label: 'Trash Tab', desc: 'View deleted scripts', action: () => { closeCommandPalette(); switchTab('trash'); } },
-            { category: 'Navigation', label: 'Script Store Tab', desc: 'Discover installable scripts', action: () => { closeCommandPalette(); switchTab('store'); } },
             { category: 'Navigation', label: 'Help Tab', desc: 'Shortcuts and documentation', action: () => { closeCommandPalette(); switchTab('help'); } },
             // Settings
             { category: 'Settings', label: 'Toggle Dark/Light Theme', desc: 'Switch between themes', action: () => { closeCommandPalette(); document.getElementById('btnCycleTheme')?.click(); } },

@@ -119,7 +119,6 @@ const wiringChecks = [
   ['dashboard-snippets.js', htmlSource, 'tbtnSnippet', 'pages/dashboard.html'],
   ['dashboard-standalone.js', dashboardSource, 'StandaloneExport.init', 'pages/dashboard.js'],
   ['dashboard-standalone.js', htmlSource, 'btnStandaloneHtml', 'pages/dashboard.html'],
-  ['dashboard-store.js', dashboardSource, 'ScriptStore.init', 'pages/dashboard.js'],
   ['dashboard-templates.js', dashboardSource, 'TemplateManager.init', 'pages/dashboard.js'],
   ['dashboard-templates.js', htmlSource, 'tbtnTemplate', 'pages/dashboard.html'],
   ['dashboard-theme-editor.js', dashboardSource, 'ThemeEditor.init', 'pages/dashboard.js'],

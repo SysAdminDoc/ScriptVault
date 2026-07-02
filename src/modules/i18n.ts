@@ -40,7 +40,6 @@ type TranslationKeys = {
   tabSettings: string;
   tabUtilities: string;
   tabTrash: string;
-  tabStore: string;
   tabHelp: string;
   tabValues: string;
 
@@ -873,7 +872,6 @@ type TranslationKeys = {
   trashShowingAllStatic: string;
   trashEmptyTitle: string;
   trashEmptyDescription: string;
-  loadingScriptStore: string;
   trashFilterAllDeletedScripts: string;
   trashFilterRecentDeletedScripts: string;
   trashFilterOlderDeletedScripts: string;
@@ -1354,7 +1352,6 @@ const translations: TranslationMap = {
     tabSettings: 'Settings',
     tabUtilities: 'Utilities',
     tabTrash: 'Trash',
-    tabStore: 'Script Store',
     tabHelp: 'Help',
     tabValues: 'Values Editor',
 
@@ -2192,7 +2189,6 @@ const translations: TranslationMap = {
     trashShowingAllStatic: "Showing all deleted scripts.",
     trashEmptyTitle: "Trash is empty",
     trashEmptyDescription: "Deleted scripts will appear here when recovery is available.",
-    loadingScriptStore: "Loading Script Store...",
     trashFilterAllDeletedScripts: "all deleted scripts",
     trashFilterRecentDeletedScripts: "deletions from the last 7 days",
     trashFilterOlderDeletedScripts: "older deletions",
@@ -3220,7 +3216,6 @@ const translations: TranslationMap = {
     trashShowingAllStatic: "Showing all deleted scripts.",
     trashEmptyTitle: "Trash is empty",
     trashEmptyDescription: "Deleted scripts will appear here when recovery is available.",
-    loadingScriptStore: "Loading Script Store...",
     trashFilterAllDeletedScripts: "all deleted scripts",
     trashFilterRecentDeletedScripts: "deletions from the last 7 days",
     trashFilterOlderDeletedScripts: "older deletions",
@@ -3614,7 +3609,6 @@ const translations: TranslationMap = {
     noUpdates: 'All scripts are up to date',
     tabUpdates: 'Updates',
     tabTrash: 'Trash',
-    tabStore: 'Script Store',
     searchScriptsCode: 'Search scripts or code:fetch',
     searchScriptsCodeTitle: 'Search by script name, domain, tag, or code:fetch',
     searchScriptsCodeAria: 'Search scripts by name, domain, tag, or code:fetch',
@@ -4483,7 +4477,6 @@ const translations: TranslationMap = {
     trashShowingAllStatic: "Showing all deleted scripts.",
     trashEmptyTitle: "Trash is empty",
     trashEmptyDescription: "Deleted scripts will appear here when recovery is available.",
-    loadingScriptStore: "Loading Script Store...",
     trashFilterAllDeletedScripts: "all deleted scripts",
     trashFilterRecentDeletedScripts: "deletions from the last 7 days",
     trashFilterOlderDeletedScripts: "older deletions",
@@ -4880,7 +4873,6 @@ const translations: TranslationMap = {
     noUpdates: 'All scripts are up to date',
     tabUpdates: 'Updates',
     tabTrash: 'Trash',
-    tabStore: 'Script Store',
     searchScriptsCode: 'Search scripts or code:fetch',
     searchScriptsCodeTitle: 'Search by script name, domain, tag, or code:fetch',
     searchScriptsCodeAria: 'Search scripts by name, domain, tag, or code:fetch',
@@ -5749,7 +5741,6 @@ const translations: TranslationMap = {
     trashShowingAllStatic: "Showing all deleted scripts.",
     trashEmptyTitle: "Trash is empty",
     trashEmptyDescription: "Deleted scripts will appear here when recovery is available.",
-    loadingScriptStore: "Loading Script Store...",
     trashFilterAllDeletedScripts: "all deleted scripts",
     trashFilterRecentDeletedScripts: "deletions from the last 7 days",
     trashFilterOlderDeletedScripts: "older deletions",
@@ -6146,7 +6137,6 @@ const translations: TranslationMap = {
     noUpdates: 'All scripts are up to date',
     tabUpdates: 'Updates',
     tabTrash: 'Trash',
-    tabStore: 'Script Store',
     searchScriptsCode: 'Search scripts or code:fetch',
     searchScriptsCodeTitle: 'Search by script name, domain, tag, or code:fetch',
     searchScriptsCodeAria: 'Search scripts by name, domain, tag, or code:fetch',
@@ -7015,7 +7005,6 @@ const translations: TranslationMap = {
     trashShowingAllStatic: "Showing all deleted scripts.",
     trashEmptyTitle: "Trash is empty",
     trashEmptyDescription: "Deleted scripts will appear here when recovery is available.",
-    loadingScriptStore: "Loading Script Store...",
     trashFilterAllDeletedScripts: "all deleted scripts",
     trashFilterRecentDeletedScripts: "deletions from the last 7 days",
     trashFilterOlderDeletedScripts: "older deletions",
@@ -7412,7 +7401,6 @@ const translations: TranslationMap = {
     noUpdates: 'All scripts are up to date',
     tabUpdates: 'Updates',
     tabTrash: 'Trash',
-    tabStore: 'Script Store',
     searchScriptsCode: 'Search scripts or code:fetch',
     searchScriptsCodeTitle: 'Search by script name, domain, tag, or code:fetch',
     searchScriptsCodeAria: 'Search scripts by name, domain, tag, or code:fetch',
@@ -8281,7 +8269,6 @@ const translations: TranslationMap = {
     trashShowingAllStatic: "Showing all deleted scripts.",
     trashEmptyTitle: "Trash is empty",
     trashEmptyDescription: "Deleted scripts will appear here when recovery is available.",
-    loadingScriptStore: "Loading Script Store...",
     trashFilterAllDeletedScripts: "all deleted scripts",
     trashFilterRecentDeletedScripts: "deletions from the last 7 days",
     trashFilterOlderDeletedScripts: "older deletions",
@@ -8678,7 +8665,6 @@ const translations: TranslationMap = {
     noUpdates: 'All scripts are up to date',
     tabUpdates: 'Updates',
     tabTrash: 'Trash',
-    tabStore: 'Script Store',
     searchScriptsCode: 'Search scripts or code:fetch',
     searchScriptsCodeTitle: 'Search by script name, domain, tag, or code:fetch',
     searchScriptsCodeAria: 'Search scripts by name, domain, tag, or code:fetch',
@@ -9547,7 +9533,6 @@ const translations: TranslationMap = {
     trashShowingAllStatic: "Showing all deleted scripts.",
     trashEmptyTitle: "Trash is empty",
     trashEmptyDescription: "Deleted scripts will appear here when recovery is available.",
-    loadingScriptStore: "Loading Script Store...",
     trashFilterAllDeletedScripts: "all deleted scripts",
     trashFilterRecentDeletedScripts: "deletions from the last 7 days",
     trashFilterOlderDeletedScripts: "older deletions",
@@ -9944,7 +9929,6 @@ const translations: TranslationMap = {
     noUpdates: 'All scripts are up to date',
     tabUpdates: 'Updates',
     tabTrash: 'Trash',
-    tabStore: 'Script Store',
     searchScriptsCode: 'Search scripts or code:fetch',
     searchScriptsCodeTitle: 'Search by script name, domain, tag, or code:fetch',
     searchScriptsCodeAria: 'Search scripts by name, domain, tag, or code:fetch',
@@ -10813,7 +10797,6 @@ const translations: TranslationMap = {
     trashShowingAllStatic: "Showing all deleted scripts.",
     trashEmptyTitle: "Trash is empty",
     trashEmptyDescription: "Deleted scripts will appear here when recovery is available.",
-    loadingScriptStore: "Loading Script Store...",
     trashFilterAllDeletedScripts: "all deleted scripts",
     trashFilterRecentDeletedScripts: "deletions from the last 7 days",
     trashFilterOlderDeletedScripts: "older deletions",
@@ -11210,7 +11193,6 @@ const translations: TranslationMap = {
     noUpdates: 'All scripts are up to date',
     tabUpdates: 'Updates',
     tabTrash: 'Trash',
-    tabStore: 'Script Store',
     searchScriptsCode: 'Search scripts or code:fetch',
     searchScriptsCodeTitle: 'Search by script name, domain, tag, or code:fetch',
     searchScriptsCodeAria: 'Search scripts by name, domain, tag, or code:fetch',
@@ -11502,7 +11484,6 @@ const translations: TranslationMap = {
     tabSettings: 'Settings',
     tabUtilities: 'Utilities',
     tabTrash: 'Trash',
-    tabStore: 'Script Store',
     tabHelp: 'Help',
     tabValues: 'Values Editor',
     editorTabCode: 'Code',
@@ -12330,7 +12311,6 @@ const translations: TranslationMap = {
     trashShowingAllStatic: "Showing all deleted scripts.",
     trashEmptyTitle: "Trash is empty",
     trashEmptyDescription: "Deleted scripts will appear here when recovery is available.",
-    loadingScriptStore: "Loading Script Store...",
     trashFilterAllDeletedScripts: "all deleted scripts",
     trashFilterRecentDeletedScripts: "deletions from the last 7 days",
     trashFilterOlderDeletedScripts: "older deletions",
