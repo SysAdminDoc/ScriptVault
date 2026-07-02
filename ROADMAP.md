@@ -46,9 +46,6 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 - **P2 — Chain non-manual triggers are decorative.** The chain editor offers URL Match / Schedule / DOM Event / After Script triggers, but no trigger engine consumes them — only manual Run works. Either implement the trigger engine or hide the unsupported trigger types.
   Where: `pages/dashboard-chains.js` editor trigger UI
 
-- **P2 — Install page never parses `@require-provenance` / `@require-identity`.** The install page's local metadata parser omits these keys, so the Sigstore provenance review row always shows "Not declared" and the preview verification never runs (save-time enforcement in the background still works). Add the keys to the install parser or reuse the shared parser.
-  Where: `pages/install.js` parseMetadata
-
 - **P2 — Unify install page theme variables with theme-tokens.css.** The install page defines its own parallel set of CSS custom properties (`--bg-primary`, `--bg-secondary`, etc.) independent of `theme-tokens.css` used by all other pages. Any theme change must be applied to both systems. Consolidate to a single source.
   Where: `pages/install.html` lines 20-98
 

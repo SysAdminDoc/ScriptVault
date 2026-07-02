@@ -617,6 +617,8 @@ function parseMetadata(code) {
     'exclude-match': [],
     grant: [],
     require: [],
+    requireProvenance: [],
+    requireIdentity: [],
     resource: {},
     'run-at': 'document-idle',
     noframes: false,
@@ -651,6 +653,13 @@ function parseMetadata(code) {
       if (resourceMatch && !['__proto__', 'constructor', 'prototype'].includes(resourceMatch[1])) {
         meta.resource[resourceMatch[1]] = resourceMatch[2];
       }
+    } else if (key === 'require-provenance') {
+      // Hyphenated directive maps to the camelCase field the provenance UI
+      // reads; matches the background parser's alias so the install review can
+      // actually verify declared Sigstore bundles.
+      if (val) meta.requireProvenance.push(val);
+    } else if (key === 'require-identity') {
+      if (val) meta.requireIdentity.push(val);
     } else if (Object.prototype.hasOwnProperty.call(meta, key) && Array.isArray(meta[key])) {
       meta[key].push(val);
     } else if (Object.prototype.hasOwnProperty.call(meta, key)) {

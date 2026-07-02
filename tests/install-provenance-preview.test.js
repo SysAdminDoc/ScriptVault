@@ -13,6 +13,16 @@ describe('install @require provenance preview wiring', () => {
     expect(installPage).toContain('checkRequireProvenance(scriptMeta)');
   });
 
+  it('parses @require-provenance / @require-identity so the preview is not dead', () => {
+    // The camelCase fields the provenance UI reads must be populated from the
+    // hyphenated directives; a template that omits them left the review row
+    // permanently "Not declared".
+    expect(installPage).toContain('requireProvenance: [],');
+    expect(installPage).toContain('requireIdentity: [],');
+    expect(installPage).toContain("key === 'require-provenance'");
+    expect(installPage).toContain("key === 'require-identity'");
+  });
+
   it('requests provenance verification from the background, not the install page', () => {
     expect(installPage).toContain("action: 'verifyRequireProvenancePreview'");
     expect(backgroundCore).toContain("case 'verifyRequireProvenancePreview':");
