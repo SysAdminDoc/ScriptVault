@@ -43,9 +43,6 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 - **P2 — Unify install page theme variables with theme-tokens.css.** The install page defines its own parallel set of CSS custom properties (`--bg-primary`, `--bg-secondary`, etc.) independent of `theme-tokens.css` used by all other pages. Any theme change must be applied to both systems. Consolidate to a single source.
   Where: `pages/install.html` lines 20-98
 
-- **P2 — KeyboardNav hijacks Enter/Space/Delete on focused row buttons.** The capture-phase document keydown handler treats a focused action button inside a script row as the row itself: Enter opens the editor, Space toggles enabled, Delete deletes — instead of activating the button. `isModalOpen()` is defined but never consulted. WCAG 2.1.1 defect.
-  Where: `pages/dashboard-keyboard.js` handleKeydown/isInputFocused/handleFocusin
-
 - **P2 — QR share encoder corrupts payloads of 107-271 bytes (versions 6-10).** `VERSION_TABLE` stores per-block data codewords but `encode()` treats them as the total, truncating the bit stream and leaving the module grid unfilled. Most real share payloads (base64 data URLs) land in this range and produce unscannable codes. V1-V5 are correct.
   Where: `pages/dashboard-sharing.js` VERSION_TABLE / encode()
 

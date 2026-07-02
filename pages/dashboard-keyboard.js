@@ -182,6 +182,18 @@ tr.kn-focused td {
     return overlays.length > 0;
   }
 
+  // True when focus is on an interactive control (a row action button, link,
+  // toggle, etc.) rather than the row shell itself. Enter/Space/Delete and the
+  // vim action keys must NOT be hijacked as row-level actions in that case —
+  // the control should activate natively (WCAG 2.1.1).
+  function isInteractiveControlFocused() {
+    const el = document.activeElement;
+    if (!el) return false;
+    const rowShell = el.matches?.('tr[data-script-id], .cv-card[data-script-id]');
+    if (rowShell) return false; // the row itself is fine to act on
+    return !!el.closest?.('button, a[href], input, select, textarea, [role="button"], [role="menuitem"], [contenteditable="true"]');
+  }
+
   function getScriptRows() {
     // Card view items
     const cards = document.querySelectorAll('.cv-card:not(.cv-hidden)');
@@ -309,6 +321,9 @@ tr.kn-focused td {
     // Don't intercept when editor active or input focused (except specific combos)
     if (isEditorActive()) return;
 
+    // Don't run list navigation/actions while a modal or dialog owns the page.
+    if (isModalOpen()) return;
+
     const ctrl = e.ctrlKey || e.metaKey;
 
     // Tab / Shift+Tab for toolbar focus cycling
@@ -363,19 +378,24 @@ tr.kn-focused td {
       return;
     }
 
-    if (e.key === 'Enter' && _focusedIndex >= 0) {
+    // Enter/Space/Delete act on the focused row — but not when a control inside
+    // the row (Delete/Export/Pin button, toggle, link) has focus; let that
+    // control handle the key natively.
+    const controlFocused = isInteractiveControlFocused();
+
+    if (e.key === 'Enter' && _focusedIndex >= 0 && !controlFocused) {
       e.preventDefault();
       dispatchAction('edit', getScriptIdAtIndex(_focusedIndex));
       return;
     }
 
-    if (e.key === ' ' && _focusedIndex >= 0) {
+    if (e.key === ' ' && _focusedIndex >= 0 && !controlFocused) {
       e.preventDefault();
       dispatchAction('toggle', getScriptIdAtIndex(_focusedIndex));
       return;
     }
 
-    if (e.key === 'Delete' && _focusedIndex >= 0) {
+    if (e.key === 'Delete' && _focusedIndex >= 0 && !controlFocused) {
       e.preventDefault();
       dispatchAction('delete', getScriptIdAtIndex(_focusedIndex));
       return;
@@ -409,6 +429,8 @@ tr.kn-focused td {
 
     const key = e.key;
     const now = Date.now();
+    // Row action keys must not fire while a control inside the row is focused.
+    const controlFocused = isInteractiveControlFocused();
 
     // j / k — navigate
     if (key === 'j') {
@@ -455,7 +477,7 @@ tr.kn-focused td {
     }
 
     // e — edit
-    if (key === 'e' && _focusedIndex >= 0) {
+    if (key === 'e' && _focusedIndex >= 0 && !controlFocused) {
       e.preventDefault();
       dispatchAction('edit', getScriptIdAtIndex(_focusedIndex));
       return;
@@ -470,7 +492,7 @@ tr.kn-focused td {
 
     // dd — delete (double d)
     // We use a simple approach: d sets a flag, second d executes
-    if (key === 'd') {
+    if (key === 'd' && !controlFocused) {
       if (KeyboardNav._pendingD && now - KeyboardNav._pendingDTime < DEBOUNCE_GG_MS) {
         e.preventDefault();
         if (_focusedIndex >= 0) {
@@ -487,14 +509,14 @@ tr.kn-focused td {
     }
 
     // x — export
-    if (key === 'x' && _focusedIndex >= 0) {
+    if (key === 'x' && _focusedIndex >= 0 && !controlFocused) {
       e.preventDefault();
       dispatchAction('export', getScriptIdAtIndex(_focusedIndex));
       return;
     }
 
     // u — check update
-    if (key === 'u' && _focusedIndex >= 0) {
+    if (key === 'u' && _focusedIndex >= 0 && !controlFocused) {
       e.preventDefault();
       dispatchAction('update', getScriptIdAtIndex(_focusedIndex));
       return;

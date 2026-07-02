@@ -36,6 +36,23 @@ describe('safeSetHtml fragment context (2026-07 regression)', () => {
   }
 });
 
+describe('KeyboardNav does not hijack focused row controls (2026-07 regression)', () => {
+  const src = read('pages/dashboard-keyboard.js');
+  it('adds an interactive-control focus guard', () => {
+    expect(src).toContain('isInteractiveControlFocused');
+    expect(src).toContain('const controlFocused = isInteractiveControlFocused()');
+  });
+  it('guards Enter/Space/Delete and vim action keys with the control check', () => {
+    expect(src).toContain("e.key === 'Enter' && _focusedIndex >= 0 && !controlFocused");
+    expect(src).toContain("e.key === ' ' && _focusedIndex >= 0 && !controlFocused");
+    expect(src).toContain("e.key === 'Delete' && _focusedIndex >= 0 && !controlFocused");
+    expect(src).toContain("key === 'e' && _focusedIndex >= 0 && !controlFocused");
+  });
+  it('gates list navigation while a modal is open', () => {
+    expect(src).toContain('if (isModalOpen()) return;');
+  });
+});
+
 describe('Per-tab run diagnostics (2026-07 feature)', () => {
   it('background exposes a diagnoseScripts handler covering the key run blockers', () => {
     const core = read('background.core.js');
