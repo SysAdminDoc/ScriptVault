@@ -2308,6 +2308,9 @@
 
         // v2.0 Module Initialization
         initV2Modules();
+        // Apply the persisted key-mapping setting to KeyboardNav (must run after
+        // initV2Modules where KeyboardNav is created) so "Vim" takes effect.
+        applyKeyMapping(state.settings.keyMapping || 'default');
         // Lazy-init the scripts tab (default active tab) so CardView etc. are available
         lazyInitTab('scripts');
 
@@ -4103,6 +4106,7 @@
                 }
             }
             if (key === 'layout') document.documentElement.setAttribute('data-theme', resolveTheme(value));
+            if (key === 'keyMapping') applyKeyMapping(value);
             if (key === 'configMode') applyConfigMode();
             if (key === 'customCss') applySettingsToUI();
             if (key === 'layout') updateHelpOverview();
@@ -4939,6 +4943,14 @@
             state.editor.setOption('theme', mapped);
         }
         applyActiveCustomThemeVars();
+    }
+
+    // Wire the "Key Mapping" setting to KeyboardNav's vim mode. The setting was
+    // persisted but never consumed, so choosing "Vim" did nothing.
+    function applyKeyMapping(value) {
+        if (typeof KeyboardNav !== 'undefined' && typeof KeyboardNav.setVimMode === 'function') {
+            KeyboardNav.setVimMode(value === 'vim');
+        }
     }
 
     // Re-apply a theme-editor custom theme or extra preset (nord/dracula/etc.)

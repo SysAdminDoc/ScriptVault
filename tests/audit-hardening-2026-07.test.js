@@ -36,6 +36,16 @@ describe('safeSetHtml fragment context (2026-07 regression)', () => {
   }
 });
 
+describe('Vim key-mapping setting is wired (2026-07 regression)', () => {
+  const src = read('pages/dashboard.js');
+  it('applies keyMapping to KeyboardNav on load and on change', () => {
+    expect(src).toContain('function applyKeyMapping');
+    expect(src).toContain("KeyboardNav.setVimMode(value === 'vim')");
+    expect(src).toContain("if (key === 'keyMapping') applyKeyMapping(value)");
+    expect(src).toContain('applyKeyMapping(state.settings.keyMapping');
+  });
+});
+
 describe('KeyboardNav does not hijack focused row controls (2026-07 regression)', () => {
   const src = read('pages/dashboard-keyboard.js');
   it('adds an interactive-control focus guard', () => {

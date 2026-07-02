@@ -46,9 +46,6 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 - **P2 — Chain non-manual triggers are decorative.** The chain editor offers URL Match / Schedule / DOM Event / After Script triggers, but no trigger engine consumes them — only manual Run works. Either implement the trigger engine or hide the unsupported trigger types.
   Where: `pages/dashboard-chains.js` editor trigger UI
 
-- **P2 — "Key Mapping: Vim" setting is inert.** `keyMapping='vim'` persists but nothing consumes it; `KeyboardNav.setVimMode()` has no callers and vim list-nav only activates via the private `sv_vimMode` localStorage key no UI writes. Wire the setting to `setVimMode`, or remove the option and its help text.
-  Where: `pages/dashboard.js` settings apply; `pages/dashboard-keyboard.js` setVimMode
-
 - **P2 — Install page never parses `@require-provenance` / `@require-identity`.** The install page's local metadata parser omits these keys, so the Sigstore provenance review row always shows "Not declared" and the preview verification never runs (save-time enforcement in the background still works). Add the keys to the install parser or reuse the shared parser.
   Where: `pages/install.js` parseMetadata
 
