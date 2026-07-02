@@ -201,6 +201,7 @@ const SCRIPTVAULT_SETTINGS_DEFAULTS = {
   "syncEncryptionEnabled": false,
   "syncEncryptionPassphrase": "",
   "syncEncryptionKdfIterations": 210000,
+  "syncEncryptionEstablished": false,
   "webdavUrl": "",
   "webdavUsername": "",
   "webdavPassword": "",
@@ -16118,6 +16119,7 @@ const StorageModule = (() => {
     syncEncryptionEnabled: false,
     syncEncryptionPassphrase: "",
     syncEncryptionKdfIterations: 21e4,
+    syncEncryptionEstablished: false,
     webdavUrl: "",
     webdavUsername: "",
     webdavPassword: "",
@@ -22031,6 +22033,9 @@ const SyncCrypto = (() => {
   async function decryptSyncEnvelope(envelope, settings) {
     if (!envelope) return null;
     if (!isEncryptedSyncEnvelope(envelope)) {
+      if (isEncryptionEnabled(settings) && settings.syncEncryptionEstablished === true) {
+        throw new Error("Sync encryption is enabled but the remote data is not encrypted. Refusing to load possibly-tampered plaintext sync data.");
+      }
       return normalizePlainSyncEnvelope(envelope);
     }
     const salt = base64ToBytes(envelope.salt);
@@ -22238,6 +22243,9 @@ const CloudSync = (() => {
   async function decryptSyncEnvelope(envelope, settings) {
     if (!envelope) return null;
     if (!isEncryptedSyncEnvelope(envelope)) {
+      if (isEncryptionEnabled(settings) && settings.syncEncryptionEstablished === true) {
+        throw new Error("Sync encryption is enabled but the remote data is not encrypted. Refusing to load possibly-tampered plaintext sync data.");
+      }
       return normalizePlainSyncEnvelope(envelope);
     }
     const salt = base64ToBytes(envelope.salt);
@@ -22526,8 +22534,20 @@ const CloudSync = (() => {
     if (Object.keys(valueBundles).length > 0) sanitized.valueBundles = valueBundles;
     return sanitized;
   }
+  async function markSyncEncryptionEstablished(settings) {
+    if (settings.syncEncryptionEnabled && !settings.syncEncryptionEstablished) {
+      try {
+        await SettingsManager.set("syncEncryptionEstablished", true);
+      } catch (_e) {
+      }
+    }
+  }
   async function readSyncEnvelopeFromRemote(remoteEnvelope, settings) {
-    return SyncCrypto.decryptSyncEnvelope(remoteEnvelope, settings);
+    const decrypted = await SyncCrypto.decryptSyncEnvelope(remoteEnvelope, settings);
+    if (remoteEnvelope && SyncCrypto.isEncryptedSyncEnvelope(remoteEnvelope)) {
+      await markSyncEncryptionEstablished(settings);
+    }
+    return decrypted;
   }
   async function prepareSyncEnvelopeForRemoteUpload(envelope, settings) {
     return SyncCrypto.prepareSyncEnvelopeForUpload(
@@ -23485,6 +23505,7 @@ const CloudSync = (() => {
         }));
         await provider.upload(await prepareSyncEnvelopeForRemoteUpload(localData, settings), settings, { signal });
       }
+      await markSyncEncryptionEstablished(settings);
       await SettingsManager.set("lastSync", Date.now());
       return {
         success: true,
@@ -23682,6 +23703,9 @@ const EasyCloudSync = (() => {
   async function decryptSyncEnvelope(envelope, settings) {
     if (!envelope) return null;
     if (!isEncryptedSyncEnvelope(envelope)) {
+      if (isEncryptionEnabled(settings) && settings.syncEncryptionEstablished === true) {
+        throw new Error("Sync encryption is enabled but the remote data is not encrypted. Refusing to load possibly-tampered plaintext sync data.");
+      }
       return normalizePlainSyncEnvelope(envelope);
     }
     const salt = base64ToBytes(envelope.salt);
@@ -38479,6 +38503,12 @@ async function handleMessage(message, sender) {
             'syncEnabled' in changed || 'syncProvider' in changed || 'syncInterval' in changed ||
             'subscriptionAutoRefresh' in changed || 'subscriptionRefreshInterval' in changed) {
           await setupAlarms();
+        }
+
+        // Turning sync encryption off clears the downgrade latch so a later
+        // re-enable gets a fresh plaintext→encrypted migration window.
+        if ('syncEncryptionEnabled' in changed && changed.syncEncryptionEnabled === false) {
+          await SettingsManager.set('syncEncryptionEstablished', false);
         }
 
         // If badge settings changed, refresh badge

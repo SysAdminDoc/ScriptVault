@@ -113,4 +113,35 @@ describe.each(implementations)('sync crypto helper ($label)', ({ api: SyncCrypto
       }),
     ).resolves.toEqual(plaintext);
   });
+
+  it('rejects a plaintext remote once encryption is established (downgrade guard)', async () => {
+    const plaintext = { version: 1, timestamp: 10, scripts: [], tombstones: {} };
+    await expect(
+      SyncCrypto.decryptSyncEnvelope(plaintext, {
+        ...fastEncryptedSettings,
+        syncEncryptionEstablished: true,
+      }),
+    ).rejects.toThrow(/not encrypted/i);
+  });
+
+  it('still decrypts a genuine encrypted remote once established', async () => {
+    const envelope = { version: 1, timestamp: 5, scripts: [], tombstones: {} };
+    const encrypted = await SyncCrypto.prepareSyncEnvelopeForUpload(envelope, fastEncryptedSettings);
+    await expect(
+      SyncCrypto.decryptSyncEnvelope(encrypted, {
+        ...fastEncryptedSettings,
+        syncEncryptionEstablished: true,
+      }),
+    ).resolves.toEqual(envelope);
+  });
+
+  it('accepts plaintext during the pre-established migration window', async () => {
+    const plaintext = { version: 1, timestamp: 10, scripts: [], tombstones: {} };
+    await expect(
+      SyncCrypto.decryptSyncEnvelope(plaintext, {
+        ...fastEncryptedSettings,
+        syncEncryptionEstablished: false,
+      }),
+    ).resolves.toEqual(plaintext);
+  });
 });

@@ -43,9 +43,6 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 - **P2 — Unify install page theme variables with theme-tokens.css.** The install page defines its own parallel set of CSS custom properties (`--bg-primary`, `--bg-secondary`, etc.) independent of `theme-tokens.css` used by all other pages. Any theme change must be applied to both systems. Consolidate to a single source.
   Where: `pages/install.html` lines 20-98
 
-- **P2 — E2EE plaintext-downgrade latch.** `decryptSyncEnvelope` accepts a plaintext remote envelope even when sync encryption is enabled, so an attacker with storage-backend write access can replace the encrypted blob with attacker-authored plaintext scripts. Needs a migration-safe latch (e.g. a persisted "encryption established" marker so the one-time plaintext→encrypted migration is allowed but later plaintext is rejected).
-  Where: `src/modules/sync-crypto.ts` decryptSyncEnvelope
-
 - **P2 — Chain non-manual triggers are decorative.** The chain editor offers URL Match / Schedule / DOM Event / After Script triggers, but no trigger engine consumes them — only manual Run works. Either implement the trigger engine or hide the unsupported trigger types.
   Where: `pages/dashboard-chains.js` editor trigger UI
 

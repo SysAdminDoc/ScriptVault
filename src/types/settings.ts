@@ -43,6 +43,7 @@ export interface Settings {
   syncEncryptionEnabled: boolean;
   syncEncryptionPassphrase: string;
   syncEncryptionKdfIterations: number;
+  syncEncryptionEstablished: boolean;
 
   // WebDAV
   webdavUrl: string;

@@ -482,11 +482,26 @@ function sanitizeSyncEnvelopeForUpload(envelope: SyncEnvelope): SyncEnvelope {
   return sanitized;
 }
 
+// Once this profile has processed an encrypted envelope end-to-end, mark
+// encryption as established so a later plaintext remote is rejected as a
+// downgrade attack.
+async function markSyncEncryptionEstablished(settings: Settings): Promise<void> {
+  if (settings.syncEncryptionEnabled && !settings.syncEncryptionEstablished) {
+    try { await SettingsManager.set('syncEncryptionEstablished', true); } catch (_e) { /* best effort */ }
+  }
+}
+
 async function readSyncEnvelopeFromRemote(
   remoteEnvelope: RemoteSyncEnvelope | null,
   settings: Settings,
 ): Promise<SyncEnvelope | null> {
-  return SyncCrypto.decryptSyncEnvelope(remoteEnvelope, settings) as Promise<SyncEnvelope | null>;
+  const decrypted = await SyncCrypto.decryptSyncEnvelope(remoteEnvelope, settings) as SyncEnvelope | null;
+  // A successful decrypt of an encrypted remote establishes the encryption
+  // latch even on a download-only device.
+  if (remoteEnvelope && SyncCrypto.isEncryptedSyncEnvelope(remoteEnvelope)) {
+    await markSyncEncryptionEstablished(settings);
+  }
+  return decrypted;
 }
 
 async function prepareSyncEnvelopeForRemoteUpload(
@@ -1731,6 +1746,10 @@ export const CloudSync = {
       }));
       await provider.upload(await prepareSyncEnvelopeForRemoteUpload(localData, settings), settings, { signal });
     }
+
+    // A successful upload with encryption on means the remote is now encrypted,
+    // so establish the downgrade latch.
+    await markSyncEncryptionEstablished(settings);
 
     await SettingsManager.set('lastSync', Date.now());
     return {

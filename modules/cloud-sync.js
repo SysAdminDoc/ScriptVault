@@ -156,6 +156,9 @@ const CloudSync = (() => {
   async function decryptSyncEnvelope(envelope, settings) {
     if (!envelope) return null;
     if (!isEncryptedSyncEnvelope(envelope)) {
+      if (isEncryptionEnabled(settings) && settings.syncEncryptionEstablished === true) {
+        throw new Error("Sync encryption is enabled but the remote data is not encrypted. Refusing to load possibly-tampered plaintext sync data.");
+      }
       return normalizePlainSyncEnvelope(envelope);
     }
     const salt = base64ToBytes(envelope.salt);
@@ -444,8 +447,20 @@ const CloudSync = (() => {
     if (Object.keys(valueBundles).length > 0) sanitized.valueBundles = valueBundles;
     return sanitized;
   }
+  async function markSyncEncryptionEstablished(settings) {
+    if (settings.syncEncryptionEnabled && !settings.syncEncryptionEstablished) {
+      try {
+        await SettingsManager.set("syncEncryptionEstablished", true);
+      } catch (_e) {
+      }
+    }
+  }
   async function readSyncEnvelopeFromRemote(remoteEnvelope, settings) {
-    return SyncCrypto.decryptSyncEnvelope(remoteEnvelope, settings);
+    const decrypted = await SyncCrypto.decryptSyncEnvelope(remoteEnvelope, settings);
+    if (remoteEnvelope && SyncCrypto.isEncryptedSyncEnvelope(remoteEnvelope)) {
+      await markSyncEncryptionEstablished(settings);
+    }
+    return decrypted;
   }
   async function prepareSyncEnvelopeForRemoteUpload(envelope, settings) {
     return SyncCrypto.prepareSyncEnvelopeForUpload(
@@ -1403,6 +1418,7 @@ const CloudSync = (() => {
         }));
         await provider.upload(await prepareSyncEnvelopeForRemoteUpload(localData, settings), settings, { signal });
       }
+      await markSyncEncryptionEstablished(settings);
       await SettingsManager.set("lastSync", Date.now());
       return {
         success: true,

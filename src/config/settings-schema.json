@@ -132,7 +132,8 @@
     "internal": [
       "experimentalBackgroundScripts",
       "googleDriveConnected",
-      "onedriveConnected"
+      "onedriveConnected",
+      "syncEncryptionEstablished"
     ],
     "derived": [
       "dropboxUser",

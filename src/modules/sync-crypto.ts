@@ -28,6 +28,11 @@ export interface SyncCryptoSettings {
   syncEncryptionEnabled?: boolean;
   syncEncryptionPassphrase?: string;
   syncEncryptionKdfIterations?: number;
+  // Set to true once this profile has completed an encrypted sync round-trip.
+  // After that, a plaintext remote envelope is treated as tampering and
+  // rejected, closing the E2EE downgrade hole while still allowing the one-time
+  // plaintext→encrypted migration before the marker is set.
+  syncEncryptionEstablished?: boolean;
 }
 
 const DEFAULT_KDF_ITERATIONS = 210_000;
@@ -194,6 +199,15 @@ async function decryptSyncEnvelope(
 ): Promise<PlainSyncEnvelope | null> {
   if (!envelope) return null;
   if (!isEncryptedSyncEnvelope(envelope)) {
+    // Downgrade guard: once encryption is established for this profile, a
+    // plaintext remote envelope means the encrypted blob was replaced (an
+    // attacker with storage-backend write access). Refuse it rather than
+    // importing attacker-authored plaintext scripts. Before establishment the
+    // plaintext is accepted so the initial migration can read pre-encryption
+    // data once.
+    if (isEncryptionEnabled(settings) && settings.syncEncryptionEstablished === true) {
+      throw new Error('Sync encryption is enabled but the remote data is not encrypted. Refusing to load possibly-tampered plaintext sync data.');
+    }
     return normalizePlainSyncEnvelope(envelope as PlainSyncEnvelope);
   }
 

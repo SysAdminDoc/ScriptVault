@@ -6449,6 +6449,12 @@ async function handleMessage(message, sender) {
           await setupAlarms();
         }
 
+        // Turning sync encryption off clears the downgrade latch so a later
+        // re-enable gets a fresh plaintext→encrypted migration window.
+        if ('syncEncryptionEnabled' in changed && changed.syncEncryptionEnabled === false) {
+          await SettingsManager.set('syncEncryptionEstablished', false);
+        }
+
         // If badge settings changed, refresh badge
         if ('badgeColor' in changed || 'badgeInfo' in changed || 'showBadge' in changed) {
           await updateBadge();
