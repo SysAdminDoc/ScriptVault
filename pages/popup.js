@@ -88,6 +88,8 @@
         menuSection: document.getElementById('menuSection'),
         btnFindScripts: document.getElementById('btnFindScripts'),
         btnNewScript: document.getElementById('btnNewScript'),
+        btnDiagnose: document.getElementById('btnDiagnose'),
+        diagnosePanel: document.getElementById('diagnosePanel'),
         btnUtilities: document.getElementById('btnUtilities'),
         utilitiesSubmenu: document.getElementById('utilitiesSubmenu'),
         btnExportZip: document.getElementById('btnExportZip'),
@@ -697,6 +699,59 @@
     }
 
     // Get current tab
+    // Per-tab "why didn't my script run?" diagnostics. Fetches a background
+    // computed status for every script against the current URL and renders a
+    // plain-language reason list. Toggles the panel open/closed.
+    async function toggleDiagnostics() {
+        const panel = elements.diagnosePanel;
+        const btn = elements.btnDiagnose;
+        if (!panel) return;
+        if (!panel.hidden) {
+            panel.hidden = true;
+            btn?.setAttribute('aria-expanded', 'false');
+            return;
+        }
+        panel.hidden = false;
+        btn?.setAttribute('aria-expanded', 'true');
+        safeSetHtml(panel, `<div class="diagnose-summary">Checking this page…</div>`);
+        try {
+            const res = await chrome.runtime.sendMessage({ action: 'diagnoseScripts', url: currentUrl });
+            renderDiagnostics(res);
+        } catch (e) {
+            safeSetHtml(panel, `<div class="diagnose-summary">Could not reach the background service.</div>`);
+        }
+    }
+
+    function renderDiagnostics(res) {
+        const panel = elements.diagnosePanel;
+        if (!panel) return;
+        const scripts = Array.isArray(res?.scripts) ? res.scripts : [];
+        if (scripts.length === 0) {
+            safeSetHtml(panel, `<div class="diagnose-summary">No scripts are installed yet.</div>`);
+            return;
+        }
+        const running = scripts.filter(s => s.status === 'running').length;
+        const order = { error: 0, blocked: 1, 'not-registered': 2, 'no-match': 3, disabled: 4, paused: 5, 'on-demand': 6, scheduled: 7, background: 8, running: 9 };
+        const sorted = scripts.slice().sort((a, b) => (order[a.status] ?? 99) - (order[b.status] ?? 99) || a.name.localeCompare(b.name));
+        let html = `<div class="diagnose-summary">${escapeHtml(
+            running === scripts.length
+                ? 'All matching scripts are running on this page.'
+                : `${running} of ${scripts.length} script${scripts.length === 1 ? '' : 's'} running here.`
+        )}</div>`;
+        for (const s of sorted) {
+            const status = String(s.status || '').replace(/[^a-z-]/gi, '');
+            html += `
+                <div class="diagnose-row">
+                    <span class="diagnose-dot ${status}" aria-hidden="true"></span>
+                    <span class="diagnose-text">
+                        <span class="diagnose-name">${escapeHtml(s.name || s.id)}</span>
+                        <span class="diagnose-reason">${escapeHtml(s.reason || '')}</span>
+                    </span>
+                </div>`;
+        }
+        safeSetHtml(panel, html);
+    }
+
     async function getCurrentTab() {
         try {
             const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -1748,6 +1803,9 @@
 
         // New script
         elements.btnNewScript?.addEventListener('click', createNewScript);
+
+        // Per-tab run diagnostics
+        elements.btnDiagnose?.addEventListener('click', toggleDiagnostics);
 
         // Utilities submenu toggle
         elements.btnUtilities?.addEventListener('click', async () => {

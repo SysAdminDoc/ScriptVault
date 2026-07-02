@@ -70,6 +70,7 @@ export const BACKGROUND_MESSAGE_ACTIONS = [
   'deleteScript',
   'deleteScriptValue',
   'deleteWorkspace',
+  'diagnoseScripts',
   'disconnectSyncProvider',
   'duplicateScript',
   'easyCloudConnect',

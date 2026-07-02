@@ -36,6 +36,30 @@ describe('safeSetHtml fragment context (2026-07 regression)', () => {
   }
 });
 
+describe('Per-tab run diagnostics (2026-07 feature)', () => {
+  it('background exposes a diagnoseScripts handler covering the key run blockers', () => {
+    const core = read('background.core.js');
+    expect(core).toContain("case 'diagnoseScripts'");
+    expect(core).toContain('userScriptsAvailable');
+    for (const status of ['disabled', 'no-match', 'not-registered', 'running', 'on-demand', 'scheduled']) {
+      expect(core).toContain(`'${status}'`);
+    }
+  });
+  it('diagnoseScripts is registered in the router action table', () => {
+    const router = read('src/background/message-router.ts');
+    expect(router).toContain("'diagnoseScripts'");
+  });
+  it('popup wires the diagnostics panel and escapes rendered fields', () => {
+    const src = read('pages/popup.js');
+    expect(src).toContain('toggleDiagnostics');
+    expect(src).toContain("action: 'diagnoseScripts'");
+    expect(src).toContain('renderDiagnostics');
+    // Names/reasons from the background are escaped before innerHTML.
+    expect(src).toContain('escapeHtml(s.name');
+    expect(src).toContain('escapeHtml(s.reason');
+  });
+});
+
 describe('Theme editor persistence + valid layouts (2026-07 regression)', () => {
   it('dashboard clamps layout to real CSS themes and validates the setting', () => {
     const src = read('pages/dashboard.js');

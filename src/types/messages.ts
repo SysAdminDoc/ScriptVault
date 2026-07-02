@@ -176,6 +176,11 @@ interface RescheduleScript {
   scriptId: string;
 }
 
+interface DiagnoseScripts {
+  action: 'diagnoseScripts';
+  url?: string;
+}
+
 interface PermanentlyDelete {
   action: 'permanentlyDelete';
   scriptId: string;
@@ -1655,7 +1660,7 @@ export type BackgroundMessage =
   // Audio
   | GMAudioSetMute | GMAudioGetState | GMAudioWatchState | GMAudioUnwatchState
   // Tabs
-  | GetScriptsForUrl | UpdateBadgeForTab | GMFocusTab | GMCloseTab
+  | GetScriptsForUrl | DiagnoseScripts | UpdateBadgeForTab | GMFocusTab | GMCloseTab
   // Extension info
   | GetExtensionInfo | RepairRuntimeState | PrefetchResources | Restart
   // Script value editor
@@ -2052,6 +2057,21 @@ export interface ResponseMap {
   getScriptSettings: unknown;
   getScriptValues: unknown;
   getScriptsForUrl: { scripts: Script[] };
+  diagnoseScripts: {
+    url: string;
+    userScriptsAvailable: boolean;
+    globallyEnabled: boolean;
+    urlBlocked: boolean;
+    scripts: Array<{
+      id: string;
+      name: string;
+      status: string;
+      reason: string;
+      matches: boolean;
+      enabled: boolean;
+      registered: boolean;
+    }>;
+  };
   getStorageBreakdown: unknown;
   getStorageSize: unknown;
   getSyncProviderStatus: SuccessOrError<{ connected: boolean; provider?: string; lastSync?: number; user?: unknown }>;

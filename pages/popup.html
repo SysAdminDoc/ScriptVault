@@ -1199,6 +1199,58 @@
         .popup-toast::before {
             min-height: 22px;
         }
+
+        /* Per-tab script run diagnostics */
+        .diagnose-panel {
+            padding: 8px 12px 12px;
+            border-top: 1px solid var(--border-color, rgba(127,127,127,0.2));
+            max-height: 260px;
+            overflow-y: auto;
+        }
+        .diagnose-summary {
+            font-size: 0.75rem;
+            color: var(--text-secondary, #a0a0a0);
+            margin: 4px 0 8px;
+        }
+        .diagnose-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            padding: 6px 0;
+            border-bottom: 1px solid var(--border-color, rgba(127,127,127,0.12));
+        }
+        .diagnose-row:last-child { border-bottom: none; }
+        .diagnose-dot {
+            flex: 0 0 auto;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-top: 5px;
+            background: var(--text-muted, #888);
+        }
+        .diagnose-dot.running { background: var(--accent-green, #22c55e); }
+        .diagnose-dot.no-match,
+        .diagnose-dot.disabled,
+        .diagnose-dot.on-demand,
+        .diagnose-dot.scheduled,
+        .diagnose-dot.background,
+        .diagnose-dot.paused { background: var(--text-muted, #888); }
+        .diagnose-dot.blocked,
+        .diagnose-dot.not-registered { background: var(--accent-yellow, #eab308); }
+        .diagnose-dot.error { background: var(--accent-red, #ef4444); }
+        .diagnose-text { flex: 1 1 auto; min-width: 0; }
+        .diagnose-name {
+            font-size: 0.8125rem;
+            font-weight: 600;
+            color: var(--text-primary, #e0e0e0);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .diagnose-reason {
+            font-size: 0.75rem;
+            color: var(--text-secondary, #a0a0a0);
+        }
     </style>
 </head>
 <body>
@@ -1268,6 +1320,19 @@
             </div>
             <span class="menu-item-text" data-i18n="popupCreateNewScriptEllipsis">Create New Script…</span>
         </button>
+
+        <button class="menu-item" id="btnDiagnose" type="button" aria-expanded="false" aria-controls="diagnosePanel">
+            <div class="menu-item-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="9"/>
+                    <line x1="12" y1="8" x2="12" y2="12"/>
+                    <line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+            </div>
+            <span class="menu-item-text">Why aren’t my scripts running?</span>
+        </button>
+
+        <div id="diagnosePanel" class="diagnose-panel" role="region" aria-label="Script run diagnostics" hidden></div>
 
         <!-- Utilities submenu -->
         <button class="menu-item" id="btnUtilities" type="button" aria-expanded="false" aria-controls="utilitiesSubmenu">

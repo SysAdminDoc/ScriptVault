@@ -599,15 +599,6 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 
 _Added 2026-07-01. Items below are net-new from the 2026-07-01 research pass and do not duplicate the existing Now/Next/Later/N-/X-/L-/UC- items. Sources in the Research-Driven Sources (2026-07-01) appendix._
 
-### P1
-
-- [ ] P1 — Per-tab "why didn't my script run?" diagnostic
-  Why: The #1 support burden across Tampermonkey/Violentmonkey is an enabled, matching script silently not injecting; no manager explains why per tab. ScriptVault has a proactive pattern tester and an execution panel but no reverse per-tab diagnostic.
-  Evidence: Tampermonkey #2536/#2086/#2126, quoid/userscripts #459, GreasyFork SPA warning thread (RD27-05..RD27-08); Chrome 138 "Allow User Scripts" defaults-off (RD27-09).
-  Touches: `pages/devtools-panel.js` or a new popup/dashboard panel, `content.js`, `src/background/core.ts` (per-tab injection state), `src/background/url-matcher.ts`, `src/background/registration.ts`.
-  Acceptance: For the active tab, the UI lists each script and a status per script — matched?/enabled?/injected?/blocked-by (CSP, host-permission, `chrome.userScripts` toggle off, frame/noframes, SPA-navigation-not-refired, `@run-at` timing) — with a plain-language cause; a Playwright/jsdom test asserts each cause path renders. Cross-ref N-7 (setup doctor surfaces the toggle-off cause).
-  Complexity: M
-
 ### P2
 
 - [ ] P2 — Compress backups and stored script bodies

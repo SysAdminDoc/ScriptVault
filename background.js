@@ -17943,6 +17943,7 @@ const MessageRouter = (() => {
     "deleteScript",
     "deleteScriptValue",
     "deleteWorkspace",
+    "diagnoseScripts",
     "disconnectSyncProvider",
     "duplicateScript",
     "easyCloudConnect",
@@ -39508,7 +39509,77 @@ async function handleMessage(message, sender) {
         // Return with metadata property for popup compatibility (strip code to reduce message size)
         return filtered.map(({ code, ...rest }) => ({ ...rest, metadata: rest.meta }));
       }
-      
+
+      // Per-tab "why didn't my script run?" diagnostic. For the given URL,
+      // report each script's run status and a plain-language reason, computed
+      // from data the background already has (match state, enablement,
+      // registration, run mode, global gates). Turns the top userscript-manager
+      // support question into an inspectable answer.
+      case 'diagnoseScripts': {
+        const settings = await SettingsManager.get();
+        const url = data.url || '';
+        const userScriptsAvailable = !!chrome.userScripts;
+        const globallyEnabled = settings.enabled !== false;
+        const urlBlocked = url ? isUrlBlockedByGlobalSettings(url, settings) : false;
+
+        let registeredIds = new Set();
+        try {
+          if (chrome.userScripts && typeof chrome.userScripts.getScripts === 'function') {
+            const regs = await chrome.userScripts.getScripts();
+            registeredIds = new Set((regs || []).map(r => r.id));
+          }
+        } catch (_e) { /* getScripts unavailable — treat as unknown registration */ }
+
+        const allScripts = await ScriptStorage.getAll();
+        const scripts = allScripts.map(s => {
+          const enabled = s.enabled !== false;
+          const matches = url ? doesScriptMatchUrl(s, url) : false;
+          const registered = registeredIds.has(s.id);
+          const regError = s.settings?._registrationError || null;
+          const effectiveRunAt = (s.settings?.runAt && s.settings.runAt !== 'default')
+            ? s.settings.runAt : s.meta?.['run-at'];
+          const isContextMenu = effectiveRunAt === 'context-menu';
+          const isCrontab = !!s.meta?.crontab;
+          const isBackground = !!s.meta?.background;
+
+          let status, reason;
+          if (!enabled) {
+            status = 'disabled'; reason = 'Script is turned off.';
+          } else if (isContextMenu) {
+            status = 'on-demand'; reason = 'Runs from the right-click menu, not on page load.';
+          } else if (isCrontab) {
+            status = 'scheduled'; reason = 'Runs on its @crontab schedule, not on page load.';
+          } else if (isBackground) {
+            status = 'background'; reason = '@background script — runs without a page.';
+          } else if (!matches) {
+            status = 'no-match'; reason = 'No @match/@include pattern matches this page.';
+          } else if (urlBlocked) {
+            status = 'blocked'; reason = 'This page is excluded by your global page filter or blocklist.';
+          } else if (!userScriptsAvailable) {
+            status = 'blocked'; reason = 'User scripts are turned off for this extension. Enable "Allow User Scripts" at chrome://extensions.';
+          } else if (!globallyEnabled) {
+            status = 'paused'; reason = 'ScriptVault is paused — enable it from the popup toggle.';
+          } else if (regError) {
+            status = 'error'; reason = 'Registration failed: ' + regError;
+          } else if (!registered) {
+            status = 'not-registered'; reason = 'Not currently registered. Toggle the script off and on, or reload the page.';
+          } else {
+            status = 'running'; reason = 'Matches this page and is injected.';
+          }
+          return {
+            id: s.id,
+            name: s.meta?.name || s.id,
+            status,
+            reason,
+            matches,
+            enabled,
+            registered,
+          };
+        }).sort((a, b) => a.name.localeCompare(b.name));
+
+        return { url, userScriptsAvailable, globallyEnabled, urlBlocked, scripts };
+      }
+
       // Update badge for specific tab
       case 'updateBadgeForTab': {
         if (data.tabId && data.url) {
