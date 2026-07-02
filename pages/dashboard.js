@@ -15409,18 +15409,6 @@
                 closeScriptTab(state.currentScriptId);
                 return;
             }
-            // Ctrl+Tab / Ctrl+Shift+Tab — cycle open script tabs
-            if (ctrl && e.key === 'Tab' && editorActive) {
-                e.preventDefault();
-                const openIds = Object.keys(state.openTabs);
-                if (openIds.length < 2) return;
-                const curIdx = openIds.indexOf(state.currentScriptId);
-                const nextIdx = e.shiftKey
-                    ? (curIdx - 1 + openIds.length) % openIds.length
-                    : (curIdx + 1) % openIds.length;
-                activateScriptTab(openIds[nextIdx]);
-                return;
-            }
             // Ctrl+K — command palette
             if (ctrl && e.key === 'k') {
                 e.preventDefault();

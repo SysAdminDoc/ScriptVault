@@ -115,7 +115,7 @@ create a broad passthrough policy just to bypass CSP.
 - **Library browser** &mdash; Search and add CDN libraries (`@require`) from cdnjs directly in the editor
 - **Advanced filters** &mdash; Filter scripts by grant type, error status, update URL, scope breadth, or tags
 - **Code snippets** &mdash; Insert GM API templates directly from the editor toolbar
-- **Keyboard shortcuts** &mdash; Ctrl+N new, Alt+1-7 switch tabs, Ctrl+W close tab, Ctrl+Tab cycle tabs
+- **Keyboard shortcuts** &mdash; Ctrl+N new, Alt+1-7 switch tabs, Ctrl+W close tab
 - **Script pinning** &mdash; Pin favorite scripts to the top of the list
 - **Pattern tester** &mdash; Test any URL to see which scripts would run on it
 - **Activity log** &mdash; Timestamped log of all installs, updates, and errors

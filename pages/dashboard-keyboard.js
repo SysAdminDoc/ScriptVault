@@ -282,14 +282,6 @@ tr.kn-focused td {
   /*  Toolbar tab navigation                                             */
   /* ------------------------------------------------------------------ */
 
-  function getToolbarButtons() {
-    const toolbar = document.querySelector('.toolbar, .tm-toolbar, .bulk-actions');
-    if (!toolbar) return [];
-    return [...toolbar.querySelectorAll('button, select, input[type="text"], a')].filter(
-      el => !el.disabled && el.offsetParent !== null
-    );
-  }
-
   /* ------------------------------------------------------------------ */
   /*  Main keydown handler                                               */
   /* ------------------------------------------------------------------ */
@@ -323,24 +315,6 @@ tr.kn-focused td {
 
     // Don't run list navigation/actions while a modal or dialog owns the page.
     if (isModalOpen()) return;
-
-    const ctrl = e.ctrlKey || e.metaKey;
-
-    // Tab / Shift+Tab for toolbar focus cycling
-    if (e.key === 'Tab' && !ctrl && !e.altKey && !isInputFocused()) {
-      const btns = getToolbarButtons();
-      if (btns.length > 0) {
-        const curIdx = btns.indexOf(document.activeElement);
-        if (curIdx !== -1 || document.activeElement?.closest('.toolbar, .tm-toolbar, .bulk-actions')) {
-          e.preventDefault();
-          const next = e.shiftKey
-            ? (curIdx <= 0 ? btns.length - 1 : curIdx - 1)
-            : (curIdx + 1) % btns.length;
-          btns[next]?.focus();
-          return;
-        }
-      }
-    }
 
     // If focused in an input (search box etc.), only handle Escape (already done) and Enter
     if (isInputFocused()) return;
@@ -562,8 +536,6 @@ tr.kn-focused td {
         title: 'Tab Navigation',
         shortcuts: [
           ['Alt + 1\u20136', 'Switch dashboard tabs'],
-          ['Ctrl + Tab', 'Cycle editor tabs'],
-          ['Tab / Shift+Tab', 'Move focus between toolbar buttons'],
         ]
       },
       {
