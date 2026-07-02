@@ -216,3 +216,21 @@ describe('Package includes page-loaded modules (2026-07 regression)', () => {
     expect(src).toContain('managed-storage-schema.json');
   });
 });
+
+describe('Dashboard quota bar uses real quota (2026-07 regression)', () => {
+  // The manifest declares unlimitedStorage, so the 10MB chrome.storage.local
+  // cap does not apply. updateStats() previously hardcoded 10MB and toasted
+  // "Storage at 100% capacity" with only two scripts installed. It must ask
+  // the background QuotaManager (navigator.storage.estimate) for the quota,
+  // keeping 10MB only as the messaging fallback.
+  const src = read('pages/dashboard.js');
+  it('queries getStorageUsage for the quota instead of a hardcoded cap', () => {
+    expect(src).toContain("sendMessage({ action: 'getStorageUsage' })");
+    expect(src).toContain('Number.isFinite(usage.quota) && usage.quota > 0');
+    expect(src).not.toContain('const QUOTA_BYTES = 10 * 1024 * 1024');
+  });
+  it('manifest still declares unlimitedStorage', () => {
+    const manifest = JSON.parse(read('manifest.json'));
+    expect(manifest.permissions).toContain('unlimitedStorage');
+  });
+});

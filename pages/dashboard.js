@@ -12298,17 +12298,26 @@
             if (elements.statTotalStorage) elements.statTotalStorage.textContent = formattedStorage;
             if (elements.workspaceStorageStat) elements.workspaceStorageStat.textContent = formattedStorage;
 
-            // Storage quota bar
+            // Storage quota bar — the manifest declares unlimitedStorage, so
+            // the 10MB chrome.storage.local cap does not apply. Ask the
+            // background QuotaManager for the real quota (it resolves via
+            // navigator.storage.estimate()); 10MB is only the messaging fallback.
             const quotaBar = document.getElementById('storageQuotaBar');
             const quotaText = document.getElementById('storageQuotaText');
-            const QUOTA_BYTES = 10 * 1024 * 1024; // 10MB Chrome limit
-            const pct = Math.min(100, (usedBytes / QUOTA_BYTES) * 100);
+            let quotaBytes = 10 * 1024 * 1024;
+            try {
+                const usage = await chrome.runtime.sendMessage({ action: 'getStorageUsage' });
+                if (usage && Number.isFinite(usage.quota) && usage.quota > 0) {
+                    quotaBytes = usage.quota;
+                }
+            } catch (_e) { /* background unavailable — keep the fallback */ }
+            const pct = Math.min(100, (usedBytes / quotaBytes) * 100);
             if (quotaBar) {
                 quotaBar.style.width = pct + '%';
                 quotaBar.className = 'quota-bar-fill' + (pct > 90 ? ' danger' : pct > 70 ? ' warning' : '');
             }
             if (quotaText) {
-                quotaText.textContent = `${formatBytes(usedBytes)} / ${formatBytes(QUOTA_BYTES)} (${pct.toFixed(1)}%)`;
+                quotaText.textContent = `${formatBytes(usedBytes)} / ${formatBytes(quotaBytes)} (${pct.toFixed(1)}%)`;
             }
             // Show warning toast if over 85%. Reset the flag once usage drops
             // back below 70% so a user who cleans up and then refills storage
