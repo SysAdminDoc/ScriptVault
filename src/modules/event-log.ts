@@ -209,8 +209,15 @@ function exportCSV(entries: EventLogRecord[]): string {
   const header = 'timestamp,category,severity,action,detail,scriptId,scriptName,hostname';
   const rows = entries.map((r) => {
     const ts = new Date(r.timestamp).toISOString();
-    const esc = (s: string | null | undefined): string =>
-      `"${String(s ?? '').replace(/"/g, '""')}"`;
+    // Defang CSV formula injection (CWE-1236): a cell beginning with = + - @
+    // or a control char is prefixed with ' so spreadsheet apps don't execute
+    // it. Fields like action/detail/scriptName derive from script @name and
+    // feed data. Matches error-log.exportCSV's mitigation.
+    const esc = (s: string | null | undefined): string => {
+      let str = String(s ?? '');
+      if (/^[=+\-@\t\r]/.test(str)) str = "'" + str;
+      return `"${str.replace(/"/g, '""')}"`;
+    };
     return `${ts},${r.category},${r.severity},${esc(r.action)},${esc(r.detail)},${esc(r.scriptId)},${esc(r.scriptName)},${esc(r.hostname)}`;
   });
   return [header, ...rows].join('\n');

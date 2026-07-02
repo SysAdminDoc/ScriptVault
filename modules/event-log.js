@@ -157,7 +157,11 @@ const EventLog = (() => {
     const header = "timestamp,category,severity,action,detail,scriptId,scriptName,hostname";
     const rows = entries.map((r) => {
       const ts = new Date(r.timestamp).toISOString();
-      const esc = (s) => `"${String(s ?? "").replace(/"/g, '""')}"`;
+      const esc = (s) => {
+        let str = String(s ?? "");
+        if (/^[=+\-@\t\r]/.test(str)) str = "'" + str;
+        return `"${str.replace(/"/g, '""')}"`;
+      };
       return `${ts},${r.category},${r.severity},${esc(r.action)},${esc(r.detail)},${esc(r.scriptId)},${esc(r.scriptName)},${esc(r.hostname)}`;
     });
     return [header, ...rows].join("\n");

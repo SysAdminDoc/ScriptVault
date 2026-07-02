@@ -397,11 +397,9 @@ const ScriptDebugger = (() => {
       });
       toggle.addEventListener('click', () => {
         _liveReload[id] = !_liveReload[id];
-        if (_liveReload[id]) {
-          chrome.runtime.sendMessage({ action: 'setLiveReload', scriptId: id, enabled: true });
-        } else {
-          chrome.runtime.sendMessage({ action: 'setLiveReload', scriptId: id, enabled: false });
-        }
+        // .catch: in MV3 sendMessage rejects if the SW is asleep with no
+        // receiver; swallow it to avoid an unhandled rejection in the console.
+        chrome.runtime.sendMessage({ action: 'setLiveReload', scriptId: id, enabled: _liveReload[id] }).catch(() => {});
         render();
       });
       row.appendChild(toggle);
@@ -693,14 +691,6 @@ const ScriptDebugger = (() => {
 
   let _onJumpToLine = null;
 
-  function notifyBackground(action, scriptId) {
-    try {
-      if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
-        chrome.runtime.sendMessage({ type: 'ScriptDebugger', action, scriptId });
-      }
-    } catch { /* not in extension context */ }
-  }
-
   /* ── Console interception wrapper ───────────────────────────────── */
 
   function createConsoleProxy(scriptId) {
@@ -844,13 +834,14 @@ const ScriptDebugger = (() => {
     },
 
     /**
-     * Notify the debugger that a script was saved (triggers live reload).
-     * @param {string} scriptId
+     * Notify the debugger that a script was saved. Live-reload of matching tabs
+     * is handled by the background saveScript handler (it force-reloads tabs
+     * for scripts in liveReloadScripts), so this is a no-op kept for API
+     * compatibility with the dashboard save flow.
+     * @param {string} _scriptId
      */
-    onScriptSaved(scriptId) {
-      if (_liveReload[scriptId]) {
-        notifyBackground('reloadTabs', scriptId);
-      }
+    onScriptSaved(_scriptId) {
+      /* handled in background saveScript */
     },
 
     /**

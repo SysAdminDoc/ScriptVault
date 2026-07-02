@@ -721,10 +721,20 @@ const DependencyGraph = (() => {
     // Animation Loop
     // =========================================
     function animationLoop() {
+        // Only repaint when the layout is animating or an interaction marked the
+        // view dirty. Previously render() ran every frame forever, repainting
+        // the whole canvas ~60fps while idle (CPU/GPU/battery drain for no
+        // visual change).
+        let shouldRender = false;
         if (_state.simulationRunning) {
             simulationStep();
+            shouldRender = true;
         }
-        render();
+        if (_state.needsRender) {
+            shouldRender = true;
+            _state.needsRender = false;
+        }
+        if (shouldRender) render();
         _state.animFrameId = requestAnimationFrame(animationLoop);
     }
 
@@ -793,6 +803,7 @@ const DependencyGraph = (() => {
                 canvas.style.cursor = node ? 'pointer' : 'grab';
                 updateTooltip(e, node);
             }
+            _state.needsRender = true;
         });
 
         canvas.addEventListener('mouseup', () => {
@@ -812,6 +823,7 @@ const DependencyGraph = (() => {
             _state.hoveredNode = null;
             canvas.classList.remove('dg-dragging');
             removeTooltip();
+            _state.needsRender = true;
         });
 
         canvas.addEventListener('wheel', (e) => {
@@ -819,6 +831,7 @@ const DependencyGraph = (() => {
             const factor = e.deltaY < 0 ? 1.1 : 0.9;
             const newZoom = Math.max(0.1, Math.min(5, _state.camera.zoom * factor));
             _state.camera.zoom = newZoom;
+            _state.needsRender = true;
         }, { passive: false });
 
         canvas.addEventListener('dblclick', (e) => {
@@ -1076,6 +1089,7 @@ const DependencyGraph = (() => {
         // DPR scale applied in render() since canvas resize resets transforms
         _state.width = rect.width;
         _state.height = rect.height;
+        _state.needsRender = true;
     }
 
     // =========================================
@@ -1241,6 +1255,7 @@ const DependencyGraph = (() => {
             // Center camera on node
             _state.camera.x = -node.x * _state.camera.zoom;
             _state.camera.y = -node.y * _state.camera.zoom;
+            _state.needsRender = true;
         }
     }
 

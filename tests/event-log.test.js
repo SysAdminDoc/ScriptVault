@@ -167,6 +167,16 @@ describe('Structured Event Logging', () => {
     expect(lines[1]).toContain('install');
     expect(lines[1]).toContain('"My Script"');
   });
+
+  it('defangs CSV formula injection in script-derived fields', async () => {
+    await EventLog.log({ category: 'install', action: 'test', scriptName: '=HYPERLINK("http://evil")', detail: '@cmd' });
+    const entries = await EventLog.getAll();
+    const csv = EventLog.exportCSV(entries);
+    // Leading =/@ must be prefixed with ' so spreadsheets don't execute it.
+    expect(csv).toContain(`"'=HYPERLINK`);
+    expect(csv).toContain(`"'@cmd"`);
+    expect(csv).not.toContain('"=HYPERLINK');
+  });
 });
 
 describe('EventLog source contract', () => {
