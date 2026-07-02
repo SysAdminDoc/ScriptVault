@@ -1239,7 +1239,13 @@ function renderInstallUI(sourceUrl) {
         <span class="count status-neutral" id="dep-status" role="status" aria-live="polite" aria-atomic="true">Checking…</span>
       </div>
       <div class="tag-list" id="dep-list">
-        ${scriptMeta.require.map(url => `<span class="tag" data-dep-url="${escapeHtml(url)}" title="${escapeHtml(url)}">${escapeHtml(getUrlFilename(url))}</span>`).join('')}
+        ${scriptMeta.require.map(url => {
+          const pinned = requireIsPinned(url);
+          const badge = pinned
+            ? ''
+            : ` <span class="tag warning" title="This @require has no SRI hash — it loads whatever the CDN serves. Pin it with #sha256=… to verify, or set Security → Subresource Integrity to Require to block un-pinned dependencies.">unverified remote code</span>`;
+          return `<span class="tag" data-dep-url="${escapeHtml(url)}" title="${escapeHtml(url)}">${escapeHtml(getUrlFilename(url))}</span>${badge}`;
+        }).join('')}
       </div>
       <div class="install-card-header" style="margin-top:14px;margin-bottom:8px">
         <div class="install-card-subtitle">Sigstore provenance</div>
@@ -2038,6 +2044,20 @@ function getUrlFilename(url) {
   } catch {
     return url.length > 30 ? url.substring(0, 30) + '…' : url;
   }
+}
+
+// A @require is "pinned" (verifiable) when it carries an SRI fragment
+// (#sha256=/sha384=/sha512=) or is an npm: spec (resolved with a computed SRI).
+// Un-pinned remote requires run whatever the CDN serves — flag them so the user
+// reviews the unverified remote code before installing.
+function requireIsPinned(url) {
+  if (typeof url !== 'string') return true;
+  if (/^npm:/i.test(url.trim())) return true;
+  const hashIdx = url.indexOf('#');
+  if (hashIdx > 0) {
+    return /^(sha256|sha384|sha512)[-=]/i.test(url.slice(hashIdx + 1));
+  }
+  return false;
 }
 
 function compareVersions(v1, v2) {

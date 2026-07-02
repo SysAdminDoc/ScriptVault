@@ -33471,7 +33471,7 @@ async function previewRequireProvenance(data = {}) {
       provenance = await _receiptDependencyProvenance(bundleUrl, identity, '', null);
     } else {
       try {
-        const body = await fetchRequireScript(url);
+        const body = await fetchRequireScript(url, { allowUnpinned: true });
         if (typeof body !== 'string' || body.length === 0) {
           provenance = {
             bundleUrl,
@@ -33599,7 +33599,7 @@ function _getRequireTofuSriFailure(receipt = {}) {
 }
 
 async function fetchRequireScriptForTrustReceipt(url) {
-  return fetchRequireScript(url, { bypassCache: true, cacheResult: false });
+  return fetchRequireScript(url, { bypassCache: true, cacheResult: false, allowUnpinned: true });
 }
 
 async function _sha256Hex(text) {
@@ -43354,6 +43354,26 @@ async function fetchRequireScript(url, options = {}) {
   }
 
   const { fetchUrl, sriHash } = parseRequireIntegrity(url);
+
+  // SRI enforcement: the Security > Subresource Integrity setting has a
+  // "require" mode that, until now, was surfaced in the UI but never enforced.
+  // In "require" mode, refuse to fetch a remote @require that carries no
+  // verifiable integrity hash. npm specs are resolved with a computed SRI above
+  // and never reach here; hash-pinned and TOFU-pinned requires are unaffected.
+  // Probe/preview/receipt callers pass allowUnpinned so install/update review
+  // can still inspect the dependency — enforcement applies to execution
+  // (registration/wrapper build) only.
+  if (!options.allowUnpinned && !hasVerifiableRequireIntegrity(url)) {
+    try {
+      const _sriSettings = await SettingsManager.get();
+      if (_sriSettings?.sri === 'require') {
+        console.warn(`[ScriptVault] Refusing un-pinned @require (SRI = require): ${fetchUrl}`);
+        return null;
+      }
+    } catch (_e) {
+      // Settings unavailable — do not block execution.
+    }
+  }
 
   debugLog('Fetching @require:', fetchUrl);
 

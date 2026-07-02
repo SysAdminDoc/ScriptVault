@@ -93,6 +93,11 @@ export interface Settings {
   allowInternalSyncEndpoints: boolean;
   allowHighPrivilegeScriptApis: boolean;
   modifyCSP: 'auto' | 'yes' | 'no';
+  // Subresource Integrity mode for @require/@resource. "validate" (default):
+  // verify declared hashes, allow un-pinned. "require": refuse un-pinned remote
+  // requires. "ignore": do not flag un-pinned. Runtime-sourced (defaults to
+  // "validate"), so optional here.
+  sri?: 'validate' | 'require' | 'ignore';
   // Execution-stats URL retention: full URL, origin-only, or no URL stored.
   statsUrlRetention: 'full' | 'origin' | 'none';
 

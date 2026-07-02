@@ -30,9 +30,11 @@ describe('install @require provenance preview wiring', () => {
   });
 
   it('uses the hardened background dependency and bundle fetchers for preview and saved receipts', () => {
-    expect(backgroundCore).toContain('const body = await fetchRequireScript(url);');
+    // Provenance preview/receipt fetches pass allowUnpinned so SRI enforce mode
+    // (sri === "require") does not block install-time inspection of a dependency.
+    expect(backgroundCore).toContain('const body = await fetchRequireScript(url, { allowUnpinned: true });');
     expect(backgroundCore).toContain('async function fetchRequireScriptForTrustReceipt(url)');
-    expect(backgroundCore).toContain("fetchRequireScript(url, { bypassCache: true, cacheResult: false })");
+    expect(backgroundCore).toContain("fetchRequireScript(url, { bypassCache: true, cacheResult: false, allowUnpinned: true })");
     expect(backgroundCore).toContain('await _receiptDependencyProvenance(bundleUrl, identity, body, fetchProvenanceBundle)');
     expect(backgroundCore).toMatch(/fetchDependencyBody:\s*fetchRequireScriptForTrustReceipt,\s*fetchProvenanceBundle/s);
   });

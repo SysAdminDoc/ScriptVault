@@ -36,6 +36,13 @@ const MAX_PROVENANCE_BUNDLE_BYTES = 256 * 1024;
 export interface FetchRequireScriptOptions {
   bypassCache?: boolean;
   cacheResult?: boolean;
+  // When true (Security > Subresource Integrity = "require"), refuse to fetch a
+  // remote @require that carries no verifiable SRI hash. npm specs get a
+  // computed SRI and are exempt.
+  enforcePinned?: boolean;
+  // Probe/preview/receipt callers set this so install/update review can inspect
+  // a dependency even under enforce mode (enforcement applies to execution).
+  allowUnpinned?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -301,6 +308,13 @@ export async function fetchRequireScript(url: string, options: FetchRequireScrip
 
   // Extract SRI hash from URL fragment (e.g., url#sha256=abc123 or url#md5=abc123)
   const { fetchUrl, sriHash } = parseRequireIntegrity(url);
+
+  // SRI enforcement: in "require" mode, refuse un-pinned remote requires. npm
+  // specs are resolved with a computed SRI above and never reach here.
+  if (options.enforcePinned && !options.allowUnpinned && !hasVerifiableRequireIntegrity(url)) {
+    console.warn(`[ScriptVault] Refusing un-pinned @require (SRI = require): ${fetchUrl}`);
+    return null;
+  }
 
   debugLog('Fetching @require:', fetchUrl);
 
