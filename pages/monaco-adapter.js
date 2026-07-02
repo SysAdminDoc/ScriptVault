@@ -75,12 +75,21 @@
         _cursorListeners.forEach(fn => { try { fn({ line: msg.line - 1, ch: msg.col - 1 }); } catch {} });
         break;
       case 'save':
-        // Find the saveCurrentScript function in dashboard scope
-        if (typeof saveCurrentScript === 'function') saveCurrentScript();
-        else document.querySelector('[data-action="save"]')?.click();
+        // saveCurrentScript/closeEditor are IIFE-scoped in dashboard.js, so
+        // reach them through the exported UI bridge; fall back to clicking the
+        // real save button (#btnEditorSave) if the bridge isn't present.
+        if (typeof window.ScriptVaultDashboardUI?.saveEditor === 'function') {
+          window.ScriptVaultDashboardUI.saveEditor();
+        } else {
+          document.getElementById('btnEditorSave')?.click();
+        }
         break;
       case 'close':
-        if (typeof closeEditor === 'function') closeEditor();
+        if (typeof window.ScriptVaultDashboardUI?.closeEditor === 'function') {
+          window.ScriptVaultDashboardUI.closeEditor();
+        } else {
+          document.getElementById('btnEditorClose')?.click();
+        }
         break;
       case 'find-search':
         // Sandbox forwards each find-widget searchString change. Persist.

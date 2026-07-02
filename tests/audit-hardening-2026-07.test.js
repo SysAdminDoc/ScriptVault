@@ -36,6 +36,23 @@ describe('safeSetHtml fragment context (2026-07 regression)', () => {
   }
 });
 
+describe('Monaco editor Ctrl+S / Escape wiring (2026-07 regression)', () => {
+  it('adapter routes save/close through the exposed UI bridge with real-button fallbacks', () => {
+    const src = read('pages/monaco-adapter.js');
+    expect(src).toContain('window.ScriptVaultDashboardUI?.saveEditor');
+    expect(src).toContain('window.ScriptVaultDashboardUI?.closeEditor');
+    expect(src).toContain("getElementById('btnEditorSave')");
+    expect(src).toContain("getElementById('btnEditorClose')");
+    // The dead selector that matched no element must be gone.
+    expect(src).not.toContain("querySelector('[data-action=\"save\"]')");
+  });
+  it('dashboard exposes saveEditor/closeEditor on the UI bridge', () => {
+    const src = read('pages/dashboard.js');
+    expect(src).toContain('saveEditor:');
+    expect(src).toContain('closeEditor:');
+  });
+});
+
 describe('Script chains use the real background API (2026-07 regression)', () => {
   const src = read('pages/dashboard-chains.js');
   it('runs steps via runScriptNow, not the non-existent executeScript action', () => {

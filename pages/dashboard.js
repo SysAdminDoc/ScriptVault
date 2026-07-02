@@ -13017,7 +13017,13 @@
         confirm: showConfirmModal,
         input: showInputModal,
         toast: showToast,
-        safeSetHtml: safeSetHtml
+        safeSetHtml: safeSetHtml,
+        // Exposed for the Monaco sandbox bridge (monaco-adapter.js) so the
+        // editor's Ctrl+S / Escape keybindings can reach the IIFE-scoped
+        // handlers. Without these, the sandbox's save/close postMessages hit a
+        // non-existent global and a dead [data-action="save"] selector.
+        saveEditor: () => { saveCurrentScript(); },
+        closeEditor: () => { closeEditor(); }
     };
 
     function getEditorLineCount(editor) {
