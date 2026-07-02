@@ -298,6 +298,21 @@ function allowsInternalSyncEndpoints(settings: Partial<Settings>): boolean {
   return settings.allowInternalSyncEndpoints === true;
 }
 
+// Resolve the remote object name for an upload. Cloud backup passes
+// settings.syncFilename to write to a DISTINCT object so it does not clobber the
+// sync envelope; sync leaves it unset and uses the provider default. The name is
+// sanitized to a bare filename (no path traversal, no leading slash).
+function resolveRemoteObjectName(settings: Partial<Settings> | undefined, defaultName: string): string {
+  const override = settings?.syncFilename;
+  if (typeof override === 'string' && override.trim()) {
+    // Strip path separators and any leading dots so the override is always a
+    // bare filename (no traversal, no hidden-file trickery).
+    const cleaned = override.trim().replace(/[^A-Za-z0-9._-]+/g, '').replace(/^\.+/, '');
+    if (cleaned) return cleaned;
+  }
+  return defaultName.replace(/^\/+/, '');
+}
+
 function syncEndpointMessage(prefix: string, result: InternalHostCheckResult): string {
   return `${prefix}: ${result.message || 'rejected URL'}`;
 }
@@ -455,7 +470,8 @@ const webdav = {
 
   async upload(data: unknown, settings: Settings): Promise<SyncUploadResult> {
     const effectiveSettings = await SyncCredentialStore.resolveSettings(settings);
-    const url = `${getRequiredWebDavBaseUrl(effectiveSettings)}/scriptvault-backup.json`;
+    const objectName = resolveRemoteObjectName(settings, 'scriptvault-backup.json');
+    const url = `${getRequiredWebDavBaseUrl(effectiveSettings)}/${objectName}`;
     const auth = getWebDavAuthHeader(effectiveSettings);
     const guardOptions = {
       label: 'WebDAV sync endpoint',
@@ -769,9 +785,9 @@ const googledrive = {
     return { success: true };
   },
 
-  async findFile(token: string): Promise<GoogleDriveFile | null> {
+  async findFile(token: string, objectName?: string): Promise<GoogleDriveFile | null> {
     // Search in root and appDataFolder
-    const safeName = this.fileName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    const safeName = (objectName || this.fileName).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     const query = encodeURIComponent(`name='${safeName}' and trashed=false`);
     const response = await fetchWithTimeout(
       `https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name,modifiedTime)&spaces=drive`,
@@ -788,9 +804,10 @@ const googledrive = {
     const token = await this.getValidToken(settings);
     if (!token) throw new Error('Not authenticated with Google Drive');
 
-    const existingFile = await this.findFile(token);
+    const objectName = resolveRemoteObjectName(settings, this.fileName);
+    const existingFile = await this.findFile(token, objectName);
     const metadata = {
-      name: this.fileName,
+      name: objectName,
       mimeType: 'application/json',
     };
 
@@ -1082,12 +1099,13 @@ const dropbox = {
     const body = JSON.stringify(data);
     if (body.length > 150 * 1024 * 1024) throw new Error('Sync data exceeds Dropbox 150 MB upload limit');
 
+    const dropboxPath = '/' + resolveRemoteObjectName(settings, this.fileName);
     const response = await fetchWithTimeout('https://content.dropboxapi.com/2/files/upload', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
         'Dropbox-API-Arg': JSON.stringify({
-          path: this.fileName,
+          path: dropboxPath,
           mode: 'overwrite',
           autorename: false,
           mute: true,
@@ -1382,8 +1400,9 @@ const onedrive = {
     if (!token) throw new Error('Not authenticated with OneDrive');
     if (!data || typeof data !== 'object') throw new Error('Invalid backup data');
 
+    const objectName = resolveRemoteObjectName(settings, this.fileName);
     const response = await fetchWithTimeout(
-      `https://graph.microsoft.com/v1.0/me/drive/special/approot:/${this.fileName}:/content`,
+      `https://graph.microsoft.com/v1.0/me/drive/special/approot:/${objectName}:/content`,
       {
         method: 'PUT',
         headers: {
@@ -1547,6 +1566,12 @@ const s3 = {
   },
 
   _objectKey(settings: Partial<Settings>): string {
+    // Cloud backup overrides the key with a distinct object so it does not
+    // clobber the sync envelope; sync leaves syncFilename unset and uses the
+    // user's configured s3ObjectKey (or the default).
+    if (typeof settings.syncFilename === 'string' && settings.syncFilename.trim()) {
+      return resolveRemoteObjectName(settings, 'scriptvault-cloud-backup.json');
+    }
     return (settings.s3ObjectKey || 'scriptvault-backup.json').replace(/^\/+/, '');
   },
 

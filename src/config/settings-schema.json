@@ -138,7 +138,8 @@
     "derived": [
       "dropboxUser",
       "googleDriveUser",
-      "onedriveUser"
+      "onedriveUser",
+      "syncFilename"
     ],
     "deprecated": []
   },

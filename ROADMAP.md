@@ -585,11 +585,6 @@ _Verified-but-unfixed items from the 2026-07-02 deep audit. The audit shipped fi
   Where: `src/modules/sync-easycloud.ts` (~718-720, 750, 854-894).
   Acceptance: mirror the cloud-sync resurrection + clean-merge-save + tombstone-change persistence fixes; a test pins restore-from-trash survival and remote-edit adoption on Easy Cloud.
 
-- [ ] P2 — Cloud backup upload collides with the cloud-sync envelope and skips E2EE
-  Why: `backup-scheduler.ts` `_uploadBackupToCloud` sets `syncFilename` but no provider reads it — every provider writes the same object as the sync envelope, so cloud backup and cloud sync overwrite each other, and the backup envelope is uploaded in plaintext even when sync E2EE is established (then the next sync download hard-fails "refusing plaintext").
-  Where: `src/modules/backup-scheduler.ts:1186-1216`, `src/modules/sync-providers.ts` (per-provider object names).
-  Acceptance: distinct per-provider backup object name; encrypt the backup envelope with SyncCrypto when E2EE is on; sync and cloud-backup no longer clobber each other.
-
 ### P3
 
 - [ ] P3 — Provenance UI aligns `@require-provenance`/`@require-identity` to the wrong dependency

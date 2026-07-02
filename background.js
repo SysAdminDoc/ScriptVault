@@ -3254,6 +3254,14 @@ const CloudSyncProviders = (() => {
   function allowsInternalSyncEndpoints(settings) {
     return settings.allowInternalSyncEndpoints === true;
   }
+  function resolveRemoteObjectName(settings, defaultName) {
+    const override = settings?.syncFilename;
+    if (typeof override === "string" && override.trim()) {
+      const cleaned = override.trim().replace(/[^A-Za-z0-9._-]+/g, "").replace(/^\.+/, "");
+      if (cleaned) return cleaned;
+    }
+    return defaultName.replace(/^\/+/, "");
+  }
   function syncEndpointMessage(prefix, result) {
     return `${prefix}: ${result.message || "rejected URL"}`;
   }
@@ -3362,7 +3370,8 @@ const CloudSyncProviders = (() => {
     },
     async upload(data, settings) {
       const effectiveSettings = await SyncCredentialStore.resolveSettings(settings);
-      const url = `${getRequiredWebDavBaseUrl(effectiveSettings)}/scriptvault-backup.json`;
+      const objectName = resolveRemoteObjectName(settings, "scriptvault-backup.json");
+      const url = `${getRequiredWebDavBaseUrl(effectiveSettings)}/${objectName}`;
       const auth = getWebDavAuthHeader(effectiveSettings);
       const guardOptions = {
         label: "WebDAV sync endpoint",
@@ -3627,8 +3636,8 @@ const CloudSyncProviders = (() => {
       }
       return { success: true };
     },
-    async findFile(token) {
-      const safeName = this.fileName.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+    async findFile(token, objectName) {
+      const safeName = (objectName || this.fileName).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
       const query = encodeURIComponent(`name='${safeName}' and trashed=false`);
       const response = await fetchWithTimeout(
         `https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name,modifiedTime)&spaces=drive`,
@@ -3642,9 +3651,10 @@ const CloudSyncProviders = (() => {
     async upload(data, settings) {
       const token = await this.getValidToken(settings);
       if (!token) throw new Error("Not authenticated with Google Drive");
-      const existingFile = await this.findFile(token);
+      const objectName = resolveRemoteObjectName(settings, this.fileName);
+      const existingFile = await this.findFile(token, objectName);
       const metadata = {
-        name: this.fileName,
+        name: objectName,
         mimeType: "application/json"
       };
       const boundary = "-------ScriptVault" + crypto.getRandomValues(new Uint8Array(8)).reduce((s, b) => s + b.toString(16).padStart(2, "0"), "");
@@ -3881,12 +3891,13 @@ const CloudSyncProviders = (() => {
       if (!token) throw new Error("Not authenticated with Dropbox");
       const body = JSON.stringify(data);
       if (body.length > 150 * 1024 * 1024) throw new Error("Sync data exceeds Dropbox 150 MB upload limit");
+      const dropboxPath = "/" + resolveRemoteObjectName(settings, this.fileName);
       const response = await fetchWithTimeout("https://content.dropboxapi.com/2/files/upload", {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${token}`,
           "Dropbox-API-Arg": JSON.stringify({
-            path: this.fileName,
+            path: dropboxPath,
             mode: "overwrite",
             autorename: false,
             mute: true
@@ -4133,8 +4144,9 @@ const CloudSyncProviders = (() => {
       const token = await this.getValidToken(effectiveSettings);
       if (!token) throw new Error("Not authenticated with OneDrive");
       if (!data || typeof data !== "object") throw new Error("Invalid backup data");
+      const objectName = resolveRemoteObjectName(settings, this.fileName);
       const response = await fetchWithTimeout(
-        `https://graph.microsoft.com/v1.0/me/drive/special/approot:/${this.fileName}:/content`,
+        `https://graph.microsoft.com/v1.0/me/drive/special/approot:/${objectName}:/content`,
         {
           method: "PUT",
           headers: {
@@ -4266,6 +4278,9 @@ const CloudSyncProviders = (() => {
       return `${endpoint.protocol}//${host}${port}/${encodedKey}`;
     },
     _objectKey(settings) {
+      if (typeof settings.syncFilename === "string" && settings.syncFilename.trim()) {
+        return resolveRemoteObjectName(settings, "scriptvault-cloud-backup.json");
+      }
       return (settings.s3ObjectKey || "scriptvault-backup.json").replace(/^\/+/, "");
     },
     async _signRequest({
@@ -25617,9 +25632,17 @@ const BackupScheduler = (() => {
       data: blobData
     };
     const uploadSettings = Object.assign({}, globalSettings, {
-      syncFilename: "scriptvault-backup.json"
+      syncFilename: "scriptvault-cloud-backup.json"
     });
-    const result = await provider.upload(envelope, uploadSettings);
+    let payload = envelope;
+    try {
+      if (typeof SyncCrypto !== "undefined" && SyncCrypto?.isEncryptionEnabled?.(uploadSettings)) {
+        payload = await SyncCrypto.prepareSyncEnvelopeForUpload(envelope, uploadSettings);
+      }
+    } catch (_e) {
+      throw new Error("Cloud backup encryption failed");
+    }
+    const result = await provider.upload(payload, uploadSettings);
     if (!result?.success) {
       throw new Error(result?.error || "Cloud backup upload failed");
     }

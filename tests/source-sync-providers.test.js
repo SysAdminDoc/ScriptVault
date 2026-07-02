@@ -106,6 +106,52 @@ describe('source sync providers module', () => {
     );
   });
 
+  it('uploads to a distinct object when syncFilename is set (cloud backup does not clobber sync)', async () => {
+    const { CloudSyncProviders } = await loadFreshSyncProviders();
+    const fetchMock = vi.fn().mockResolvedValue(new Response('', { status: 201 }));
+    globalThis.fetch = fetchMock;
+
+    // Sync (no syncFilename) writes the default object.
+    await CloudSyncProviders.webdav.upload(
+      { scripts: [] },
+      { webdavUrl: 'https://dav.example.com/', webdavUsername: 'a', webdavPassword: 'b' },
+    );
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      'https://dav.example.com/scriptvault-backup.json',
+      expect.objectContaining({ method: 'PUT' }),
+    );
+
+    // Cloud backup (syncFilename override) writes a DISTINCT object.
+    await CloudSyncProviders.webdav.upload(
+      { schema: 'scriptvault-cloud-backup/v1' },
+      {
+        webdavUrl: 'https://dav.example.com/',
+        webdavUsername: 'a',
+        webdavPassword: 'b',
+        syncFilename: 'scriptvault-cloud-backup.json',
+      },
+    );
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      'https://dav.example.com/scriptvault-cloud-backup.json',
+      expect.objectContaining({ method: 'PUT' }),
+    );
+
+    // A traversal-laden override is sanitized to a bare filename.
+    await CloudSyncProviders.webdav.upload(
+      { schema: 'x' },
+      {
+        webdavUrl: 'https://dav.example.com/',
+        webdavUsername: 'a',
+        webdavPassword: 'b',
+        syncFilename: '../../etc/passwd',
+      },
+    );
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      'https://dav.example.com/etcpasswd',
+      expect.objectContaining({ method: 'PUT' }),
+    );
+  });
+
   it('rejects internal-host WebDAV endpoints before network I/O by default', async () => {
     const { CloudSyncProviders } = await loadFreshSyncProviders();
     const fetchMock = vi.fn().mockResolvedValue(new Response('', { status: 201 }));

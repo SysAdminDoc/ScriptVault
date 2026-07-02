@@ -64,6 +64,11 @@ declare const CloudSyncProviders: Record<string, {
   upload(data: unknown, settings: Record<string, unknown>): Promise<{ success: boolean; error?: string }>;
 } | undefined> | undefined;
 
+declare const SyncCrypto: {
+  isEncryptionEnabled(settings: Record<string, unknown>): boolean;
+  prepareSyncEnvelopeForUpload(envelope: unknown, settings: Record<string, unknown>): Promise<unknown>;
+} | undefined;
+
 declare const FolderStorage: {
   cache: unknown;
 };
@@ -1205,11 +1210,28 @@ async function _uploadBackupToCloud(backup: BackupEntry): Promise<void> {
     data: blobData,
   };
 
+  // Write to a DISTINCT remote object so the cloud backup never clobbers the
+  // sync envelope (they previously shared scriptvault-backup.json, so each
+  // overwrote the other and the next sync download read a backup envelope).
   const uploadSettings = Object.assign({}, globalSettings, {
-    syncFilename: 'scriptvault-backup.json',
+    syncFilename: 'scriptvault-cloud-backup.json',
   });
 
-  const result = await provider.upload(envelope, uploadSettings);
+  // Encrypt the backup with the same passphrase as sync when E2EE is enabled,
+  // so a user who turned on sync encryption doesn't leak plaintext script code
+  // and GM values into their cloud provider through the backup path.
+  let payload: unknown = envelope;
+  try {
+    if (typeof SyncCrypto !== 'undefined' && SyncCrypto?.isEncryptionEnabled?.(uploadSettings)) {
+      payload = await SyncCrypto.prepareSyncEnvelopeForUpload(envelope, uploadSettings);
+    }
+  } catch (_e) {
+    // If encryption is unavailable, fail closed rather than uploading plaintext
+    // under an E2EE expectation.
+    throw new Error('Cloud backup encryption failed');
+  }
+
+  const result = await provider.upload(payload, uploadSettings);
   if (!result?.success) {
     throw new Error(result?.error || 'Cloud backup upload failed');
   }
