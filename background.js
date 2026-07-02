@@ -1,4 +1,4 @@
-// ScriptVault v3.13.0 - Background Service Worker
+// ScriptVault v3.14.0 - Background Service Worker
 // Comprehensive userscript manager with cloud sync and auto-updates
 // NOTE: This file is built from source modules. Edit the individual files in
 // shared/, modules/, and lib/, then run `npm run build` to regenerate.

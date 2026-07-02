@@ -9,6 +9,22 @@ const WhatsNew = (() => {
     : '2.0.0';
 
   const CHANGELOG = {
+    '3.14.0': {
+      title: 'ScriptVault 3.14.0 — Sync Merge Restored & Deep Audit',
+      date: '2026-07-02',
+      highlights: [
+        { icon: 'SYNC', title: 'Real 3-Way Merge', desc: 'Concurrent edits on two devices now merge again — the merge engine relied on an API removed from the diff library, so it had silently fallen back to last-write-wins.' },
+        { icon: 'GRAPH', title: 'Calmer Dependency Graph', desc: 'The graph no longer repaints 60 times a second while idle, saving CPU and battery.' },
+        { icon: 'SAFE', title: 'Backup Warning Works', desc: 'The "storage almost full" backup warning can fire again (it measured the wrong field after v3.12).' },
+        { icon: 'EXPORT', title: 'Better Standalone Export', desc: 'Exported install pages get a working "Copy Link" share instead of a non-scannable placeholder QR, and the bookmarklet minifier no longer risks corrupting exported code.' }
+      ],
+      improvements: [
+        'Large-file diffs and merges no longer render as all-delete garbage',
+        'Event-log CSV export is hardened against spreadsheet formula injection',
+        'Removed a dead debugger live-reload message path',
+        'Bounded the notification error-count store'
+      ]
+    },
     '3.13.0': {
       title: 'ScriptVault 3.13.0 — Scheduler, Diagnostics & Hardening',
       date: '2026-07-02',
