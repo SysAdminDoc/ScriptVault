@@ -255,6 +255,17 @@ const NotificationSystem = {
 
     // Increment consecutive error count
     this._errorCounts[scriptId] = (this._errorCounts[scriptId] ?? 0) + 1;
+    // Cap the map so scripts that error 1-2 times then get deleted (never
+    // reaching the reset-on-success path) can't accumulate keys without bound.
+    // When over the cap, drop the below-threshold (count < 3) entries first —
+    // those haven't earned a notification and are the churn.
+    const MAX_ERROR_COUNT_KEYS = 500;
+    const keys = Object.keys(this._errorCounts);
+    if (keys.length > MAX_ERROR_COUNT_KEYS) {
+      for (const k of keys) {
+        if (k !== scriptId && (this._errorCounts[k] ?? 0) < 3) delete this._errorCounts[k];
+      }
+    }
     await chrome.storage.local.set({ [this.STORAGE_KEY_ERROR_COUNTS]: this._errorCounts });
 
     // Track for digest

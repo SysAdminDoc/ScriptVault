@@ -21568,6 +21568,13 @@ const NotificationSystem = (() => {
         this._rateLimits = data[this.STORAGE_KEY_RATE_LIMITS] ?? {};
       }
       this._errorCounts[scriptId] = (this._errorCounts[scriptId] ?? 0) + 1;
+      const MAX_ERROR_COUNT_KEYS = 500;
+      const keys = Object.keys(this._errorCounts);
+      if (keys.length > MAX_ERROR_COUNT_KEYS) {
+        for (const k of keys) {
+          if (k !== scriptId && (this._errorCounts[k] ?? 0) < 3) delete this._errorCounts[k];
+        }
+      }
       await chrome.storage.local.set({ [this.STORAGE_KEY_ERROR_COUNTS]: this._errorCounts });
       const errorObj = error;
       await this._addDigestData("errors", [{

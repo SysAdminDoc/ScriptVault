@@ -58,6 +58,12 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 - **P3 — Implement a chain trigger engine.** The chain editor's non-manual triggers (URL Match / Schedule / DOM Event / After Script) were hidden because nothing consumed them (only manual Run works). Build the engine — URL-match triggers via the existing registration match layer, Schedule via the sv_sched alarm mechanism, After Script via chain-completion events — then re-mark those `TRIGGER_TYPES` as `supported`.
   Where: `pages/dashboard-chains.js` TRIGGER_TYPES; `src/background/core.ts` (trigger dispatch)
 
+- **P3 — Lint fix-preview shows the whole script instead of collapsed hunks.** `_computeDiff` returns the full op list (the prior "collapse unchanged regions" loop was a no-op and was removed). Implement real hunk collapsing (keep ~3 context lines around changes, elide long unchanged runs) and update the preview renderer to draw gap separators.
+  Where: `pages/dashboard-linter.js` _computeDiff and the fix-preview renderer
+
+- **P3 — "Fix All" silently applies at most 5 fixes.** `autoFixAll` caps at 5 passes with one fix per pass, so a script with 6+ fixable lint issues gets a partial fix and no feedback that some remain. Either raise/remove the cap safely (re-lint between passes to avoid index corruption) or report "N issues still need manual review".
+  Where: `pages/dashboard-linter.js` autoFixAll
+
 ## Later
 
 ## Under Consideration

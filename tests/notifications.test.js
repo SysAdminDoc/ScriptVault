@@ -152,6 +152,22 @@ describe('NotificationSystem runtime module', () => {
     expect(stored.notifRateLimits.script_error).toBeGreaterThan(0);
   });
 
+  it('caps the error-count map so below-threshold keys cannot grow unbounded', async () => {
+    // Seed 600 stale single-error entries (scripts that errored once then were
+    // removed) directly into storage, then trigger one more error.
+    const seeded = {};
+    for (let i = 0; i < 600; i++) seeded[`stale_${i}`] = 1;
+    await chrome.storage.local.set({ notifErrorCounts: seeded });
+    const fresh = createFreshNotificationSystem();
+    await fresh.notifyError('active_script', new Error('boom'));
+
+    const stored = await chrome.storage.local.get('notifErrorCounts');
+    const keys = Object.keys(stored.notifErrorCounts);
+    // Stale count<3 entries are pruned; the active script is retained.
+    expect(keys.length).toBeLessThanOrEqual(500);
+    expect(stored.notifErrorCounts.active_script).toBeGreaterThan(0);
+  });
+
   it('does not recreate the weekly digest alarm when it already exists', async () => {
     await NotificationSystem.setPreferences({ digest: true });
     chrome.alarms.create.mockClear();

@@ -1100,20 +1100,11 @@ const AdvancedLinter = (() => {
       }
     }
     ops.reverse();
-    // Collapse unchanged regions
-    let ctxRun = 0;
-    const collapsed = [];
-    for (const op of ops) {
-      if (op.type === 'ctx') {
-        ctxRun++;
-        collapsed.push(op);
-      } else {
-        // Show context around changes
-        ctxRun = 0;
-        collapsed.push(op);
-      }
-    }
-    return collapsed;
+    // NOTE: the fix-preview currently renders the full op list. A prior
+    // "collapse unchanged regions" loop here was a no-op (it copied every op
+    // without eliding any context) — removed. Real hunk collapsing is tracked
+    // on the roadmap.
+    return ops;
   }
 
   /* ------------------------------------------------------------------ */
