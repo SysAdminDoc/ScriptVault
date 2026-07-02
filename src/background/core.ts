@@ -10235,8 +10235,13 @@ function _getChromeVersion() {
 
 function _isFirefoxRuntime() {
   try {
-    return /Firefox\//.test(self.navigator?.userAgent || '') ||
-      (typeof browser !== 'undefined' && !!browser.runtime?.id);
+    // Detect Firefox by user agent only. ScriptVault installs a `browser`->
+    // `chrome` alias on Chrome for MV3 compatibility (shared/utils.js), so a
+    // `typeof browser !== 'undefined' && browser.runtime.id` check falsely
+    // matched on Chrome — showing the Firefox setup banner and disabling
+    // per-script worldId isolation on Chrome 133+. Firefox always reports
+    // `Firefox/<version>` in its UA, which registration.ts already relies on.
+    return /Firefox\//.test(self.navigator?.userAgent || '');
   } catch (e) {
     return false;
   }
