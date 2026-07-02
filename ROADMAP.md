@@ -43,9 +43,6 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 - **P2 — Unify install page theme variables with theme-tokens.css.** The install page defines its own parallel set of CSS custom properties (`--bg-primary`, `--bg-secondary`, etc.) independent of `theme-tokens.css` used by all other pages. Any theme change must be applied to both systems. Consolidate to a single source.
   Where: `pages/install.html` lines 20-98
 
-- **P2 — Chain non-manual triggers are decorative.** The chain editor offers URL Match / Schedule / DOM Event / After Script triggers, but no trigger engine consumes them — only manual Run works. Either implement the trigger engine or hide the unsupported trigger types.
-  Where: `pages/dashboard-chains.js` editor trigger UI
-
 - **P2 — Unify install page theme variables with theme-tokens.css.** The install page defines its own parallel set of CSS custom properties (`--bg-primary`, `--bg-secondary`, etc.) independent of `theme-tokens.css` used by all other pages. Any theme change must be applied to both systems. Consolidate to a single source.
   Where: `pages/install.html` lines 20-98
 
@@ -63,6 +60,9 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 
 - **P3 — Partial i18n coverage on popup and install pages.** Many toasts, empty states, and the entire install review UI are hardcoded English while the surrounding surfaces are keyed, so non-English users get half-translated pages.
   Where: `pages/popup.js`, `pages/install.js`
+
+- **P3 — Implement a chain trigger engine.** The chain editor's non-manual triggers (URL Match / Schedule / DOM Event / After Script) were hidden because nothing consumed them (only manual Run works). Build the engine — URL-match triggers via the existing registration match layer, Schedule via the sv_sched alarm mechanism, After Script via chain-completion events — then re-mark those `TRIGGER_TYPES` as `supported`.
+  Where: `pages/dashboard-chains.js` TRIGGER_TYPES; `src/background/core.ts` (trigger dispatch)
 
 - **P3 — README advertises the browser-reserved Ctrl+Tab shortcut.** Chrome reserves Ctrl+Tab / Ctrl+Shift+Tab, so the dashboard tab-cycling handler and help text never fire; the toolbar-cycling selectors (`.toolbar`/`.tm-toolbar`/`.bulk-actions`) also match no element.
   Where: `README.md` keyboard shortcuts; `pages/dashboard-keyboard.js` getToolbarButtons

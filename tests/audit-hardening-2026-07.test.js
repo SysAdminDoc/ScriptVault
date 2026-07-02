@@ -36,6 +36,17 @@ describe('safeSetHtml fragment context (2026-07 regression)', () => {
   }
 });
 
+describe('Chain editor only offers supported triggers (2026-07 regression)', () => {
+  const src = read('pages/dashboard-chains.js');
+  it('marks manual as the only supported trigger and filters the editor select', () => {
+    expect(src).toContain('supported: true');
+    expect(src).toContain('.filter(([, v]) => v.supported)');
+    // url/schedule/event/afterScript remain in the map (for legacy badges) but
+    // are not marked supported.
+    expect(src).not.toMatch(/url:\s*\{[^}]*supported/);
+  });
+});
+
 describe('Vim key-mapping setting is wired (2026-07 regression)', () => {
   const src = read('pages/dashboard.js');
   it('applies keyMapping to KeyboardNav on load and on change', () => {

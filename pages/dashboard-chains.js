@@ -14,8 +14,12 @@ const ScriptChains = (() => {
   const MAX_LOG_ENTRIES = 500;
   const MAX_DELAY = 10000; // 10s
 
+  // `supported: true` marks triggers a trigger engine actually consumes. Only
+  // manual runs are wired today, so the editor offers only supported types
+  // rather than advertising url/schedule/event/afterScript that never fire.
+  // The full map is retained so legacy chains still render a correct badge.
   const TRIGGER_TYPES = {
-    manual:       { label: 'Manual',       icon: '&#9654;' },
+    manual:       { label: 'Manual',       icon: '&#9654;',    supported: true },
     url:          { label: 'URL Match',    icon: '&#128279;' },
     schedule:     { label: 'Schedule',     icon: '&#128339;' },
     event:        { label: 'DOM Event',    icon: '&#9889;' },
@@ -895,19 +899,16 @@ const ScriptChains = (() => {
             <label>Chain Name</label>
             <input type="text" id="sv-chain-name" value="${_esc(chain.name)}" placeholder="My Automation Chain" />
           </div>
-          <div class="sv-chain-field" style="display:flex;gap:12px;">
-            <div style="flex:1;">
-              <label>Trigger Type</label>
-              <select id="sv-chain-trigger-type">
-                ${Object.entries(TRIGGER_TYPES).map(([k, v]) =>
-                  `<option value="${k}" ${chain.trigger?.type === k ? 'selected' : ''}>${v.label}</option>`
+          <div class="sv-chain-field">
+            <label>Trigger</label>
+            <select id="sv-chain-trigger-type">
+              ${Object.entries(TRIGGER_TYPES)
+                .filter(([, v]) => v.supported)
+                .map(([k, v]) =>
+                  `<option value="${k}" ${(chain.trigger?.type || 'manual') === k ? 'selected' : ''}>${v.label}</option>`
                 ).join('')}
-              </select>
-            </div>
-            <div style="flex:1;">
-              <label>Trigger Value</label>
-              <input type="text" id="sv-chain-trigger-value" value="${_esc(chain.trigger?.value || '')}" placeholder="URL pattern, cron, event name..." />
-            </div>
+            </select>
+            <input type="hidden" id="sv-chain-trigger-value" value="${_esc(chain.trigger?.value || '')}" />
           </div>
           <div class="sv-chain-field">
             <label>Error Handling</label>
