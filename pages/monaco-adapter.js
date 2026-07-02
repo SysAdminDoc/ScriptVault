@@ -17,6 +17,7 @@
   let _pendingReady = [];
   let _changeListeners = [];
   let _cursorListeners = [];
+  let _lastCursor = { line: 0, ch: 0 };
   let _useFallback = false;
   let _lastScriptId = null;
   let _fallbackInputBound = false;
@@ -72,7 +73,8 @@
         _changeListeners.forEach(fn => { try { fn(_monacoEditor, { origin: 'input' }); } catch {} });
         break;
       case 'cursor':
-        _cursorListeners.forEach(fn => { try { fn({ line: msg.line - 1, ch: msg.col - 1 }); } catch {} });
+        _lastCursor = { line: msg.line - 1, ch: msg.col - 1 };
+        _cursorListeners.forEach(fn => { try { fn(_lastCursor); } catch {} });
         break;
       case 'save':
         // saveCurrentScript/closeEditor are IIFE-scoped in dashboard.js, so
@@ -182,9 +184,12 @@
       else if (event === 'cursorActivity') _cursorListeners = _cursorListeners.filter(f => f !== fn);
     },
 
-    // getCursor: returns {line, ch} (0-based, like CodeMirror)
+    // getCursor: returns {line, ch} (0-based, like CodeMirror). Monaco pushes
+    // cursor positions via 'cursor' messages; we cache the latest so callers
+    // like updateCursorPos() (which reads getCursor() on cursorActivity) show
+    // the real line/column instead of a frozen Ln 1, Col 1.
     getCursor() {
-      return { line: 0, ch: 0 }; // Monaco sends cursor events, tracked by dashboard
+      return { line: _lastCursor.line, ch: _lastCursor.ch };
     },
 
     lineCount() {
@@ -318,6 +323,14 @@
 
     // No-op CodeMirror methods not applicable to Monaco
     clearHistory() {},
+    // Per-tab undo history is not round-tripped through the sandbox yet, so
+    // expose explicit no-op stubs instead of leaving these methods absent —
+    // that made activateScriptTab's getHistory()/setHistory() calls throw and
+    // get silently swallowed by their try/catch. Returning null means "no saved
+    // history", so the caller clears the stack cleanly. See ROADMAP (per-tab
+    // Monaco undo via per-model view-state).
+    getHistory() { return null; },
+    setHistory() {},
     setCursor(line = 0, ch = 0) {
       if (_useFallback && fallbackTextarea) {
         const lines = (fallbackTextarea.value || '').split('\n');

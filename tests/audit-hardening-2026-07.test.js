@@ -289,6 +289,25 @@ describe('Extension pages have no CSP-blocked inline scripts (2026-07 regression
   });
 });
 
+describe('Editor adapter/sandbox correctness (2026-07-02 audit)', () => {
+  it('setValue does not arm the change latch on a no-op (would swallow next keystroke)', () => {
+    const src = read('pages/editor-sandbox.html');
+    // Guard must precede arming the latch.
+    expect(src).toMatch(/if \(editor\.getValue\(\) === value\) \{\s*editor\.focus\(\);\s*return;\s*\}\s*ignoreNextChange = true;/);
+  });
+  it('monaco adapter caches the real cursor position instead of a frozen stub', () => {
+    const src = read('pages/monaco-adapter.js');
+    expect(src).toContain('_lastCursor = { line: msg.line - 1, ch: msg.col - 1 }');
+    expect(src).toContain('return { line: _lastCursor.line, ch: _lastCursor.ch }');
+    expect(src).not.toContain('return { line: 0, ch: 0 }; // Monaco sends cursor events');
+  });
+  it('monaco adapter exposes getHistory/setHistory stubs so tab-switch calls do not throw', () => {
+    const src = read('pages/monaco-adapter.js');
+    expect(src).toContain('getHistory() { return null; }');
+    expect(src).toContain('setHistory() {}');
+  });
+});
+
 describe('Editor overlay layering + nav band (2026-07-02 regression)', () => {
   const dashHtml = read('pages/dashboard.html');
   it('editor overlay stacks above sticky page chrome and below modals', () => {

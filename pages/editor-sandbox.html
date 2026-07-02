@@ -462,9 +462,17 @@
 
   function setValue(value, scriptId) {
     if (!editor) return;
-    ignoreNextChange = true;
     // Preserve cursor position on same-script reload
     const pos = editor.getPosition();
+    // Only arm the change-suppression latch when the content is actually
+    // changing. Monaco fires onDidChangeModelContent only on a real change, so
+    // arming it for a no-op setValue (e.g. re-activating a same-content tab)
+    // would leave the latch set and swallow the user's next real keystroke.
+    if (editor.getValue() === value) {
+      editor.focus();
+      return;
+    }
+    ignoreNextChange = true;
     editor.setValue(value);
     if (pos) editor.setPosition(pos);
     editor.focus();
