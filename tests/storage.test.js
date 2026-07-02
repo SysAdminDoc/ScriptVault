@@ -143,6 +143,25 @@ describe('SettingsManager', () => {
     expect(await SettingsManager.get('deniedHosts')).toEqual(['blocked.example']);
   });
 
+  it('serializes concurrent set() calls so neither writer clobbers the other', async () => {
+    // Regression: two set() calls that each snapshot the cache at call time and
+    // then await storage would lose the first writer's change. The serialized
+    // write chain must let both survive in cache AND persisted storage.
+    await SettingsManager.set({ googleDriveToken: '', theme: 'dark' });
+    await Promise.all([
+      SettingsManager.set('googleDriveToken', 'refreshed-token'),
+      SettingsManager.set('lastSync', 123456),
+    ]);
+    expect(await SettingsManager.get('googleDriveToken')).toBe('refreshed-token');
+    expect(await SettingsManager.get('lastSync')).toBe(123456);
+    // The theme set before the race is untouched by either writer.
+    expect(await SettingsManager.get('theme')).toBe('dark');
+    // Persisted storage reflects both concurrent writes, not just the last one.
+    const persisted = (await chrome.storage.local.get('settings')).settings;
+    expect(persisted.googleDriveToken).toBe('refreshed-token');
+    expect(persisted.lastSync).toBe(123456);
+  });
+
   it('rolls back cache on failed set/reset persistence', async () => {
     await SettingsManager.set({ theme: 'oled', debugMode: false });
 

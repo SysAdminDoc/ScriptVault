@@ -590,11 +590,6 @@ _Verified-but-unfixed items from the 2026-07-02 deep audit. The audit shipped fi
   Where: `src/modules/backup-scheduler.ts:1186-1216`, `src/modules/sync-providers.ts` (per-provider object names).
   Acceptance: distinct per-provider backup object name; encrypt the backup envelope with SyncCrypto when E2EE is on; sync and cloud-backup no longer clobber each other.
 
-- [ ] P2 — `SettingsManager.set` lost-update race can drop a refreshed OAuth token
-  Why: concurrent `set()` calls each snapshot `this.cache`, build a full replacement, and write it; the second write (built from the pre-first-write cache) erases the first. Reachable when a sync-end `set('lastSync')` / OAuth token persistence races a dashboard `saveSetting`.
-  Where: `src/modules/storage.ts:197-215`.
-  Acceptance: serialize `set()` through a promise chain (like `_toggleLocks`); a test drives two concurrent sets on different keys and asserts both survive.
-
 ### P3
 
 - [ ] P3 — Provenance UI aligns `@require-provenance`/`@require-identity` to the wrong dependency

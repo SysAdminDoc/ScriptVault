@@ -878,6 +878,7 @@ const StorageModule = (() => {
     }
   }
   var _settingsInitPromise = null;
+  var _settingsWriteChain = Promise.resolve();
   var _scriptsInitPromise = null;
   var _foldersInitPromise = null;
   function cloneDefaultSettings() {
@@ -945,22 +946,27 @@ const StorageModule = (() => {
     get: getSettingsValue,
     async set(key, value) {
       await this.init();
-      const previous = cloneSettingsState(this.cache);
-      let rawNext;
-      if (typeof key === "object") {
-        rawNext = { ...this.cache, ...key };
-      } else {
-        rawNext = { ...this.cache, [key]: value };
-      }
-      const next = cloneSettingsState(rawNext);
-      try {
-        await chrome.storage.local.set({ settings: cloneSettingsState(next) });
-      } catch (e) {
-        this.cache = previous;
-        throw e;
-      }
-      this.cache = next;
-      return cloneSettingsState(this.cache);
+      const run = async () => {
+        const previous = cloneSettingsState(this.cache);
+        let rawNext;
+        if (typeof key === "object") {
+          rawNext = { ...this.cache, ...key };
+        } else {
+          rawNext = { ...this.cache, [key]: value };
+        }
+        const next = cloneSettingsState(rawNext);
+        try {
+          await chrome.storage.local.set({ settings: cloneSettingsState(next) });
+        } catch (e) {
+          this.cache = previous;
+          throw e;
+        }
+        this.cache = next;
+        return cloneSettingsState(this.cache);
+      };
+      const result = _settingsWriteChain.then(run, run);
+      _settingsWriteChain = result.then(() => void 0, () => void 0);
+      return result;
     },
     async reset() {
       await this.init();

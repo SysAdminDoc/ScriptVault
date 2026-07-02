@@ -113,6 +113,11 @@ function notifyScriptChange(): void {
 
 // Pending init promise — ensures concurrent callers share one storage read
 let _settingsInitPromise: Promise<void> | null = null;
+// Serializes SettingsManager.set() so concurrent writers (e.g. a sync-end
+// lastSync write racing an OAuth-token persist or a dashboard saveSetting) each
+// derive their replacement from the CURRENT cache instead of a stale snapshot,
+// which would silently drop the other writer's change (lost-update race).
+let _settingsWriteChain: Promise<unknown> = Promise.resolve();
 // Pending init promise for ScriptStorage
 let _scriptsInitPromise: Promise<void> | null = null;
 // Pending init promise for FolderStorage
@@ -196,22 +201,32 @@ export const SettingsManager = {
 
   async set(key: keyof Settings | Partial<Settings>, value?: Settings[keyof Settings]): Promise<Settings> {
     await this.init();
-    const previous = cloneSettingsState(this.cache!);
-    let rawNext: Settings;
-    if (typeof key === 'object') {
-      rawNext = { ...this.cache!, ...key };
-    } else {
-      rawNext = { ...this.cache!, [key]: value };
-    }
-    const next = cloneSettingsState(rawNext);
-    try {
-      await chrome.storage.local.set({ settings: cloneSettingsState(next) });
-    } catch (e) {
-      this.cache = previous;
-      throw e;
-    }
-    this.cache = next;
-    return cloneSettingsState(this.cache!);
+    // Chain this write after any in-flight write. The snapshot of this.cache is
+    // taken INSIDE run() (at execution time), so each serialized write builds on
+    // the previous writer's committed state rather than a stale call-time copy.
+    const run = async (): Promise<Settings> => {
+      const previous = cloneSettingsState(this.cache!);
+      let rawNext: Settings;
+      if (typeof key === 'object') {
+        rawNext = { ...this.cache!, ...key };
+      } else {
+        rawNext = { ...this.cache!, [key]: value };
+      }
+      const next = cloneSettingsState(rawNext);
+      try {
+        await chrome.storage.local.set({ settings: cloneSettingsState(next) });
+      } catch (e) {
+        this.cache = previous;
+        throw e;
+      }
+      this.cache = next;
+      return cloneSettingsState(this.cache!);
+    };
+    const result = _settingsWriteChain.then(run, run);
+    // Keep the chain progressing even if this write rejects; swallow only the
+    // chain's copy of the error (the caller still receives the rejection).
+    _settingsWriteChain = result.then(() => undefined, () => undefined);
+    return result;
   },
 
   async reset(): Promise<Settings> {
