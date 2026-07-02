@@ -9003,7 +9003,20 @@
     // Editor
     function openEditorForScript(scriptId, options = {}) {
         const script = state.scripts.find(s => s.id === scriptId);
-        if (!script) return;
+        if (!script) {
+            // A deep link (or a shared/popup link) can point at a script that
+            // was since deleted. Clear the stale hash and tell the user instead
+            // of silently leaving them on the scripts tab with a dead URL.
+            try {
+                const url = getDashboardUrl();
+                if (url.hash && url.hash.includes(scriptId)) {
+                    url.hash = '';
+                    replaceDashboardUrl(url);
+                    showToast('That script no longer exists', 'warning');
+                }
+            } catch (_) { /* best effort */ }
+            return;
+        }
 
         ensureEditorModulesLoaded();
 
@@ -12197,6 +12210,10 @@
     // Find Scripts
     // =========================================
     const findScriptsState = { page: 1, query: '', source: 'greasyfork', loading: false };
+    // Requested page size for Find Scripts sources; the "Next" button shows when
+    // a full page comes back. Must match the per-source limit actually requested
+    // (OpenUserJS limit / GreasyFork per_page) or pagination breaks.
+    const FIND_RESULTS_PAGE_SIZE = 25;
 
     function setFindScriptsBackgroundHidden(hidden) {
         FIND_SCRIPTS_BACKGROUND_SELECTORS.forEach(selector => {
@@ -12358,9 +12375,9 @@
         const isDomain = /^[a-zA-Z0-9]([a-zA-Z0-9-]*\.)+[a-zA-Z]{2,}$/.test(query);
         let apiUrl;
         if (isDomain) {
-            apiUrl = `https://api.greasyfork.org/en/scripts/by-site/${encodeURIComponent(query)}.json?page=${page}`;
+            apiUrl = `https://api.greasyfork.org/en/scripts/by-site/${encodeURIComponent(query)}.json?page=${page}&per_page=${FIND_RESULTS_PAGE_SIZE}`;
         } else {
-            apiUrl = `https://api.greasyfork.org/en/scripts.json?q=${encodeURIComponent(query)}&page=${page}`;
+            apiUrl = `https://api.greasyfork.org/en/scripts.json?q=${encodeURIComponent(query)}&page=${page}&per_page=${FIND_RESULTS_PAGE_SIZE}`;
         }
 
         const resp = await fetch(apiUrl);
@@ -12372,12 +12389,12 @@
             return;
         }
 
-        renderFindResults(scripts, page, isDomain ? query : null);
+        renderFindResults(scripts, page, isDomain ? query : null, FIND_RESULTS_PAGE_SIZE);
     }
 
     async function searchOpenUserJS(query, page) {
         // OpenUserJS has a JSON API at /api/script/list
-        const apiUrl = `https://openuserjs.org/api/script/list?q=${encodeURIComponent(query)}&p=${page}&limit=25`;
+        const apiUrl = `https://openuserjs.org/api/script/list?q=${encodeURIComponent(query)}&p=${page}&limit=${FIND_RESULTS_PAGE_SIZE}`;
         try {
             const resp = await fetch(apiUrl);
             if (!resp.ok) {
@@ -12404,14 +12421,14 @@
                 code_updated_at: s.updated || s._updated,
                 users: [{ name: s.author || 'Unknown' }]
             }));
-            renderFindResults(normalized, page, null);
+            renderFindResults(normalized, page, null, FIND_RESULTS_PAGE_SIZE);
         } catch (e) {
             // Fallback to external
             searchExternal(`https://openuserjs.org/?q=${encodeURIComponent(query)}`);
         }
     }
 
-    function renderFindResults(scripts, page, domain) {
+    function renderFindResults(scripts, page, domain, pageSize = FIND_RESULTS_PAGE_SIZE) {
         // Build installed script lookup for duplicate detection
         const installedNames = new Set(state.scripts.map(s => (s.metadata?.name || '').toLowerCase()));
 
@@ -12466,7 +12483,7 @@
 
         const pagination = `<div class="find-scripts-pagination">
             ${page > 1 ? `<button class="toolbar-btn" data-find-page="${page - 1}">Previous</button>` : ''}
-            ${scripts.length >= 50 ? `<button class="toolbar-btn" data-find-page="${page + 1}">Next</button>` : ''}
+            ${scripts.length >= pageSize ? `<button class="toolbar-btn" data-find-page="${page + 1}">Next</button>` : ''}
         </div>`;
 
         if (elements.findScriptsResults) {
