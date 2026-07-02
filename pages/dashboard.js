@@ -2108,12 +2108,10 @@
         root.style.setProperty('--toolbar-bottom', (headerH + toolbarH) + 'px');
     }
 
+    // Only icon buttons whose label is a bare text node belong here — elements
+    // that carry their label in a [data-i18n] span are translated by
+    // i18n.applyToDOM, and adding them again appends a duplicate label.
     const DASHBOARD_I18N_TEXT_TARGETS = Object.freeze({
-        dashboardTabScripts: 'tabScripts',
-        dashboardTabUpdates: 'tabUpdates',
-        dashboardTabSettings: 'tabSettings',
-        dashboardTabUtilities: 'tabUtilities',
-        dashboardTabTrash: 'tabTrash',
         btnNewScript: 'newScript',
         btnImportScript: 'importScript',
         btnCheckUpdates: 'checkUpdates',
@@ -2180,6 +2178,9 @@
 
     function setLabelPreservingDecor(el, label) {
         if (!el || !label) return;
+        // A [data-i18n] descendant owns the label (translated by applyToDOM);
+        // appending a text node here would render the label twice.
+        if (el.querySelector('[data-i18n]')) return;
         const textNode = Array.from(el.childNodes).find(node =>
             node.nodeType === Node.TEXT_NODE && node.textContent.trim()
         );
@@ -4095,7 +4096,9 @@
             if (key === 'syncEnabled' || key === 'syncProvider') {
                 loadSyncProviderStatus();
             }
-            if (!options.quiet) showToast('Setting saved', 'success');
+            // Theme switches are their own visible feedback — no success toast.
+            const themeKeys = key === 'layout' || key === 'editorTheme';
+            if (!options.quiet && !themeKeys) showToast('Setting saved', 'success');
             return true;
         } catch (e) {
             state.settings[key] = previousValue;
@@ -9967,7 +9970,12 @@
                 ? tDashboard('editorSyncedUserscript', 'Synced Userscript')
                 : tDashboard('editorUserscriptEditor', 'Userscript Editor');
         }
-        if (elements.editorTitle) elements.editorTitle.textContent = metadata.name || tDashboard('editorEditScript', 'Edit Script');
+        if (elements.editorTitle) {
+            elements.editorTitle.textContent = metadata.name || tDashboard('editorEditScript', 'Edit Script');
+            // The subtitle is display:none to maximize code-pane height; keep
+            // its enabled/version/author summary reachable as a hover tooltip.
+            elements.editorTitle.title = subtitleParts.join(' • ');
+        }
         if (elements.editorSubtitle) elements.editorSubtitle.textContent = subtitleParts.join(' • ');
 
         if (elements.editorSaveState) {
@@ -11347,185 +11355,6 @@
     // Your code here...
 })();`
         },
-        domModifier: {
-            label: 'Page Modifier',
-            desc: 'Modify page content and layout',
-            code: `// ==UserScript==
-// @name        Page Modifier
-// @namespace   http://example.com/
-// @version     1.0
-// @description Modify page elements
-// @author      You
-// @match       *://*/*
-// @grant       GM_addStyle
-// @run-at      document-end
-// ==/UserScript==
-
-(function() {
-    'use strict';
-
-    // Add custom CSS
-    GM_addStyle(\`
-        /* Your styles here */
-    \`);
-
-    // Wait for element then modify
-    function waitForElement(selector, callback) {
-        const el = document.querySelector(selector);
-        if (el) return callback(el);
-        const observer = new MutationObserver((mutations, obs) => {
-            const el = document.querySelector(selector);
-            if (el) { obs.disconnect(); callback(el); }
-        });
-        observer.observe(document.body, { childList: true, subtree: true });
-    }
-
-    // Example: modify an element
-    // waitForElement('.target', el => { el.textContent = 'Modified!'; });
-})();`
-        },
-        cssInjector: {
-            label: 'CSS Injector',
-            desc: 'Inject custom styles into a page',
-            code: `// ==UserScript==
-// @name        Custom CSS
-// @namespace   http://example.com/
-// @version     1.0
-// @description Inject custom styles
-// @author      You
-// @match       *://*/*
-// @grant       GM_addStyle
-// @run-at      document-start
-// ==/UserScript==
-
-(function() {
-    'use strict';
-
-    GM_addStyle(\`
-        /* Dark mode override example */
-        body {
-            background: #1a1a1a !important;
-            color: #e0e0e0 !important;
-        }
-
-        /* Hide elements */
-        .ads, .banner, .popup {
-            display: none !important;
-        }
-    \`);
-})();`
-        },
-        apiInterceptor: {
-            label: 'API Interceptor',
-            desc: 'Intercept fetch/XHR requests',
-            code: `// ==UserScript==
-// @name        API Interceptor
-// @namespace   http://example.com/
-// @version     1.0
-// @description Intercept and modify network requests
-// @author      You
-// @match       *://*/*
-// @grant       unsafeWindow
-// @run-at      document-start
-// ==/UserScript==
-
-(function() {
-    'use strict';
-    const win = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
-
-    // Intercept fetch
-    const originalFetch = win.fetch;
-    win.fetch = async function(...args) {
-        const url = typeof args[0] === 'string' ? args[0] : args[0]?.url;
-        console.log('[Intercepted fetch]', url);
-
-        const response = await originalFetch.apply(this, args);
-        // Modify response if needed
-        return response;
-    };
-
-    // Intercept XMLHttpRequest
-    const originalOpen = XMLHttpRequest.prototype.open;
-    XMLHttpRequest.prototype.open = function(method, url, ...rest) {
-        console.log('[Intercepted XHR]', method, url);
-        return originalOpen.call(this, method, url, ...rest);
-    };
-})();`
-        },
-        spaScript: {
-            label: 'SPA Content Script',
-            desc: 'React to URL changes in single-page apps',
-            code: `// ==UserScript==
-// @name        SPA Script
-// @namespace   http://example.com/
-// @version     1.0
-// @description Handle SPA navigation
-// @author      You
-// @match       *://*/*
-// @grant       window.onurlchange
-// @run-at      document-end
-// ==/UserScript==
-
-(function() {
-    'use strict';
-
-    function onPageLoad(url) {
-        console.log('Page loaded:', url);
-        // Run your logic here each time the page/URL changes
-    }
-
-    // Initial page load
-    onPageLoad(location.href);
-
-    // SPA navigation detection
-    if (window.onurlchange === null) {
-        window.addEventListener('urlchange', (e) => {
-            onPageLoad(e.url || location.href);
-        });
-    }
-})();`
-        },
-        crossSiteRequest: {
-            label: 'Cross-Site Request',
-            desc: 'Fetch data from external APIs',
-            code: `// ==UserScript==
-// @name        API Client
-// @namespace   http://example.com/
-// @version     1.0
-// @description Fetch data from external APIs
-// @author      You
-// @match       *://*/*
-// @grant       GM_xmlhttpRequest
-// @grant       GM_getValue
-// @grant       GM_setValue
-// @connect     api.example.com
-// ==/UserScript==
-
-(function() {
-    'use strict';
-
-    // Cross-origin request example
-    GM_xmlhttpRequest({
-        method: 'GET',
-        url: 'https://api.example.com/data',
-        onload: function(response) {
-            try {
-                const data = JSON.parse(response.responseText);
-                console.log('API response:', data);
-            } catch (e) {
-                console.error('Parse error:', e);
-            }
-        },
-        onerror: function(err) {
-            console.error('Request failed:', err);
-        }
-    });
-
-    // Cache results
-    // const cached = GM_getValue('apiCache');
-    // GM_setValue('apiCache', { data, timestamp: Date.now() });
-})();`
-        }
     };
 
     async function createNewScript() {
@@ -11536,47 +11365,23 @@
         nextUrl.hash = '';
         replaceDashboardUrl(nextUrl);
 
-        const templateHtml = Object.entries(SCRIPT_TEMPLATES).map(([key, t]) => `
-            <div class="template-card" data-template="${key}" tabindex="0" role="button">
-                <div class="template-name">${escapeHtml(t.label)}</div>
-                <div class="template-desc">${escapeHtml(t.desc)}</div>
-            </div>
-        `).join('');
-
-        showModal('New Script', `
-            <p style="margin-bottom: 16px; color: var(--text-secondary);">Choose a template to get started:</p>
-            <div class="template-grid">${templateHtml}</div>
-        `, [
-            { label: 'Cancel', callback: () => hideModal() }
-        ]);
-
-        // Bind template clicks
-        document.querySelectorAll('.template-card').forEach(card => {
-            const handler = async () => {
-                hideModal();
-                const key = card.dataset.template;
-                const template = SCRIPT_TEMPLATES[key];
-                if (!template) return;
-
-                _creatingScript = true;
-                try {
-                    const resolvedCode = await resolveTemplateTokens(template.code);
-                    const response = await chrome.runtime.sendMessage({ action: 'createScript', code: resolvedCode });
-                    if (response?.success) {
-                        await loadScripts();
-                        updateStats();
-                        openEditorForScript(response.scriptId);
-                        showToast('Created from ' + template.label, 'success');
-                    }
-                } catch (e) {
-                    showToast('Failed', 'error');
-                } finally {
-                    _creatingScript = false;
-                }
-            };
-            card.addEventListener('click', handler);
-            card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handler(); } });
-        });
+        // No template picker — create from the blank template and jump straight
+        // into the editor. Other starters remain available through the editor's
+        // template/snippet tools.
+        _creatingScript = true;
+        try {
+            const resolvedCode = await resolveTemplateTokens(SCRIPT_TEMPLATES.blank.code);
+            const response = await chrome.runtime.sendMessage({ action: 'createScript', code: resolvedCode });
+            if (response?.success) {
+                await loadScripts();
+                updateStats();
+                openEditorForScript(response.scriptId);
+            }
+        } catch (e) {
+            showToast('Failed to create script', 'error');
+        } finally {
+            _creatingScript = false;
+        }
     }
 
     function beautifyCode() {
@@ -16654,7 +16459,7 @@
         // Build command list
         const commands = [
             // Actions
-            { category: 'Actions', label: 'New Script', desc: 'Create a new script from template', action: () => { closeCommandPalette(); createNewScript(); } },
+            { category: 'Actions', label: 'New Script', desc: 'Create a new script and open the editor', action: () => { closeCommandPalette(); createNewScript(); } },
             { category: 'Actions', label: 'Import Script', desc: 'Import from file', action: () => { closeCommandPalette(); importScript(); } },
             { category: 'Actions', label: 'Check for Updates', desc: 'Check all scripts for updates', action: () => { closeCommandPalette(); document.getElementById('btnCheckUpdates')?.click(); } },
             { category: 'Actions', label: 'Export All (ZIP)', desc: 'Export all scripts as ZIP', action: () => { closeCommandPalette(); elements.btnExportZip?.click(); } },

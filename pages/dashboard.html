@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en" dir="ltr" data-theme="dark">
 <head>
-    <script>document.documentElement.dir = chrome.i18n?.getMessage?.('@@bidi_dir') || 'ltr';</script>
+    <script src="page-dir.js"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title data-i18n="dashboardTitle">ScriptVault Dashboard</title>
@@ -606,6 +606,12 @@
             border: 1px solid rgba(127, 127, 127, 0.12);
             border-radius: 8px;
             background: rgba(255, 255, 255, 0.03);
+        }
+
+        /* With no open editors the padded/bordered shell renders as a stray
+           empty pill — hide it until a script tab exists. */
+        .tm-tabs-scripts:empty {
+            display: none;
         }
 
         .tm-tabs {
@@ -3069,7 +3075,10 @@
         .editor-overlay {
             display: none;
             position: fixed;
-            top: var(--header-height, 35px); left: 0; right: 0; bottom: 0;
+            /* Full-viewport takeover: the dashboard header is inert while the
+               editor dialog is open, so covering it costs nothing and gives
+               the code pane the entire screen height. */
+            top: 0; left: 0; right: 0; bottom: 0;
             background:
                 radial-gradient(circle at top right, rgba(34, 197, 94, 0.08), transparent 28%),
                 linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 18%),
@@ -3083,11 +3092,11 @@
 
         .editor-header {
             display: flex;
-            align-items: flex-start;
+            align-items: center;
             justify-content: space-between;
             gap: 16px;
             flex-wrap: wrap;
-            padding: 14px 20px;
+            padding: 6px 16px;
             background:
                 linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 140%),
                 var(--bg-header);
@@ -3109,8 +3118,10 @@
             min-width: 0;
         }
 
+        /* Eyebrow chip and subtitle are hidden to maximize vertical space for
+           the code pane; the elements stay in the DOM for aria-describedby. */
         .editor-eyebrow {
-            display: inline-flex;
+            display: none;
             align-items: center;
             padding: 4px 9px;
             border-radius: 8px;
@@ -3128,15 +3139,18 @@
             align-items: center;
             gap: 10px;
             flex-wrap: wrap;
-            margin-top: 10px;
+            margin-top: 0;
         }
 
         .editor-title {
             margin: 0;
-            font-size: 1.375rem;
+            font-size: 1rem;
             font-weight: 700;
-            letter-spacing: -0.03em;
-            text-wrap: balance;
+            letter-spacing: -0.02em;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 40vw;
         }
 
         .editor-save-state {
@@ -3180,7 +3194,7 @@
         }
 
         .editor-subtitle {
-            display: block;
+            display: none;
             margin: 8px 0 0;
             color: var(--text-secondary);
             font-size: 0.75rem;
@@ -3199,8 +3213,8 @@
         .editor-metric {
             display: inline-flex;
             align-items: center;
-            min-height: 30px;
-            padding: 0 10px;
+            min-height: 24px;
+            padding: 0 8px;
             border-radius: 8px;
             border: 1px solid rgba(127, 127, 127, 0.18);
             background: rgba(255, 255, 255, 0.03);
@@ -3216,17 +3230,17 @@
 
         .editor-actions {
             display: flex;
-            gap: 8px;
-            align-items: flex-start;
+            gap: 6px;
+            align-items: center;
             flex-wrap: wrap;
         }
 
         .editor-actions .btn {
-            min-height: 38px;
-            padding: 0 14px;
+            min-height: 30px;
+            padding: 0 10px;
             display: inline-flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
         }
 
         .editor-actions .btn svg {
@@ -3249,7 +3263,7 @@
         }
 
         .editor-tab {
-            padding: 10px 16px;
+            padding: 6px 12px;
             background: transparent;
             border: none;
             color: var(--text-muted);
@@ -3269,7 +3283,7 @@
             align-items: center;
             align-content: flex-start;
             gap: 2px;
-            padding: 8px 20px;
+            padding: 4px 16px;
             background:
                 linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent),
                 var(--bg-section-header);
@@ -3280,8 +3294,8 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            min-height: 34px;
-            padding: 0 10px;
+            min-height: 28px;
+            padding: 0 8px;
             background: rgba(255, 255, 255, 0.02);
             border: 1px solid rgba(127, 127, 127, 0.16);
             border-radius: 10px;
@@ -4571,7 +4585,7 @@
             .search-box { max-width: none; flex-basis: 100%; }
             .input-field.wide { width: 100%; max-width: 300px; }
             .settings-row .label-text { min-width: 140px; }
-            .editor-header { padding: 12px; }
+            .editor-header { padding: 6px 12px; }
             .editor-header-main { width: 100%; }
             .editor-metrics { justify-content: flex-start; flex-wrap: wrap; }
             .editor-toolbar { flex-wrap: wrap; gap: 4px; }
@@ -4598,46 +4612,10 @@
             .settings-row .label-text { min-width: unset; width: 100%; }
             .info-grid { grid-template-columns: 1fr; }
             .storage-item { grid-template-columns: 1fr; }
-            .editor-header { padding: 8px; }
+            .editor-header { padding: 4px 8px; }
             .editor-toolbar button span { display: none; }
             .scripts-toolbar-left { flex-basis: 100%; }
             .toast-container { left: 50%; right: auto; bottom: 12px; transform: translateX(-50%); max-width: calc(100vw - 24px); }
-        }
-
-        /* ============================================
-           Script Template Picker (New Script modal)
-           ============================================ */
-        .template-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 10px;
-        }
-        .template-card {
-            background: var(--bg-input);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 14px 16px;
-            cursor: pointer;
-            transition: border-color 0.15s, background 0.15s, transform 0.1s;
-        }
-        .template-card:hover {
-            border-color: var(--accent-primary);
-            background: var(--bg-row-hover);
-            transform: translateY(-1px);
-        }
-        .template-card:focus-visible {
-            outline: 2px solid var(--accent-primary);
-            outline-offset: -2px;
-        }
-        .template-name {
-            font-size: 0.8125rem;
-            font-weight: 600;
-            color: var(--text-primary);
-            margin-bottom: 4px;
-        }
-        .template-desc {
-            font-size: 0.6875rem;
-            color: var(--text-muted);
         }
 
         /* ============================================
@@ -5133,8 +5111,8 @@
         }
 
         .editor-tab {
-            min-height: 40px;
-            padding: 0 16px;
+            min-height: 30px;
+            padding: 0 12px;
             border: 1px solid transparent;
             border-radius: 8px 8px 0 0;
         }

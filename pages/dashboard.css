@@ -1477,47 +1477,6 @@ input[type="checkbox"] {
 }
 
 /* ============================================
-   Script Template Picker
-   ============================================ */
-.template-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-}
-
-.template-card {
-  background: var(--bg-input);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 14px 16px;
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s, transform 0.1s;
-}
-
-.template-card:hover {
-  border-color: var(--accent-green);
-  background: var(--bg-row-hover);
-  transform: translateY(-1px);
-}
-
-.template-card:focus-visible {
-  outline: 2px solid var(--accent-green);
-  outline-offset: -2px;
-}
-
-.template-name {
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: 4px;
-}
-
-.template-desc {
-  font-size: 0.6875rem;
-  color: var(--text-muted);
-}
-
-/* ============================================
    Storage Quota Bar
    ============================================ */
 .quota-bar-container {

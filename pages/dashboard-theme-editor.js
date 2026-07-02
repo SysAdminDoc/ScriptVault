@@ -1432,8 +1432,7 @@ const ThemeEditor = (() => {
         }
       } catch { /* ignore */ }
     }
-
-    toast('Theme applied');
+    // No success toast — the theme change itself is the visible feedback.
   }
 
   /* ------------------------------------------------------------------ */

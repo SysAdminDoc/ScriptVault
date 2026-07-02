@@ -10,15 +10,19 @@ const WhatsNew = (() => {
 
   const CHANGELOG = {
     '3.15.0': {
-      title: 'ScriptVault 3.15.0 — Leaner Dashboard & Honest Storage Meter',
+      title: 'ScriptVault 3.15.0 — Leaner Dashboard & Full-Screen Editor',
       date: '2026-07-02',
       highlights: [
         { icon: 'TRIM', title: 'Script Store Removed', desc: 'The Script Store tab is gone — a lighter dashboard that loads less on every open. Use Find Scripts in the toolbar (or popup/side panel) to search GreasyFork and OpenUserJS.' },
+        { icon: 'EDIT', title: 'Full-Screen Editor', desc: 'The script editor now uses the entire viewport: dashboard chrome is covered, the hero header is a slim single row, and the code pane gets every saved pixel.' },
+        { icon: 'FAST', title: 'Instant New Script', desc: 'New Script jumps straight into a blank editor — no template picker roadblock. Starters still live in the editor template manager.' },
         { icon: 'METER', title: 'Accurate Storage Meter', desc: 'The storage bar now measures against your real disk-based quota instead of a fictional 10 MB cap, so the false "Storage at 100% capacity" warning is gone.' }
       ],
       improvements: [
-        'Dashboard startup no longer eagerly loads the ~2,100-line store module',
-        'Command palette and tab navigation trimmed to the surfaces that remain'
+        'Fixed doubled navigation labels (e.g. "SettingsSettings") from a duplicate i18n pass',
+        'Theme switches no longer fire a success toast — the theme change is the feedback',
+        'The empty open-editors tab group no longer renders as a stray pill in the header',
+        'Dashboard startup no longer eagerly loads the ~2,100-line store module'
       ]
     },
     '3.14.0': {

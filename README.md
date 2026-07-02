@@ -105,7 +105,7 @@ create a broad passthrough policy just to bypass CSP.
 - **Find Scripts** &mdash; Search and install userscripts from Greasy Fork and other sources directly in the dashboard
 - **Bulk operations** &mdash; Select multiple scripts to enable, disable, update, reset, or delete with progress tracking
 - **Per-script export** &mdash; Export individual scripts as `.user.js` files
-- **Script templates** &mdash; 6 starter templates (blank, page modifier, CSS injector, API interceptor, SPA script, cross-site request)
+- **Script templates** &mdash; New Script opens a blank editor instantly; built-in starter templates (page modifier, CSS injector, API interceptor, and more) live in the editor's template manager
 - **Version rollback** &mdash; Auto-saves last 3 versions on update; one-click rollback from info panel
 - **Storage quota monitor** &mdash; Visual quota bar with warning when approaching the real storage quota (unlimitedStorage-aware)
 - **Bucketed IndexedDB storage** &mdash; Separates script records, GM values, and backup blobs through Storage Buckets when Chrome exposes `navigator.storageBuckets`, with single-DB fallback elsewhere

@@ -233,3 +233,54 @@ describe('Dashboard quota bar uses real quota (2026-07 regression)', () => {
     expect(manifest.permissions).toContain('unlimitedStorage');
   });
 });
+
+describe('Dashboard UX pass (2026-07-02 regression)', () => {
+  const dashJs = read('pages/dashboard.js');
+  const dashHtml = read('pages/dashboard.html');
+
+  it('setLabelPreservingDecor skips elements whose label lives in a [data-i18n] child', () => {
+    // Tab buttons hold their label in a data-i18n span; appending a second
+    // text node rendered "Installed UserscriptsInstalled Userscripts".
+    expect(dashJs).toContain("if (el.querySelector('[data-i18n]')) return;");
+    expect(dashJs).not.toMatch(/DASHBOARD_I18N_TEXT_TARGETS = Object\.freeze\(\{[^}]*dashboardTab/s);
+  });
+
+  it('theme switches show no success toast', () => {
+    expect(read('pages/dashboard-theme-editor.js')).not.toContain("toast('Theme applied')");
+    expect(dashJs).toContain("key === 'layout' || key === 'editorTheme'");
+  });
+
+  it('empty open-editors tab group is hidden instead of rendering a stray pill', () => {
+    expect(dashHtml).toContain('.tm-tabs-scripts:empty');
+  });
+
+  it('editor overlay takes the full viewport and drops hero chrome', () => {
+    expect(dashHtml).toMatch(/\.editor-overlay \{[^}]*top: 0; left: 0; right: 0; bottom: 0;/s);
+    expect(dashHtml).toMatch(/\.editor-eyebrow \{\s*display: none;/);
+    expect(dashHtml).toMatch(/\.editor-subtitle \{\s*display: none;/);
+  });
+
+  it('New Script skips the template picker and opens the editor directly', () => {
+    const fn = dashJs.match(/async function createNewScript\(\) \{[\s\S]*?\n    \}/);
+    expect(fn).toBeTruthy();
+    expect(fn[0]).not.toContain('showModal');
+    expect(fn[0]).toContain('SCRIPT_TEMPLATES.blank.code');
+    expect(fn[0]).toContain('openEditorForScript(response.scriptId)');
+  });
+});
+
+describe('Extension pages have no CSP-blocked inline scripts (2026-07 regression)', () => {
+  // MV3 script-src 'self' blocks inline scripts; the dir bootstrap must load
+  // from pages/page-dir.js or it silently never runs.
+  const pages = ['dashboard', 'devtools-panel', 'install', 'popup', 'sidepanel'];
+  for (const page of pages) {
+    it(`pages/${page}.html uses the external dir bootstrap`, () => {
+      const src = read(`pages/${page}.html`);
+      expect(src).toContain('<script src="page-dir.js"></script>');
+      expect(src).not.toMatch(/<script>[^<]*documentElement\.dir/);
+    });
+  }
+  it('page-dir.js exists and sets the direction', () => {
+    expect(read('pages/page-dir.js')).toContain("chrome.i18n?.getMessage?.('@@bidi_dir')");
+  });
+});
