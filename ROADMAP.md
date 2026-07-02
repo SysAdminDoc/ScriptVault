@@ -714,3 +714,143 @@ _Added 2026-07-01. Items below are net-new from the 2026-07-01 research pass and
 | RD27-13 | TM granular host-permission requests | https://github.com/Tampermonkey/tampermonkey/issues/640 |
 | RD27-14 | HN Tampermonkey alternatives (privacy) | https://news.ycombinator.com/item?id=22896078 |
 | RD27-15 | CSA MCP security best-practices | https://labs.cloudsecurityalliance.org/agentic/agentic-mcp-security-best-practices-v1/ |
+
+## Research-Driven Additions (2026-07-02 research pass)
+
+_Net-new from the 2026-07-02 pass (v3.16.0). Verified as not already implemented in code and not duplicating the Next tier, the Deep Audit Findings (2026-07-02), or the 2026-07-01 Research-Driven Additions. Cross-references: the Next-tier "editor cursor position stuck at Ln 1, Col 1" item is RESOLVED in v3.16.0 (monaco-adapter now caches the real cursor) — treat as done. One-click GreasyFork/OpenUserJS publish (VM #2425) is already covered by X-9 (publish handoff) — not re-added. UC-3 (AI-Assisted Script Editing) precondition "on-device LLMs practical" is now MET (Chrome Prompt API stable for extensions since Chrome 138) — see the P2 AI item below to promote it._
+
+### P1
+
+- [ ] P1 — Warn (and optionally enforce) on un-pinned `@require`/`@resource`
+  Why: `verifySRI` returns `true` when no integrity hash is declared (`src/background/resource-loader.ts:190`), so an un-pinned remote `@require` silently trusts whatever the CDN serves — the exact vector behind 2026 scam-script campaigns and GreasyFork's own unresolved SRI gap. ScriptVault already has TOFU receipts and Ed25519 signing; this closes the remaining silent-drift path.
+  Evidence: `src/background/resource-loader.ts:190`; GreasyFork SRI request #1070 (RD28-08); TM scam-script campaign #2783 (RD28-02).
+  Touches: `src/background/resource-loader.ts` (verifySRI/fetchRequireScript), install-page review UI (surface "unverified remote code"), `src/config/settings-schema.json` (a warn/enforce setting), install/update trust receipts, tests.
+  Acceptance: install/update review flags each un-pinned `@require`/`@resource` as "unverified remote code"; an opt-in enforce mode refuses to run un-pinned requires; TOFU-pinned and hash-pinned requires are unaffected; a test pins warn-by-default + enforce-on behavior.
+  Complexity: M
+
+### P2
+
+- [ ] P2 — On-device AI module (Chrome Prompt API / Gemini Nano), opt-in and local-only
+  Why: managers are becoming AI scripting copilots (ScriptCat's cloud AI Agent, #1324); the Prompt/Summarizer APIs are stable for extensions since Chrome 138 and run fully on-device with no network egress — a keyless, telemetry-free "explain this script / plain-language AST-risk summary / draft a script" is a leapfrog that fits ScriptVault's identity where a cloud agent would violate it. Promotes UC-3 (precondition now met).
+  Evidence: Chrome Prompt API (RD28-09), built-in AI (RD28-10); ScriptCat AI Agent #1324 (RD28-05); pairs with the existing 31-detector AST analyzer (`src/bg/analyzer.ts`).
+  Touches: a NEW lazy-loaded module (feature-detected via `LanguageModel.availability()`), editor + install-review UI hooks, settings toggle (off by default), `src/bg/analyzer.ts` (feed detector output to the summarizer). Must degrade cleanly to "unavailable" (2.7–4 GB model, ~16 GB RAM).
+  Acceptance: with the model available and the setting on, the install review shows a locally-generated plain-language risk summary and the editor offers explain/draft; with it unavailable the UI hides the feature and nothing calls the network; a test mocks `LanguageModel` availability both ways.
+  Complexity: XL
+
+- [ ] P2 — `GM.fetch`: a `Response`/`ReadableStream`-shaped fetch API
+  Why: `GM_xmlhttpRequest` is callback-shaped and buffers whole responses; a modern `GM.fetch` returning a real `Response` with streaming is a long-standing ask no manager ships well. `src/modules/xhr.ts` has no streaming path today.
+  Evidence: TM #1278 (RD28-03); `src/modules/xhr.ts` (no `ReadableStream`/`responseType:"stream"`).
+  Touches: `src/modules/xhr.ts`, `src/background/gm-network-handler.ts`, `src/background/wrapper-builder.ts` (expose `GM.fetch`), `content.js` bridge (stream chunk forwarding), `src/background/scriptvault.d.ts` typings, tests.
+  Acceptance: a granted script can `await GM.fetch(url)` and read `res.body.getReader()` chunk-by-chunk under the existing @connect/internal-host guards; a test streams a chunked response; falls back cleanly where unsupported.
+  Complexity: L
+
+- [ ] P2 — Per-script isolated cookie jars (`isolationCookie`)
+  Why: multi-account/session isolation per script (a script runs against a partitioned cookie store) is an open, unshipped ask; a local-first manager can offer it with no backend — a genuine differentiator.
+  Evidence: TM #2815 (RD28-01).
+  Touches: `src/background/gm-cookie-handler.ts`, `src/background/gm-network-handler.ts` (cookie routing), a per-script setting, `src/background/parser.ts` (opt-in directive or per-script UI), tests. Depends on partitioned-cookie/CHIPS handling (P3 below).
+  Acceptance: a script opted into an isolated jar sends/receives cookies from a partition distinct from the page and from other scripts; a test asserts cross-script/page cookie isolation.
+  Complexity: L
+
+- [ ] P2 — One-click "restrict to current site" + inline domain editor with validation
+  Why: a cluster of 2026 requests wants fast match-management — restrict a running script to the current site and add/edit domains inline with validation, instead of hand-editing `@match`. High satisfaction, low effort, fits the existing per-script settings (userMatches/userExcludes).
+  Evidence: VM #2410 / #2403 / #2559 (RD28-11); existing `settings.userMatches`/`userExcludes` override support.
+  Touches: `pages/popup.js` (per-script "only on this site" action), `pages/dashboard.js` (inline domain editor + `@match` validation), `src/background/registration.ts` (re-register on scope change), tests.
+  Acceptance: from the popup a user restricts the active script to the current hostname in one click; the dashboard offers add/remove domain rows with live `@match` validation; changes re-register and persist; a test covers scope narrowing + validation rejection.
+  Complexity: M
+
+- [ ] P2 — Scam/crypto-drain AST detector category + install-time warning
+  Why: 2026 saw active distribution of fake "crypto exploit" userscripts that drain exchange sessions; ScriptVault already has a 31-detector AST analyzer, so adding a scam-heuristic category (wallet/exchange DOM targeting, seed-phrase/private-key exfil patterns, obfuscated `eval` + network POST) turns that analyzer into a named defense.
+  Evidence: TM scam-script campaign #2783 (RD28-02); GreasyFork account-takeover propagation #682 (RD28-12); existing `src/bg/analyzer.ts` detectors.
+  Touches: `src/bg/analyzer.ts` (new detector group), install-review severity surfacing, `tests/analyzer.test.js`.
+  Acceptance: install review raises a high-severity "possible credential/wallet exfiltration" flag on scripts matching the heuristics, with a named reason; a test pins detection on representative patterns and no false-positive on benign wallet-adjacent scripts.
+  Complexity: M
+
+- [ ] P2 — Local-folder sync provider and plain git-remote sync
+  Why: persistent 2026 demand for syncing the script library to a local directory and to a plain git remote (not just Gist). Local-folder pairs with File System Observer hot-reload (P3); git-remote gives version-controlled, self-hosted sync with no third-party account.
+  Evidence: VM local-directory sync #2125 (RD28-13), git-server sync #2176 (RD28-14); existing provider framework in `src/modules/sync-providers.ts`.
+  Touches: `src/modules/sync-providers.ts` (new providers), sync settings UI, `src/background/cloud-sync.ts` (envelope reuse), File System Access handle storage (local-folder), tests.
+  Acceptance: a user can bind a local folder or a git remote as a sync target and round-trip scripts + GM values through it; conflict/merge uses the existing 3-way engine; tests cover round-trip and conflict for each.
+  Complexity: L
+
+### P3
+
+- [ ] P3 — Event-driven local-file hot-reload via File System Observer (upgrade X-8)
+  Why: the existing local-file binding (X-8) is refresh-only/poll-based; `FileSystemObserver.observe()` gives true event-driven "edit in VS Code → auto-update in the browser" without polling, beating Tampermonkey's poll-based local tracking.
+  Evidence: File System Observer (RD28-15); VM local-directory demand #2125 (RD28-13); existing `Bind File`/`Refresh File` work (X-8).
+  Touches: `pages/dashboard.js` (bound-file watcher), `src/storage` (handle store), feature-detection + graceful fallback to manual refresh, tests. Cross-reference X-8.
+  Acceptance: with a bound file and the API available, an external edit auto-applies (after the existing review-diff gate) with no manual refresh; where unsupported it falls back to the current Refresh button; a test mocks the observer.
+  Complexity: M
+
+- [ ] P3 — "Hold script execution until first sync completes" toggle
+  Why: on a fresh device, scripts can run against stale local state before the first sync lands; an opt-in "wait for first sync" avoids the stale-script race. Complements the existing managed-policy/sync work.
+  Evidence: VM #2067 (RD28-16); existing `src/background/cloud-sync.ts` + registration.
+  Touches: `src/background/registration.ts` (gate registration on a first-sync flag), `src/background/cloud-sync.ts` (signal first-sync completion), a setting, tests.
+  Acceptance: with the toggle on and sync configured, no userscript registers until the first successful sync (or a timeout with a surfaced warning); default off preserves current behavior; a test pins the gate.
+  Complexity: S
+
+- [ ] P3 — Verify/allow concurrent header-modifying `GM_xmlhttpRequest` (request-scoped DNR)
+  Why: MV3 forces a DNR rule per header-modifying request; TM (#2215) and ScriptCat (#1377) both hit and fixed a "one at a time / global rule" serialization wall. ScriptVault's cookie routing uses session DNR rules — confirm it does not serialize concurrent requests, and move to request-scoped rules if it does.
+  Evidence: TM #2215 (RD28-04), ScriptCat #1377 (RD28-06); `src/background/gm-network-handler.ts` (`withCookieHeaderSessionRule`). Confidence: Needs live validation.
+  Touches: `src/background/gm-network-handler.ts` (DNR rule scoping), tests.
+  Acceptance: two concurrent header-modifying `GM_xmlhttpRequest` calls from the same or different scripts both apply their headers correctly without clobbering each other; a test drives two overlapping requests.
+  Complexity: M
+
+- [ ] P3 — Partitioned-cookie (CHIPS) awareness for `GM_download`/`GM_xmlhttpRequest`
+  Why: partitioned cookies (`cf_clearance` and similar) are table-stakes in 2026; requests that ignore the partition key fail on Cloudflare-gated hosts. Confirm GM download/xhr respect storage partitioning; prerequisite for isolated cookie jars (P2).
+  Evidence: TM #2419 (RD28-17). Confidence: Needs live validation.
+  Touches: `src/background/gm-network-handler.ts`, `src/background/gm-cookie-handler.ts`, tests.
+  Acceptance: a GM download/xhr to a partitioned-cookie host includes the correct partition key; a test asserts partition handling.
+  Complexity: M
+
+- [ ] P3 — Dashboard accessibility sweep for dynamically-created controls
+  Why: managers broadly neglect SR operability (TM #2813: script-deletion controls not operable via screen reader). ScriptVault's dynamically-created controls (`pages/dashboard-cardview.js` `.cv-select-btn`/`.cv-meta-button`, chain drag handles) need verified roles/labels/keyboard operability; complements the already-tracked keyboard-reorder item.
+  Evidence: TM #2813 (RD28-18); `pages/dashboard-cardview.js`, `pages/dashboard-chains.js`.
+  Touches: `pages/dashboard-cardview.js`, `pages/dashboard-chains.js`, other dynamic-control renderers; `tests/dashboard-a11y.test.js`.
+  Acceptance: every dynamically-created interactive control has a role + accessible name and is keyboard-operable; an a11y test asserts label/role coverage on card-view and chain controls.
+  Complexity: M
+
+- [ ] P3 — Snippet editor tab-stop navigation
+  Why: the snippet inserter drops tab-stop markers but navigation between them is unimplemented (`// Remove tab stop markers for now (future: implement tab stop navigation)`), so multi-field snippets don't behave like editor snippets elsewhere.
+  Evidence: `pages/dashboard-snippets.js:1317`.
+  Touches: `pages/dashboard-snippets.js`, `pages/monaco-adapter.js` (selection/placeholder API), tests.
+  Acceptance: inserting a multi-placeholder snippet lets the user Tab between placeholders; a test covers placeholder navigation.
+  Complexity: S
+
+- [ ] P3 — Respect Firefox container identity (do not force-enable)
+  Why: cross-browser edge case where userscript managers force-enable in Firefox containers instead of honoring container scope; relevant to the in-flight Firefox port.
+  Evidence: TM #2792 (RD28-19); `FIREFOX-PORT.md`. Confidence: Needs live validation on the Firefox build.
+  Touches: `src/background/registration.ts` / Firefox-specific registration path, `FIREFOX-PORT.md` validation notes.
+  Acceptance: on Firefox, scripts respect container/contextual-identity scope rather than force-enabling across containers; validated in the Firefox smoke path.
+  Complexity: M
+
+- [ ] P3 — Same-document View Transitions polish in the dashboard
+  Why: same-document View Transitions are Baseline (Oct 2025); using `document.startViewTransition` for script-list ↔ editor and tab changes is cheap, tasteful motion that fits the existing design system.
+  Evidence: same-doc View Transitions Baseline (RD28-20).
+  Touches: `pages/dashboard.js` view/tab transitions, `pages/dashboard.css`, `prefers-reduced-motion` guard.
+  Acceptance: list↔editor and tab switches use a subtle view transition, disabled under reduced-motion; no layout shift or jank; visual regression baseline updated.
+  Complexity: S
+
+### Appendix: Research-Driven Sources (2026-07-02)
+
+| ID | Source | URL |
+|---|---|---|
+| RD28-01 | TM per-script isolated cookie jars | https://github.com/Tampermonkey/tampermonkey/issues/2815 |
+| RD28-02 | TM fake crypto-exploit userscripts | https://github.com/Tampermonkey/tampermonkey/issues/2783 |
+| RD28-03 | TM streaming GM.fetch request | https://github.com/Tampermonkey/tampermonkey/issues/1278 |
+| RD28-04 | TM MV3 GM_xhr DNR serialization | https://github.com/Tampermonkey/tampermonkey/issues/2215 |
+| RD28-05 | ScriptCat AI Agent | https://github.com/scriptscat/scriptcat/pull/1324 |
+| RD28-06 | ScriptCat request-scoped DNR | https://github.com/scriptscat/scriptcat/pull/1377 |
+| RD28-07 | ScriptCat v1.4.0 release notes | https://github.com/scriptscat/scriptcat/releases/tag/v1.4.0 |
+| RD28-08 | GreasyFork SRI enforcement request | https://github.com/JasonBarnabe/greasyfork/issues/1070 |
+| RD28-09 | Chrome Prompt API (Gemini Nano) | https://developer.chrome.com/docs/ai/prompt-api |
+| RD28-10 | Chrome built-in AI overview | https://developer.chrome.com/docs/ai/built-in |
+| RD28-11 | VM restrict-to-current-site cluster | https://github.com/violentmonkey/violentmonkey/issues/2410 |
+| RD28-12 | GreasyFork account-takeover propagation | https://github.com/JasonBarnabe/greasyfork/issues/682 |
+| RD28-13 | VM local-directory sync | https://github.com/violentmonkey/violentmonkey/issues/2125 |
+| RD28-14 | VM git-server sync | https://github.com/violentmonkey/violentmonkey/issues/2176 |
+| RD28-15 | File System Observer API | https://developer.chrome.com/blog/file-system-observer |
+| RD28-16 | VM hold-execution-until-sync | https://github.com/violentmonkey/violentmonkey/issues/2067 |
+| RD28-17 | TM partitioned-cookie/CHIPS download | https://github.com/Tampermonkey/tampermonkey/issues/2419 |
+| RD28-18 | TM SR-inaccessible delete controls | https://github.com/Tampermonkey/tampermonkey/issues/2813 |
+| RD28-19 | TM Firefox container force-enable | https://github.com/Tampermonkey/tampermonkey/issues/2792 |
+| RD28-20 | Same-document View Transitions Baseline | https://web.dev/blog/same-document-view-transitions-are-now-baseline-newly-available |
