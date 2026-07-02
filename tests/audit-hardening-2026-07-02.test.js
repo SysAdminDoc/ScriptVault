@@ -44,6 +44,34 @@ describe('Dependency graph idle-render (2026-07-02 regression)', () => {
   });
 });
 
+describe('Large-file diff fallback resyncs (2026-07-02 regression)', () => {
+  it('dashboard-diff _computeSimpleDiff resyncs on the next matching anchor', () => {
+    const src = read('pages/dashboard-diff.js');
+    const fn = src.slice(src.indexOf('function _computeSimpleDiff'), src.indexOf('function _computeSimpleDiff') + 900);
+    expect(fn).toContain('occurrences.find(idx => idx >= bi)');
+  });
+  it('dashboard-linter _computeSimpleDiff resyncs on the next matching anchor', () => {
+    const src = read('pages/dashboard-linter.js');
+    const fn = src.slice(src.indexOf('function _computeSimpleDiff'), src.indexOf('function _computeSimpleDiff') + 900);
+    expect(fn).toContain('bIndex.get(a[ai])');
+    expect(fn).toContain('idx >= bi');
+  });
+});
+
+describe('Standalone export quality (2026-07-02 regression)', () => {
+  const src = read('pages/dashboard-standalone.js');
+  it('minifier no longer strips inline // or /* */ (string/regex-safe)', () => {
+    expect(src).not.toContain("js.replace(/(?<![:\"'`])");
+    expect(src).not.toContain('js.replace(/\\/\\*[\\s\\S]*?\\*\\//g');
+    expect(src).toContain("!line.startsWith('//')");
+  });
+  it('ships a real copy-link share, not a fake QR', () => {
+    expect(src).not.toContain('generateQRCodeInlineJS');
+    expect(src).not.toContain('qrCanvas');
+    expect(src).toContain("data-action=\"copy-link\"");
+  });
+});
+
 describe('Debugger live-reload path (2026-07-02 regression)', () => {
   const src = read('pages/dashboard-debugger.js');
   it('removes the dead type:ScriptDebugger reloadTabs message (no router handler)', () => {

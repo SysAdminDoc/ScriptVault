@@ -159,15 +159,16 @@ const StandaloneExport = (() => {
         if (code.length > 500000) return code;
         // Strip userscript header
         let js = code.replace(/\/\/\s*==UserScript==[\s\S]*?\/\/\s*==\/UserScript==\s*/, '');
-        // Strip single-line comments (skip inside strings, URLs, and template literals)
-        js = js.replace(/(?<![:"'`])\/\/.*$/gm, '');
-        // Strip multi-line comments
-        js = js.replace(/\/\*[\s\S]*?\*\//g, '');
-        // Collapse blank lines and leading/trailing whitespace per line
-        // Use newlines (not semicolons) to avoid breaking if/else, arrow functions, etc.
+        // Conservative, string/regex-safe minification: only remove comments
+        // that occupy an entire line, then collapse blank lines/indentation.
+        // We deliberately do NOT strip inline `//` or `/* */` via regex —
+        // those match `//`, `/*`, `*/` sequences inside string and regex
+        // literals (e.g. "a//b", "/*", or /\/\*/), corrupting the exported
+        // bookmarklet. Full-line comments are the bulk of comment bytes and are
+        // always safe to drop.
         js = js.split('\n')
             .map(line => line.trim())
-            .filter(line => line.length > 0)
+            .filter(line => line.length > 0 && !line.startsWith('//'))
             .join('\n');
         return js;
     }
@@ -615,10 +616,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const downloadSlug = slugify(name);
         const generatedDate = formatGeneratedDate();
 
-        // QR Code generator (self-contained, alphanumeric-only for simplicity)
-        // Uses a minimal QR code library embedded inline
-        const qrInlineJS = generateQRCodeInlineJS();
-
         const bodyContent = `
 <div class="header-bar">
     <h1>Install ${escapeHTML(name)}</h1>
@@ -644,8 +641,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     <div class="card" style="text-align:center">
         <h2 style="margin-bottom:12px">Share</h2>
-        <p style="margin-bottom:16px;color:#a0a0a0;font-size:0.8125rem">Scan the QR code to open this page on another device</p>
-        <canvas id="qrCanvas" width="200" height="200" style="border:4px solid #fff;border-radius:8px"></canvas>
+        <p style="margin-bottom:16px;color:#a0a0a0;font-size:0.8125rem">Copy this page's link to open it on another device.</p>
+        <button type="button" class="btn btn-outline" data-action="copy-link">Copy Page Link</button>
     </div>
 
     <div class="card">
@@ -670,12 +667,12 @@ document.addEventListener('DOMContentLoaded', function() {
 ${buildClientHelpers()}
 var _rawCode = ${JSON.stringify(script.code || '')};
 var _scriptName = ${JSON.stringify(downloadSlug)};
-${qrInlineJS}
 document.addEventListener('DOMContentLoaded', function() {
     var installButton = document.querySelector('[data-action="install-script"]');
     var toggleButton = document.querySelector('[data-action="toggle-source"]');
     var copyButton = document.querySelector('[data-action="copy-code"]');
     var downloadButton = document.querySelector('[data-action="download-script"]');
+    var copyLinkButton = document.querySelector('[data-action="copy-link"]');
 
     installButton && installButton.addEventListener('click', function() {
         svDownloadFile(_scriptName + '.user.js', _rawCode, 'text/javascript');
@@ -700,7 +697,13 @@ document.addEventListener('DOMContentLoaded', function() {
         svDownloadFile(_scriptName + '.user.js', _rawCode, 'text/javascript');
     });
 
-    generateQR(document.getElementById('qrCanvas'), location.href);
+    copyLinkButton && copyLinkButton.addEventListener('click', function() {
+        svCopyText(location.href).then(function() {
+            svShowToast('Link copied!');
+        }).catch(function() {
+            svShowToast('Copy failed');
+        });
+    });
 });`;
 
         const html = baseHTMLTemplate({
@@ -711,92 +714,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
         downloadFile(downloadSlug + '-install.html', html);
         return html;
-    }
-
-    // =========================================
-    // QR Code Generator (self-contained, minimal)
-    // =========================================
-    function generateQRCodeInlineJS() {
-        // A minimal QR code generator that draws to a canvas
-        // Supports up to ~150 chars (version 5, error correction L)
-        return `
-function generateQR(canvas, text) {
-    // Minimal QR encoder - encodes text as a simple pixel grid
-    // For full QR spec compliance you'd need a larger library,
-    // but this covers common use cases for short URLs.
-    var ctx = canvas.getContext('2d');
-    var size = canvas.width;
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, size, size);
-
-    // Simple hash-based visual code (not a real QR but visually distinct)
-    // For production, replace with a full QR library
-    var modules = 25;
-    var cellSize = Math.floor(size / modules);
-    var offset = Math.floor((size - cellSize * modules) / 2);
-
-    // Generate deterministic pattern from text
-    var data = [];
-    for (var i = 0; i < modules * modules; i++) data[i] = 0;
-
-    // Finder patterns (top-left, top-right, bottom-left)
-    function setFinderPattern(row, col) {
-        for (var r = 0; r < 7; r++) {
-            for (var c = 0; c < 7; c++) {
-                var isBlack = (r === 0 || r === 6 || c === 0 || c === 6) ||
-                              (r >= 2 && r <= 4 && c >= 2 && c <= 4);
-                data[((row + r) * modules + col + c)] = isBlack ? 1 : 0;
-            }
-        }
-    }
-    setFinderPattern(0, 0);
-    setFinderPattern(0, modules - 7);
-    setFinderPattern(modules - 7, 0);
-
-    // Timing patterns
-    for (var i = 8; i < modules - 8; i++) {
-        data[6 * modules + i] = i % 2 === 0 ? 1 : 0;
-        data[i * modules + 6] = i % 2 === 0 ? 1 : 0;
-    }
-
-    // Encode text data into remaining cells
-    var hash = 0;
-    for (var i = 0; i < text.length; i++) {
-        hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0;
-    }
-    var rng = Math.abs(hash);
-    for (var i = 0; i < text.length && i < 100; i++) {
-        rng = ((rng * 1103515245 + 12345) & 0x7fffffff);
-        var pos = 8 + (rng % ((modules - 9) * (modules - 9)));
-        var row = Math.floor(pos / (modules - 9)) + 8;
-        var col = (pos % (modules - 9)) + 8;
-        if (row < modules && col < modules) {
-            var idx = row * modules + col;
-            data[idx] = (text.charCodeAt(i) + i) % 2;
-        }
-    }
-    // Additional encoding passes for visual density
-    for (var pass = 0; pass < 3; pass++) {
-        for (var i = 0; i < text.length; i++) {
-            rng = ((rng * 1103515245 + 12345) & 0x7fffffff);
-            var row = 9 + (rng % (modules - 16));
-            var col = 9 + ((rng >> 8) % (modules - 16));
-            if (row < modules - 7 && col < modules - 7) {
-                data[row * modules + col] = (rng >> 16) % 2;
-            }
-        }
-    }
-
-    // Draw
-    ctx.fillStyle = '#1a1a1a';
-    for (var r = 0; r < modules; r++) {
-        for (var c = 0; c < modules; c++) {
-            if (data[r * modules + c]) {
-                ctx.fillRect(offset + c * cellSize, offset + r * cellSize, cellSize, cellSize);
-            }
-        }
-    }
-}`;
     }
 
     // =========================================

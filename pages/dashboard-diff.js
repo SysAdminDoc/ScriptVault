@@ -351,6 +351,16 @@ const DiffTool = (() => {
       if (a[ai] === b[bi]) {
         ops.push({ type: 'equal', lineA: ai + 1, lineB: bi + 1, text: a[ai] });
         ai++; bi++;
+        continue;
+      }
+      // Resync instead of blindly deleting: if a[ai] reappears later in b, the
+      // intervening b lines are insertions — emit them and realign on the
+      // anchor. Otherwise a[ai] is a deletion. Without this, a single inserted
+      // line made every following line render as del+add.
+      const occurrences = bSet.get(a[ai]);
+      const bMatch = occurrences ? occurrences.find(idx => idx >= bi) : undefined;
+      if (bMatch !== undefined) {
+        while (bi < bMatch) { ops.push({ type: 'add', lineB: bi + 1, text: b[bi] }); bi++; }
       } else {
         ops.push({ type: 'del', lineA: ai + 1, text: a[ai] });
         ai++;

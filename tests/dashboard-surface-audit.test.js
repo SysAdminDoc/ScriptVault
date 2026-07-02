@@ -585,6 +585,10 @@ console.log('demo');
     expect(portfolioHtml).toContain('data-action="toggle-code"');
     expect(installHtml).toContain('var _scriptName = "script"');
     expect(installHtml).toContain('data-action="toggle-source"');
+    // The fake (non-scannable) QR was replaced with a real copy-link share.
+    expect(installHtml).toContain('data-action="copy-link"');
+    expect(installHtml).not.toContain('generateQR');
+    expect(installHtml).not.toContain('qrCanvas');
 
     StandaloneExport.destroy();
   });

@@ -1043,11 +1043,25 @@ const AdvancedLinter = (() => {
   // `ctx`/`add`/`remove` values. Used when the LCS table would allocate too much.
   function _computeSimpleDiff(a, b) {
     const ops = [];
+    // Index each line of b so a divergence can resync on the next matching
+    // anchor instead of deleting every subsequent line (a single insertion
+    // otherwise cascaded into all-remove+add output).
+    const bIndex = new Map();
+    b.forEach((line, idx) => {
+      if (!bIndex.has(line)) bIndex.set(line, []);
+      bIndex.get(line).push(idx);
+    });
     let ai = 0, bi = 0;
     while (ai < a.length && bi < b.length) {
       if (a[ai] === b[bi]) {
         ops.push({ type: 'ctx', text: a[ai] });
         ai++; bi++;
+        continue;
+      }
+      const occurrences = bIndex.get(a[ai]);
+      const bMatch = occurrences ? occurrences.find(idx => idx >= bi) : undefined;
+      if (bMatch !== undefined) {
+        while (bi < bMatch) { ops.push({ type: 'add', text: b[bi] }); bi++; }
       } else {
         ops.push({ type: 'remove', text: a[ai] });
         ai++;
