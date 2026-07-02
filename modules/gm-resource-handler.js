@@ -51,10 +51,11 @@ const GMResourceHandler = (() => {
   function isGMResourceAction(action) {
     return typeof action === "string" && GM_RESOURCE_ACTION_SET.has(action);
   }
-  async function handleGMResourceMessage(action, data = {}) {
+  async function handleGMResourceMessage(action, data = {}, sender = {}) {
+    const ownedScriptId = sender.userScriptId || data.scriptId;
     switch (action) {
       case "GM_getResourceText": {
-        const script = await ScriptStorage.get(data.scriptId);
+        const script = await ScriptStorage.get(ownedScriptId);
         if (!script || !script.meta?.resource) return null;
         const url = data.name ? script.meta.resource[data.name] : void 0;
         if (!url) return null;
@@ -65,7 +66,7 @@ const GMResourceHandler = (() => {
         }
       }
       case "GM_getResourceURL": {
-        const script = await ScriptStorage.get(data.scriptId);
+        const script = await ScriptStorage.get(ownedScriptId);
         if (!script || !script.meta?.resource) return null;
         const url = data.name ? script.meta.resource[data.name] : void 0;
         if (!url) return null;
@@ -78,8 +79,8 @@ const GMResourceHandler = (() => {
       case "GM_loadScript": {
         try {
           if (!data.url) return { error: "No URL provided" };
-          if (!data.scriptId) return { error: "Missing script context" };
-          const script = await ScriptStorage.get(data.scriptId);
+          if (!ownedScriptId) return { error: "Missing script context" };
+          const script = await ScriptStorage.get(ownedScriptId);
           if (!script) return { error: "Script context not found" };
           const policy = evaluateConnectPolicy(script, data.url);
           if (!policy.allowed) return { error: policy.error };

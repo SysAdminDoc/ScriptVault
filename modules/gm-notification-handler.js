@@ -76,6 +76,15 @@ const GMNotificationHandler = (() => {
       persistNotifCallbacks();
     }
   }
+  function callerOwnsNotification(sender, data) {
+    const ownedScriptId = sender.userScriptId || data.scriptId;
+    const runtime = notificationRuntime();
+    const entry = data.id ? runtime._notifCallbacks?.get(data.id) : void 0;
+    if (entry && ownedScriptId && entry.scriptId && entry.scriptId !== ownedScriptId) {
+      return false;
+    }
+    return true;
+  }
   function isGMNotificationAction(action) {
     return typeof action === "string" && GM_NOTIFICATION_ACTION_SET.has(action);
   }
@@ -132,6 +141,9 @@ const GMNotificationHandler = (() => {
       }
       case "GM_updateNotification": {
         if (!data.id) return { success: false, error: "Missing notification id" };
+        if (!callerOwnsNotification(sender, data)) {
+          return { success: false, error: "Notification not owned by caller" };
+        }
         const updateOpts = {};
         if (typeof data.title === "string") updateOpts.title = data.title;
         if (typeof data.text === "string") updateOpts.message = data.text;
@@ -153,6 +165,9 @@ const GMNotificationHandler = (() => {
       }
       case "GM_closeNotification": {
         if (!data.id) return { success: false, error: "Missing notification id" };
+        if (!callerOwnsNotification(sender, data)) {
+          return { success: false, error: "Notification not owned by caller" };
+        }
         try {
           await clearNotification()(data.id);
           removeNotifCallback(data.id);

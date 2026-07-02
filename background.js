@@ -18278,10 +18278,11 @@ const GMMenuHandler = (() => {
     return typeof action === "string" && GM_MENU_ACTION_SET.has(action);
   }
   async function handleGMMenuMessage(action, data = {}, sender = {}) {
+    const ownedScriptId = sender.userScriptId || data.scriptId;
     switch (action) {
       case "registerMenuCommand":
       case "GM_registerMenuCommand": {
-        const scriptId = data.scriptId;
+        const scriptId = ownedScriptId;
         const commands = await chrome.storage.session.get("menuCommands") || {};
         if (!commands.menuCommands) commands.menuCommands = {};
         if (!commands.menuCommands[scriptId]) commands.menuCommands[scriptId] = [];
@@ -18305,7 +18306,7 @@ const GMMenuHandler = (() => {
       }
       case "unregisterMenuCommand":
       case "GM_unregisterMenuCommand": {
-        const scriptId = data.scriptId;
+        const scriptId = ownedScriptId;
         const commands = await chrome.storage.session.get("menuCommands") || {};
         if (commands.menuCommands?.[scriptId]) {
           commands.menuCommands[scriptId] = commands.menuCommands[scriptId].filter(
@@ -18676,6 +18677,15 @@ const GMNotificationHandler = (() => {
       persistNotifCallbacks();
     }
   }
+  function callerOwnsNotification(sender, data) {
+    const ownedScriptId = sender.userScriptId || data.scriptId;
+    const runtime = notificationRuntime();
+    const entry = data.id ? runtime._notifCallbacks?.get(data.id) : void 0;
+    if (entry && ownedScriptId && entry.scriptId && entry.scriptId !== ownedScriptId) {
+      return false;
+    }
+    return true;
+  }
   function isGMNotificationAction(action) {
     return typeof action === "string" && GM_NOTIFICATION_ACTION_SET.has(action);
   }
@@ -18732,6 +18742,9 @@ const GMNotificationHandler = (() => {
       }
       case "GM_updateNotification": {
         if (!data.id) return { success: false, error: "Missing notification id" };
+        if (!callerOwnsNotification(sender, data)) {
+          return { success: false, error: "Notification not owned by caller" };
+        }
         const updateOpts = {};
         if (typeof data.title === "string") updateOpts.title = data.title;
         if (typeof data.text === "string") updateOpts.message = data.text;
@@ -18753,6 +18766,9 @@ const GMNotificationHandler = (() => {
       }
       case "GM_closeNotification": {
         if (!data.id) return { success: false, error: "Missing notification id" };
+        if (!callerOwnsNotification(sender, data)) {
+          return { success: false, error: "Notification not owned by caller" };
+        }
         try {
           await clearNotification()(data.id);
           removeNotifCallback(data.id);
@@ -18831,10 +18847,11 @@ const GMResourceHandler = (() => {
   function isGMResourceAction(action) {
     return typeof action === "string" && GM_RESOURCE_ACTION_SET.has(action);
   }
-  async function handleGMResourceMessage(action, data = {}) {
+  async function handleGMResourceMessage(action, data = {}, sender = {}) {
+    const ownedScriptId = sender.userScriptId || data.scriptId;
     switch (action) {
       case "GM_getResourceText": {
-        const script = await ScriptStorage.get(data.scriptId);
+        const script = await ScriptStorage.get(ownedScriptId);
         if (!script || !script.meta?.resource) return null;
         const url = data.name ? script.meta.resource[data.name] : void 0;
         if (!url) return null;
@@ -18845,7 +18862,7 @@ const GMResourceHandler = (() => {
         }
       }
       case "GM_getResourceURL": {
-        const script = await ScriptStorage.get(data.scriptId);
+        const script = await ScriptStorage.get(ownedScriptId);
         if (!script || !script.meta?.resource) return null;
         const url = data.name ? script.meta.resource[data.name] : void 0;
         if (!url) return null;
@@ -18858,8 +18875,8 @@ const GMResourceHandler = (() => {
       case "GM_loadScript": {
         try {
           if (!data.url) return { error: "No URL provided" };
-          if (!data.scriptId) return { error: "Missing script context" };
-          const script = await ScriptStorage.get(data.scriptId);
+          if (!ownedScriptId) return { error: "Missing script context" };
+          const script = await ScriptStorage.get(ownedScriptId);
           if (!script) return { error: "Script context not found" };
           const policy = evaluateConnectPolicy(script, data.url);
           if (!policy.allowed) return { error: policy.error };
@@ -19253,16 +19270,17 @@ const GMNetworkHandler = (() => {
     return typeof action === "string" && GM_NETWORK_ACTION_SET.has(action);
   }
   async function handleGMNetworkMessage(action, data = {}, sender = {}) {
+    const ownedScriptId = sender.userScriptId || data.scriptId;
     switch (action) {
       case "GM_xmlhttpRequest": {
         try {
           if (!data.url) {
             return { error: "No URL provided", type: "error" };
           }
-          if (!data.scriptId) {
+          if (!ownedScriptId) {
             return { error: "Missing script context", type: "error" };
           }
-          const xhrScript = await ScriptStorage.get(data.scriptId);
+          const xhrScript = await ScriptStorage.get(ownedScriptId);
           if (!xhrScript) {
             return { error: "Script context not found", type: "error" };
           }
@@ -19281,19 +19299,19 @@ const GMNetworkHandler = (() => {
           const cookieRouting = await prepareCookieRoutingForFetch(data, "GM_xmlhttpRequest");
           if (cookieRouting.error) return { error: cookieRouting.error, type: "error" };
           const tabId = sender.tab?.id;
-          const request = XhrManager.create(tabId, data.scriptId, data);
+          const request = XhrManager.create(tabId, ownedScriptId, data);
           const { id: requestId } = request;
           const netLogStartTime = Date.now();
           const netLogEntry = {
-            scriptId: data.scriptId,
+            scriptId: ownedScriptId,
             scriptName: "",
             method: String(data.method || "GET").toUpperCase(),
             url: data.url,
             requestSize: data.data ? typeof data.data === "string" ? data.data.length : 0 : 0
           };
           try {
-            const script = await ScriptStorage.get(data.scriptId);
-            netLogEntry.scriptName = script?.meta?.name || data.scriptId;
+            const script = await ScriptStorage.get(ownedScriptId);
+            netLogEntry.scriptName = script?.meta?.name || ownedScriptId;
           } catch (_) {
           }
           const controller = new AbortController();
@@ -19305,7 +19323,7 @@ const GMNetworkHandler = (() => {
                 action: "xhrEvent",
                 data: {
                   requestId,
-                  scriptId: data.scriptId,
+                  scriptId: ownedScriptId,
                   type,
                   ...eventData
                 }
@@ -19526,8 +19544,8 @@ const GMNetworkHandler = (() => {
         try {
           if (typeof WebSocket !== "function") return { error: "WebSocket is not available in this browser context" };
           if (!data.url) return { error: "No URL provided" };
-          if (!data.scriptId) return { error: "Missing script context" };
-          const wsScript = await ScriptStorage.get(data.scriptId);
+          if (!ownedScriptId) return { error: "Missing script context" };
+          const wsScript = await ScriptStorage.get(ownedScriptId);
           if (!wsScript) return { error: "Script context not found" };
           if (!scriptHasGrant(wsScript, ["GM_webSocket", "GM.webSocket"])) return { error: "Not granted" };
           const wsUrl = normalizeGMWebSocketUrl(data.url);
@@ -19568,8 +19586,8 @@ const GMNetworkHandler = (() => {
             requestId,
             socket,
             tabId,
-            scriptId: data.scriptId,
-            scriptName: wsScript.meta?.name || data.scriptId,
+            scriptId: ownedScriptId,
+            scriptName: wsScript.meta?.name || ownedScriptId,
             url: wsUrl,
             bytesSent: 0,
             bytesReceived: 0,
@@ -19649,7 +19667,7 @@ const GMNetworkHandler = (() => {
       case "GM_webSocket_send": {
         try {
           const record = getGMWebSocketMap().get(data.requestId);
-          if (!record || record.scriptId !== data.scriptId) return { error: "WebSocket request not found" };
+          if (!record || record.scriptId !== ownedScriptId) return { error: "WebSocket request not found" };
           if (record.socket.readyState !== WebSocket.OPEN) return { error: "WebSocket is not open" };
           const size = estimateGMWebSocketPayloadBytes(data.payload);
           if (size > GM_WEBSOCKET_MAX_MESSAGE_BYTES) {
@@ -19664,7 +19682,7 @@ const GMNetworkHandler = (() => {
       }
       case "GM_webSocket_close": {
         const record = getGMWebSocketMap().get(data.requestId);
-        if (!record || record.scriptId !== data.scriptId) return { success: false };
+        if (!record || record.scriptId !== ownedScriptId) return { success: false };
         const code = normalizeGMWebSocketCloseCode(data.code);
         const reason = normalizeGMWebSocketCloseReason(data.reason);
         try {
@@ -19677,8 +19695,8 @@ const GMNetworkHandler = (() => {
       case "GM_download": {
         try {
           if (!data.url) return { error: "url is required for download" };
-          if (!data.scriptId) return { error: "Missing script context" };
-          const downloadScript = await ScriptStorage.get(data.scriptId);
+          if (!ownedScriptId) return { error: "Missing script context" };
+          const downloadScript = await ScriptStorage.get(ownedScriptId);
           if (!downloadScript) return { error: "Script context not found" };
           let downloadProtocol = "";
           try {
@@ -19736,7 +19754,7 @@ const GMNetworkHandler = (() => {
           if (tabId && data.hasCallbacks) {
             const tracker = trackPendingDownload(downloadId, {
               tabId,
-              scriptId: data.scriptId,
+              scriptId: ownedScriptId,
               url: data.url,
               timeoutMs: data.timeout
             });
@@ -39476,7 +39494,7 @@ async function handleMessage(message, sender) {
       case 'GM_getResourceURL':
       case 'GM_loadScript':
         if (typeof GMResourceHandler === 'undefined') return { error: 'GMResourceHandler not available' };
-        return await GMResourceHandler.handleGMResourceMessage(action, data);
+        return await GMResourceHandler.handleGMResourceMessage(action, data, sender);
 
       // GM network APIs: XHR, WebSocket, and download handling live in the promoted TypeScript module.
       case 'GM_xmlhttpRequest':

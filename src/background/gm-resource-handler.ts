@@ -26,6 +26,11 @@ interface GMResourcePayload {
   url?: string;
 }
 
+interface RuntimeMessageSender {
+  tab?: { id?: number; url?: string };
+  userScriptId?: string;
+}
+
 interface ScriptRecord {
   meta?: {
     resource?: Record<string, string>;
@@ -82,10 +87,15 @@ export function isGMResourceAction(action: unknown): action is GMResourceAction 
 export async function handleGMResourceMessage(
   action: GMResourceAction,
   data: GMResourcePayload = {},
+  sender: RuntimeMessageSender = {},
 ): Promise<unknown> {
+  // Bind to the authenticated caller so a script can't read another script's
+  // @resource bodies or borrow its @connect scope via GM_loadScript by forging
+  // data.scriptId. Mirrors the gm-values/network handlers.
+  const ownedScriptId = sender.userScriptId || data.scriptId;
   switch (action) {
     case 'GM_getResourceText': {
-      const script = await ScriptStorage.get(data.scriptId);
+      const script = await ScriptStorage.get(ownedScriptId);
       if (!script || !script.meta?.resource) return null;
       const url = data.name ? script.meta.resource[data.name] : undefined;
       if (!url) return null;
@@ -97,7 +107,7 @@ export async function handleGMResourceMessage(
     }
 
     case 'GM_getResourceURL': {
-      const script = await ScriptStorage.get(data.scriptId);
+      const script = await ScriptStorage.get(ownedScriptId);
       if (!script || !script.meta?.resource) return null;
       const url = data.name ? script.meta.resource[data.name] : undefined;
       if (!url) return null;
@@ -111,8 +121,8 @@ export async function handleGMResourceMessage(
     case 'GM_loadScript': {
       try {
         if (!data.url) return { error: 'No URL provided' };
-        if (!data.scriptId) return { error: 'Missing script context' };
-        const script = await ScriptStorage.get(data.scriptId);
+        if (!ownedScriptId) return { error: 'Missing script context' };
+        const script = await ScriptStorage.get(ownedScriptId);
         if (!script) return { error: 'Script context not found' };
 
         const policy = evaluateConnectPolicy(script, data.url);

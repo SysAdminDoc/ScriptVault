@@ -29,6 +29,7 @@ interface RuntimeMessageSender {
   tab?: {
     id?: number;
   };
+  userScriptId?: string;
 }
 
 interface GMMenuPayload {
@@ -72,10 +73,14 @@ export async function handleGMMenuMessage(
   data: GMMenuPayload = {},
   sender: RuntimeMessageSender = {},
 ): Promise<Record<string, unknown>> {
+  // Bind to the authenticated caller when the message came directly from a user
+  // script, so a script can't register/unregister menu commands under another
+  // script's id. Falls back to data.scriptId for the dashboard/content-bridge path.
+  const ownedScriptId = sender.userScriptId || (data.scriptId as string);
   switch (action) {
     case 'registerMenuCommand':
     case 'GM_registerMenuCommand': {
-      const scriptId = data.scriptId as string;
+      const scriptId = ownedScriptId;
       const commands = await chrome.storage.session.get('menuCommands') || {};
       if (!commands.menuCommands) commands.menuCommands = {};
       if (!commands.menuCommands[scriptId]) commands.menuCommands[scriptId] = [];
@@ -102,7 +107,7 @@ export async function handleGMMenuMessage(
 
     case 'unregisterMenuCommand':
     case 'GM_unregisterMenuCommand': {
-      const scriptId = data.scriptId as string;
+      const scriptId = ownedScriptId;
       const commands = await chrome.storage.session.get('menuCommands') || {};
       if (commands.menuCommands?.[scriptId]) {
         commands.menuCommands[scriptId] = commands.menuCommands[scriptId].filter(

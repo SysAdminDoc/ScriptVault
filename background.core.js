@@ -7435,7 +7435,7 @@ async function handleMessage(message, sender) {
       case 'GM_getResourceURL':
       case 'GM_loadScript':
         if (typeof GMResourceHandler === 'undefined') return { error: 'GMResourceHandler not available' };
-        return await GMResourceHandler.handleGMResourceMessage(action, data);
+        return await GMResourceHandler.handleGMResourceMessage(action, data, sender);
 
       // GM network APIs: XHR, WebSocket, and download handling live in the promoted TypeScript module.
       case 'GM_xmlhttpRequest':

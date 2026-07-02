@@ -1230,9 +1230,11 @@ $CURSOR$`
     }
 
     function escapeHTML(str) {
-        const d = document.createElement('div');
-        d.textContent = str;
-        return d.innerHTML;
+        // Escapes quotes too so values rendered into attributes (e.g. the search
+        // input value="") can't break out of the attribute.
+        return String(str ?? '')
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
     function escapeSelectorValue(value) {

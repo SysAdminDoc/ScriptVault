@@ -238,11 +238,15 @@ describe('Dashboard UX pass (2026-07-02 regression)', () => {
   const dashJs = read('pages/dashboard.js');
   const dashHtml = read('pages/dashboard.html');
 
-  it('setLabelPreservingDecor skips elements whose label lives in a [data-i18n] child', () => {
+  it('setLabelPreservingDecor skips elements whose label lives in a [data-i18n] on self or child', () => {
     // Tab buttons hold their label in a data-i18n span; appending a second
-    // text node rendered "Installed UserscriptsInstalled Userscripts".
-    expect(dashJs).toContain("if (el.querySelector('[data-i18n]')) return;");
+    // text node rendered "Installed UserscriptsInstalled Userscripts". The guard
+    // also skips elements that carry data-i18n on themselves (e.g. btnBulkApply),
+    // which would otherwise get a stray leading space.
+    expect(dashJs).toContain("if (el.matches('[data-i18n]') || el.querySelector('[data-i18n]')) return;");
     expect(dashJs).not.toMatch(/DASHBOARD_I18N_TEXT_TARGETS = Object\.freeze\(\{[^}]*dashboardTab/s);
+    // The self-data-i18n toolbar buttons must not be in the map.
+    expect(dashJs).not.toMatch(/DASHBOARD_I18N_TEXT_TARGETS = Object\.freeze\(\{[^}]*btnBulkApply/s);
   });
 
   it('theme switches show no success toast', () => {

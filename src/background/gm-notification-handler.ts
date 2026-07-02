@@ -26,6 +26,7 @@ interface RuntimeMessageSender {
   tab?: {
     id?: number;
   };
+  userScriptId?: string;
 }
 
 interface NotificationButtonPayload {
@@ -129,6 +130,21 @@ function removeNotifCallback(id: string): void {
   }
 }
 
+// Reject cross-script update/close: if a callback record exists for this
+// notification id and names a different owner than the authenticated caller,
+// the caller does not own it. Notifications with no callback record (fire-and-
+// forget or internal ScriptVault notifications) have no recorded owner, so we
+// can't attribute them and leave existing behaviour unchanged.
+function callerOwnsNotification(sender: RuntimeMessageSender, data: GMNotificationPayload): boolean {
+  const ownedScriptId = sender.userScriptId || data.scriptId;
+  const runtime = notificationRuntime();
+  const entry = data.id ? runtime._notifCallbacks?.get(data.id) : undefined;
+  if (entry && ownedScriptId && entry.scriptId && entry.scriptId !== ownedScriptId) {
+    return false;
+  }
+  return true;
+}
+
 export function isGMNotificationAction(action: unknown): action is GMNotificationAction {
   return typeof action === 'string' && GM_NOTIFICATION_ACTION_SET.has(action);
 }
@@ -194,6 +210,9 @@ export async function handleGMNotificationMessage(
 
     case 'GM_updateNotification': {
       if (!data.id) return { success: false, error: 'Missing notification id' };
+      if (!callerOwnsNotification(sender, data)) {
+        return { success: false, error: 'Notification not owned by caller' };
+      }
       const updateOpts: NotificationOptions = {};
       if (typeof data.title === 'string') updateOpts.title = data.title;
       if (typeof data.text === 'string') updateOpts.message = data.text;
@@ -216,6 +235,9 @@ export async function handleGMNotificationMessage(
 
     case 'GM_closeNotification': {
       if (!data.id) return { success: false, error: 'Missing notification id' };
+      if (!callerOwnsNotification(sender, data)) {
+        return { success: false, error: 'Notification not owned by caller' };
+      }
       try {
         await clearNotification()(data.id);
         removeNotifCallback(data.id);

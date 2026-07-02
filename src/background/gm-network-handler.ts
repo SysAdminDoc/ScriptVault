@@ -124,6 +124,13 @@ export async function handleGMNetworkMessage(
   data: GMNetworkPayload = {},
   sender: RuntimeMessageSender = {},
 ): Promise<Record<string, any>> {
+  // Bind every network operation to the authenticated caller. sender.userScriptId
+  // is set by Chrome for onUserScriptMessage and cannot be spoofed; it overrides
+  // any data.scriptId a malicious script passes to borrow another script's
+  // @connect allowlist / host scope. Falls back to data.scriptId for the
+  // content-bridge path (older Chrome) where the bridge supplies the ID. Mirrors
+  // the gm-values/cookie/webRequest handlers.
+  const ownedScriptId = sender.userScriptId || data.scriptId;
   switch (action) {
     case 'GM_xmlhttpRequest': {
       try {
@@ -131,10 +138,10 @@ export async function handleGMNetworkMessage(
           return { error: 'No URL provided', type: 'error' };
         }
 
-        if (!data.scriptId) {
+        if (!ownedScriptId) {
           return { error: 'Missing script context', type: 'error' };
         }
-        const xhrScript = await ScriptStorage.get(data.scriptId);
+        const xhrScript = await ScriptStorage.get(ownedScriptId);
         if (!xhrScript) {
           return { error: 'Script context not found', type: 'error' };
         }
@@ -156,20 +163,20 @@ export async function handleGMNetworkMessage(
         if (cookieRouting.error) return { error: cookieRouting.error, type: 'error' };
 
         const tabId: any = sender.tab?.id;
-        const request = XhrManager.create(tabId, data.scriptId, data);
+        const request = XhrManager.create(tabId, ownedScriptId, data);
         const { id: requestId } = request;
 
         const netLogStartTime = Date.now();
         const netLogEntry = {
-          scriptId: data.scriptId,
+          scriptId: ownedScriptId,
           scriptName: '',
           method: String(data.method || 'GET').toUpperCase(),
           url: data.url,
           requestSize: data.data ? (typeof data.data === 'string' ? data.data.length : 0) : 0,
         };
         try {
-          const script = await ScriptStorage.get(data.scriptId);
-          netLogEntry.scriptName = script?.meta?.name || data.scriptId;
+          const script = await ScriptStorage.get(ownedScriptId);
+          netLogEntry.scriptName = script?.meta?.name || ownedScriptId;
         } catch (_) {}
 
         const controller = new AbortController();
@@ -182,7 +189,7 @@ export async function handleGMNetworkMessage(
               action: 'xhrEvent',
               data: {
                 requestId,
-                scriptId: data.scriptId,
+                scriptId: ownedScriptId,
                 type,
                 ...eventData,
               },
@@ -424,9 +431,9 @@ export async function handleGMNetworkMessage(
       try {
         if (typeof WebSocket !== 'function') return { error: 'WebSocket is not available in this browser context' };
         if (!data.url) return { error: 'No URL provided' };
-        if (!data.scriptId) return { error: 'Missing script context' };
+        if (!ownedScriptId) return { error: 'Missing script context' };
 
-        const wsScript = await ScriptStorage.get(data.scriptId);
+        const wsScript = await ScriptStorage.get(ownedScriptId);
         if (!wsScript) return { error: 'Script context not found' };
         if (!scriptHasGrant(wsScript, ['GM_webSocket', 'GM.webSocket'])) return { error: 'Not granted' };
 
@@ -469,8 +476,8 @@ export async function handleGMNetworkMessage(
           requestId,
           socket,
           tabId,
-          scriptId: data.scriptId,
-          scriptName: wsScript.meta?.name || data.scriptId,
+          scriptId: ownedScriptId,
+          scriptName: wsScript.meta?.name || ownedScriptId,
           url: wsUrl,
           bytesSent: 0,
           bytesReceived: 0,
@@ -549,7 +556,7 @@ export async function handleGMNetworkMessage(
     case 'GM_webSocket_send': {
       try {
         const record = getGMWebSocketMap().get(data.requestId);
-        if (!record || record.scriptId !== data.scriptId) return { error: 'WebSocket request not found' };
+        if (!record || record.scriptId !== ownedScriptId) return { error: 'WebSocket request not found' };
         if (record.socket.readyState !== WebSocket.OPEN) return { error: 'WebSocket is not open' };
         const size = estimateGMWebSocketPayloadBytes(data.payload);
         if (size > GM_WEBSOCKET_MAX_MESSAGE_BYTES) {
@@ -565,7 +572,7 @@ export async function handleGMNetworkMessage(
 
     case 'GM_webSocket_close': {
       const record = getGMWebSocketMap().get(data.requestId);
-      if (!record || record.scriptId !== data.scriptId) return { success: false };
+      if (!record || record.scriptId !== ownedScriptId) return { success: false };
       const code = normalizeGMWebSocketCloseCode(data.code);
       const reason = normalizeGMWebSocketCloseReason(data.reason);
       try {
@@ -578,8 +585,8 @@ export async function handleGMNetworkMessage(
     case 'GM_download': {
       try {
         if (!data.url) return { error: 'url is required for download' };
-        if (!data.scriptId) return { error: 'Missing script context' };
-        const downloadScript = await ScriptStorage.get(data.scriptId);
+        if (!ownedScriptId) return { error: 'Missing script context' };
+        const downloadScript = await ScriptStorage.get(ownedScriptId);
         if (!downloadScript) return { error: 'Script context not found' };
         let downloadProtocol = '';
         try {
@@ -636,7 +643,7 @@ export async function handleGMNetworkMessage(
         if (tabId && data.hasCallbacks) {
           const tracker = trackPendingDownload(downloadId, {
             tabId,
-            scriptId: data.scriptId,
+            scriptId: ownedScriptId,
             url: data.url,
             timeoutMs: data.timeout,
           });

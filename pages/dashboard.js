@@ -2108,9 +2108,12 @@
         root.style.setProperty('--toolbar-bottom', (headerH + toolbarH) + 'px');
     }
 
-    // Only icon buttons whose label is a bare text node belong here — elements
-    // that carry their label in a [data-i18n] span are translated by
-    // i18n.applyToDOM, and adding them again appends a duplicate label.
+    // Only icon buttons whose label is a bare text node (next to an inline SVG)
+    // belong here — elements that carry their own [data-i18n] are translated by
+    // i18n.applyToDOM, and adding them here appends a duplicate/space-prefixed
+    // label. btnBulkApply / btnRefreshPendingUpdates / btnApplySafePendingUpdates
+    // / btnClearPendingUpdates all have data-i18n on the element itself, so they
+    // are intentionally NOT listed here.
     const DASHBOARD_I18N_TEXT_TARGETS = Object.freeze({
         btnNewScript: 'newScript',
         btnImportScript: 'importScript',
@@ -2118,10 +2121,6 @@
         btnExportAll: 'exportAll',
         btnNewFolder: 'folder',
         btnFindScripts: 'find',
-        btnBulkApply: 'apply',
-        btnRefreshPendingUpdates: 'checkNow',
-        btnApplySafePendingUpdates: 'applySafe',
-        btnClearPendingUpdates: 'clearQueue',
     });
 
     function getDashboardI18n() {
@@ -2178,9 +2177,10 @@
 
     function setLabelPreservingDecor(el, label) {
         if (!el || !label) return;
-        // A [data-i18n] descendant owns the label (translated by applyToDOM);
-        // appending a text node here would render the label twice.
-        if (el.querySelector('[data-i18n]')) return;
+        // A [data-i18n] on the element itself or a descendant owns the label
+        // (translated by applyToDOM); appending a text node here would render
+        // the label twice (or with a stray leading space).
+        if (el.matches('[data-i18n]') || el.querySelector('[data-i18n]')) return;
         const textNode = Array.from(el.childNodes).find(node =>
             node.nodeType === Node.TEXT_NODE && node.textContent.trim()
         );
@@ -6957,6 +6957,8 @@
                 await loadFolders();
                 renderScriptTable();
                 showToast('Folder created', 'success');
+            } else {
+                showToast(res?.error || 'Failed to create folder', 'error');
             }
         } catch (e) { showToast('Failed', 'error'); }
     }
@@ -10896,6 +10898,8 @@
                 closeEditor();
                 openEditorForScript(response.newScriptId);
                 showToast('Duplicated', 'success');
+            } else {
+                showToast(response?.error || 'Failed to duplicate script', 'error');
             }
         } catch (e) {
             showToast('Failed', 'error');
@@ -11376,6 +11380,11 @@
                 await loadScripts();
                 updateStats();
                 openEditorForScript(response.scriptId);
+            } else {
+                // The background wraps handler errors into a resolved { error }
+                // (never a rejection), so the catch below won't fire for
+                // quota/registration failures — surface them here.
+                showToast(response?.error || 'Failed to create script', 'error');
             }
         } catch (e) {
             showToast('Failed to create script', 'error');
@@ -11532,7 +11541,15 @@
             scheduleUserCssPreviewRefresh();
             if (s.autoSave) {
                 clearTimeout(autoSaveTimer);
-                autoSaveTimer = setTimeout(() => saveCurrentScript({ autosave: true }), 2000);
+                // Capture the script being edited so a debounced autosave that
+                // lands after the user switched tabs (or closed the editor) does
+                // not spuriously write the now-current script.
+                const armedScriptId = state.currentScriptId;
+                autoSaveTimer = setTimeout(() => {
+                    if (state.currentScriptId === armedScriptId) {
+                        saveCurrentScript({ autosave: true });
+                    }
+                }, 2000);
             }
             // Auto-trigger autocomplete on GM_ / GM. / @
             if (change.origin === '+input' && change.text.length === 1) {
@@ -12075,25 +12092,35 @@
         if (elements.workspaceActiveStat) elements.workspaceActiveStat.textContent = formattedActive;
         updateHelpOverview();
         try {
-            const bytes = await chrome.storage.local.getBytesInUse(null);
-            const usedBytes = bytes || 0;
+            // Measure usage and quota from the SAME source. Since v3.0.0 scripts,
+            // GM values, and backups live in IndexedDB, not chrome.storage.local —
+            // navigator.storage.estimate().usage covers all of it, so both the
+            // "Storage" stat and the quota bar reflect the real footprint. Fall
+            // back to the background quota + chrome.storage.local bytes only when
+            // the estimate API is unavailable.
+            let usedBytes = 0;
+            let quotaBytes = 10 * 1024 * 1024;
+            let haveEstimate = false;
+            if (typeof navigator !== 'undefined' && navigator.storage?.estimate) {
+                try {
+                    const est = await navigator.storage.estimate();
+                    if (Number.isFinite(est.usage)) { usedBytes = est.usage; haveEstimate = true; }
+                    if (Number.isFinite(est.quota) && est.quota > 0) quotaBytes = est.quota;
+                } catch (_e) { /* fall through to messaging path */ }
+            }
+            if (!haveEstimate) {
+                usedBytes = (await chrome.storage.local.getBytesInUse(null)) || 0;
+                try {
+                    const usage = await chrome.runtime.sendMessage({ action: 'getStorageUsage' });
+                    if (usage && Number.isFinite(usage.quota) && usage.quota > 0) quotaBytes = usage.quota;
+                } catch (_e) { /* background unavailable — keep the fallback */ }
+            }
             const formattedStorage = formatBytes(usedBytes);
             if (elements.statTotalStorage) elements.statTotalStorage.textContent = formattedStorage;
             if (elements.workspaceStorageStat) elements.workspaceStorageStat.textContent = formattedStorage;
 
-            // Storage quota bar — the manifest declares unlimitedStorage, so
-            // the 10MB chrome.storage.local cap does not apply. Ask the
-            // background QuotaManager for the real quota (it resolves via
-            // navigator.storage.estimate()); 10MB is only the messaging fallback.
             const quotaBar = document.getElementById('storageQuotaBar');
             const quotaText = document.getElementById('storageQuotaText');
-            let quotaBytes = 10 * 1024 * 1024;
-            try {
-                const usage = await chrome.runtime.sendMessage({ action: 'getStorageUsage' });
-                if (usage && Number.isFinite(usage.quota) && usage.quota > 0) {
-                    quotaBytes = usage.quota;
-                }
-            } catch (_e) { /* background unavailable — keep the fallback */ }
             const pct = Math.min(100, (usedBytes / quotaBytes) * 100);
             if (quotaBar) {
                 quotaBar.style.width = pct + '%';

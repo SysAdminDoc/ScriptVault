@@ -48,10 +48,11 @@ const GMMenuHandler = (() => {
     return typeof action === "string" && GM_MENU_ACTION_SET.has(action);
   }
   async function handleGMMenuMessage(action, data = {}, sender = {}) {
+    const ownedScriptId = sender.userScriptId || data.scriptId;
     switch (action) {
       case "registerMenuCommand":
       case "GM_registerMenuCommand": {
-        const scriptId = data.scriptId;
+        const scriptId = ownedScriptId;
         const commands = await chrome.storage.session.get("menuCommands") || {};
         if (!commands.menuCommands) commands.menuCommands = {};
         if (!commands.menuCommands[scriptId]) commands.menuCommands[scriptId] = [];
@@ -75,7 +76,7 @@ const GMMenuHandler = (() => {
       }
       case "unregisterMenuCommand":
       case "GM_unregisterMenuCommand": {
-        const scriptId = data.scriptId;
+        const scriptId = ownedScriptId;
         const commands = await chrome.storage.session.get("menuCommands") || {};
         if (commands.menuCommands?.[scriptId]) {
           commands.menuCommands[scriptId] = commands.menuCommands[scriptId].filter(

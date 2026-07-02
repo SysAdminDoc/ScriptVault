@@ -1152,9 +1152,10 @@ const ScriptSharing = (() => {
     }
 
     function escapeHtml(str) {
-        const div = document.createElement('div');
-        div.textContent = str || '';
-        return div.innerHTML;
+        // Escapes quotes too so values interpolated into attributes can't break out.
+        return String(str ?? '')
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
     function escapeAttr(str) {
