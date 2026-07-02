@@ -95,4 +95,50 @@ describe('ScriptScheduler module', () => {
     expect(guard).toContain('interval');
     expect(guard).toContain('return true');
   });
+
+  it('dateRange guard/shouldRunNow use local date components, not UTC toISOString', () => {
+    // Both the runtime shouldRunNow and the emitted guard must key on local
+    // Y-M-D so a <input type="date"> boundary matches the user's calendar day.
+    expect(schedulerCode).not.toContain("now.toISOString().slice(0, 10)");
+    const guard = ScriptScheduler.generateGuardCode({
+      enabled: true, type: 'dateRange', dateStart: '2026-01-01', dateEnd: '2026-12-31',
+    });
+    expect(guard).toContain('getFullYear');
+  });
+
+  it('setSchedule notifies the background to apply the schedule', async () => {
+    await ScriptScheduler.setSchedule('script-1', { enabled: true, type: 'interval', interval: 15 });
+    expect(globalThis.chrome.runtime.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'rescheduleScript', scriptId: 'script-1' }),
+    );
+  });
+});
+
+describe('background scheduler enforcement (background.core.js)', () => {
+  const core = readFileSync(resolve(process.cwd(), 'background.core.js'), 'utf8');
+
+  it('routes sv_sched_ alarms to handleScheduleAlarm', () => {
+    expect(core).toContain('SCHEDULE_ALARM_PREFIX');
+    expect(core).toContain('handleScheduleAlarm(scriptId)');
+  });
+
+  it('skips page-load registration for interval/oneTime schedules', () => {
+    expect(core).toContain('SCHEDULE_ALARM_TYPES.has(scriptSchedule.type)');
+    expect(core).toContain('Skipped page-load registration for alarm-scheduled script');
+  });
+
+  it('injects a schedule guard for time/day/dateRange schedules', () => {
+    expect(core).toContain('buildScheduleGuardFn');
+    expect(core).toContain('SCHEDULE_GUARD_TYPES.has(scriptSchedule.type)');
+    expect(core).toContain('__svScheduleOk');
+  });
+
+  it('disables one-time schedules after firing', () => {
+    expect(core).toContain("sched.type === 'oneTime'");
+    expect(core).toContain('enabled: false');
+  });
+
+  it('recreates schedule alarms on startup', () => {
+    expect(core).toContain('setupScheduleAlarms');
+  });
 });

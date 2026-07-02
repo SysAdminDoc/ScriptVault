@@ -43,9 +43,6 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 - **P2 — Unify install page theme variables with theme-tokens.css.** The install page defines its own parallel set of CSS custom properties (`--bg-primary`, `--bg-secondary`, etc.) independent of `theme-tokens.css` used by all other pages. Any theme change must be applied to both systems. Consolidate to a single source.
   Where: `pages/install.html` lines 20-98
 
-- **P1 — Scheduler enforcement engine is not wired.** `dashboard-scheduler.js` saves `sv_schedules` and creates `sv_sched_` alarms, but no background `onAlarm` handler matches that prefix, and `generateGuardCode`/`shouldRunNow` have no callers. Interval/one-time/time-range schedules are configured but never fire or gate execution; the preview text promises behavior that does not happen. Needs a background alarm handler + injection guard wiring (and local-vs-UTC date handling in the date-range comparison).
-  Where: `pages/dashboard-scheduler.js` (syncAlarms, generateGuardCode, shouldRunNow); background alarm dispatch in `src/background/core.ts`
-
 - **P1 — Monaco editor Ctrl+S / Escape do nothing.** The sandbox posts `save`/`close` to `monaco-adapter.js`, which calls IIFE-scoped `saveCurrentScript`/`closeEditor` (not global) and a `[data-action="save"]` fallback that matches no element (the button is `#btnEditorSave`). The UI instructs "Press Ctrl+S to save." Expose the handlers (e.g. via `window.ScriptVaultDashboardUI`) or click the real button ids.
   Where: `pages/monaco-adapter.js` save/close cases; `pages/dashboard.js` saveCurrentScript/closeEditor
 

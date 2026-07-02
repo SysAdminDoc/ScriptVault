@@ -33,6 +33,7 @@ export function buildWrappedScript(
   preloadedStorage: Record<string, unknown> = {},
   regexIncludes: string[] = [],
   regexExcludes: string[] = [],
+  scheduleGuard = '',
 ): string {
   const meta = script.meta;
   const grants: string[] = meta.grant.length > 0 ? meta.grant : ['none'];
@@ -2362,7 +2363,19 @@ ${libraryExports}
     // cleanly inside the console.warn() call.
     const nameLit = JSON.stringify(meta.name || 'Unnamed');
     const banner = `console.warn('[ScriptVault] ' + ${nameLit} + ': @unwrap is set — GM_* APIs are unavailable.');`;
+    if (scheduleGuard) {
+      // @unwrap has no runner function to `return` from, so wrap the raw body
+      // in a guard IIFE that only runs it inside the schedule window.
+      return `${banner}\n${scheduleGuard}\n(function(){ if(!__svScheduleOk())return;\n${userCode}\n})();`;
+    }
     return banner + '\n' + userCode;
+  }
+
+  // Schedule guard: a time/day/dateRange schedule gates page-load execution to
+  // its window. Runs before @delay/@top-level-await scheduling so an
+  // out-of-window load never queues the body.
+  if (scheduleGuard) {
+    userCode = `${scheduleGuard}\nif(!__svScheduleOk())return;\n${userCode}`;
   }
 
   return apiInit + userCode + apiClose;

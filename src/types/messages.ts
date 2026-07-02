@@ -171,6 +171,11 @@ interface EmptyTrash {
   action: 'emptyTrash';
 }
 
+interface RescheduleScript {
+  action: 'rescheduleScript';
+  scriptId: string;
+}
+
 interface PermanentlyDelete {
   action: 'permanentlyDelete';
   scriptId: string;
@@ -1567,7 +1572,7 @@ export type BackgroundMessage =
   | ToggleScript | RunScriptNow | DuplicateScript | UserStylePreviewDraft | UserStyleClearPreview | SearchScripts | ReorderScripts
   | ImportScript | GetHostPermissionStatus | QueueHostAccessRequest | OpenDashboard | FactoryReset
   // Trash
-  | GetTrash | RestoreFromTrash | EmptyTrash | PermanentlyDelete
+  | GetTrash | RestoreFromTrash | EmptyTrash | RescheduleScript | PermanentlyDelete
   // Script values
   | GMGetValue | GMSetValue | GMDeleteValue | GMListValues
   | GMGetValues | GMSetValues | GMDeleteValues
@@ -1749,6 +1754,7 @@ export interface ResponseMap {
   getTrash: GetTrashResponse;
   restoreFromTrash: SuccessResponse | ErrorResponse;
   emptyTrash: SuccessResponse;
+  rescheduleScript: SuccessResponse | ErrorResponse;
   permanentlyDelete: SuccessResponse;
 
   // ── Settings ───────────────────────────────────────────────────────

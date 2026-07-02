@@ -167,6 +167,7 @@ export const BACKGROUND_MESSAGE_ACTIONS = [
   'reportCSPFailure',
   'reportExecError',
   'reportExecTime',
+  'rescheduleScript',
   'resetScriptSettings',
   'resetScriptStats',
   'resetSettings',

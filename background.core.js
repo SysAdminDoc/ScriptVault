@@ -6229,6 +6229,31 @@ async function handleMessage(message, sender) {
         return { success: true };
       }
 
+      case 'rescheduleScript': {
+        // The dashboard scheduler saved a schedule for this script. Recreate
+        // its interval/oneTime alarm and reregister so the page-load guard
+        // snapshot (time/day/dateRange) is refreshed or the registration is
+        // dropped for alarm-only schedules.
+        const scriptId = data.scriptId;
+        if (!scriptId) return { error: 'Missing scriptId' };
+        const script = await ScriptStorage.get(scriptId);
+        const sched = await getScheduleForScript(scriptId);
+        await chrome.alarms.clear(SCHEDULE_ALARM_PREFIX + scriptId).catch(() => {});
+        if (sched && sched.type === 'interval') {
+          const periodMinutes = sched.intervalUnit === 'hours'
+            ? (sched.interval || 1) * 60
+            : (sched.interval || 1);
+          await chrome.alarms.create(SCHEDULE_ALARM_PREFIX + scriptId, { delayInMinutes: periodMinutes, periodInMinutes: periodMinutes }).catch(() => {});
+        } else if (sched && sched.type === 'oneTime' && sched.oneTime) {
+          const when = new Date(sched.oneTime).getTime();
+          if (when > Date.now()) await chrome.alarms.create(SCHEDULE_ALARM_PREFIX + scriptId, { when }).catch(() => {});
+        }
+        if (script && script.enabled !== false) {
+          await reregisterScript(script);
+        }
+        return { success: true };
+      }
+
       case 'restart': {
         chrome.runtime.reload();
         return { success: true };
@@ -8758,6 +8783,13 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     return;
   }
 
+  // Handle dashboard-scheduler interval/oneTime alarms
+  if (alarm.name.startsWith(SCHEDULE_ALARM_PREFIX)) {
+    const scriptId = alarm.name.slice(SCHEDULE_ALARM_PREFIX.length);
+    handleScheduleAlarm(scriptId).catch(e => console.error('[ScriptVault] Schedule alarm error:', e));
+    return;
+  }
+
   // Delegate to NotificationSystem for weekly-digest + internal context alarms.
   // Without this dispatch the `scriptvault-weekly-digest` alarm would fire into
   // nothing (the branches below only handle autoUpdate/autoSync), so the digest
@@ -9041,6 +9073,133 @@ async function setupCrontabAlarms() {
   }
 }
 
+// ============================================================================
+// Dashboard Script Scheduler enforcement (sv_schedules / sv_sched_ alarms)
+// ============================================================================
+// The dashboard scheduler (pages/dashboard-scheduler.js) stores per-script
+// schedules under chrome.storage.local['sv_schedules'] and creates
+// `sv_sched_<id>` alarms for interval/oneTime schedules. This is the missing
+// background half: it fires those alarms (interval/oneTime) and injects a
+// runtime guard so time/day/dateRange schedules only execute inside their
+// window. interval/oneTime schedules skip page-load registration entirely and
+// run only on the alarm — the same model as @crontab.
+
+const SCHEDULE_STORAGE_KEY = 'sv_schedules';
+const SCHEDULE_ALARM_PREFIX = 'sv_sched_';
+const SCHEDULE_ALARM_TYPES = new Set(['interval', 'oneTime']);
+const SCHEDULE_GUARD_TYPES = new Set(['time', 'day', 'dateRange']);
+
+async function getScheduleMap() {
+  try {
+    const data = await chrome.storage.local.get(SCHEDULE_STORAGE_KEY);
+    const map = data[SCHEDULE_STORAGE_KEY];
+    return (map && typeof map === 'object') ? map : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+async function getScheduleForScript(scriptId) {
+  const map = await getScheduleMap();
+  const sched = map[scriptId];
+  return (sched && typeof sched === 'object' && sched.enabled) ? sched : null;
+}
+
+/**
+ * Build the schedule guard function definition injected into a wrapped script.
+ * Defines `__svScheduleOk()` returning whether the script may run right now.
+ * Uses LOCAL date components (not toISOString/UTC) so date-range boundaries
+ * match the user's calendar day.
+ */
+function buildScheduleGuardFn(sched) {
+  const s = JSON.stringify(sched);
+  return `function __svScheduleOk(){try{var __s=${s};if(!__s||!__s.enabled)return true;`
+    + `var n=new Date();var day=n.getDay();var mins=n.getHours()*60+n.getMinutes();`
+    + `var ymd=n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0');`
+    + `function __t(t){if(!t)return 0;var p=String(t).split(':');return (parseInt(p[0],10)||0)*60+(parseInt(p[1],10)||0);}`
+    + `switch(__s.type){`
+    + `case 'time':{if(__s.days&&__s.days.length>0&&__s.days.indexOf(day)===-1)return false;var a=__t(__s.timeStart),b=__t(__s.timeEnd);if(a<=b)return mins>=a&&mins<=b;return mins>=a||mins<=b;}`
+    + `case 'day':return !!(__s.days&&__s.days.indexOf(day)!==-1);`
+    + `case 'dateRange':{if(__s.dateStart&&ymd<__s.dateStart)return false;if(__s.dateEnd&&ymd>__s.dateEnd)return false;return true;}`
+    + `default:return true;}}catch(e){return true;}}`;
+}
+
+/** Execute a scheduled script on all currently-open matching tabs. */
+async function handleScheduleAlarm(scriptId) {
+  const sched = await getScheduleForScript(scriptId);
+  const script = await ScriptStorage.get(scriptId);
+  if (!script || !script.enabled || !sched || !SCHEDULE_ALARM_TYPES.has(sched.type)) {
+    await chrome.alarms.clear(SCHEDULE_ALARM_PREFIX + scriptId).catch(() => {});
+    return;
+  }
+
+  const meta = script.meta;
+  const hasMatches = (meta.match && meta.match.length > 0) || (meta.include && meta.include.length > 0);
+  if (hasMatches) {
+    const requireScripts = [];
+    const requires = Array.isArray(meta.require) ? meta.require : (meta.require ? [meta.require] : []);
+    for (const url of requires) {
+      try { const code = await fetchRequireScript(url); if (code) requireScripts.push({ url, code }); } catch (_e) {}
+    }
+    const storedValues = await ScriptValues.getAll(script.id) || {};
+    const regexIncludes = [];
+    const regexExcludes = [];
+    for (const inc of (meta.include || [])) { if (/^\/.*\/$|^\/.*\/[gimsuy]+$/.test(inc)) regexIncludes.push(inc); }
+    for (const exc of (meta.exclude || [])) { if (/^\/.*\/$|^\/.*\/[gimsuy]+$/.test(exc)) regexExcludes.push(exc); }
+    const wrappedCode = buildWrappedScript(script, requireScripts, storedValues, regexIncludes, regexExcludes);
+    const injectInto = meta['inject-into'] || 'auto';
+    const wantsPage = (injectInto === 'page' || (meta.sandbox || '') === 'raw');
+    const tabs = await chrome.tabs.query({ status: 'complete' });
+    for (const tab of tabs) {
+      if (!tab.url || !tab.id) continue;
+      if (!doesScriptMatchUrl(script, tab.url)) continue;
+      try {
+        const mode = await executeWrappedScriptInTab(tab.id, wrappedCode, wantsPage);
+        debugLog(`sv_sched ${meta.name}: executed in tab ${tab.id} via ${mode}`);
+      } catch (e) {
+        debugLog(`sv_sched ${meta.name}: failed in tab ${tab.id}: ${e.message}`);
+      }
+    }
+  }
+
+  // One-time schedules disable themselves after firing (matches the preview
+  // copy "run once … then disable") and drop their alarm.
+  if (sched.type === 'oneTime') {
+    try {
+      const map = await getScheduleMap();
+      if (map[scriptId]) {
+        map[scriptId] = { ...map[scriptId], enabled: false };
+        await chrome.storage.local.set({ [SCHEDULE_STORAGE_KEY]: map });
+      }
+    } catch (_e) {}
+    await chrome.alarms.clear(SCHEDULE_ALARM_PREFIX + scriptId).catch(() => {});
+  }
+}
+
+/** Create/refresh chrome alarms for enabled interval/oneTime schedules. */
+async function setupScheduleAlarms() {
+  const existing = await chrome.alarms.getAll().catch(() => []);
+  for (const alarm of existing) {
+    if (alarm.name.startsWith(SCHEDULE_ALARM_PREFIX)) {
+      await chrome.alarms.clear(alarm.name).catch(() => {});
+    }
+  }
+  const map = await getScheduleMap();
+  for (const [scriptId, sched] of Object.entries(map)) {
+    if (!sched || !sched.enabled) continue;
+    const name = SCHEDULE_ALARM_PREFIX + scriptId;
+    if (sched.type === 'interval') {
+      const periodMinutes = sched.intervalUnit === 'hours'
+        ? (sched.interval || 1) * 60
+        : (sched.interval || 1);
+      await chrome.alarms.create(name, { delayInMinutes: periodMinutes, periodInMinutes: periodMinutes });
+    } else if (sched.type === 'oneTime' && sched.oneTime) {
+      const when = new Date(sched.oneTime).getTime();
+      if (when > Date.now()) await chrome.alarms.create(name, { when });
+    }
+  }
+}
+
 async function setupAlarms() {
   const settings = await SettingsManager.get();
   
@@ -9083,6 +9242,8 @@ async function setupAlarms() {
 
   // Setup @crontab alarms for all enabled scripts
   await setupCrontabAlarms();
+  // Setup dashboard-scheduler interval/oneTime alarms
+  await setupScheduleAlarms();
 }
 
 // ============================================================================
@@ -10445,6 +10606,20 @@ async function registerScript(script, { useUpdate = false, throwOnError = false 
       return;
     }
 
+    // Dashboard scheduler: interval/oneTime schedules run only on their
+    // sv_sched_ alarm (like @crontab), so skip page-load registration to avoid
+    // running BOTH on load and on schedule. time/day/dateRange schedules stay
+    // page-load scripts but get a runtime guard (built below) that gates them
+    // to their window.
+    const scriptSchedule = await getScheduleForScript(script.id);
+    if (scriptSchedule && SCHEDULE_ALARM_TYPES.has(scriptSchedule.type)) {
+      if (chrome.userScripts) {
+        try { await chrome.userScripts.unregister({ ids: [script.id] }); } catch (_) {}
+      }
+      debugLog(`Skipped page-load registration for alarm-scheduled script: ${meta.name} (${scriptSchedule.type})`);
+      return;
+    }
+
     if (!chrome.userScripts) return;
     // Not a @crontab script — clear any stale crontab alarm left over from a
     // prior version of this script's metadata (e.g. @crontab was just removed
@@ -10660,8 +10835,13 @@ async function registerScript(script, { useUpdate = false, throwOnError = false 
     if (injectIntoPage) {
       debugLog(`Note: @inject-into page / @sandbox raw not fully supported in MV3, running in USER_SCRIPT world: ${meta.name}`);
     }
-    const wrappedCode = buildWrappedScript(script, requireScripts, storedValues, regexIncludes, regexExcludes);
-    
+    // time/day/dateRange schedule → inject a runtime guard that gates the
+    // script to its window (returns early on out-of-window page loads).
+    const scheduleGuard = (scriptSchedule && SCHEDULE_GUARD_TYPES.has(scriptSchedule.type))
+      ? buildScheduleGuardFn(scriptSchedule)
+      : '';
+    const wrappedCode = buildWrappedScript(script, requireScripts, storedValues, regexIncludes, regexExcludes, scheduleGuard);
+
     // Per-script frame-mode override (settings.frameMode): 'top' forces top
     // frame only, 'all' forces all frames, and any other value (including
     // 'default'/undefined) falls back to the `@noframes` metadata.
@@ -11671,7 +11851,7 @@ async function unregisterScript(scriptId) {
 }
 
 // Build wrapped script code with GM API
-function buildWrappedScript(script, requireScripts = [], preloadedStorage = {}, regexIncludes = [], regexExcludes = []) {
+function buildWrappedScript(script, requireScripts = [], preloadedStorage = {}, regexIncludes = [], regexExcludes = [], scheduleGuard = '') {
   const meta = script.meta;
   const grants = meta.grant || ['none'];
   const scriptConfigValues = typeof ScriptConfig !== 'undefined' && ScriptConfig.normalizeValues
@@ -13844,7 +14024,20 @@ ${libraryExports}
     // syntax. The full JSON-quoted form is a valid JS string literal.
     const nameLit = JSON.stringify(meta.name || 'Unnamed');
     const banner = `console.warn('[ScriptVault] ' + ${nameLit} + ': @unwrap is set — GM_* APIs are unavailable.');`;
+    if (scheduleGuard) {
+      // @unwrap has no runner function to `return` from, so wrap the raw body
+      // in a guard IIFE that only runs it inside the schedule window.
+      return `${banner}\n${scheduleGuard}\n(function(){ if(!__svScheduleOk())return;\n${userCode}\n})();`;
+    }
     return banner + '\n' + userCode;
+  }
+
+  // Schedule guard: prepend the guard function definition + early return so a
+  // time/day/dateRange schedule gates page-load execution to its window. It
+  // runs before any @delay/@top-level-await scheduling, so an out-of-window
+  // load never even queues the body.
+  if (scheduleGuard) {
+    userCode = `${scheduleGuard}\nif(!__svScheduleOk())return;\n${userCode}`;
   }
 
   return apiInit + userCode + apiClose;

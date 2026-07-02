@@ -512,6 +512,18 @@ const ScriptScheduler = (() => {
     }
   }
 
+  // Ask the background to apply the schedule: recreate the interval/oneTime
+  // alarm and reregister the script so its page-load guard snapshot refreshes
+  // (or its registration is dropped for alarm-only schedules).
+  async function notifyBackgroundReschedule(scriptId) {
+    if (!scriptId) return;
+    try {
+      await chrome.runtime.sendMessage({ action: 'rescheduleScript', scriptId });
+    } catch (e) {
+      console.warn('[ScriptScheduler] Failed to notify background of schedule change:', e);
+    }
+  }
+
   /* ------------------------------------------------------------------ */
   /*  Preview Text                                                       */
   /* ------------------------------------------------------------------ */
@@ -587,7 +599,7 @@ const ScriptScheduler = (() => {
       case 'day':
         return __svSched.days && __svSched.days.includes(day);
       case 'dateRange': {
-        const today = now.toISOString().slice(0, 10);
+        const today = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
         if (__svSched.dateStart && today < __svSched.dateStart) return false;
         if (__svSched.dateEnd && today > __svSched.dateEnd) return false;
         return true;
@@ -1061,6 +1073,7 @@ const ScriptScheduler = (() => {
       return;
     }
     await syncAlarms();
+    await notifyBackgroundReschedule(_activeScriptId);
     updateScriptRowIndicators();
     closeModal();
 
@@ -1080,6 +1093,7 @@ const ScriptScheduler = (() => {
       return;
     }
     await syncAlarms();
+    await notifyBackgroundReschedule(_activeScriptId);
     updateScriptRowIndicators();
     closeModal();
 
@@ -1244,6 +1258,7 @@ const ScriptScheduler = (() => {
         throw new Error('Failed to save schedule');
       }
       await syncAlarms();
+      await notifyBackgroundReschedule(scriptId);
       updateScriptRowIndicators();
     },
 
@@ -1281,7 +1296,9 @@ const ScriptScheduler = (() => {
         case 'day':
           return sched.days?.includes(day) ?? true;
         case 'dateRange': {
-          const today = now.toISOString().slice(0, 10);
+          // Local calendar date, not UTC — <input type="date"> values are
+          // local, so toISOString() (UTC) shifted the boundary by up to a day.
+          const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
           if (sched.dateStart && today < sched.dateStart) return false;
           if (sched.dateEnd && today > sched.dateEnd) return false;
           return true;
