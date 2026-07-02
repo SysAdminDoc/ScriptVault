@@ -9,6 +9,19 @@ const WhatsNew = (() => {
     : '2.0.0';
 
   const CHANGELOG = {
+    '3.15.1': {
+      title: 'ScriptVault 3.15.1 — Editor Screen Repair & Redesign',
+      date: '2026-07-02',
+      highlights: [
+        { icon: 'FIX', title: 'Editor Controls Restored', desc: 'v3.15.0 left the sticky dashboard header painted over the editor’s Save/Close row. The editor now stacks above all page chrome — every control is clickable again.' },
+        { icon: 'NAV', title: 'One-Row Editor Nav', desc: 'Panel tabs sit on the left and icon-only tools (with tooltips) on the right of a single slim band — even more room for your code.' }
+      ],
+      improvements: [
+        'Preview CSS and file-binding buttons now hide correctly when not applicable',
+        'Editor panel tabs are left-aligned instead of floating at the right edge',
+        'Save button is accented, and filled while there are unsaved changes'
+      ]
+    },
     '3.15.0': {
       title: 'ScriptVault 3.15.0 — Leaner Dashboard & Full-Screen Editor',
       date: '2026-07-02',

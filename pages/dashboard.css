@@ -1209,13 +1209,6 @@ input[type="checkbox"] {
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
 }
 
-.editor-tabs {
-  display: flex;
-  gap: 4px;
-  margin-left: auto;
-  margin-right: 20px;
-}
-
 /* ===== SETTINGS SECTIONS ===== */
 .settings-section {
   display: flex;

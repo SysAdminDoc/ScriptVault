@@ -284,3 +284,24 @@ describe('Extension pages have no CSP-blocked inline scripts (2026-07 regression
     expect(read('pages/page-dir.js')).toContain("chrome.i18n?.getMessage?.('@@bidi_dir')");
   });
 });
+
+describe('Editor overlay layering + nav band (2026-07-02 regression)', () => {
+  const dashHtml = read('pages/dashboard.html');
+  it('editor overlay stacks above sticky page chrome and below modals', () => {
+    // .tm-header is sticky z-index:100 and stays rendered under the overlay;
+    // anything <= 100 leaves the editor Save/Close row painted over and
+    // unclickable. Modals sit at 300 and must stay on top.
+    const overlay = dashHtml.match(/\.editor-overlay \{[\s\S]*?\}/)[0];
+    expect(overlay).toContain('z-index: 200;');
+  });
+  it('hidden editor buttons actually hide despite display rules', () => {
+    expect(dashHtml).toContain('.editor-actions .btn[hidden]');
+    expect(dashHtml).toContain('.editor-toolbar .toolbar-btn[hidden]');
+  });
+  it('tabs and toolbar share one editor-nav band, tools icon-only', () => {
+    expect(dashHtml).toContain('<div class="editor-nav">');
+    expect(dashHtml).toContain('.editor-toolbar .toolbar-btn span');
+    // The legacy dashboard.css rule that right-shoved the tabs is gone.
+    expect(read('pages/dashboard.css')).not.toMatch(/\.editor-tabs \{[^}]*margin-left: auto/);
+  });
+});

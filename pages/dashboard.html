@@ -3077,13 +3077,15 @@
             position: fixed;
             /* Full-viewport takeover: the dashboard header is inert while the
                editor dialog is open, so covering it costs nothing and gives
-               the code pane the entire screen height. */
+               the code pane the entire screen height. z-index must beat all
+               sticky page chrome (.tm-header 100, .setup-warning-banner 101,
+               .scripts-toolbar 90) but stay below modals (300) and toasts. */
             top: 0; left: 0; right: 0; bottom: 0;
             background:
                 radial-gradient(circle at top right, rgba(34, 197, 94, 0.08), transparent 28%),
                 linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 18%),
                 var(--bg-body);
-            z-index: 50;
+            z-index: 200;
             flex-direction: column;
             overscroll-behavior: contain;
         }
@@ -3249,17 +3251,49 @@
             flex-shrink: 0;
         }
 
+        /* display:inline-flex above would defeat the hidden attribute (author
+           rules beat the UA [hidden] style) — restate it explicitly so
+           conditionally-shown actions like Preview CSS actually hide. */
+        .editor-actions .btn[hidden] {
+            display: none;
+        }
+
         .editor-actions .btn[data-save-state="saving"] svg {
             animation: lazySpin 0.8s linear infinite;
         }
 
-        .editor-tabs {
+        /* Save is the primary action in the slim header row: quietly accented
+           when clean, filled when there are unsaved changes. */
+        .editor-actions #btnEditorSave {
+            border-color: rgba(34, 197, 94, 0.35);
+            color: var(--accent-primary);
+        }
+
+        .editor-actions #btnEditorSave[data-save-state="dirty"] {
+            background: var(--accent-primary);
+            border-color: transparent;
+            color: #071b0e;
+            font-weight: 700;
+        }
+
+        /* Single nav band under the editor header: panel tabs on the left,
+           icon-only tools on the right. One row of chrome instead of two. */
+        .editor-nav {
             display: flex;
-            padding: 0 20px;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 2px 12px;
+            padding: 2px 12px;
             background:
                 linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent),
                 var(--bg-section-header);
             border-bottom: 1px solid rgba(127, 127, 127, 0.16);
+        }
+
+        .editor-tabs {
+            display: flex;
+            padding: 0;
+            flex-shrink: 0;
         }
 
         .editor-tab {
@@ -3283,11 +3317,35 @@
             align-items: center;
             align-content: flex-start;
             gap: 2px;
-            padding: 4px 16px;
-            background:
-                linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent),
-                var(--bg-section-header);
-            border-bottom: 1px solid rgba(127, 127, 127, 0.16);
+            padding: 0;
+            margin-inline-start: auto;
+        }
+
+        /* Toolbar tools are icon-only: labels stay in the accessibility tree
+           (clipped, not display:none) and every button keeps its title tooltip. */
+        .editor-toolbar .toolbar-btn span {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0 0 0 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
+        .editor-toolbar .toolbar-btn {
+            position: relative;
+            min-width: 30px;
+        }
+
+        .editor-toolbar .toolbar-btn[hidden] {
+            display: none;
+        }
+
+        .editor-toolbar .toolbar-btn svg {
+            margin: 0;
         }
 
         .editor-toolbar .toolbar-btn {
@@ -5096,8 +5154,7 @@
         }
 
         .editor-header,
-        .editor-tabs,
-        .editor-toolbar,
+        .editor-nav,
         .find-scripts-header,
         .find-scripts-search {
             border-color: var(--panel-border-soft);
@@ -5528,8 +5585,7 @@
             color: #475569;
         }
         html[data-theme="light"] .editor-header,
-        html[data-theme="light"] .editor-tabs,
-        html[data-theme="light"] .editor-toolbar,
+        html[data-theme="light"] .editor-nav,
         html[data-theme="light"] .find-scripts-header,
         html[data-theme="light"] .find-scripts-search {
             background:
@@ -8261,6 +8317,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 </button>
             </div>
         </div>
+        <div class="editor-nav">
         <div class="editor-tabs" role="tablist" aria-label="Script editor panels" data-i18n-aria-label="editorPanelsAria">
             <button type="button" class="editor-tab active" id="editorTabCode" role="tab" aria-selected="true" aria-controls="codePanel" tabindex="0" data-panel="code"><span data-i18n="editorTabCode">Code</span></button>
             <button type="button" class="editor-tab" id="editorTabScriptSettings" role="tab" aria-selected="false" aria-controls="scriptsettingsPanel" tabindex="-1" data-panel="scriptsettings"><span data-i18n="editorTabScriptSettings">Settings</span></button>
@@ -8312,7 +8369,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
             <div class="toolbar-separator"></div>
             <button type="button" class="toolbar-btn" id="tbtnComment" title="Toggle Comment (Ctrl+/)" data-i18n-title="toggleCommentTitle">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h7M4 12h16M4 17h11"/><path d="M17 7l3 3-3 3"/></svg>
-                //
+                <span>//</span>
             </button>
             <button type="button" class="toolbar-btn" id="tbtnWordWrap" title="Toggle Word Wrap" data-i18n-title="wordWrapTitle">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h15a3 3 0 010 6H9m0 0l3-3m-3 3l3 3"/></svg>
@@ -8358,6 +8415,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 10.6l6.8-4.2M8.6 13.4l6.8 4.2"/></svg>
                 <span data-i18n="shareAction">Share</span>
             </button>
+        </div>
         </div>
         <div class="editor-body">
             <div class="editor-main">

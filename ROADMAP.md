@@ -599,6 +599,13 @@ _Added 2026-07-01. Items below are net-new from the 2026-07-01 research pass and
 
 ### P3
 
+- [ ] P3 — Monaco language workers fail in the sandboxed editor iframe
+  Why: `pages/editor-sandbox.html` runs with a null origin, so Monaco's `new Worker('chrome-extension://.../ts.worker.js')` throws SecurityError on every editor open (`npm run smoke:editor` logs it). Monaco falls back to synchronous language services — completions/diagnostics still work but run on the main thread.
+  Evidence: smoke-editor console capture 2026-07-02; Monaco ESM worker bootstrap docs (self.MonacoEnvironment.getWorker).
+  Touches: `pages/editor-sandbox.html` (MonacoEnvironment.getWorker returning a same-origin blob-URL bootstrap that importScripts the extension worker), `scripts/check-monaco-esm-prototype.mjs` budgets if worker packaging changes.
+  Acceptance: editor open produces zero Worker SecurityErrors in `npm run smoke:editor`; ts.worker runs off-main-thread (verify via `chrome://inspect` worker target or postMessage probe); CSP/sandbox manifest unchanged.
+  Complexity: M
+
 - [ ] P3 — Sanitize untrusted API/imported HTML with `Element.setHTML()`
   Why: GreasyFork/OpenUserJS/GitHub-fetched descriptions and changelogs are rendered in the manager UI; `safeSetHtml` currently relies on a Trusted-Types passthrough plus `escapeHtml`, not real sanitization. Native `Element.setHTML()` adds defense-in-depth without bundling DOMPurify.
   Evidence: MDN HTML Sanitizer API — Baseline newly-available 2025-09, Chrome ~146 / Firefox 148 (RD27-10).
