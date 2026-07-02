@@ -1578,12 +1578,27 @@ export const CloudSync = {
       // the tombstone (restore-from-trash, ID-preserving backup import).
       // Without this, the remote tombstone re-deletes the restored script on
       // the next sync — permanently, since deleteSyncedScript bypasses trash.
+      //
+      // mergeData() already drops tombstoned ids from merged.scripts, so the
+      // resurrection candidate must be looked up in the UNFILTERED local/remote
+      // union (newer wins) — checking merged.scripts here would never match and
+      // left this guard dead. When a candidate wins, drop the tombstone AND
+      // re-include the script that mergeData removed.
+      const resurrectionUnion = new Map<string, SyncScript>();
+      for (const s of (localData.scripts || [])) resurrectionUnion.set(s.id, s);
+      for (const s of (remoteData.scripts || [])) {
+        const existingUnion = resurrectionUnion.get(s.id);
+        if (!existingUnion || s.updatedAt > existingUnion.updatedAt) resurrectionUnion.set(s.id, s);
+      }
       for (const tombstoneId of Object.keys(mergedTombstones)) {
         const tombstoneTs = mergedTombstones[tombstoneId];
         if (typeof tombstoneTs !== 'number') continue; // legacy entry: deletion wins
-        const candidate = merged.scripts.find((s: SyncScript) => s.id === tombstoneId);
+        const candidate = resurrectionUnion.get(tombstoneId);
         if (candidate && candidate.updatedAt > tombstoneTs) {
           delete mergedTombstones[tombstoneId];
+          if (!merged.scripts.some((s: SyncScript) => s.id === tombstoneId)) {
+            merged.scripts.push(sanitizeSyncScriptForEnvelope(candidate));
+          }
         }
       }
       merged.scripts = merged.scripts.filter((script: SyncScript) => !mergedTombstones[script.id]);
@@ -1678,8 +1693,15 @@ export const CloudSync = {
         }
       }
 
-      // Persist merged tombstones locally
-      if (Object.keys(mergedTombstones).length > Object.keys(tombstones).length) {
+      // Persist merged tombstones locally whenever the set CHANGED (added or
+      // removed), not only when it grew — a resurrection removes a tombstone
+      // without growing the count, and that removal must stick locally.
+      const mergedTombstoneIds = Object.keys(mergedTombstones);
+      const localTombstoneIds = Object.keys(tombstones);
+      const tombstonesChanged = mergedTombstoneIds.length !== localTombstoneIds.length ||
+        mergedTombstoneIds.some((id) => !(id in tombstones)) ||
+        localTombstoneIds.some((id) => !(id in mergedTombstones));
+      if (tombstonesChanged) {
         await chrome.storage.local.set({ syncTombstones: mergedTombstones });
       }
 

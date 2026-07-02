@@ -1289,12 +1289,21 @@ const CloudSync = (() => {
       if (remoteData) {
         const mergedTombstones = { ...tombstones, ...remoteData.tombstones ?? {} };
         const merged = this.mergeData(localData, remoteData);
+        const resurrectionUnion = /* @__PURE__ */ new Map();
+        for (const s of localData.scripts || []) resurrectionUnion.set(s.id, s);
+        for (const s of remoteData.scripts || []) {
+          const existingUnion = resurrectionUnion.get(s.id);
+          if (!existingUnion || s.updatedAt > existingUnion.updatedAt) resurrectionUnion.set(s.id, s);
+        }
         for (const tombstoneId of Object.keys(mergedTombstones)) {
           const tombstoneTs = mergedTombstones[tombstoneId];
           if (typeof tombstoneTs !== "number") continue;
-          const candidate = merged.scripts.find((s) => s.id === tombstoneId);
+          const candidate = resurrectionUnion.get(tombstoneId);
           if (candidate && candidate.updatedAt > tombstoneTs) {
             delete mergedTombstones[tombstoneId];
+            if (!merged.scripts.some((s) => s.id === tombstoneId)) {
+              merged.scripts.push(sanitizeSyncScriptForEnvelope(candidate));
+            }
           }
         }
         merged.scripts = merged.scripts.filter((script) => !mergedTombstones[script.id]);
@@ -1364,7 +1373,10 @@ const CloudSync = (() => {
             }
           }
         }
-        if (Object.keys(mergedTombstones).length > Object.keys(tombstones).length) {
+        const mergedTombstoneIds = Object.keys(mergedTombstones);
+        const localTombstoneIds = Object.keys(tombstones);
+        const tombstonesChanged = mergedTombstoneIds.length !== localTombstoneIds.length || mergedTombstoneIds.some((id) => !(id in tombstones)) || localTombstoneIds.some((id) => !(id in mergedTombstones));
+        if (tombstonesChanged) {
           await chrome.storage.local.set({ syncTombstones: mergedTombstones });
         }
         if (localMutated) {

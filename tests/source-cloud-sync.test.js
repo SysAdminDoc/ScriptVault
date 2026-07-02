@@ -358,6 +358,61 @@ describe('source cloud sync module', () => {
     });
   });
 
+  it('resurrects a restored-from-trash script whose updatedAt is newer than the remote tombstone', async () => {
+    await chrome.storage.local.set({ syncTombstones: {} });
+
+    const harness = await loadFreshCloudSync(
+      [
+        {
+          id: 'script_alpha',
+          code: '// ==UserScript==\n// @name Alpha\n// ==/UserScript==\nconsole.log("alpha");',
+          enabled: true,
+          position: 0,
+          meta: { name: 'Alpha' },
+          settings: {},
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+      null,
+    );
+    const { CloudSync, ScriptStorage, provider, scriptState, getRemoteData } = harness;
+
+    // Initial sync, then delete + propagate the tombstone to remote.
+    await expect(CloudSync.sync()).resolves.toEqual({ success: true });
+    await ScriptStorage.delete('script_alpha');
+    await chrome.storage.local.set({ syncTombstones: { script_alpha: 2222 } });
+    await expect(CloudSync.sync()).resolves.toEqual({ success: true });
+    expect(getRemoteData().tombstones).toEqual({ script_alpha: 2222 });
+
+    // Restore from trash: re-save with a NEWER updatedAt and clear the local
+    // tombstone (mirrors the restoreFromTrash handler). The remote still holds
+    // the tombstone at 2222.
+    await ScriptStorage.set('script_alpha', {
+      id: 'script_alpha',
+      code: '// ==UserScript==\n// @name Alpha\n// ==/UserScript==\nconsole.log("restored");',
+      enabled: true,
+      position: 0,
+      meta: { name: 'Alpha' },
+      settings: {},
+      createdAt: 1,
+      updatedAt: 9999,
+    });
+    await chrome.storage.local.set({ syncTombstones: {} });
+    vi.clearAllMocks();
+
+    await expect(CloudSync.sync()).resolves.toEqual({ success: true });
+
+    // The restored script survives, and the tombstone is cleared on the remote.
+    expect(scriptState.map((s) => s.id)).toEqual(['script_alpha']);
+    const uploaded = provider.upload.mock.calls[0][0];
+    expect(uploaded.scripts.map((s) => s.id)).toEqual(['script_alpha']);
+    expect(uploaded.tombstones).toEqual({});
+    await expect(chrome.storage.local.get('syncTombstones')).resolves.toEqual({
+      syncTombstones: {},
+    });
+  });
+
   it('deletes tombstoned local scripts and refreshes runtime registration for synced changes', async () => {
     await chrome.storage.local.set({
       syncTombstones: {},
