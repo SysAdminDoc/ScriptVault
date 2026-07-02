@@ -43,9 +43,6 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 - **P3 — Keyboard alternative for script reorder.** The drag-and-drop reorder handle in the dashboard table only supports mouse drag events, and the reorder is computed against the unfiltered/unsorted array so a drag while sorted or filtered lands in the wrong position. Add keyboard reordering and compute against the visible order.
   Where: `pages/dashboard.js` createScriptRow drag handle, reorderScripts
 
-- **P3 — Editor status bar cursor position is stuck at "Ln 1, Col 1".** `monaco-adapter.getCursor()` returns a hardcoded stub and the dashboard ignores the cursor event payload it is sent.
-  Where: `pages/monaco-adapter.js` getCursor; `pages/dashboard.js` updateCursorPos
-
 - **P3 — Remaining hardcoded dark colors on light theme.** The Monaco fallback textarea (`dashboard.html`), and the floating-panel/template snippet code strings hardcode dark backgrounds/colors that ignore the light theme.
   Where: `pages/dashboard.html` #editorTextarea; `pages/dashboard-snippets.js`; `pages/dashboard-templates.js`
 
@@ -718,15 +715,6 @@ _Added 2026-07-01. Items below are net-new from the 2026-07-01 research pass and
 ## Research-Driven Additions (2026-07-02 research pass)
 
 _Net-new from the 2026-07-02 pass (v3.16.0). Verified as not already implemented in code and not duplicating the Next tier, the Deep Audit Findings (2026-07-02), or the 2026-07-01 Research-Driven Additions. Cross-references: the Next-tier "editor cursor position stuck at Ln 1, Col 1" item is RESOLVED in v3.16.0 (monaco-adapter now caches the real cursor) — treat as done. One-click GreasyFork/OpenUserJS publish (VM #2425) is already covered by X-9 (publish handoff) — not re-added. UC-3 (AI-Assisted Script Editing) precondition "on-device LLMs practical" is now MET (Chrome Prompt API stable for extensions since Chrome 138) — see the P2 AI item below to promote it._
-
-### P1
-
-- [ ] P1 — Warn (and optionally enforce) on un-pinned `@require`/`@resource`
-  Why: `verifySRI` returns `true` when no integrity hash is declared (`src/background/resource-loader.ts:190`), so an un-pinned remote `@require` silently trusts whatever the CDN serves — the exact vector behind 2026 scam-script campaigns and GreasyFork's own unresolved SRI gap. ScriptVault already has TOFU receipts and Ed25519 signing; this closes the remaining silent-drift path.
-  Evidence: `src/background/resource-loader.ts:190`; GreasyFork SRI request #1070 (RD28-08); TM scam-script campaign #2783 (RD28-02).
-  Touches: `src/background/resource-loader.ts` (verifySRI/fetchRequireScript), install-page review UI (surface "unverified remote code"), `src/config/settings-schema.json` (a warn/enforce setting), install/update trust receipts, tests.
-  Acceptance: install/update review flags each un-pinned `@require`/`@resource` as "unverified remote code"; an opt-in enforce mode refuses to run un-pinned requires; TOFU-pinned and hash-pinned requires are unaffected; a test pins warn-by-default + enforce-on behavior.
-  Complexity: M
 
 ### P2
 
