@@ -577,6 +577,74 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 | RD26-09 | Vitest CVE-2026-47429 (CVSS 9.8) | https://github.com/advisories/GHSA-5xrq-8626-4rwp |
 | RD26-10 | W3C WebExtensions WG draft charter | https://w3c.github.io/charter-drafts/2025/webextensions-wg.html |
 
+## Deep Audit Findings (2026-07-02)
+
+_Verified-but-unfixed items from the 2026-07-02 deep audit. The audit shipped fixes for GM handler auth binding, attribute-injection XSS, the Chrome-as-Firefox misdetection, editor keystroke/cursor/undo bugs, trash-restore + backup-import data loss, and the cloud-sync tombstone-resurrection data loss (see CHANGELOG v3.16.0). The items below were confirmed reachable but deferred as higher-risk or larger than an audit fix._
+
+### P2
+
+- [ ] P2 — Easy Cloud sync never received the 2026-07-01 merge fixes
+  Why: `src/modules/sync-easycloud.ts` `_mergeData`/apply loop has no tombstone-resurrection guard (restore-from-trash is re-deleted, same class just fixed in `cloud-sync.ts`), discards clean 3-way merges when the local timestamp wins (`if (!existing || script.updatedAt > existing.updatedAt)` at ~line 869 drops merged text), and treats an empty-string `syncBaseCode` as missing (falls back to the remote base, wrong ancestor).
+  Where: `src/modules/sync-easycloud.ts` (~718-720, 750, 854-894).
+  Acceptance: mirror the cloud-sync resurrection + clean-merge-save + tombstone-change persistence fixes; a test pins restore-from-trash survival and remote-edit adoption on Easy Cloud.
+
+- [ ] P2 — Cloud backup upload collides with the cloud-sync envelope and skips E2EE
+  Why: `backup-scheduler.ts` `_uploadBackupToCloud` sets `syncFilename` but no provider reads it — every provider writes the same object as the sync envelope, so cloud backup and cloud sync overwrite each other, and the backup envelope is uploaded in plaintext even when sync E2EE is established (then the next sync download hard-fails "refusing plaintext").
+  Where: `src/modules/backup-scheduler.ts:1186-1216`, `src/modules/sync-providers.ts` (per-provider object names).
+  Acceptance: distinct per-provider backup object name; encrypt the backup envelope with SyncCrypto when E2EE is on; sync and cloud-backup no longer clobber each other.
+
+- [ ] P2 — `SettingsManager.set` lost-update race can drop a refreshed OAuth token
+  Why: concurrent `set()` calls each snapshot `this.cache`, build a full replacement, and write it; the second write (built from the pre-first-write cache) erases the first. Reachable when a sync-end `set('lastSync')` / OAuth token persistence races a dashboard `saveSetting`.
+  Where: `src/modules/storage.ts:197-215`.
+  Acceptance: serialize `set()` through a promise chain (like `_toggleLocks`); a test drives two concurrent sets on different keys and asserts both survive.
+
+### P3
+
+- [ ] P3 — Provenance UI aligns `@require-provenance`/`@require-identity` to the wrong dependency
+  Why: the install page pairs `@require`/`@require-provenance`/`@require-identity` by parallel-array index, but they are independent directives with no positional contract, so a mismatched count binds provenance to the wrong `@require` URL on a trust-decision surface.
+  Where: `pages/install.js:656-662` (parser), `:1252-1263` (render), `:2415-2422` (background forward).
+  Acceptance: pair provenance/identity to a specific require URL by explicit key rather than index; a test pins correct pairing under interleaved/mismatched declarations.
+
+- [ ] P3 — Editor has no way to switch among open script tabs while open
+  Why: with the full-screen editor overlay (`z-index:200`, `.tm-header` inert behind it), the open-editors tab strip (`#scriptTabsGroup`, inside `.tm-header`) is unreachable, and the "Ctrl+Tab cycling" referenced by a comment does not exist. Multi-tab users must leave the editor to switch scripts.
+  Where: `pages/dashboard.js` (editor nav), `pages/dashboard.html` (`.editor-nav`).
+  Acceptance: mirror open-script tabs into the `.editor-nav` band or add a documented cycle shortcut/dropdown; keyboard-accessible.
+
+- [ ] P3 — Per-tab Monaco undo history is not preserved across tab switches
+  Why: `activateScriptTab` calls `getHistory()`/`setHistory()`, now no-op stubs on the Monaco adapter; `setValue` on switch also resets Monaco's undo stack. True per-tab undo needs per-tab Monaco models swapped via the sandbox.
+  Where: `pages/monaco-adapter.js`, `pages/editor-sandbox.html`, `pages/dashboard.js:10160-10173`.
+  Acceptance: undo after a tab switch back restores that tab's stack; a smoke step verifies undo across a switch.
+
+- [ ] P3 — JSON "Export" is not a full backup (no GM values / settings / folders)
+  Why: `exportAllScripts` serializes only id/code/enabled/position/timestamps; users treating "Export JSON" as a full backup silently lose GM values, per-script settings, and folder assignments (only the ZIP path carries those).
+  Where: `src/background/core.ts` (`exportAllScripts`), `pages/dashboard.js` export UI.
+  Acceptance: either enrich JSON export to round-trip the same data as the ZIP, or label the JSON export as "scripts only" in the UI.
+
+- [ ] P3 — v3 migration retry can clobber GM values written on v3
+  Why: `migration-v3.ts` guards scripts against re-clobber on interrupted-migration retry but not values; an SW death between `migrateLegacyToIDB()` and `setSchemaVersion(3)` re-runs and overwrites v3-era GM values with stale legacy bags.
+  Where: `src/storage/migration-v3.ts:121-134`.
+  Acceptance: skip value keys already present in IDB (mirror the scripts existing-id guard); a test pins no-clobber on re-run.
+
+- [ ] P3 — Orphaned backup blobs accumulate in IndexedDB
+  Why: `createBackup` writes the blob before `_saveBackupList`; an SW death/quota failure between the two leaves an unreferenced blob that prune/delete (list-driven) can never reclaim.
+  Where: `src/modules/backup-scheduler.ts:1286-1293`, init sweep.
+  Acceptance: add an orphan sweep (IDB backup ids not in `autoBackups`) to init or prune.
+
+- [ ] P3 — Bucket-mode script delete removes GM values before the script row
+  Why: cross-bucket deletes can't be atomic; deleting values first means an SW crash mid-delete leaves the script installed with its GM values destroyed. Reversing the order degrades the failure to harmless orphaned value rows.
+  Where: `src/storage/script-db.ts:220-237`, `ScriptsDAO.clear()` 258-271.
+  Acceptance: delete the script row first, then values; orphaned values are cleanable, script data is not silently lost.
+
+- [ ] P3 — Tombstone cleanup at 30 days can resurrect deletions on rarely-synced devices
+  Why: `quota-manager.ts` prunes `syncTombstones` older than 30 days by wall-clock age with no `lastSync` check; a device that hits storage-warning cleanup while another has been offline >30 days drops the tombstone and the offline device resurrects the deleted script.
+  Where: `src/modules/quota-manager.ts:303-324`.
+  Acceptance: gate pruning on `tombstoneTs < settings.lastSync` (deletion already propagated) rather than age alone.
+
+- [ ] P3 — DevTools HAR export reads `content-type` case-sensitively
+  Why: `(e.responseHeaders||{})['content-type']` misses `Content-Type`, so exported HAR mimeType falls back to text/plain for many responses.
+  Where: `pages/devtools-panel.js:668`.
+  Acceptance: look up the header case-insensitively.
+
 ## Research-Driven Additions
 
 _Added 2026-07-01. Items below are net-new from the 2026-07-01 research pass and do not duplicate the existing Now/Next/Later/N-/X-/L-/UC- items. Sources in the Research-Driven Sources (2026-07-01) appendix._

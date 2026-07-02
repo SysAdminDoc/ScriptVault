@@ -9,6 +9,23 @@ const WhatsNew = (() => {
     : '2.0.0';
 
   const CHANGELOG = {
+    '3.16.0': {
+      title: 'ScriptVault 3.16.0 — Deep Audit: Security & Data Safety',
+      date: '2026-07-02',
+      highlights: [
+        { icon: 'LOCK', title: 'Hardened GM Networking', desc: 'GM_xmlhttpRequest, GM_download, @resource and menu APIs now bind to the authenticated script, so one script can no longer borrow another’s @connect allowlist.' },
+        { icon: 'SYNC', title: 'Restore-from-Trash Survives Sync', desc: 'A script you restored from trash is no longer silently re-deleted on the next cloud sync — the resurrection guard actually works now.' },
+        { icon: 'SAFE', title: 'Backups Keep Your Settings', desc: 'Restoring a backup no longer wipes per-script settings (match rules, notes, tags, pin) of installed scripts.' },
+        { icon: 'FIX', title: 'Chrome Detected Correctly', desc: 'ScriptVault no longer mistakes Chrome for Firefox — restoring proper per-script world isolation on Chrome 133+ and the right setup instructions.' }
+      ],
+      improvements: [
+        'Editor no longer swallows the first keystroke after switching tabs',
+        'Editor cursor position (Ln/Col) now updates instead of showing Ln 1, Col 1',
+        'Storage meter measures real usage; Find Scripts pagination works again',
+        'New Script / Duplicate / New Folder now report failures instead of doing nothing',
+        'Fixed an attribute-injection XSS in the dependency graph and other panels'
+      ]
+    },
     '3.15.1': {
       title: 'ScriptVault 3.15.1 — Editor Screen Repair & Redesign',
       date: '2026-07-02',
