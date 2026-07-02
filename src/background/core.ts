@@ -4978,8 +4978,11 @@ async function importScripts(data, options = {}) {
         meta: parsed.meta,
         enabled: trustState.enabled,
         settings: trustState.settings,
-        position: Number.isFinite(script.position) ? script.position : _importPosition++,
-        createdAt: Number.isFinite(script.createdAt) ? script.createdAt : Date.now(),
+        position: Number.isFinite(script.position) ? script.position : (existing?.position ?? _importPosition++),
+        // On overwrite, keep the original install date rather than resetting it
+        // to now when the incoming entry has no createdAt (backup restores and
+        // JSON re-imports otherwise lose the true creation time).
+        createdAt: Number.isFinite(script.createdAt) ? script.createdAt : (existing?.createdAt ?? Date.now()),
         updatedAt: Number.isFinite(script.updatedAt) ? script.updatedAt : Date.now()
       };
 
@@ -5285,7 +5288,11 @@ async function importFromZip(zipData, options = {}) {
         }
         usedScriptIds.add(scriptId);
         const now = Date.now();
-        const trustState = applyImportedScriptTrust({}, enabled, {
+        // Base the trust/quarantine state on the existing script's settings so a
+        // backup restore (or ZIP re-import) over an installed script preserves
+        // its per-script settings — userIncludes/userMatches/userExcludes, notes,
+        // tags, pinned, runAt override, syncValues — instead of wiping them.
+        const trustState = applyImportedScriptTrust({ ...(existing?.settings || {}) }, enabled, {
           trustImportedScripts,
           source: 'import-zip',
           sourceLabel
@@ -6205,15 +6212,19 @@ async function handleMessage(message, sender) {
         if (parsed.error) return { error: 'Corrupt trash entry: ' + parsed.error };
         script.meta = parsed.meta;
         delete script.trashedAt;
-        trash.splice(idx, 1);
-        await chrome.storage.local.set({ trash });
+        // Persist the restored script BEFORE removing it from trash. If the
+        // service worker dies mid-restore, the worst case is a harmless
+        // duplicate (script in both storage and trash, restore is idempotent)
+        // rather than losing the script from both stores.
+        await ScriptStorage.set(script.id, script);
         const _tombstoneData = await chrome.storage.local.get('syncTombstones');
         const _tombstones = _tombstoneData.syncTombstones || {};
         if (_tombstones[scriptId]) {
           delete _tombstones[scriptId];
           await chrome.storage.local.set({ syncTombstones: _tombstones });
         }
-        await ScriptStorage.set(script.id, script);
+        trash.splice(idx, 1);
+        await chrome.storage.local.set({ trash });
         if (script.enabled !== false) await registerScript(script);
         await updateBadge();
         return { success: true };

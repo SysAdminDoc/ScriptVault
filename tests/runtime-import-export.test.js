@@ -326,6 +326,39 @@ describe('runtime import/export archive identity', () => {
     expect(harness.generateId).not.toHaveBeenCalled();
   });
 
+  it('preserves existing per-script settings when a ZIP backup restore overwrites an installed script', async () => {
+    // Regression: BackupScheduler.restoreBackup routes through importFromZip
+    // with overwrite:true; the ZIP path used an empty settings base, wiping
+    // userMatches/notes/pinned of the currently-installed script.
+    const existing = {
+      ...makeScript('script_preserved', 'Preserved Script'),
+      settings: { notes: 'keep me', pinned: true, userMatches: ['https://kept.example/*'] },
+    };
+    const harness = createRuntimeHarness([existing]);
+    const zipBytes = harness.fakeFflate.zipSync({
+      'Preserved.user.js': harness.fakeFflate.strToU8([
+        '// ==UserScript==',
+        '// @name Preserved Script',
+        '// @namespace scriptvault/preserved',
+        '// @version 2.0.0',
+        '// @match https://example.com/*',
+        '// ==/UserScript==',
+        'console.log("restored");',
+      ].join('\n')),
+      'Preserved.options.json': harness.fakeFflate.strToU8(JSON.stringify({
+        scriptId: 'script_preserved',
+        scriptVault: { schemaVersion: 1, createdAt: 1, updatedAt: 2, position: 0 },
+      })),
+    });
+
+    const result = await harness.importFromZip(bytesToBase64(zipBytes), { overwrite: true });
+    expect(result).toMatchObject({ imported: 1 });
+    const setCall = harness.ScriptStorage.set.mock.calls.find(([id]) => id === 'script_preserved');
+    expect(setCall).toBeTruthy();
+    expect(setCall[1].settings).toMatchObject({ notes: 'keep me', pinned: true });
+    expect(setCall[1].settings.userMatches).toEqual(['https://kept.example/*']);
+  });
+
   it('quarantines archive-enabled ZIP imports while preserving ScriptVault IDs', async () => {
     const existing = makeScript('script_preserved', 'Renamed Local Script');
     const harness = createRuntimeHarness([existing]);
@@ -428,6 +461,49 @@ describe('runtime import/export archive identity', () => {
     );
     expect(harness.ScriptStorage.get).not.toHaveBeenCalledWith('__proto__');
     expect(harness.generateId).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves existing per-script settings and version history when overwriting on import', async () => {
+    // Regression: a JSON re-import (or backup restore) over an installed script
+    // used to wipe userIncludes/notes/tags/pinned and versionHistory because
+    // the new record only carried quarantine state.
+    const existing = {
+      id: 'script_keep',
+      code: '// old code',
+      enabled: true,
+      meta: { name: 'Keep Me' },
+      settings: { notes: 'my notes', pinned: true, userMatches: ['https://kept.example/*'] },
+      versionHistory: [{ version: '0.9.0', code: '// v0.9' }],
+      createdAt: 111,
+    };
+    const harness = createRuntimeHarness([existing]);
+
+    const result = await harness.importScripts({
+      scripts: [{
+        id: 'script_keep',
+        code: [
+          '// ==UserScript==',
+          '// @name Keep Me',
+          '// @namespace scriptvault/keep',
+          '// @version 1.0.0',
+          '// @match https://example.com/*',
+          '// ==/UserScript==',
+          'console.log("new");',
+        ].join('\n'),
+        enabled: true,
+      }],
+    }, { overwrite: true });
+
+    expect(result).toMatchObject({ imported: 1 });
+    const setCall = harness.ScriptStorage.set.mock.calls.find(([id]) => id === 'script_keep');
+    expect(setCall).toBeTruthy();
+    const written = setCall[1];
+    expect(written.settings).toMatchObject({ notes: 'my notes', pinned: true });
+    expect(written.settings.userMatches).toEqual(['https://kept.example/*']);
+    // The prior version-history entry must survive the overwrite (the import
+    // may additionally append the incoming version).
+    expect(written.versionHistory).toContainEqual({ version: '0.9.0', code: '// v0.9' });
+    expect(written.createdAt).toBe(111);
   });
 
   it('rejects oversized JSON imports before storage or parser work', async () => {
