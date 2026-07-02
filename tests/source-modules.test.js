@@ -321,8 +321,10 @@ describe('source analyzer', () => {
     const originalOffscreen = chrome.offscreen;
     const originalDiff = globalThis.Diff;
     delete chrome.offscreen;
+    // jsdiff v7 has no merge(); the inline merge uses structuredPatch +
+    // applyPatch (apply remote's base-diff onto local).
     globalThis.Diff = {
-      merge: vi.fn(() => ({ hunks: [] })),
+      structuredPatch: vi.fn(() => ({ hunks: [{}] })),
       applyPatch: vi.fn(() => 'merged text'),
       diffLines: vi.fn(() => []),
     };
@@ -331,7 +333,8 @@ describe('source analyzer', () => {
       const result = await ScriptAnalyzer.mergeText('base', 'local edit', 'remote edit');
 
       expect(result).toEqual({ merged: 'merged text', conflicts: false });
-      expect(globalThis.Diff.merge).toHaveBeenCalledWith('local edit', 'remote edit', 'base');
+      expect(globalThis.Diff.structuredPatch).toHaveBeenCalledWith('script', 'script', 'base', 'remote edit', '', '', { context: 3 });
+      expect(globalThis.Diff.applyPatch).toHaveBeenCalledWith('local edit', { hunks: [{}] });
       expect(chrome.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({
         type: 'offscreen_merge',
       }));

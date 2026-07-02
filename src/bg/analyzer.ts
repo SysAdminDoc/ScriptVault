@@ -102,9 +102,18 @@ interface AcornGlobal {
   parse(code: string, options: Record<string, unknown>): AstNode;
 }
 
+interface DiffPatch {
+  hunks?: unknown[];
+}
+
 interface DiffGlobal {
-  merge(local: string, remote: string, base: string): unknown;
-  applyPatch(base: string, patch: unknown): string | false;
+  // jsdiff v7 removed the 3-way merge() API; the merge is built from
+  // structuredPatch + applyPatch instead.
+  structuredPatch(
+    oldName: string, newName: string, oldStr: string, newStr: string,
+    oldHeader?: string, newHeader?: string, options?: { context?: number },
+  ): DiffPatch;
+  applyPatch(source: string, patch: unknown): string | false;
   diffLines(oldCode: string, newCode: string): Array<{ added?: boolean; removed?: boolean; count?: number }>;
 }
 
@@ -265,7 +274,7 @@ function getAcorn(): AcornGlobal {
 
 function getDiff(): DiffGlobal {
   const diff = getGlobalValue<DiffGlobal>('Diff');
-  if (!diff || typeof diff.merge !== 'function' || typeof diff.applyPatch !== 'function') {
+  if (!diff || typeof diff.structuredPatch !== 'function' || typeof diff.applyPatch !== 'function') {
     throw new Error('Diff library is not available');
   }
   return diff;
@@ -941,16 +950,14 @@ function mergeTextInline(base: string, local: string, remote: string): MergeResu
 
   try {
     const diff = getDiff();
-    const merged = diff.merge(local, remote, base) as { hunks?: Array<{ lines?: Array<unknown> }> };
-    const hasConflicts = Array.isArray(merged.hunks) && merged.hunks.some((hunk) =>
-      Array.isArray(hunk.lines) && hunk.lines.some((line) => typeof line === 'object' && line !== null && (line as { conflict?: unknown }).conflict)
-    );
-
-    if (hasConflicts) {
-      return { merged: resolveWithMarkers(local, remote), conflicts: true };
+    // jsdiff v7 has no 3-way merge, so apply remote's base-relative changes
+    // onto the local text. A hunk that overlaps a local edit fails to apply
+    // (context mismatch) and becomes a conflict; non-overlapping hunks merge.
+    const patch = diff.structuredPatch('script', 'script', base, remote, '', '', { context: 3 });
+    if (!Array.isArray(patch.hunks) || patch.hunks.length === 0) {
+      return { merged: local, conflicts: false };
     }
-
-    const mergedText = diff.applyPatch(base, merged);
+    const mergedText = diff.applyPatch(local, patch);
     if (mergedText === false) {
       return { merged: resolveWithMarkers(local, remote), conflicts: true };
     }

@@ -25538,7 +25538,7 @@ const BackupScheduler = (() => {
   function _estimateBackupSize(backups) {
     let total = 0;
     for (const b of backups) {
-      total += b.data?.length ?? 0;
+      total += typeof b.size === "number" && b.size > 0 ? b.size : b.data?.length ?? 0;
     }
     return total;
   }
@@ -30605,7 +30605,7 @@ const ScriptAnalyzer = (() => {
   }
   function getDiff() {
     const diff = getGlobalValue("Diff");
-    if (!diff || typeof diff.merge !== "function" || typeof diff.applyPatch !== "function") {
+    if (!diff || typeof diff.structuredPatch !== "function" || typeof diff.applyPatch !== "function") {
       throw new Error("Diff library is not available");
     }
     return diff;
@@ -31245,14 +31245,11 @@ const ScriptAnalyzer = (() => {
     if (remote === base) return { merged: local, conflicts: false };
     try {
       const diff = getDiff();
-      const merged = diff.merge(local, remote, base);
-      const hasConflicts = Array.isArray(merged.hunks) && merged.hunks.some(
-        (hunk) => Array.isArray(hunk.lines) && hunk.lines.some((line) => typeof line === "object" && line !== null && line.conflict)
-      );
-      if (hasConflicts) {
-        return { merged: resolveWithMarkers(local, remote), conflicts: true };
+      const patch = diff.structuredPatch("script", "script", base, remote, "", "", { context: 3 });
+      if (!Array.isArray(patch.hunks) || patch.hunks.length === 0) {
+        return { merged: local, conflicts: false };
       }
-      const mergedText = diff.applyPatch(base, merged);
+      const mergedText = diff.applyPatch(local, patch);
       if (mergedText === false) {
         return { merged: resolveWithMarkers(local, remote), conflicts: true };
       }

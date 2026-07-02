@@ -627,7 +627,7 @@ const BackupScheduler = (() => {
   function _estimateBackupSize(backups) {
     let total = 0;
     for (const b of backups) {
-      total += b.data?.length ?? 0;
+      total += typeof b.size === "number" && b.size > 0 ? b.size : b.data?.length ?? 0;
     }
     return total;
   }

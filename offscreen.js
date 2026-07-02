@@ -559,21 +559,20 @@ function handleMerge(base, local, remote) {
   if (remote === base) return { merged: local, conflicts: false };
 
   try {
-    // Diff.merge(mine, theirs, base) — all args are text strings, returns a structured patch
-    const merged = Diff.merge(local, remote, base);
-    const hasConflicts = Array.isArray(merged.hunks) && merged.hunks.some(h =>
-      Array.isArray(h.lines) && h.lines.some(l => typeof l === 'object' && l.conflict)
-    );
-
-    if (hasConflicts) {
-      // Produce conflict markers like git
-      return { merged: resolveWithMarkers(base, local, remote), conflicts: true };
+    // jsdiff v7 removed the 3-way Diff.merge() API, so build the merge from
+    // primitives: compute remote's changes relative to base as a patch, then
+    // apply them onto the local text. applyPatch locates each hunk by context,
+    // so a hunk whose surrounding lines the local side also changed fails to
+    // apply (an overlapping edit) and we surface conflict markers; a hunk in a
+    // region local left untouched applies cleanly (the mergeable case).
+    const patch = Diff.structuredPatch('script', 'script', base, remote, '', '', { context: 3 });
+    if (!patch.hunks || patch.hunks.length === 0) {
+      // Remote made no changes vs base — keep the local edits.
+      return { merged: local, conflicts: false };
     }
-
-    // Apply the merged patch onto the base text
-    const mergedText = Diff.applyPatch(base, merged);
+    const mergedText = Diff.applyPatch(local, patch);
     if (mergedText === false) {
-      // Patch apply failed — produce conflict markers
+      // A hunk did not apply — remote and local edited overlapping regions.
       return { merged: resolveWithMarkers(base, local, remote), conflicts: true };
     }
     return { merged: mergedText, conflicts: false };

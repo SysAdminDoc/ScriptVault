@@ -69,14 +69,17 @@ describe('offscreen AST analysis', () => {
 });
 
 describe('offscreen 3-way merge', () => {
-  it('produces a merge result for non-overlapping edits', () => {
+  it('actually merges non-overlapping edits (not a conflict-marker fallback)', () => {
     const base = 'aaa\nbbb\nccc\nddd\neee\nfff\nggg\nhhh\n';
     const local = 'aaa-local\nbbb\nccc\nddd\neee\nfff\nggg\nhhh\n';
     const remote = 'aaa\nbbb\nccc\nddd\neee\nfff\nggg\nhhh-remote\n';
     const result = handleMerge(base, local, remote);
-    expect(result).toHaveProperty('merged');
-    expect(typeof result.merged).toBe('string');
-    expect(result.merged.length).toBeGreaterThan(0);
+    expect(result.conflicts).toBe(false);
+    // Both sides' non-overlapping edits must survive the merge — this is the
+    // regression guard for the jsdiff-v7 3-way merge (Diff.merge was removed).
+    expect(result.merged).toContain('aaa-local');
+    expect(result.merged).toContain('hhh-remote');
+    expect(result.merged).not.toContain('<<<<<<<');
   });
 
   it('detects conflicts with markers', () => {

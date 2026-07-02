@@ -1137,8 +1137,11 @@ async function _captureSnapshot({
 function _estimateBackupSize(backups: BackupEntry[]): number {
   let total = 0;
   for (const b of backups) {
-    // base64 string length is ~4/3 of binary; approximate storage cost
-    total += b.data?.length ?? 0;
+    // Prefer the recorded byte size (`size`). Since v3.12 blob data lives in
+    // IndexedDB and `b.data` is stripped, so summing `b.data.length` returned
+    // ~0 and silently disabled the storage-full warning. Fall back to the
+    // legacy base64 length only for un-migrated entries that still carry data.
+    total += (typeof b.size === 'number' && b.size > 0) ? b.size : (b.data?.length ?? 0);
   }
   return total;
 }
