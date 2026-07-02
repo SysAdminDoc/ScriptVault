@@ -12,6 +12,11 @@ const ThemeEditor = (() => {
 
   const STORAGE_KEY = 'sv_custom_themes';
   const ACTIVE_THEME_KEY = 'sv_active_custom_theme';
+  // Presets that map to a real [data-theme="..."] CSS block. Only these may be
+  // written to settings.layout. The other presets (nord/dracula/solarized/
+  // monokai/gruvbox) and user themes are CSS-variable sets applied as an inline
+  // override that the dashboard re-applies on load.
+  const LAYOUT_PRESETS = new Set(['dark', 'light', 'catppuccin', 'oled']);
 
   /** All CSS variables that can be themed, grouped by category. */
   const VARIABLE_GROUPS = [
@@ -679,18 +684,31 @@ const ThemeEditor = (() => {
     try {
       const data = await chrome.storage.local.get([STORAGE_KEY, ACTIVE_THEME_KEY]);
       _customThemes = data[STORAGE_KEY] || {};
-      _activePreset = data[ACTIVE_THEME_KEY] || null;
+      const active = data[ACTIVE_THEME_KEY];
+      // Current shape is { preset, vars }; tolerate the legacy bare-string form.
+      _activePreset = (active && typeof active === 'object')
+        ? (active.preset || null)
+        : (active || null);
     } catch {
       _customThemes = {};
       _activePreset = null;
     }
   }
 
+  // Resolve the CSS-variable override for the active selection. Returns null for
+  // the real layout presets (their CSS block already covers everything) so no
+  // stale inline override lingers after switching back to a built-in layout.
+  function resolveActiveThemeVars() {
+    if (!_activePreset || LAYOUT_PRESETS.has(_activePreset)) return null;
+    // The live working set is the source of truth (captures user edits).
+    return _workingVars && Object.keys(_workingVars).length ? { ..._workingVars } : null;
+  }
+
   async function persistCustomThemes() {
     try {
       await chrome.storage.local.set({
         [STORAGE_KEY]: _customThemes,
-        [ACTIVE_THEME_KEY]: _activePreset,
+        [ACTIVE_THEME_KEY]: { preset: _activePreset, vars: resolveActiveThemeVars() },
       });
     } catch (e) {
       console.error('[ThemeEditor] Failed to persist themes:', e);
@@ -1392,12 +1410,17 @@ const ThemeEditor = (() => {
       if (val) document.documentElement.style.setProperty(key, val);
     }
 
+    // persistCustomThemes stores the resolved variable override under
+    // ACTIVE_THEME_KEY so the dashboard re-applies it on load (fixes the
+    // "applied theme reverts on reload" bug).
     await persistCustomThemes();
 
-    // Also store as a setting if a built-in theme key was selected
-    if (_activePreset && !_activePreset.startsWith('custom:') && PRESETS[_activePreset]) {
+    // Only a real layout preset maps to settings.layout / data-theme. Extra
+    // presets (nord/dracula/etc.) and custom themes are variable sets — writing
+    // their key to settings.layout produced an invalid layout that fell back to
+    // dark and blanked the Layout select.
+    if (_activePreset && LAYOUT_PRESETS.has(_activePreset)) {
       try {
-        // Use the dashboard's saveSetting if available
         if (typeof saveSetting === 'function') {
           await saveSetting('layout', _activePreset);
         } else {

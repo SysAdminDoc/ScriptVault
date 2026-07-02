@@ -36,6 +36,29 @@ describe('safeSetHtml fragment context (2026-07 regression)', () => {
   }
 });
 
+describe('Theme editor persistence + valid layouts (2026-07 regression)', () => {
+  it('dashboard clamps layout to real CSS themes and validates the setting', () => {
+    const src = read('pages/dashboard.js');
+    expect(src).toContain('VALID_LAYOUTS');
+    expect(src).toContain('VALID_LAYOUTS.has(layout) ? layout');
+    // validateSettingsValue rejects non-layout preset keys.
+    expect(src).toContain("case 'layout':");
+  });
+  it('dashboard re-applies the persisted custom theme variables on load', () => {
+    const src = read('pages/dashboard.js');
+    expect(src).toContain('applyActiveCustomThemeVars');
+    expect(src).toContain("chrome.storage.local.get('sv_active_custom_theme')");
+  });
+  it('theme editor only writes settings.layout for real layout presets', () => {
+    const src = read('pages/dashboard-theme-editor.js');
+    expect(src).toContain('LAYOUT_PRESETS');
+    expect(src).toContain('LAYOUT_PRESETS.has(_activePreset)');
+    expect(src).toContain('resolveActiveThemeVars');
+    // The old bug wrote any PRESETS[key] to layout.
+    expect(src).not.toContain("!_activePreset.startsWith('custom:') && PRESETS[_activePreset]");
+  });
+});
+
 describe('Monaco editor Ctrl+S / Escape wiring (2026-07 regression)', () => {
   it('adapter routes save/close through the exposed UI bridge with real-button fallbacks', () => {
     const src = read('pages/monaco-adapter.js');

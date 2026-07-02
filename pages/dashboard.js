@@ -106,11 +106,16 @@
         oled: 'layoutOledBlack'
     };
 
+    // The four layouts that have a real [data-theme="..."] CSS block. Anything
+    // else (e.g. a theme-editor preset key like 'nord') has no CSS and must not
+    // become the data-theme value, or the UI silently falls back to dark with a
+    // blanked Layout select.
+    const VALID_LAYOUTS = new Set(['dark', 'light', 'catppuccin', 'oled', 'auto']);
     function resolveTheme(layout) {
         if (layout === 'auto') {
             return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
         }
-        return layout || 'dark';
+        return VALID_LAYOUTS.has(layout) ? layout : 'dark';
     }
     const SETTINGS_FILTER_LABELS = {
         all: 'all sections',
@@ -3889,6 +3894,15 @@
 
     function validateSettingsValue(key, value) {
         switch (key) {
+            case 'layout': {
+                // Only the four real CSS themes (+ auto) are valid layouts.
+                // Theme-editor presets (nord/dracula/etc.) are var-sets applied
+                // separately and must never be stored as a layout.
+                if (!VALID_LAYOUTS.has(String(value))) {
+                    return { ok: false, error: 'Choose a valid theme layout.' };
+                }
+                return { ok: true, value: String(value) };
+            }
             case 'badgeColor': {
                 const color = String(value || '').trim();
                 if (!/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(color)) {
@@ -4924,6 +4938,42 @@
             const mapped = DASHBOARD_TO_EDITOR_THEME[layout] || 'material-darker';
             state.editor.setOption('theme', mapped);
         }
+        applyActiveCustomThemeVars();
+    }
+
+    // Re-apply a theme-editor custom theme or extra preset (nord/dracula/etc.)
+    // on load. These are CSS-variable sets — not layouts — so the theme editor
+    // stores the resolved variables under `sv_active_custom_theme`; without
+    // re-applying them here the applied theme silently reverts to the base
+    // layout after every reload.
+    let _activeCustomThemeStyleEl = null;
+    async function applyActiveCustomThemeVars() {
+        try {
+            const data = await chrome.storage.local.get('sv_active_custom_theme');
+            const active = data.sv_active_custom_theme;
+            const vars = (active && typeof active === 'object' && active.vars && typeof active.vars === 'object')
+                ? active.vars
+                : null;
+            if (!vars || Object.keys(vars).length === 0) {
+                if (_activeCustomThemeStyleEl) _activeCustomThemeStyleEl.textContent = '';
+                return;
+            }
+            if (!_activeCustomThemeStyleEl) {
+                _activeCustomThemeStyleEl = document.createElement('style');
+                _activeCustomThemeStyleEl.id = 'sv-active-custom-theme';
+                document.head.appendChild(_activeCustomThemeStyleEl);
+            }
+            let css = ':root {\n';
+            for (const [k, v] of Object.entries(vars)) {
+                // Only allow CSS custom properties with a safe value (no braces
+                // or semicolons that could break out of the declaration).
+                if (/^--[\w-]+$/.test(k) && typeof v === 'string' && !/[{};]/.test(v)) {
+                    css += `  ${k}: ${v};\n`;
+                }
+            }
+            css += '}\n';
+            _activeCustomThemeStyleEl.textContent = css;
+        } catch (_e) { /* storage unavailable — skip */ }
     }
 
     function normalizeSettingsLabel(text) {

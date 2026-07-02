@@ -43,9 +43,6 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 - **P2 — Unify install page theme variables with theme-tokens.css.** The install page defines its own parallel set of CSS custom properties (`--bg-primary`, `--bg-secondary`, etc.) independent of `theme-tokens.css` used by all other pages. Any theme change must be applied to both systems. Consolidate to a single source.
   Where: `pages/install.html` lines 20-98
 
-- **P1 — Theme Editor "Apply Theme" does not persist and extra presets set invalid `layout`.** Applied custom themes revert on reload (nothing reads `sv_active_custom_theme` at startup), and the six extra built-in presets (Nord/Dracula/Solarized×2/Monokai/Gruvbox) save `settings.layout` values that match no CSS block and fall back to dark, blanking the Layout select and desyncing the theme-cycle button.
-  Where: `pages/dashboard-theme-editor.js` applyAndPersist; `pages/dashboard.js` startup theme resolution + `validateSettingsValue`
-
 - **P2 — KeyboardNav hijacks Enter/Space/Delete on focused row buttons.** The capture-phase document keydown handler treats a focused action button inside a script row as the row itself: Enter opens the editor, Space toggles enabled, Delete deletes — instead of activating the button. `isModalOpen()` is defined but never consulted. WCAG 2.1.1 defect.
   Where: `pages/dashboard-keyboard.js` handleKeydown/isInputFocused/handleFocusin
 
