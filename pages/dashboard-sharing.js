@@ -391,7 +391,13 @@ const ScriptSharing = (() => {
         }
 
         // Version info tables (L error correction)
-        // [totalCodewords, ecCodewordsPerBlock, numBlocks, dataCodewords]
+        // [totalCodewords, ecCodewordsPerBlock, numBlocks, totalDataCodewords]
+        // NOTE: field [3] is the TOTAL data codewords for the version, not the
+        // per-block count. The block splitter below derives per-block sizes
+        // (including the mixed group layouts, e.g. V10-L = 2×68 + 2×69) from
+        // totalData/numBlocks + remainder. A prior version stored the per-block
+        // count here, which truncated the bit stream for V6-V10 and produced
+        // unscannable codes.
         const VERSION_TABLE = [
             null, // 0 placeholder
             [26, 7, 1, 19],    // V1
@@ -399,12 +405,19 @@ const ScriptSharing = (() => {
             [70, 15, 1, 55],   // V3
             [100, 20, 1, 80],  // V4
             [134, 26, 1, 108], // V5
-            [172, 18, 2, 68],  // V6
-            [196, 20, 2, 78],  // V7
-            [242, 24, 2, 97],  // V8
-            [292, 30, 2, 116], // V9
-            [346, 18, 2, 68],  // V10 - 2 blocks of 68 + 2 blocks of 69
+            [172, 18, 2, 136], // V6  — 2×68
+            [196, 20, 2, 156], // V7  — 2×78
+            [242, 24, 2, 194], // V8  — 2×97
+            [292, 30, 2, 232], // V9  — 2×116
+            [346, 18, 4, 274], // V10 — 2×68 + 2×69
         ];
+
+        // Fixed 18-bit version information strings (BCH(18,6) encoded) required
+        // for V7+. Placed near the top-right and bottom-left finders. These are
+        // the standard QR spec constants — no runtime BCH needed.
+        const VERSION_INFO = {
+            7: 0x07C94, 8: 0x085BC, 9: 0x09A99, 10: 0x0A4D3,
+        };
 
         // Data capacity (byte mode, L correction) per version
         const BYTE_CAPACITY = [0, 17, 32, 53, 78, 106, 134, 154, 192, 230, 271];
@@ -585,6 +598,18 @@ const ScriptSharing = (() => {
                 }
             }
 
+            // Reserve version-information areas for V7+ (two 6×3 blocks by the
+            // top-right and bottom-left finders) so data placement and masking
+            // skip them. Without this the code is non-conformant for V7-V10.
+            if (version >= 7) {
+                for (let i = 0; i < 18; i++) {
+                    const row = Math.floor(i / 3);
+                    const col = i % 3;
+                    reserved[row][size - 11 + col] = 1;       // top-right block
+                    reserved[size - 11 + col][row] = 1;       // bottom-left block
+                }
+            }
+
             // Track function pattern modules for masking
             const isFunction = Array.from({ length: size }, () => new Uint8Array(size));
             for (let r = 0; r < size; r++) {
@@ -633,6 +658,18 @@ const ScriptSharing = (() => {
             // Pre-computed format string for L, mask 0: 111011111000100
             const formatBits = 0b111011111000100;
             placeFormatInfo(grid, size, formatBits);
+
+            // Version information for V7+ (18-bit BCH constant, LSB-first).
+            const versionInfo = VERSION_INFO[version];
+            if (versionInfo !== undefined) {
+                for (let i = 0; i < 18; i++) {
+                    const bit = (versionInfo >> i) & 1;
+                    const row = Math.floor(i / 3);
+                    const col = i % 3;
+                    grid[row][size - 11 + col] = bit;   // top-right block
+                    grid[size - 11 + col][row] = bit;   // bottom-left block
+                }
+            }
 
             return { grid, size, version };
         }
@@ -1229,6 +1266,8 @@ const ScriptSharing = (() => {
         encodeScript,
         decodeScript,
         batchExport,
-        destroy
+        destroy,
+        // Exposed for regression tests of the self-contained QR encoder.
+        _qr: QR
     };
 })();

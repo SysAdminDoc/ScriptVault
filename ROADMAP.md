@@ -43,9 +43,6 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 - **P2 — Unify install page theme variables with theme-tokens.css.** The install page defines its own parallel set of CSS custom properties (`--bg-primary`, `--bg-secondary`, etc.) independent of `theme-tokens.css` used by all other pages. Any theme change must be applied to both systems. Consolidate to a single source.
   Where: `pages/install.html` lines 20-98
 
-- **P2 — QR share encoder corrupts payloads of 107-271 bytes (versions 6-10).** `VERSION_TABLE` stores per-block data codewords but `encode()` treats them as the total, truncating the bit stream and leaving the module grid unfilled. Most real share payloads (base64 data URLs) land in this range and produce unscannable codes. V1-V5 are correct.
-  Where: `pages/dashboard-sharing.js` VERSION_TABLE / encode()
-
 - **P2 — E2EE plaintext-downgrade latch.** `decryptSyncEnvelope` accepts a plaintext remote envelope even when sync encryption is enabled, so an attacker with storage-backend write access can replace the encrypted blob with attacker-authored plaintext scripts. Needs a migration-safe latch (e.g. a persisted "encryption established" marker so the one-time plaintext→encrypted migration is allowed but later plaintext is rejected).
   Where: `src/modules/sync-crypto.ts` decryptSyncEnvelope
 
