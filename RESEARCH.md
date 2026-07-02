@@ -1,86 +1,102 @@
-# Research - ScriptVault
+# Research — ScriptVault
+
+Date: 2026-07-01 — replaces all prior research.
 
 ## Executive Summary
-ScriptVault is a Chrome MV3 userscript manager with a strong trust-first position: open source, local-first storage, no telemetry, Chrome Web Store publication, Firefox/Edge validation paths, Monaco editing, static analysis, update review, cloud sync, script signing, and a large local regression suite. The highest-value direction is not another broad feature wave; it is tightening release/process trust around the current product: remove the resurrected GitHub Actions workflow, make public release verification deterministic without GitHub CLI auth, reduce Firefox AMO warning noise before submission, keep dev dependencies current, and keep public documentation aligned with the no-remote-build/local-release policy.
 
-Top opportunities in priority order: remove `.github/workflows/ci.yml` and the local GitHub Actions pin gate; harden `release:check:public` so public artifact checks do not fail only because `gh` auth is invalid or GitHub API quota is exhausted; burn down Firefox lint warnings from 148 toward a reviewer-friendlier budget; refresh patch-level dev dependencies found by `npm outdated`; align Firefox/release docs away from remote CI language; keep session-only credentials and Storage Buckets prominent in store-facing copy.
+ScriptVault is a mature, trust-first Chrome MV3 userscript manager (v3.12.0): open-source, local-first, zero-telemetry, with Monaco editing, a 35+ function GM API, static AST risk analysis, update review with diff+rollback, Ed25519 signing + Sigstore provenance, seven cloud sync providers, IndexedDB Storage Buckets, enterprise managed-policy provisioning, and a 182-file local test suite. The prior research pass's headline opportunities are now **resolved** (the resurrected GitHub Actions workflow is gone and gated by `scripts/check-no-github-actions.mjs`; `npm audit` is clean; the Firefox lint budget is formalized at 80). The product is past broad feature-catching-up; the highest-value direction is **reliability and trust depth on the paths users actually hit**: a per-tab "why didn't my script run?" diagnostic (the single strongest, most-corroborated community pain), storage/backup compression, and optionally narrowing the `<all_urls>` blast radius — all implementable client-side with no backend.
+
+Top opportunities in priority order:
+1. Per-tab, per-script run diagnostic ("matched / enabled / injected / why-not") — turns the #1 support burden into a feature.
+2. Compress backups and stored script bodies (CompressionStream) to cut Storage Buckets quota and fix the known oversized-backup-blob issue.
+3. Optional per-site host permissions to shrink the `<all_urls>` grant for privacy-conscious users (large, must stay user-controlled).
+4. Adopt `Element.setHTML()` (feature-detected) for real sanitization of GreasyFork/API-fetched HTML rendered in the manager UI.
+5. `@crontab once(...)` one-time schedules (small parity extension).
+6. Spike a local MCP bridge exposing script CRUD to a user's own agent (zero-inference, differentiator) — validate before committing.
+7. Continue the already-scoped dev-workflow work (external-editor file binding X-8; add localhost dev-server hot-reload as an X-8 extension).
 
 ## Product Map
-- Core workflows: install/import userscripts, review metadata and risk, edit in Monaco, register through `chrome.userScripts`, expose GM APIs, review updates with diff/rollback context, sync/backup scripts and GM values, inspect network/execution diagnostics, and package Chrome/Firefox/Edge artifacts.
-- User personas: privacy-conscious userscript users, users migrating from MV2-era managers, script authors, extension reviewers, enterprise operators using managed policies, and power users with multi-device sync needs.
-- Platforms and distribution: Chrome MV3 published package, Firefox AMO validation package, Edge package path, local release artifacts, and deferred Firefox Android/Safari paths because validation or platform APIs are missing.
-- Key integrations and data flows: IndexedDB/Storage Buckets for script records, GM values, stats, backups, and local bindings; `chrome.storage.local` for settings and receipts; `chrome.storage.session` for optional session-only sync secrets; offscreen/Firefox fallbacks for analysis and merge work; WebDAV/Drive/Dropbox/OneDrive/S3/Gist sync; CWS/AMO reviewer evidence tooling.
+
+- Core workflows: install/import userscripts, review metadata + AST risk, edit in Monaco, register via `chrome.userScripts` (USER_SCRIPT world, per-script `worldId`), expose GM APIs, review updates with diff/rollback, sync/backup scripts + GM values, inspect network/execution diagnostics, package Chrome/Firefox/Edge.
+- Personas: privacy-conscious userscript users, MV2-era migrants, script authors, extension reviewers, enterprise operators (managed policy), multi-device sync users.
+- Platforms/distribution: Chrome MV3 (published), Firefox AMO (validation, Phase 5), Edge (package path), local release artifacts; Firefox Android and Safari deferred (API gaps).
+- Integrations/data: IndexedDB + Storage Buckets (scripts, GM values, stats, backups, bindings); `chrome.storage.local` (settings, receipts, managed policy); `chrome.storage.session` (session-only sync secrets); offscreen/Firefox fallbacks for AST + merge; WebDAV/Drive/Dropbox/OneDrive/S3/Gist/EasyCloud sync; CWS/AMO reviewer-evidence tooling.
 
 ## Competitive Landscape
-- Tampermonkey: strongest incumbent with MV3 parity, enterprise provisioning, external editor tracking, and a large installed base. Learn from its file-tracking and policy-provisioning maturity; avoid closed-source trust opacity and freemium trust tradeoffs.
-- Violentmonkey: strongest open-source brand but Chrome MV3 support remains unresolved. Learn from its lightweight UX and community trust; avoid leaving a platform migration until browser removal forces users to move.
-- ScriptCat: MV3-native and active, with scheduled/background scripts, cloud sync, `@unwrap`, and modern storage choices. Learn from its background-script vocabulary and schedule UX; avoid stability regressions and documentation fragmentation.
-- OrangeMonkey: high-install-count lightweight manager. Learn from casual-user migration simplicity and low-friction import paths; avoid weak provenance signals.
-- FireMonkey and Greasemonkey: Firefox-only userscript/userstyle references. Learn from userstyle parity and Firefox-first constraints; avoid Chrome-incompatible architecture.
-- Userscripts for Safari: proves Safari demand but requires a different extension platform. Keep as a watch item, not a near-term implementation target.
-- Requestly and Automa: adjacent browser automation/request tools. Learn from rule testing, replayable workflows, and inspectable execution logs; avoid turning ScriptVault into a general automation suite.
-- Greasy Fork/OpenUserJS/awesome-userscripts: discovery ecosystems remain valuable. Keep ScriptVault's built-in search, install-source trust receipts, and migration messaging focused on these ecosystems.
+
+- Tampermonkey (5.5.0, closed-source): strongest incumbent — external-editor file tracking, MCP server, OS/policy provisioning, badge/execution-state display modes. Learn from its dev-workflow polish and execution-state visibility; avoid closed-source trust opacity. Most of its GM/directive surface (GM_getValues, @tag, @run-in, GM_audio, GM_download, GM_getTab) ScriptVault already matches.
+- ScriptCat (v1.4.0, MV3-native): background/scheduled scripts, `crontab once(...)`, `@early-start`, an AI Agent + MCP, multi-engine discovery. Learn from schedule vocabulary and one-time cron; avoid the built-in hosted-AI dependency (conflicts with zero-telemetry).
+- Violentmonkey (open-source, no Chrome MV3): its issue tracker is a goldmine of unmet needs — blank-state sync overwrite (#590), OAuth rot (#2254/#389), fused check-and-apply update (#1023), no update diff (#500), GM value data sync (#48). ScriptVault already answers most of these; use them to validate the reliability focus.
+- Userscripts for Safari: directory-of-files model (whole library as `.user.js` on disk, edited by any external editor). Learn the directory-store idea for the dev-workflow track; avoid the Safari platform dependency itself.
+- vite-plugin-monkey: userscript dev tooling with a localhost dev server + `.meta.js` HMR. Learn the hot-reload-from-localhost pattern (fits the external-editor track); nothing to avoid.
+- Tweeks.io (AI-native, YC W25): natural-language → DOM transforms. Learn the demand signal; avoid the hosted-inference architecture — only viable here as bring-your-own-endpoint.
 
 ## Security, Privacy, and Reliability
-- `npm audit --audit-level=moderate --omit=optional` is currently clean.
-- `gh auth status` fails for the configured account, and `npm run release:check:public` hit GitHub API rate limiting plus an unsigned `v3.11.0` tag. Public release checks need a deterministic unauthenticated/public-source path and clearer signed-tag handling.
-- `.github/workflows/ci.yml` exists even though repo/global policy says builds, tests, audits, and deploys are local-only. It also revives a remote build surface that the repo recently removed in commit `cef8dec`.
-- Firefox lint warning inventory is 148 warnings: 126 `UNSAFE_VAR_ASSIGNMENT`, 17 `UNSUPPORTED_API`, 3 `DANGEROUS_EVAL`, 1 `KEY_FIREFOX_ANDROID_UNSUPPORTED_BY_MIN_VERSION`, and 1 `INLINE_SCRIPT`. The warnings are reviewed, but lowering the count before AMO submission reduces reviewer friction.
-- Broad `<all_urls>` host access, user script execution, optional cookies/downloads/clipboard/identity permissions, and remote `@require` support are inherent to the product; the project offsets them with install review, internal-host guards, SRI/provenance checks, trust receipts, and local-only disclosure.
-- Current dependency drift is patch-level: `@playwright/test` 1.60.0 -> 1.61.1, `chrome-types` 0.1.425 -> 0.1.431, `chrome-webstore-upload-cli` 4.0.0 -> 4.0.1, `jsdom` 29.0.1 -> 29.1.1, and `typescript` 6.0.2 -> 6.0.3. `monaco-editor` 0.55.1 and `vitest` 4.1.9 are current.
+
+- `npm audit --audit-level=moderate --omit=optional`: **0 vulnerabilities** (2026-07-01). Dependency stack fully patched: `esbuild` resolves to 0.28.1 (0.28.0's GHSA-gv7w-rqvm-qjhr / GHSA-g7r4-m6w7-qqqr avoided), `dompurify` pinned at 3.4.11 (covers the June 2026 IN_PLACE/cross-realm advisory cluster), `vitest` 4.1.9 (CVE-2026-47429 backport-patched — do NOT chase 5.0-beta), `fflate` vendored as `lib/fflate.js` under the provenance gate. No dependency roadmap action needed.
+- `<all_urls>` static `host_permissions` (`manifest.json:37-38`) is the largest privacy surface. `src/background/host-permission-patterns.ts` already computes per-URL patterns; moving to `optional_host_permissions` with per-script grants is a real differentiator but large and behavior-risky (breaks update/GM_xmlhttpRequest scoping if done naively). Must stay default-scoped with explicit, plain-language broad-access opt-in.
+- Reliability wins already shipped this cycle: cloud-sync 3-way merge no longer dead-gates to last-write-wins, restore-from-trash survives remote tombstones, and GM values are isolated per authenticated `userScriptId` (see 2026-07-01 CHANGELOG). Community's top sync data-loss classes (blank-state overwrite, tombstone resurrection) are now addressed; OAuth-rot resilience (Violentmonkey #2254) is partially covered by PKCE/refresh-token flows.
+- Chrome 138+ "Allow User Scripts" is a per-extension toggle that defaults OFF on new installs and makes `chrome.userScripts` `undefined` when off — a silent first-run break. The setup-doctor work (N-7) covers rehydration; new-user onboarding should deep-link the toggle, and the proposed run-diagnostic should name this as a cause.
+- The `safeSetHtml` helpers (fixed 2026-07-01 to anchor the parse range) still rely on a Trusted-Types passthrough, not real sanitization. `Element.setHTML()` (Chrome ~146 / Firefox 148) would add genuine sanitization for GreasyFork/API-fetched HTML — feature-detect, too new to rely on unconditionally.
 
 ## Architecture Assessment
-- Source ownership is mostly clear: TypeScript authoritative modules in `src/**`, generated runtime artifacts, and dashboard modules in `pages/**`. `background.js` and Monaco build output should remain generated.
-- `src/background/core.ts` remains the largest implementation boundary and should continue shrinking through typed handler extraction rather than broad rewrites.
-- `pages/dashboard.js` is large but supported by lazy-loaded modules and focused tests; near-term work should target measured warnings and release/docs drift, not another dashboard split.
-- `vitest.config.mjs` coverage thresholds are already ratcheted to 45 lines / 48 functions / 32 branches / 42 statements, so prior research claiming 10/5/10 thresholds is stale.
-- `tests/dependabot-config.test.js` no longer exists, so the prior stale-test item is obsolete.
-- `.github/workflows/ci.yml` and `scripts/check-github-actions-pins.mjs` now conflict with the local-build policy and should be removed or replaced with a local-only drift check.
+
+- Source ownership is clear: TypeScript-authoritative `src/**`, generated runtime artifacts (`modules/*.js`, `background.core.js`, `background.js`), dashboard modules in `pages/**`. Generated files stay generated.
+- `src/background/core.ts` remains the largest boundary; continue shrinking via typed handler extraction, not rewrites.
+- `pages/dashboard.js` (~16.7k lines) is large but lazy-loaded and tested; a run-diagnostic should be a new focused module, not more dashboard bulk.
+- `BackupScheduler` stores full ZIP blobs in `chrome.storage.local` (CLAUDE.md Known Issues) — CompressionStream + Storage-Bucket relocation is the direct fix.
+- Test/doc gaps: no per-tab injection-state coverage exists (the run-diagnostic would need it); dependency-drift and Firefox-warning items from prior research are now stale and should not be re-raised.
 
 ## Rejected Ideas
-- Built-in hosted script generation: natural-language script tools validate demand, but sending page/script context to a hosted service conflicts with ScriptVault's zero-telemetry posture. Source: Tweeks, ScriptCat.
-- Safari port now: Safari lacks the same `userScripts` API shape and would require a separate platform project. Source: Userscripts Safari and WebExtensions platform docs.
-- Replace Monaco on Chrome with CodeMirror: Firefox packaging may justify a smaller editor later, but Chrome's Monaco editor is a flagship differentiator. Source: Monaco and CodeMirror changelogs.
-- General browser automation builder: Requestly/Automa show useful diagnostics patterns, but full workflow automation would dilute the userscript-manager product.
-- New sync provider before AMO/CWS hardening: sync coverage is already broad; release trust and reviewer friction are higher-value.
-- More remote CI hardening: project policy is local builds only, so hardening `.github/workflows/ci.yml` is the wrong direction.
+
+- Built-in hosted AI script generation (Tweeks, ScriptCat AI Agent): sending page/script context to a hosted model conflicts with zero-telemetry. Only viable as bring-your-own local/OpenAI-compatible endpoint. Source: tweeks.io, docs.scriptcat.org.
+- In-app conversational AI editing now: viable only BYO-key; revisit when on-device LLMs are practical (matches existing UC-3). Source: docs.scriptcat.org.
+- Safari port / MV2 shims: Safari lacks the `userScripts` shape; MV2 is terminally removed at Chrome 139. Source: quoid/userscripts, Chrome MV2 timeline.
+- vitest 5.0-beta upgrade: still beta; CVE-2026-47429 already backported to 4.1.x. Source: GHSA-5xrq-8626-4rwp.
+- `@early-start` "earlier than document-start": MV3 injection floor is document_start (`injectImmediately`); nothing earlier is exposed. Source: chrome.userScripts docs.
+- Re-adding remote CI / dependency-drift / Firefox-148-warning burndown: all resolved since the prior pass. Source: repo state (`scripts/check-no-github-actions.mjs`, clean `npm audit`, WARNING_BUDGET=80).
 
 ## Sources
+
 Competitors:
 - https://www.tampermonkey.net/changelog.php
-- https://github.com/violentmonkey/violentmonkey/issues/1934
-- https://github.com/scriptscat/scriptcat/releases
-- https://docs.scriptcat.org/en/
-- https://chrome-stats.com/d/ekmeppjgajofkpiofbebgcbohbmfldaf
-- https://github.com/erosman/firemonkey
+- https://www.tampermonkey.net/documentation.php
+- https://github.com/Tampermonkey/tampermonkey-mcp
+- https://docs.scriptcat.org/en/docs/change/
 - https://github.com/quoid/userscripts
-- https://github.com/awesome-scripts/awesome-userscripts
+- https://github.com/lisonge/vite-plugin-monkey
+- https://news.ycombinator.com/item?id=45916525
 
-Platform and policy:
-- https://developer.chrome.com/docs/extensions/whats-new
+Community pain (Verified issues):
+- https://github.com/violentmonkey/violentmonkey/issues/590
+- https://github.com/violentmonkey/violentmonkey/issues/2254
+- https://github.com/violentmonkey/violentmonkey/issues/1023
+- https://github.com/violentmonkey/violentmonkey/issues/500
+- https://github.com/violentmonkey/violentmonkey/issues/48
+- https://github.com/Tampermonkey/tampermonkey/issues/2536
+- https://github.com/Tampermonkey/tampermonkey/issues/2086
+- https://github.com/Tampermonkey/tampermonkey/issues/1265
+- https://greasyfork.org/en/discussions/development/247083
+
+Platform / specs:
 - https://developer.chrome.com/docs/extensions/reference/api/userScripts
-- https://developer.chrome.com/docs/extensions/develop/migrate/mv2-deprecation-timeline
+- https://developer.chrome.com/blog/chrome-userscript
+- https://developer.chrome.com/docs/extensions/whats-new
 - https://developer.chrome.com/docs/extensions/develop/migrate/remote-hosted-code
-- https://extensionworkshop.com/documentation/publish/source-code-submission/
+- https://developer.mozilla.org/en-US/docs/Web/API/HTML_Sanitizer_API
+- https://developer.mozilla.org/en-US/docs/Web/API/Compression_Streams_API
 - https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/userScripts
-- https://w3c.github.io/webextensions/specification/
+- https://extensionworkshop.com/documentation/publish/source-code-submission/
+- https://w3c.github.io/charter-drafts/2025/webextensions-wg.html
 
-Security and reliability:
-- https://cheatsheetseries.owasp.org/cheatsheets/Browser_Extension_Vulnerabilities_Cheat_Sheet.html
-- https://blog.sekoia.io/targeted-supply-chain-attack-against-chrome-browser-extensions/
-- https://www.cyberhaven.com/engineering-blog/final-analysis-chrome-extension-security-incident
-- https://pluto.security/blog/chrome-extension-supply-chain-attacks-permission-creep/
+Security / dependencies:
 - https://github.com/advisories/GHSA-5xrq-8626-4rwp
-
-Dependencies and tooling:
-- https://github.com/microsoft/monaco-editor/releases
-- https://github.com/vitest-dev/vitest/releases
-- https://playwright.dev/docs/release-notes
-- https://www.typescriptlang.org/docs/
-- https://github.com/jsdom/jsdom/releases
-- https://github.com/fregante/chrome-webstore-upload-cli/releases
+- https://github.com/advisories/GHSA-hpcv-96wg-7vj8
+- https://github.com/evanw/esbuild/releases
+- https://cheatsheetseries.owasp.org/cheatsheets/Browser_Extension_Vulnerabilities_Cheat_Sheet.html
 
 ## Open Questions
-- AMO submission feedback remains unknowable until maintainer credentials are available and the package is submitted.
-- Whether release tags must be signed locally for every historical/public verification path needs a maintainer key decision.
-- Firefox Android validation still needs a device or emulator smoke path before claiming support.
+
+- Would raising `minimum_chrome_version` from 130 to 138 (clean "Allow User Scripts" toggle semantics + structured-clone messaging) cut off a meaningful user share? Needs install-base data only the maintainer has.
+- Is per-site optional host permissions worth the update/GM_xmlhttpRequest scoping complexity, or does the install-review + trust-receipt model already satisfy the privacy wedge? Needs a user-demand signal.
+- AMO submission feedback remains unknowable until maintainer credentials exist and the package is submitted.

@@ -605,3 +605,73 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 | RD26-10 | W3C WebExtensions WG draft charter | https://w3c.github.io/charter-drafts/2025/webextensions-wg.html |
 
 ## Research-Driven Additions
+
+_Added 2026-07-01. Items below are net-new from the 2026-07-01 research pass and do not duplicate the existing Now/Next/Later/N-/X-/L-/UC- items. Sources in the Research-Driven Sources (2026-07-01) appendix._
+
+### P1
+
+- [ ] P1 — Per-tab "why didn't my script run?" diagnostic
+  Why: The #1 support burden across Tampermonkey/Violentmonkey is an enabled, matching script silently not injecting; no manager explains why per tab. ScriptVault has a proactive pattern tester and an execution panel but no reverse per-tab diagnostic.
+  Evidence: Tampermonkey #2536/#2086/#2126, quoid/userscripts #459, GreasyFork SPA warning thread (RD27-05..RD27-08); Chrome 138 "Allow User Scripts" defaults-off (RD27-09).
+  Touches: `pages/devtools-panel.js` or a new popup/dashboard panel, `content.js`, `src/background/core.ts` (per-tab injection state), `src/background/url-matcher.ts`, `src/background/registration.ts`.
+  Acceptance: For the active tab, the UI lists each script and a status per script — matched?/enabled?/injected?/blocked-by (CSP, host-permission, `chrome.userScripts` toggle off, frame/noframes, SPA-navigation-not-refired, `@run-at` timing) — with a plain-language cause; a Playwright/jsdom test asserts each cause path renders. Cross-ref N-7 (setup doctor surfaces the toggle-off cause).
+  Complexity: M
+
+### P2
+
+- [ ] P2 — Compress backups and stored script bodies
+  Why: `BackupScheduler` stores full uncompressed ZIP blobs in `chrome.storage.local` (CLAUDE.md Known Issues) and script bodies are stored raw, inflating Storage Buckets quota. `CompressionStream` reached Baseline widely-available 2025-11-09 (Chromium 80+), so no new dependency is required.
+  Evidence: MDN Compression Streams API (RD27-11); CLAUDE.md Known Remaining Issues (oversized backup blobs).
+  Touches: `src/modules/backup-scheduler.ts`, `src/storage/script-db.ts` / `src/modules/storage.ts`, `src/background/import-export.ts`, `tests/storage.test.js`.
+  Acceptance: New backups and large stored bodies are gzip-compressed via `CompressionStream`, transparently decompressed on read, with a migration path for existing uncompressed records; a test verifies round-trip and measured size reduction. Relocate backup blobs to a Storage Bucket where available.
+  Complexity: M
+
+- [ ] P2 — Optional per-site host permissions to narrow `<all_urls>`
+  Why: The static `<all_urls>` grant is the biggest privacy surface and the "read and change all your data on all sites" prompt actively drives users to seek alternatives — directly on ScriptVault's privacy-first wedge.
+  Evidence: Tampermonkey #640/#1572, HN Tampermonkey-alternatives threads (RD27-13, RD27-14); existing groundwork in `src/background/host-permission-patterns.ts`.
+  Touches: `manifest.json` (`optional_host_permissions`), `src/background/host-permission-patterns.ts`, `src/background/registration.ts`, `pages/dashboard.js` (grant UI), `pages/install.js` (request at install from a user gesture).
+  Acceptance: A setting defaults scripts to scoped host grants derived from `@match`; broad/`<all_urls>` access requires an explicit per-script opt-in with a plain-language explanation; update checks and `GM_xmlhttpRequest` continue to work under scoped grants; feature-detected and degrades on Firefox. Ship behind a flag first.
+  Complexity: XL
+
+### P3
+
+- [ ] P3 — Sanitize untrusted API/imported HTML with `Element.setHTML()`
+  Why: GreasyFork/OpenUserJS/GitHub-fetched descriptions and changelogs are rendered in the manager UI; `safeSetHtml` currently relies on a Trusted-Types passthrough plus `escapeHtml`, not real sanitization. Native `Element.setHTML()` adds defense-in-depth without bundling DOMPurify.
+  Evidence: MDN HTML Sanitizer API — Baseline newly-available 2025-09, Chrome ~146 / Firefox 148 (RD27-10).
+  Touches: `pages/dashboard-store.js`, `pages/dashboard-gist.js`, shared `safeSetHtml` helpers in `pages/*`.
+  Acceptance: Where untrusted remote HTML is rendered, `Element.setHTML()` is used when available with the existing escaped-fragment path as fallback; a test asserts a script/style-bearing payload is stripped under the sanitizer path.
+  Complexity: S
+
+- [ ] P3 — `@crontab once(...)` one-time schedule
+  Why: ScriptCat supports one-time cron expressions; ScriptVault's `@crontab` only recurs, so authors can't schedule a single future run.
+  Evidence: docs.scriptcat.org changelog (RD27-03); existing `@crontab` parsing in `src/background/core.ts`.
+  Touches: `src/background/core.ts` (`parseCronExpression`/`scheduleCrontabAlarm`/`handleCrontabAlarm`), `pages/dashboard-linter.js` (crontab lint), `tests/crontab-next-fire.test.js`.
+  Acceptance: `@crontab once(<expr>)` fires exactly once at the next matching time then clears its alarm and does not reschedule; the linter accepts it; a test pins single-fire + no-reschedule.
+  Complexity: S
+
+- [ ] P3 — Spike a local MCP bridge for script management
+  Why: Tampermonkey and ScriptCat now expose script operations to external AI agents via MCP; a zero-inference local bridge (extension WebSocket endpoint + user-run local MCP helper) lets a user's own agent list/read/create/edit scripts without any hosted service — a differentiator that preserves the no-telemetry guarantee.
+  Evidence: Tampermonkey MCP (RD27-02), ScriptCat v1.4.0 MCP (RD27-03), CSA MCP security best-practices (RD27-15).
+  Touches: spike only — a design note plus a guarded, off-by-default local message endpoint; no runtime commitment until the security model (auth handshake, origin/loopback binding, scope limits) is validated.
+  Acceptance: A written design + prototype behind an explicit off-by-default setting that authenticates the local client and refuses non-loopback connections; decision recorded to promote or reject before any user-facing exposure.
+  Complexity: L
+
+### Appendix: Research-Driven Sources (2026-07-01)
+
+| ID | Source | URL |
+|---|---|---|
+| RD27-01 | Tampermonkey 5.5.0 changelog | https://www.tampermonkey.net/changelog.php |
+| RD27-02 | Tampermonkey MCP server | https://github.com/Tampermonkey/tampermonkey-mcp |
+| RD27-03 | ScriptCat v1.4.0 changelog (once/MCP/@early-start) | https://docs.scriptcat.org/en/docs/change/ |
+| RD27-04 | Userscripts for Safari (directory store) | https://github.com/quoid/userscripts |
+| RD27-05 | TM scripts silently not executing | https://github.com/Tampermonkey/tampermonkey/issues/2536 |
+| RD27-06 | TM document-start injection timing | https://github.com/Tampermonkey/tampermonkey/issues/2086 |
+| RD27-07 | quoid/userscripts instant injection | https://github.com/quoid/userscripts/issues/459 |
+| RD27-08 | GreasyFork SPA navigation warning | https://greasyfork.org/en/discussions/development/247083 |
+| RD27-09 | Chrome 138 Allow-User-Scripts toggle | https://developer.chrome.com/blog/chrome-userscript |
+| RD27-10 | HTML Sanitizer API (Element.setHTML) | https://developer.mozilla.org/en-US/docs/Web/API/HTML_Sanitizer_API |
+| RD27-11 | Compression Streams API (Baseline 2025-11) | https://developer.mozilla.org/en-US/docs/Web/API/Compression_Streams_API |
+| RD27-12 | vite-plugin-monkey dev server HMR | https://github.com/lisonge/vite-plugin-monkey |
+| RD27-13 | TM granular host-permission requests | https://github.com/Tampermonkey/tampermonkey/issues/640 |
+| RD27-14 | HN Tampermonkey alternatives (privacy) | https://news.ycombinator.com/item?id=22896078 |
+| RD27-15 | CSA MCP security best-practices | https://labs.cloudsecurityalliance.org/agentic/agentic-mcp-security-best-practices-v1/ |
