@@ -234,6 +234,67 @@ describe('source easycloud sync module', () => {
     expect(scriptState).toEqual([]);
   });
 
+  it('resurrects a restored-from-trash script newer than a remote tombstone (does not re-delete)', async () => {
+    await chrome.storage.local.set({
+      easycloud_connected: true,
+      syncTombstones: {},
+    });
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ files: [{ id: 'drive-file-id' }] }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            version: 1,
+            timestamp: 50,
+            deviceId: 'remote-device',
+            scripts: [],
+            tombstones: { script_alpha: 12345 },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(new Response('{}', { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ id: 'drive-file-id' }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+    globalThis.fetch = fetchMock;
+
+    // Local script was restored from trash with an updatedAt NEWER than the
+    // remote tombstone (12345), so the restore must win.
+    const harness = await loadFreshEasyCloud([
+      {
+        id: 'script_alpha',
+        code: '// ==UserScript==\n// @name Alpha\n// ==/UserScript==',
+        meta: { name: 'Alpha' },
+        enabled: true,
+        position: 0,
+        settings: {},
+        createdAt: 1,
+        updatedAt: 99999,
+      },
+    ]);
+    const { EasyCloudSync, ScriptStorage, scriptState } = harness;
+
+    const result = await EasyCloudSync.sync();
+
+    expect(result.success).toBe(true);
+    expect(ScriptStorage.delete).not.toHaveBeenCalledWith('script_alpha');
+    expect(scriptState.map((s) => s.id)).toEqual(['script_alpha']);
+    // The tombstone was cleared locally.
+    const persisted = (await chrome.storage.local.get('syncTombstones')).syncTombstones;
+    expect(persisted).toEqual({});
+  });
+
   it('uploads only sync-safe per-script settings to EasyCloud', async () => {
     await chrome.storage.local.set({
       easycloud_connected: true,

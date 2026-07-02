@@ -604,9 +604,19 @@ const EasyCloudSync = (() => {
     const allIds = /* @__PURE__ */ new Set([...localScripts.keys(), ...remoteScripts.keys()]);
     const mergedScripts = [];
     for (const id of allIds) {
-      if (mergedTombstones[id]) continue;
       const local = localScripts.get(id);
       const remote = remoteScripts.get(id);
+      const tombstoneTs = mergedTombstones[id];
+      if (typeof tombstoneTs === "number") {
+        const candidateTs = Math.max(local?.updatedAt || 0, remote?.updatedAt || 0);
+        if (candidateTs > tombstoneTs) {
+          delete mergedTombstones[id];
+        } else {
+          continue;
+        }
+      } else if (mergedTombstones[id]) {
+        continue;
+      }
       if (!remote) {
         if (local) mergedScripts.push(sanitizeSyncScriptForEnvelope(local));
         continue;
@@ -623,8 +633,8 @@ const EasyCloudSync = (() => {
         merged.settings = mergeSyncedScriptSettings(local.settings, remote.settings);
       }
       if (local.code !== remote.code) {
-        const base = local.syncBaseCode || remote.syncBaseCode || null;
-        if (base && base !== local.code && base !== remote.code) {
+        const base = local.syncBaseCode ?? null;
+        if (base != null && base !== local.code && base !== remote.code) {
           try {
             const mergeResult = await _mergeScriptText(base, local.code, remote.code);
             if (mergeResult && !mergeResult.error) {
@@ -711,7 +721,7 @@ const EasyCloudSync = (() => {
           if (mergedTombstones[script.id]) continue;
           const existing = await ScriptStorage.get(script.id);
           if (existing?.settings?.userModified) continue;
-          if (!existing || script.updatedAt > (existing.updatedAt || 0)) {
+          if (!existing || script.updatedAt > (existing.updatedAt || 0) || script.code !== existing.code) {
             const parsed = typeof parseUserscript === "function" ? parseUserscript(script.code) : { meta: {}, error: null };
             if (!parsed.error) {
               const nextScript = {
@@ -731,7 +741,10 @@ const EasyCloudSync = (() => {
             }
           }
         }
-        if (Object.keys(mergedTombstones).length > Object.keys(tombstones).length) {
+        const mergedIds = Object.keys(mergedTombstones);
+        const localIds = Object.keys(tombstones);
+        const tombstonesChanged = mergedIds.length !== localIds.length || mergedIds.some((id) => !(id in tombstones)) || localIds.some((id) => !(id in mergedTombstones));
+        if (tombstonesChanged) {
           await chrome.storage.local.set({ syncTombstones: mergedTombstones });
         }
         if (localMutated) {

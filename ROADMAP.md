@@ -580,11 +580,6 @@ _Verified-but-unfixed items from the 2026-07-02 deep audit. The audit shipped fi
 
 ### P2
 
-- [ ] P2 — Easy Cloud sync never received the 2026-07-01 merge fixes
-  Why: `src/modules/sync-easycloud.ts` `_mergeData`/apply loop has no tombstone-resurrection guard (restore-from-trash is re-deleted, same class just fixed in `cloud-sync.ts`), discards clean 3-way merges when the local timestamp wins (`if (!existing || script.updatedAt > existing.updatedAt)` at ~line 869 drops merged text), and treats an empty-string `syncBaseCode` as missing (falls back to the remote base, wrong ancestor).
-  Where: `src/modules/sync-easycloud.ts` (~718-720, 750, 854-894).
-  Acceptance: mirror the cloud-sync resurrection + clean-merge-save + tombstone-change persistence fixes; a test pins restore-from-trash survival and remote-edit adoption on Easy Cloud.
-
 ### P3
 
 - [ ] P3 — Provenance UI aligns `@require-provenance`/`@require-identity` to the wrong dependency

@@ -716,11 +716,24 @@ async function _mergeData(
   const mergedScripts: SyncScript[] = [];
 
   for (const id of allIds) {
-    // Skip tombstoned scripts
-    if (mergedTombstones[id]) continue;
-
     const local = localScripts.get(id);
     const remote = remoteScripts.get(id);
+
+    // Resurrection: a script saved AFTER its tombstone was written (restore-
+    // from-trash, ID-preserving import) wins over the tombstone. Without this,
+    // the tombstone re-deletes the restored script on the next sync. Check the
+    // unfiltered local/remote candidate before skipping tombstoned ids.
+    const tombstoneTs = mergedTombstones[id];
+    if (typeof tombstoneTs === 'number') {
+      const candidateTs = Math.max(local?.updatedAt || 0, remote?.updatedAt || 0);
+      if (candidateTs > tombstoneTs) {
+        delete mergedTombstones[id];
+      } else {
+        continue; // genuine deletion — deletion wins
+      }
+    } else if (mergedTombstones[id]) {
+      continue; // legacy non-timestamp tombstone — deletion wins
+    }
 
     if (!remote) {
       // Only local — keep it
@@ -747,9 +760,13 @@ async function _mergeData(
 
     // Code merge
     if (local.code !== remote.code) {
-      const base: string | null = local.syncBaseCode || remote.syncBaseCode || null;
+      // Use the LOCAL device's recorded sync base as the 3-way ancestor. Empty
+      // string is a valid base (only null/undefined means "no base recorded");
+      // do NOT fall back to the remote device's base, which is a different
+      // ancestor and produces a wrong merge.
+      const base: string | null = local.syncBaseCode ?? null;
 
-      if (base && base !== local.code && base !== remote.code) {
+      if (base != null && base !== local.code && base !== remote.code) {
         // Both sides changed since base — attempt 3-way merge. Chrome routes
         // through the offscreen document; Firefox runs Diff inline.
         try {
@@ -866,7 +883,11 @@ async function _performSync(): Promise<SyncResult> {
         // Skip user-modified scripts
         if (existing?.settings?.userModified) continue;
 
-        if (!existing || script.updatedAt > (existing.updatedAt || 0)) {
+        // Save when the merged script is new, the remote side is newer, OR a
+        // clean 3-way merge produced text that differs from the local copy — a
+        // clean merge must not be discarded just because the local timestamp
+        // wins (merged.updatedAt = max(local, remote) equals local's own).
+        if (!existing || script.updatedAt > (existing.updatedAt || 0) || script.code !== existing.code) {
           const parsed = typeof parseUserscript === 'function'
             ? parseUserscript(script.code)
             : { meta: {} as ScriptMeta, error: null };
@@ -890,8 +911,15 @@ async function _performSync(): Promise<SyncResult> {
         }
       }
 
-      // Persist merged tombstones
-      if (Object.keys(mergedTombstones).length > Object.keys(tombstones).length) {
+      // Persist merged tombstones whenever the set CHANGED (added OR removed) —
+      // a resurrection removes a tombstone without growing the count, and that
+      // removal must stick locally so it does not re-resurrect-and-redelete.
+      const mergedIds = Object.keys(mergedTombstones);
+      const localIds = Object.keys(tombstones);
+      const tombstonesChanged = mergedIds.length !== localIds.length ||
+        mergedIds.some((id) => !(id in tombstones)) ||
+        localIds.some((id) => !(id in mergedTombstones));
+      if (tombstonesChanged) {
         await chrome.storage.local.set({ syncTombstones: mergedTombstones });
       }
 
