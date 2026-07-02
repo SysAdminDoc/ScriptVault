@@ -17,85 +17,33 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
+    /* Install-page tokens are aliases over the canonical --sv-* tokens from
+       theme-tokens.css (linked above), so all four themes come from a single
+       source instead of a parallel per-theme copy. Derived tints follow the
+       theme accent via color-mix (Chrome 111+/Firefox supported). */
     :root {
-      --bg-primary: #0f172a;
-      --bg-secondary: #1e293b;
-      --bg-tertiary: #334155;
-      --bg-hover: #475569;
-      --text-primary: #f8fafc;
-      --text-secondary: #cbd5e1;
-      --text-muted: #94a3b8;
-      --accent: #22c55e;
-      --accent-hover: #16a34a;
-      --accent-bg: rgba(34, 197, 94, 0.1);
-      --blue: #60a5fa;
-      --blue-hover: #3b82f6;
-      --blue-bg: rgba(96, 165, 250, 0.1);
-      --danger: #ef4444;
-      --danger-bg: rgba(239, 68, 68, 0.1);
-      --warning: #f59e0b;
-      --warning-bg: rgba(245, 158, 11, 0.1);
-      --border: #334155;
+      --bg-primary: var(--sv-bg);
+      --bg-secondary: var(--sv-bg-raised);
+      --bg-tertiary: var(--sv-bg-hover);
+      --bg-hover: var(--sv-bg-hover);
+      --text-primary: var(--sv-text);
+      --text-secondary: var(--sv-text-muted);
+      --text-muted: var(--sv-text-dim);
+      --accent: var(--sv-accent);
+      --accent-hover: var(--sv-accent);
+      --accent-bg: color-mix(in srgb, var(--sv-accent) 12%, transparent);
+      --blue: var(--sv-info);
+      --blue-hover: var(--sv-info);
+      --blue-bg: color-mix(in srgb, var(--sv-info) 12%, transparent);
+      --danger: var(--sv-danger);
+      --danger-bg: color-mix(in srgb, var(--sv-danger) 12%, transparent);
+      --warning: var(--sv-warning);
+      --warning-bg: color-mix(in srgb, var(--sv-warning) 12%, transparent);
+      --border: var(--sv-border);
       --shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-      --radius: 8px;
-      --radius-sm: 6px;
+      --radius: var(--sv-radius-panel);
+      --radius-sm: var(--sv-radius-control);
       --radius-xs: 4px;
-    }
-    
-    [data-theme="light"] {
-      --bg-primary: #f8fafc;
-      --bg-secondary: #ffffff;
-      --bg-tertiary: #f1f5f9;
-      --bg-hover: #e2e8f0;
-      --text-primary: #0f172a;
-      --text-secondary: #475569;
-      --text-muted: #64748b;
-      --border: #e2e8f0;
-      --shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
-    }
-
-    [data-theme="catppuccin"] {
-      --bg-primary: #1e1e2e;
-      --bg-secondary: #252536;
-      --bg-tertiary: #313244;
-      --bg-hover: #3b3b52;
-      --text-primary: #cdd6f4;
-      --text-secondary: #a6adc8;
-      --text-muted: #585b70;
-      --accent: #a6e3a1;
-      --accent-hover: #94d990;
-      --accent-bg: rgba(166, 227, 161, 0.1);
-      --blue: #89b4fa;
-      --blue-hover: #74a8f7;
-      --blue-bg: rgba(137, 180, 250, 0.1);
-      --danger: #f38ba8;
-      --danger-bg: rgba(243, 139, 168, 0.1);
-      --warning: #f9e2af;
-      --warning-bg: rgba(249, 226, 175, 0.1);
-      --border: #45475a;
-      --shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-    }
-
-    [data-theme="oled"] {
-      --bg-primary: #000000;
-      --bg-secondary: #0a0a0a;
-      --bg-tertiary: #151515;
-      --bg-hover: #1f1f1f;
-      --text-primary: #e0e0e0;
-      --text-secondary: #999;
-      --text-muted: #555;
-      --accent: #22c55e;
-      --accent-hover: #16a34a;
-      --accent-bg: rgba(34, 197, 94, 0.1);
-      --blue: #60a5fa;
-      --blue-hover: #3b82f6;
-      --blue-bg: rgba(96, 165, 250, 0.1);
-      --danger: #ef4444;
-      --danger-bg: rgba(239, 68, 68, 0.1);
-      --warning: #f59e0b;
-      --warning-bg: rgba(245, 158, 11, 0.1);
-      --border: #1a1a1a;
-      --shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
     }
 
     html:not([data-theme="light"]) {

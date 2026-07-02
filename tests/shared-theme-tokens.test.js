@@ -61,6 +61,16 @@ describe('shared theme token system', () => {
     expect(html).toContain('var(--sv-accent)');
   });
 
+  it('install page aliases shared tokens instead of a parallel per-theme copy', () => {
+    const html = read('pages/install.html');
+    expect(html).toContain('--bg-primary: var(--sv-bg)');
+    expect(html).toContain('--text-primary: var(--sv-text)');
+    expect(html).toContain('--accent: var(--sv-accent)');
+    // The old parallel per-theme blocks must be gone.
+    expect(html).not.toContain('[data-theme="catppuccin"] {');
+    expect(html).not.toContain('--bg-primary: #0f172a');
+  });
+
   it('devtools panel aliases shared tokens to local names', () => {
     const html = read('pages/devtools-panel.html');
     expect(html).toContain('--bg: var(--sv-bg)');

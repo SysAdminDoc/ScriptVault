@@ -40,12 +40,6 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 
 ## Next
 
-- **P2 — Unify install page theme variables with theme-tokens.css.** The install page defines its own parallel set of CSS custom properties (`--bg-primary`, `--bg-secondary`, etc.) independent of `theme-tokens.css` used by all other pages. Any theme change must be applied to both systems. Consolidate to a single source.
-  Where: `pages/install.html` lines 20-98
-
-- **P2 — Unify install page theme variables with theme-tokens.css.** The install page defines its own parallel set of CSS custom properties (`--bg-primary`, `--bg-secondary`, etc.) independent of `theme-tokens.css` used by all other pages. Any theme change must be applied to both systems. Consolidate to a single source.
-  Where: `pages/install.html` lines 20-98
-
 - **P3 — Keyboard alternative for script reorder.** The drag-and-drop reorder handle in the dashboard table only supports mouse drag events, and the reorder is computed against the unfiltered/unsorted array so a drag while sorted or filtered lands in the wrong position. Add keyboard reordering and compute against the visible order.
   Where: `pages/dashboard.js` createScriptRow drag handle, reorderScripts
 
