@@ -156,6 +156,9 @@ const EasyCloudSync = (() => {
   async function decryptSyncEnvelope(envelope, settings) {
     if (!envelope) return null;
     if (!isEncryptedSyncEnvelope(envelope)) {
+      if (isEncryptionEnabled(settings) && settings.syncEncryptionEstablished === true) {
+        throw new Error("Sync encryption is enabled but the remote data is not encrypted. Refusing to load possibly-tampered plaintext sync data.");
+      }
       return normalizePlainSyncEnvelope(envelope);
     }
     const salt = base64ToBytes(envelope.salt);

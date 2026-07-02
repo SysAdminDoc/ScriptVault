@@ -9,6 +9,25 @@ const WhatsNew = (() => {
     : '2.0.0';
 
   const CHANGELOG = {
+    '3.13.0': {
+      title: 'ScriptVault 3.13.0 — Scheduler, Diagnostics & Hardening',
+      date: '2026-07-02',
+      highlights: [
+        { icon: 'RUN', title: 'Schedules Actually Run', desc: 'Interval, one-time, time-of-day, and date-range script schedules now fire and gate execution — before, they were saved but never enforced.' },
+        { icon: 'WHY', title: 'Run Diagnostics', desc: 'A new popup panel explains, per script, why it is or isn’t running on the current page.' },
+        { icon: 'KEY', title: 'Working Editor Keys', desc: 'Ctrl+S saves and Escape closes the Monaco editor; the Vim key-mapping setting now takes effect.' },
+        { icon: 'THEME', title: 'Themes That Stick', desc: 'Applied custom themes and presets persist across reloads instead of reverting.' },
+        { icon: 'SEC', title: 'Sync Downgrade Guard', desc: 'Once sync encryption is established, tampered plaintext remotes are refused.' },
+        { icon: 'QR', title: 'Scannable Share Codes', desc: 'QR codes for larger scripts (107–271 bytes) are no longer corrupt.' }
+      ],
+      improvements: [
+        'Keyboard navigation no longer hijacks focused row buttons (WCAG 2.1.1)',
+        'Install page verifies declared @require-provenance / @require-identity',
+        'Chain editor only offers the working Manual trigger',
+        'Install page theme is driven by the shared theme-tokens.css',
+        'Removed dead Ctrl+Tab and toolbar-cycling shortcuts'
+      ]
+    },
     '3.12.0': {
       title: 'ScriptVault 3.12.0 — Deep Audit Hardening',
       date: '2026-07-01',

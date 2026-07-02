@@ -80,6 +80,7 @@ const StorageModule = (() => {
     syncEncryptionEnabled: false,
     syncEncryptionPassphrase: "",
     syncEncryptionKdfIterations: 21e4,
+    syncEncryptionEstablished: false,
     webdavUrl: "",
     webdavUsername: "",
     webdavPassword: "",
