@@ -731,13 +731,6 @@ _Net-new from the 2026-07-02 pass (v3.16.0). Verified as not already implemented
   Acceptance: from the popup a user restricts the active script to the current hostname in one click; the dashboard offers add/remove domain rows with live `@match` validation; changes re-register and persist; a test covers scope narrowing + validation rejection.
   Complexity: M
 
-- [ ] P2 — Scam/crypto-drain AST detector category + install-time warning
-  Why: 2026 saw active distribution of fake "crypto exploit" userscripts that drain exchange sessions; ScriptVault already has a 31-detector AST analyzer, so adding a scam-heuristic category (wallet/exchange DOM targeting, seed-phrase/private-key exfil patterns, obfuscated `eval` + network POST) turns that analyzer into a named defense.
-  Evidence: TM scam-script campaign #2783 (RD28-02); GreasyFork account-takeover propagation #682 (RD28-12); existing `src/bg/analyzer.ts` detectors.
-  Touches: `src/bg/analyzer.ts` (new detector group), install-review severity surfacing, `tests/analyzer.test.js`.
-  Acceptance: install review raises a high-severity "possible credential/wallet exfiltration" flag on scripts matching the heuristics, with a named reason; a test pins detection on representative patterns and no false-positive on benign wallet-adjacent scripts.
-  Complexity: M
-
 - [ ] P2 — Local-folder sync provider and plain git-remote sync
   Why: persistent 2026 demand for syncing the script library to a local directory and to a plain git remote (not just Gist). Local-folder pairs with File System Observer hot-reload (P3); git-remote gives version-controlled, self-hosted sync with no third-party account.
   Evidence: VM local-directory sync #2125 (RD28-13), git-server sync #2176 (RD28-14); existing provider framework in `src/modules/sync-providers.ts`.

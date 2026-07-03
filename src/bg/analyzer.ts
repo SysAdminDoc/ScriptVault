@@ -758,6 +758,15 @@ function analyzeAST(code: string): AnalysisResult {
     findings.push(entropyResult);
   }
 
+  // Scam/crypto-drain heuristics are keyword-based; run them on the source text
+  // (comment-stripped) in the AST path too so the primary analyzer flags them.
+  const strippedForScam = code
+    .replace(/(^|[^:])\/\/.*$/gm, '$1')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  const scam = detectScamSignals(strippedForScam);
+  for (const f of scam.findings) findings.push(f);
+  totalRisk += scam.risk;
+
   const riskLevel: string = totalRisk >= 80 ? 'high' : totalRisk >= 40 ? 'medium' : totalRisk >= 15 ? 'low' : 'minimal';
   const categories: Record<string, Finding[]> = {};
   for (const f of findings) {
@@ -978,6 +987,47 @@ function resolveWithMarkers(local: string, remote: string): string {
   ].join('\n');
 }
 
+// Scam / crypto-drain heuristics. 2026 saw active distribution of fake "crypto
+// exploit" userscripts that harvest wallet seed phrases / private keys and drain
+// exchange sessions. These are keyword/text signals (not AST-structural), so
+// they run on the raw code in BOTH the AST and regex analysis paths. To avoid
+// false positives on benign wallet-adjacent scripts, merely reading
+// window.ethereum is NOT flagged; the high-severity "exfiltration" finding
+// requires a seed/private-key or drainer signal COMBINED with an off-page send.
+const SCAM_SEED_HARVEST = /\b(seed[\s_-]?phrase|mnemonic|recovery[\s_-]?phrase|secretRecoveryPhrase|private[\s_-]?key|privateKey|priv[\s_-]?key)\b/i;
+const SCAM_DRAINER_KEYWORDS = /\b(drainer|drainWallet|sweepWallet|transferAll|approveMax|setApprovalForAll)\b/i;
+const SCAM_WALLET_TX = /\b(eth_sendTransaction|wallet_sendTransaction|personal_sign|eth_sign|signTransaction|sendRawTransaction)\b/;
+const SCAM_EXFIL = /\b(fetch|XMLHttpRequest|sendBeacon|WebSocket|GM_xmlhttpRequest|GM\.xmlHttpRequest)\b/;
+
+function detectScamSignals(strippedCode: string): { findings: Finding[]; risk: number } {
+  const findings: Finding[] = [];
+  let risk = 0;
+  const seedHarvest = SCAM_SEED_HARVEST.test(strippedCode);
+  const drainer = SCAM_DRAINER_KEYWORDS.test(strippedCode);
+  const walletTx = SCAM_WALLET_TX.test(strippedCode);
+  const exfil = SCAM_EXFIL.test(strippedCode);
+
+  if (seedHarvest) {
+    findings.push({ id: 'wallet-seed-access', label: 'Wallet seed / private key access', category: 'scam', desc: 'References a wallet seed/recovery phrase or private key — the hallmark of a wallet-drainer script.', risk: 35, count: 1, adjustedRisk: 35 });
+    risk += 35;
+  }
+  if (drainer) {
+    findings.push({ id: 'wallet-drainer-keywords', label: 'Wallet-drainer keywords', category: 'scam', desc: 'Contains keywords associated with wallet-drainer scripts (e.g. setApprovalForAll, sweepWallet, transferAll).', risk: 40, count: 1, adjustedRisk: 40 });
+    risk += 40;
+  }
+  if (walletTx) {
+    findings.push({ id: 'wallet-transaction', label: 'Wallet transaction / signature request', category: 'scam', desc: 'Initiates a wallet transaction or signature (eth_sendTransaction / personal_sign). Legitimate for dApps, but review the destination.', risk: 25, count: 1, adjustedRisk: 25 });
+    risk += 25;
+  }
+  // High-severity correlation: harvesting secrets or draining a wallet AND
+  // sending data off-page is the exfiltration shape.
+  if ((seedHarvest || drainer) && exfil) {
+    findings.push({ id: 'credential-exfil', label: 'Possible credential/wallet exfiltration', category: 'scam', desc: 'This script references wallet secrets or drainer operations AND performs an off-page network send — a possible credential/wallet exfiltration. Review the network destinations before installing.', risk: 60, count: 1, adjustedRisk: 60 });
+    risk += 60;
+  }
+  return { findings, risk };
+}
+
 function analyze(code: string): AnalysisResult {
   const findings: Finding[] = [];
   let totalRisk: number = 0;
@@ -1011,6 +1061,9 @@ function analyze(code: string): AnalysisResult {
       totalRisk += 20;
     }
   }
+  const scam = detectScamSignals(strippedCode);
+  for (const f of scam.findings) findings.push(f);
+  totalRisk += scam.risk;
   const riskLevel: string = totalRisk >= 80 ? 'high' : totalRisk >= 40 ? 'medium' : totalRisk >= 15 ? 'low' : 'minimal';
   const categories: Record<string, Finding[]> = {};
   for (const f of findings) {
