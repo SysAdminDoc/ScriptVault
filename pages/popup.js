@@ -1316,6 +1316,47 @@
                 });
             });
 
+            dropdown.querySelector('[data-action="restrictSite"]')?.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const scriptId = activeDropdownScriptId;
+                queuePopupFocusRestore(getPopupFocusDescriptor(getDropdownTriggerButton(scriptId)));
+                closeScriptDropdown();
+                if (!scriptId) return;
+                let hostPattern = '';
+                try {
+                    if (!canMatchScriptsForUrl(currentUrl)) throw new Error('restricted-page');
+                    const host = new URL(currentUrl).hostname;
+                    if (!host) throw new Error('no-host');
+                    hostPattern = `*://${host}/*`;
+                } catch {
+                    showPopupToast('Open a normal web page first', 'info');
+                    return;
+                }
+                await runScriptAction(scriptId, async () => {
+                    const script = pageScripts.find(s => s.id === scriptId);
+                    if (!script) return;
+                    // Replace the script's original @match with a single site-scoped
+                    // pattern so it only runs on the current site.
+                    const nextSettings = {
+                        ...(script.settings || {}),
+                        useOriginalMatches: false,
+                        userMatches: [hostPattern],
+                    };
+                    try {
+                        const result = await chrome.runtime.sendMessage({ action: 'setScriptSettings', scriptId, settings: nextSettings });
+                        const error = getRuntimeError(result, 'Unable to restrict scope');
+                        if (error) throw new Error(error);
+                        script.settings = nextSettings;
+                        const allScript = allScripts.find(s => s.id === scriptId);
+                        if (allScript) allScript.settings = nextSettings;
+                        renderScriptList();
+                        showPopupToast(`Restricted to ${new URL(currentUrl).hostname}`);
+                    } catch (error) {
+                        showPopupToast(error.message || 'Unable to restrict scope', 'error');
+                    }
+                });
+            });
+
             dropdown.querySelector('[data-action="delete"]')?.addEventListener('click', (e) => {
                 e.stopPropagation();
                 if (!activeDropdownScriptId) return;

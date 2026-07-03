@@ -126,6 +126,7 @@ type TranslationKeys = {
   popupCopyInstallUrl: string;
   popupNoInstallUrl: string;
   popupPinUnpin: string;
+  popupRestrictToSite: string;
   popupPinScript: string;
   popupUnpinScript: string;
   popupConfirmDelete: string;
@@ -1438,6 +1439,7 @@ const translations: TranslationMap = {
     popupCopyInstallUrl: "Copy Install URL",
     popupNoInstallUrl: "No Install URL",
     popupPinUnpin: "Pin / Unpin",
+    popupRestrictToSite: "Only on This Site",
     popupPinScript: "Pin Script",
     popupUnpinScript: "Unpin Script",
     popupConfirmDelete: "Confirm Delete",
@@ -3671,6 +3673,7 @@ const translations: TranslationMap = {
     popupCopyInstallUrl: "Copy Install URL",
     popupNoInstallUrl: "No Install URL",
     popupPinUnpin: "Pin / Unpin",
+    popupRestrictToSite: "Only on This Site",
     popupPinScript: "Pin Script",
     popupUnpinScript: "Unpin Script",
     popupConfirmDelete: "Confirm Delete",
@@ -4935,6 +4938,7 @@ const translations: TranslationMap = {
     popupCopyInstallUrl: "Copy Install URL",
     popupNoInstallUrl: "No Install URL",
     popupPinUnpin: "Pin / Unpin",
+    popupRestrictToSite: "Only on This Site",
     popupPinScript: "Pin Script",
     popupUnpinScript: "Unpin Script",
     popupConfirmDelete: "Confirm Delete",
@@ -6199,6 +6203,7 @@ const translations: TranslationMap = {
     popupCopyInstallUrl: "Copy Install URL",
     popupNoInstallUrl: "No Install URL",
     popupPinUnpin: "Pin / Unpin",
+    popupRestrictToSite: "Only on This Site",
     popupPinScript: "Pin Script",
     popupUnpinScript: "Unpin Script",
     popupConfirmDelete: "Confirm Delete",
@@ -7463,6 +7468,7 @@ const translations: TranslationMap = {
     popupCopyInstallUrl: "Copy Install URL",
     popupNoInstallUrl: "No Install URL",
     popupPinUnpin: "Pin / Unpin",
+    popupRestrictToSite: "Only on This Site",
     popupPinScript: "Pin Script",
     popupUnpinScript: "Unpin Script",
     popupConfirmDelete: "Confirm Delete",
@@ -8727,6 +8733,7 @@ const translations: TranslationMap = {
     popupCopyInstallUrl: "Copy Install URL",
     popupNoInstallUrl: "No Install URL",
     popupPinUnpin: "Pin / Unpin",
+    popupRestrictToSite: "Only on This Site",
     popupPinScript: "Pin Script",
     popupUnpinScript: "Unpin Script",
     popupConfirmDelete: "Confirm Delete",
@@ -9991,6 +9998,7 @@ const translations: TranslationMap = {
     popupCopyInstallUrl: "Copy Install URL",
     popupNoInstallUrl: "No Install URL",
     popupPinUnpin: "Pin / Unpin",
+    popupRestrictToSite: "Only on This Site",
     popupPinScript: "Pin Script",
     popupUnpinScript: "Unpin Script",
     popupConfirmDelete: "Confirm Delete",
@@ -11255,6 +11263,7 @@ const translations: TranslationMap = {
     popupCopyInstallUrl: "Copy Install URL",
     popupNoInstallUrl: "No Install URL",
     popupPinUnpin: "Pin / Unpin",
+    popupRestrictToSite: "Only on This Site",
     popupPinScript: "Pin Script",
     popupUnpinScript: "Unpin Script",
     popupConfirmDelete: "Confirm Delete",
@@ -11564,6 +11573,7 @@ const translations: TranslationMap = {
     popupCopyInstallUrl: "Copy Install URL",
     popupNoInstallUrl: "No Install URL",
     popupPinUnpin: "Pin / Unpin",
+    popupRestrictToSite: "Only on This Site",
     popupPinScript: "Pin Script",
     popupUnpinScript: "Unpin Script",
     popupConfirmDelete: "Confirm Delete",

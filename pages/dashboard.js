@@ -4806,10 +4806,28 @@
         return patterns;
     }
     
+    // Chrome match-pattern grammar: <all_urls> or <scheme>://<host><path> where
+    // scheme is * | http | https | file | ftp, host is * | *.domain | domain (or
+    // empty for file://), and path starts with /.
+    function isValidMatchPattern(pattern) {
+        if (typeof pattern !== 'string' || !pattern.trim()) return false;
+        const p = pattern.trim();
+        if (p === '<all_urls>') return true;
+        return /^(\*|https?|file|ftp):\/\/(\*|(?:\*\.)?[^/*]+|)(\/.*)$/.test(p);
+    }
+
     function addUserPattern(listId, pattern, type) {
         const el = document.getElementById(listId);
         if (!el) return;
-        
+
+        // Validate @match / @exclude patterns before adding so a malformed
+        // pattern (that would silently never match) is rejected with feedback.
+        // @include uses looser glob/regex rules, so it is not validated here.
+        if ((type === 'match' || type === 'exclude') && !isValidMatchPattern(pattern)) {
+            showToast('Invalid match pattern — expected e.g. *://example.com/*', 'error');
+            return;
+        }
+
         // Check for duplicates
         const existing = getUserPatternsFromList(listId);
         if (existing.includes(pattern)) {

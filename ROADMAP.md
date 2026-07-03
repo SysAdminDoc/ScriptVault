@@ -724,13 +724,6 @@ _Net-new from the 2026-07-02 pass (v3.16.0). Verified as not already implemented
   Acceptance: a script opted into an isolated jar sends/receives cookies from a partition distinct from the page and from other scripts; a test asserts cross-script/page cookie isolation.
   Complexity: L
 
-- [ ] P2 — One-click "restrict to current site" + inline domain editor with validation
-  Why: a cluster of 2026 requests wants fast match-management — restrict a running script to the current site and add/edit domains inline with validation, instead of hand-editing `@match`. High satisfaction, low effort, fits the existing per-script settings (userMatches/userExcludes).
-  Evidence: VM #2410 / #2403 / #2559 (RD28-11); existing `settings.userMatches`/`userExcludes` override support.
-  Touches: `pages/popup.js` (per-script "only on this site" action), `pages/dashboard.js` (inline domain editor + `@match` validation), `src/background/registration.ts` (re-register on scope change), tests.
-  Acceptance: from the popup a user restricts the active script to the current hostname in one click; the dashboard offers add/remove domain rows with live `@match` validation; changes re-register and persist; a test covers scope narrowing + validation rejection.
-  Complexity: M
-
 - [ ] P2 — Local-folder sync provider and plain git-remote sync
   Why: persistent 2026 demand for syncing the script library to a local directory and to a plain git remote (not just Gist). Local-folder pairs with File System Observer hot-reload (P3); git-remote gives version-controlled, self-hosted sync with no third-party account.
   Evidence: VM local-directory sync #2125 (RD28-13), git-server sync #2176 (RD28-14); existing provider framework in `src/modules/sync-providers.ts`.
