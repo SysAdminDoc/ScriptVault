@@ -441,16 +441,39 @@ const BackupScheduler = (() => {
   async function _saveBackupList(list) {
     await chrome.storage.local.set({ [STORAGE_KEY_BACKUPS]: list });
   }
+  async function _gzipBytes(bytes) {
+    const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream("gzip"));
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  }
+  async function _gunzipBytes(bytes) {
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  }
   async function _storeBackupBlob(id, base64Data) {
     const dao = _tryGetBackupsDAO();
     if (!dao) return false;
     try {
+      const raw = new Uint8Array(_base64ToArrayBuffer(base64Data));
+      let data = raw.buffer;
+      let compressed = false;
+      if (typeof CompressionStream === "function") {
+        try {
+          const gz = await _gzipBytes(raw);
+          data = gz.buffer;
+          compressed = true;
+        } catch {
+          data = raw.buffer;
+          compressed = false;
+        }
+      }
       await dao.put({
         id,
         name: id,
         createdAt: Date.now(),
-        byteSize: Math.round(base64Data.length * 0.75),
-        data: _base64ToArrayBuffer(base64Data)
+        byteSize: raw.length,
+        // uncompressed logical size
+        compressed,
+        data
       });
       return true;
     } catch {
@@ -463,7 +486,15 @@ const BackupScheduler = (() => {
     try {
       const record = await dao.get(id);
       if (!record?.data) return null;
-      return _arrayBufferToBase64(record.data);
+      let bytes = new Uint8Array(record.data);
+      if (record.compressed) {
+        try {
+          bytes = await _gunzipBytes(bytes);
+        } catch {
+          return null;
+        }
+      }
+      return _arrayBufferToBase64(bytes.buffer);
     } catch {
       return null;
     }

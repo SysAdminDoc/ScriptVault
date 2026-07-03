@@ -68,6 +68,10 @@ export interface BackupRecord {
   createdAt: number;
   byteSize: number;
   data: ArrayBuffer;
+  // When true, `data` is gzip-compressed (CompressionStream). Absent/false means
+  // the record predates compression and `data` is the raw blob — read
+  // transparently either way. `byteSize` is always the uncompressed size.
+  compressed?: boolean;
   meta?: Record<string, unknown>;
 }
 

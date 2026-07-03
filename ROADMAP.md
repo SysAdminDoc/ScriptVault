@@ -582,6 +582,12 @@ _Verified-but-unfixed items from the 2026-07-02 deep audit. The audit shipped fi
 
 ### P3
 
+- [ ] P3 — Compress large stored script bodies (follow-up to backup compression)
+  Why: backup blobs are now gzip-compressed, but raw script bodies in IndexedDB are still uncompressed. Compressing large bodies would cut Storage Buckets quota further. Higher risk than backups because it touches the hot script read/write path — needs a size threshold and a lazy migration so small scripts stay uncompressed.
+  Where: `src/storage/script-db.ts` / `src/modules/storage.ts` (ScriptStorage get/set), `tests/storage.test.js`.
+  Acceptance: script bodies over a size threshold are gzip-compressed transparently with a per-record flag; existing uncompressed records read unchanged; a test verifies round-trip and that small scripts are stored raw.
+  Complexity: M
+
 - [ ] P3 — Provenance UI aligns `@require-provenance`/`@require-identity` to the wrong dependency
   Why: the install page pairs `@require`/`@require-provenance`/`@require-identity` by parallel-array index, but they are independent directives with no positional contract, so a mismatched count binds provenance to the wrong `@require` URL on a trust-decision surface.
   Where: `pages/install.js:656-662` (parser), `:1252-1263` (render), `:2415-2422` (background forward).
@@ -632,13 +638,6 @@ _Verified-but-unfixed items from the 2026-07-02 deep audit. The audit shipped fi
 _Added 2026-07-01. Items below are net-new from the 2026-07-01 research pass and do not duplicate the existing Now/Next/Later/N-/X-/L-/UC- items. Sources in the Research-Driven Sources (2026-07-01) appendix._
 
 ### P2
-
-- [ ] P2 — Compress backups and stored script bodies
-  Why: `BackupScheduler` stores full uncompressed ZIP blobs in `chrome.storage.local` (CLAUDE.md Known Issues) and script bodies are stored raw, inflating Storage Buckets quota. `CompressionStream` reached Baseline widely-available 2025-11-09 (Chromium 80+), so no new dependency is required.
-  Evidence: MDN Compression Streams API (RD27-11); CLAUDE.md Known Remaining Issues (oversized backup blobs).
-  Touches: `src/modules/backup-scheduler.ts`, `src/storage/script-db.ts` / `src/modules/storage.ts`, `src/background/import-export.ts`, `tests/storage.test.js`.
-  Acceptance: New backups and large stored bodies are gzip-compressed via `CompressionStream`, transparently decompressed on read, with a migration path for existing uncompressed records; a test verifies round-trip and measured size reduction. Relocate backup blobs to a Storage Bucket where available.
-  Complexity: M
 
 - [ ] P2 — Optional per-site host permissions to narrow `<all_urls>`
   Why: The static `<all_urls>` grant is the biggest privacy surface and the "read and change all your data on all sites" prompt actively drives users to seek alternatives — directly on ScriptVault's privacy-first wedge.

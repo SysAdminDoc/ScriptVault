@@ -904,16 +904,43 @@ async function _saveBackupList(list: BackupEntry[]): Promise<void> {
  * Returns true if the blob was stored in IDB, false if IDB is unavailable
  * (in which case the caller should keep data inline as fallback).
  */
+// gzip a byte array via the Compression Streams API (Baseline, Chromium 80+).
+async function _gzipBytes(bytes: Uint8Array): Promise<Uint8Array> {
+  const stream = new Blob([bytes as BlobPart]).stream().pipeThrough(new CompressionStream('gzip'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+async function _gunzipBytes(bytes: Uint8Array): Promise<Uint8Array> {
+  const stream = new Blob([bytes as BlobPart]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
 async function _storeBackupBlob(id: string, base64Data: string): Promise<boolean> {
   const dao = _tryGetBackupsDAO();
   if (!dao) return false;
   try {
+    const raw = new Uint8Array(_base64ToArrayBuffer(base64Data));
+    let data: ArrayBuffer = raw.buffer as ArrayBuffer;
+    let compressed = false;
+    // gzip the blob so large backups don't balloon the IndexedDB bucket. Falls
+    // back to raw storage where CompressionStream is unavailable.
+    if (typeof CompressionStream === 'function') {
+      try {
+        const gz = await _gzipBytes(raw);
+        data = gz.buffer as ArrayBuffer;
+        compressed = true;
+      } catch {
+        data = raw.buffer as ArrayBuffer;
+        compressed = false;
+      }
+    }
     await dao.put({
       id,
       name: id,
       createdAt: Date.now(),
-      byteSize: Math.round(base64Data.length * 0.75),
-      data: _base64ToArrayBuffer(base64Data),
+      byteSize: raw.length, // uncompressed logical size
+      compressed,
+      data,
     });
     return true;
   } catch {
@@ -928,7 +955,17 @@ async function _getBackupBlob(id: string): Promise<string | null> {
   try {
     const record = await dao.get(id);
     if (!record?.data) return null;
-    return _arrayBufferToBase64(record.data);
+    let bytes: Uint8Array = new Uint8Array(record.data);
+    // Records written before compression have no `compressed` flag and are read
+    // as-is; new records are transparently gunzipped.
+    if (record.compressed) {
+      try {
+        bytes = await _gunzipBytes(bytes);
+      } catch {
+        return null;
+      }
+    }
+    return _arrayBufferToBase64(bytes.buffer as ArrayBuffer);
   } catch {
     return null;
   }
