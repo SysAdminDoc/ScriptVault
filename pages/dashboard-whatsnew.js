@@ -9,6 +9,21 @@ const WhatsNew = (() => {
     : '2.0.0';
 
   const CHANGELOG = {
+    '3.17.0': {
+      title: 'ScriptVault 3.17.0 — Trust Enforcement & Sync Safety',
+      date: '2026-07-02',
+      highlights: [
+        { icon: 'LOCK', title: 'Enforce Verified Dependencies', desc: 'Set Security → Subresource Integrity to "Require" to refuse any @require that loads unverified remote code. Un-pinned dependencies are now flagged at install as "unverified remote code".' },
+        { icon: 'SCAN', title: 'Scam / Wallet-Drainer Detection', desc: 'The analyzer flags scripts that harvest wallet seed phrases or private keys and send data off-page — a high-severity "possible credential/wallet exfiltration" warning at install.' },
+        { icon: 'SITE', title: 'Only on This Site', desc: 'One click in the popup menu restricts a script to the current site. The dashboard match editor now validates @match patterns.' },
+        { icon: 'SYNC', title: 'Safer Sync & Backups', desc: 'Easy Cloud got the sync merge fixes (restored scripts survive), cloud backups no longer collide with the sync file (and encrypt under E2EE), and backup blobs are gzip-compressed.' },
+      ],
+      improvements: [
+        'Fixed a SettingsManager write race that could drop a refreshed OAuth token',
+        'Cloud backup uploads to a distinct object and encrypts when sync E2EE is on',
+        'Backup blobs are gzip-compressed in IndexedDB (transparent, backward-compatible)',
+      ],
+    },
     '3.16.0': {
       title: 'ScriptVault 3.16.0 — Deep Audit: Security & Data Safety',
       date: '2026-07-02',
