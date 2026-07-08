@@ -247,6 +247,22 @@ const GistIntegration = (() => {
         return resp.json();
     }
 
+    function rawFileHeaders() {
+        const h = { 'Accept': 'text/plain, application/octet-stream, */*' };
+        if (_state.token) h['Authorization'] = `Bearer ${_state.token}`;
+        return h;
+    }
+
+    async function resolveGistFileContent(file, filename) {
+        if (!file || typeof file !== 'object') return '';
+        if (file.truncated !== true) return typeof file.content === 'string' ? file.content : '';
+        if (!file.raw_url) throw new Error(`Gist file ${filename} is truncated and has no raw URL`);
+
+        const resp = await fetch(file.raw_url, { headers: rawFileHeaders() });
+        if (!resp.ok) throw new Error(`Failed to fetch full Gist file ${filename} (${resp.status})`);
+        return await resp.text();
+    }
+
     function extractGistId(input) {
         if (!input) return null;
         input = input.trim();
@@ -369,7 +385,8 @@ const GistIntegration = (() => {
         const scripts = [];
         for (const [filename, file] of Object.entries(gist.files)) {
             if (filename.endsWith('.user.js')) {
-                const meta = parseUserscriptMeta(file.content);
+                const code = await resolveGistFileContent(file, filename);
+                const meta = parseUserscriptMeta(code);
                 const allScripts = _state.getAllScripts?.() || [];
                 const installed = allScripts.some(s => {
                     const sMeta = parseUserscriptMeta(s.code || '');
@@ -377,7 +394,7 @@ const GistIntegration = (() => {
                 });
                 scripts.push({
                     filename,
-                    code: file.content,
+                    code,
                     meta,
                     installed,
                     gistId: gist.id,
@@ -431,8 +448,9 @@ const GistIntegration = (() => {
         if (files.length === 0) throw new Error('No .user.js files in linked Gist');
 
         const [filename, file] = files[0];
+        const code = await resolveGistFileContent(file, filename);
         return {
-            code: file.content,
+            code,
             filename,
             updatedAt: gist.updated_at,
             gistUrl: gist.html_url

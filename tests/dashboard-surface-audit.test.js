@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 const profilesCode = readFileSync(resolve(process.cwd(), 'pages/dashboard-profiles.js'), 'utf8');
 const chainsCode = readFileSync(resolve(process.cwd(), 'pages/dashboard-chains.js'), 'utf8');
 const standaloneCode = readFileSync(resolve(process.cwd(), 'pages/dashboard-standalone.js'), 'utf8');
+const gistCode = readFileSync(resolve(process.cwd(), 'pages/dashboard-gist.js'), 'utf8');
 
 function _invoke(body, params, args, filename) {
   try { const vm = require('node:vm'); return vm.compileFunction(body, params, { filename })(...args); } catch { return new Function(...params, body)(...args); }
@@ -20,6 +21,10 @@ function createScriptChains() {
 
 function createStandaloneExport() {
   return _invoke(standaloneCode + '\nreturn StandaloneExport;', [], [], resolve(process.cwd(), 'pages/dashboard-standalone.js'));
+}
+
+function createGistIntegration() {
+  return _invoke(gistCode + '\nreturn GistIntegration;', [], [], resolve(process.cwd(), 'pages/dashboard-gist.js'));
 }
 
 function createDeferred() {
@@ -301,6 +306,114 @@ describe('dashboard audit surfaces', () => {
     ]);
 
     ScriptChains.destroy();
+  });
+
+  it('Gist imports fetch raw content when GitHub truncates a user script file', async () => {
+    const GistIntegration = createGistIntegration();
+    const gistId = '1234567890abcdef1234';
+    const rawUrl = 'https://gist.githubusercontent.com/raw/full.user.js';
+    const fullScript = [
+      '// ==UserScript==',
+      '// @name Full Gist Script',
+      '// ==/UserScript==',
+      'console.log("full");',
+    ].join('\n');
+
+    globalThis.fetch = vi.fn(async (url) => {
+      if (url === `https://api.github.com/gists/${gistId}`) {
+        return {
+          ok: true,
+          json: async () => ({
+            id: gistId,
+            html_url: `https://gist.github.com/user/${gistId}`,
+            owner: { login: 'user' },
+            files: {
+              'full.user.js': {
+                content: '// ==UserScript==\n// @name Truncated\n// ==/UserScript==\n',
+                truncated: true,
+                raw_url: rawUrl,
+              },
+            },
+          }),
+        };
+      }
+      if (url === rawUrl) {
+        return { ok: true, text: async () => fullScript };
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    const scripts = await GistIntegration.importFromGist(gistId);
+
+    expect(scripts).toHaveLength(1);
+    expect(scripts[0]).toMatchObject({
+      filename: 'full.user.js',
+      code: fullScript,
+      meta: { name: 'Full Gist Script' },
+      gistId,
+      owner: 'user',
+    });
+    expect(globalThis.fetch).toHaveBeenCalledWith(rawUrl, expect.objectContaining({
+      headers: expect.objectContaining({ Accept: expect.stringContaining('text/plain') }),
+    }));
+  });
+
+  it('Gist sync-from fetches raw content for truncated linked files', async () => {
+    const GistIntegration = createGistIntegration();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const gistId = 'abcdef1234567890abcd';
+    const rawUrl = 'https://gist.githubusercontent.com/raw/synced.user.js';
+    const fullScript = [
+      '// ==UserScript==',
+      '// @name Synced Full Script',
+      '// ==/UserScript==',
+      'console.log("synced");',
+    ].join('\n');
+
+    await chrome.storage.local.set({ gist_pat: 'test-token' });
+    globalThis.fetch = vi.fn(async (url) => {
+      if (url === `https://api.github.com/gists/${gistId}`) {
+        return {
+          ok: true,
+          json: async () => ({
+            id: gistId,
+            html_url: `https://gist.github.com/user/${gistId}`,
+            updated_at: '2026-07-08T00:00:00Z',
+            files: {
+              'synced.user.js': {
+                content: '// ==UserScript==\n// @name Cut Off\n// ==/UserScript==\n',
+                truncated: true,
+                raw_url: rawUrl,
+              },
+            },
+          }),
+        };
+      }
+      if (url === rawUrl) {
+        return { ok: true, text: async () => fullScript };
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    await GistIntegration.init(container, {
+      getScript: (scriptId) => scriptId === 'script_synced'
+        ? { id: scriptId, settings: { gistId } }
+        : null,
+    });
+
+    const result = await GistIntegration.syncFromGist('script_synced');
+
+    expect(result).toMatchObject({
+      code: fullScript,
+      filename: 'synced.user.js',
+      updatedAt: '2026-07-08T00:00:00Z',
+    });
+    expect(globalThis.fetch).toHaveBeenCalledWith(rawUrl, expect.objectContaining({
+      headers: expect.objectContaining({ Authorization: 'Bearer test-token' }),
+    }));
+
+    GistIntegration.destroy();
   });
 
   it('standalone exports remove inline handlers and keep safe generated defaults', () => {
