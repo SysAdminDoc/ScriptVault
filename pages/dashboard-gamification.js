@@ -11,7 +11,6 @@ const Gamification = (() => {
   const STORAGE_KEY = 'gamification';
   const STYLE_ID = 'sv-gamification-styles';
   const TOAST_DURATION = 4500;
-  const DAY_MS = 86400000;
 
   /* ------------------------------------------------------------------ */
   /*  Level Definitions                                                  */
@@ -352,15 +351,24 @@ const Gamification = (() => {
   /*  Helpers                                                            */
   /* ------------------------------------------------------------------ */
 
-  function todayKey() {
-    // Local date, not UTC. toISOString() rolls the "day" over at UTC midnight,
-    // which is mid-afternoon/evening for most users — so streak day-boundaries
-    // fell at the wrong local time and could double-count or break streaks.
-    const d = new Date();
+  function localDateKey(d = new Date()) {
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     return `${y}-${m}-${day}`;
+  }
+
+  function todayKey() {
+    // Local date, not UTC. toISOString() rolls the "day" over at UTC midnight,
+    // which is mid-afternoon/evening for most users — so streak day-boundaries
+    // fell at the wrong local time and could double-count or break streaks.
+    return localDateKey();
+  }
+
+  function yesterdayKey() {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return localDateKey(d);
   }
 
   function defaultData() {
@@ -417,7 +425,7 @@ const Gamification = (() => {
     const today = todayKey();
     if (s.lastDate === today) return;
 
-    const yesterday = new Date(Date.now() - DAY_MS).toISOString().slice(0, 10);
+    const yesterday = yesterdayKey();
     if (s.lastDate === yesterday) {
       s.current += 1;
     } else {

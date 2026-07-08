@@ -401,10 +401,14 @@ describe('Local-date keys for heatmap and gamification (2026-07 regression)', ()
   });
   it('gamification todayKey builds the key from local date components', () => {
     const src = read('pages/dashboard-gamification.js');
-    const fn = src.slice(src.indexOf('function todayKey'), src.indexOf('function todayKey') + 500);
+    const fn = src.slice(src.indexOf('function localDateKey'), src.indexOf('function localDateKey') + 500);
     expect(fn).toContain('getFullYear');
     expect(fn).toContain("padStart(2, '0')");
-    expect(fn).not.toContain('d.toISOString()');
+    expect(src).toContain('function yesterdayKey');
+    expect(src).toContain('d.setDate(d.getDate() - 1)');
+    expect(src).toContain('const yesterday = yesterdayKey();');
+    expect(src).not.toContain('Date.now() - DAY_MS');
+    expect(src).not.toContain('.toISOString().slice(0, 10)');
   });
 });
 
