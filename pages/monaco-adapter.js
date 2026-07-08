@@ -21,6 +21,13 @@
   let _useFallback = false;
   let _lastScriptId = null;
   let _fallbackInputBound = false;
+  const _optionState = {
+    theme: 'monaco',
+    lineWrapping: false,
+    indentWithTabs: false,
+    indentUnit: 4,
+    tabSize: 4
+  };
 
   // Editor find-widget search history. Persisted to chrome.storage.local
   // under `editorFindHistory` as a FIFO list (newest first), capped at 20.
@@ -229,28 +236,46 @@
     // setOption: map CodeMirror options to Monaco equivalents
     setOption(key, value) {
       const opts = {};
-      if (key === 'theme') opts.theme = value;
-      else if (key === 'lineWrapping') opts.wordWrap = value;
-      else if (key === 'tabSize') opts.tabSize = value;
-      else if (key === 'indentUnit') opts.tabSize = value;
-      else if (key === 'indentWithTabs') opts.insertSpaces = !value;
+      if (key === 'theme') {
+        _optionState.theme = value;
+        opts.theme = value;
+      }
+      else if (key === 'lineWrapping') {
+        _optionState.lineWrapping = !!value;
+        opts.wordWrap = _optionState.lineWrapping;
+      }
+      else if (key === 'tabSize') {
+        _optionState.tabSize = parseInt(value, 10) || 4;
+        opts.tabSize = _optionState.tabSize;
+      }
+      else if (key === 'indentUnit') {
+        _optionState.indentUnit = parseInt(value, 10) || 4;
+        opts.tabSize = _optionState.indentUnit;
+      }
+      else if (key === 'indentWithTabs') {
+        _optionState.indentWithTabs = !!value;
+        opts.insertSpaces = !_optionState.indentWithTabs;
+      }
       else if (key === 'lineNumbers') opts.lineNumbers = value;
       else if (key === 'fontSize') opts.fontSize = value;
       if (Object.keys(opts).length) sendToFrame({ type: 'set-options', options: opts });
     },
 
     getOption(key) {
-      if (key === 'theme') return 'monaco';
-      if (key === 'lineWrapping') return false;
-      if (key === 'indentWithTabs') return false;
-      if (key === 'indentUnit') return 4;
-      if (key === 'tabSize') return 4;
+      if (key === 'theme') return _optionState.theme;
+      if (key === 'lineWrapping') return _optionState.lineWrapping;
+      if (key === 'indentWithTabs') return _optionState.indentWithTabs;
+      if (key === 'indentUnit') return _optionState.indentUnit;
+      if (key === 'tabSize') return _optionState.tabSize;
       return undefined;
     },
 
     // Toolbar button hooks
     toggleComment() { sendToFrame({ type: 'toggle-comment' }); },
-    toggleWordWrap() { sendToFrame({ type: 'toggle-word-wrap' }); },
+    toggleWordWrap() {
+      _optionState.lineWrapping = !_optionState.lineWrapping;
+      sendToFrame({ type: 'set-options', options: { wordWrap: _optionState.lineWrapping } });
+    },
     format() { sendToFrame({ type: 'format' }); },
 
     // For font size setting
@@ -261,6 +286,7 @@
 
     // Expose for theme changes
     setTheme(theme) {
+      _optionState.theme = theme;
       sendToFrame({ type: 'set-theme', theme });
     },
 
@@ -279,6 +305,11 @@
         lineNumbers: true,
         minimap: s.editorMinimap !== false
       };
+      _optionState.theme = opts.theme;
+      _optionState.lineWrapping = !!opts.wordWrap;
+      _optionState.indentWithTabs = !opts.insertSpaces;
+      _optionState.indentUnit = opts.tabSize;
+      _optionState.tabSize = opts.tabSize;
       whenReady(() => {
         sendToFrame({ type: 'set-options', options: opts });
         sendToFrame({ type: 'set-theme', theme: s.editorTheme || 'dark' });

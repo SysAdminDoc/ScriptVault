@@ -98,4 +98,19 @@ describe('Firefox Monaco fallback', () => {
     expect(postMessage).toHaveBeenNthCalledWith(3, { type: 'action', id: 'actions.find' }, '*');
     expect(postMessage).toHaveBeenNthCalledWith(4, { type: 'action', id: 'editor.action.startFindReplaceAction' }, '*');
   });
+
+  it('tracks Monaco word-wrap state for toolbar toggles', () => {
+    const { frame, editor } = installAdapter();
+    const postMessage = vi.spyOn(frame.contentWindow, 'postMessage').mockImplementation(() => {});
+
+    expect(editor.getOption('lineWrapping')).toBe(true);
+
+    editor.setOption('lineWrapping', false);
+    expect(editor.getOption('lineWrapping')).toBe(false);
+    expect(postMessage).toHaveBeenLastCalledWith({ type: 'set-options', options: { wordWrap: false } }, '*');
+
+    editor.toggleWordWrap();
+    expect(editor.getOption('lineWrapping')).toBe(true);
+    expect(postMessage).toHaveBeenLastCalledWith({ type: 'set-options', options: { wordWrap: true } }, '*');
+  });
 });
