@@ -465,8 +465,21 @@
   }
 
   async function loadSettings() {
-    const res = await chrome.runtime.sendMessage({ action: 'getSettings' });
-    settings = res?.settings || res || {};
+    try {
+      const res = await chrome.runtime.sendMessage({ action: 'getSettings' });
+      settings = res?.settings || res || {};
+    } catch (error) {
+      console.error('[SP] settings load error:', error);
+      settings = {};
+      if (isContextInvalidated(error)) {
+        showContextInvalidatedBanner();
+        return;
+      }
+      showPanelNotice(
+        error?.message || tSidepanel('sideSettingsLoadFailed', 'Could not load side panel settings. Using defaults.'),
+        'error',
+      );
+    }
   }
 
   function applyTheme() {
@@ -1126,5 +1139,15 @@
     }
   }
 
-  init();
+  init().catch((error) => {
+    console.error('[SP] init error:', error);
+    if (isContextInvalidated(error)) {
+      showContextInvalidatedBanner();
+      return;
+    }
+    showPanelNotice(
+      error?.message || tSidepanel('sidePanelStartupFailed', 'Side panel could not start. Refresh the panel to reconnect.'),
+      'error',
+    );
+  });
 })();

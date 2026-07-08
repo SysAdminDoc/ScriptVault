@@ -124,6 +124,26 @@ describe('Install page startup and error resilience (2026-07 regression)', () =>
   });
 });
 
+describe('Side panel startup and settings resilience (2026-07 regression)', () => {
+  const src = read('pages/sidepanel.js');
+
+  it('defaults settings and keeps booting when getSettings fails', () => {
+    const fn = src.slice(src.indexOf('async function loadSettings'), src.indexOf('function applyTheme'));
+    expect(fn).toContain('try {');
+    expect(fn).toContain("const res = await chrome.runtime.sendMessage({ action: 'getSettings' });");
+    expect(fn).toContain('settings = {};');
+    expect(fn).toContain("showPanelNotice(");
+    expect(fn).toContain("tSidepanel('sideSettingsLoadFailed'");
+  });
+
+  it('surfaces fatal init failures instead of leaving a static panel', () => {
+    expect(src).toContain('init().catch((error) => {');
+    expect(src).toContain("console.error('[SP] init error:', error);");
+    expect(src).toContain('showContextInvalidatedBanner();');
+    expect(src).toContain("tSidepanel('sidePanelStartupFailed'");
+  });
+});
+
 describe('Update confirmation diff modal sequencing (2026-07 regression)', () => {
   const src = read('pages/dashboard.js');
 
