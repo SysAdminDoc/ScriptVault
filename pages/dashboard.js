@@ -13014,7 +13014,10 @@
 
     function showModal(title, html, actions = [], options = {}) {
         if (!elements.modal) return;
-        modalLastFocusedElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        const modalAlreadyOpen = !elements.modal.hidden || elements.modal.classList.contains('show');
+        if (!modalAlreadyOpen) {
+            modalLastFocusedElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        }
         modalDismissHandler = typeof options.onDismiss === 'function' ? options.onDismiss : null;
         if (elements.modalTitle) elements.modalTitle.textContent = title;
         if (elements.modalBody) safeSetHtml(elements.modalBody, html);
@@ -13035,7 +13038,7 @@
         elements.modal.setAttribute('aria-hidden', 'false');
         elements.modal.classList.add('show');
         const modalSurface = elements.modal.querySelector('.modal-content');
-        if (modalSurface && typeof A11y !== 'undefined' && typeof A11y.trapFocus === 'function') {
+        if (!modalFocusManaged && modalSurface && typeof A11y !== 'undefined' && typeof A11y.trapFocus === 'function') {
             A11y.trapFocus(modalSurface);
             modalFocusManaged = true;
         }

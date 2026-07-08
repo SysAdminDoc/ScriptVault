@@ -391,6 +391,13 @@ describe("dashboard accessibility markup", () => {
     expect(dashboardJs).toMatch(/progressHideTimer = window\.setTimeout/);
   });
 
+  test("modal shell does not stack focus traps when content is replaced", () => {
+    expect(dashboardJs).toContain('const modalAlreadyOpen = !elements.modal.hidden || elements.modal.classList.contains(\'show\');');
+    expect(dashboardJs).toContain('if (!modalAlreadyOpen) {');
+    expect(dashboardJs).toContain('modalLastFocusedElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;');
+    expect(dashboardJs).toContain('if (!modalFocusManaged && modalSurface && typeof A11y !== \'undefined\' && typeof A11y.trapFocus === \'function\')');
+  });
+
   test("utility actions use pending button guards and reset file-import state", () => {
     expect(dashboardJs).toMatch(/async function runButtonTask/);
     expect(dashboardJs).toMatch(/const originalContent = isButton \? button\.innerHTML : '';/);
