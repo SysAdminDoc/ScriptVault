@@ -131,6 +131,57 @@ describe('source sync providers module', () => {
     await expect(upload).rejects.toThrow(/aborted/i);
   });
 
+  it('uses WebDAV ETags as same-object upload preconditions', async () => {
+    const { CloudSyncProviders } = await loadFreshSyncProviders();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ scripts: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json', ETag: '"webdav-v1"' },
+      }))
+      .mockResolvedValueOnce(new Response('', { status: 201, headers: { ETag: '"webdav-v2"' } }))
+      .mockResolvedValueOnce(new Response('', { status: 201, headers: { ETag: '"cloud-v1"' } }));
+    globalThis.fetch = fetchMock;
+
+    await expect(CloudSyncProviders.webdav.download({
+      webdavUrl: 'https://dav.example.com/backups',
+      webdavUsername: 'alice',
+      webdavPassword: 'secret',
+    })).resolves.toEqual({ scripts: [] });
+
+    await expect(CloudSyncProviders.webdav.upload(
+      { scripts: [] },
+      {
+        webdavUrl: 'https://dav.example.com/backups',
+        webdavUsername: 'alice',
+        webdavPassword: 'secret',
+      },
+    )).resolves.toEqual(expect.objectContaining({ success: true }));
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'https://dav.example.com/backups/scriptvault-backup.json',
+      expect.objectContaining({
+        method: 'PUT',
+        headers: expect.objectContaining({ 'If-Match': '"webdav-v1"' }),
+      }),
+    );
+
+    await expect(CloudSyncProviders.webdav.upload(
+      { schema: 'scriptvault-cloud-backup/v1' },
+      {
+        webdavUrl: 'https://dav.example.com/backups',
+        webdavUsername: 'alice',
+        webdavPassword: 'secret',
+        syncFilename: 'scriptvault-cloud-backup.json',
+      },
+    )).resolves.toEqual(expect.objectContaining({ success: true }));
+
+    const overrideHeaders = fetchMock.mock.calls[2][1].headers;
+    expect(overrideHeaders).not.toHaveProperty('If-Match');
+    expect(overrideHeaders).not.toHaveProperty('If-None-Match');
+  });
+
   it('uploads to a distinct object when syncFilename is set (cloud backup does not clobber sync)', async () => {
     const { CloudSyncProviders } = await loadFreshSyncProviders();
     const fetchMock = vi.fn().mockResolvedValue(new Response('', { status: 201 }));

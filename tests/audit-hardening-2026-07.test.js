@@ -235,6 +235,26 @@ describe('Cloud provider fetches honor sync abort signals (2026-07 P3 regression
   });
 });
 
+describe('Cloud provider uploads use conditional remote validators (2026-07 P3 regression)', () => {
+  const providers = read('src/modules/sync-providers.ts');
+
+  it('captures download validators and keys them by remote object', () => {
+    expect(providers).toContain('_lastSyncEtagKey');
+    expect(providers).toContain('_lastSyncRevPath');
+    expect(providers).toContain("response.headers.get('ETag')");
+    expect(providers).toContain("response.headers.get('Dropbox-API-Result')");
+  });
+
+  it('sends provider-specific write preconditions on upload', () => {
+    expect(providers).toContain("headers['If-Match']");
+    expect(providers).toContain("headers['If-None-Match']");
+    expect(providers).toContain("{ '.tag': 'update', update: lastRev }");
+    expect(providers).toContain("conditionalHeaders['if-match']");
+    expect(providers).toContain("conditionalHeaders['if-none-match']");
+    expect(providers).toContain('extraHeaders: conditionalHeaders');
+  });
+});
+
 describe('KeyboardNav does not hijack focused row controls (2026-07 regression)', () => {
   const src = read('pages/dashboard-keyboard.js');
   it('adds an interactive-control focus guard', () => {

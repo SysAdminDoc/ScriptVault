@@ -3381,6 +3381,8 @@ const CloudSyncProviders = (() => {
     requiresAuth: true,
     supportsManualSync: true,
     supportsDryRun: true,
+    _lastSyncEtag: void 0,
+    _lastSyncEtagKey: "",
     getStorageDisclosure(settings = {}) {
       return syncStorageDisclosure(settings, {
         fields: [
@@ -3401,21 +3403,28 @@ const CloudSyncProviders = (() => {
         label: "WebDAV sync endpoint",
         allowInternalEndpoint: allowsInternalSyncEndpoints(effectiveSettings)
       };
+      const headers = {
+        "Authorization": auth,
+        "Content-Type": "application/json"
+      };
+      const lastEtag = this._lastSyncEtagKey === objectName ? this._lastSyncEtag : void 0;
+      if (typeof lastEtag === "string") headers["If-Match"] = lastEtag;
+      else if (lastEtag === null) headers["If-None-Match"] = "*";
       const response = await fetchWithTimeout(url, {
         method: "PUT",
-        headers: {
-          "Authorization": auth,
-          "Content-Type": "application/json"
-        },
+        headers,
         body: JSON.stringify(data),
         signal: opts.signal
       }, 6e4, guardOptions);
       if (!response.ok) throw new Error(`WebDAV upload failed: HTTP ${response.status}`);
+      this._lastSyncEtag = response.headers?.get("ETag") || this._lastSyncEtag;
+      this._lastSyncEtagKey = objectName;
       return { success: true, timestamp: Date.now() };
     },
     async download(settings, opts = {}) {
       const effectiveSettings = await SyncCredentialStore.resolveSettings(settings);
-      const url = `${getRequiredWebDavBaseUrl(effectiveSettings)}/scriptvault-backup.json`;
+      const objectName = "scriptvault-backup.json";
+      const url = `${getRequiredWebDavBaseUrl(effectiveSettings)}/${objectName}`;
       const auth = getWebDavAuthHeader(effectiveSettings);
       const guardOptions = {
         label: "WebDAV sync endpoint",
@@ -3426,8 +3435,14 @@ const CloudSyncProviders = (() => {
         headers: { "Authorization": auth },
         signal: opts.signal
       }, 6e4, guardOptions);
-      if (response.status === 404) return null;
+      if (response.status === 404) {
+        this._lastSyncEtag = null;
+        this._lastSyncEtagKey = objectName;
+        return null;
+      }
       if (!response.ok) throw new Error(`WebDAV download failed: HTTP ${response.status}`);
+      this._lastSyncEtag = response.headers?.get("ETag") || void 0;
+      this._lastSyncEtagKey = objectName;
       return await response.json();
     },
     async test(settings) {
@@ -3495,6 +3510,8 @@ const CloudSyncProviders = (() => {
     // Google OAuth client ID (public, installed-app type)
     // Users can override via settings.googleClientId
     clientId: "287129963438-mcc1mod1m5jm8vjr3icb7ensdtcfq44l.apps.googleusercontent.com",
+    _lastSyncEtag: void 0,
+    _lastSyncEtagKey: "",
     getStorageDisclosure(settings = {}) {
       return syncStorageDisclosure(settings, {
         fields: [
@@ -3699,12 +3716,15 @@ const CloudSyncProviders = (() => {
       ].join("\r\n");
       const safeFileId = existingFile ? String(existingFile.id).replace(/[^a-zA-Z0-9_-]/g, "") : "";
       const url = existingFile ? `https://www.googleapis.com/upload/drive/v3/files/${safeFileId}?uploadType=multipart` : "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart";
+      const headers = {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": `multipart/related; boundary=${boundary}`
+      };
+      const lastEtag = this._lastSyncEtagKey === objectName ? this._lastSyncEtag : void 0;
+      if (existingFile && typeof lastEtag === "string") headers["If-Match"] = lastEtag;
       const response = await fetchWithTimeout(url, {
         method: existingFile ? "PATCH" : "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": `multipart/related; boundary=${boundary}`
-        },
+        headers,
         body,
         signal: opts.signal
       }, 6e4);
@@ -3712,13 +3732,19 @@ const CloudSyncProviders = (() => {
         const error = await response.text();
         throw new Error(`Upload failed: ${error}`);
       }
+      this._lastSyncEtag = response.headers?.get("ETag") || this._lastSyncEtag;
+      this._lastSyncEtagKey = objectName;
       return { success: true, timestamp: Date.now() };
     },
     async download(settings, opts = {}) {
       const token = await this.getValidToken(settings, opts);
       if (!token) throw new Error("Not authenticated with Google Drive");
       const file = await this.findFile(token, void 0, opts);
-      if (!file) return null;
+      if (!file) {
+        this._lastSyncEtag = null;
+        this._lastSyncEtagKey = this.fileName;
+        return null;
+      }
       const safeFileId = String(file.id).replace(/[^a-zA-Z0-9_-]/g, "");
       const response = await fetchWithTimeout(
         `https://www.googleapis.com/drive/v3/files/${safeFileId}?alt=media`,
@@ -3726,6 +3752,8 @@ const CloudSyncProviders = (() => {
         6e4
       );
       if (!response.ok) throw new Error(`Download failed: ${response.status}`);
+      this._lastSyncEtag = response.headers?.get("ETag") || void 0;
+      this._lastSyncEtagKey = this.fileName;
       return await response.json();
     },
     async test(settings) {
@@ -3771,6 +3799,8 @@ const CloudSyncProviders = (() => {
     fileName: "/scriptvault-backup.json",
     supportsManualSync: true,
     supportsDryRun: true,
+    _lastSyncRev: void 0,
+    _lastSyncRevPath: "",
     getStorageDisclosure(settings = {}) {
       return syncStorageDisclosure(settings, {
         fields: [
@@ -3923,13 +3953,15 @@ const CloudSyncProviders = (() => {
       const body = JSON.stringify(data);
       if (body.length > 150 * 1024 * 1024) throw new Error("Sync data exceeds Dropbox 150 MB upload limit");
       const dropboxPath = "/" + resolveRemoteObjectName(settings, this.fileName);
+      const lastRev = this._lastSyncRevPath === dropboxPath ? this._lastSyncRev : void 0;
+      const mode = typeof lastRev === "string" ? { ".tag": "update", update: lastRev } : lastRev === null ? "add" : "overwrite";
       const response = await fetchWithTimeout("https://content.dropboxapi.com/2/files/upload", {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${token}`,
           "Dropbox-API-Arg": JSON.stringify({
             path: dropboxPath,
-            mode: "overwrite",
+            mode,
             autorename: false,
             mute: true
           }),
@@ -3943,6 +3975,9 @@ const CloudSyncProviders = (() => {
         const error = await response.text();
         throw new Error(`Upload failed: ${error}`);
       }
+      const metadata = await response.clone().json().catch(() => null);
+      if (metadata?.rev) this._lastSyncRev = metadata.rev;
+      this._lastSyncRevPath = dropboxPath;
       return { success: true, timestamp: Date.now() };
     },
     async download(settings, opts = {}) {
@@ -3957,9 +3992,27 @@ const CloudSyncProviders = (() => {
         },
         signal: opts.signal
       }, 6e4);
-      if (response.status === 409) return null;
+      if (response.status === 409) {
+        this._lastSyncRev = null;
+        this._lastSyncRevPath = "/" + this.fileName;
+        return null;
+      }
       if (response.status === 401) throw new Error("Dropbox token expired. Please reconnect.");
       if (!response.ok) throw new Error(`Download failed: ${response.status}`);
+      const apiResult = response.headers.get("Dropbox-API-Result");
+      if (apiResult) {
+        try {
+          const metadata = JSON.parse(apiResult);
+          this._lastSyncRev = metadata.rev || void 0;
+          this._lastSyncRevPath = "/" + this.fileName;
+        } catch (_) {
+          this._lastSyncRev = void 0;
+          this._lastSyncRevPath = "";
+        }
+      } else {
+        this._lastSyncRev = void 0;
+        this._lastSyncRevPath = "";
+      }
       return await response.json();
     },
     async test(settings) {
@@ -4017,6 +4070,8 @@ const CloudSyncProviders = (() => {
     fileName: "scriptvault-backup.json",
     supportsManualSync: true,
     supportsDryRun: true,
+    _lastSyncEtag: void 0,
+    _lastSyncEtagKey: "",
     // Microsoft OAuth - users must provide their own client ID from Azure AD
     // Create at: https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps
     getStorageDisclosure(settings = {}) {
@@ -4180,20 +4235,26 @@ const CloudSyncProviders = (() => {
       if (!token) throw new Error("Not authenticated with OneDrive");
       if (!data || typeof data !== "object") throw new Error("Invalid backup data");
       const objectName = resolveRemoteObjectName(settings, this.fileName);
+      const headers = {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json"
+      };
+      const lastEtag = this._lastSyncEtagKey === objectName ? this._lastSyncEtag : void 0;
+      if (typeof lastEtag === "string") headers["If-Match"] = lastEtag;
+      else if (lastEtag === null) headers["If-None-Match"] = "*";
       const response = await fetchWithTimeout(
         `https://graph.microsoft.com/v1.0/me/drive/special/approot:/${objectName}:/content`,
         {
           method: "PUT",
-          headers: {
-            "Authorization": `Bearer ${token}`,
-            "Content-Type": "application/json"
-          },
+          headers,
           body: JSON.stringify(data),
           signal: opts.signal
         },
         6e4
       );
       if (!response.ok) throw new Error("Upload failed: " + await response.text());
+      this._lastSyncEtag = response.headers.get("ETag") || response.headers.get("eTag") || this._lastSyncEtag;
+      this._lastSyncEtagKey = objectName;
       return { success: true, timestamp: Date.now() };
     },
     async download(settings, opts = {}) {
@@ -4205,8 +4266,14 @@ const CloudSyncProviders = (() => {
         { headers: { "Authorization": `Bearer ${token}` }, signal: opts.signal },
         6e4
       );
-      if (response.status === 404) return null;
+      if (response.status === 404) {
+        this._lastSyncEtag = null;
+        this._lastSyncEtagKey = this.fileName;
+        return null;
+      }
       if (!response.ok) throw new Error("Download failed: " + response.status);
+      this._lastSyncEtag = response.headers.get("ETag") || response.headers.get("eTag") || void 0;
+      this._lastSyncEtagKey = this.fileName;
       return await response.json();
     },
     async test(settings) {
@@ -4252,6 +4319,8 @@ const CloudSyncProviders = (() => {
     requiresAuth: true,
     supportsManualSync: true,
     supportsDryRun: true,
+    _lastSyncEtag: void 0,
+    _lastSyncEtagKey: "",
     getStorageDisclosure(settings = {}) {
       return syncStorageDisclosure(settings, {
         fields: [
@@ -4326,7 +4395,8 @@ const CloudSyncProviders = (() => {
       accessKeyId,
       secretKey,
       body,
-      contentType
+      contentType,
+      extraHeaders
     }) {
       const parsedUrl = new URL(url);
       const now = /* @__PURE__ */ new Date();
@@ -4343,6 +4413,9 @@ const CloudSyncProviders = (() => {
         "x-amz-date": amzDate
       };
       if (contentType) headers["content-type"] = contentType;
+      for (const [key, value] of Object.entries(extraHeaders || {})) {
+        headers[key.toLowerCase()] = value;
+      }
       const sortedHeaderNames = Object.keys(headers).sort();
       const canonicalHeaders = sortedHeaderNames.map((key) => `${key}:${headers[key]}
   `).join("");
@@ -4413,13 +4486,18 @@ const CloudSyncProviders = (() => {
       if (!check.valid) {
         throw new Error(`S3 settings invalid: ${check.errors.map((e) => e.error).join(" ")}`);
       }
-      const url = this._buildObjectUrl(effectiveSettings, this._objectKey(effectiveSettings));
+      const objectKey = this._objectKey(effectiveSettings);
+      const url = this._buildObjectUrl(effectiveSettings, objectKey);
       const guardOptions = {
         label: "S3 sync endpoint",
         allowInternalEndpoint: allowsInternalSyncEndpoints(effectiveSettings)
       };
       assertSyncEndpointAllowed(url, guardOptions);
       const body = JSON.stringify(data);
+      const conditionalHeaders = {};
+      const lastEtag = this._lastSyncEtagKey === objectKey ? this._lastSyncEtag : void 0;
+      if (typeof lastEtag === "string") conditionalHeaders["if-match"] = lastEtag;
+      else if (lastEtag === null) conditionalHeaders["if-none-match"] = "*";
       const signed = await this._signRequest({
         method: "PUT",
         url,
@@ -4427,7 +4505,8 @@ const CloudSyncProviders = (() => {
         accessKeyId: effectiveSettings.s3AccessKeyId,
         secretKey: effectiveSettings.s3SecretKey,
         body,
-        contentType: "application/json"
+        contentType: "application/json",
+        extraHeaders: conditionalHeaders
       });
       const response = await fetch(url, {
         method: "PUT",
@@ -4438,8 +4517,10 @@ const CloudSyncProviders = (() => {
       assertSyncResponseAllowed(response, guardOptions);
       if (!response.ok) {
         const text = await response.text().catch(() => "");
-        throw new Error(`S3 upload failed: HTTP ${response.status}${text ? ` \u2014 ${text.slice(0, 200)}` : ""}`);
+        throw new Error(`S3 upload failed: HTTP ${response.status}${text ? ` - ${text.slice(0, 200)}` : ""}`);
       }
+      this._lastSyncEtag = response.headers?.get("ETag") || this._lastSyncEtag;
+      this._lastSyncEtagKey = objectKey;
       return { success: true, timestamp: Date.now() };
     },
     async download(settings, opts = {}) {
@@ -4448,7 +4529,8 @@ const CloudSyncProviders = (() => {
       if (!check.valid) {
         throw new Error(`S3 settings invalid: ${check.errors.map((e) => e.error).join(" ")}`);
       }
-      const url = this._buildObjectUrl(effectiveSettings, this._objectKey(effectiveSettings));
+      const objectKey = this._objectKey(effectiveSettings);
+      const url = this._buildObjectUrl(effectiveSettings, objectKey);
       const guardOptions = {
         label: "S3 sync endpoint",
         allowInternalEndpoint: allowsInternalSyncEndpoints(effectiveSettings)
@@ -4467,11 +4549,17 @@ const CloudSyncProviders = (() => {
         signal: opts.signal
       });
       assertSyncResponseAllowed(response, guardOptions);
-      if (response.status === 404) return null;
+      if (response.status === 404) {
+        this._lastSyncEtag = null;
+        this._lastSyncEtagKey = objectKey;
+        return null;
+      }
       if (!response.ok) {
         const text = await response.text().catch(() => "");
-        throw new Error(`S3 download failed: HTTP ${response.status}${text ? ` \u2014 ${text.slice(0, 200)}` : ""}`);
+        throw new Error(`S3 download failed: HTTP ${response.status}${text ? ` - ${text.slice(0, 200)}` : ""}`);
       }
+      this._lastSyncEtag = response.headers?.get("ETag") || void 0;
+      this._lastSyncEtagKey = objectKey;
       return await response.json();
     },
     async test(settings) {
