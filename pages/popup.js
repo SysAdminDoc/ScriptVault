@@ -1327,19 +1327,32 @@
                     if (!canMatchScriptsForUrl(currentUrl)) throw new Error('restricted-page');
                     const host = new URL(currentUrl).hostname;
                     if (!host) throw new Error('no-host');
+                    // Chrome match patterns cannot express IPv6 (bracketed) hosts;
+                    // a pattern like *://[::1]/* is rejected by registration and
+                    // silently falls back to <all_urls> — the opposite of scoping.
+                    // Refuse rather than accidentally widen the script to every site.
+                    if (host.includes('[') || host.includes(']') || host.includes(':')) {
+                        throw new Error('unsupported-host');
+                    }
                     hostPattern = `*://${host}/*`;
-                } catch {
-                    showPopupToast('Open a normal web page first', 'info');
+                } catch (err) {
+                    const msg = err && err.message === 'unsupported-host'
+                        ? 'This site can’t be scoped (IP-literal host)'
+                        : 'Open a normal web page first';
+                    showPopupToast(msg, 'info');
                     return;
                 }
                 await runScriptAction(scriptId, async () => {
                     const script = pageScripts.find(s => s.id === scriptId);
                     if (!script) return;
-                    // Replace the script's original @match with a single site-scoped
-                    // pattern so it only runs on the current site.
+                    // Replace the script's original @match AND @include with a single
+                    // site-scoped pattern so it only runs on the current site. Both
+                    // must be overridden — a legacy script with only @include *
+                    // would otherwise keep running everywhere.
                     const nextSettings = {
                         ...(script.settings || {}),
                         useOriginalMatches: false,
+                        useOriginalIncludes: false,
                         userMatches: [hostPattern],
                     };
                     try {

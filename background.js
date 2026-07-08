@@ -23482,6 +23482,7 @@ const CloudSync = (() => {
             const parsed = parseUserscript(codeToSave);
             if (!parsed.error && parsed.meta) {
               const nextScript = {
+                ...existing || {},
                 id: script.id,
                 code: codeToSave,
                 meta: parsed.meta,
@@ -23979,11 +23980,10 @@ const EasyCloudSync = (() => {
     };
   }
   async function getSyncCryptoSettings() {
-    try {
-      return typeof SettingsManager.get === "function" ? await SettingsManager.get() : {};
-    } catch (_) {
-      return {};
+    if (typeof SettingsManager.get !== "function") {
+      throw new Error("Settings unavailable for sync encryption");
     }
+    return await SettingsManager.get();
   }
   async function readSyncEnvelopeFromRemote(remoteEnvelope) {
     return SyncCrypto.decryptSyncEnvelope(
@@ -24321,10 +24321,13 @@ const EasyCloudSync = (() => {
           if (mergedTombstones[script.id]) continue;
           const existing = await ScriptStorage.get(script.id);
           if (existing?.settings?.userModified) continue;
-          if (!existing || script.updatedAt > (existing.updatedAt || 0) || script.code !== existing.code) {
+          const existingUpdatedAt = existing?.updatedAt || 0;
+          const mergeChangedCode = !!existing && script.code !== existing.code && script.updatedAt >= existingUpdatedAt;
+          if (!existing || script.updatedAt > existingUpdatedAt || mergeChangedCode) {
             const parsed = typeof parseUserscript === "function" ? parseUserscript(script.code) : { meta: {}, error: null };
             if (!parsed.error) {
               const nextScript = {
+                ...existing || {},
                 id: script.id,
                 code: script.code,
                 meta: parsed.meta,
@@ -25507,9 +25510,13 @@ const BackupScheduler = (() => {
     const needsMigration = list.filter((e) => typeof e.data === "string" && e.data.length > 0);
     if (needsMigration.length === 0) return;
     for (const entry of needsMigration) {
+      let stored = false;
       try {
-        await _storeBackupBlob(entry.id, entry.data);
+        stored = await _storeBackupBlob(entry.id, entry.data);
       } catch {
+        stored = false;
+      }
+      if (!stored) {
         continue;
       }
       delete entry.data;
@@ -25688,6 +25695,10 @@ const BackupScheduler = (() => {
       syncFilename: "scriptvault-cloud-backup.json"
     });
     let payload = envelope;
+    const wantsEncryption = uploadSettings.syncEncryptionEnabled === true;
+    if (wantsEncryption && (typeof SyncCrypto === "undefined" || typeof SyncCrypto?.prepareSyncEnvelopeForUpload !== "function")) {
+      throw new Error("Cloud backup encryption unavailable");
+    }
     try {
       if (typeof SyncCrypto !== "undefined" && SyncCrypto?.isEncryptionEnabled?.(uploadSettings)) {
         payload = await SyncCrypto.prepareSyncEnvelopeForUpload(envelope, uploadSettings);
@@ -42910,19 +42921,28 @@ async function registerScript(script, { useUpdate = false, throwOnError = false 
     // Build match patterns with URL override support
     const matches = [];
     const excludeMatches = [];
-    
+    // Count how many positive patterns the script actually requested. If a user
+    // scopes a script to a site whose pattern is malformed (IPv6 host, empty
+    // file:// host, ported host Chrome rejects), every pattern can resolve
+    // invalid — and widening to <all_urls> would run the script EVERYWHERE,
+    // the opposite of the restriction. When positive patterns were requested
+    // but none survived, fail closed instead of expanding scope.
+    let requestedPositivePatterns = 0;
+
     // Process @match (if enabled in settings)
     if (settings.useOriginalMatches !== false && meta.match && Array.isArray(meta.match)) {
       for (const m of meta.match) {
+        if (typeof m === 'string' && m.trim()) requestedPositivePatterns++;
         if (isValidMatchPattern(m)) {
           matches.push(m);
         }
       }
     }
-    
+
     // Process user @match patterns
     if (settings.userMatches && Array.isArray(settings.userMatches)) {
       for (const m of settings.userMatches) {
+        if (typeof m === 'string' && m.trim()) requestedPositivePatterns++;
         if (isValidMatchPattern(m)) {
           matches.push(m);
         } else {
@@ -42942,6 +42962,7 @@ async function registerScript(script, { useUpdate = false, throwOnError = false 
     // Process @include (if enabled in settings)
     if (settings.useOriginalIncludes !== false && meta.include && Array.isArray(meta.include)) {
       for (const inc of meta.include) {
+        if (typeof inc === 'string' && inc.trim()) requestedPositivePatterns++;
         if (isRegexPattern(inc)) {
           // Regex pattern - extract broad match patterns for registration, filter at runtime
           regexIncludes.push(inc);
@@ -42963,6 +42984,7 @@ async function registerScript(script, { useUpdate = false, throwOnError = false 
     // Process user @include patterns
     if (settings.userIncludes && Array.isArray(settings.userIncludes)) {
       for (const inc of settings.userIncludes) {
+        if (typeof inc === 'string' && inc.trim()) requestedPositivePatterns++;
         const converted = convertIncludeToMatch(inc);
         if (converted && isValidMatchPattern(converted)) {
           matches.push(converted);
@@ -43024,11 +43046,20 @@ async function registerScript(script, { useUpdate = false, throwOnError = false 
       }
     }
 
-    // If no matches, use <all_urls> (some scripts use @include *)
+    // If positive patterns WERE requested but none survived, they were all
+    // malformed. Fail closed — do NOT widen to <all_urls>, which would run the
+    // script everywhere and defeat an explicit scope restriction. Unregister any
+    // prior registration so it stops running, then surface the error.
+    if (matches.length === 0 && requestedPositivePatterns > 0) {
+      await chrome.userScripts.unregister({ ids: [script.id] }).catch(() => {});
+      throw new Error('No valid match patterns — script scope could not be applied');
+    }
+
+    // If no matches at all (script defined none), use <all_urls> (some scripts use @include *)
     if (matches.length === 0) {
       matches.push('<all_urls>');
     }
-    
+
     // Map run-at values (with per-script setting override)
     const runAtMap = {
       'document-start': 'document_start',

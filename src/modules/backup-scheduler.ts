@@ -1013,10 +1013,17 @@ async function _migrateBackupBlobsToIdb(): Promise<void> {
   if (needsMigration.length === 0) return;
 
   for (const entry of needsMigration) {
+    // _storeBackupBlob returns false (does not throw) on any failure — missing
+    // DAO, quota, or a put() error. Only strip the inline base64 once the blob
+    // is confirmed in IndexedDB, otherwise the backup becomes unrestorable.
+    let stored = false;
     try {
-      await _storeBackupBlob(entry.id, entry.data!);
+      stored = await _storeBackupBlob(entry.id, entry.data!);
     } catch {
-      // If IDB write fails, keep the data in chrome.storage.local as fallback
+      stored = false;
+    }
+    if (!stored) {
+      // Keep the data in chrome.storage.local as a fallback for this entry.
       continue;
     }
     delete entry.data;
@@ -1258,6 +1265,12 @@ async function _uploadBackupToCloud(backup: BackupEntry): Promise<void> {
   // so a user who turned on sync encryption doesn't leak plaintext script code
   // and GM values into their cloud provider through the backup path.
   let payload: unknown = envelope;
+  const wantsEncryption = uploadSettings.syncEncryptionEnabled === true;
+  if (wantsEncryption && (typeof SyncCrypto === 'undefined' || typeof SyncCrypto?.prepareSyncEnvelopeForUpload !== 'function')) {
+    // E2EE is enabled but the crypto module is missing — fail closed rather than
+    // silently uploading plaintext script code and GM values to the cloud.
+    throw new Error('Cloud backup encryption unavailable');
+  }
   try {
     if (typeof SyncCrypto !== 'undefined' && SyncCrypto?.isEncryptionEnabled?.(uploadSettings)) {
       payload = await SyncCrypto.prepareSyncEnvelopeForUpload(envelope, uploadSettings);

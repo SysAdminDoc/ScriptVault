@@ -58,4 +58,32 @@ describe('popup restrict-to-site action', () => {
     expect(handler).toContain('userMatches: [hostPattern]');
     expect(handler).toContain("action: 'setScriptSettings'");
   });
+
+  it('also overrides @include so legacy include-only scripts are actually scoped', () => {
+    const handler = popupJs.slice(popupJs.indexOf('[data-action="restrictSite"]'));
+    expect(handler).toContain('useOriginalIncludes: false');
+  });
+
+  it('refuses IPv6/bracketed hosts that would fall back to <all_urls>', () => {
+    const handler = popupJs.slice(popupJs.indexOf('[data-action="restrictSite"]'));
+    expect(handler).toContain("host.includes('[')");
+    expect(handler).toContain('unsupported-host');
+  });
+});
+
+describe('registration fails closed on all-invalid positive patterns', () => {
+  const regTs = read('src/background/registration.ts');
+  const regJs = read('background.core.js');
+
+  it('does not widen to <all_urls> when positive patterns were requested but none survived', () => {
+    // The guard must count requested positive patterns and throw rather than
+    // pushing <all_urls>, which would run a scope-restricted script everywhere.
+    expect(regTs).toContain('requestedPositivePatterns');
+    expect(regTs).toContain('matches.length === 0 && requestedPositivePatterns > 0');
+    expect(regTs).toContain('script scope could not be applied');
+  });
+
+  it('is mirrored into the generated background runtime', () => {
+    expect(regJs).toContain('requestedPositivePatterns');
+  });
 });

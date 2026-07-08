@@ -1673,7 +1673,11 @@ export const CloudSync = {
         if (!existing || script.updatedAt > existing.updatedAt || mergeConflict || mergeChangedCode) {
           const parsed = parseUserscript(codeToSave);
           if (!parsed.error && parsed.meta) {
+            // Spread `existing` first so local-only fields (versionHistory,
+            // trustReceipt, stats, _httpEtag/_httpLastModified) survive a
+            // remote-newer apply; the sync-managed fields below override them.
             const nextScript = {
+              ...(existing || {}),
               id: script.id,
               code: codeToSave,
               meta: parsed.meta,

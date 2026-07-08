@@ -388,13 +388,14 @@ function sanitizeSyncEnvelopeForUpload(envelope: SyncEnvelope): SyncEnvelope {
 }
 
 async function getSyncCryptoSettings(): Promise<Record<string, unknown>> {
-  try {
-    return typeof SettingsManager.get === 'function'
-      ? await SettingsManager.get()
-      : {};
-  } catch (_) {
-    return {};
+  // Do NOT swallow read failures to `{}`: an empty settings object reports
+  // encryption disabled, which would silently upload plaintext scripts/values
+  // under an E2EE expectation and disable the plaintext-rejection guard on
+  // download. Fail the sync instead.
+  if (typeof SettingsManager.get !== 'function') {
+    throw new Error('Settings unavailable for sync encryption');
   }
+  return await SettingsManager.get();
 }
 
 async function readSyncEnvelopeFromRemote(remoteEnvelope: RemoteSyncEnvelope | null): Promise<SyncEnvelope | null> {
@@ -887,13 +888,23 @@ async function _performSync(): Promise<SyncResult> {
         // clean 3-way merge produced text that differs from the local copy — a
         // clean merge must not be discarded just because the local timestamp
         // wins (merged.updatedAt = max(local, remote) equals local's own).
-        if (!existing || script.updatedAt > (existing.updatedAt || 0) || script.code !== existing.code) {
+        // The code-differs clause is gated on the merge's timestamp not being
+        // OLDER than the current local copy: a save the user made DURING the
+        // sync bumps `existing.updatedAt` above the merge inputs, and must not
+        // be overwritten by the stale merged text (mirrors the main cloud-sync
+        // apply guard).
+        const existingUpdatedAt = existing?.updatedAt || 0;
+        const mergeChangedCode = !!existing && script.code !== existing.code && script.updatedAt >= existingUpdatedAt;
+        if (!existing || script.updatedAt > existingUpdatedAt || mergeChangedCode) {
           const parsed = typeof parseUserscript === 'function'
             ? parseUserscript(script.code)
             : { meta: {} as ScriptMeta, error: null };
 
           if (!parsed.error) {
+            // Spread `existing` first so local-only fields (versionHistory,
+            // trustReceipt, stats, HTTP cache validators) survive the apply.
             const nextScript = {
+              ...(existing || {}),
               id: script.id,
               code: script.code,
               meta: parsed.meta,

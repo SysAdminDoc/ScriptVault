@@ -225,10 +225,18 @@ export async function registerScript(
     // Build match patterns with URL override support
     const matches: string[] = [];
     const excludeMatches: string[] = [];
+    // Track whether the script actually ASKED to run somewhere positive. If a
+    // user restricts scope to a site whose pattern is malformed (e.g. an IPv6
+    // host, an empty file:// host, or a ported host Chrome rejects), all
+    // patterns can resolve invalid — and falling back to <all_urls> would run
+    // the script on every site, the exact opposite of the user's intent. When
+    // positive patterns were requested but none survived, fail closed instead.
+    let requestedPositivePatterns = 0;
 
     // Process @match (if enabled in settings)
     if ((settings as Record<string, unknown>).useOriginalMatches !== false && meta.match && Array.isArray(meta.match)) {
       for (const m of meta.match) {
+        if (typeof m === 'string' && m.trim()) requestedPositivePatterns++;
         if (isValidMatchPattern(m)) {
           matches.push(m);
         }
@@ -239,6 +247,7 @@ export async function registerScript(
     const userMatches = (settings as Record<string, unknown>).userMatches;
     if (userMatches && Array.isArray(userMatches)) {
       for (const m of userMatches as string[]) {
+        if (typeof m === 'string' && m.trim()) requestedPositivePatterns++;
         if (isValidMatchPattern(m)) {
           matches.push(m);
         } else {
@@ -258,6 +267,7 @@ export async function registerScript(
     // Process @include (if enabled in settings)
     if ((settings as Record<string, unknown>).useOriginalIncludes !== false && meta.include && Array.isArray(meta.include)) {
       for (const inc of meta.include) {
+        if (typeof inc === 'string' && inc.trim()) requestedPositivePatterns++;
         if (isRegexPattern(inc)) {
           // Regex pattern - extract broad match patterns for registration, filter at runtime
           regexIncludes.push(inc);
@@ -280,6 +290,7 @@ export async function registerScript(
     const userIncludes = (settings as Record<string, unknown>).userIncludes;
     if (userIncludes && Array.isArray(userIncludes)) {
       for (const inc of userIncludes as string[]) {
+        if (typeof inc === 'string' && inc.trim()) requestedPositivePatterns++;
         const converted: string | null = convertIncludeToMatch(inc);
         if (converted && isValidMatchPattern(converted)) {
           matches.push(converted);
@@ -342,7 +353,16 @@ export async function registerScript(
       }
     }
 
-    // If no matches, use <all_urls> (some scripts use @include *)
+    // If no matches survived but positive patterns WERE requested, they were all
+    // malformed. Fail closed — do NOT widen to <all_urls>, which would run the
+    // script everywhere and defeat an explicit scope restriction. Unregister any
+    // prior registration so the script stops running, and surface the error.
+    if (matches.length === 0 && requestedPositivePatterns > 0) {
+      await chrome.userScripts.unregister({ ids: [script.id] }).catch(() => undefined);
+      throw new Error('No valid match patterns — script scope could not be applied');
+    }
+
+    // If no matches at all (script defined none), use <all_urls> (some scripts use @include *)
     if (matches.length === 0) {
       matches.push('<all_urls>');
     }

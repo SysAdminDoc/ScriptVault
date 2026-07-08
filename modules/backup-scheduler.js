@@ -530,9 +530,13 @@ const BackupScheduler = (() => {
     const needsMigration = list.filter((e) => typeof e.data === "string" && e.data.length > 0);
     if (needsMigration.length === 0) return;
     for (const entry of needsMigration) {
+      let stored = false;
       try {
-        await _storeBackupBlob(entry.id, entry.data);
+        stored = await _storeBackupBlob(entry.id, entry.data);
       } catch {
+        stored = false;
+      }
+      if (!stored) {
         continue;
       }
       delete entry.data;
@@ -711,6 +715,10 @@ const BackupScheduler = (() => {
       syncFilename: "scriptvault-cloud-backup.json"
     });
     let payload = envelope;
+    const wantsEncryption = uploadSettings.syncEncryptionEnabled === true;
+    if (wantsEncryption && (typeof SyncCrypto === "undefined" || typeof SyncCrypto?.prepareSyncEnvelopeForUpload !== "function")) {
+      throw new Error("Cloud backup encryption unavailable");
+    }
     try {
       if (typeof SyncCrypto !== "undefined" && SyncCrypto?.isEncryptionEnabled?.(uploadSettings)) {
         payload = await SyncCrypto.prepareSyncEnvelopeForUpload(envelope, uploadSettings);

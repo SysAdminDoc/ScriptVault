@@ -1354,6 +1354,7 @@ const CloudSync = (() => {
             const parsed = parseUserscript(codeToSave);
             if (!parsed.error && parsed.meta) {
               const nextScript = {
+                ...existing || {},
                 id: script.id,
                 code: codeToSave,
                 meta: parsed.meta,

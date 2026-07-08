@@ -379,11 +379,10 @@ const EasyCloudSync = (() => {
     };
   }
   async function getSyncCryptoSettings() {
-    try {
-      return typeof SettingsManager.get === "function" ? await SettingsManager.get() : {};
-    } catch (_) {
-      return {};
+    if (typeof SettingsManager.get !== "function") {
+      throw new Error("Settings unavailable for sync encryption");
     }
+    return await SettingsManager.get();
   }
   async function readSyncEnvelopeFromRemote(remoteEnvelope) {
     return SyncCrypto.decryptSyncEnvelope(
@@ -721,10 +720,13 @@ const EasyCloudSync = (() => {
           if (mergedTombstones[script.id]) continue;
           const existing = await ScriptStorage.get(script.id);
           if (existing?.settings?.userModified) continue;
-          if (!existing || script.updatedAt > (existing.updatedAt || 0) || script.code !== existing.code) {
+          const existingUpdatedAt = existing?.updatedAt || 0;
+          const mergeChangedCode = !!existing && script.code !== existing.code && script.updatedAt >= existingUpdatedAt;
+          if (!existing || script.updatedAt > existingUpdatedAt || mergeChangedCode) {
             const parsed = typeof parseUserscript === "function" ? parseUserscript(script.code) : { meta: {}, error: null };
             if (!parsed.error) {
               const nextScript = {
+                ...existing || {},
                 id: script.id,
                 code: script.code,
                 meta: parsed.meta,
