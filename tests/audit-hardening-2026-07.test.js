@@ -144,6 +144,40 @@ describe('Side panel startup and settings resilience (2026-07 regression)', () =
   });
 });
 
+describe('Non-dashboard theme overlays use shared tokens (2026-07 regression)', () => {
+  const surfaces = [
+    'pages/popup.html',
+    'pages/sidepanel.html',
+    'pages/install.html',
+    'pages/devtools-panel.html',
+  ];
+
+  it('defines shared overlay tokens in the theme contract', () => {
+    const tokens = read('pages/theme-tokens.css');
+    expect(tokens).toContain('--sv-overlay:');
+    expect(tokens).toContain('--sv-overlay-subtle:');
+    expect(tokens).toContain('--sv-overlay-strong:');
+  });
+
+  it('removes raw dark-theme white/green/blue overlays from non-dashboard pages', () => {
+    for (const file of surfaces) {
+      const src = read(file);
+      expect(src).not.toMatch(/rgba\(\s*255\s*,\s*255\s*,\s*255\s*,/);
+      expect(src).not.toMatch(/rgba\(\s*(?:76\s*,\s*175\s*,\s*80|34\s*,\s*197\s*,\s*94)\s*,/);
+      expect(src).not.toMatch(/rgba\(\s*96\s*,\s*165\s*,\s*250\s*,/);
+      expect(src).toContain('var(--sv-overlay');
+    }
+  });
+
+  it('routes accent/info glows through current theme tokens', () => {
+    for (const file of ['pages/popup.html', 'pages/sidepanel.html', 'pages/install.html']) {
+      const src = read(file);
+      expect(src).toContain('rgb(from var(--sv-accent)');
+      expect(src).toContain('rgb(from var(--sv-info)');
+    }
+  });
+});
+
 describe('Update confirmation diff modal sequencing (2026-07 regression)', () => {
   const src = read('pages/dashboard.js');
 

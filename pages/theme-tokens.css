@@ -21,7 +21,7 @@
   --sv-scrollbar-hover: #555;
   --sv-radius-panel: 8px;
   --sv-radius-control: 6px;
-  --sv-focus-ring: 0 0 0 2px rgba(76, 175, 80, 0.72), 0 0 0 4px rgba(76, 175, 80, 0.16);
+  --sv-focus-ring: 0 0 0 2px rgb(from var(--sv-accent) r g b / 0.72), 0 0 0 4px rgb(from var(--sv-accent) r g b / 0.16);
   color-scheme: dark;
 }
 
@@ -42,7 +42,7 @@
   --sv-badge-bg: #f0f0f0;
   --sv-scrollbar: #ccc;
   --sv-scrollbar-hover: #bbb;
-  --sv-focus-ring: 0 0 0 2px rgba(22, 163, 74, 0.68), 0 0 0 4px rgba(22, 163, 74, 0.16);
+  --sv-focus-ring: 0 0 0 2px rgb(from var(--sv-accent) r g b / 0.68), 0 0 0 4px rgb(from var(--sv-accent) r g b / 0.16);
   color-scheme: light;
 }
 
@@ -63,7 +63,7 @@
   --sv-badge-bg: #313244;
   --sv-scrollbar: #45475a;
   --sv-scrollbar-hover: #585b70;
-  --sv-focus-ring: 0 0 0 2px rgba(166, 227, 161, 0.72), 0 0 0 4px rgba(166, 227, 161, 0.16);
+  --sv-focus-ring: 0 0 0 2px rgb(from var(--sv-accent) r g b / 0.72), 0 0 0 4px rgb(from var(--sv-accent) r g b / 0.16);
   color-scheme: dark;
 }
 
@@ -84,6 +84,16 @@
   --sv-badge-bg: #1a1a1a;
   --sv-scrollbar: #333;
   --sv-scrollbar-hover: #444;
-  --sv-focus-ring: 0 0 0 2px rgba(34, 197, 94, 0.72), 0 0 0 4px rgba(34, 197, 94, 0.16);
+  --sv-focus-ring: 0 0 0 2px rgb(from var(--sv-accent) r g b / 0.72), 0 0 0 4px rgb(from var(--sv-accent) r g b / 0.16);
   color-scheme: dark;
+}
+
+:root {
+  --sv-overlay-faint: rgb(from var(--sv-text) r g b / 0.025);
+  --sv-overlay-subtle: rgb(from var(--sv-text) r g b / 0.03);
+  --sv-overlay: rgb(from var(--sv-text) r g b / 0.04);
+  --sv-overlay-medium: rgb(from var(--sv-text) r g b / 0.055);
+  --sv-overlay-strong: rgb(from var(--sv-text) r g b / 0.075);
+  --sv-overlay-bright: rgb(from var(--sv-text) r g b / 0.12);
+  --sv-overlay-active: rgb(from var(--sv-text) r g b / 0.24);
 }
