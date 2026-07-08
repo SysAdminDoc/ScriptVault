@@ -1145,6 +1145,14 @@
         }
     }
 
+    function syncWorkbenchNavigation(activeTab) {
+        Array.from(elements.workbenchNavButtons || []).forEach(button => {
+            const isActive = button.dataset.workbenchTab === activeTab;
+            button.classList.toggle('active', isActive);
+            button.setAttribute('aria-pressed', String(isActive));
+        });
+    }
+
     function setDashboardSection(name, { focusControl = false } = {}) {
         const nextTab = DASHBOARD_TABS.includes(name) ? name : 'scripts';
         clearDashboardSectionSelection();
@@ -1158,6 +1166,7 @@
             elements.btnHelpTab?.setAttribute('aria-expanded', 'true');
             elements.btnHelpTab?.setAttribute('aria-pressed', 'true');
             if (focusControl) elements.btnHelpTab?.focus();
+            syncWorkbenchNavigation(nextTab);
             return true;
         }
 
@@ -1171,6 +1180,7 @@
         panel.classList.add('active');
         panel.hidden = false;
         if (focusControl) tab.focus();
+        syncWorkbenchNavigation(nextTab);
         return true;
     }
 
@@ -1604,6 +1614,7 @@
             trash: document.getElementById('trashPanel'),
             help: document.getElementById('helpPanel')
         };
+        elements.workbenchNavButtons = document.querySelectorAll('[data-workbench-tab]');
 
         // Scripts tab
         elements.scriptSearch = document.getElementById('scriptSearch');
@@ -1626,6 +1637,20 @@
         elements.workspaceInstalledStat = document.getElementById('workspaceInstalledStat');
         elements.workspaceActiveStat = document.getElementById('workspaceActiveStat');
         elements.workspaceStorageStat = document.getElementById('workspaceStorageStat');
+        elements.scriptInspectorPanel = document.getElementById('scriptInspectorPanel');
+        elements.scriptInspectorTitle = document.getElementById('scriptInspectorTitle');
+        elements.scriptInspectorSubtitle = document.getElementById('scriptInspectorSubtitle');
+        elements.scriptInspectorEdit = document.getElementById('scriptInspectorEdit');
+        elements.scriptInspectorUpdate = document.getElementById('scriptInspectorUpdate');
+        elements.scriptInspectorScore = document.getElementById('scriptInspectorScore');
+        elements.scriptInspectorTrustScore = document.getElementById('scriptInspectorTrustScore');
+        elements.scriptInspectorTrustSummary = document.getElementById('scriptInspectorTrustSummary');
+        elements.scriptInspectorStatus = document.getElementById('scriptInspectorStatus');
+        elements.scriptInspectorVersion = document.getElementById('scriptInspectorVersion');
+        elements.scriptInspectorUpdated = document.getElementById('scriptInspectorUpdated');
+        elements.scriptInspectorRuntime = document.getElementById('scriptInspectorRuntime');
+        elements.scriptInspectorDomains = document.getElementById('scriptInspectorDomains');
+        elements.scriptInspectorGrants = document.getElementById('scriptInspectorGrants');
         elements.dashboardUpdatesBadge = document.getElementById('dashboardUpdatesBadge');
         elements.pendingUpdatesList = document.getElementById('pendingUpdatesList');
         elements.pendingUpdatesCount = document.getElementById('pendingUpdatesCount');
@@ -8037,10 +8062,165 @@
         return Number.isFinite(configured) && configured >= 100 ? configured : 500;
     }
 
+    function getInspectorScript(candidates = []) {
+        const selectedIds = getSelectedScriptIds();
+        const candidateMap = new Map(candidates.map(script => [script.id, script]));
+        for (const id of selectedIds) {
+            const script = candidateMap.get(id) || state.scripts.find(item => item.id === id);
+            if (script) return script;
+        }
+        if (state.currentScriptId) {
+            const current = candidateMap.get(state.currentScriptId) || state.scripts.find(item => item.id === state.currentScriptId);
+            if (current) return current;
+        }
+        return candidates[0] || state.scripts[0] || null;
+    }
+
+    function setInspectorText(element, value) {
+        if (element) element.textContent = value;
+    }
+
+    function renderInspectorTokens(container, values, emptyLabel) {
+        if (!container) return;
+        container.replaceChildren();
+        const filtered = values.map(value => String(value || '').trim()).filter(Boolean);
+        if (!filtered.length) {
+            container.textContent = emptyLabel;
+            return;
+        }
+        const fragment = document.createDocumentFragment();
+        filtered.slice(0, 5).forEach(value => {
+            const token = document.createElement('span');
+            token.className = 'inspector-token';
+            token.textContent = value;
+            token.title = value;
+            fragment.appendChild(token);
+        });
+        if (filtered.length > 5) {
+            const token = document.createElement('span');
+            token.className = 'inspector-token';
+            token.textContent = `+${numberFormatter.format(filtered.length - 5)}`;
+            token.title = filtered.slice(5).join('\n');
+            fragment.appendChild(token);
+        }
+        container.appendChild(fragment);
+    }
+
+    function getInspectorTrust(script, matches, grants) {
+        const issues = [];
+        let score = 100;
+        const stats = script.stats || {};
+        const daysSinceUpdate = script.updatedAt ? Math.floor((Date.now() - script.updatedAt) / 86400000) : 0;
+        const perfBudget = script.settings?.perfBudget || state.settings.perfBudget || 200;
+
+        if (isImportQuarantined(script)) {
+            score -= 25;
+            issues.push('Import review');
+        }
+        if (script.settings?.sourceIdentityChanged) {
+            score -= 24;
+            issues.push('Source changed');
+        }
+        if (isBroadMatch(matches)) {
+            score -= 16;
+            issues.push('Broad match');
+        }
+        if (getDeclaredAntifeatures(script.metadata || {}).length > 0) {
+            score -= 14;
+            issues.push('Anti-feature');
+        }
+        if (grants.some(grant => /unsafeWindow|xmlhttpRequest/i.test(grant))) {
+            score -= 10;
+            issues.push('High-power grant');
+        }
+        if (Number(stats.errors || 0) > 0) {
+            score -= 10;
+            issues.push('Runtime errors');
+        }
+        if (Number(stats.avgTime || 0) > perfBudget && Number(stats.runs || 0) > 2) {
+            score -= 6;
+            issues.push('Over budget');
+        }
+        if (daysSinceUpdate > 180 && (script.metadata?.updateURL || script.metadata?.downloadURL)) {
+            score -= 6;
+            issues.push('Stale source');
+        }
+
+        const clamped = Math.max(0, Math.min(100, score));
+        const tone = clamped < 60 ? 'alert' : clamped < 85 ? 'warn' : 'good';
+        return {
+            score: clamped,
+            tone,
+            summary: issues.length ? issues.slice(0, 3).join(' | ') : 'No review flags'
+        };
+    }
+
+    function renderScriptInspector(candidates = []) {
+        if (!elements.scriptInspectorPanel) return;
+        const script = getInspectorScript(candidates);
+        if (!script) {
+            elements.scriptInspectorPanel.dataset.state = 'empty';
+            delete elements.scriptInspectorPanel.dataset.scriptId;
+            setInspectorText(elements.scriptInspectorTitle, 'No script selected');
+            setInspectorText(elements.scriptInspectorSubtitle, 'Select a row to inspect trust, access, and runtime details.');
+            setInspectorText(elements.scriptInspectorTrustScore, '--');
+            setInspectorText(elements.scriptInspectorTrustSummary, 'Waiting for script data');
+            setInspectorText(elements.scriptInspectorStatus, '--');
+            setInspectorText(elements.scriptInspectorVersion, '--');
+            setInspectorText(elements.scriptInspectorUpdated, '--');
+            setInspectorText(elements.scriptInspectorRuntime, '--');
+            renderInspectorTokens(elements.scriptInspectorDomains, [], 'No domains');
+            renderInspectorTokens(elements.scriptInspectorGrants, [], 'No grants');
+            if (elements.scriptInspectorScore) elements.scriptInspectorScore.dataset.tone = 'neutral';
+            if (elements.scriptInspectorEdit) elements.scriptInspectorEdit.disabled = true;
+            if (elements.scriptInspectorUpdate) elements.scriptInspectorUpdate.disabled = true;
+            return;
+        }
+
+        const metadata = script.metadata || {};
+        const matches = [
+            ...(Array.isArray(metadata.match) ? metadata.match : metadata.match ? [metadata.match] : []),
+            ...(Array.isArray(metadata.include) ? metadata.include : metadata.include ? [metadata.include] : [])
+        ];
+        const grants = Array.isArray(metadata.grant)
+            ? metadata.grant
+            : metadata.grant
+                ? [metadata.grant]
+                : [];
+        const domains = extractDomainsFromPatterns(matches);
+        const stats = script.stats || {};
+        const name = metadata.name || 'Unnamed Script';
+        const version = metadata.version || '1.0';
+        const runs = Number(stats.runs || 0);
+        const avgTime = Number(stats.avgTime || 0);
+        const errors = Number(stats.errors || 0);
+        const runtime = runs > 0
+            ? `${numberFormatter.format(runs)} runs | ${numberFormatter.format(avgTime)}ms avg${errors ? ` | ${numberFormatter.format(errors)} errors` : ''}`
+            : 'No execution data';
+        const trust = getInspectorTrust(script, matches, grants);
+
+        elements.scriptInspectorPanel.dataset.state = 'ready';
+        elements.scriptInspectorPanel.dataset.scriptId = script.id;
+        setInspectorText(elements.scriptInspectorTitle, name);
+        setInspectorText(elements.scriptInspectorSubtitle, metadata.description || metadata.author || 'Local userscript');
+        setInspectorText(elements.scriptInspectorTrustScore, `${trust.score}%`);
+        setInspectorText(elements.scriptInspectorTrustSummary, trust.summary);
+        setInspectorText(elements.scriptInspectorStatus, script.enabled !== false ? 'Enabled' : 'Disabled');
+        setInspectorText(elements.scriptInspectorVersion, version);
+        setInspectorText(elements.scriptInspectorUpdated, script.updatedAt ? formatTime(script.updatedAt) : '-');
+        setInspectorText(elements.scriptInspectorRuntime, runtime);
+        renderInspectorTokens(elements.scriptInspectorDomains, domains, 'No domains');
+        renderInspectorTokens(elements.scriptInspectorGrants, grants.length ? grants : ['none'], 'No grants');
+        if (elements.scriptInspectorScore) elements.scriptInspectorScore.dataset.tone = trust.tone;
+        if (elements.scriptInspectorEdit) elements.scriptInspectorEdit.disabled = false;
+        if (elements.scriptInspectorUpdate) elements.scriptInspectorUpdate.disabled = false;
+    }
+
     function renderScriptTable(filter = '') {
         if (!elements.scriptTableBody) return;
         
         const filtered = getFilteredScripts();
+        renderScriptInspector(filtered);
         syncScriptTableListSize(filtered.length);
         syncCardView(filtered);
         updateScriptSearchAffordances();
@@ -8483,6 +8663,7 @@
             }
             state._lastCheckedId = script.id;
             updateBulkCheckboxes();
+            renderScriptInspector(getFilteredScripts());
         });
         tr.querySelector('.script-name-button')?.addEventListener('click', () => openEditorForScript(script.id));
         tr.querySelector('[data-action="edit"]')?.addEventListener('click', () => openEditorForScript(script.id));
@@ -14077,6 +14258,12 @@
             });
         });
 
+        Array.from(elements.workbenchNavButtons || []).forEach(button => {
+            button.addEventListener('click', async () => {
+                await switchTab(button.dataset.workbenchTab, { focusControl: true });
+            });
+        });
+
         elements.dashboardTabs.forEach(tab => {
             tab.addEventListener('keydown', async (event) => {
                 const tabs = Array.from(elements.dashboardTabs || []);
@@ -14125,6 +14312,15 @@
             saveSetting('layout', next);
             elements.btnCycleTheme.title = `Theme: ${themeLabels[next]}`;
             if (elements.settingsLayout) elements.settingsLayout.value = next;
+        });
+
+        elements.scriptInspectorEdit?.addEventListener('click', () => {
+            const scriptId = elements.scriptInspectorPanel?.dataset.scriptId;
+            if (scriptId) openEditorForScript(scriptId);
+        });
+        elements.scriptInspectorUpdate?.addEventListener('click', async (event) => {
+            const scriptId = elements.scriptInspectorPanel?.dataset.scriptId;
+            if (scriptId) await interactiveCheckAndConfirmUpdate(scriptId, event.currentTarget);
         });
 
         // Scripts
