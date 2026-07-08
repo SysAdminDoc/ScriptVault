@@ -22,7 +22,8 @@ describe('cloud backup schedule integration', () => {
     // The cloud backup must write to a DISTINCT object so it can't overwrite the
     // sync envelope (they previously shared scriptvault-backup.json).
     expect(backupSchedulerJs).toContain('scriptvault-cloud-backup.json');
-    expect(backupSchedulerJs).not.toContain('syncFilename: "scriptvault-backup.json"');
+    expect(backupSchedulerJs).toContain('objectName: "scriptvault-cloud-backup.json"');
+    expect(backupSchedulerJs).not.toContain('syncFilename');
     // And it must encrypt the backup with the sync passphrase when E2EE is on.
     expect(backupSchedulerJs).toContain('isEncryptionEnabled');
     expect(backupSchedulerJs).toContain('SyncCrypto.prepareSyncEnvelopeForUpload(envelope, uploadSettings)');

@@ -78,10 +78,6 @@ export interface Settings {
   s3SecretKey: string;
   s3ObjectKey: string;
   s3PathStyle?: boolean;
-  // Overrides the remote object name for a single upload. Cloud backup sets this
-  // to a distinct name so it does not clobber the sync envelope; sync never sets
-  // it (uploads/downloads the default object). Not persisted as a real setting.
-  syncFilename?: string;
 
   // Language
   language: string;

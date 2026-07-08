@@ -173,8 +173,8 @@ describe('source sync providers module', () => {
         webdavUrl: 'https://dav.example.com/backups',
         webdavUsername: 'alice',
         webdavPassword: 'secret',
-        syncFilename: 'scriptvault-cloud-backup.json',
       },
+      { objectName: 'scriptvault-cloud-backup.json' },
     )).resolves.toEqual(expect.objectContaining({ success: true }));
 
     const overrideHeaders = fetchMock.mock.calls[2][1].headers;
@@ -182,12 +182,12 @@ describe('source sync providers module', () => {
     expect(overrideHeaders).not.toHaveProperty('If-None-Match');
   });
 
-  it('uploads to a distinct object when syncFilename is set (cloud backup does not clobber sync)', async () => {
+  it('uses explicit object names for cloud backup upload/download without clobbering sync', async () => {
     const { CloudSyncProviders } = await loadFreshSyncProviders();
     const fetchMock = vi.fn().mockResolvedValue(new Response('', { status: 201 }));
     globalThis.fetch = fetchMock;
 
-    // Sync (no syncFilename) writes the default object.
+    // Sync (no objectName option) writes the default object.
     await CloudSyncProviders.webdav.upload(
       { scripts: [] },
       { webdavUrl: 'https://dav.example.com/', webdavUsername: 'a', webdavPassword: 'b' },
@@ -197,15 +197,15 @@ describe('source sync providers module', () => {
       expect.objectContaining({ method: 'PUT' }),
     );
 
-    // Cloud backup (syncFilename override) writes a DISTINCT object.
+    // Cloud backup writes a DISTINCT object through a per-call option.
     await CloudSyncProviders.webdav.upload(
       { schema: 'scriptvault-cloud-backup/v1' },
       {
         webdavUrl: 'https://dav.example.com/',
         webdavUsername: 'a',
         webdavPassword: 'b',
-        syncFilename: 'scriptvault-cloud-backup.json',
       },
+      { objectName: 'scriptvault-cloud-backup.json' },
     );
     expect(fetchMock).toHaveBeenLastCalledWith(
       'https://dav.example.com/scriptvault-cloud-backup.json',
@@ -219,12 +219,25 @@ describe('source sync providers module', () => {
         webdavUrl: 'https://dav.example.com/',
         webdavUsername: 'a',
         webdavPassword: 'b',
-        syncFilename: '../../etc/passwd',
       },
+      { objectName: '../../etc/passwd' },
     );
     expect(fetchMock).toHaveBeenLastCalledWith(
       'https://dav.example.com/etcpasswd',
       expect.objectContaining({ method: 'PUT' }),
+    );
+
+    fetchMock.mockResolvedValueOnce(new Response(
+      JSON.stringify({ schema: 'scriptvault-cloud-backup/v1' }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    ));
+    await expect(CloudSyncProviders.webdav.download(
+      { webdavUrl: 'https://dav.example.com/', webdavUsername: 'a', webdavPassword: 'b' },
+      { objectName: 'scriptvault-cloud-backup.json' },
+    )).resolves.toEqual({ schema: 'scriptvault-cloud-backup/v1' });
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      'https://dav.example.com/scriptvault-cloud-backup.json',
+      expect.objectContaining({ method: 'GET' }),
     );
   });
 

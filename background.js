@@ -3254,8 +3254,8 @@ const CloudSyncProviders = (() => {
   function allowsInternalSyncEndpoints(settings) {
     return settings.allowInternalSyncEndpoints === true;
   }
-  function resolveRemoteObjectName(settings, defaultName) {
-    const override = settings?.syncFilename;
+  function resolveRemoteObjectName(objectName, defaultName) {
+    const override = objectName;
     if (typeof override === "string" && override.trim()) {
       const cleaned = override.trim().replace(/[^A-Za-z0-9._-]+/g, "").replace(/^\.+/, "");
       if (cleaned) return cleaned;
@@ -3396,7 +3396,7 @@ const CloudSyncProviders = (() => {
     },
     async upload(data, settings, opts = {}) {
       const effectiveSettings = await SyncCredentialStore.resolveSettings(settings);
-      const objectName = resolveRemoteObjectName(settings, "scriptvault-backup.json");
+      const objectName = resolveRemoteObjectName(opts.objectName, "scriptvault-backup.json");
       const url = `${getRequiredWebDavBaseUrl(effectiveSettings)}/${objectName}`;
       const auth = getWebDavAuthHeader(effectiveSettings);
       const guardOptions = {
@@ -3423,7 +3423,7 @@ const CloudSyncProviders = (() => {
     },
     async download(settings, opts = {}) {
       const effectiveSettings = await SyncCredentialStore.resolveSettings(settings);
-      const objectName = "scriptvault-backup.json";
+      const objectName = resolveRemoteObjectName(opts.objectName, "scriptvault-backup.json");
       const url = `${getRequiredWebDavBaseUrl(effectiveSettings)}/${objectName}`;
       const auth = getWebDavAuthHeader(effectiveSettings);
       const guardOptions = {
@@ -3696,7 +3696,7 @@ const CloudSyncProviders = (() => {
     async upload(data, settings, opts = {}) {
       const token = await this.getValidToken(settings, opts);
       if (!token) throw new Error("Not authenticated with Google Drive");
-      const objectName = resolveRemoteObjectName(settings, this.fileName);
+      const objectName = resolveRemoteObjectName(opts.objectName, this.fileName);
       const existingFile = await this.findFile(token, objectName, opts);
       const metadata = {
         name: objectName,
@@ -3739,10 +3739,11 @@ const CloudSyncProviders = (() => {
     async download(settings, opts = {}) {
       const token = await this.getValidToken(settings, opts);
       if (!token) throw new Error("Not authenticated with Google Drive");
-      const file = await this.findFile(token, void 0, opts);
+      const objectName = resolveRemoteObjectName(opts.objectName, this.fileName);
+      const file = await this.findFile(token, objectName, opts);
       if (!file) {
         this._lastSyncEtag = null;
-        this._lastSyncEtagKey = this.fileName;
+        this._lastSyncEtagKey = objectName;
         return null;
       }
       const safeFileId = String(file.id).replace(/[^a-zA-Z0-9_-]/g, "");
@@ -3753,7 +3754,7 @@ const CloudSyncProviders = (() => {
       );
       if (!response.ok) throw new Error(`Download failed: ${response.status}`);
       this._lastSyncEtag = response.headers?.get("ETag") || void 0;
-      this._lastSyncEtagKey = this.fileName;
+      this._lastSyncEtagKey = objectName;
       return await response.json();
     },
     async test(settings) {
@@ -3952,7 +3953,8 @@ const CloudSyncProviders = (() => {
       if (!token) throw new Error("Not authenticated with Dropbox");
       const body = JSON.stringify(data);
       if (body.length > 150 * 1024 * 1024) throw new Error("Sync data exceeds Dropbox 150 MB upload limit");
-      const dropboxPath = "/" + resolveRemoteObjectName(settings, this.fileName);
+      const objectName = resolveRemoteObjectName(opts.objectName, this.fileName);
+      const dropboxPath = "/" + objectName;
       const lastRev = this._lastSyncRevPath === dropboxPath ? this._lastSyncRev : void 0;
       const mode = typeof lastRev === "string" ? { ".tag": "update", update: lastRev } : lastRev === null ? "add" : "overwrite";
       const response = await fetchWithTimeout("https://content.dropboxapi.com/2/files/upload", {
@@ -3984,17 +3986,19 @@ const CloudSyncProviders = (() => {
       const effectiveSettings = await SyncCredentialStore.resolveSettings(settings);
       const token = await this.getValidToken(effectiveSettings, opts);
       if (!token) throw new Error("Not authenticated with Dropbox");
+      const objectName = resolveRemoteObjectName(opts.objectName, this.fileName);
+      const dropboxPath = "/" + objectName;
       const response = await fetchWithTimeout("https://content.dropboxapi.com/2/files/download", {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${token}`,
-          "Dropbox-API-Arg": JSON.stringify({ path: this.fileName })
+          "Dropbox-API-Arg": JSON.stringify({ path: dropboxPath })
         },
         signal: opts.signal
       }, 6e4);
       if (response.status === 409) {
         this._lastSyncRev = null;
-        this._lastSyncRevPath = "/" + this.fileName;
+        this._lastSyncRevPath = dropboxPath;
         return null;
       }
       if (response.status === 401) throw new Error("Dropbox token expired. Please reconnect.");
@@ -4004,7 +4008,7 @@ const CloudSyncProviders = (() => {
         try {
           const metadata = JSON.parse(apiResult);
           this._lastSyncRev = metadata.rev || void 0;
-          this._lastSyncRevPath = "/" + this.fileName;
+          this._lastSyncRevPath = dropboxPath;
         } catch (_) {
           this._lastSyncRev = void 0;
           this._lastSyncRevPath = "";
@@ -4234,7 +4238,7 @@ const CloudSyncProviders = (() => {
       const token = await this.getValidToken(effectiveSettings, opts);
       if (!token) throw new Error("Not authenticated with OneDrive");
       if (!data || typeof data !== "object") throw new Error("Invalid backup data");
-      const objectName = resolveRemoteObjectName(settings, this.fileName);
+      const objectName = resolveRemoteObjectName(opts.objectName, this.fileName);
       const headers = {
         "Authorization": `Bearer ${token}`,
         "Content-Type": "application/json"
@@ -4261,19 +4265,20 @@ const CloudSyncProviders = (() => {
       const effectiveSettings = await SyncCredentialStore.resolveSettings(settings ?? await getRawSettings());
       const token = await this.getValidToken(effectiveSettings, opts);
       if (!token) throw new Error("Not authenticated with OneDrive");
+      const objectName = resolveRemoteObjectName(opts.objectName, this.fileName);
       const response = await fetchWithTimeout(
-        `https://graph.microsoft.com/v1.0/me/drive/special/approot:/${this.fileName}:/content`,
+        `https://graph.microsoft.com/v1.0/me/drive/special/approot:/${objectName}:/content`,
         { headers: { "Authorization": `Bearer ${token}` }, signal: opts.signal },
         6e4
       );
       if (response.status === 404) {
         this._lastSyncEtag = null;
-        this._lastSyncEtagKey = this.fileName;
+        this._lastSyncEtagKey = objectName;
         return null;
       }
       if (!response.ok) throw new Error("Download failed: " + response.status);
       this._lastSyncEtag = response.headers.get("ETag") || response.headers.get("eTag") || void 0;
-      this._lastSyncEtagKey = this.fileName;
+      this._lastSyncEtagKey = objectName;
       return await response.json();
     },
     async test(settings) {
@@ -4373,7 +4378,7 @@ const CloudSyncProviders = (() => {
     _buildObjectUrl(settings, objectKey) {
       const endpoint = new URL(settings.s3Endpoint);
       const isAws = /(^|\.)amazonaws\.com$/i.test(endpoint.hostname);
-      const usePathStyle = settings.s3PathStyle === true || settings.s3PathStyle === void 0 && !isAws || settings.s3PathStyle === false && false;
+      const usePathStyle = settings.s3PathStyle === true || settings.s3PathStyle === void 0 && !isAws;
       const encodedKey = objectKey.split("/").map(encodeURIComponent).join("/");
       if (usePathStyle) {
         return `${endpoint.origin}/${encodeURIComponent(settings.s3Bucket)}/${encodedKey}`;
@@ -4382,9 +4387,9 @@ const CloudSyncProviders = (() => {
       const port = endpoint.port ? `:${endpoint.port}` : "";
       return `${endpoint.protocol}//${host}${port}/${encodedKey}`;
     },
-    _objectKey(settings) {
-      if (typeof settings.syncFilename === "string" && settings.syncFilename.trim()) {
-        return resolveRemoteObjectName(settings, "scriptvault-cloud-backup.json");
+    _objectKey(settings, objectName) {
+      if (typeof objectName === "string" && objectName.trim()) {
+        return resolveRemoteObjectName(objectName, "scriptvault-cloud-backup.json");
       }
       return (settings.s3ObjectKey || "scriptvault-backup.json").replace(/^\/+/, "");
     },
@@ -4486,7 +4491,7 @@ const CloudSyncProviders = (() => {
       if (!check.valid) {
         throw new Error(`S3 settings invalid: ${check.errors.map((e) => e.error).join(" ")}`);
       }
-      const objectKey = this._objectKey(effectiveSettings);
+      const objectKey = this._objectKey(effectiveSettings, opts.objectName);
       const url = this._buildObjectUrl(effectiveSettings, objectKey);
       const guardOptions = {
         label: "S3 sync endpoint",
@@ -4529,7 +4534,7 @@ const CloudSyncProviders = (() => {
       if (!check.valid) {
         throw new Error(`S3 settings invalid: ${check.errors.map((e) => e.error).join(" ")}`);
       }
-      const objectKey = this._objectKey(effectiveSettings);
+      const objectKey = this._objectKey(effectiveSettings, opts.objectName);
       const url = this._buildObjectUrl(effectiveSettings, objectKey);
       const guardOptions = {
         label: "S3 sync endpoint",
@@ -26072,9 +26077,7 @@ const BackupScheduler = (() => {
       size: backup.size,
       data: blobData
     };
-    const uploadSettings = Object.assign({}, globalSettings, {
-      syncFilename: "scriptvault-cloud-backup.json"
-    });
+    const uploadSettings = Object.assign({}, globalSettings);
     let payload = envelope;
     const wantsEncryption = uploadSettings.syncEncryptionEnabled === true;
     if (wantsEncryption && (typeof SyncCrypto === "undefined" || typeof SyncCrypto?.prepareSyncEnvelopeForUpload !== "function")) {
@@ -26087,7 +26090,9 @@ const BackupScheduler = (() => {
     } catch (_e) {
       throw new Error("Cloud backup encryption failed");
     }
-    const result = await provider.upload(payload, uploadSettings);
+    const result = await provider.upload(payload, uploadSettings, {
+      objectName: "scriptvault-cloud-backup.json"
+    });
     if (!result?.success) {
       throw new Error(result?.error || "Cloud backup upload failed");
     }

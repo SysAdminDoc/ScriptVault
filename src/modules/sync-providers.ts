@@ -59,6 +59,7 @@ interface SyncStatusResult {
 
 interface SyncRequestOptions {
   signal?: AbortSignal;
+  objectName?: string;
 }
 
 interface SyncStorageDisclosureField {
@@ -302,12 +303,11 @@ function allowsInternalSyncEndpoints(settings: Partial<Settings>): boolean {
   return settings.allowInternalSyncEndpoints === true;
 }
 
-// Resolve the remote object name for an upload. Cloud backup passes
-// settings.syncFilename to write to a DISTINCT object so it does not clobber the
-// sync envelope; sync leaves it unset and uses the provider default. The name is
-// sanitized to a bare filename (no path traversal, no leading slash).
-function resolveRemoteObjectName(settings: Partial<Settings> | undefined, defaultName: string): string {
-  const override = settings?.syncFilename;
+// Resolve an optional remote object name override. Cloud backup passes this as
+// a provider call option so it can write a distinct object without pretending
+// the filename is a persisted setting. The name is sanitized to a bare filename.
+function resolveRemoteObjectName(objectName: string | undefined, defaultName: string): string {
+  const override = objectName;
   if (typeof override === 'string' && override.trim()) {
     // Strip path separators and any leading dots so the override is always a
     // bare filename (no traversal, no hidden-file trickery).
@@ -492,7 +492,7 @@ const webdav = {
 
   async upload(data: unknown, settings: Settings, opts: SyncRequestOptions = {}): Promise<SyncUploadResult> {
     const effectiveSettings = await SyncCredentialStore.resolveSettings(settings);
-    const objectName = resolveRemoteObjectName(settings, 'scriptvault-backup.json');
+    const objectName = resolveRemoteObjectName(opts.objectName, 'scriptvault-backup.json');
     const url = `${getRequiredWebDavBaseUrl(effectiveSettings)}/${objectName}`;
     const auth = getWebDavAuthHeader(effectiveSettings);
     const guardOptions = {
@@ -523,7 +523,7 @@ const webdav = {
 
   async download(settings: Settings, opts: SyncRequestOptions = {}): Promise<unknown | null> {
     const effectiveSettings = await SyncCredentialStore.resolveSettings(settings);
-    const objectName = 'scriptvault-backup.json';
+    const objectName = resolveRemoteObjectName(opts.objectName, 'scriptvault-backup.json');
     const url = `${getRequiredWebDavBaseUrl(effectiveSettings)}/${objectName}`;
     const auth = getWebDavAuthHeader(effectiveSettings);
     const guardOptions = {
@@ -846,7 +846,7 @@ const googledrive = {
     const token = await this.getValidToken(settings, opts);
     if (!token) throw new Error('Not authenticated with Google Drive');
 
-    const objectName = resolveRemoteObjectName(settings, this.fileName);
+    const objectName = resolveRemoteObjectName(opts.objectName, this.fileName);
     const existingFile = await this.findFile(token, objectName, opts);
     const metadata = {
       name: objectName,
@@ -902,10 +902,11 @@ const googledrive = {
     const token = await this.getValidToken(settings, opts);
     if (!token) throw new Error('Not authenticated with Google Drive');
 
-    const file = await this.findFile(token, undefined, opts);
+    const objectName = resolveRemoteObjectName(opts.objectName, this.fileName);
+    const file = await this.findFile(token, objectName, opts);
     if (!file) {
       this._lastSyncEtag = null;
-      this._lastSyncEtagKey = this.fileName;
+      this._lastSyncEtagKey = objectName;
       return null;
     }
     const safeFileId = String(file.id).replace(/[^a-zA-Z0-9_-]/g, '');
@@ -918,7 +919,7 @@ const googledrive = {
 
     if (!response.ok) throw new Error(`Download failed: ${response.status}`);
     this._lastSyncEtag = response.headers?.get('ETag') || undefined;
-    this._lastSyncEtagKey = this.fileName;
+    this._lastSyncEtagKey = objectName;
     return (await response.json()) as unknown;
   },
 
@@ -1157,7 +1158,8 @@ const dropbox = {
     const body = JSON.stringify(data);
     if (body.length > 150 * 1024 * 1024) throw new Error('Sync data exceeds Dropbox 150 MB upload limit');
 
-    const dropboxPath = '/' + resolveRemoteObjectName(settings, this.fileName);
+    const objectName = resolveRemoteObjectName(opts.objectName, this.fileName);
+    const dropboxPath = '/' + objectName;
     const lastRev = this._lastSyncRevPath === dropboxPath ? this._lastSyncRev : undefined;
     const mode = typeof lastRev === 'string'
       ? { '.tag': 'update', update: lastRev }
@@ -1195,18 +1197,20 @@ const dropbox = {
     const token = await this.getValidToken(effectiveSettings, opts);
     if (!token) throw new Error('Not authenticated with Dropbox');
 
+    const objectName = resolveRemoteObjectName(opts.objectName, this.fileName);
+    const dropboxPath = '/' + objectName;
     const response = await fetchWithTimeout('https://content.dropboxapi.com/2/files/download', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
-        'Dropbox-API-Arg': JSON.stringify({ path: this.fileName }),
+        'Dropbox-API-Arg': JSON.stringify({ path: dropboxPath }),
       },
       signal: opts.signal,
     }, 60_000);
 
     if (response.status === 409) {
       this._lastSyncRev = null;
-      this._lastSyncRevPath = '/' + this.fileName;
+      this._lastSyncRevPath = dropboxPath;
       return null; // File not found
     }
     if (response.status === 401) throw new Error('Dropbox token expired. Please reconnect.');
@@ -1217,7 +1221,7 @@ const dropbox = {
       try {
         const metadata = JSON.parse(apiResult) as { rev?: string };
         this._lastSyncRev = metadata.rev || undefined;
-        this._lastSyncRevPath = '/' + this.fileName;
+        this._lastSyncRevPath = dropboxPath;
       } catch (_) {
         this._lastSyncRev = undefined;
         this._lastSyncRevPath = '';
@@ -1489,7 +1493,7 @@ const onedrive = {
     if (!token) throw new Error('Not authenticated with OneDrive');
     if (!data || typeof data !== 'object') throw new Error('Invalid backup data');
 
-    const objectName = resolveRemoteObjectName(settings, this.fileName);
+    const objectName = resolveRemoteObjectName(opts.objectName, this.fileName);
     const headers: Record<string, string> = {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
@@ -1519,20 +1523,21 @@ const onedrive = {
     const token = await this.getValidToken(effectiveSettings, opts);
     if (!token) throw new Error('Not authenticated with OneDrive');
 
+    const objectName = resolveRemoteObjectName(opts.objectName, this.fileName);
     const response = await fetchWithTimeout(
-      `https://graph.microsoft.com/v1.0/me/drive/special/approot:/${this.fileName}:/content`,
+      `https://graph.microsoft.com/v1.0/me/drive/special/approot:/${objectName}:/content`,
       { headers: { 'Authorization': `Bearer ${token}` }, signal: opts.signal },
       60_000,
     );
 
     if (response.status === 404) {
       this._lastSyncEtag = null;
-      this._lastSyncEtagKey = this.fileName;
+      this._lastSyncEtagKey = objectName;
       return null;
     }
     if (!response.ok) throw new Error('Download failed: ' + response.status);
     this._lastSyncEtag = response.headers.get('ETag') || response.headers.get('eTag') || undefined;
-    this._lastSyncEtagKey = this.fileName;
+    this._lastSyncEtagKey = objectName;
     return (await response.json()) as unknown;
   },
 
@@ -1658,8 +1663,7 @@ const s3 = {
     const endpoint = new URL(settings.s3Endpoint);
     const isAws = /(^|\.)amazonaws\.com$/i.test(endpoint.hostname);
     const usePathStyle = settings.s3PathStyle === true ||
-      (settings.s3PathStyle === undefined && !isAws) ||
-      (settings.s3PathStyle === false && false);
+      (settings.s3PathStyle === undefined && !isAws);
     const encodedKey = objectKey.split('/').map(encodeURIComponent).join('/');
     if (usePathStyle) {
       return `${endpoint.origin}/${encodeURIComponent(settings.s3Bucket)}/${encodedKey}`;
@@ -1669,12 +1673,12 @@ const s3 = {
     return `${endpoint.protocol}//${host}${port}/${encodedKey}`;
   },
 
-  _objectKey(settings: Partial<Settings>): string {
+  _objectKey(settings: Partial<Settings>, objectName?: string): string {
     // Cloud backup overrides the key with a distinct object so it does not
-    // clobber the sync envelope; sync leaves syncFilename unset and uses the
+    // clobber the sync envelope; sync leaves objectName unset and uses the
     // user's configured s3ObjectKey (or the default).
-    if (typeof settings.syncFilename === 'string' && settings.syncFilename.trim()) {
-      return resolveRemoteObjectName(settings, 'scriptvault-cloud-backup.json');
+    if (typeof objectName === 'string' && objectName.trim()) {
+      return resolveRemoteObjectName(objectName, 'scriptvault-cloud-backup.json');
     }
     return (settings.s3ObjectKey || 'scriptvault-backup.json').replace(/^\/+/, '');
   },
@@ -1790,14 +1794,14 @@ const s3 = {
   async upload(
     data: unknown,
     settings: Settings,
-    opts: { signal?: AbortSignal } = {},
+    opts: SyncRequestOptions = {},
   ): Promise<SyncUploadResult> {
     const effectiveSettings = await SyncCredentialStore.resolveSettings(settings);
     const check = this.validate(effectiveSettings);
     if (!check.valid) {
       throw new Error(`S3 settings invalid: ${check.errors.map((e) => e.error).join(' ')}`);
     }
-    const objectKey = this._objectKey(effectiveSettings);
+    const objectKey = this._objectKey(effectiveSettings, opts.objectName);
     const url = this._buildObjectUrl(effectiveSettings, objectKey);
     const guardOptions = {
       label: 'S3 sync endpoint',
@@ -1837,14 +1841,14 @@ const s3 = {
 
   async download(
     settings: Settings,
-    opts: { signal?: AbortSignal } = {},
+    opts: SyncRequestOptions = {},
   ): Promise<unknown | null> {
     const effectiveSettings = await SyncCredentialStore.resolveSettings(settings);
     const check = this.validate(effectiveSettings);
     if (!check.valid) {
       throw new Error(`S3 settings invalid: ${check.errors.map((e) => e.error).join(' ')}`);
     }
-    const objectKey = this._objectKey(effectiveSettings);
+    const objectKey = this._objectKey(effectiveSettings, opts.objectName);
     const url = this._buildObjectUrl(effectiveSettings, objectKey);
     const guardOptions = {
       label: 'S3 sync endpoint',

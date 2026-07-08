@@ -711,9 +711,7 @@ const BackupScheduler = (() => {
       size: backup.size,
       data: blobData
     };
-    const uploadSettings = Object.assign({}, globalSettings, {
-      syncFilename: "scriptvault-cloud-backup.json"
-    });
+    const uploadSettings = Object.assign({}, globalSettings);
     let payload = envelope;
     const wantsEncryption = uploadSettings.syncEncryptionEnabled === true;
     if (wantsEncryption && (typeof SyncCrypto === "undefined" || typeof SyncCrypto?.prepareSyncEnvelopeForUpload !== "function")) {
@@ -726,7 +724,9 @@ const BackupScheduler = (() => {
     } catch (_e) {
       throw new Error("Cloud backup encryption failed");
     }
-    const result = await provider.upload(payload, uploadSettings);
+    const result = await provider.upload(payload, uploadSettings, {
+      objectName: "scriptvault-cloud-backup.json"
+    });
     if (!result?.success) {
       throw new Error(result?.error || "Cloud backup upload failed");
     }

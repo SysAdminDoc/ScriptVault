@@ -61,7 +61,11 @@ declare const SettingsManager: {
 };
 
 declare const CloudSyncProviders: Record<string, {
-  upload(data: unknown, settings: Record<string, unknown>): Promise<{ success: boolean; error?: string }>;
+  upload(
+    data: unknown,
+    settings: Record<string, unknown>,
+    options?: { objectName?: string },
+  ): Promise<{ success: boolean; error?: string }>;
 } | undefined> | undefined;
 
 declare const SyncCrypto: {
@@ -1257,9 +1261,7 @@ async function _uploadBackupToCloud(backup: BackupEntry): Promise<void> {
   // Write to a DISTINCT remote object so the cloud backup never clobbers the
   // sync envelope (they previously shared scriptvault-backup.json, so each
   // overwrote the other and the next sync download read a backup envelope).
-  const uploadSettings = Object.assign({}, globalSettings, {
-    syncFilename: 'scriptvault-cloud-backup.json',
-  });
+  const uploadSettings = Object.assign({}, globalSettings);
 
   // Encrypt the backup with the same passphrase as sync when E2EE is enabled,
   // so a user who turned on sync encryption doesn't leak plaintext script code
@@ -1281,7 +1283,9 @@ async function _uploadBackupToCloud(backup: BackupEntry): Promise<void> {
     throw new Error('Cloud backup encryption failed');
   }
 
-  const result = await provider.upload(payload, uploadSettings);
+  const result = await provider.upload(payload, uploadSettings, {
+    objectName: 'scriptvault-cloud-backup.json',
+  });
   if (!result?.success) {
     throw new Error(result?.error || 'Cloud backup upload failed');
   }
