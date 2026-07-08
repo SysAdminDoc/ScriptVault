@@ -917,6 +917,9 @@ const StorageModule = (() => {
       return Array.isArray(value) ? [...value] : { ...value };
     }
   }
+  function cloneScriptRecord(script) {
+    return cloneStoredValue(script);
+  }
   async function getSettingsValue(key) {
     await SettingsManager.init();
     const cachedSettings = SettingsManager.cache;
@@ -1004,7 +1007,7 @@ const StorageModule = (() => {
           }
           const list = await ScriptsDAO.getAll();
           const next = {};
-          for (const s of list) next[s.id] = s;
+          for (const s of list) next[s.id] = cloneScriptRecord(s);
           this.cache = next;
           console.log("[ScriptVault] Loaded", Object.keys(this.cache).length, "scripts");
         })();
@@ -1021,24 +1024,26 @@ const StorageModule = (() => {
     },
     async getAll() {
       await this.init();
-      return Object.values(this.cache);
+      return Object.values(this.cache).map((script) => cloneScriptRecord(script));
     },
     async get(id) {
       await this.init();
-      return this.cache[id] ?? null;
+      const script = this.cache[id];
+      return script ? cloneScriptRecord(script) : null;
     },
     async set(id, script) {
       await this.init();
       const prev = this.cache[id];
+      const nextScript = cloneScriptRecord(script);
       try {
-        await ScriptsDAO.put(script);
+        await ScriptsDAO.put(nextScript);
       } catch (e) {
         throw e;
       }
-      this.cache[id] = script;
+      this.cache[id] = nextScript;
       void prev;
       notifyScriptChange();
-      return script;
+      return cloneScriptRecord(nextScript);
     },
     async delete(id) {
       await this.init();
@@ -1080,11 +1085,11 @@ const StorageModule = (() => {
       const q = query.toLowerCase();
       return Object.values(this.cache).filter(
         (s) => (s.meta?.name || "").toLowerCase().includes(q) || (s.meta?.description || "").toLowerCase().includes(q) || (s.meta?.author || "").toLowerCase().includes(q)
-      );
+      ).map((script) => cloneScriptRecord(script));
     },
     async getByNamespace(namespace) {
       await this.init();
-      return Object.values(this.cache).filter((s) => s.meta?.namespace === namespace);
+      return Object.values(this.cache).filter((s) => s.meta?.namespace === namespace).map((script) => cloneScriptRecord(script));
     },
     async reorder(orderedIds) {
       await this.init();
@@ -1092,12 +1097,12 @@ const StorageModule = (() => {
       orderedIds.forEach((id, index) => {
         const script = this.cache[id];
         if (script) {
-          script.position = index;
-          updates.push(script);
+          updates.push({ ...cloneScriptRecord(script), position: index });
         }
       });
       for (const s of updates) {
         await ScriptsDAO.put(s);
+        this.cache[s.id] = s;
       }
     },
     async duplicate(id) {

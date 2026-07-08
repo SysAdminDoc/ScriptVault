@@ -165,6 +165,10 @@ function cloneStoredValue<T>(value: T): T {
   }
 }
 
+function cloneScriptRecord(script: Script): Script {
+  return cloneStoredValue(script);
+}
+
 async function getSettingsValue<K extends keyof Settings>(key: K): Promise<Settings[K]>;
 async function getSettingsValue(): Promise<Settings>;
 async function getSettingsValue<K extends keyof Settings>(key?: K): Promise<Settings | Settings[K]> {
@@ -279,7 +283,7 @@ export const ScriptStorage = {
         }
         const list = await ScriptsDAO.getAll();
         const next: Record<string, Script> = {};
-        for (const s of list) next[s.id] = s;
+        for (const s of list) next[s.id] = cloneScriptRecord(s);
         this.cache = next;
         console.log('[ScriptVault] Loaded', Object.keys(this.cache).length, 'scripts');
       })();
@@ -299,27 +303,29 @@ export const ScriptStorage = {
 
   async getAll(): Promise<Script[]> {
     await this.init();
-    return Object.values(this.cache!);
+    return Object.values(this.cache!).map((script) => cloneScriptRecord(script));
   },
 
   async get(id: string): Promise<Script | null> {
     await this.init();
-    return this.cache![id] ?? null;
+    const script = this.cache![id];
+    return script ? cloneScriptRecord(script) : null;
   },
 
   async set(id: string, script: Script): Promise<Script> {
     await this.init();
     const prev = this.cache![id];
+    const nextScript = cloneScriptRecord(script);
     try {
-      await ScriptsDAO.put(script);
+      await ScriptsDAO.put(nextScript);
     } catch (e) {
       // Cache untouched on IDB failure — rethrow so callers know.
       throw e;
     }
-    this.cache![id] = script;
+    this.cache![id] = nextScript;
     void prev; // explicit no-op to keep diff readable; cache now matches IDB
     notifyScriptChange();
-    return script;
+    return cloneScriptRecord(nextScript);
   },
 
   async delete(id: string): Promise<void> {
@@ -371,12 +377,14 @@ export const ScriptStorage = {
         (s.meta?.name || '').toLowerCase().includes(q) ||
         (s.meta?.description || '').toLowerCase().includes(q) ||
         (s.meta?.author || '').toLowerCase().includes(q),
-    );
+    ).map((script) => cloneScriptRecord(script));
   },
 
   async getByNamespace(namespace: string): Promise<Script[]> {
     await this.init();
-    return Object.values(this.cache!).filter((s) => s.meta?.namespace === namespace);
+    return Object.values(this.cache!)
+      .filter((s) => s.meta?.namespace === namespace)
+      .map((script) => cloneScriptRecord(script));
   },
 
   async reorder(orderedIds: string[]): Promise<void> {
@@ -388,12 +396,12 @@ export const ScriptStorage = {
     orderedIds.forEach((id, index) => {
       const script = this.cache![id];
       if (script) {
-        script.position = index;
-        updates.push(script);
+        updates.push({ ...cloneScriptRecord(script), position: index });
       }
     });
     for (const s of updates) {
       await ScriptsDAO.put(s);
+      this.cache![s.id] = s;
     }
   },
 

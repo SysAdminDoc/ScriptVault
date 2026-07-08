@@ -245,6 +245,46 @@ describe('ScriptStorage', () => {
     expect(copy.meta.name).toBe('Alpha (Copy)');
   });
 
+  it('returns script copies so caller mutations cannot drift the cache', async () => {
+    const alpha = makeScript('alpha', {
+      code: '// saved',
+      meta: { name: 'Alpha', namespace: 'tests', version: '1.0' },
+      settings: { userModified: false },
+    });
+
+    const stored = await ScriptStorage.set(alpha.id, alpha);
+    alpha.code = '// mutated after set';
+    alpha.meta.name = 'Mutated input';
+    stored.code = '// mutated returned set';
+    stored.meta.name = 'Mutated set return';
+
+    expect(await ScriptStorage.get('alpha')).toMatchObject({
+      code: '// saved',
+      meta: expect.objectContaining({ name: 'Alpha' }),
+    });
+
+    const fetched = await ScriptStorage.get('alpha');
+    fetched.code = '// mutated fetched';
+    fetched.meta.name = 'Mutated fetched';
+
+    const all = await ScriptStorage.getAll();
+    all[0].enabled = false;
+    all[0].settings.userModified = true;
+
+    const searched = await ScriptStorage.search('alpha');
+    searched[0].code = '// mutated search';
+
+    const namespaced = await ScriptStorage.getByNamespace('tests');
+    namespaced[0].meta.name = 'Mutated namespace';
+
+    expect(await ScriptStorage.get('alpha')).toMatchObject({
+      code: '// saved',
+      enabled: true,
+      meta: expect.objectContaining({ name: 'Alpha' }),
+      settings: expect.objectContaining({ userModified: false }),
+    });
+  });
+
   it('deletes scripts and their value bags atomically through IndexedDB', async () => {
     const script = makeScript('alpha');
 
