@@ -517,6 +517,88 @@ describe('source easycloud sync module', () => {
     expect(body).not.toContain('secret\\\\local.user.js');
   });
 
+  it('marks sync encryption established after reading an encrypted EasyCloud envelope', async () => {
+    await chrome.storage.local.set({
+      easycloud_connected: true,
+      syncTombstones: {},
+    });
+
+    const { SyncCrypto } = await import('../src/modules/sync-crypto.ts');
+    const remoteEnvelope = await SyncCrypto.prepareSyncEnvelopeForUpload(
+      {
+        version: 1,
+        timestamp: 20,
+        scripts: [
+          {
+            id: 'script_remote',
+            code: '// ==UserScript==\n// @name Remote\n// ==/UserScript==\n// encrypted remote',
+            enabled: true,
+            position: 0,
+            settings: {},
+            updatedAt: 20,
+            syncBaseCode: null,
+          },
+        ],
+        tombstones: {},
+      },
+      {
+        syncEncryptionEnabled: true,
+        syncEncryptionPassphrase: 'easycloud passphrase',
+        syncEncryptionKdfIterations: 2,
+      },
+    );
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ files: [{ id: 'drive-file-id', modifiedTime: '2026-07-08T00:00:00Z' }] }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify(remoteEnvelope),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ id: 'drive-file-id', modifiedTime: '2026-07-08T00:00:00Z' }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ id: 'drive-file-id' }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+    globalThis.fetch = fetchMock;
+
+    const { EasyCloudSync, SettingsManager, scriptState } = await loadFreshEasyCloud(
+      [],
+      {
+        syncEncryptionEnabled: true,
+        syncEncryptionPassphrase: 'easycloud passphrase',
+        syncEncryptionKdfIterations: 2,
+        syncEncryptionEstablished: false,
+      },
+    );
+
+    const result = await EasyCloudSync.sync();
+
+    expect(result.success).toBe(true);
+    expect(SettingsManager.set).toHaveBeenCalledWith('syncEncryptionEstablished', true);
+    expect(scriptState).toEqual([
+      expect.objectContaining({
+        id: 'script_remote',
+        code: expect.stringContaining('// encrypted remote'),
+        syncBaseCode: expect.stringContaining('// encrypted remote'),
+      }),
+    ]);
+  });
+
   it('encrypts EasyCloud Drive uploads when sync encryption is enabled', async () => {
     await chrome.storage.local.set({
       easycloud_connected: true,
@@ -545,7 +627,7 @@ describe('source easycloud sync module', () => {
       );
     globalThis.fetch = fetchMock;
 
-    const { EasyCloudSync } = await loadFreshEasyCloud(
+    const { EasyCloudSync, SettingsManager } = await loadFreshEasyCloud(
       [
         {
           id: 'script_secret',
@@ -576,5 +658,6 @@ describe('source easycloud sync module', () => {
     expect(body).toContain('"encrypted":true');
     expect(body).toContain('"algorithm":"AES-256-GCM"');
     expect(body).not.toContain('easycloud-secret');
+    expect(SettingsManager.set).toHaveBeenCalledWith('syncEncryptionEstablished', true);
   });
 });

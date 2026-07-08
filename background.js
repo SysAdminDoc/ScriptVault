@@ -24106,17 +24106,39 @@ const EasyCloudSync = (() => {
     }
     return await SettingsManager.get();
   }
+  async function markSyncEncryptionEstablished(settings) {
+    if (settings.syncEncryptionEnabled === true && settings.syncEncryptionEstablished !== true) {
+      try {
+        await SettingsManager.set("syncEncryptionEstablished", true);
+      } catch (_) {
+      }
+    }
+  }
   async function readSyncEnvelopeFromRemote(remoteEnvelope) {
-    return SyncCrypto.decryptSyncEnvelope(
+    const settings = await getSyncCryptoSettings();
+    const decrypted = await SyncCrypto.decryptSyncEnvelope(
       remoteEnvelope,
-      await getSyncCryptoSettings()
+      settings
     );
+    if (remoteEnvelope && SyncCrypto.isEncryptedSyncEnvelope(remoteEnvelope)) {
+      await markSyncEncryptionEstablished(settings);
+    }
+    return decrypted;
   }
   async function prepareSyncEnvelopeForRemoteUpload(envelope) {
-    return SyncCrypto.prepareSyncEnvelopeForUpload(
-      sanitizeSyncEnvelopeForUpload(envelope),
-      await getSyncCryptoSettings()
-    );
+    const settings = await getSyncCryptoSettings();
+    return {
+      envelope: await SyncCrypto.prepareSyncEnvelopeForUpload(
+        sanitizeSyncEnvelopeForUpload(envelope),
+        settings
+      ),
+      settings
+    };
+  }
+  async function uploadSyncEnvelopeToDrive(token, envelope) {
+    const prepared = await prepareSyncEnvelopeForRemoteUpload(envelope);
+    await _uploadToDrive(token, prepared.envelope);
+    await markSyncEncryptionEstablished(prepared.settings);
   }
   function setStatus(newStatus) {
     if (_status === newStatus) return;
@@ -24479,9 +24501,9 @@ const EasyCloudSync = (() => {
           await _updateBadgeIfAvailable();
         }
         merged.timestamp = Date.now();
-        await _uploadToDrive(token, await prepareSyncEnvelopeForRemoteUpload(merged));
+        await uploadSyncEnvelopeToDrive(token, merged);
       } else {
-        await _uploadToDrive(token, await prepareSyncEnvelopeForRemoteUpload(localData));
+        await uploadSyncEnvelopeToDrive(token, localData);
       }
       const now = Date.now();
       await _setStorageValues({ [KEYS.LAST_SYNC]: now });

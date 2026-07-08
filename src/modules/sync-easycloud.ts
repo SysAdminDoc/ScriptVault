@@ -398,18 +398,42 @@ async function getSyncCryptoSettings(): Promise<Record<string, unknown>> {
   return await SettingsManager.get();
 }
 
-async function readSyncEnvelopeFromRemote(remoteEnvelope: RemoteSyncEnvelope | null): Promise<SyncEnvelope | null> {
-  return SyncCrypto.decryptSyncEnvelope(
-    remoteEnvelope,
-    await getSyncCryptoSettings(),
-  ) as Promise<SyncEnvelope | null>;
+async function markSyncEncryptionEstablished(settings: Record<string, unknown>): Promise<void> {
+  if (settings.syncEncryptionEnabled === true && settings.syncEncryptionEstablished !== true) {
+    try { await SettingsManager.set('syncEncryptionEstablished', true); } catch (_) { /* best effort */ }
+  }
 }
 
-async function prepareSyncEnvelopeForRemoteUpload(envelope: SyncEnvelope): Promise<RemoteSyncEnvelope> {
-  return SyncCrypto.prepareSyncEnvelopeForUpload(
-    sanitizeSyncEnvelopeForUpload(envelope),
-    await getSyncCryptoSettings(),
-  );
+async function readSyncEnvelopeFromRemote(remoteEnvelope: RemoteSyncEnvelope | null): Promise<SyncEnvelope | null> {
+  const settings = await getSyncCryptoSettings();
+  const decrypted = await SyncCrypto.decryptSyncEnvelope(
+    remoteEnvelope,
+    settings,
+  ) as SyncEnvelope | null;
+  if (remoteEnvelope && SyncCrypto.isEncryptedSyncEnvelope(remoteEnvelope)) {
+    await markSyncEncryptionEstablished(settings);
+  }
+  return decrypted;
+}
+
+async function prepareSyncEnvelopeForRemoteUpload(envelope: SyncEnvelope): Promise<{
+  envelope: RemoteSyncEnvelope;
+  settings: Record<string, unknown>;
+}> {
+  const settings = await getSyncCryptoSettings();
+  return {
+    envelope: await SyncCrypto.prepareSyncEnvelopeForUpload(
+      sanitizeSyncEnvelopeForUpload(envelope),
+      settings,
+    ),
+    settings,
+  };
+}
+
+async function uploadSyncEnvelopeToDrive(token: string, envelope: SyncEnvelope): Promise<void> {
+  const prepared = await prepareSyncEnvelopeForRemoteUpload(envelope);
+  await _uploadToDrive(token, prepared.envelope);
+  await markSyncEncryptionEstablished(prepared.settings);
 }
 
 function setStatus(newStatus: string): void {
@@ -947,10 +971,10 @@ async function _performSync(): Promise<SyncResult> {
 
       // Upload merged data
       merged.timestamp = Date.now();
-      await _uploadToDrive(token, await prepareSyncEnvelopeForRemoteUpload(merged));
+      await uploadSyncEnvelopeToDrive(token, merged);
     } else {
       // First sync — upload local data
-      await _uploadToDrive(token, await prepareSyncEnvelopeForRemoteUpload(localData));
+      await uploadSyncEnvelopeToDrive(token, localData);
     }
 
     const now = Date.now();
