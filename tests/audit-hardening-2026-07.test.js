@@ -346,6 +346,17 @@ describe('Monaco editor Ctrl+S / Escape wiring (2026-07 regression)', () => {
   });
 });
 
+describe('Editor tab reconciliation (2026-07 regression)', () => {
+  const src = read('pages/dashboard.js');
+
+  it('prunes open editor tabs after script reloads and warns on stale activation', () => {
+    expect(src).toContain('function reconcileOpenEditorTabs()');
+    expect(src).toContain('reconcileOpenEditorTabs();');
+    expect(src).toContain('removedScriptIds.forEach(removeOpenScriptTab);');
+    expect(src).toContain("showToast('That script is no longer available. Editor tab closed.', 'warning')");
+  });
+});
+
 describe('Script chains use the real background API (2026-07 regression)', () => {
   const src = read('pages/dashboard-chains.js');
   it('runs steps via runScriptNow, not the non-existent executeScript action', () => {

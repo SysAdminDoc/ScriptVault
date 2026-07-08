@@ -7229,6 +7229,7 @@
             const response = await chrome.runtime.sendMessage({ action: 'getScripts' });
             if (response?.scripts) {
                 state.scripts = response.scripts;
+                reconcileOpenEditorTabs();
                 updateTagFilterOptions();
                 renderScriptTable();
                 refreshStandaloneScriptSelect();
@@ -9352,6 +9353,56 @@
         return tabData;
     }
 
+    function getLastValidOpenScriptId() {
+        const scriptIds = new Set(state.scripts.map(script => script.id));
+        return Object.keys(state.openTabs).filter(scriptId => scriptIds.has(scriptId)).pop() || null;
+    }
+
+    function removeOpenScriptTab(scriptId) {
+        getScriptTabElement(scriptId)?.remove();
+        delete state.openTabs[scriptId];
+    }
+
+    function recoverEditorAfterMissingScript(options = {}) {
+        const { updateRoute = true } = options;
+        const fallbackScriptId = getLastValidOpenScriptId();
+        state.currentScriptId = null;
+        state.unsavedChanges = false;
+
+        if (fallbackScriptId) {
+            activateScriptTab(fallbackScriptId, { updateRoute });
+            return;
+        }
+
+        hideEditorOverlay({ restoreFocus: true });
+        if (updateRoute) {
+            Promise.resolve(switchTab('scripts', { focusControl: false })).catch(error => {
+                console.warn('[ScriptVault] Failed to leave stale editor tab:', error?.message || error);
+            });
+        }
+    }
+
+    function reconcileOpenEditorTabs() {
+        const scriptIds = new Set(state.scripts.map(script => script.id));
+        const openScriptIds = Object.keys(state.openTabs);
+        const removedScriptIds = openScriptIds.filter(scriptId => !scriptIds.has(scriptId));
+        const activeScriptMissing = !!state.currentScriptId && !scriptIds.has(state.currentScriptId);
+
+        if (removedScriptIds.length === 0 && !activeScriptMissing) return 0;
+
+        const previousScriptId = state.currentScriptId;
+        removedScriptIds.forEach(removeOpenScriptTab);
+
+        if (activeScriptMissing) {
+            if (state.userCssPreview.scriptId === previousScriptId) {
+                void clearUserCssPreview({ silent: true });
+            }
+            recoverEditorAfterMissingScript();
+        }
+
+        return removedScriptIds.length;
+    }
+
     function updateScriptTabVisual(scriptId, isDirty) {
         const tab = getScriptTabElement(scriptId);
         if (tab) {
@@ -10351,7 +10402,17 @@
     function activateScriptTab(scriptId, options = {}) {
         const { updateRoute = true } = options;
         const script = state.scripts.find(s => s.id === scriptId);
-        if (!script) return;
+        if (!script) {
+            removeOpenScriptTab(scriptId);
+            if (state.currentScriptId === scriptId) {
+                if (state.userCssPreview.scriptId === scriptId) {
+                    void clearUserCssPreview({ silent: true });
+                }
+                recoverEditorAfterMissingScript({ updateRoute });
+            }
+            showToast('That script is no longer available. Editor tab closed.', 'warning');
+            return;
+        }
 
         const previousScriptId = state.currentScriptId;
         // Persist the outgoing tab's in-progress code before switching.
