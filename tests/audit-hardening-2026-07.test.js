@@ -357,6 +357,14 @@ describe('Editor tab reconciliation (2026-07 regression)', () => {
   });
 });
 
+describe('Editor autosave setting refresh (2026-07 regression)', () => {
+  it('reads the current autosave setting inside the persistent change handler', () => {
+    const src = read('pages/dashboard.js');
+    expect(src).toContain('if (state.settings.autoSave) {');
+    expect(src).not.toContain('if (s.autoSave) {');
+  });
+});
+
 describe('Script chains use the real background API (2026-07 regression)', () => {
   const src = read('pages/dashboard-chains.js');
   it('runs steps via runScriptNow, not the non-existent executeScript action', () => {

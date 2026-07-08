@@ -11844,7 +11844,7 @@
             updateLineCount();
             updateUserCssPreviewButton();
             scheduleUserCssPreviewRefresh();
-            if (s.autoSave) {
+            if (state.settings.autoSave) {
                 clearTimeout(autoSaveTimer);
                 // Capture the script being edited so a debounced autosave that
                 // lands after the user switched tabs (or closed the editor) does
