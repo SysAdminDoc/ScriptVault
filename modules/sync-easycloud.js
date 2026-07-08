@@ -92,9 +92,10 @@ const EasyCloudSync = (() => {
     return !!value && typeof value === "object" && !Array.isArray(value);
   }
   function normalizePlainSyncEnvelope(envelope) {
+    const version = typeof envelope.version === "number" || typeof envelope.version === "string" && envelope.version.trim() ? envelope.version : 1;
     return {
       ...envelope,
-      version: typeof envelope.version === "number" ? envelope.version : 1,
+      version,
       timestamp: typeof envelope.timestamp === "number" ? envelope.timestamp : Date.now(),
       scripts: Array.isArray(envelope.scripts) ? envelope.scripts : [],
       tombstones: isObject(envelope.tombstones) ? envelope.tombstones : {}

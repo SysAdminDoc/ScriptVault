@@ -114,6 +114,30 @@ describe.each(implementations)('sync crypto helper ($label)', ({ api: SyncCrypto
     ).resolves.toEqual(plaintext);
   });
 
+  it('preserves string manifest versions in encrypted cloud backup envelopes', async () => {
+    const backupEnvelope = {
+      schema: 'scriptvault-cloud-backup/v1',
+      backupId: 'backup_123',
+      timestamp: 123,
+      version: '3.17.0',
+      scriptCount: 0,
+      reason: 'manual',
+      size: 0,
+      data: 'UEsDBAo=',
+    };
+
+    const encrypted = await SyncCrypto.prepareSyncEnvelopeForUpload(backupEnvelope, fastEncryptedSettings);
+    await expect(SyncCrypto.decryptSyncEnvelope(encrypted, fastEncryptedSettings)).resolves.toEqual(
+      expect.objectContaining({
+        schema: 'scriptvault-cloud-backup/v1',
+        backupId: 'backup_123',
+        version: '3.17.0',
+        scripts: [],
+        tombstones: {},
+      }),
+    );
+  });
+
   it('rejects a plaintext remote once encryption is established (downgrade guard)', async () => {
     const plaintext = { version: 1, timestamp: 10, scripts: [], tombstones: {} };
     await expect(
