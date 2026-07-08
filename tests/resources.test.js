@@ -102,6 +102,29 @@ describe('ResourceCache', () => {
       expect(ResourceCache.cache['https://cdn.example.com/lib.js']).toBeUndefined();
     });
 
+    it('verifies a pinned @resource SRI hash against the fetched bytes', async () => {
+      const body = 'body{color:red}';
+      const { createHash } = await import('node:crypto');
+      const digest = createHash('sha256').update(Buffer.from(body)).digest('base64');
+      const url = `https://cdn.example.com/style.css#sha256=${digest}`;
+
+      const goodResp = new Response(body, { status: 200, headers: { 'content-type': 'text/css' } });
+      Object.defineProperty(goodResp, 'url', { value: 'https://cdn.example.com/style.css', configurable: true });
+      globalThis.fetch = vi.fn().mockResolvedValue(goodResp);
+      ResourceCache = createFresh();
+      await expect(ResourceCache.fetchResource(url)).resolves.toBe(body);
+    });
+
+    it('rejects a pinned @resource whose bytes do not match the SRI hash', async () => {
+      const url = 'https://cdn.example.com/style.css#sha256=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
+      const resp = new Response('body{color:blue}', { status: 200, headers: { 'content-type': 'text/css' } });
+      Object.defineProperty(resp, 'url', { value: 'https://cdn.example.com/style.css', configurable: true });
+      globalThis.fetch = vi.fn().mockResolvedValue(resp);
+      ResourceCache = createFresh();
+      await expect(ResourceCache.fetchResource(url)).rejects.toThrow('SRI hash mismatch');
+      expect(ResourceCache.cache[url]).toBeUndefined();
+    });
+
     it('rejects oversized resources before reading the body when content-length is available', async () => {
       const arrayBuffer = vi.fn();
       const fetchMock = vi.fn().mockResolvedValue({

@@ -837,14 +837,22 @@ const ScriptAnalyzer = (() => {
       ">>>>>>> REMOTE (cloud)"
     ].join("\n");
   }
-  var SCAM_SEED_HARVEST = /\b(seed[\s_-]?phrase|mnemonic|recovery[\s_-]?phrase|secretRecoveryPhrase|private[\s_-]?key|privateKey|priv[\s_-]?key)\b/i;
+  var SCAM_WALLET_SECRET = /\b(seed[\s_-]?phrase|mnemonic|recovery[\s_-]?phrase|secretRecoveryPhrase)\b/i;
+  var SCAM_PRIVATE_KEY = /\b(private[\s_-]?key|privateKey|priv[\s_-]?key)\b/i;
+  var SCAM_WALLET_CONTEXT = /(\bwallet\b|\bwindow\.ethereum\b|\bethereum\b|\bweb3\b|\bmetamask\b|\bwalletconnect\b|\bsolana\b|\bphantom\b|\bkeplr\b|\bcoinbase\b|0x[a-fA-F0-9]{40})/i;
+  var SCAM_WEBCRYPTO_CONTEXT = /\b(crypto\.subtle|SubtleCrypto|CryptoKey|generateKey|importKey|exportKey|deriveKey|deriveBits|subtle\.sign)\b/;
   var SCAM_DRAINER_KEYWORDS = /\b(drainer|drainWallet|sweepWallet|transferAll|approveMax|setApprovalForAll)\b/i;
   var SCAM_WALLET_TX = /\b(eth_sendTransaction|wallet_sendTransaction|personal_sign|eth_sign|signTransaction|sendRawTransaction)\b/;
   var SCAM_EXFIL = /\b(fetch|XMLHttpRequest|sendBeacon|WebSocket|GM_xmlhttpRequest|GM\.xmlHttpRequest)\b/;
   function detectScamSignals(strippedCode) {
     const findings = [];
     let risk = 0;
-    const seedHarvest = SCAM_SEED_HARVEST.test(strippedCode);
+    const walletSecret = SCAM_WALLET_SECRET.test(strippedCode);
+    const privateKeyRef = SCAM_PRIVATE_KEY.test(strippedCode);
+    const walletContext = SCAM_WALLET_CONTEXT.test(strippedCode);
+    const webCrypto = SCAM_WEBCRYPTO_CONTEXT.test(strippedCode);
+    const seedHarvest = walletSecret || privateKeyRef && !webCrypto;
+    const strongWalletSecret = walletSecret || privateKeyRef && walletContext && !webCrypto;
     const drainer = SCAM_DRAINER_KEYWORDS.test(strippedCode);
     const walletTx = SCAM_WALLET_TX.test(strippedCode);
     const exfil = SCAM_EXFIL.test(strippedCode);
@@ -860,7 +868,7 @@ const ScriptAnalyzer = (() => {
       findings.push({ id: "wallet-transaction", label: "Wallet transaction / signature request", category: "scam", desc: "Initiates a wallet transaction or signature (eth_sendTransaction / personal_sign). Legitimate for dApps, but review the destination.", risk: 25, count: 1, adjustedRisk: 25 });
       risk += 25;
     }
-    if ((seedHarvest || drainer) && exfil) {
+    if ((strongWalletSecret || drainer) && exfil) {
       findings.push({ id: "credential-exfil", label: "Possible credential/wallet exfiltration", category: "scam", desc: "This script references wallet secrets or drainer operations AND performs an off-page network send \u2014 a possible credential/wallet exfiltration. Review the network destinations before installing.", risk: 60, count: 1, adjustedRisk: 60 });
       risk += 60;
     }

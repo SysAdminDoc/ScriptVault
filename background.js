@@ -20156,6 +20156,32 @@ const ResourceCache = (() => {
   }
 
   // src/modules/resources.ts
+  function _parseResourceIntegrity(url) {
+    const hashIdx = url.indexOf("#");
+    if (hashIdx === -1) return { sriHash: null };
+    const frag = url.slice(hashIdx + 1);
+    const m = frag.match(/(sha256|sha384|sha512)[-=]([A-Za-z0-9+/=_-]+)/i);
+    return { sriHash: m ? `${m[1]}-${m[2]}` : null };
+  }
+  function _normalizeSriB64(s) {
+    return s.replace(/=+$/, "").replace(/\s+/g, "");
+  }
+  async function _verifyResourceIntegrity(bytes, sriHash) {
+    if (!sriHash) return true;
+    const match = sriHash.match(/^(sha256|sha384|sha512)[-=](.+)$/i);
+    if (!match) return true;
+    const algoMap = { sha256: "SHA-256", sha384: "SHA-384", sha512: "SHA-512" };
+    const algoName = algoMap[match[1].toLowerCase()];
+    const expected = match[2];
+    if (!algoName || !expected) return true;
+    try {
+      const digest = await crypto.subtle.digest(algoName, bytes);
+      const actual = btoa(String.fromCharCode(...new Uint8Array(digest)));
+      return _normalizeSriB64(actual) === _normalizeSriB64(expected);
+    } catch {
+      return false;
+    }
+  }
   var RESOURCE_SIZE_ERROR = "Resource exceeds maximum allowed size (5 MB)";
   async function readResponseBytesBounded(response, maxBytes) {
     const contentLength = Number.parseInt(response.headers.get("content-length") || "", 10);
@@ -20263,6 +20289,17 @@ const ResourceCache = (() => {
       if (!preCheck.ok) {
         throw new Error(`@resource URL rejected: ${preCheck.message}`);
       }
+      const { sriHash } = _parseResourceIntegrity(url);
+      if (!sriHash) {
+        try {
+          const sriSettings = typeof SettingsManager !== "undefined" && SettingsManager ? await SettingsManager.get() : null;
+          if (sriSettings && sriSettings.sri === "require") {
+            throw new Error('Blocked: unpinned @resource under SRI "Require" policy');
+          }
+        } catch (e) {
+          if (e instanceof Error && e.message.startsWith("Blocked:")) throw e;
+        }
+      }
       const pending = this._pendingFetches.get(url);
       if (pending) return await pending;
       const fetchPromise = (async () => {
@@ -20277,6 +20314,9 @@ const ResourceCache = (() => {
           }
           const contentType = response.headers.get("content-type") || "text/plain";
           const bytes = await readResponseBytesBounded(response, this.maxResourceBytes);
+          if (sriHash && !await _verifyResourceIntegrity(bytes, sriHash)) {
+            throw new Error("@resource SRI hash mismatch");
+          }
           let text;
           if (contentType.includes("text") || contentType.includes("json") || contentType.includes("xml") || contentType.includes("css") || contentType.includes("javascript")) {
             text = new TextDecoder().decode(bytes);
@@ -31388,14 +31428,22 @@ const ScriptAnalyzer = (() => {
       ">>>>>>> REMOTE (cloud)"
     ].join("\n");
   }
-  var SCAM_SEED_HARVEST = /\b(seed[\s_-]?phrase|mnemonic|recovery[\s_-]?phrase|secretRecoveryPhrase|private[\s_-]?key|privateKey|priv[\s_-]?key)\b/i;
+  var SCAM_WALLET_SECRET = /\b(seed[\s_-]?phrase|mnemonic|recovery[\s_-]?phrase|secretRecoveryPhrase)\b/i;
+  var SCAM_PRIVATE_KEY = /\b(private[\s_-]?key|privateKey|priv[\s_-]?key)\b/i;
+  var SCAM_WALLET_CONTEXT = /(\bwallet\b|\bwindow\.ethereum\b|\bethereum\b|\bweb3\b|\bmetamask\b|\bwalletconnect\b|\bsolana\b|\bphantom\b|\bkeplr\b|\bcoinbase\b|0x[a-fA-F0-9]{40})/i;
+  var SCAM_WEBCRYPTO_CONTEXT = /\b(crypto\.subtle|SubtleCrypto|CryptoKey|generateKey|importKey|exportKey|deriveKey|deriveBits|subtle\.sign)\b/;
   var SCAM_DRAINER_KEYWORDS = /\b(drainer|drainWallet|sweepWallet|transferAll|approveMax|setApprovalForAll)\b/i;
   var SCAM_WALLET_TX = /\b(eth_sendTransaction|wallet_sendTransaction|personal_sign|eth_sign|signTransaction|sendRawTransaction)\b/;
   var SCAM_EXFIL = /\b(fetch|XMLHttpRequest|sendBeacon|WebSocket|GM_xmlhttpRequest|GM\.xmlHttpRequest)\b/;
   function detectScamSignals(strippedCode) {
     const findings = [];
     let risk = 0;
-    const seedHarvest = SCAM_SEED_HARVEST.test(strippedCode);
+    const walletSecret = SCAM_WALLET_SECRET.test(strippedCode);
+    const privateKeyRef = SCAM_PRIVATE_KEY.test(strippedCode);
+    const walletContext = SCAM_WALLET_CONTEXT.test(strippedCode);
+    const webCrypto = SCAM_WEBCRYPTO_CONTEXT.test(strippedCode);
+    const seedHarvest = walletSecret || privateKeyRef && !webCrypto;
+    const strongWalletSecret = walletSecret || privateKeyRef && walletContext && !webCrypto;
     const drainer = SCAM_DRAINER_KEYWORDS.test(strippedCode);
     const walletTx = SCAM_WALLET_TX.test(strippedCode);
     const exfil = SCAM_EXFIL.test(strippedCode);
@@ -31411,7 +31459,7 @@ const ScriptAnalyzer = (() => {
       findings.push({ id: "wallet-transaction", label: "Wallet transaction / signature request", category: "scam", desc: "Initiates a wallet transaction or signature (eth_sendTransaction / personal_sign). Legitimate for dApps, but review the destination.", risk: 25, count: 1, adjustedRisk: 25 });
       risk += 25;
     }
-    if ((seedHarvest || drainer) && exfil) {
+    if ((strongWalletSecret || drainer) && exfil) {
       findings.push({ id: "credential-exfil", label: "Possible credential/wallet exfiltration", category: "scam", desc: "This script references wallet secrets or drainer operations AND performs an off-page network send \u2014 a possible credential/wallet exfiltration. Review the network destinations before installing.", risk: 60, count: 1, adjustedRisk: 60 });
       risk += 60;
     }
@@ -34040,6 +34088,13 @@ const UpdateSystem = {
   },
 
   async applyUpdate(scriptId, newCode, { force = false, sourceUrl = '', fetchDependencyBody = null, fetchProvenanceBundle: fetchProvenanceBundleOption = null } = {}) {
+    // Serialize with saveScript/toggleScript/deleteScript/rollback on the same
+    // script. Auto-update runs on a chrome.alarms tick and shares the service
+    // worker with user actions; without this lock an update captured before a
+    // concurrent delete would write the script back (resurrecting it and
+    // re-registering it), or re-enable a script the user just disabled. Reading
+    // the script INSIDE the lock means a delete that lands first yields null.
+    return await _runExclusiveScriptOperation(scriptId, async () => {
     const script = await ScriptStorage.get(scriptId);
     if (!script) return { error: 'Script not found' };
     // Don't auto-update scripts the user has locally edited (unless force=true from forceUpdate)
@@ -34150,6 +34205,7 @@ const UpdateSystem = {
     // Update", dashboard force-update) get their feedback inline via the
     // returned { success, script } payload.
     return { success: true, script };
+    });
   },
 
   // Phase 12.10 — recently-applied updates ring buffer surfaced to the
@@ -43507,11 +43563,13 @@ async function fetchRequireScript(url, options = {}) {
   // SRI enforcement: the Security > Subresource Integrity setting has a
   // "require" mode that, until now, was surfaced in the UI but never enforced.
   // In "require" mode, refuse to fetch a remote @require that carries no
-  // verifiable integrity hash. npm specs are resolved with a computed SRI above
-  // and never reach here; hash-pinned and TOFU-pinned requires are unaffected.
-  // Probe/preview/receipt callers pass allowUnpinned so install/update review
-  // can still inspect the dependency — enforcement applies to execution
-  // (registration/wrapper build) only.
+  // verifiable URL-fragment integrity hash. npm specs are resolved with a
+  // computed SRI above and never reach here. NOTE: this gate checks only the
+  // URL hash — a TOFU pin lives in the trust receipt, not the URL, so a
+  // TOFU-only @require IS blocked under "require" (that is intentional: the
+  // pin is not an inline hash the fetch layer can see). Probe/preview/receipt
+  // callers pass allowUnpinned so install/update review can still inspect the
+  // dependency — enforcement applies to execution (registration/wrapper build).
   if (!options.allowUnpinned && !hasVerifiableRequireIntegrity(url)) {
     try {
       const _sriSettings = await SettingsManager.get();

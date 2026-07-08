@@ -119,6 +119,32 @@ const ResourceCache = (() => {
   }
 
   // src/modules/resources.ts
+  function _parseResourceIntegrity(url) {
+    const hashIdx = url.indexOf("#");
+    if (hashIdx === -1) return { sriHash: null };
+    const frag = url.slice(hashIdx + 1);
+    const m = frag.match(/(sha256|sha384|sha512)[-=]([A-Za-z0-9+/=_-]+)/i);
+    return { sriHash: m ? `${m[1]}-${m[2]}` : null };
+  }
+  function _normalizeSriB64(s) {
+    return s.replace(/=+$/, "").replace(/\s+/g, "");
+  }
+  async function _verifyResourceIntegrity(bytes, sriHash) {
+    if (!sriHash) return true;
+    const match = sriHash.match(/^(sha256|sha384|sha512)[-=](.+)$/i);
+    if (!match) return true;
+    const algoMap = { sha256: "SHA-256", sha384: "SHA-384", sha512: "SHA-512" };
+    const algoName = algoMap[match[1].toLowerCase()];
+    const expected = match[2];
+    if (!algoName || !expected) return true;
+    try {
+      const digest = await crypto.subtle.digest(algoName, bytes);
+      const actual = btoa(String.fromCharCode(...new Uint8Array(digest)));
+      return _normalizeSriB64(actual) === _normalizeSriB64(expected);
+    } catch {
+      return false;
+    }
+  }
   var RESOURCE_SIZE_ERROR = "Resource exceeds maximum allowed size (5 MB)";
   async function readResponseBytesBounded(response, maxBytes) {
     const contentLength = Number.parseInt(response.headers.get("content-length") || "", 10);
@@ -226,6 +252,17 @@ const ResourceCache = (() => {
       if (!preCheck.ok) {
         throw new Error(`@resource URL rejected: ${preCheck.message}`);
       }
+      const { sriHash } = _parseResourceIntegrity(url);
+      if (!sriHash) {
+        try {
+          const sriSettings = typeof SettingsManager !== "undefined" && SettingsManager ? await SettingsManager.get() : null;
+          if (sriSettings && sriSettings.sri === "require") {
+            throw new Error('Blocked: unpinned @resource under SRI "Require" policy');
+          }
+        } catch (e) {
+          if (e instanceof Error && e.message.startsWith("Blocked:")) throw e;
+        }
+      }
       const pending = this._pendingFetches.get(url);
       if (pending) return await pending;
       const fetchPromise = (async () => {
@@ -240,6 +277,9 @@ const ResourceCache = (() => {
           }
           const contentType = response.headers.get("content-type") || "text/plain";
           const bytes = await readResponseBytesBounded(response, this.maxResourceBytes);
+          if (sriHash && !await _verifyResourceIntegrity(bytes, sriHash)) {
+            throw new Error("@resource SRI hash mismatch");
+          }
           let text;
           if (contentType.includes("text") || contentType.includes("json") || contentType.includes("xml") || contentType.includes("css") || contentType.includes("javascript")) {
             text = new TextDecoder().decode(bytes);

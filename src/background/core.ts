@@ -1835,6 +1835,13 @@ const UpdateSystem = {
   },
 
   async applyUpdate(scriptId, newCode, { force = false, sourceUrl = '', fetchDependencyBody = null, fetchProvenanceBundle: fetchProvenanceBundleOption = null } = {}) {
+    // Serialize with saveScript/toggleScript/deleteScript/rollback on the same
+    // script. Auto-update runs on a chrome.alarms tick and shares the service
+    // worker with user actions; without this lock an update captured before a
+    // concurrent delete would write the script back (resurrecting it and
+    // re-registering it), or re-enable a script the user just disabled. Reading
+    // the script INSIDE the lock means a delete that lands first yields null.
+    return await _runExclusiveScriptOperation(scriptId, async () => {
     const script = await ScriptStorage.get(scriptId);
     if (!script) return { error: 'Script not found' };
     // Don't auto-update scripts the user has locally edited (unless force=true from forceUpdate)
@@ -1945,6 +1952,7 @@ const UpdateSystem = {
     // Update", dashboard force-update) get their feedback inline via the
     // returned { success, script } payload.
     return { success: true, script };
+    });
   },
 
   // Phase 12.10 — recently-applied updates ring buffer surfaced to the
@@ -11302,11 +11310,13 @@ async function fetchRequireScript(url, options = {}) {
   // SRI enforcement: the Security > Subresource Integrity setting has a
   // "require" mode that, until now, was surfaced in the UI but never enforced.
   // In "require" mode, refuse to fetch a remote @require that carries no
-  // verifiable integrity hash. npm specs are resolved with a computed SRI above
-  // and never reach here; hash-pinned and TOFU-pinned requires are unaffected.
-  // Probe/preview/receipt callers pass allowUnpinned so install/update review
-  // can still inspect the dependency — enforcement applies to execution
-  // (registration/wrapper build) only.
+  // verifiable URL-fragment integrity hash. npm specs are resolved with a
+  // computed SRI above and never reach here. NOTE: this gate checks only the
+  // URL hash — a TOFU pin lives in the trust receipt, not the URL, so a
+  // TOFU-only @require IS blocked under "require" (that is intentional: the
+  // pin is not an inline hash the fetch layer can see). Probe/preview/receipt
+  // callers pass allowUnpinned so install/update review can still inspect the
+  // dependency — enforcement applies to execution (registration/wrapper build).
   if (!options.allowUnpinned && !hasVerifiableRequireIntegrity(url)) {
     try {
       const _sriSettings = await SettingsManager.get();
