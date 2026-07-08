@@ -11947,7 +11947,11 @@
                     } else {
                         const code = await file.text();
                         const res = await chrome.runtime.sendMessage({ action: 'createScript', code });
-                        if (res?.success) showToast(`Imported: ${file.name}`, 'success');
+                        if (res?.success) {
+                            showToast(`Imported: ${file.name}`, 'success');
+                        } else {
+                            showToast(`${file.name}: ${res?.error || 'Import failed'}`, 'error');
+                        }
                     }
                 } catch (err) {
                     showToast(`Failed: ${file.name}`, 'error');

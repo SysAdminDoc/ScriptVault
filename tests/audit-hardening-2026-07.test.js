@@ -365,6 +365,18 @@ describe('Editor autosave setting refresh (2026-07 regression)', () => {
   });
 });
 
+describe('Userscript file import errors (2026-07 regression)', () => {
+  it('surfaces background createScript errors for plain .user.js imports', () => {
+    const src = read('pages/dashboard.js');
+    const importBlock = src.slice(
+      src.indexOf('async function importScript()'),
+      src.indexOf('async function exportAllScripts()')
+    );
+    expect(importBlock).toContain("const res = await chrome.runtime.sendMessage({ action: 'createScript', code });");
+    expect(importBlock).toContain("showToast(`${file.name}: ${res?.error || 'Import failed'}`, 'error');");
+  });
+});
+
 describe('Script chains use the real background API (2026-07 regression)', () => {
   const src = read('pages/dashboard-chains.js');
   it('runs steps via runScriptNow, not the non-existent executeScript action', () => {
