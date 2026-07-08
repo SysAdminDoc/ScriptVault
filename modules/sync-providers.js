@@ -352,9 +352,20 @@ const CloudSyncProviders = (() => {
   }
   async function _oauthFetchWithTimeout(url, init, providerLabel, timeoutMs = 15e3) {
     const controller = new AbortController();
+    const externalSignal = init.signal;
+    const { signal: _ignoredSignal, ...fetchInit } = init;
+    const abortFromExternal = () => {
+      try {
+        controller.abort(externalSignal?.reason);
+      } catch (_) {
+        controller.abort();
+      }
+    };
+    if (externalSignal?.aborted) abortFromExternal();
+    else externalSignal?.addEventListener("abort", abortFromExternal, { once: true });
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      return await fetch(url, { ...init, signal: controller.signal });
+      return await fetch(url, { ...fetchInit, signal: controller.signal });
     } catch (e) {
       const name = e && typeof e === "object" && "name" in e ? String(e.name) : "";
       const message = e instanceof Error ? e.message : String(e);
@@ -366,18 +377,31 @@ const CloudSyncProviders = (() => {
       return null;
     } finally {
       clearTimeout(timer);
+      externalSignal?.removeEventListener("abort", abortFromExternal);
     }
   }
   async function fetchWithTimeout(url, options = {}, timeoutMs = 3e4, guardOptions = { label: "Cloud sync endpoint" }) {
     assertSyncEndpointAllowed(url, guardOptions);
     const controller = new AbortController();
+    const externalSignal = options.signal;
+    const { signal: _ignoredSignal, ...fetchOptions } = options;
+    const abortFromExternal = () => {
+      try {
+        controller.abort(externalSignal?.reason);
+      } catch (_) {
+        controller.abort();
+      }
+    };
+    if (externalSignal?.aborted) abortFromExternal();
+    else externalSignal?.addEventListener("abort", abortFromExternal, { once: true });
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const response = await fetch(url, { ...options, signal: controller.signal });
+      const response = await fetch(url, { ...fetchOptions, signal: controller.signal });
       assertSyncResponseAllowed(response, guardOptions);
       return response;
     } finally {
       clearTimeout(timeoutId);
+      externalSignal?.removeEventListener("abort", abortFromExternal);
     }
   }
   var webdav = {
@@ -397,7 +421,7 @@ const CloudSyncProviders = (() => {
         notes: "WebDAV Basic credentials are sent only to the configured server during sync."
       });
     },
-    async upload(data, settings) {
+    async upload(data, settings, opts = {}) {
       const effectiveSettings = await SyncCredentialStore.resolveSettings(settings);
       const objectName = resolveRemoteObjectName(settings, "scriptvault-backup.json");
       const url = `${getRequiredWebDavBaseUrl(effectiveSettings)}/${objectName}`;
@@ -412,12 +436,13 @@ const CloudSyncProviders = (() => {
           "Authorization": auth,
           "Content-Type": "application/json"
         },
-        body: JSON.stringify(data)
+        body: JSON.stringify(data),
+        signal: opts.signal
       }, 6e4, guardOptions);
       if (!response.ok) throw new Error(`WebDAV upload failed: HTTP ${response.status}`);
       return { success: true, timestamp: Date.now() };
     },
-    async download(settings) {
+    async download(settings, opts = {}) {
       const effectiveSettings = await SyncCredentialStore.resolveSettings(settings);
       const url = `${getRequiredWebDavBaseUrl(effectiveSettings)}/scriptvault-backup.json`;
       const auth = getWebDavAuthHeader(effectiveSettings);
@@ -427,7 +452,8 @@ const CloudSyncProviders = (() => {
       };
       const response = await fetchWithTimeout(url, {
         method: "GET",
-        headers: { "Authorization": auth }
+        headers: { "Authorization": auth },
+        signal: opts.signal
       }, 6e4, guardOptions);
       if (response.status === 404) return null;
       if (!response.ok) throw new Error(`WebDAV download failed: HTTP ${response.status}`);
@@ -514,7 +540,7 @@ const CloudSyncProviders = (() => {
       const settings = await getSettings();
       return settings.googleDriveToken || null;
     },
-    async refreshToken(settings) {
+    async refreshToken(settings, opts = {}) {
       const currentSettings = await SyncCredentialStore.resolveSettings(settings ?? await getRawSettings());
       const refreshTok = currentSettings.googleDriveRefreshToken;
       if (!refreshTok) return null;
@@ -522,6 +548,7 @@ const CloudSyncProviders = (() => {
       const resp = await _oauthFetchWithTimeout("https://oauth2.googleapis.com/token", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        signal: opts.signal,
         body: new URLSearchParams({
           client_id: clientId,
           grant_type: "refresh_token",
@@ -546,20 +573,21 @@ const CloudSyncProviders = (() => {
       }
       return null;
     },
-    async getValidToken(settings) {
+    async getValidToken(settings, opts = {}) {
       const currentSettings = await SyncCredentialStore.resolveSettings(settings ?? await getRawSettings());
       let token = currentSettings.googleDriveToken || null;
       if (!token) {
-        return await this.refreshToken(currentSettings);
+        return await this.refreshToken(currentSettings, opts);
       }
       try {
         const test = await _oauthFetchWithTimeout("https://www.googleapis.com/drive/v3/about?fields=user", {
-          headers: { "Authorization": `Bearer ${token}` }
+          headers: { "Authorization": `Bearer ${token}` },
+          signal: opts.signal
         }, "Google Drive", 1e4);
         if (!test) return token;
         if (test.ok) return token;
         if (test.status === 401 || test.status === 403) {
-          return await this.refreshToken(currentSettings);
+          return await this.refreshToken(currentSettings, opts);
         }
         return token;
       } catch (_e) {
@@ -665,23 +693,23 @@ const CloudSyncProviders = (() => {
       }
       return { success: true };
     },
-    async findFile(token, objectName) {
+    async findFile(token, objectName, opts = {}) {
       const safeName = (objectName || this.fileName).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
       const query = encodeURIComponent(`name='${safeName}' and trashed=false`);
       const response = await fetchWithTimeout(
         `https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name,modifiedTime)&spaces=drive`,
-        { headers: { "Authorization": `Bearer ${token}` } },
+        { headers: { "Authorization": `Bearer ${token}` }, signal: opts.signal },
         15e3
       );
       if (!response.ok) throw new Error(`Failed to search files: ${response.status}`);
       const data = await response.json();
       return data.files?.[0] ?? null;
     },
-    async upload(data, settings) {
-      const token = await this.getValidToken(settings);
+    async upload(data, settings, opts = {}) {
+      const token = await this.getValidToken(settings, opts);
       if (!token) throw new Error("Not authenticated with Google Drive");
       const objectName = resolveRemoteObjectName(settings, this.fileName);
-      const existingFile = await this.findFile(token, objectName);
+      const existingFile = await this.findFile(token, objectName, opts);
       const metadata = {
         name: objectName,
         mimeType: "application/json"
@@ -706,7 +734,8 @@ const CloudSyncProviders = (() => {
           "Authorization": `Bearer ${token}`,
           "Content-Type": `multipart/related; boundary=${boundary}`
         },
-        body
+        body,
+        signal: opts.signal
       }, 6e4);
       if (!response.ok) {
         const error = await response.text();
@@ -714,15 +743,15 @@ const CloudSyncProviders = (() => {
       }
       return { success: true, timestamp: Date.now() };
     },
-    async download(settings) {
-      const token = await this.getValidToken(settings);
+    async download(settings, opts = {}) {
+      const token = await this.getValidToken(settings, opts);
       if (!token) throw new Error("Not authenticated with Google Drive");
-      const file = await this.findFile(token);
+      const file = await this.findFile(token, void 0, opts);
       if (!file) return null;
       const safeFileId = String(file.id).replace(/[^a-zA-Z0-9_-]/g, "");
       const response = await fetchWithTimeout(
         `https://www.googleapis.com/drive/v3/files/${safeFileId}?alt=media`,
-        { headers: { "Authorization": `Bearer ${token}` } },
+        { headers: { "Authorization": `Bearer ${token}` }, signal: opts.signal },
         6e4
       );
       if (!response.ok) throw new Error(`Download failed: ${response.status}`);
@@ -846,7 +875,7 @@ const CloudSyncProviders = (() => {
         refreshToken: tokens.refresh_token || ""
       };
     },
-    async refreshToken(settings) {
+    async refreshToken(settings, opts = {}) {
       const effectiveSettings = await SyncCredentialStore.resolveSettings(settings);
       const refreshTok = effectiveSettings.dropboxRefreshToken;
       const clientId = effectiveSettings.dropboxClientId;
@@ -854,6 +883,7 @@ const CloudSyncProviders = (() => {
       const resp = await _oauthFetchWithTimeout("https://api.dropboxapi.com/oauth2/token", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        signal: opts.signal,
         body: new URLSearchParams({
           client_id: clientId,
           grant_type: "refresh_token",
@@ -872,7 +902,7 @@ const CloudSyncProviders = (() => {
       }
       return null;
     },
-    async getValidToken(settings) {
+    async getValidToken(settings, opts = {}) {
       const effectiveSettings = await SyncCredentialStore.resolveSettings(settings);
       if (effectiveSettings.dropboxToken) {
         try {
@@ -880,7 +910,8 @@ const CloudSyncProviders = (() => {
             "https://api.dropboxapi.com/2/users/get_current_account",
             {
               method: "POST",
-              headers: { "Authorization": `Bearer ${effectiveSettings.dropboxToken}` }
+              headers: { "Authorization": `Bearer ${effectiveSettings.dropboxToken}` },
+              signal: opts.signal
             },
             "Dropbox",
             1e4
@@ -892,7 +923,7 @@ const CloudSyncProviders = (() => {
           return effectiveSettings.dropboxToken;
         }
       }
-      return await this.refreshToken(effectiveSettings);
+      return await this.refreshToken(effectiveSettings, opts);
     },
     async disconnect(settings) {
       const effectiveSettings = await SyncCredentialStore.resolveSettings(settings);
@@ -914,9 +945,9 @@ const CloudSyncProviders = (() => {
       });
       return { success: true };
     },
-    async upload(data, settings) {
+    async upload(data, settings, opts = {}) {
       const effectiveSettings = await SyncCredentialStore.resolveSettings(settings);
-      const token = await this.getValidToken(effectiveSettings);
+      const token = await this.getValidToken(effectiveSettings, opts);
       if (!token) throw new Error("Not authenticated with Dropbox");
       const body = JSON.stringify(data);
       if (body.length > 150 * 1024 * 1024) throw new Error("Sync data exceeds Dropbox 150 MB upload limit");
@@ -933,7 +964,8 @@ const CloudSyncProviders = (() => {
           }),
           "Content-Type": "application/octet-stream"
         },
-        body
+        body,
+        signal: opts.signal
       }, 6e4);
       if (response.status === 401) throw new Error("Dropbox token expired. Please reconnect.");
       if (!response.ok) {
@@ -942,16 +974,17 @@ const CloudSyncProviders = (() => {
       }
       return { success: true, timestamp: Date.now() };
     },
-    async download(settings) {
+    async download(settings, opts = {}) {
       const effectiveSettings = await SyncCredentialStore.resolveSettings(settings);
-      const token = await this.getValidToken(effectiveSettings);
+      const token = await this.getValidToken(effectiveSettings, opts);
       if (!token) throw new Error("Not authenticated with Dropbox");
       const response = await fetchWithTimeout("https://content.dropboxapi.com/2/files/download", {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${token}`,
           "Dropbox-API-Arg": JSON.stringify({ path: this.fileName })
-        }
+        },
+        signal: opts.signal
       }, 6e4);
       if (response.status === 409) return null;
       if (response.status === 401) throw new Error("Dropbox token expired. Please reconnect.");
@@ -1105,7 +1138,7 @@ const CloudSyncProviders = (() => {
         }
       };
     },
-    async refreshToken(settings) {
+    async refreshToken(settings, opts = {}) {
       const currentSettings = await SyncCredentialStore.resolveSettings(settings ?? await getRawSettings());
       const refreshTok = currentSettings.onedriveRefreshToken;
       const clientId = currentSettings.onedriveClientId;
@@ -1115,6 +1148,7 @@ const CloudSyncProviders = (() => {
         {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          signal: opts.signal,
           body: new URLSearchParams({
             client_id: clientId,
             grant_type: "refresh_token",
@@ -1138,20 +1172,21 @@ const CloudSyncProviders = (() => {
       }
       return null;
     },
-    async getValidToken(settings) {
+    async getValidToken(settings, opts = {}) {
       const currentSettings = await SyncCredentialStore.resolveSettings(settings ?? await getRawSettings());
       const token = currentSettings.onedriveToken;
       if (!token) {
-        return await this.refreshToken(currentSettings);
+        return await this.refreshToken(currentSettings, opts);
       }
       try {
         const test = await _oauthFetchWithTimeout("https://graph.microsoft.com/v1.0/me", {
-          headers: { "Authorization": `Bearer ${token}` }
+          headers: { "Authorization": `Bearer ${token}` },
+          signal: opts.signal
         }, "OneDrive", 1e4);
         if (!test) return token;
         if (test.ok) return token;
         if (test.status === 401 || test.status === 403) {
-          return await this.refreshToken(currentSettings);
+          return await this.refreshToken(currentSettings, opts);
         }
         return token;
       } catch (_e) {
@@ -1168,9 +1203,9 @@ const CloudSyncProviders = (() => {
       });
       return { success: true };
     },
-    async upload(data, settings) {
+    async upload(data, settings, opts = {}) {
       const effectiveSettings = await SyncCredentialStore.resolveSettings(settings ?? await getRawSettings());
-      const token = await this.getValidToken(effectiveSettings);
+      const token = await this.getValidToken(effectiveSettings, opts);
       if (!token) throw new Error("Not authenticated with OneDrive");
       if (!data || typeof data !== "object") throw new Error("Invalid backup data");
       const objectName = resolveRemoteObjectName(settings, this.fileName);
@@ -1182,20 +1217,21 @@ const CloudSyncProviders = (() => {
             "Authorization": `Bearer ${token}`,
             "Content-Type": "application/json"
           },
-          body: JSON.stringify(data)
+          body: JSON.stringify(data),
+          signal: opts.signal
         },
         6e4
       );
       if (!response.ok) throw new Error("Upload failed: " + await response.text());
       return { success: true, timestamp: Date.now() };
     },
-    async download(settings) {
+    async download(settings, opts = {}) {
       const effectiveSettings = await SyncCredentialStore.resolveSettings(settings ?? await getRawSettings());
-      const token = await this.getValidToken(effectiveSettings);
+      const token = await this.getValidToken(effectiveSettings, opts);
       if (!token) throw new Error("Not authenticated with OneDrive");
       const response = await fetchWithTimeout(
         `https://graph.microsoft.com/v1.0/me/drive/special/approot:/${this.fileName}:/content`,
-        { headers: { "Authorization": `Bearer ${token}` } },
+        { headers: { "Authorization": `Bearer ${token}` }, signal: opts.signal },
         6e4
       );
       if (response.status === 404) return null;

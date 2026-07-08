@@ -211,6 +211,30 @@ describe('Sync apply loops share the per-script operation lock (2026-07 P2 regre
   });
 });
 
+describe('Cloud provider fetches honor sync abort signals (2026-07 P3 regression)', () => {
+  const providers = read('src/modules/sync-providers.ts');
+
+  it('composes caller abort signals with provider fetch timeouts', () => {
+    expect(providers).toContain('interface SyncRequestOptions');
+    expect(providers).toContain('externalSignal?.addEventListener');
+    expect(providers).toContain('externalSignal?.removeEventListener');
+    expect(providers).toContain('controller.abort(externalSignal?.reason)');
+  });
+
+  it('threads opts.signal through non-S3 provider upload/download paths', () => {
+    for (const signature of [
+      'async upload(data: unknown, settings: Settings, opts: SyncRequestOptions = {})',
+      'async download(settings: Settings, opts: SyncRequestOptions = {})',
+      'async findFile(token: string, objectName?: string, opts: SyncRequestOptions = {})',
+      'async upload(data: unknown, settings?: Settings, opts: SyncRequestOptions = {})',
+      'async download(settings?: Settings, opts: SyncRequestOptions = {})',
+    ]) {
+      expect(providers).toContain(signature);
+    }
+    expect((providers.match(/signal: opts\.signal/g) || []).length).toBeGreaterThanOrEqual(10);
+  });
+});
+
 describe('KeyboardNav does not hijack focused row controls (2026-07 regression)', () => {
   const src = read('pages/dashboard-keyboard.js');
   it('adds an interactive-control focus guard', () => {

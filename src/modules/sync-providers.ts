@@ -57,6 +57,10 @@ interface SyncStatusResult {
   endpointHost?: string;
 }
 
+interface SyncRequestOptions {
+  signal?: AbortSignal;
+}
+
 interface SyncStorageDisclosureField {
   key: string;
   label: string;
@@ -403,9 +407,16 @@ async function _oauthFetchWithTimeout(
   timeoutMs = 15_000,
 ): Promise<Response | null> {
   const controller = new AbortController();
+  const externalSignal = init.signal;
+  const { signal: _ignoredSignal, ...fetchInit } = init;
+  const abortFromExternal = () => {
+    try { controller.abort(externalSignal?.reason); } catch (_) { controller.abort(); }
+  };
+  if (externalSignal?.aborted) abortFromExternal();
+  else externalSignal?.addEventListener('abort', abortFromExternal, { once: true });
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetch(url, { ...init, signal: controller.signal });
+    return await fetch(url, { ...fetchInit, signal: controller.signal });
   } catch (e: unknown) {
     const name = e && typeof e === 'object' && 'name' in e ? String(e.name) : '';
     const message = e instanceof Error ? e.message : String(e);
@@ -417,6 +428,7 @@ async function _oauthFetchWithTimeout(
     return null;
   } finally {
     clearTimeout(timer);
+    externalSignal?.removeEventListener('abort', abortFromExternal);
   }
 }
 
@@ -424,7 +436,7 @@ async function _oauthFetchWithTimeout(
  * Wraps `fetch` with an AbortController timeout.
  * Prevents service worker hangs caused by slow or unresponsive cloud API endpoints.
  * @param url - Request URL
- * @param options - Standard RequestInit options (do not include a signal — one is added here)
+ * @param options - Standard RequestInit options; a caller signal is composed with the timeout
  * @param timeoutMs - Abort after this many milliseconds (default: 30 000)
  */
 async function fetchWithTimeout(
@@ -435,13 +447,21 @@ async function fetchWithTimeout(
 ): Promise<Response> {
   assertSyncEndpointAllowed(url, guardOptions);
   const controller = new AbortController();
+  const externalSignal = options.signal;
+  const { signal: _ignoredSignal, ...fetchOptions } = options;
+  const abortFromExternal = () => {
+    try { controller.abort(externalSignal?.reason); } catch (_) { controller.abort(); }
+  };
+  if (externalSignal?.aborted) abortFromExternal();
+  else externalSignal?.addEventListener('abort', abortFromExternal, { once: true });
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await fetch(url, { ...options, signal: controller.signal });
+    const response = await fetch(url, { ...fetchOptions, signal: controller.signal });
     assertSyncResponseAllowed(response, guardOptions);
     return response;
   } finally {
     clearTimeout(timeoutId);
+    externalSignal?.removeEventListener('abort', abortFromExternal);
   }
 }
 
@@ -468,7 +488,7 @@ const webdav = {
     });
   },
 
-  async upload(data: unknown, settings: Settings): Promise<SyncUploadResult> {
+  async upload(data: unknown, settings: Settings, opts: SyncRequestOptions = {}): Promise<SyncUploadResult> {
     const effectiveSettings = await SyncCredentialStore.resolveSettings(settings);
     const objectName = resolveRemoteObjectName(settings, 'scriptvault-backup.json');
     const url = `${getRequiredWebDavBaseUrl(effectiveSettings)}/${objectName}`;
@@ -485,13 +505,14 @@ const webdav = {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(data),
+      signal: opts.signal,
     }, 60_000, guardOptions);
 
     if (!response.ok) throw new Error(`WebDAV upload failed: HTTP ${response.status}`);
     return { success: true, timestamp: Date.now() };
   },
 
-  async download(settings: Settings): Promise<unknown | null> {
+  async download(settings: Settings, opts: SyncRequestOptions = {}): Promise<unknown | null> {
     const effectiveSettings = await SyncCredentialStore.resolveSettings(settings);
     const url = `${getRequiredWebDavBaseUrl(effectiveSettings)}/scriptvault-backup.json`;
     const auth = getWebDavAuthHeader(effectiveSettings);
@@ -503,6 +524,7 @@ const webdav = {
     const response = await fetchWithTimeout(url, {
       method: 'GET',
       headers: { 'Authorization': auth },
+      signal: opts.signal,
     }, 60_000, guardOptions);
 
     if (response.status === 404) return null;
@@ -605,7 +627,7 @@ const googledrive = {
     return settings.googleDriveToken || null;
   },
 
-  async refreshToken(settings?: Settings): Promise<string | null> {
+  async refreshToken(settings?: Settings, opts: SyncRequestOptions = {}): Promise<string | null> {
     const currentSettings = await SyncCredentialStore.resolveSettings(settings ?? (await getRawSettings()));
     const refreshTok = currentSettings.googleDriveRefreshToken;
     if (!refreshTok) return null;
@@ -614,6 +636,7 @@ const googledrive = {
     const resp = await _oauthFetchWithTimeout('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      signal: opts.signal,
       body: new URLSearchParams({
         client_id: clientId,
         grant_type: 'refresh_token',
@@ -640,23 +663,24 @@ const googledrive = {
     return null;
   },
 
-  async getValidToken(settings?: Settings): Promise<string | null> {
+  async getValidToken(settings?: Settings, opts: SyncRequestOptions = {}): Promise<string | null> {
     const currentSettings = await SyncCredentialStore.resolveSettings(settings ?? (await getRawSettings()));
     let token = currentSettings.googleDriveToken || null;
     if (!token) {
-      return await this.refreshToken(currentSettings);
+      return await this.refreshToken(currentSettings, opts);
     }
 
     try {
       // Test if token is still valid
       const test = await _oauthFetchWithTimeout('https://www.googleapis.com/drive/v3/about?fields=user', {
         headers: { 'Authorization': `Bearer ${token}` },
+        signal: opts.signal,
       }, 'Google Drive', 10_000);
 
       if (!test) return token;
       if (test.ok) return token;
       if (test.status === 401 || test.status === 403) {
-        return await this.refreshToken(currentSettings);
+        return await this.refreshToken(currentSettings, opts);
       }
       return token;
     } catch (_e: unknown) {
@@ -785,13 +809,13 @@ const googledrive = {
     return { success: true };
   },
 
-  async findFile(token: string, objectName?: string): Promise<GoogleDriveFile | null> {
+  async findFile(token: string, objectName?: string, opts: SyncRequestOptions = {}): Promise<GoogleDriveFile | null> {
     // Search in root and appDataFolder
     const safeName = (objectName || this.fileName).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     const query = encodeURIComponent(`name='${safeName}' and trashed=false`);
     const response = await fetchWithTimeout(
       `https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name,modifiedTime)&spaces=drive`,
-      { headers: { 'Authorization': `Bearer ${token}` } },
+      { headers: { 'Authorization': `Bearer ${token}` }, signal: opts.signal },
       15_000,
     );
 
@@ -800,12 +824,12 @@ const googledrive = {
     return data.files?.[0] ?? null;
   },
 
-  async upload(data: unknown, settings: Settings): Promise<SyncUploadResult> {
-    const token = await this.getValidToken(settings);
+  async upload(data: unknown, settings: Settings, opts: SyncRequestOptions = {}): Promise<SyncUploadResult> {
+    const token = await this.getValidToken(settings, opts);
     if (!token) throw new Error('Not authenticated with Google Drive');
 
     const objectName = resolveRemoteObjectName(settings, this.fileName);
-    const existingFile = await this.findFile(token, objectName);
+    const existingFile = await this.findFile(token, objectName, opts);
     const metadata = {
       name: objectName,
       mimeType: 'application/json',
@@ -840,6 +864,7 @@ const googledrive = {
         'Content-Type': `multipart/related; boundary=${boundary}`,
       },
       body,
+      signal: opts.signal,
     }, 60_000);
 
     if (!response.ok) {
@@ -850,17 +875,17 @@ const googledrive = {
     return { success: true, timestamp: Date.now() };
   },
 
-  async download(settings: Settings): Promise<unknown | null> {
-    const token = await this.getValidToken(settings);
+  async download(settings: Settings, opts: SyncRequestOptions = {}): Promise<unknown | null> {
+    const token = await this.getValidToken(settings, opts);
     if (!token) throw new Error('Not authenticated with Google Drive');
 
-    const file = await this.findFile(token);
+    const file = await this.findFile(token, undefined, opts);
     if (!file) return null;
     const safeFileId = String(file.id).replace(/[^a-zA-Z0-9_-]/g, '');
 
     const response = await fetchWithTimeout(
       `https://www.googleapis.com/drive/v3/files/${safeFileId}?alt=media`,
-      { headers: { 'Authorization': `Bearer ${token}` } },
+      { headers: { 'Authorization': `Bearer ${token}` }, signal: opts.signal },
       60_000,
     );
 
@@ -1018,7 +1043,7 @@ const dropbox = {
     };
   },
 
-  async refreshToken(settings: Settings): Promise<string | null> {
+  async refreshToken(settings: Settings, opts: SyncRequestOptions = {}): Promise<string | null> {
     const effectiveSettings = await SyncCredentialStore.resolveSettings(settings);
     const refreshTok = effectiveSettings.dropboxRefreshToken;
     const clientId = effectiveSettings.dropboxClientId;
@@ -1027,6 +1052,7 @@ const dropbox = {
     const resp = await _oauthFetchWithTimeout('https://api.dropboxapi.com/oauth2/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      signal: opts.signal,
       body: new URLSearchParams({
         client_id: clientId,
         grant_type: 'refresh_token',
@@ -1047,7 +1073,7 @@ const dropbox = {
     return null;
   },
 
-  async getValidToken(settings: Settings): Promise<string | null> {
+  async getValidToken(settings: Settings, opts: SyncRequestOptions = {}): Promise<string | null> {
     const effectiveSettings = await SyncCredentialStore.resolveSettings(settings);
     if (effectiveSettings.dropboxToken) {
       try {
@@ -1056,6 +1082,7 @@ const dropbox = {
           {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${effectiveSettings.dropboxToken}` },
+            signal: opts.signal,
           },
           'Dropbox',
           10_000,
@@ -1067,7 +1094,7 @@ const dropbox = {
         return effectiveSettings.dropboxToken;
       }
     }
-    return await this.refreshToken(effectiveSettings);
+    return await this.refreshToken(effectiveSettings, opts);
   },
 
   async disconnect(settings: Settings): Promise<SyncDisconnectResult> {
@@ -1091,9 +1118,9 @@ const dropbox = {
     return { success: true };
   },
 
-  async upload(data: unknown, settings: Settings): Promise<SyncUploadResult> {
+  async upload(data: unknown, settings: Settings, opts: SyncRequestOptions = {}): Promise<SyncUploadResult> {
     const effectiveSettings = await SyncCredentialStore.resolveSettings(settings);
-    const token = await this.getValidToken(effectiveSettings);
+    const token = await this.getValidToken(effectiveSettings, opts);
     if (!token) throw new Error('Not authenticated with Dropbox');
 
     const body = JSON.stringify(data);
@@ -1113,6 +1140,7 @@ const dropbox = {
         'Content-Type': 'application/octet-stream',
       },
       body,
+      signal: opts.signal,
     }, 60_000);
 
     if (response.status === 401) throw new Error('Dropbox token expired. Please reconnect.');
@@ -1124,9 +1152,9 @@ const dropbox = {
     return { success: true, timestamp: Date.now() };
   },
 
-  async download(settings: Settings): Promise<unknown | null> {
+  async download(settings: Settings, opts: SyncRequestOptions = {}): Promise<unknown | null> {
     const effectiveSettings = await SyncCredentialStore.resolveSettings(settings);
-    const token = await this.getValidToken(effectiveSettings);
+    const token = await this.getValidToken(effectiveSettings, opts);
     if (!token) throw new Error('Not authenticated with Dropbox');
 
     const response = await fetchWithTimeout('https://content.dropboxapi.com/2/files/download', {
@@ -1135,6 +1163,7 @@ const dropbox = {
         'Authorization': `Bearer ${token}`,
         'Dropbox-API-Arg': JSON.stringify({ path: this.fileName }),
       },
+      signal: opts.signal,
     }, 60_000);
 
     if (response.status === 409) return null; // File not found
@@ -1325,7 +1354,7 @@ const onedrive = {
     };
   },
 
-  async refreshToken(settings?: Settings): Promise<string | null> {
+  async refreshToken(settings?: Settings, opts: SyncRequestOptions = {}): Promise<string | null> {
     const currentSettings = await SyncCredentialStore.resolveSettings(settings ?? (await getRawSettings()));
     const refreshTok = currentSettings.onedriveRefreshToken;
     const clientId = currentSettings.onedriveClientId;
@@ -1336,6 +1365,7 @@ const onedrive = {
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        signal: opts.signal,
         body: new URLSearchParams({
           client_id: clientId,
           grant_type: 'refresh_token',
@@ -1361,21 +1391,22 @@ const onedrive = {
     return null;
   },
 
-  async getValidToken(settings?: Settings): Promise<string | null> {
+  async getValidToken(settings?: Settings, opts: SyncRequestOptions = {}): Promise<string | null> {
     const currentSettings = await SyncCredentialStore.resolveSettings(settings ?? (await getRawSettings()));
     const token = currentSettings.onedriveToken;
     if (!token) {
-      return await this.refreshToken(currentSettings);
+      return await this.refreshToken(currentSettings, opts);
     }
 
     try {
       const test = await _oauthFetchWithTimeout('https://graph.microsoft.com/v1.0/me', {
         headers: { 'Authorization': `Bearer ${token}` },
+        signal: opts.signal,
       }, 'OneDrive', 10_000);
       if (!test) return token;
       if (test.ok) return token;
       if (test.status === 401 || test.status === 403) {
-        return await this.refreshToken(currentSettings);
+        return await this.refreshToken(currentSettings, opts);
       }
       return token;
     } catch (_e: unknown) {
@@ -1394,9 +1425,9 @@ const onedrive = {
     return { success: true };
   },
 
-  async upload(data: unknown, settings?: Settings): Promise<SyncUploadResult> {
+  async upload(data: unknown, settings?: Settings, opts: SyncRequestOptions = {}): Promise<SyncUploadResult> {
     const effectiveSettings = await SyncCredentialStore.resolveSettings(settings ?? (await getRawSettings()));
-    const token = await this.getValidToken(effectiveSettings);
+    const token = await this.getValidToken(effectiveSettings, opts);
     if (!token) throw new Error('Not authenticated with OneDrive');
     if (!data || typeof data !== 'object') throw new Error('Invalid backup data');
 
@@ -1410,6 +1441,7 @@ const onedrive = {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(data),
+        signal: opts.signal,
       },
       60_000,
     );
@@ -1418,14 +1450,14 @@ const onedrive = {
     return { success: true, timestamp: Date.now() };
   },
 
-  async download(settings?: Settings): Promise<unknown | null> {
+  async download(settings?: Settings, opts: SyncRequestOptions = {}): Promise<unknown | null> {
     const effectiveSettings = await SyncCredentialStore.resolveSettings(settings ?? (await getRawSettings()));
-    const token = await this.getValidToken(effectiveSettings);
+    const token = await this.getValidToken(effectiveSettings, opts);
     if (!token) throw new Error('Not authenticated with OneDrive');
 
     const response = await fetchWithTimeout(
       `https://graph.microsoft.com/v1.0/me/drive/special/approot:/${this.fileName}:/content`,
-      { headers: { 'Authorization': `Bearer ${token}` } },
+      { headers: { 'Authorization': `Bearer ${token}` }, signal: opts.signal },
       60_000,
     );
 

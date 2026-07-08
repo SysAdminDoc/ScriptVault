@@ -1355,6 +1355,7 @@ const CloudSync = (() => {
         for (const localScript of scripts) {
           if (!mergedTombstones[localScript.id]) continue;
           const deleted = await runExclusiveScriptOperation(localScript.id, async () => {
+            if (signal?.aborted) throw new Error("Sync aborted");
             await deleteSyncedScript(localScript.id);
             return true;
           });
@@ -1364,6 +1365,7 @@ const CloudSync = (() => {
           if (signal?.aborted) throw new Error("Sync aborted");
           if (mergedTombstones[script.id]) continue;
           const applied = await runExclusiveScriptOperation(script.id, async () => {
+            if (signal?.aborted) throw new Error("Sync aborted");
             const existing = await ScriptStorage.get(script.id);
             if (existing?.settings?.userModified) return false;
             const remoteScript = remoteData.scripts?.find((s) => s.id === script.id);
@@ -1398,6 +1400,7 @@ const CloudSync = (() => {
             const mergeChangedCode = didThreeWayMerge && existing != null && codeToSave !== existing.code;
             const oneSidedChangedCode = selectedOneSidedCodeChange && existing != null && codeToSave !== existing.code;
             if (!existing || script.updatedAt > existing.updatedAt || mergeConflict || mergeChangedCode || oneSidedChangedCode) {
+              if (signal?.aborted) throw new Error("Sync aborted");
               const parsed = parseUserscript(codeToSave);
               if (!parsed.error && parsed.meta) {
                 const nextScript = {

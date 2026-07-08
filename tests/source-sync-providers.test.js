@@ -106,6 +106,31 @@ describe('source sync providers module', () => {
     );
   });
 
+  it('aborts WebDAV upload fetches when the sync signal aborts', async () => {
+    const { CloudSyncProviders } = await loadFreshSyncProviders();
+    const controller = new AbortController();
+    const fetchMock = vi.fn((_url, init) => new Promise((_resolve, reject) => {
+      init.signal.addEventListener('abort', () => {
+        reject(new DOMException('Aborted', 'AbortError'));
+      });
+    }));
+    globalThis.fetch = fetchMock;
+
+    const upload = CloudSyncProviders.webdav.upload(
+      { scripts: [] },
+      {
+        webdavUrl: 'https://dav.example.com/backups',
+        webdavUsername: 'alice',
+        webdavPassword: 'secret',
+      },
+      { signal: controller.signal },
+    );
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    controller.abort();
+
+    await expect(upload).rejects.toThrow(/aborted/i);
+  });
+
   it('uploads to a distinct object when syncFilename is set (cloud backup does not clobber sync)', async () => {
     const { CloudSyncProviders } = await loadFreshSyncProviders();
     const fetchMock = vi.fn().mockResolvedValue(new Response('', { status: 201 }));
