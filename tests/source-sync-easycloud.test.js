@@ -81,6 +81,7 @@ afterEach(() => {
   globalThis.updateBadge = originalUpdateBadge;
   Reflect.deleteProperty(globalThis, 'ScriptStorage');
   Reflect.deleteProperty(globalThis, 'SettingsManager');
+  Reflect.deleteProperty(globalThis, '__scriptVaultSyncEngineLock');
 });
 
 describe('source easycloud sync module', () => {
@@ -95,6 +96,23 @@ describe('source easycloud sync module', () => {
         delayInMinutes: 5000 / 60000,
       }),
     );
+  });
+
+  it('skips native sync when another sync engine holds the shared lock', async () => {
+    await chrome.storage.local.set({ easycloud_connected: true });
+    globalThis.__scriptVaultSyncEngineLock = {
+      owner: 'cloud-sync',
+      token: Symbol('cloud-sync'),
+      startedAt: Date.now(),
+    };
+    const fetchMock = vi.fn();
+    globalThis.fetch = fetchMock;
+    const { EasyCloudSync } = await loadFreshEasyCloud();
+
+    const result = await EasyCloudSync.sync();
+
+    expect(result).toEqual({ skipped: true });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('runs a sync when the debounce alarm fires', async () => {

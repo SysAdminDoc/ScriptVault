@@ -62,6 +62,7 @@ declare const ScriptAnalyzer: {
 interface CloudSyncProvider {
   download(settings: Settings, options?: { signal?: AbortSignal }): Promise<RemoteSyncEnvelope | null>;
   upload(data: SyncEnvelope | RemoteSyncEnvelope, settings: Settings, options?: { signal?: AbortSignal }): Promise<void>;
+  sync?(settings: Settings, options?: { signal?: AbortSignal }): Promise<SyncResult>;
   name?: string;
   supportsDryRun?: boolean;
 }
@@ -81,6 +82,23 @@ async function resolveSyncCredentialSettings(settings: Settings): Promise<Settin
     return CloudSyncProviders._credentialStore.resolveSettings(settings);
   }
   return settings;
+}
+
+type SyncEngineLock = { owner: string; token: symbol; startedAt: number };
+type SyncEngineLockHost = typeof globalThis & {
+  __scriptVaultSyncEngineLock?: SyncEngineLock;
+};
+
+function acquireSyncEngineLock(owner: string): (() => void) | null {
+  const host = globalThis as SyncEngineLockHost;
+  if (host.__scriptVaultSyncEngineLock) return null;
+  const token = Symbol(owner);
+  host.__scriptVaultSyncEngineLock = { owner, token, startedAt: Date.now() };
+  return () => {
+    if (host.__scriptVaultSyncEngineLock?.token === token) {
+      delete host.__scriptVaultSyncEngineLock;
+    }
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -1315,6 +1333,7 @@ export const CloudSync = {
     }
     this._syncInProgress = true;
     this._abortController = new AbortController();
+    let releaseSyncEngineLock: (() => void) | null = null;
 
     const syncTimeoutAlarm = 'sv_sync_timeout_' + Date.now();
     let onTimeoutAlarm: ((alarm: chrome.alarms.Alarm) => void) | null = null;
@@ -1327,6 +1346,19 @@ export const CloudSync = {
     };
 
     try {
+      const settings = await resolveSyncCredentialSettings(await SettingsManager.get());
+      const selectedProvider = settings.syncProvider;
+      const provider: CloudSyncProvider | undefined =
+        selectedProvider && selectedProvider !== 'none' ? this.providers[selectedProvider] : undefined;
+      const providerOwnsSync = typeof provider?.sync === 'function';
+      if (settings.syncEnabled && selectedProvider !== 'none' && !providerOwnsSync) {
+        releaseSyncEngineLock = acquireSyncEngineLock('cloud-sync');
+        if (!releaseSyncEngineLock) {
+          debugLog('[CloudSync] Another sync engine is already in progress, skipping');
+          return { skipped: true };
+        }
+      }
+
       const timeoutPromise = new Promise<never>((_, reject) => {
         chrome.alarms.create(syncTimeoutAlarm, { delayInMinutes: 1.5 });
         onTimeoutAlarm = (alarm: chrome.alarms.Alarm) => {
@@ -1340,7 +1372,7 @@ export const CloudSync = {
         chrome.alarms.onAlarm.addListener(onTimeoutAlarm);
       });
       return await Promise.race([
-        this._performSync({ signal: this._abortController.signal }),
+        this._performSync({ signal: this._abortController.signal, settings }),
         timeoutPromise,
       ]);
     } catch (e) {
@@ -1348,6 +1380,7 @@ export const CloudSync = {
       console.error('[ScriptVault] Sync failed:', e);
       return { error: msg };
     } finally {
+      releaseSyncEngineLock?.();
       removeTimeoutAlarmListener();
       try {
         await Promise.resolve(chrome.alarms.clear(syncTimeoutAlarm));
@@ -1579,14 +1612,17 @@ export const CloudSync = {
     };
   },
 
-  async _performSync(opts: { signal?: AbortSignal } = {}): Promise<SyncResult> {
+  async _performSync(opts: { signal?: AbortSignal; settings?: Settings } = {}): Promise<SyncResult> {
     const { signal } = opts;
-    const settings = await resolveSyncCredentialSettings(await SettingsManager.get());
+    const settings = opts.settings ?? await resolveSyncCredentialSettings(await SettingsManager.get());
     if (!settings.syncEnabled || settings.syncProvider === 'none') return {};
     if (signal?.aborted) throw new Error('Sync aborted');
 
     const provider: CloudSyncProvider | undefined = this.providers[settings.syncProvider];
     if (!provider) return {};
+    if (typeof provider.sync === 'function') {
+      return await provider.sync(settings, { signal });
+    }
     let valueBundleSync: ValueBundleSyncSummary | null = null;
 
     // Load tombstones (IDs of locally-deleted scripts, to prevent sync re-importing them)

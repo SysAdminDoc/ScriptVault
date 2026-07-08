@@ -21,6 +21,7 @@ async function loadFreshCloudSync(
   settingsOverride = {},
   valuesByScript = {},
   metadataByScript = null,
+  providersOverride = null,
 ) {
   vi.resetModules();
 
@@ -94,7 +95,7 @@ async function loadFreshCloudSync(
     metaBlock: '',
   })));
   vi.stubGlobal('ScriptAnalyzer', { _ensureOffscreen: vi.fn().mockResolvedValue() });
-  vi.stubGlobal('CloudSyncProviders', { googledrive: provider });
+  vi.stubGlobal('CloudSyncProviders', providersOverride ?? { googledrive: provider });
   vi.stubGlobal('SettingsManager', SettingsManager);
   vi.stubGlobal('ScriptStorage', ScriptStorage);
   vi.stubGlobal('ScriptValues', ScriptValues);
@@ -207,6 +208,31 @@ afterEach(() => {
 });
 
 describe('source cloud sync module', () => {
+  it('delegates provider-owned EasyCloud sync without download/upload double-driving', async () => {
+    const easycloudProvider = {
+      name: 'EasyCloud',
+      supportsDryRun: false,
+      sync: vi.fn(async () => ({ success: true, timestamp: 123 })),
+      download: vi.fn(async () => null),
+      upload: vi.fn(async () => {}),
+    };
+    const { CloudSync } = await loadFreshCloudSync(
+      [],
+      null,
+      { syncProvider: 'easycloud' },
+      {},
+      null,
+      { easycloud: easycloudProvider },
+    );
+
+    const result = await CloudSync.sync();
+
+    expect(result).toEqual({ success: true, timestamp: 123 });
+    expect(easycloudProvider.sync).toHaveBeenCalledTimes(1);
+    expect(easycloudProvider.download).not.toHaveBeenCalled();
+    expect(easycloudProvider.upload).not.toHaveBeenCalled();
+  });
+
   it('includes syncBaseCode in first-sync upload envelopes', async () => {
     await chrome.storage.local.set({ syncTombstones: {} });
 

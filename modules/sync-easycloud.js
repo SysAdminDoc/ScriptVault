@@ -234,6 +234,17 @@ const EasyCloudSync = (() => {
   var _cachedFileId = null;
   var _deviceId = null;
   var _initialized = false;
+  function acquireSyncEngineLock(owner) {
+    const host = globalThis;
+    if (host.__scriptVaultSyncEngineLock) return null;
+    const token = Symbol(owner);
+    host.__scriptVaultSyncEngineLock = { owner, token, startedAt: Date.now() };
+    return () => {
+      if (host.__scriptVaultSyncEngineLock?.token === token) {
+        delete host.__scriptVaultSyncEngineLock;
+      }
+    };
+  }
   async function fetchWithTimeout(url, options = {}, timeoutMs = 3e4) {
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), timeoutMs);
@@ -723,6 +734,11 @@ const EasyCloudSync = (() => {
       setStatus(STATUS.OFFLINE);
       return { offline: true };
     }
+    const releaseSyncEngineLock = acquireSyncEngineLock("easycloud");
+    if (!releaseSyncEngineLock) {
+      log("Another sync engine is already in progress, skipping");
+      return { skipped: true };
+    }
     _syncInProgress = true;
     setStatus(STATUS.SYNCING);
     try {
@@ -825,6 +841,7 @@ const EasyCloudSync = (() => {
       return { error: msg };
     } finally {
       _syncInProgress = false;
+      releaseSyncEngineLock();
     }
   }
   function _debouncedSync() {
@@ -1122,13 +1139,15 @@ const EasyCloudSync = (() => {
       async disconnect() {
         return EasyCloudSync.disconnect();
       },
+      async sync(_settings, _options) {
+        return EasyCloudSync.sync();
+      },
       async upload(_data, _settings) {
         const result = await EasyCloudSync.sync();
         if (result.error) throw new Error(result.error);
         return { success: true, timestamp: Date.now() };
       },
       async download(_settings) {
-        await EasyCloudSync.sync();
         return null;
       },
       async test() {

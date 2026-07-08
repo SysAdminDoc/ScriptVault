@@ -310,6 +310,17 @@ const CloudSync = (() => {
     }
     return settings;
   }
+  function acquireSyncEngineLock(owner) {
+    const host = globalThis;
+    if (host.__scriptVaultSyncEngineLock) return null;
+    const token = Symbol(owner);
+    host.__scriptVaultSyncEngineLock = { owner, token, startedAt: Date.now() };
+    return () => {
+      if (host.__scriptVaultSyncEngineLock?.token === token) {
+        delete host.__scriptVaultSyncEngineLock;
+      }
+    };
+  }
   function getRuntimeHooks() {
     return globalThis;
   }
@@ -1050,6 +1061,7 @@ const CloudSync = (() => {
       }
       this._syncInProgress = true;
       this._abortController = new AbortController();
+      let releaseSyncEngineLock = null;
       const syncTimeoutAlarm = "sv_sync_timeout_" + Date.now();
       let onTimeoutAlarm = null;
       const removeTimeoutAlarmListener = () => {
@@ -1061,6 +1073,17 @@ const CloudSync = (() => {
         onTimeoutAlarm = null;
       };
       try {
+        const settings = await resolveSyncCredentialSettings(await SettingsManager.get());
+        const selectedProvider = settings.syncProvider;
+        const provider = selectedProvider && selectedProvider !== "none" ? this.providers[selectedProvider] : void 0;
+        const providerOwnsSync = typeof provider?.sync === "function";
+        if (settings.syncEnabled && selectedProvider !== "none" && !providerOwnsSync) {
+          releaseSyncEngineLock = acquireSyncEngineLock("cloud-sync");
+          if (!releaseSyncEngineLock) {
+            debugLog("[CloudSync] Another sync engine is already in progress, skipping");
+            return { skipped: true };
+          }
+        }
         const timeoutPromise = new Promise((_, reject) => {
           chrome.alarms.create(syncTimeoutAlarm, { delayInMinutes: 1.5 });
           onTimeoutAlarm = (alarm) => {
@@ -1075,7 +1098,7 @@ const CloudSync = (() => {
           chrome.alarms.onAlarm.addListener(onTimeoutAlarm);
         });
         return await Promise.race([
-          this._performSync({ signal: this._abortController.signal }),
+          this._performSync({ signal: this._abortController.signal, settings }),
           timeoutPromise
         ]);
       } catch (e) {
@@ -1083,6 +1106,7 @@ const CloudSync = (() => {
         console.error("[ScriptVault] Sync failed:", e);
         return { error: msg };
       } finally {
+        releaseSyncEngineLock?.();
         removeTimeoutAlarmListener();
         try {
           await Promise.resolve(chrome.alarms.clear(syncTimeoutAlarm));
@@ -1291,11 +1315,14 @@ const CloudSync = (() => {
     },
     async _performSync(opts = {}) {
       const { signal } = opts;
-      const settings = await resolveSyncCredentialSettings(await SettingsManager.get());
+      const settings = opts.settings ?? await resolveSyncCredentialSettings(await SettingsManager.get());
       if (!settings.syncEnabled || settings.syncProvider === "none") return {};
       if (signal?.aborted) throw new Error("Sync aborted");
       const provider = this.providers[settings.syncProvider];
       if (!provider) return {};
+      if (typeof provider.sync === "function") {
+        return await provider.sync(settings, { signal });
+      }
       let valueBundleSync = null;
       const tombstoneData = await chrome.storage.local.get("syncTombstones");
       const tombstones = tombstoneData["syncTombstones"] ?? {};

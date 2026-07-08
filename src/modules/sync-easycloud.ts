@@ -52,6 +52,7 @@ export interface CloudSyncProvider {
   };
   connect(): Promise<ConnectResult>;
   disconnect(): Promise<DisconnectResult>;
+  sync?(settings?: unknown, options?: { signal?: AbortSignal }): Promise<SyncResult>;
   upload(data: unknown, settings: unknown): Promise<{ success: boolean; timestamp: number }>;
   download(settings: unknown): Promise<SyncEnvelope | null>;
   test(): Promise<{ success: boolean }>;
@@ -206,6 +207,23 @@ let _cachedToken: string | null = null;
 let _cachedFileId: string | null = null;
 let _deviceId: string | null = null;
 let _initialized = false;
+
+type SyncEngineLock = { owner: string; token: symbol; startedAt: number };
+type SyncEngineLockHost = typeof globalThis & {
+  __scriptVaultSyncEngineLock?: SyncEngineLock;
+};
+
+function acquireSyncEngineLock(owner: string): (() => void) | null {
+  const host = globalThis as SyncEngineLockHost;
+  if (host.__scriptVaultSyncEngineLock) return null;
+  const token = Symbol(owner);
+  host.__scriptVaultSyncEngineLock = { owner, token, startedAt: Date.now() };
+  return () => {
+    if (host.__scriptVaultSyncEngineLock?.token === token) {
+      delete host.__scriptVaultSyncEngineLock;
+    }
+  };
+}
 
 // ============================================================================
 // Helpers
@@ -883,6 +901,12 @@ async function _performSync(): Promise<SyncResult> {
     return { offline: true };
   }
 
+  const releaseSyncEngineLock = acquireSyncEngineLock('easycloud');
+  if (!releaseSyncEngineLock) {
+    log('Another sync engine is already in progress, skipping');
+    return { skipped: true };
+  }
+
   _syncInProgress = true;
   setStatus(STATUS.SYNCING);
 
@@ -1029,6 +1053,7 @@ async function _performSync(): Promise<SyncResult> {
     return { error: msg };
   } finally {
     _syncInProgress = false;
+    releaseSyncEngineLock();
   }
 }
 
@@ -1431,16 +1456,21 @@ if (typeof CloudSyncProviders !== 'undefined') {
       return EasyCloudSync.disconnect();
     },
 
+    async sync(_settings?: unknown, _options?: { signal?: AbortSignal }): Promise<SyncResult> {
+      return EasyCloudSync.sync();
+    },
+
     async upload(_data: unknown, _settings: unknown): Promise<{ success: boolean; timestamp: number }> {
-      // EasyCloud manages its own upload via sync(); this is for compatibility
+      // EasyCloud manages its own upload via sync(); this remains for direct
+      // provider API compatibility outside CloudSync's provider-owned path.
       const result = await EasyCloudSync.sync();
       if (result.error) throw new Error(result.error);
       return { success: true, timestamp: Date.now() };
     },
 
     async download(_settings: unknown): Promise<SyncEnvelope | null> {
-      // For compatibility: trigger sync and return null (data is applied locally by sync)
-      await EasyCloudSync.sync();
+      // Provider-owned sync is delegated through sync(); download must stay
+      // side-effect-free so CloudSync does not drive EasyCloud twice.
       return null;
     },
 
