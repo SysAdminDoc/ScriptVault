@@ -1196,6 +1196,28 @@ async function _runExclusiveScriptOperation(scriptId, operation) {
   return await operationPromise;
 }
 
+function notifyEasyCloudScriptSaved(scriptId) {
+  if (!scriptId) return;
+  try {
+    if (typeof EasyCloudSync !== 'undefined' && typeof EasyCloudSync.notifyScriptSaved === 'function') {
+      EasyCloudSync.notifyScriptSaved(scriptId);
+    }
+  } catch (e) {
+    debugLog('EasyCloud save notification failed:', e?.message || e);
+  }
+}
+
+function notifyEasyCloudScriptDeleted(scriptId) {
+  if (!scriptId) return;
+  try {
+    if (typeof EasyCloudSync !== 'undefined' && typeof EasyCloudSync.notifyScriptDeleted === 'function') {
+      EasyCloudSync.notifyScriptDeleted(scriptId);
+    }
+  } catch (e) {
+    debugLog('EasyCloud delete notification failed:', e?.message || e);
+  }
+}
+
 function _receiptLineCount(code) {
   if (!code) return 0;
   return code.split(/\r\n|\r|\n/).length;
@@ -1948,6 +1970,7 @@ const UpdateSystem = {
 
     // Persist to storage after registration attempt
     await ScriptStorage.set(scriptId, script);
+    notifyEasyCloudScriptSaved(scriptId);
 
     // Phase 12.10 — applyUpdate no longer fires a per-script OS notification.
     // Instead, the autoUpdate caller aggregates successful updates into a
@@ -6083,6 +6106,7 @@ async function handleMessage(message, sender) {
         await ensurePersistentStorageForScriptWrite(existing ? 'script-save' : 'script-create', script.code);
         await ScriptStorage.set(id, script);
         await updateBadge();
+        notifyEasyCloudScriptSaved(id);
 
         // Re-register BEFORE reloading tabs so reloaded pages pick up the new
         // script. reregisterScript uses chrome.userScripts.update on Chrome
@@ -6146,6 +6170,7 @@ async function handleMessage(message, sender) {
         await ensurePersistentStorageForScriptWrite('script-create', script.code);
         await ScriptStorage.set(id, script);
         await updateBadge();
+        notifyEasyCloudScriptSaved(id);
 
         // Register the new script
         await registerScript(script);
@@ -6197,6 +6222,7 @@ async function handleMessage(message, sender) {
           await chrome.storage.local.set({ syncTombstones: tombstones });
 
           await updateBadge();
+          notifyEasyCloudScriptDeleted(scriptId);
           return {
             success: true,
             scriptId,
@@ -6248,6 +6274,7 @@ async function handleMessage(message, sender) {
         await chrome.storage.local.set({ trash });
         if (script.enabled !== false) await registerScript(script);
         await updateBadge();
+        notifyEasyCloudScriptSaved(script.id);
         return { success: true };
       }
 
@@ -6319,6 +6346,7 @@ async function handleMessage(message, sender) {
           await reregisterScript(script);
 
           await updateBadge();
+          notifyEasyCloudScriptSaved(scriptId);
 
           try {
             const tabs = await chrome.tabs.query({});
@@ -6363,6 +6391,7 @@ async function handleMessage(message, sender) {
         await ScriptStorage.set(id, script);
         await registerScript(script);
         await updateBadge();
+        notifyEasyCloudScriptSaved(id);
         // Return with metadata property for dashboard compatibility
         return { success: true, script: { ...script, metadata: script.meta } };
       }
@@ -6376,6 +6405,7 @@ async function handleMessage(message, sender) {
             await registerScript(newScript);
           }
           await updateBadge();
+          notifyEasyCloudScriptSaved(newScript.id);
           // Return with metadata property for dashboard compatibility
           return { success: true, script: { ...newScript, metadata: newScript.meta } };
         }
@@ -6615,6 +6645,7 @@ async function handleMessage(message, sender) {
 
           await ScriptStorage.set(data.scriptId, script);
           await reregisterScript(script);
+          notifyEasyCloudScriptSaved(data.scriptId);
           return { success: true, script: { ...script, metadata: script.meta } };
         });
       }
@@ -6888,6 +6919,7 @@ async function handleMessage(message, sender) {
           }
 
           await ScriptStorage.set(data.scriptId, script);
+          notifyEasyCloudScriptSaved(data.scriptId);
 
           if ('enabled' in data.settings && script.enabled !== oldEnabled) {
             if (script.enabled) {

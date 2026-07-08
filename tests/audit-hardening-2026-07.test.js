@@ -126,6 +126,62 @@ describe('Dashboard telemetry/event bus wiring (2026-07 P1 regression)', () => {
   });
 });
 
+describe('Easy Cloud reacts to real script mutations (2026-07 P2 regression)', () => {
+  const core = read('src/background/core.ts');
+
+  function expectNotifyAfter(block, write, notify) {
+    expect(block).toContain(write);
+    expect(block).toContain(notify);
+    expect(block.indexOf(write)).toBeLessThan(block.indexOf(notify));
+  }
+
+  it('keeps Easy Cloud notifications best-effort', () => {
+    expect(core).toContain('function notifyEasyCloudScriptSaved');
+    expect(core).toContain('function notifyEasyCloudScriptDeleted');
+    expect(core).toContain('EasyCloudSync.notifyScriptSaved(scriptId)');
+    expect(core).toContain('EasyCloudSync.notifyScriptDeleted(scriptId)');
+    expect(core).toContain('EasyCloud save notification failed');
+    expect(core).toContain('EasyCloud delete notification failed');
+  });
+
+  it('notifies Easy Cloud after central save/create/delete paths persist', () => {
+    const saveBlock = core.slice(core.indexOf("case 'saveScript'"), core.indexOf("case 'createScript'"));
+    expectNotifyAfter(saveBlock, 'await ScriptStorage.set(id, script);', 'notifyEasyCloudScriptSaved(id);');
+
+    const createBlock = core.slice(core.indexOf("case 'createScript'"), core.indexOf("case 'deleteScript'"));
+    expectNotifyAfter(createBlock, 'await ScriptStorage.set(id, script);', 'notifyEasyCloudScriptSaved(id);');
+
+    const deleteBlock = core.slice(core.indexOf("case 'deleteScript'"), core.indexOf("case 'getTrash'"));
+    expectNotifyAfter(deleteBlock, 'await ScriptStorage.delete(scriptId);', 'notifyEasyCloudScriptDeleted(scriptId);');
+  });
+
+  it('notifies Easy Cloud after adjacent script-state mutation paths persist', () => {
+    const restoreBlock = core.slice(core.indexOf("case 'restoreFromTrash'"), core.indexOf("case 'emptyTrash'"));
+    expectNotifyAfter(restoreBlock, 'await ScriptStorage.set(script.id, script);', 'notifyEasyCloudScriptSaved(script.id);');
+
+    const toggleBlock = core.slice(core.indexOf("case 'toggleScript'"), core.indexOf("case 'importScript'"));
+    expectNotifyAfter(toggleBlock, 'await ScriptStorage.set(scriptId, script);', 'notifyEasyCloudScriptSaved(scriptId);');
+
+    const importBlock = core.slice(core.indexOf("case 'importScript'"), core.indexOf("case 'duplicateScript'"));
+    expectNotifyAfter(importBlock, 'await ScriptStorage.set(id, script);', 'notifyEasyCloudScriptSaved(id);');
+
+    const duplicateBlock = core.slice(core.indexOf("case 'duplicateScript'"), core.indexOf("case 'searchScripts'"));
+    expect(duplicateBlock).toContain('notifyEasyCloudScriptSaved(newScript.id);');
+
+    const rollbackBlock = core.slice(core.indexOf("case 'rollbackScript'"), core.indexOf('// Sync'));
+    expectNotifyAfter(rollbackBlock, 'await ScriptStorage.set(data.scriptId, script);', 'notifyEasyCloudScriptSaved(data.scriptId);');
+
+    const settingsStart = core.indexOf("case 'setScriptSettings'");
+    const settingsBlock = core.slice(settingsStart, core.indexOf('// Import/Export', settingsStart));
+    expectNotifyAfter(settingsBlock, 'await ScriptStorage.set(data.scriptId, script);', 'notifyEasyCloudScriptSaved(data.scriptId);');
+  });
+
+  it('notifies Easy Cloud after update application persists new script code', () => {
+    const updateBlock = core.slice(core.indexOf('async applyUpdate'), core.indexOf('// Phase 12.10', core.indexOf('async applyUpdate')));
+    expectNotifyAfter(updateBlock, 'await ScriptStorage.set(scriptId, script);', 'notifyEasyCloudScriptSaved(scriptId);');
+  });
+});
+
 describe('KeyboardNav does not hijack focused row controls (2026-07 regression)', () => {
   const src = read('pages/dashboard-keyboard.js');
   it('adds an interactive-control focus guard', () => {
