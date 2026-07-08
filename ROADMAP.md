@@ -61,6 +61,435 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 - **P3 — "Fix All" silently applies at most 5 fixes.** `autoFixAll` caps at 5 passes with one fix per pass, so a script with 6+ fixable lint issues gets a partial fix and no feedback that some remain. Either raise/remove the cap safely (re-lint between passes to avoid index corruption) or report "N issues still need manual review".
   Where: `pages/dashboard-linter.js` autoFixAll
 
+## Deep Audit Backlog (2026-07-07)
+
+Findings from a six-agent deep audit (correctness, security, cloud-sync/storage,
+background core, dashboard UX, dashboard modules, non-dashboard UI). The P0/P1
+data-safety and background-hardening items were fixed in commits `17f45bf`
+(sync data-safety + restrict-to-site scope expansion) and `e233c94` (update
+lock + SRI @resource + scam-detector precision) — do NOT re-open those. The
+items below are the remaining unfixed findings.
+
+### Instructions for the AI working this backlog
+
+- **Authoritative source is `src/**` (TypeScript). `background.js`,
+  `background.core.js`, `modules/*.js`, and `bg/*.js` are GENERATED.** The live
+  service-worker logic lives in `src/background/core.ts` (a ~13k-line bridge);
+  the focused modules under `src/background/` (e.g. `registration.ts`,
+  `update-checker.ts`, `resource-loader.ts`) are EXTRACTION TARGETS that are
+  NOT wired into the runtime — editing them alone changes nothing at runtime.
+  Grep the generated `background.js` for a symbol to confirm which copy is live
+  before editing; usually you must fix BOTH `core.ts` (runtime) and the matching
+  extraction module (drift-cleanliness). The `@match` ReDoS and restrict-to-site
+  fixes both had to touch two copies for this reason.
+- **After any `src/**` edit:** `npm run ts-runtime:generate` → `npm run build:bg`
+  → `npm run typecheck` → focused `npx vitest run <files>` → then `npm run check`
+  before committing. Never edit generated artifacts by hand.
+- **`pages/dashboard.js` is plain JS (no build step) and is LF-pinned.** Edit
+  with the Edit tool only — PowerShell `Set-Content` rewrites CRLF and breaks
+  the `\n`-literal source-pin tests (`support-snapshot-redaction`). Many
+  dashboard styles are duplicated between inline `pages/dashboard.html` `<style>`
+  and `pages/dashboard.css` — check both.
+- **Theme tokens:** the 4 themes (dark/light/catppuccin/oled) are defined in
+  `pages/theme-tokens.css` and the dashboard theme blocks. Prefer semantic
+  tokens over raw hex; verify every change in all four modes.
+- Add a regression test for every fix (static source-pin at minimum; functional
+  where a harness exists). Commit in logical batches with conventional messages;
+  no AI authorship in commits.
+
+### Cloud sync & storage (data-safety)
+
+- [ ] **P1 — A metadata-only change on one device reverts a code edit on another.**
+  The 3-way merge only runs when BOTH sides changed code; when one side changed,
+  it falls to timestamp LWW — but `updatedAt` is bumped by non-code ops (toggle
+  enable/disable, auto-update metadata). Device A edits code at T1; device B
+  toggles at T2>T1; on A's next sync the merge is skipped and A's edit is
+  overwritten with old code (and `syncBaseCode` reset). Same in Easy Cloud.
+  Fix: when `base != null` and exactly one side's code differs from base, the
+  changed side must win regardless of `updatedAt`; or stop bumping `updatedAt`
+  for code-irrelevant changes and add a separate `codeUpdatedAt`.
+  Where: `src/background/cloud-sync.ts:1649-1673`; `src/modules/sync-easycloud.ts:769-794,890`
+- [ ] **P2 — GM value-bundle upload prefers the stale remote bundle over newer local values.**
+  Bundles skipped as `skippedNonEmpty`/`skippedUserModified` are spread LAST
+  into the upload envelope, clobbering the local device's freshly built bundle;
+  once both devices have values the cloud copy pins to the first writer forever.
+  Fix: when local `lastValueUpdatedAt` is strictly newer, upload the local bundle.
+  Where: `src/background/cloud-sync.ts:1747-1750`
+- [ ] **P2 — Easy Cloud never sets the `syncEncryptionEstablished` latch.**
+  `readSyncEnvelopeFromRemote` has no equivalent of CloudSync's
+  `markSyncEncryptionEstablished`, so an Easy-Cloud-only profile stays in the
+  pre-establishment state and an attacker with Drive write access can substitute
+  a plaintext envelope that will be accepted. Fix: mark establishment on first
+  successful encrypted read, mirroring cloud-sync.ts.
+  Where: `src/modules/sync-easycloud.ts:400-405`; cf. `src/background/cloud-sync.ts:488-505,1774`
+- [ ] **P2 — Easy Cloud change-triggered sync is dead; offline queue never populated.**
+  It watches `changes['userscripts']` in `chrome.storage.local`, but v3 moved
+  scripts to IndexedDB — that key is never written again. `notifyScriptSaved`/
+  `notifyScriptDeleted` are defined but never called. Easy Cloud only syncs on
+  the 15-min alarm + manual trigger, widening the conflict window feeding the P1
+  above. Fix: trigger on the real save/delete paths in core.ts.
+  Where: `src/modules/sync-easycloud.ts:1031,1292-1309,667-688`
+- [ ] **P2 — Sync apply loop bypasses the per-script operation lock.**
+  `ScriptStorage.get` → async offscreen 3-way merge → `ScriptStorage.set` runs
+  with no `_runExclusiveScriptOperation`; an editor save/toggle landing between
+  get and set is overwritten by the sync's write computed from the pre-save
+  snapshot. Fix: acquire the per-script lock around each get/merge/set (the lock
+  helper is core-local — expose it or replicate for sync).
+  Where: `src/background/cloud-sync.ts:1630-1694`; `src/modules/sync-easycloud.ts:881-908`
+- [ ] **P3 — 90s sync timeout releases the in-progress flag while `_performSync` may still run.**
+  On timeout the flag clears but the zombie sync continues (all providers except
+  S3 ignore the abort signal), so a new sync can interleave storage writes with
+  the zombie's apply loop. Fix: thread and honor the abort signal in all
+  provider download/upload calls; guard the apply loop on `signal.aborted`.
+  Where: `src/background/cloud-sync.ts:1290-1305`; `src/modules/sync-providers.ts:494` (and peers)
+- [ ] **P3 — No conditional writes (ETag/If-Match) on any provider upload.**
+  WebDAV/Drive/Dropbox/OneDrive/S3 uploads are unconditional; two devices
+  syncing simultaneously last-write-win at the envelope level and a device's
+  local-only scripts can transiently vanish from the cloud copy. Fix: send
+  ETag/If-Match/generation preconditions where the provider supports them.
+  Where: `src/modules/sync-providers.ts:481,836,1109,1404,1707`
+- [ ] **P3 — Two sync engines can run concurrently; `syncProvider='easycloud'` runs every sync twice.**
+  CloudSync and EasyCloudSync have separate `_syncInProgress` flags but write
+  the same storage/tombstones; the easycloud `download()` shim runs a full sync
+  and returns null, which CloudSync treats as "first sync" and calls `upload()`
+  → a second full sync. Fix: unify the in-progress guard; make the shim not
+  double-drive a sync.
+  Where: `src/modules/sync-easycloud.ts:203,1358-1369`; `src/background/cloud-sync.ts:1255`
+- [ ] **P3 — Live cache references defeat the "cache untouched on persist failure" guarantee.**
+  `ScriptStorage.get/getAll` return the cached objects; callers mutate in place
+  (e.g. toggle flips `enabled`/`updatedAt`) before `set()`, so a `put` failure
+  leaves the cache diverged from IDB serving unpersisted state until SW restart.
+  Fix: return shallow copies from get/getAll, or snapshot-and-restore on failure.
+  Where: `src/modules/storage.ts:300-316`; callers e.g. `src/background/core.ts:6287-6293`
+- [ ] **P3 — Cross-bucket script delete is non-atomic with values-first ordering.**
+  Under Storage Buckets, `ScriptsDAO.delete` runs `ValuesDAO.deleteAll` in a
+  separate DB/txn BEFORE deleting the script row; if the second txn fails the
+  script survives with its GM values gone. Fix: delete the script row first
+  (orphaned values are recoverable; lost values are not).
+  Where: `src/storage/script-db.ts:226-240`
+- [ ] **P3 — `syncFilename` asymmetry + latent split-brain, and a dead S3 expression.**
+  Uploads honor the `syncFilename` override but downloads hardcode
+  `scriptvault-backup.json`; benign today (only cloud-backup sets it and never
+  downloads) but a future restore path would read the wrong object. Prefer a
+  plain function parameter over a Settings field. Also `s3._buildObjectUrl` has
+  the always-false `(settings.s3PathStyle === false && false)`.
+  Where: `src/modules/sync-providers.ts:473/496,1102/1136,1556-1558`; `src/types/settings.ts:78`
+- [ ] **P3 — Encrypted cloud-backup envelope loses the extension version.**
+  `normalizePlainSyncEnvelope` rewrites non-numeric `version` to `1`, so E2EE
+  backups drop the manifest version string. Cosmetic until a restore path exists.
+  Where: `src/modules/sync-crypto.ts:119`; `src/modules/backup-scheduler.ts:1243`
+- [ ] **P3 — `SettingsManager.reset()` bypasses the serialized write chain.**
+  `reset()` writes `chrome.storage.local.set` directly, not through
+  `_settingsWriteChain`; a `set()` in flight can commit after reset and resurrect
+  pre-reset state (the lost-update class `125b53a` fixed for `set()`).
+  Where: `src/modules/storage.ts:232-248`
+
+### Background core & security
+
+- [ ] **P1 — GM_xmlhttpRequest response bodies leak to the host page's MAIN world.**
+  Background→userscript events (`xhrEvent`, `valueChanged`, `downloadEvent`,
+  `webSocketEvent`) are rebroadcast by `content.js` via `window.postMessage(...,
+  '*')`, which is delivered to every world sharing the window — the page can
+  register a `message` listener, match the public channel id, and read full
+  responses of every GM_xhr (which sends with `credentials: 'include'` and
+  bypasses CORS). Defeats USER_SCRIPT isolation. Fix: mint a per-wrapper random
+  token at build time (injected into wrapper source, invisible to MAIN world),
+  require it on every background→userscript event, and drop events lacking it;
+  at minimum stop forwarding response bodies through the page-visible bridge.
+  Where: `src/background/gm-network-handler.ts:185-198` → `content.js:116-142` → `src/background/wrapper-builder.ts:344-445`
+- [ ] **P3 — ZIP storage import can carry `__proto__`/`constructor` keys into value storage.**
+  `storageData.data` from a parsed archive entry is handed to
+  `ScriptValues.setAll` without the reserved-key filtering script IDs get, and
+  falls back to the whole parsed object when `.data` is absent. Fix: strip
+  `__proto__`/`constructor`/`prototype` and validate the value-map shape.
+  Where: `src/background/import-export.ts:788-797,846-848`
+- [ ] **P3 — External `installScript` defaults `@match` to universal and skips quarantine.**
+  With no `@match` it defaults to `matches: ['*://*/*']`, stores `enabled: true`,
+  uses the minimal parser, and bypasses the import quarantine. Gated behind an
+  allow-only permission so not directly exploitable, but sharpen it: narrow the
+  default and route through the standard trust/quarantine path.
+  Where: `src/modules/public-api.ts:1181-1196`
+- [ ] **P3 — `enforcePinned` @require path is dead; two divergent `fetchRequireScript` copies.**
+  `resource-loader.ts` gates on `options.enforcePinned` which no production
+  caller passes (only the test), while the live enforcement lives in `core.ts`
+  reading settings itself — so the module used by install-handler/update-checker
+  has different SRI semantics than core. Fix: make the module read settings like
+  core (or have core delegate), and repoint the test at settings-driven behavior.
+  Where: `src/background/resource-loader.ts:314`; `src/background/core.ts:~11318`
+- [ ] **P3 — SRI "Require" blocks TOFU-pinned @require with a misleading "empty response".**
+  The gate only sees URL-fragment hashes, so a TOFU-only @require is blocked
+  under "require" (intended) but surfaces as `failedRequires: "empty response"`.
+  Fix: return a distinct error ("blocked: unpinned @require under SRI Require")
+  so the dashboard can explain it, or consult the TOFU receipt in the gate.
+  Where: `src/background/core.ts:~11318`; `src/background/registration.ts:404-405`
+- [ ] **P3 — Update-checker extraction-target copy remains unlocked.**
+  The live `applyUpdate` is now serialized (commit `e233c94`), but the
+  `update-checker.ts` extraction target still does an unlocked read-modify-write.
+  Harmless at runtime (not wired in) but drift-dirty. Fix: mirror the lock or
+  document the copy as non-live.
+  Where: `src/background/update-checker.ts:292-408`
+- [ ] **P3 — Restrict-to-site discards existing user `@match` overrides with no undo.**
+  `userMatches: [hostPattern]` replaces any curated list in one click; offer an
+  undo toast or append instead of replace.
+  Where: `pages/popup.js` restrictSite handler
+- [ ] **P3 — Dashboard @match validator blesses ported hosts native registration rejects.**
+  `isValidMatchPattern` (UI + runtime matcher) accepts `http://localhost:8080/*`,
+  but `chrome.userScripts.register` rejects ports and fails the WHOLE script
+  registration. Fix: strip/segregate ported patterns before native registration
+  (register the port-less host, filter at runtime).
+  Where: `pages/dashboard.js isValidMatchPattern`; `src/background/url-matcher.ts:274`
+
+### Dashboard modules — dead/broken feature surfaces
+
+- [ ] **P1 — Instrument the dashboard telemetry/event bus (single epic for 5 dead surfaces).**
+  Five feature surfaces render but have NO event producers anywhere in the repo:
+  (a) Script Debugger console/variable-inspector/error-timeline/live-reload
+  (`dashboard-debugger.js`) — the console proxy return value is discarded, the
+  variable store reads dashboard `localStorage` not `chrome.storage`, `recordError`/
+  `enableLiveReload` have zero callers; (b) CSP Compatibility Report + Bypass
+  (`dashboard-csp.js:1086` `recordFailure` uncalled); (c) Activity Heatmap
+  (`dashboard-heatmap.js:246,654` `__svRecordActivity` uncalled); (d) Gamification
+  achievements (`dashboard-gamification.js:865,940` `checkAchievement`/
+  `recordActivity` uncalled — install/create/share/backup achievements never
+  unlock); (e) Gist auto-sync (`dashboard-gist.js:1373-1377` `gist_autosync`
+  persisted but never read). Fix: build one message channel from the injected
+  wrapper/background into these consumers (console/error events, execution/edit/
+  install counters, CSP `securitypolicyviolation`, GM value reads), or remove the
+  dead UI. Until then, each surface shows a permanent empty state.
+  Where: `pages/dashboard-debugger.js`, `pages/dashboard-csp.js`, `pages/dashboard-heatmap.js`, `pages/dashboard-gamification.js`, `pages/dashboard-gist.js`
+- [ ] **P2 — Chain editor silently wipes unsaved step data on Add/Remove/Reorder.**
+  The script `<select>` and delay input have no change listener syncing
+  `step.scriptId`/`step.delay`, but Add/remove/drag rebuild rows from the stale
+  `steps` array — selecting scripts then "+ Add Step" resets every dropdown.
+  Only `condition` is synced. Fix: add change/input listeners writing back to the
+  step object (mirror the condition handler).
+  Where: `pages/dashboard-chains.js:1043-1053,1085-1093,961-964,1100-1103,1132-1145`
+- [ ] **P2 — Gamification streak resets daily in most timezones.**
+  `todayKey()` was fixed to local dates but `yesterday` is still computed in UTC
+  (`new Date(Date.now()-DAY_MS).toISOString()`), so evening-local US users never
+  match `lastDate === yesterday` and the streak resets to 1 each day.
+  Where: `pages/dashboard-gamification.js:420`
+- [ ] **P2 — Collections Share → Import round-trip is broken.**
+  Share copies a `data:application/json;base64,...` URL but Import feeds pasted
+  text straight to `JSON.parse`, throwing "Invalid JSON" on the shared link.
+  Fix: detect the `data:` prefix in `importCollection` and base64-decode first.
+  Where: `pages/dashboard-collections.js:1389-1390,1285-1307`
+- [ ] **P2 — Gist import/sync ignores GitHub's `truncated` flag (data loss).**
+  Files >~1 MB have `content` truncated and `truncated: true`; import corrupts
+  and "Sync from Gist" overwrites local code with a truncated copy. Fix: when
+  `file.truncated`, fetch `file.raw_url` (or refuse).
+  Where: `pages/dashboard-gist.js:363-373,420-432`
+- [ ] **P3 — Template card icons render as literal HTML-entity text.**
+  Built-in/default icons are stored as entities (`'&#128274;'`) then passed
+  through `escHtml`, so cards show the raw string. Fix: store real emoji chars
+  (migrate existing values by decoding entities once), keep escaping.
+  Where: `pages/dashboard-templates.js:1026,236,1289,1545`
+- [ ] **P3 — Scheduler modal close/reopen race removes the fresh modal.**
+  `closeModal`'s 200ms timeout operates on the module `_modalEl`, not a captured
+  ref; closing then reopening another script's schedule within 200ms nulls the
+  new modal. Fix: capture the element before the timeout or cancel it in build.
+  Where: `pages/dashboard-scheduler.js:1054-1058`
+- [ ] **P3 — Scheduler resets alarm phase on every dashboard open, and date preview is off by one.**
+  `syncAlarms()` clears+recreates all `sv_sched_*` alarms with `delayInMinutes =
+  period`, delaying each pending run by a full period on every open. Separately
+  the date-range PREVIEW parses `new Date('YYYY-MM-DD')` as UTC then localizes,
+  showing the wrong day in negative-UTC zones (runtime check is correct).
+  Where: `pages/dashboard-scheduler.js:477-513,1226,440-444`
+- [ ] **P3 — Pattern Builder test badges use non-Chrome match semantics; patterns silently corrupted.**
+  `*`→`.*?` reports "no match" for `*.host` against the bare host; `buildPattern`
+  truncates >200-char patterns mid-segment producing an invalid `@match`;
+  unparseable URLs are a silent no-op. Fix: special-case the `*.` host prefix,
+  warn instead of truncating, toast on parse failure.
+  Where: `pages/dashboard-pattern-builder.js:161-181,214-224`
+- [ ] **P3 — CSP "Clear All" destroys reports with no confirm; bypass toggle diverges from DNR state.**
+  `applyBypassRule` failure is swallowed yet the toggle flips to ON and persists
+  `enabled: true`. Fix: confirm dialog; await the DNR update and revert on failure.
+  Where: `pages/dashboard-csp.js:627-632,947-949`
+- [ ] **P3 — Built-in collection install state is lost on reload.**
+  `markLocalInstalled` skips `saveCollections()` for `builtIn` collections and
+  `_localInstalled` is non-enumerable, so installed built-ins show "Install"
+  again after reload and re-install on click. Fix: persist built-in install links
+  in a separate storage map.
+  Where: `pages/dashboard-collections.js:776-781`
+- [ ] **P3 — Chain logs render into whichever editor is open.**
+  `_renderLogEntry` targets the global `#sv-chain-log`; running chain A while
+  chain B's editor is open appends A's lines into B's panel. Fix: scope the log
+  element per chain id.
+  Where: `pages/dashboard-chains.js:1155-1159`
+- [ ] **P3 — Batch export ZIP filename collisions + oversized mailto.**
+  Two scripts sanitizing to the same name overwrite in the ZIP; `share-email`
+  embeds the full base64 data URL in a `mailto:` body and fails silently past
+  practical limits. Fix: dedupe names (`name-2.user.js`); for email, fall back to
+  instructions + a copy action.
+  Where: `pages/dashboard-sharing.js:1180-1185,1101-1103`
+- [ ] **P3 — Heatmap stats disagree with cell colors and undercount errors; leaks a tooltip div per init.**
+  `total = executions+edits+installs` excludes errors (so error-only days reset
+  the streak) while `_getActivityLevel` colors them; repeated `init()` appends a
+  new tooltip div; the filter `<select>` shows raw script IDs. (Moot until the
+  telemetry epic above feeds it.)
+  Where: `pages/dashboard-heatmap.js:456,464,261,599-601,539-543`
+- [ ] **P3 — GitHub PAT stored in plaintext; fine-grained tokens get a spurious scope warning.**
+  `gist_pat` lives unencrypted in `chrome.storage.local` (deliberate, session-
+  only mode exists) — default new tokens to session-only. `verifyToken` reads
+  `x-oauth-scopes`, absent on fine-grained PATs, so valid tokens warn "gist scope
+  missing". Fix: skip the warning when the header is absent.
+  Where: `pages/dashboard-gist.js:30,38,296-298,1284,1321`
+
+### Dashboard main (pages/dashboard.js)
+
+- [ ] **P1 — "View diff" in the update-confirmation flow is destroyed by its own loop.**
+  `showDiffView()` renders into the shared `#modal` shell and returns
+  synchronously; `continue` immediately re-opens the confirmation modal in the
+  same tick, so the diff never shows. Fix: await diff-modal dismissal before
+  re-asking (wrap in a Promise resolved on Close), or render the diff inside the
+  confirmation modal body.
+  Where: `pages/dashboard.js:11056-11069,10599,11043`
+- [ ] **P2 — Editor Find and Replace toolbar buttons are silent no-ops under Monaco (the default).**
+  The Monaco branch passes raw action IDs but the adapter's `execCommand` only
+  maps the CodeMirror names `findPersistent`/`replace`. Fix: forward unknown
+  commands as `{ type: 'action', id: cmd }`, or pass the CodeMirror names.
+  Where: `pages/dashboard.js:13729-13742`; `pages/monaco-adapter.js:351-354`
+- [ ] **P2 — Word-wrap toolbar toggle is one-way under Monaco; the active indicator never lights.**
+  The adapter's `getOption('lineWrapping')` is hardcoded `false`, so the toggle
+  always turns wrap ON and the button never shows `.active`. Use the adapter's
+  existing `toggleWordWrap()` and track state via a sandbox echo. Same stub
+  breaks Beautify's indent detection (always 4 spaces).
+  Where: `pages/monaco-adapter.js:242-249`; `pages/dashboard.js:13797-13804,11430`
+- [ ] **P2 — `var(--accent)` / `var(--danger)` are undefined on the dashboard page.**
+  These vars exist only in devtools/install/sidepanel — on the dashboard the
+  sync "connected"/error colors and the publish-preflight error line silently
+  inherit. Fix: use the defined `var(--accent-primary)`/`var(--accent-error)`,
+  or alias them on the dashboard root.
+  Where: `pages/dashboard.js:4204,4209,14807,14820,8917`
+- [ ] **P2 — Focus-trap stack leaks on every stacked-modal round-trip.**
+  `showModal` calls `A11y.trapFocus` each time but `closeModalShell` releases
+  exactly one trap (boolean-gated); stacked flows (Backup Review → confirm, the
+  diff loop) leave orphan traps with live capture keydown handlers, so later
+  `releaseFocus()` pops the wrong trap. Fix: release as many traps as the modal
+  pushed (counter), or skip `trapFocus` when the shell is already open.
+  Where: `pages/dashboard.js:12798-12832,12782-12796`; `pages/dashboard-a11y.js:363-409`
+- [ ] **P2 — Orphaned editor tabs after scripts vanish outside `deleteScript`.**
+  Backup restore/rollback/sync/bulk-import overwrite call only `loadScripts()`,
+  which never prunes `openTabs` or the tab-bar DOM; clicking a stale tab silently
+  does nothing and the editor can be left with no active tab. Fix: reconcile
+  `openTabs` against `state.scripts` after `loadScripts()`, and toast in
+  `activateScriptTab`'s not-found path.
+  Where: `pages/dashboard.js:10154-10155,10250-10252,7028-7042`
+- [ ] **P2 — Autosave toggle stops working after any restore/import/sync-connect.**
+  The editor's persistent change handler closes over `const s = state.settings`
+  captured at init; `loadSettings()` replaces the object, so `s.autoSave` goes
+  stale. Fix: read `state.settings.autoSave` inside the handler.
+  Where: `pages/dashboard.js:11510,11573,3349`
+- [ ] **P2 — Importing a `.user.js` the background rejects fails silently.**
+  `createScript` success shows a toast but there is no `else` for `{ error }`
+  (quota/parse/invalid metadata). The ZIP/JSON branches surface the error; this
+  one should too.
+  Where: `pages/dashboard.js:11674-11677`
+- [ ] **P2 — `loadScripts` failure is silent and masquerades as an empty vault.**
+  The catch only `console.error`s; a failed `getScripts` at startup shows the
+  "Your vault is empty" state next to a full vault. Fix: distinct error state
+  (mirror `loadTrash`'s "Trash unavailable") or a toast + retry.
+  Where: `pages/dashboard.js:7039-7041,7642-7667`
+- [ ] **P2 — Drag-and-drop ZIP install overwrites scripts with no confirm or Undo.**
+  The drop handler calls `importFromZip` with `overwrite: true` and ignores
+  `res.receiptId`, while the Import BUTTON shows an overwrite confirm and an Undo
+  toast. Fix: route dropped `.zip` through the same confirm + Undo-receipt path.
+  Where: `pages/dashboard.js:15340-15342,11609-11646`
+- [ ] **P3 — Single-script delete confirms claim "cannot be undone" while default settings move to Trash.**
+  Bulk delete already uses trash-aware copy + an "Open Trash" undo toast; single
+  deletes should match. Also the trash-permanence check compares a LOCALIZED
+  label to hardcoded English (`retentionLabel === 'Disabled'`) — compare
+  `state.settings.trashMode === 'disabled'` instead.
+  Where: `pages/dashboard.js:8129,13620,2593,606-607,682`
+- [ ] **P3 — `checkScriptForUpdates` treats an `{error}` response as "up to date".**
+  `if (updates && updates.length > 0)` — an error object is truthy with
+  `length === undefined`, so failures show the "up to date" toast. Handle
+  `updates?.error` like the interactive path does.
+  Where: `pages/dashboard.js:11121-11129`
+- [ ] **P3 — Optimistic UI actions that lie on backend failure.**
+  Pin toggle flips `s.settings.pinned`, fires `setScriptSettings` without
+  checking the response, and toasts "Pinned" unconditionally; `duplicateCurrentScript`
+  races its own unsaved-changes confirm and duplicates stale saved code. Fix:
+  check responses and revert on error (like `toggleScriptEnabled`); check
+  `state.unsavedChanges` before duplicating and await tab close.
+  Where: `pages/dashboard.js:8146-8154,10923-10938`
+- [ ] **P3 — Silent panel-load failures leave stale content.**
+  `loadScriptStorage` failure is console-only, leaving the prior tab's values
+  visible. Autosave is dropped (not flushed) when the user switches tabs within
+  the 2s debounce, contradicting the "Autosaves after 2 seconds" header. Fix:
+  inline error state for the storage panel; flush the outgoing tab's buffered
+  code on switch.
+  Where: `pages/dashboard.js:10710-10712,11578-11583`
+- [ ] **P3 — Toast/microcopy polish.**
+  Multi-file import stacks N toasts (aggregate into one summary like
+  `buildBulkActionToast`); bare `showToast('Failed'/'Deleted'/'Empty')` give no
+  noun or cause — include the action and `e.message`.
+  Where: `pages/dashboard.js:11639-11676,10936,10967,11720,15153`
+- [ ] **P3 — Light-theme contrast on status/eyebrow literals designed for dark backgrounds.**
+  `.editor-save-state[data-state="dirty"/"error"]`, `.trash-eyebrow`, and ~17
+  info-tag tones hardcode light-on-dark colors (~1.7-1.9:1 on near-white in the
+  light theme). Fix: add `html[data-theme="light"]` overrides (amber-700/rose-700)
+  or route through theme tokens.
+  Where: `pages/dashboard.html:3180-3196,2158,4390-4426`
+
+### Editor sandbox (pages/editor-sandbox.html)
+
+- [ ] **P3 — Escape is bound unconditionally, so it always closes the editor tab.**
+  `editor.addCommand(monaco.KeyCode.Escape, ...)` with no `when` context shadows
+  Monaco's find-widget/suggest/rename Escape handlers; dismissing the find widget
+  instead pops the close/unsaved-changes flow. Fix: add a precondition like
+  `'!findWidgetVisible && !suggestWidgetVisible && !renameInputVisible'`.
+  Where: `pages/editor-sandbox.html:160-162`
+- [ ] **P3 — `setValue` applies the previous script's cursor position to a different script.**
+  `pos` is captured and re-applied unconditionally; the `scriptId` param is
+  ignored, so switching tabs drops the cursor at an arbitrary line. Fix: track
+  last scriptId and only restore `pos` when it matches.
+  Where: `pages/editor-sandbox.html:463-479`
+
+### Non-dashboard UI (popup / install / sidepanel / devtools)
+
+- [ ] **P2 — install.js settings fetch runs outside the error boundary and can blank the page.**
+  The `getSettings` call is before the `try`, and `init()` has no `.catch`; a
+  service-worker wake race leaves the security-critical install page blank with
+  no feedback. Fix: move the settings/theme block inside the try (theme failure
+  → default dark) and wrap `init()` in `.catch(showError)`.
+  Where: `pages/install.js:519,534,2586`
+- [ ] **P2 — sidepanel `loadSettings()` has no error handling; a failed getSettings kills the panel.**
+  A rejection throws out of `init` before listeners/refresh are wired, leaving
+  the long-lived panel permanently static (unlike popup which defaults). Fix:
+  mirror popup's try/catch default and/or wrap `init()` in a catch that shows a
+  banner.
+  Where: `pages/sidepanel.js:442-455,467`
+- [ ] **P2 — popup diagnostics sort throws on any nameless script.**
+  `a.name.localeCompare(b.name)` is called raw while the renderer uses
+  `s.name || s.id`, proving `name` can be falsy; the TypeError propagates and
+  renders a misleading "Could not reach the background service." Fix:
+  `(a.name || a.id || '').localeCompare(b.name || b.id || '')`.
+  Where: `pages/popup.js:735`
+- [ ] **P2 — Accent glows and light overlays are hardcoded to dark-theme values across all 4 surfaces.**
+  `theme-tokens.css` redefines `--sv-accent` per theme, but the inline `<style>`
+  blocks hardcode `rgba(76,175,80,…)` glows and `rgba(255,255,255,…)` overlays
+  with no light/catppuccin/oled overrides — wrong hue in light, washed-out
+  overlays. Fix: express as `rgb(from var(--sv-accent) r g b / .22)` and add a
+  theme-aware `--sv-overlay` token.
+  Where: `pages/popup.html`, `pages/sidepanel.html`, `pages/install.html`, `pages/devtools-panel.html`
+- [ ] **P3 — install.js `compareVersions` dereferences `.includes` before the string guard.**
+  `v1.includes('-')` runs before the `typeof v1 === 'string'` coercion two lines
+  later; a non-string imported `meta.version` throws during `renderInstallUI` and
+  the install page fails to render. Fix: coerce `v1`/`v2` to string at the top.
+  Where: `pages/install.js:2064-2066`
+- [ ] **P3 — install.js "missing UI, please reload" fallback error is never inserted.**
+  `showInstallError` inserts via `actions.before(errorEl)`, but in the missing-UI
+  path `.actions` doesn't exist, so the node is orphaned and the user sees a blank
+  page. Fix: append to `#content`/`document.body` when no `.actions` anchor.
+  Where: `pages/install.js:1930-1936,1065`
+- [ ] **P3 — install.html is a `<all_urls>` web-accessible resource.**
+  Not directly exploitable (reads only extension-written `pendingInstall`, needs
+  a user gesture + freshness check) but unnecessary framing surface. Confirm
+  whether the broad WAR match is required; if the background navigates a tab to
+  it, drop the match.
+  Where: `manifest.json` WAR entry
+
 ## Later
 
 ## Under Consideration
