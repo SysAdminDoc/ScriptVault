@@ -1332,25 +1332,34 @@ const CloudSync = (() => {
           let codeToSave = script.code;
           let mergeConflict = false;
           let didThreeWayMerge = false;
+          let selectedOneSidedCodeChange = false;
           if (existing && remoteScript && existing.code !== remoteScript.code) {
             const base = existing.syncBaseCode ?? null;
-            if (base != null && base !== existing.code && base !== remoteScript.code) {
-              try {
-                const mergeResult = await mergeScriptText(base, existing.code, remoteScript.code);
-                if (mergeResult && !mergeResult.error) {
-                  codeToSave = mergeResult.merged ?? script.code;
-                  mergeConflict = mergeResult.conflicts ?? false;
-                  didThreeWayMerge = true;
-                  debugLog(`[CloudSync] 3-way merge for ${script.id}: conflicts=${String(mergeConflict)}`);
+            if (base != null) {
+              const localChangedFromBase = existing.code !== base;
+              const remoteChangedFromBase = remoteScript.code !== base;
+              if (localChangedFromBase !== remoteChangedFromBase) {
+                codeToSave = localChangedFromBase ? existing.code : remoteScript.code;
+                selectedOneSidedCodeChange = true;
+              } else if (localChangedFromBase && remoteChangedFromBase) {
+                try {
+                  const mergeResult = await mergeScriptText(base, existing.code, remoteScript.code);
+                  if (mergeResult && !mergeResult.error) {
+                    codeToSave = mergeResult.merged ?? script.code;
+                    mergeConflict = mergeResult.conflicts ?? false;
+                    didThreeWayMerge = true;
+                    debugLog(`[CloudSync] 3-way merge for ${script.id}: conflicts=${String(mergeConflict)}`);
+                  }
+                } catch (e) {
+                  const msg = e instanceof Error ? e.message : String(e);
+                  debugLog("[CloudSync] 3-way merge failed, using timestamp winner:", msg);
                 }
-              } catch (e) {
-                const msg = e instanceof Error ? e.message : String(e);
-                debugLog("[CloudSync] 3-way merge failed, using timestamp winner:", msg);
               }
             }
           }
           const mergeChangedCode = didThreeWayMerge && existing != null && codeToSave !== existing.code;
-          if (!existing || script.updatedAt > existing.updatedAt || mergeConflict || mergeChangedCode) {
+          const oneSidedChangedCode = selectedOneSidedCodeChange && existing != null && codeToSave !== existing.code;
+          if (!existing || script.updatedAt > existing.updatedAt || mergeConflict || mergeChangedCode || oneSidedChangedCode) {
             const parsed = parseUserscript(codeToSave);
             if (!parsed.error && parsed.meta) {
               const nextScript = {

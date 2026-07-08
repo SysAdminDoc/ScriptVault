@@ -211,14 +211,16 @@ describe('Backup retention hardening', () => {
 });
 
 describe('Cross-device delete propagation (CloudSync runtime)', () => {
-  it('applies remote tombstone deletions locally and aligns empty-base merge', () => {
+  it('applies remote tombstone deletions locally and aligns sync-base merge selection', () => {
     const src = read('modules/cloud-sync.js');
     expect(src).toContain('await deleteSyncedScript(localScript.id)');
     // The 3-way merge base is the recorded syncBaseCode (or null when none) —
     // NOT a fallback to existing.code, which would make base===local and
-    // defeat concurrent-edit detection. The merge local side is existing.code.
+    // defeat concurrent-edit detection. When exactly one side changed from
+    // that base, that side's code wins before timestamp fallback.
     expect(src).toContain('existing.syncBaseCode ?? null');
-    expect(src).toContain('base != null && base !== existing.code && base !== remoteScript.code');
+    expect(src).toContain('localChangedFromBase !== remoteChangedFromBase');
+    expect(src).toContain('localChangedFromBase && remoteChangedFromBase');
   });
 
   it('reruns the tombstone resurrection guard and merge-changed save condition', () => {

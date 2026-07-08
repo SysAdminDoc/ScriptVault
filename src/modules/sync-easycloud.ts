@@ -767,7 +767,14 @@ async function _mergeData(
       // ancestor and produces a wrong merge.
       const base: string | null = local.syncBaseCode ?? null;
 
-      if (base != null && base !== local.code && base !== remote.code) {
+      const localChangedFromBase = base != null && local.code !== base;
+      const remoteChangedFromBase = base != null && remote.code !== base;
+
+      if (base != null && localChangedFromBase !== remoteChangedFromBase) {
+        // Exactly one side changed code; that code wins regardless of the
+        // other side's newer metadata timestamp.
+        merged.code = localChangedFromBase ? local.code : remote.code;
+      } else if (base != null && localChangedFromBase && remoteChangedFromBase) {
         // Both sides changed since base — attempt 3-way merge. Chrome routes
         // through the offscreen document; Firefox runs Diff inline.
         try {

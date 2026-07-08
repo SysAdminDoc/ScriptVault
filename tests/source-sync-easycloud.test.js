@@ -295,6 +295,158 @@ describe('source easycloud sync module', () => {
     expect(persisted).toEqual({});
   });
 
+  it('keeps the local-only code edit when EasyCloud remote metadata is newer', async () => {
+    await chrome.storage.local.set({
+      easycloud_connected: true,
+      syncTombstones: {},
+    });
+
+    const baseCode = '// ==UserScript==\n// @name Easy One Side\n// ==/UserScript==\n// base';
+    const localCode = '// ==UserScript==\n// @name Easy One Side\n// ==/UserScript==\n// local code edit';
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ files: [{ id: 'drive-file-id' }] }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            version: 1,
+            timestamp: 20,
+            deviceId: 'remote-device',
+            scripts: [
+              {
+                id: 'script_easy_local',
+                code: baseCode,
+                enabled: false,
+                position: 7,
+                settings: { notes: 'remote metadata' },
+                syncBaseCode: baseCode,
+                updatedAt: 20,
+              },
+            ],
+            tombstones: {},
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(new Response('{}', { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ id: 'drive-file-id' }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+    globalThis.fetch = fetchMock;
+
+    const { EasyCloudSync, scriptState } = await loadFreshEasyCloud([
+      {
+        id: 'script_easy_local',
+        code: localCode,
+        meta: { name: 'Easy One Side' },
+        enabled: true,
+        position: 0,
+        settings: { notes: 'local note' },
+        syncBaseCode: baseCode,
+        createdAt: 1,
+        updatedAt: 10,
+      },
+    ]);
+
+    const result = await EasyCloudSync.sync();
+
+    expect(result.success).toBe(true);
+    expect(scriptState).toEqual([
+      expect.objectContaining({
+        id: 'script_easy_local',
+        code: localCode,
+        enabled: false,
+        position: 7,
+        updatedAt: 20,
+        syncBaseCode: localCode,
+      }),
+    ]);
+  });
+
+  it('keeps the remote-only code edit when EasyCloud local metadata is newer', async () => {
+    await chrome.storage.local.set({
+      easycloud_connected: true,
+      syncTombstones: {},
+    });
+
+    const baseCode = '// ==UserScript==\n// @name Easy Remote Side\n// ==/UserScript==\n// base';
+    const remoteCode = '// ==UserScript==\n// @name Easy Remote Side\n// ==/UserScript==\n// remote code edit';
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ files: [{ id: 'drive-file-id' }] }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            version: 1,
+            timestamp: 20,
+            deviceId: 'remote-device',
+            scripts: [
+              {
+                id: 'script_easy_remote',
+                code: remoteCode,
+                enabled: true,
+                position: 1,
+                settings: { notes: 'remote note' },
+                syncBaseCode: baseCode,
+                updatedAt: 20,
+              },
+            ],
+            tombstones: {},
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(new Response('{}', { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ id: 'drive-file-id' }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+    globalThis.fetch = fetchMock;
+
+    const { EasyCloudSync, scriptState } = await loadFreshEasyCloud([
+      {
+        id: 'script_easy_remote',
+        code: baseCode,
+        meta: { name: 'Easy Remote Side' },
+        enabled: false,
+        position: 9,
+        settings: { notes: 'local metadata' },
+        syncBaseCode: baseCode,
+        createdAt: 1,
+        updatedAt: 30,
+      },
+    ]);
+
+    const result = await EasyCloudSync.sync();
+
+    expect(result.success).toBe(true);
+    expect(scriptState).toEqual([
+      expect.objectContaining({
+        id: 'script_easy_remote',
+        code: remoteCode,
+        enabled: false,
+        position: 9,
+        updatedAt: 30,
+        syncBaseCode: remoteCode,
+      }),
+    ]);
+  });
+
   it('uploads only sync-safe per-script settings to EasyCloud', async () => {
     await chrome.storage.local.set({
       easycloud_connected: true,

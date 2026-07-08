@@ -633,7 +633,11 @@ const EasyCloudSync = (() => {
       }
       if (local.code !== remote.code) {
         const base = local.syncBaseCode ?? null;
-        if (base != null && base !== local.code && base !== remote.code) {
+        const localChangedFromBase = base != null && local.code !== base;
+        const remoteChangedFromBase = base != null && remote.code !== base;
+        if (base != null && localChangedFromBase !== remoteChangedFromBase) {
+          merged.code = localChangedFromBase ? local.code : remote.code;
+        } else if (base != null && localChangedFromBase && remoteChangedFromBase) {
           try {
             const mergeResult = await _mergeScriptText(base, local.code, remote.code);
             if (mergeResult && !mergeResult.error) {

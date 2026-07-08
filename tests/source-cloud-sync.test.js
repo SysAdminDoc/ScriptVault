@@ -303,6 +303,128 @@ describe('source cloud sync module', () => {
     ]);
   });
 
+  it('keeps the local-only code edit when remote metadata has the newer timestamp', async () => {
+    await chrome.storage.local.set({ syncTombstones: {} });
+
+    const baseCode = '// ==UserScript==\n// @name One Side\n// ==/UserScript==\n// base';
+    const localCode = '// ==UserScript==\n// @name One Side\n// ==/UserScript==\n// local code edit';
+    const harness = await loadFreshCloudSync(
+      [
+        {
+          id: 'script_one_sided',
+          code: localCode,
+          enabled: true,
+          position: 0,
+          meta: { name: 'One Side' },
+          settings: { notes: 'local note' },
+          syncBaseCode: baseCode,
+          createdAt: 1,
+          updatedAt: 10,
+        },
+      ],
+      {
+        version: 1,
+        timestamp: 20,
+        scripts: [
+          {
+            id: 'script_one_sided',
+            code: baseCode,
+            enabled: false,
+            position: 7,
+            settings: { notes: 'remote metadata' },
+            syncBaseCode: baseCode,
+            updatedAt: 20,
+          },
+        ],
+        tombstones: {},
+      },
+    );
+
+    await expect(harness.CloudSync.sync()).resolves.toEqual({ success: true });
+
+    expect(harness.scriptState).toEqual([
+      expect.objectContaining({
+        id: 'script_one_sided',
+        code: localCode,
+        enabled: false,
+        position: 7,
+        updatedAt: 20,
+        syncBaseCode: localCode,
+      }),
+    ]);
+    expect(harness.getRemoteData().scripts).toEqual([
+      expect.objectContaining({
+        id: 'script_one_sided',
+        code: localCode,
+        enabled: false,
+        position: 7,
+        updatedAt: 20,
+        syncBaseCode: localCode,
+      }),
+    ]);
+  });
+
+  it('keeps the remote-only code edit when local metadata has the newer timestamp', async () => {
+    await chrome.storage.local.set({ syncTombstones: {} });
+
+    const baseCode = '// ==UserScript==\n// @name One Side Remote\n// ==/UserScript==\n// base';
+    const remoteCode = '// ==UserScript==\n// @name One Side Remote\n// ==/UserScript==\n// remote code edit';
+    const harness = await loadFreshCloudSync(
+      [
+        {
+          id: 'script_remote_code',
+          code: baseCode,
+          enabled: false,
+          position: 9,
+          meta: { name: 'One Side Remote' },
+          settings: { notes: 'local metadata' },
+          syncBaseCode: baseCode,
+          createdAt: 1,
+          updatedAt: 30,
+        },
+      ],
+      {
+        version: 1,
+        timestamp: 20,
+        scripts: [
+          {
+            id: 'script_remote_code',
+            code: remoteCode,
+            enabled: true,
+            position: 1,
+            settings: { notes: 'remote note' },
+            syncBaseCode: baseCode,
+            updatedAt: 20,
+          },
+        ],
+        tombstones: {},
+      },
+    );
+
+    await expect(harness.CloudSync.sync()).resolves.toEqual({ success: true });
+
+    expect(harness.scriptState).toEqual([
+      expect.objectContaining({
+        id: 'script_remote_code',
+        code: remoteCode,
+        enabled: false,
+        position: 9,
+        updatedAt: 30,
+        syncBaseCode: remoteCode,
+      }),
+    ]);
+    expect(harness.getRemoteData().scripts).toEqual([
+      expect.objectContaining({
+        id: 'script_remote_code',
+        code: remoteCode,
+        enabled: false,
+        position: 9,
+        updatedAt: 30,
+        syncBaseCode: remoteCode,
+      }),
+    ]);
+  });
+
   it('does not resurrect a deleted script after local state is wiped and resynced from a remote tombstone', async () => {
     await chrome.storage.local.set({ syncTombstones: {} });
 
