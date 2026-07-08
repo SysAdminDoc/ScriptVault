@@ -6,6 +6,7 @@ import { buildWrappedScript } from '../src/background/wrapper-builder.ts';
 
 const ROOT = process.cwd();
 let messageListeners = [];
+let remoteValue;
 
 function readSource(path) {
   return readFileSync(resolve(ROOT, path), 'utf8');
@@ -79,6 +80,7 @@ ${code}`,
 }
 
 function postValueChanged(data) {
+  remoteValue = data.newValue;
   const event = {
     source: window,
     data: {
@@ -107,6 +109,11 @@ async function waitForUserscriptBody() {
 describe('GM value-change remote semantics', () => {
   beforeEach(() => {
     messageListeners = [];
+    remoteValue = undefined;
+    chrome.runtime.sendMessage.mockImplementation((message) => {
+      if (message.action === 'GM_getValue') return Promise.resolve(remoteValue);
+      return Promise.resolve({});
+    });
     const addEventListener = window.addEventListener.bind(window);
     vi.spyOn(window, 'addEventListener').mockImplementation((type, listener, options) => {
       if (type === 'message') messageListeners.push(listener);
@@ -169,7 +176,8 @@ GM_addValueChangeListener('count', (name, oldValue, newValue, remote) => {
 
     for (const path of ['src/background/wrapper-builder.ts', 'src/background/core.ts', 'background.core.js']) {
       const source = readSource(path);
-      expect(source).toContain('listener.callback(msg.key, oldValue, msg.newValue, msg.remote !== false);');
+      expect(source).toContain("sendToBackground('GM_getValue', { scriptId, key: msg.key })");
+      expect(source).toContain('listener.callback(msg.key, oldValue, newValue, msg.remote !== false);');
     }
   });
 });

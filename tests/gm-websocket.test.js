@@ -73,6 +73,16 @@ async function flushWrappedScript() {
 }
 
 function postWebSocketEvent(eventType, extra = {}) {
+  const eventId = `evt_${eventType}_${Date.now()}`;
+  const bridgeData = eventType === 'message' ? { eventId } : {
+    requestId: 'ws_test',
+    scriptId: 'script_ws',
+    type: eventType,
+    ...extra,
+  };
+  if (eventType === 'message') {
+    bridgeData.eventId = eventId;
+  }
   window.dispatchEvent(new MessageEvent('message', {
     source: window,
     data: {
@@ -82,12 +92,7 @@ function postWebSocketEvent(eventType, extra = {}) {
       requestId: 'ws_test',
       scriptId: 'script_ws',
       eventType,
-      data: {
-        requestId: 'ws_test',
-        scriptId: 'script_ws',
-        type: eventType,
-        ...extra,
-      },
+      data: bridgeData,
     },
   }));
 }
@@ -107,6 +112,9 @@ describe('GM_webSocket', () => {
       if (message.action === 'GM_webSocket') return Promise.resolve({ requestId: 'ws_test' });
       if (message.action === 'GM_webSocket_send') return Promise.resolve({ success: true });
       if (message.action === 'GM_webSocket_close') return Promise.resolve({ success: true });
+      if (message.action === 'GM_webSocket_takeEvent') {
+        return Promise.resolve({ success: true, event: { payload: 'pong', origin: '' } });
+      }
       return Promise.resolve({});
     });
 

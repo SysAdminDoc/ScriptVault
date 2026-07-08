@@ -355,21 +355,23 @@ ${req.code}
     // Handle value change notifications (cross-tab sync)
     if (msg.type === 'valueChanged' && msg.scriptId === scriptId) {
       const oldValue = _cache[msg.key];
-      if (msg.newValue === undefined) {
-        delete _cache[msg.key];
-      } else {
-        _cache[msg.key] = msg.newValue;
-      }
-      // Notify value change listeners
-      _valueChangeListeners.forEach((listener) => {
-        if (listener.key === msg.key || listener.key === null) {
-          try {
-            listener.callback(msg.key, oldValue, msg.newValue, msg.remote !== false);
-          } catch (e) {
-            /* silently ignore value change listener errors */
-          }
+      sendToBackground('GM_getValue', { scriptId, key: msg.key }).then((newValue) => {
+        if (newValue === undefined) {
+          delete _cache[msg.key];
+        } else {
+          _cache[msg.key] = newValue;
         }
-      });
+        // Notify value change listeners
+        _valueChangeListeners.forEach((listener) => {
+          if (listener.key === msg.key || listener.key === null) {
+            try {
+              listener.callback(msg.key, oldValue, newValue, msg.remote !== false);
+            } catch (e) {
+              /* silently ignore value change listener errors */
+            }
+          }
+        });
+      }).catch(() => {});
     }
 
     // Handle XHR events
@@ -379,7 +381,16 @@ ${req.code}
 
       const { details } = request;
       const eventType = msg.eventType;
-      const eventData = msg.data || {};
+      const eventData = { ...(msg.data || {}) };
+      delete eventData.response;
+      delete eventData.responseText;
+      delete eventData.responseXML;
+      delete eventData.responseHeaders;
+      delete eventData.streamChunk;
+      if (eventType === 'load' || eventType === 'loadend' || eventType === 'error' ||
+          eventType === 'timeout' || eventType === 'abort') {
+        return;
+      }
 
       // Decode binary responses transferred as base64/dataURL
       let responseValue = eventData.response;
@@ -451,6 +462,26 @@ ${req.code}
 
       const eventType = msg.eventType;
       const eventData = msg.data || {};
+
+      if (eventType === 'message') {
+        if (eventData.eventId) {
+          sendToBackground('GM_webSocket_takeEvent', {
+            scriptId,
+            requestId: msg.requestId,
+            eventId: eventData.eventId
+          }).then((result) => {
+            if (!result || result.success !== true) return;
+            const payloadEventData = result.event || {};
+            dispatch('message', {
+              type: 'message',
+              data: decodeMessageData(payloadEventData.payload),
+              origin: payloadEventData.origin || '',
+              target: socket.handle,
+            });
+          }).catch(() => {});
+        }
+        return;
+      }
 
       function decodeMessageData(value) {
         if (value && typeof value === 'object' && value.__sv_base64__) {
@@ -934,12 +965,55 @@ ${req.code}
         _xhrRequests.set(requestId, requestEntry);
         _xhrRequests.delete(localId);
         currentMapKey = requestId;
+        pollXhrFinalResult();
       }
     })().catch(err => {
       if (aborted) return;
       if (details.onerror) details.onerror({ error: err.message || 'Request failed', status: 0 });
       _xhrRequests.delete(currentMapKey);
     });
+
+    function dispatchXhrTerminal(eventType, eventData) {
+      if (aborted || requestEntry.aborted) return;
+      const response = eventData || { readyState: 4, status: 0 };
+      if (typeof details.onreadystatechange === 'function') {
+        try { details.onreadystatechange(response); } catch (e) {}
+      }
+      if (eventType === 'load') {
+        if (typeof details.onload === 'function') {
+          try { details.onload(response); } catch (e) {}
+        }
+      } else if (eventType === 'timeout') {
+        if (typeof details.ontimeout === 'function') {
+          try { details.ontimeout(response); } catch (e) {}
+        }
+      } else if (eventType === 'abort') {
+        if (typeof details.onabort === 'function') {
+          try { details.onabort(response); } catch (e) {}
+        }
+      } else if (typeof details.onerror === 'function') {
+        try { details.onerror(response); } catch (e) {}
+      }
+      if (typeof details.onloadend === 'function') {
+        try { details.onloadend(response); } catch (e) {}
+      }
+      _xhrRequests.delete(currentMapKey);
+      if (requestId) _xhrRequests.delete(requestId);
+    }
+
+    function pollXhrFinalResult(attempt = 0) {
+      if (aborted || requestEntry.aborted || !requestId) return;
+      sendToBackground('GM_xmlhttpRequest_result', { scriptId, requestId }).then((result) => {
+        if (aborted || requestEntry.aborted) return;
+        if (!result || result.done !== true) {
+          if (attempt < 600) setTimeout(() => pollXhrFinalResult(attempt + 1), 50);
+          return;
+        }
+        dispatchXhrTerminal(result.type || 'error', result.response || { readyState: 4, status: 0, error: result.error || 'Request failed' });
+      }).catch(() => {
+        if (attempt < 600) setTimeout(() => pollXhrFinalResult(attempt + 1), 50);
+      });
+    }
 
     return control;
   }

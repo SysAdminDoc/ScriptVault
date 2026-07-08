@@ -5631,6 +5631,14 @@ function normalizeGMWebSocketCloseReason(reason) {
 
 function sendGMWebSocketEvent(record, type, eventData = {}) {
   if (!record || typeof record.tabId !== 'number') return;
+  let bridgeEventData = eventData;
+  if (type === 'message') {
+    const eventId = 'ws_evt_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2);
+    record._eventQueue = Array.isArray(record._eventQueue) ? record._eventQueue : [];
+    record._eventQueue.push({ id: eventId, type, data: eventData });
+    if (record._eventQueue.length > 100) record._eventQueue.splice(0, record._eventQueue.length - 100);
+    bridgeEventData = { eventId };
+  }
   try {
     chrome.tabs.sendMessage(record.tabId, {
       action: 'webSocketEvent',
@@ -5638,7 +5646,7 @@ function sendGMWebSocketEvent(record, type, eventData = {}) {
         requestId: record.requestId,
         scriptId: record.scriptId,
         type,
-        ...eventData
+        ...bridgeEventData
       }
     }).catch(() => {});
   } catch (_) {
@@ -7454,9 +7462,11 @@ async function handleMessage(message, sender) {
       // GM network APIs: XHR, WebSocket, and download handling live in the promoted TypeScript module.
       case 'GM_xmlhttpRequest':
       case 'GM_xmlhttpRequest_abort':
+      case 'GM_xmlhttpRequest_result':
       case 'GM_webSocket':
       case 'GM_webSocket_send':
       case 'GM_webSocket_close':
+      case 'GM_webSocket_takeEvent':
       case 'GM_download':
         if (typeof GMNetworkHandler === 'undefined') return { error: 'GMNetworkHandler not available' };
         return await GMNetworkHandler.handleGMNetworkMessage(action, data, sender);
@@ -12296,21 +12306,23 @@ ${req.code}
     // Handle value change notifications (cross-tab sync)
     if (msg.type === 'valueChanged' && msg.scriptId === scriptId) {
       const oldValue = _cache[msg.key];
-      if (msg.newValue === undefined) {
-        delete _cache[msg.key];
-      } else {
-        _cache[msg.key] = msg.newValue;
-      }
-      // Notify value change listeners
-      _valueChangeListeners.forEach((listener) => {
-        if (listener.key === msg.key || listener.key === null) {
-          try {
-            listener.callback(msg.key, oldValue, msg.newValue, msg.remote !== false);
-          } catch (e) {
-            /* silently ignore value change listener errors */
-          }
+      sendToBackground('GM_getValue', { scriptId, key: msg.key }).then((newValue) => {
+        if (newValue === undefined) {
+          delete _cache[msg.key];
+        } else {
+          _cache[msg.key] = newValue;
         }
-      });
+        // Notify value change listeners
+        _valueChangeListeners.forEach((listener) => {
+          if (listener.key === msg.key || listener.key === null) {
+            try {
+              listener.callback(msg.key, oldValue, newValue, msg.remote !== false);
+            } catch (e) {
+              /* silently ignore value change listener errors */
+            }
+          }
+        });
+      }).catch(() => {});
     }
     
     // Handle XHR events
@@ -12320,7 +12332,16 @@ ${req.code}
       
       const { details } = request;
       const eventType = msg.eventType;
-      const eventData = msg.data || {};
+      const eventData = { ...(msg.data || {}) };
+      delete eventData.response;
+      delete eventData.responseText;
+      delete eventData.responseXML;
+      delete eventData.responseHeaders;
+      delete eventData.streamChunk;
+      if (eventType === 'load' || eventType === 'loadend' || eventType === 'error' ||
+          eventType === 'timeout' || eventType === 'abort') {
+        return;
+      }
       
       // Decode binary responses transferred as base64/dataURL
       let responseValue = eventData.response;
@@ -12801,12 +12822,55 @@ ${req.code}
         _xhrRequests.set(requestId, requestEntry);
         _xhrRequests.delete(localId);
         currentMapKey = requestId;
+        pollXhrFinalResult();
       }
     })().catch(err => {
       if (aborted) return;
       if (details.onerror) details.onerror({ error: err.message || 'Request failed', status: 0 });
       _xhrRequests.delete(currentMapKey);
     });
+
+    function dispatchXhrTerminal(eventType, eventData) {
+      if (aborted || requestEntry.aborted) return;
+      const response = eventData || { readyState: 4, status: 0 };
+      if (typeof details.onreadystatechange === 'function') {
+        try { details.onreadystatechange(response); } catch (e) {}
+      }
+      if (eventType === 'load') {
+        if (typeof details.onload === 'function') {
+          try { details.onload(response); } catch (e) {}
+        }
+      } else if (eventType === 'timeout') {
+        if (typeof details.ontimeout === 'function') {
+          try { details.ontimeout(response); } catch (e) {}
+        }
+      } else if (eventType === 'abort') {
+        if (typeof details.onabort === 'function') {
+          try { details.onabort(response); } catch (e) {}
+        }
+      } else if (typeof details.onerror === 'function') {
+        try { details.onerror(response); } catch (e) {}
+      }
+      if (typeof details.onloadend === 'function') {
+        try { details.onloadend(response); } catch (e) {}
+      }
+      _xhrRequests.delete(currentMapKey);
+      if (requestId) _xhrRequests.delete(requestId);
+    }
+
+    function pollXhrFinalResult(attempt = 0) {
+      if (aborted || requestEntry.aborted || !requestId) return;
+      sendToBackground('GM_xmlhttpRequest_result', { scriptId, requestId }).then((result) => {
+        if (aborted || requestEntry.aborted) return;
+        if (!result || result.done !== true) {
+          if (attempt < 600) setTimeout(() => pollXhrFinalResult(attempt + 1), 50);
+          return;
+        }
+        dispatchXhrTerminal(result.type || 'error', result.response || { readyState: 4, status: 0, error: result.error || 'Request failed' });
+      }).catch(() => {
+        if (attempt < 600) setTimeout(() => pollXhrFinalResult(attempt + 1), 50);
+      });
+    }
     
     return control;
   }

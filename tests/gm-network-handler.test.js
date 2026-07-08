@@ -73,7 +73,7 @@ describe('GM network handler', () => {
     };
     globalThis.XhrManager = {
       create: vi.fn((_tabId, _scriptId, _data) => {
-        const request = { id: 'xhr_1', aborted: false };
+        const request = { id: 'xhr_1', tabId: _tabId, scriptId: _scriptId, details: _data, aborted: false };
         xhrRequests.set(request.id, request);
         return request;
       }),
@@ -160,8 +160,10 @@ describe('GM network handler', () => {
       'GM_webSocket',
       'GM_webSocket_close',
       'GM_webSocket_send',
+      'GM_webSocket_takeEvent',
       'GM_xmlhttpRequest',
       'GM_xmlhttpRequest_abort',
+      'GM_xmlhttpRequest_result',
     ]);
     expect(isGMNetworkAction('GM_xmlhttpRequest')).toBe(true);
     expect(isGMNetworkAction('GM_cookie_list')).toBe(false);
@@ -185,6 +187,29 @@ describe('GM network handler', () => {
     expect(globalThis.fetch).toHaveBeenCalledWith('https://api.example.com/data', expect.objectContaining({
       body: 'payload',
     }));
+    await vi.waitFor(() => {
+      expect(xhrRequests.get('xhr_1')?.finalResult).toMatchObject({
+        done: true,
+        type: 'load',
+      });
+    });
+    for (const [, message] of chrome.tabs.sendMessage.mock.calls) {
+      if (message?.action !== 'xhrEvent') continue;
+      expect(message.data).not.toHaveProperty('response');
+      expect(message.data).not.toHaveProperty('responseText');
+      expect(message.data).not.toHaveProperty('responseHeaders');
+    }
+    await expect(handleGMNetworkMessage('GM_xmlhttpRequest_result', {
+      scriptId: 'script-1',
+      requestId: 'xhr_1',
+    })).resolves.toMatchObject({
+      done: true,
+      type: 'load',
+      response: expect.objectContaining({
+        responseText: 'ok',
+      }),
+    });
+    expect(globalThis.XhrManager.remove).toHaveBeenCalledWith('xhr_1');
   });
 
   it('aborts tracked GM_xmlhttpRequest entries', async () => {
@@ -227,6 +252,20 @@ describe('GM network handler', () => {
       reason: 'done',
     })).resolves.toEqual({ success: true });
     expect(createdSockets[0].closed).toEqual({ code: 1000, reason: 'done' });
+
+    wsRecords.set('ws_queued', {
+      scriptId: 'script-1',
+      _eventQueue: [{ id: 'evt_secret', data: { payload: 'secret-message', origin: 'https://api.example.com' } }],
+    });
+    await expect(handleGMNetworkMessage('GM_webSocket_takeEvent', {
+      scriptId: 'script-1',
+      requestId: 'ws_queued',
+      eventId: 'evt_secret',
+    })).resolves.toEqual({
+      success: true,
+      event: { payload: 'secret-message', origin: 'https://api.example.com' },
+    });
+    expect(wsRecords.get('ws_queued')._eventQueue).toEqual([]);
   });
 
   it('starts GM_download through permission and filename normalization', async () => {

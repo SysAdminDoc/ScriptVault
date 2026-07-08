@@ -28,6 +28,18 @@
     return ALLOWED_BRIDGE_ACTIONS.has(action);
   }
 
+  function redactBridgeEventData(data) {
+    if (!data || typeof data !== 'object') return data;
+    const safe = { ...data };
+    delete safe.response;
+    delete safe.responseText;
+    delete safe.responseXML;
+    delete safe.responseHeaders;
+    delete safe.payload;
+    delete safe.streamChunk;
+    return safe;
+  }
+
   // Listen for messages from userscript world (USER_SCRIPT or page context)
   window.addEventListener('message', async (event) => {
     // Security: Only accept messages from same window
@@ -120,8 +132,6 @@
         type: 'valueChanged',
         scriptId: message.data?.scriptId,
         key: message.data?.key,
-        oldValue: message.data?.oldValue,
-        newValue: message.data?.newValue,
         remote: message.data?.remote
       }, '*');
       handled = true;
@@ -136,7 +146,7 @@
         requestId: message.data?.requestId,
         scriptId: message.data?.scriptId,
         eventType: message.data?.type,
-        data: message.data
+        data: redactBridgeEventData(message.data)
       }, '*');
       handled = true;
     }
@@ -150,7 +160,7 @@
         requestId: message.data?.requestId,
         scriptId: message.data?.scriptId,
         eventType: message.data?.type,
-        data: message.data
+        data: redactBridgeEventData(message.data)
       }, '*');
       handled = true;
     }

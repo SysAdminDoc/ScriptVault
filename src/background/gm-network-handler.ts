@@ -3,16 +3,20 @@ export type GMNetworkAction =
   | 'GM_webSocket'
   | 'GM_webSocket_close'
   | 'GM_webSocket_send'
+  | 'GM_webSocket_takeEvent'
   | 'GM_xmlhttpRequest'
-  | 'GM_xmlhttpRequest_abort';
+  | 'GM_xmlhttpRequest_abort'
+  | 'GM_xmlhttpRequest_result';
 
 export const GM_NETWORK_ACTIONS: readonly GMNetworkAction[] = [
   'GM_download',
   'GM_webSocket',
   'GM_webSocket_close',
   'GM_webSocket_send',
+  'GM_webSocket_takeEvent',
   'GM_xmlhttpRequest',
   'GM_xmlhttpRequest_abort',
+  'GM_xmlhttpRequest_result',
 ];
 
 const GM_NETWORK_ACTION_SET: ReadonlySet<string> = new Set(GM_NETWORK_ACTIONS);
@@ -115,6 +119,16 @@ async function blobToDataUrl(blob: Blob): Promise<string | null> {
   });
 }
 
+function redactXhrBridgePayload(eventData: GMNetworkPayload = {}): GMNetworkPayload {
+  const safe = { ...eventData };
+  delete safe.response;
+  delete safe.responseText;
+  delete safe.responseXML;
+  delete safe.responseHeaders;
+  delete safe.streamChunk;
+  return safe;
+}
+
 export function isGMNetworkAction(action: unknown): action is GMNetworkAction {
   return typeof action === 'string' && GM_NETWORK_ACTION_SET.has(action);
 }
@@ -191,7 +205,7 @@ export async function handleGMNetworkMessage(
                 requestId,
                 scriptId: ownedScriptId,
                 type,
-                ...eventData,
+                ...redactXhrBridgePayload(eventData),
               },
             }).catch(() => {});
           } catch (_) {}
@@ -212,6 +226,16 @@ export async function handleGMNetworkMessage(
           if (!request.aborted) {
             request.aborted = true;
             controller.abort();
+            request.finalResult = {
+              done: true,
+              type: 'timeout',
+              response: {
+                readyState: 4,
+                status: 0,
+                statusText: '',
+                error: 'Request timed out',
+              },
+            };
             sendEvent('timeout', {
               readyState: 4,
               status: 0,
@@ -219,7 +243,6 @@ export async function handleGMNetworkMessage(
               error: 'Request timed out',
             });
             sendEvent('loadend', { readyState: 4 });
-            XhrManager.remove(requestId);
           }
         }, timeoutMs);
 
@@ -363,7 +386,6 @@ export async function handleGMNetworkMessage(
               total: responseText?.length || 0,
             };
 
-            sendEvent('load', finalResponse);
             NetworkLog.add({
               ...netLogEntry,
               status: finalResponse.status,
@@ -372,8 +394,17 @@ export async function handleGMNetworkMessage(
               duration: Date.now() - netLogStartTime,
               finalUrl: finalResponse.finalUrl,
             });
-            sendEvent('loadend', finalResponse);
-            XhrManager.remove(requestId);
+            request.finalResult = {
+              done: true,
+              type: 'load',
+              response: finalResponse,
+            };
+            sendEvent('readystatechange', {
+              readyState: 4,
+              status: response.status,
+              statusText: response.statusText,
+              finalUrl: response.url,
+            });
           } catch (error) {
             if (request.aborted) return;
 
@@ -388,6 +419,17 @@ export async function handleGMNetworkMessage(
               duration: Date.now() - netLogStartTime,
             });
 
+            request.finalResult = {
+              done: true,
+              type: errorType,
+              response: {
+                readyState: 4,
+                status: 0,
+                statusText: '',
+                error: errorMsg,
+              },
+              error: errorMsg,
+            };
             sendEvent(errorType, {
               readyState: 4,
               status: 0,
@@ -398,7 +440,6 @@ export async function handleGMNetworkMessage(
               readyState: 4,
               status: 0,
             });
-            XhrManager.remove(requestId);
           } finally {
             clearTimeout(timeoutId);
           }
@@ -425,6 +466,15 @@ export async function handleGMNetworkMessage(
         return { success: true };
       }
       return { success: false };
+    }
+
+    case 'GM_xmlhttpRequest_result': {
+      const request = XhrManager.get(data.requestId);
+      if (!request || request.scriptId !== ownedScriptId) return { done: false };
+      if (!request.finalResult) return { done: false };
+      const result = request.finalResult;
+      XhrManager.remove(data.requestId);
+      return result;
     }
 
     case 'GM_webSocket': {
@@ -551,6 +601,16 @@ export async function handleGMNetworkMessage(
         console.error('[ScriptVault] GM_webSocket setup error:', error);
         return { error: errorMessage(error, 'WebSocket setup failed') };
       }
+    }
+
+    case 'GM_webSocket_takeEvent': {
+      const record = getGMWebSocketMap().get(data.requestId);
+      if (!record || record.scriptId !== ownedScriptId) return { error: 'WebSocket event not found' };
+      const queue = Array.isArray(record._eventQueue) ? record._eventQueue : [];
+      const idx = queue.findIndex((entry: any) => entry?.id === data.eventId);
+      if (idx < 0) return { error: 'WebSocket event not found' };
+      const [entry] = queue.splice(idx, 1);
+      return { success: true, event: entry?.data || {} };
     }
 
     case 'GM_webSocket_send': {

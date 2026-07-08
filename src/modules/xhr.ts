@@ -16,6 +16,12 @@ interface XhrRequest {
   details: XhrRequestDetails;
   aborted: boolean;
   startTime: number;
+  finalResult?: {
+    done: boolean;
+    type: string;
+    response?: Record<string, unknown>;
+    error?: string;
+  };
   _cleanupTimer?: ReturnType<typeof setTimeout>;
 }
 

@@ -17924,8 +17924,10 @@ const MessageRouter = (() => {
     "GM_webSocket",
     "GM_webSocket_close",
     "GM_webSocket_send",
+    "GM_webSocket_takeEvent",
     "GM_xmlhttpRequest",
     "GM_xmlhttpRequest_abort",
+    "GM_xmlhttpRequest_result",
     "activateWorkspace",
     "addScriptToFolder",
     "addSubscription",
@@ -19239,8 +19241,10 @@ const GMNetworkHandler = (() => {
     "GM_webSocket",
     "GM_webSocket_close",
     "GM_webSocket_send",
+    "GM_webSocket_takeEvent",
     "GM_xmlhttpRequest",
-    "GM_xmlhttpRequest_abort"
+    "GM_xmlhttpRequest_abort",
+    "GM_xmlhttpRequest_result"
   ];
   var GM_NETWORK_ACTION_SET = new Set(GM_NETWORK_ACTIONS);
   function errorMessage(error, fallback = "Unexpected error") {
@@ -19295,6 +19299,15 @@ const GMNetworkHandler = (() => {
       reader.onerror = () => resolve(null);
       reader.readAsDataURL(blob);
     });
+  }
+  function redactXhrBridgePayload(eventData = {}) {
+    const safe = { ...eventData };
+    delete safe.response;
+    delete safe.responseText;
+    delete safe.responseXML;
+    delete safe.responseHeaders;
+    delete safe.streamChunk;
+    return safe;
   }
   function isGMNetworkAction(action) {
     return typeof action === "string" && GM_NETWORK_ACTION_SET.has(action);
@@ -19355,7 +19368,7 @@ const GMNetworkHandler = (() => {
                   requestId,
                   scriptId: ownedScriptId,
                   type,
-                  ...eventData
+                  ...redactXhrBridgePayload(eventData)
                 }
               }).catch(() => {
               });
@@ -19374,6 +19387,16 @@ const GMNetworkHandler = (() => {
             if (!request.aborted) {
               request.aborted = true;
               controller.abort();
+              request.finalResult = {
+                done: true,
+                type: "timeout",
+                response: {
+                  readyState: 4,
+                  status: 0,
+                  statusText: "",
+                  error: "Request timed out"
+                }
+              };
               sendEvent("timeout", {
                 readyState: 4,
                 status: 0,
@@ -19381,7 +19404,6 @@ const GMNetworkHandler = (() => {
                 error: "Request timed out"
               });
               sendEvent("loadend", { readyState: 4 });
-              XhrManager.remove(requestId);
             }
           }, timeoutMs);
           sendEvent("loadstart", {
@@ -19512,7 +19534,6 @@ const GMNetworkHandler = (() => {
                 loaded: responseText?.length || 0,
                 total: responseText?.length || 0
               };
-              sendEvent("load", finalResponse);
               NetworkLog.add({
                 ...netLogEntry,
                 status: finalResponse.status,
@@ -19521,8 +19542,17 @@ const GMNetworkHandler = (() => {
                 duration: Date.now() - netLogStartTime,
                 finalUrl: finalResponse.finalUrl
               });
-              sendEvent("loadend", finalResponse);
-              XhrManager.remove(requestId);
+              request.finalResult = {
+                done: true,
+                type: "load",
+                response: finalResponse
+              };
+              sendEvent("readystatechange", {
+                readyState: 4,
+                status: response.status,
+                statusText: response.statusText,
+                finalUrl: response.url
+              });
             } catch (error) {
               if (request.aborted) return;
               const isAbort = errorName(error) === "AbortError";
@@ -19534,6 +19564,17 @@ const GMNetworkHandler = (() => {
                 error: errorMsg,
                 duration: Date.now() - netLogStartTime
               });
+              request.finalResult = {
+                done: true,
+                type: errorType,
+                response: {
+                  readyState: 4,
+                  status: 0,
+                  statusText: "",
+                  error: errorMsg
+                },
+                error: errorMsg
+              };
               sendEvent(errorType, {
                 readyState: 4,
                 status: 0,
@@ -19544,7 +19585,6 @@ const GMNetworkHandler = (() => {
                 readyState: 4,
                 status: 0
               });
-              XhrManager.remove(requestId);
             } finally {
               clearTimeout(timeoutId);
             }
@@ -19569,6 +19609,14 @@ const GMNetworkHandler = (() => {
           return { success: true };
         }
         return { success: false };
+      }
+      case "GM_xmlhttpRequest_result": {
+        const request = XhrManager.get(data.requestId);
+        if (!request || request.scriptId !== ownedScriptId) return { done: false };
+        if (!request.finalResult) return { done: false };
+        const result = request.finalResult;
+        XhrManager.remove(data.requestId);
+        return result;
       }
       case "GM_webSocket": {
         try {
@@ -19693,6 +19741,15 @@ const GMNetworkHandler = (() => {
           console.error("[ScriptVault] GM_webSocket setup error:", error);
           return { error: errorMessage(error, "WebSocket setup failed") };
         }
+      }
+      case "GM_webSocket_takeEvent": {
+        const record = getGMWebSocketMap().get(data.requestId);
+        if (!record || record.scriptId !== ownedScriptId) return { error: "WebSocket event not found" };
+        const queue = Array.isArray(record._eventQueue) ? record._eventQueue : [];
+        const idx = queue.findIndex((entry2) => entry2?.id === data.eventId);
+        if (idx < 0) return { error: "WebSocket event not found" };
+        const [entry] = queue.splice(idx, 1);
+        return { success: true, event: entry?.data || {} };
       }
       case "GM_webSocket_send": {
         try {
@@ -37897,6 +37954,14 @@ function normalizeGMWebSocketCloseReason(reason) {
 
 function sendGMWebSocketEvent(record, type, eventData = {}) {
   if (!record || typeof record.tabId !== 'number') return;
+  let bridgeEventData = eventData;
+  if (type === 'message') {
+    const eventId = 'ws_evt_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2);
+    record._eventQueue = Array.isArray(record._eventQueue) ? record._eventQueue : [];
+    record._eventQueue.push({ id: eventId, type, data: eventData });
+    if (record._eventQueue.length > 100) record._eventQueue.splice(0, record._eventQueue.length - 100);
+    bridgeEventData = { eventId };
+  }
   try {
     chrome.tabs.sendMessage(record.tabId, {
       action: 'webSocketEvent',
@@ -37904,7 +37969,7 @@ function sendGMWebSocketEvent(record, type, eventData = {}) {
         requestId: record.requestId,
         scriptId: record.scriptId,
         type,
-        ...eventData
+        ...bridgeEventData
       }
     }).catch(() => {});
   } catch (_) {
@@ -39720,9 +39785,11 @@ async function handleMessage(message, sender) {
       // GM network APIs: XHR, WebSocket, and download handling live in the promoted TypeScript module.
       case 'GM_xmlhttpRequest':
       case 'GM_xmlhttpRequest_abort':
+      case 'GM_xmlhttpRequest_result':
       case 'GM_webSocket':
       case 'GM_webSocket_send':
       case 'GM_webSocket_close':
+      case 'GM_webSocket_takeEvent':
       case 'GM_download':
         if (typeof GMNetworkHandler === 'undefined') return { error: 'GMNetworkHandler not available' };
         return await GMNetworkHandler.handleGMNetworkMessage(action, data, sender);
@@ -44562,21 +44629,23 @@ ${req.code}
     // Handle value change notifications (cross-tab sync)
     if (msg.type === 'valueChanged' && msg.scriptId === scriptId) {
       const oldValue = _cache[msg.key];
-      if (msg.newValue === undefined) {
-        delete _cache[msg.key];
-      } else {
-        _cache[msg.key] = msg.newValue;
-      }
-      // Notify value change listeners
-      _valueChangeListeners.forEach((listener) => {
-        if (listener.key === msg.key || listener.key === null) {
-          try {
-            listener.callback(msg.key, oldValue, msg.newValue, msg.remote !== false);
-          } catch (e) {
-            /* silently ignore value change listener errors */
-          }
+      sendToBackground('GM_getValue', { scriptId, key: msg.key }).then((newValue) => {
+        if (newValue === undefined) {
+          delete _cache[msg.key];
+        } else {
+          _cache[msg.key] = newValue;
         }
-      });
+        // Notify value change listeners
+        _valueChangeListeners.forEach((listener) => {
+          if (listener.key === msg.key || listener.key === null) {
+            try {
+              listener.callback(msg.key, oldValue, newValue, msg.remote !== false);
+            } catch (e) {
+              /* silently ignore value change listener errors */
+            }
+          }
+        });
+      }).catch(() => {});
     }
     
     // Handle XHR events
@@ -44586,7 +44655,16 @@ ${req.code}
       
       const { details } = request;
       const eventType = msg.eventType;
-      const eventData = msg.data || {};
+      const eventData = { ...(msg.data || {}) };
+      delete eventData.response;
+      delete eventData.responseText;
+      delete eventData.responseXML;
+      delete eventData.responseHeaders;
+      delete eventData.streamChunk;
+      if (eventType === 'load' || eventType === 'loadend' || eventType === 'error' ||
+          eventType === 'timeout' || eventType === 'abort') {
+        return;
+      }
       
       // Decode binary responses transferred as base64/dataURL
       let responseValue = eventData.response;
@@ -45067,12 +45145,55 @@ ${req.code}
         _xhrRequests.set(requestId, requestEntry);
         _xhrRequests.delete(localId);
         currentMapKey = requestId;
+        pollXhrFinalResult();
       }
     })().catch(err => {
       if (aborted) return;
       if (details.onerror) details.onerror({ error: err.message || 'Request failed', status: 0 });
       _xhrRequests.delete(currentMapKey);
     });
+
+    function dispatchXhrTerminal(eventType, eventData) {
+      if (aborted || requestEntry.aborted) return;
+      const response = eventData || { readyState: 4, status: 0 };
+      if (typeof details.onreadystatechange === 'function') {
+        try { details.onreadystatechange(response); } catch (e) {}
+      }
+      if (eventType === 'load') {
+        if (typeof details.onload === 'function') {
+          try { details.onload(response); } catch (e) {}
+        }
+      } else if (eventType === 'timeout') {
+        if (typeof details.ontimeout === 'function') {
+          try { details.ontimeout(response); } catch (e) {}
+        }
+      } else if (eventType === 'abort') {
+        if (typeof details.onabort === 'function') {
+          try { details.onabort(response); } catch (e) {}
+        }
+      } else if (typeof details.onerror === 'function') {
+        try { details.onerror(response); } catch (e) {}
+      }
+      if (typeof details.onloadend === 'function') {
+        try { details.onloadend(response); } catch (e) {}
+      }
+      _xhrRequests.delete(currentMapKey);
+      if (requestId) _xhrRequests.delete(requestId);
+    }
+
+    function pollXhrFinalResult(attempt = 0) {
+      if (aborted || requestEntry.aborted || !requestId) return;
+      sendToBackground('GM_xmlhttpRequest_result', { scriptId, requestId }).then((result) => {
+        if (aborted || requestEntry.aborted) return;
+        if (!result || result.done !== true) {
+          if (attempt < 600) setTimeout(() => pollXhrFinalResult(attempt + 1), 50);
+          return;
+        }
+        dispatchXhrTerminal(result.type || 'error', result.response || { readyState: 4, status: 0, error: result.error || 'Request failed' });
+      }).catch(() => {
+        if (attempt < 600) setTimeout(() => pollXhrFinalResult(attempt + 1), 50);
+      });
+    }
     
     return control;
   }

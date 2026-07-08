@@ -1031,6 +1031,12 @@ interface GMXmlhttpRequestAbort {
   requestId: string;
 }
 
+interface GMXmlhttpRequestResult {
+  action: 'GM_xmlhttpRequest_result';
+  scriptId: string;
+  requestId: string;
+}
+
 interface GMWebSocket {
   action: 'GM_webSocket';
   scriptId: string;
@@ -1052,6 +1058,13 @@ interface GMWebSocketClose {
   requestId: string;
   code?: number;
   reason?: string;
+}
+
+interface GMWebSocketTakeEvent {
+  action: 'GM_webSocket_takeEvent';
+  scriptId: string;
+  requestId: string;
+  eventId: string;
 }
 
 interface GMDownload {
@@ -1616,8 +1629,8 @@ export type BackgroundMessage =
   | GetFolders | CreateFolder | UpdateFolder | DeleteFolder
   | AddScriptToFolder | RemoveScriptFromFolder | MoveScriptToFolder
   // GM APIs
-  | GMXmlhttpRequest | GMXmlhttpRequestAbort | GMDownload
-  | GMWebSocket | GMWebSocketSend | GMWebSocketClose
+  | GMXmlhttpRequest | GMXmlhttpRequestAbort | GMXmlhttpRequestResult | GMDownload
+  | GMWebSocket | GMWebSocketSend | GMWebSocketClose | GMWebSocketTakeEvent
   | GMNotification | GMUpdateNotification | GMCloseNotification | GMOpenInTab
   | GMRegisterMenuCommand | GMUnregisterMenuCommand
   | GetMenuCommands | ExecuteMenuCommand
@@ -1999,9 +2012,11 @@ export interface ResponseMap {
   GM_listValues: { keys: string[] };
   GM_xmlhttpRequest: SuccessOrError<{ requestId: string }>;
   GM_xmlhttpRequest_abort: SuccessResponse;
+  GM_xmlhttpRequest_result: { done: boolean; type?: string; response?: Record<string, unknown>; error?: string };
   GM_webSocket: SuccessOrError<{ requestId: string }>;
   GM_webSocket_send: SuccessOrError;
   GM_webSocket_close: SuccessResponse;
+  GM_webSocket_takeEvent: SuccessOrError<{ event: Record<string, unknown> }>;
   GM_cookie_list: SuccessOrError<{ cookies: chrome.cookies.Cookie[] }>;
   GM_cookie_set: SuccessOrError<{ cookie?: chrome.cookies.Cookie }>;
   GM_cookie_delete: SuccessOrError;

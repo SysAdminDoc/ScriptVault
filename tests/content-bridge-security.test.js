@@ -224,6 +224,70 @@ describe('content script bridge security boundary', () => {
     }
   });
 
+  it('redacts sensitive background event payloads before posting to the page-visible bridge', () => {
+    const { window: win, chromeMock, channel } = loadContentBridge();
+    const listener = chromeMock.runtime.onMessage.addListener.mock.calls[0][0];
+    const sendResponse = vi.fn();
+
+    listener({
+      action: 'xhrEvent',
+      data: {
+        requestId: 'xhr_1',
+        scriptId: 'script_1',
+        type: 'progress',
+        response: 'secret-body',
+        responseText: 'secret-text',
+        responseHeaders: 'set-cookie: secret=1',
+        responseXML: '<secret />',
+        loaded: 10,
+      },
+    }, {}, sendResponse);
+    const xhrPost = win.postMessage.mock.calls.at(-1)[0];
+    expect(xhrPost).toMatchObject({
+      channel,
+      direction: 'to-userscript',
+      type: 'xhrEvent',
+      data: expect.objectContaining({ requestId: 'xhr_1', loaded: 10 }),
+    });
+    expect(xhrPost.data).not.toHaveProperty('response');
+    expect(xhrPost.data).not.toHaveProperty('responseText');
+    expect(xhrPost.data).not.toHaveProperty('responseHeaders');
+    expect(xhrPost.data).not.toHaveProperty('responseXML');
+
+    listener({
+      action: 'webSocketEvent',
+      data: {
+        requestId: 'ws_1',
+        scriptId: 'script_1',
+        type: 'message',
+        eventId: 'evt_1',
+        payload: 'secret-message',
+      },
+    }, {}, sendResponse);
+    const wsPost = win.postMessage.mock.calls.at(-1)[0];
+    expect(wsPost.data).toEqual(expect.objectContaining({ requestId: 'ws_1', eventId: 'evt_1' }));
+    expect(wsPost.data).not.toHaveProperty('payload');
+
+    listener({
+      action: 'valueChanged',
+      data: {
+        scriptId: 'script_1',
+        key: 'token',
+        oldValue: 'old-secret',
+        newValue: 'new-secret',
+        remote: true,
+      },
+    }, {}, sendResponse);
+    const valuePost = win.postMessage.mock.calls.at(-1)[0];
+    expect(valuePost).toMatchObject({
+      type: 'valueChanged',
+      key: 'token',
+      remote: true,
+    });
+    expect(valuePost).not.toHaveProperty('oldValue');
+    expect(valuePost).not.toHaveProperty('newValue');
+  });
+
   it('normalizes @connect hosts before allowing privileged network calls', () => {
     const { evaluateConnectPolicy, normalizeConnectHost } = loadConnectPolicyHelpers();
     const script = {
