@@ -732,7 +732,13 @@
         }
         const running = scripts.filter(s => s.status === 'running').length;
         const order = { error: 0, blocked: 1, 'not-registered': 2, 'no-match': 3, disabled: 4, paused: 5, 'on-demand': 6, scheduled: 7, background: 8, running: 9 };
-        const sorted = scripts.slice().sort((a, b) => (order[a.status] ?? 99) - (order[b.status] ?? 99) || a.name.localeCompare(b.name));
+        const sorted = scripts.slice().sort((a, b) => {
+            const statusOrder = (order[a.status] ?? 99) - (order[b.status] ?? 99);
+            if (statusOrder !== 0) return statusOrder;
+            const nameA = String(a.name || a.id || '');
+            const nameB = String(b.name || b.id || '');
+            return nameA.localeCompare(nameB);
+        });
         let html = `<div class="diagnose-summary">${escapeHtml(
             running === scripts.length
                 ? 'All matching scripts are running on this page.'

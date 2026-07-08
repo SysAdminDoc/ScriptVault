@@ -381,6 +381,9 @@ describe('Per-tab run diagnostics (2026-07 feature)', () => {
     // Names/reasons from the background are escaped before innerHTML.
     expect(src).toContain('escapeHtml(s.name');
     expect(src).toContain('escapeHtml(s.reason');
+    expect(src).toContain("const nameA = String(a.name || a.id || '');");
+    expect(src).toContain("const nameB = String(b.name || b.id || '');");
+    expect(src).not.toContain('a.name.localeCompare(b.name)');
   });
 });
 
