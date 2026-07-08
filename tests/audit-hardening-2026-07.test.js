@@ -56,6 +56,26 @@ describe('Vim key-mapping setting is wired (2026-07 regression)', () => {
   });
 });
 
+describe('Update confirmation diff modal sequencing (2026-07 regression)', () => {
+  const src = read('pages/dashboard.js');
+
+  it('waits for the diff modal to close before reopening update confirmation', () => {
+    const diffStart = src.indexOf('function showDiffView');
+    const diffEnd = src.indexOf('// Precomputed conflict cache', diffStart);
+    const diffSource = src.slice(diffStart, diffEnd);
+    expect(diffSource).toContain('return new Promise(resolve => {');
+    expect(diffSource).toContain('modalDismissHandler = null;');
+    expect(diffSource).toContain('closeModalShell();');
+    expect(diffSource).toContain('], { onDismiss: () => finish() });');
+
+    const confirmStart = src.indexOf('const askConfirmation = () => new Promise');
+    const confirmEnd = src.indexOf("if (choice !== 'install') return false;", confirmStart);
+    const confirmSource = src.slice(confirmStart, confirmEnd);
+    expect(confirmSource).toContain('await showDiffView(');
+    expect(confirmSource).not.toMatch(/\n\s+showDiffView\(/);
+  });
+});
+
 describe('KeyboardNav does not hijack focused row controls (2026-07 regression)', () => {
   const src = read('pages/dashboard-keyboard.js');
   it('adds an interactive-control focus guard', () => {

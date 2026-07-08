@@ -10596,9 +10596,20 @@
         const summary = `<div class="diff-summary"><span class="diff-add-count">+${additions}</span> <span class="diff-del-count">-${deletions}</span> <span class="diff-unch-count">${unchanged} unchanged</span></div>`;
         const header = `<div class="diff-header"><span>${escapeHtml(oldLabel)}</span> vs <span>${escapeHtml(newLabel)}</span></div>`;
 
-        showModal('Version Diff', `${header}${summary}<div class="diff-container">${diffHtml || '<div style="padding:20px;text-align:center;color:var(--text-muted)">No differences found</div>'}</div>`, [
-            { label: 'Close', callback: () => hideModal() }
-        ]);
+        if (!elements.modal) return Promise.resolve();
+        return new Promise(resolve => {
+            let settled = false;
+            const finish = () => {
+                if (settled) return;
+                settled = true;
+                modalDismissHandler = null;
+                closeModalShell();
+                resolve();
+            };
+            showModal('Version Diff', `${header}${summary}<div class="diff-container">${diffHtml || '<div style="padding:20px;text-align:center;color:var(--text-muted)">No differences found</div>'}</div>`, [
+                { label: 'Close', callback: () => finish() }
+            ], { onDismiss: () => finish() });
+        });
     }
 
     // Precomputed conflict cache (rebuilt each render, avoids O(n^2) per row)
@@ -11056,7 +11067,7 @@
             while (true) {
                 const choice = await askConfirmation();
                 if (choice === 'diff') {
-                    showDiffView(
+                    await showDiffView(
                         script?.code || '',
                         update.code || '',
                         `v${oldVersion}`,
