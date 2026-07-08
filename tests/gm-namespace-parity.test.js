@@ -40,16 +40,20 @@ describe('GM namespace parity', () => {
       expect(source, `${label} missing GM.fetch namespace alias`).toContain('fetch: GM_fetch');
       expect(source, `${label} missing direct GM_fetch export`).toContain('window.GM_fetch = GM_fetch');
       expect(source, `${label} missing guarded XHR grant reuse`).toContain('allowFetchGrant');
-      expect(source, `${label} missing existing XHR bridge reuse`).toContain("_GM_xmlhttpRequestPromise({");
+      expect(source, `${label} missing streaming response support`).toContain('new ReadableStream');
+      expect(source, `${label} missing streaming XHR bridge reuse`).toContain("responseType: 'stream'");
+      expect(source, `${label} missing binary stream chunk transport`).toContain("streamEncoding: 'base64'");
+      expect(source, `${label} missing privileged stream result polling`).toContain('takeStream: true');
+      expect(source, `${label} missing fallback XHR bridge reuse`).toContain("_GM_xmlhttpRequestPromise({");
     }
 
     const core = readSource('src/background/core.ts');
     expect(core).not.toContain("case 'GM_fetch'");
     expect(core).toContain("case 'GM_xmlhttpRequest'");
 
-    const docs = readSource('docs/gm-namespace-parity.md');
-    expect(docs).toContain('`GM.fetch` is shipped as a guarded compatibility alias');
-    expect(docs).toContain('host-scope checks');
-    expect(docs).toContain('GM_xmlhttpRequest');
+    const readme = readSource('README.md');
+    expect(readme).toContain('`GM.fetch`');
+    expect(readme).toContain('ReadableStream');
+    expect(readme).toContain('@connect');
   });
 });

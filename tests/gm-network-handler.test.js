@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ReadableStream } from 'node:stream/web';
 import {
   GM_NETWORK_ACTIONS,
   handleGMNetworkMessage,
@@ -49,6 +50,23 @@ function restoreGlobal(key) {
 async function flushNetworkTasks() {
   await Promise.resolve();
   await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+function chunkedResponse(chunks, init = {}) {
+  const encoder = new TextEncoder();
+  return new Response(new ReadableStream({
+    start(controller) {
+      for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+      controller.close();
+    },
+  }), init);
+}
+
+function decodeStreamChunk(chunk) {
+  const payload = chunk?.response;
+  expect(payload).toMatchObject({ __sv_base64__: true, data: expect.any(String) });
+  const bytes = Uint8Array.from(atob(payload.data), (char) => char.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
 }
 
 describe('GM network handler', () => {
@@ -210,6 +228,63 @@ describe('GM network handler', () => {
       }),
     });
     expect(globalThis.XhrManager.remove).toHaveBeenCalledWith('xhr_1');
+  });
+
+  it('streams GM.fetch-compatible response chunks through privileged result polling', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(chunkedResponse(['alpha', 'beta'], {
+      status: 206,
+      statusText: 'Partial Content',
+      headers: {
+        'content-length': '9',
+        'content-type': 'text/plain',
+      },
+    }));
+
+    await expect(handleGMNetworkMessage('GM_xmlhttpRequest', {
+      scriptId: 'script-1',
+      url: 'https://api.example.com/stream',
+      responseType: 'stream',
+      streamEncoding: 'base64',
+    }, { tab: { id: 7 } })).resolves.toEqual({ requestId: 'xhr_1', started: true });
+
+    await vi.waitFor(() => {
+      expect(xhrRequests.get('xhr_1')?.finalResult).toMatchObject({
+        done: true,
+        type: 'load',
+      });
+    });
+
+    const result = await handleGMNetworkMessage('GM_xmlhttpRequest_result', {
+      scriptId: 'script-1',
+      requestId: 'xhr_1',
+      takeStream: true,
+    });
+
+    expect(result).toMatchObject({
+      done: true,
+      type: 'load',
+      meta: {
+        status: 206,
+        statusText: 'Partial Content',
+        finalUrl: 'https://api.example.com/stream',
+      },
+      streamChunks: expect.any(Array),
+    });
+    expect(result.streamChunks.map(decodeStreamChunk)).toEqual(['alpha', 'beta']);
+    expect(result.response).toMatchObject({
+      response: null,
+      responseText: '',
+      finalUrl: 'https://api.example.com/stream',
+    });
+    expect(globalThis.XhrManager.remove).toHaveBeenCalledWith('xhr_1');
+
+    for (const [, message] of chrome.tabs.sendMessage.mock.calls) {
+      if (message?.action !== 'xhrEvent') continue;
+      expect(message.data).not.toHaveProperty('response');
+      expect(message.data).not.toHaveProperty('responseText');
+      expect(message.data).not.toHaveProperty('responseHeaders');
+      expect(message.data).not.toHaveProperty('streamChunk');
+    }
   });
 
   it('aborts tracked GM_xmlhttpRequest entries', async () => {

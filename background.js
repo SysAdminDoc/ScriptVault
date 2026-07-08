@@ -19571,12 +19571,18 @@ const GMNetworkHandler = (() => {
                 throw new Error(internalXhrError("GM_xmlhttpRequest redirected to internal host", xhrPostCheck));
               }
               const responseHeaders = [...response.headers.entries()].map(([key, value]) => `${key}: ${value}`).join("\r\n");
+              request.streamMeta = {
+                status: response.status,
+                statusText: response.statusText,
+                responseHeaders,
+                finalUrl: response.url || data.url
+              };
               sendEvent("readystatechange", {
                 readyState: 2,
                 status: response.status,
                 statusText: response.statusText,
                 responseHeaders,
-                finalUrl: response.url
+                finalUrl: response.url || data.url
               });
               const contentLength = parseInt(response.headers.get("content-length") || "0", 10);
               const maxBytes = GM_DOWNLOAD_FETCH_MAX_BYTES;
@@ -19621,10 +19627,11 @@ const GMNetworkHandler = (() => {
                 });
               } else if (data.responseType === "stream") {
                 const reader = response.body?.getReader();
+                const streamAsBase64 = data.streamEncoding === "base64";
                 if (reader) {
                   let loaded = 0;
                   const chunks = [];
-                  const decoder = new TextDecoder();
+                  const decoder = streamAsBase64 ? null : new TextDecoder();
                   try {
                     while (true) {
                       const { done, value } = await reader.read();
@@ -19634,22 +19641,32 @@ const GMNetworkHandler = (() => {
                         await reader.cancel();
                         throw new Error(`Streamed response exceeds ${formatBytes(maxBytes)} limit.`);
                       }
-                      const chunkText = decoder.decode(value, { stream: true });
-                      chunks.push(chunkText);
+                      let chunkText = "";
+                      if (streamAsBase64) {
+                        if (!Array.isArray(request.streamChunks)) request.streamChunks = [];
+                        request.streamChunks.push({
+                          response: { __sv_base64__: true, data: encodeBytesToBase64(value) },
+                          loaded,
+                          total: contentLength || 0
+                        });
+                      } else {
+                        chunkText = decoder.decode(value, { stream: true });
+                        chunks.push(chunkText);
+                      }
                       sendEvent("progress", {
                         readyState: 3,
                         lengthComputable: contentLength > 0,
                         loaded,
                         total: contentLength || 0,
                         responseText: chunkText,
-                        streamChunk: true
+                        streamChunk: !streamAsBase64
                       });
                     }
                   } finally {
                     reader.releaseLock();
                   }
-                  responseText = chunks.join("");
-                  responseData = responseText;
+                  responseText = streamAsBase64 ? "" : chunks.join("");
+                  responseData = streamAsBase64 ? null : responseText;
                 } else {
                   responseText = await response.text();
                   responseData = responseText;
@@ -19677,8 +19694,8 @@ const GMNetworkHandler = (() => {
                 statusText: response.statusText,
                 responseHeaders,
                 response: responseData,
-                responseText: responseText || (typeof responseData === "string" ? responseData : JSON.stringify(responseData)),
-                finalUrl: response.url,
+                responseText: responseText || (typeof responseData === "string" ? responseData : responseData == null ? "" : JSON.stringify(responseData)),
+                finalUrl: response.url || data.url,
                 lengthComputable: true,
                 loaded: responseText?.length || 0,
                 total: responseText?.length || 0
@@ -19762,6 +19779,23 @@ const GMNetworkHandler = (() => {
       case "GM_xmlhttpRequest_result": {
         const request = XhrManager.get(data.requestId);
         if (!request || request.scriptId !== ownedScriptId) return { done: false };
+        if (data.takeStream === true) {
+          const streamChunks = Array.isArray(request.streamChunks) && request.streamChunks.length ? request.streamChunks.splice(0, request.streamChunks.length) : [];
+          if (!request.finalResult) {
+            return {
+              done: false,
+              meta: request.streamMeta || null,
+              streamChunks
+            };
+          }
+          const result2 = {
+            ...request.finalResult,
+            meta: request.streamMeta || null,
+            streamChunks
+          };
+          XhrManager.remove(data.requestId);
+          return result2;
+        }
         if (!request.finalResult) return { done: false };
         const result = request.finalResult;
         XhrManager.remove(data.requestId);
@@ -46072,6 +46106,61 @@ ${req.code}
     return headers;
   }
 
+  function _gmFetchBase64ToBytes(data) {
+    const binary = atob(data || '');
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  }
+
+  function _gmFetchDelay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  async function _gmFetchSerializeBody(body) {
+    if (!body || typeof body === 'string' || body instanceof ArrayBuffer || ArrayBuffer.isView(body)) return body;
+    if (typeof body.getReader === 'function') throw new Error('GM.fetch does not support streaming request bodies');
+    if (body instanceof URLSearchParams) return body.toString();
+    function _ab2b64(buf) {
+      const bytes = new Uint8Array(buf), chunk = 8192;
+      let s = '';
+      for (let i = 0; i < bytes.length; i += chunk) s += String.fromCharCode(...bytes.subarray(i, i + chunk));
+      return btoa(s);
+    }
+    if (body instanceof Blob || body instanceof File) {
+      const buf = await body.arrayBuffer();
+      return { __sv_blob__: true, b64: _ab2b64(buf), type: body.type, name: body instanceof File ? body.name : undefined };
+    }
+    if (body instanceof FormData) {
+      const entries = [];
+      for (const [name, val] of body.entries()) {
+        if (val instanceof Blob || val instanceof File) {
+          const buf = await val.arrayBuffer();
+          entries.push({ name, b64: _ab2b64(buf), type: val.type, filename: val instanceof File ? val.name : 'blob' });
+        } else {
+          entries.push({ name, value: val });
+        }
+      }
+      return { __sv_formdata__: true, entries };
+    }
+    return body;
+  }
+
+  function _gmFetchBuildResponse(meta, body, fallbackUrl) {
+    const status = Number(meta && meta.status);
+    const responseStatus = status >= 200 && status <= 599 ? status : 200;
+    const noBodyStatus = responseStatus === 204 || responseStatus === 205 || responseStatus === 304;
+    const fetchResponse = new Response(noBodyStatus ? null : body, {
+      status: responseStatus,
+      statusText: (meta && meta.statusText) || '',
+      headers: _gmFetchParseResponseHeaders((meta && meta.responseHeaders) || '')
+    });
+    try {
+      Object.defineProperty(fetchResponse, 'url', { value: (meta && meta.finalUrl) || fallbackUrl, configurable: true });
+    } catch (e) {}
+    return fetchResponse;
+  }
+
   async function GM_fetch(input, init = {}) {
     if (!hasGrant('GM_fetch') && !hasGrant('GM.fetch') &&
         !hasGrant('GM_xmlhttpRequest') && !hasGrant('GM.xmlHttpRequest')) {
@@ -46101,15 +46190,149 @@ ${req.code}
     const signal = fetchInit.signal;
     if (signal && signal.aborted) throw _gmFetchAbortError();
 
-    const xhrPromise = _GM_xmlhttpRequestPromise({
+    const requestPayload = {
       method,
       url,
       headers,
       data: body,
-      responseType: 'arraybuffer',
       anonymous: (fetchInit.credentials || (request && request.credentials)) === 'omit',
       noCache: fetchInit.cache === 'no-store' || fetchInit.cache === 'reload' || (request && (request.cache === 'no-store' || request.cache === 'reload')),
       redirect: fetchInit.redirect || (request && request.redirect)
+    };
+
+    if (typeof ReadableStream === 'function') {
+      const serializedBody = await _gmFetchSerializeBody(body);
+      let requestId = null;
+      let streamController = null;
+      let responseSettled = false;
+      let streamSettled = false;
+      let abortHandler;
+      let abortPending = false;
+
+      let resolveResponse;
+      let rejectResponse;
+      const responsePromise = new Promise((resolve, reject) => {
+        resolveResponse = resolve;
+        rejectResponse = reject;
+      });
+
+      const abortRequest = () => {
+        if (streamSettled) return;
+        streamSettled = true;
+        if (requestId) sendToBackground('GM_xmlhttpRequest_abort', { scriptId, requestId }).catch(() => {});
+        else abortPending = true;
+        if (!responseSettled) {
+          responseSettled = true;
+          rejectResponse(_gmFetchAbortError());
+        }
+        try { streamController?.error?.(_gmFetchAbortError()); } catch (e) {}
+      };
+
+      const bodyStream = new ReadableStream({
+        start(controller) {
+          streamController = controller;
+        },
+        cancel() {
+          abortRequest();
+        }
+      });
+
+      if (signal && typeof signal.addEventListener === 'function') {
+        abortHandler = abortRequest;
+        signal.addEventListener('abort', abortHandler, { once: true });
+      }
+
+      const cleanupSignal = () => {
+        if (signal && abortHandler && typeof signal.removeEventListener === 'function') {
+          signal.removeEventListener('abort', abortHandler);
+        }
+      };
+
+      const settleResponse = (meta) => {
+        if (responseSettled) return;
+        responseSettled = true;
+        resolveResponse(_gmFetchBuildResponse(meta, bodyStream, url));
+      };
+
+      const failStream = (error) => {
+        streamSettled = true;
+        cleanupSignal();
+        if (!responseSettled) {
+          responseSettled = true;
+          rejectResponse(error);
+        } else {
+          try { streamController?.error?.(error); } catch (e) {}
+        }
+      };
+
+      const enqueueChunks = (chunks) => {
+        if (!Array.isArray(chunks) || !chunks.length || streamSettled) return;
+        for (const chunk of chunks) {
+          const responseChunk = chunk && chunk.response;
+          if (responseChunk && responseChunk.__sv_base64__) {
+            streamController.enqueue(_gmFetchBase64ToBytes(responseChunk.data));
+          } else if (typeof chunk.responseText === 'string') {
+            streamController.enqueue(new TextEncoder().encode(chunk.responseText));
+          }
+        }
+      };
+
+      const started = await sendToBackground('GM_xmlhttpRequest', {
+        scriptId,
+        ...requestPayload,
+        data: serializedBody,
+        responseType: 'stream',
+        streamEncoding: 'base64'
+      });
+
+      if (!started || started.error || !started.requestId) {
+        cleanupSignal();
+        throw new Error(started?.error || 'GM.fetch failed to start');
+      }
+      requestId = started.requestId;
+      if (abortPending || (signal && signal.aborted)) {
+        sendToBackground('GM_xmlhttpRequest_abort', { scriptId, requestId }).catch(() => {});
+        return responsePromise;
+      }
+
+      (async () => {
+        try {
+          for (;;) {
+            if (signal && signal.aborted) throw _gmFetchAbortError();
+            const result = await sendToBackground('GM_xmlhttpRequest_result', {
+              scriptId,
+              requestId,
+              takeStream: true
+            });
+            if (result?.meta) settleResponse(result.meta);
+            enqueueChunks(result?.streamChunks);
+
+            if (result?.done === true) {
+              const terminalType = result.type || 'error';
+              if (terminalType === 'load') {
+                settleResponse(result.meta || result.response || {});
+                streamSettled = true;
+                cleanupSignal();
+                try { streamController.close(); } catch (e) {}
+              } else {
+                const message = result.error || result.response?.error || 'GM.fetch request failed';
+                failStream(new Error(message));
+              }
+              return;
+            }
+            await _gmFetchDelay(25);
+          }
+        } catch (error) {
+          failStream((signal && signal.aborted) ? _gmFetchAbortError() : error);
+        }
+      })();
+
+      return responsePromise;
+    }
+
+    const xhrPromise = _GM_xmlhttpRequestPromise({
+      ...requestPayload,
+      responseType: 'arraybuffer',
     }, { allowFetchGrant: true });
 
     let abortHandler;

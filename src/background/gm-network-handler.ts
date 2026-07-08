@@ -267,13 +267,19 @@ export async function handleGMNetworkMessage(
             const responseHeaders = [...response.headers.entries()]
               .map(([key, value]) => `${key}: ${value}`)
               .join('\r\n');
+            request.streamMeta = {
+              status: response.status,
+              statusText: response.statusText,
+              responseHeaders,
+              finalUrl: response.url || data.url,
+            };
 
             sendEvent('readystatechange', {
               readyState: 2,
               status: response.status,
               statusText: response.statusText,
               responseHeaders,
-              finalUrl: response.url,
+              finalUrl: response.url || data.url,
             });
 
             const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
@@ -321,10 +327,11 @@ export async function handleGMNetworkMessage(
               });
             } else if (data.responseType === 'stream') {
               const reader = response.body?.getReader();
+              const streamAsBase64 = data.streamEncoding === 'base64';
               if (reader) {
                 let loaded = 0;
                 const chunks: string[] = [];
-                const decoder = new TextDecoder();
+                const decoder = streamAsBase64 ? null : new TextDecoder();
                 try {
                   while (true) {
                     const { done, value } = await reader.read();
@@ -334,22 +341,32 @@ export async function handleGMNetworkMessage(
                       await reader.cancel();
                       throw new Error(`Streamed response exceeds ${formatBytes(maxBytes)} limit.`);
                     }
-                    const chunkText = decoder.decode(value, { stream: true });
-                    chunks.push(chunkText);
+                    let chunkText = '';
+                    if (streamAsBase64) {
+                      if (!Array.isArray(request.streamChunks)) request.streamChunks = [];
+                      request.streamChunks.push({
+                        response: { __sv_base64__: true, data: encodeBytesToBase64(value) },
+                        loaded,
+                        total: contentLength || 0,
+                      });
+                    } else {
+                      chunkText = decoder!.decode(value, { stream: true });
+                      chunks.push(chunkText);
+                    }
                     sendEvent('progress', {
                       readyState: 3,
                       lengthComputable: contentLength > 0,
                       loaded,
                       total: contentLength || 0,
                       responseText: chunkText,
-                      streamChunk: true,
+                      streamChunk: !streamAsBase64,
                     });
                   }
                 } finally {
                   reader.releaseLock();
                 }
-                responseText = chunks.join('');
-                responseData = responseText;
+                responseText = streamAsBase64 ? '' : chunks.join('');
+                responseData = streamAsBase64 ? null : responseText;
               } else {
                 responseText = await response.text();
                 responseData = responseText;
@@ -379,8 +396,8 @@ export async function handleGMNetworkMessage(
               statusText: response.statusText,
               responseHeaders,
               response: responseData,
-              responseText: responseText || (typeof responseData === 'string' ? responseData : JSON.stringify(responseData)),
-              finalUrl: response.url,
+              responseText: responseText || (typeof responseData === 'string' ? responseData : (responseData == null ? '' : JSON.stringify(responseData))),
+              finalUrl: response.url || data.url,
               lengthComputable: true,
               loaded: responseText?.length || 0,
               total: responseText?.length || 0,
@@ -471,6 +488,25 @@ export async function handleGMNetworkMessage(
     case 'GM_xmlhttpRequest_result': {
       const request = XhrManager.get(data.requestId);
       if (!request || request.scriptId !== ownedScriptId) return { done: false };
+      if (data.takeStream === true) {
+        const streamChunks = Array.isArray(request.streamChunks) && request.streamChunks.length
+          ? request.streamChunks.splice(0, request.streamChunks.length)
+          : [];
+        if (!request.finalResult) {
+          return {
+            done: false,
+            meta: request.streamMeta || null,
+            streamChunks,
+          };
+        }
+        const result = {
+          ...request.finalResult,
+          meta: request.streamMeta || null,
+          streamChunks,
+        };
+        XhrManager.remove(data.requestId);
+        return result;
+      }
       if (!request.finalResult) return { done: false };
       const result = request.finalResult;
       XhrManager.remove(data.requestId);

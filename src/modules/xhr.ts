@@ -22,6 +22,8 @@ interface XhrRequest {
     response?: Record<string, unknown>;
     error?: string;
   };
+  streamMeta?: Record<string, unknown>;
+  streamChunks?: Array<Record<string, unknown>>;
   _cleanupTimer?: ReturnType<typeof setTimeout>;
 }
 

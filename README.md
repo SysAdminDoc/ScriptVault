@@ -49,12 +49,14 @@ Full Greasemonkey/Tampermonkey API compatibility with promise-based `GM.*` async
 | `GM_getValues` | | `GM_getMenuCommands` | `GM_getResourceText` |
 | `GM_setValues` | `GM_webSocket` | `GM_addElement` | `GM_getResourceURL` |
 | `GM_deleteValues` | `GM_head` | `GM_loadScript` | `GM_cookie` |
-| `GM_addValueChangeListener` | | `GM_audio` | `GM_focusTab` |
+| `GM_addValueChangeListener` | `GM.fetch` | `GM_audio` | `GM_focusTab` |
 | `GM_removeValueChangeListener` | | | |
 
 Plus `GM_getTab`, `GM_saveTab`, `GM_getTabs` for cross-tab state, `window.close`, `window.focus`, `window.onurlchange` grants, `@top-level-await`, `@delay`, and `@nodownload` support.
 
 TypeScript userscripts can reference `lib/scriptvault.d.ts` for generated ambient declarations that match ScriptVault's GM API surface.
+
+`GM.fetch` returns a Fetch-compatible `Response`; modern browser contexts expose `res.body` as a `ReadableStream` so scripts can read cross-origin responses chunk-by-chunk while ScriptVault still applies the script's `@connect` hosts and internal-host guards. Older contexts fall back to the existing `GM_xmlhttpRequest` response path.
 
 #### SPA URL Changes
 

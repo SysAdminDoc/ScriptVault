@@ -1018,6 +1018,7 @@ interface GMXmlhttpRequest {
   headers?: Record<string, string>;
   data?: unknown;
   responseType?: string;
+  streamEncoding?: string;
   timeout?: number;
   anonymous?: boolean;
   partitionKey?: chrome.cookies.CookiePartitionKey;
@@ -1035,6 +1036,7 @@ interface GMXmlhttpRequestResult {
   action: 'GM_xmlhttpRequest_result';
   scriptId: string;
   requestId: string;
+  takeStream?: boolean;
 }
 
 interface GMWebSocket {
@@ -2027,7 +2029,14 @@ export interface ResponseMap {
   GM_listValues: { keys: string[] };
   GM_xmlhttpRequest: SuccessOrError<{ requestId: string }>;
   GM_xmlhttpRequest_abort: SuccessResponse;
-  GM_xmlhttpRequest_result: { done: boolean; type?: string; response?: Record<string, unknown>; error?: string };
+  GM_xmlhttpRequest_result: {
+    done: boolean;
+    type?: string;
+    response?: Record<string, unknown>;
+    error?: string;
+    meta?: Record<string, unknown> | null;
+    streamChunks?: Array<Record<string, unknown>>;
+  };
   GM_webSocket: SuccessOrError<{ requestId: string }>;
   GM_webSocket_send: SuccessOrError;
   GM_webSocket_close: SuccessResponse;
