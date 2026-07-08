@@ -462,7 +462,7 @@ const ScriptDebugger = (() => {
     return frag;
   }
 
-  function renderVariableTable() {
+  async function renderVariableTable() {
     if (!_container) return;
     const container = _container.querySelector('#dbg-var-container');
     if (!container) return;
@@ -473,7 +473,7 @@ const ScriptDebugger = (() => {
       return;
     }
 
-    const vars = getVariableStore(_activeScriptId);
+    const vars = await getVariableStore(_activeScriptId);
     if (!vars || Object.keys(vars).length === 0) {
       container.appendChild(el('div', { class: 'dbg-empty', text: 'No stored variables found for this script.' }));
       return;
@@ -513,9 +513,8 @@ const ScriptDebugger = (() => {
           if (e.key === 'Enter') {
             let newVal = editInput.value;
             try { newVal = JSON.parse(newVal); } catch { /* keep as string */ }
-            setVariable(_activeScriptId, key, newVal);
             _editingVar = null;
-            renderVariableTable();
+            setVariable(_activeScriptId, key, newVal).finally(() => renderVariableTable());
           } else if (e.key === 'Escape') {
             _editingVar = null;
             renderVariableTable();
@@ -559,8 +558,7 @@ const ScriptDebugger = (() => {
         title: 'Delete variable',
       });
       delBtn.addEventListener('click', () => {
-        deleteVariable(_activeScriptId, key);
-        renderVariableTable();
+        deleteVariable(_activeScriptId, key).finally(() => renderVariableTable());
       });
       actionsCell.appendChild(delBtn);
       row.appendChild(actionsCell);
@@ -651,7 +649,18 @@ const ScriptDebugger = (() => {
 
   /* ── Storage abstraction (chrome.storage or localStorage fallback) */
 
-  function getVariableStore(scriptId) {
+  async function getVariableStore(scriptId) {
+    if (!scriptId) return {};
+    if (typeof chrome !== 'undefined' && typeof chrome.runtime?.sendMessage === 'function') {
+      try {
+        const response = await chrome.runtime.sendMessage({ action: 'getScriptValues', scriptId });
+        if (response && typeof response === 'object' && response.values && typeof response.values === 'object') {
+          return response.values;
+        }
+      } catch {
+        // Fall through to localStorage for test/non-extension contexts.
+      }
+    }
     const prefix = `SV_GM_${scriptId}_`;
     const result = {};
     try {
@@ -672,15 +681,32 @@ const ScriptDebugger = (() => {
     return result;
   }
 
-  function setVariable(scriptId, key, value) {
+  async function setVariable(scriptId, key, value) {
     if (!scriptId) return;
+    if (typeof chrome !== 'undefined' && typeof chrome.runtime?.sendMessage === 'function') {
+      try {
+        const response = await chrome.runtime.sendMessage({ action: 'GM_setValue', scriptId, key, value });
+        if (!response?.error) return;
+      } catch {
+        // Fall through to localStorage for test/non-extension contexts.
+      }
+    }
     const storeKey = `SV_GM_${scriptId}_${key}`;
     try {
       localStorage.setItem(storeKey, JSON.stringify(value));
     } catch { /* silent */ }
   }
 
-  function deleteVariable(scriptId, key) {
+  async function deleteVariable(scriptId, key) {
+    if (!scriptId) return;
+    if (typeof chrome !== 'undefined' && typeof chrome.runtime?.sendMessage === 'function') {
+      try {
+        const response = await chrome.runtime.sendMessage({ action: 'deleteScriptValue', scriptId, key });
+        if (!response?.error) return;
+      } catch {
+        // Fall through to localStorage for test/non-extension contexts.
+      }
+    }
     const storeKey = `SV_GM_${scriptId}_${key}`;
     try {
       localStorage.removeItem(storeKey);
@@ -731,6 +757,29 @@ const ScriptDebugger = (() => {
     return proxy;
   }
 
+  function ingestConsoleEntries(scriptId, entries = []) {
+    if (!scriptId || !Array.isArray(entries) || entries.length === 0) return 0;
+    ensureScript(scriptId);
+    const target = _consoleLogs[scriptId];
+    const seen = new Set(target.map(entry => `${entry.time}|${entry.level}|${JSON.stringify(entry.args)}`));
+    let added = 0;
+    for (const entry of entries) {
+      const normalized = {
+        level: entry.level || 'log',
+        args: Array.isArray(entry.args) ? entry.args : [entry.message ?? entry.detail ?? ''],
+        time: Number(entry.time || entry.timestamp || Date.now()),
+      };
+      const key = `${normalized.time}|${normalized.level}|${JSON.stringify(normalized.args)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      target.push(normalized);
+      added++;
+    }
+    while (target.length > MAX_CONSOLE_ENTRIES) target.shift();
+    if (added && _activeTab === 'console' && _activeScriptId === scriptId) render();
+    return added;
+  }
+
   /* ── Public API ─────────────────────────────────────────────────── */
 
   return {
@@ -776,6 +825,10 @@ const ScriptDebugger = (() => {
       ensureScript(scriptId);
       if (!_activeScriptId) _activeScriptId = scriptId;
       return createConsoleProxy(scriptId);
+    },
+
+    ingestConsoleEntries(scriptId, entries) {
+      return ingestConsoleEntries(scriptId, entries);
     },
 
     /**

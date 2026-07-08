@@ -360,6 +360,7 @@
     const SCRIPT_SEARCH_DEBOUNCE_MS = 90;
     const SCRIPT_TABLE_VIRTUAL_ROW_HEIGHT = 72;
     const SCRIPT_TABLE_VIRTUAL_MAX_ROWS = 60;
+    const DASHBOARD_TELEMETRY_SYNC_MS = 5000;
     const DASHBOARD_TABS = ['scripts', 'updates', 'settings', 'utilities', 'trash', 'help'];
     const OAUTH_SYNC_PROVIDERS = ['googledrive', 'dropbox', 'onedrive'];
     const ALL_SYNC_PROVIDERS = ['none', 'webdav', 'googledrive', 'dropbox', 'onedrive', 's3'];
@@ -374,6 +375,12 @@
     let findScriptsFocusManaged = false;
     let scriptSearchTimer = null;
     let commandPaletteReturnFocus = null;
+    let dashboardTelemetryTimer = null;
+    let dashboardTelemetryStatsSeeded = false;
+    const dashboardTelemetryStatsSeen = new Map();
+    const dashboardTelemetryConsoleSeen = new Map();
+    const dashboardTelemetryErrorsSeen = new Set();
+    const dashboardTelemetryGistSyncing = new Set();
     const PROGRESS_BACKGROUND_SELECTORS = ['.skip-link', '.tm-header', '#viewSettingsBar', '#setupWarning', '#mainContent', '#editorOverlay', '#findScriptsOverlay', '#modal', '#commandPalette'];
     const EDITOR_BACKGROUND_SELECTORS = ['.skip-link', '.tm-header', '#viewSettingsBar', '#setupWarning', '#mainContent'];
     const FIND_SCRIPTS_BACKGROUND_SELECTORS = ['.skip-link', '.tm-header', '#mainContent'];
@@ -2286,6 +2293,7 @@
         await loadSettings();
         await loadFolders();
         await loadScripts();
+        initDashboardTelemetryBus();
         restoreScriptWorkspaceStateFromQuery();
         try { initEditor(); } catch (e) { console.error('[ScriptVault] Editor init failed:', e); }
         initEventListeners();
@@ -2306,6 +2314,7 @@
 
         // v2.0 Module Initialization
         initV2Modules();
+        syncDashboardTelemetry();
         // Apply the persisted key-mapping setting to KeyboardNav (must run after
         // initV2Modules where KeyboardNav is created) so "Vim" takes effect.
         applyKeyMapping(state.settings.keyMapping || 'default');
@@ -2402,6 +2411,193 @@
         return Array.isArray(state.scripts) ? state.scripts.slice() : [];
     }
 
+    function publishDashboardTelemetry(type, payload = {}) {
+        const event = {
+            type,
+            timestamp: Number(payload.timestamp || Date.now()),
+            scriptId: payload.scriptId || state.currentScriptId || '',
+            scriptName: payload.scriptName || getScriptById(payload.scriptId || state.currentScriptId || '')?.metadata?.name || '',
+            ...payload
+        };
+
+        try {
+            window.dispatchEvent(new CustomEvent('scriptvault:dashboard-telemetry', { detail: event }));
+        } catch {
+            // CustomEvent can be unavailable in stripped-down test contexts.
+        }
+
+        const heatmapType = {
+            scriptExecuted: typeof ActivityHeatmap !== 'undefined' ? ActivityHeatmap.ACTIVITY_TYPES?.EXECUTION : null,
+            scriptEdited: typeof ActivityHeatmap !== 'undefined' ? ActivityHeatmap.ACTIVITY_TYPES?.EDIT : null,
+            scriptCreated: typeof ActivityHeatmap !== 'undefined' ? ActivityHeatmap.ACTIVITY_TYPES?.INSTALL : null,
+            scriptInstalled: typeof ActivityHeatmap !== 'undefined' ? ActivityHeatmap.ACTIVITY_TYPES?.INSTALL : null,
+            scriptUpdated: typeof ActivityHeatmap !== 'undefined' ? ActivityHeatmap.ACTIVITY_TYPES?.EDIT : null,
+            scriptError: typeof ActivityHeatmap !== 'undefined' ? ActivityHeatmap.ACTIVITY_TYPES?.ERROR : null,
+        }[type];
+        if (heatmapType && typeof ActivityHeatmap !== 'undefined' && typeof ActivityHeatmap._recordActivity === 'function') {
+            try {
+                ActivityHeatmap._recordActivity(heatmapType, event.scriptId || null, new Date(event.timestamp));
+                ActivityHeatmap.refresh?.().catch?.(() => {});
+            } catch {
+                // Heatmap is optional/lazy.
+            }
+        }
+
+        const gamificationActivity = {
+            scriptEdited: 'scriptEdited',
+            scriptCreated: 'scriptCreated',
+            scriptInstalled: 'scriptInstalled',
+            scriptUpdated: 'scriptUpdated',
+            scriptShared: 'scriptShared',
+            gistExported: 'gistExported',
+            updatesChecked: 'updatesChecked',
+            backupCreated: 'backupCreated',
+        }[type];
+        if (gamificationActivity && typeof Gamification !== 'undefined' && typeof Gamification.recordActivity === 'function') {
+            Gamification.recordActivity(gamificationActivity).catch?.(() => {});
+        }
+
+        if (type === 'scriptError' && typeof ScriptDebugger !== 'undefined' && typeof ScriptDebugger.recordError === 'function') {
+            ScriptDebugger.recordError(event.scriptId, {
+                message: event.message || event.error || 'Script error',
+                stack: event.stack || '',
+                line: event.line || null
+            });
+        }
+
+        if (type === 'consoleEntries' && typeof ScriptDebugger !== 'undefined' && typeof ScriptDebugger.ingestConsoleEntries === 'function') {
+            ScriptDebugger.ingestConsoleEntries(event.scriptId, event.entries || []);
+        }
+
+        if (type === 'cspViolation' && typeof CSPReporter !== 'undefined' && typeof CSPReporter.recordFailure === 'function') {
+            CSPReporter.recordFailure(
+                event.url || location.href,
+                event.scriptId || 'dashboard',
+                event.directive || 'default-src',
+                { scriptName: event.scriptName || 'Dashboard', detail: event.detail || event.blockedURI || '' }
+            ).catch?.(() => {});
+        }
+
+        if ((type === 'scriptEdited' || type === 'scriptUpdated') &&
+            typeof GistIntegration !== 'undefined' &&
+            typeof GistIntegration.onScriptSaved === 'function' &&
+            event.scriptId &&
+            !dashboardTelemetryGistSyncing.has(event.scriptId)) {
+            dashboardTelemetryGistSyncing.add(event.scriptId);
+            GistIntegration.onScriptSaved(event.scriptId)
+                .catch?.(() => {})
+                .finally?.(() => dashboardTelemetryGistSyncing.delete(event.scriptId));
+        }
+    }
+
+    async function syncDashboardTelemetry() {
+        if (typeof chrome === 'undefined' || typeof chrome.runtime?.sendMessage !== 'function') return;
+        const scripts = getAllScriptsSnapshot();
+
+        try {
+            const response = await chrome.runtime.sendMessage({ action: 'getScriptStats' });
+            const allStats = response?.allStats || {};
+            for (const [scriptId, stats] of Object.entries(allStats)) {
+                const previous = dashboardTelemetryStatsSeen.get(scriptId);
+                const runs = Number(stats?.runs || 0);
+                const errors = Number(stats?.errors || 0);
+                if (dashboardTelemetryStatsSeeded && previous) {
+                    if (runs > Number(previous.runs || 0)) {
+                        publishDashboardTelemetry('scriptExecuted', {
+                            scriptId,
+                            timestamp: Number(stats.lastRun || Date.now()),
+                            count: runs - Number(previous.runs || 0)
+                        });
+                    }
+                    if (errors > Number(previous.errors || 0)) {
+                        publishDashboardTelemetry('scriptError', {
+                            scriptId,
+                            timestamp: Number(stats.lastErrorTime || Date.now()),
+                            message: stats.lastError || 'Script error',
+                            count: errors - Number(previous.errors || 0)
+                        });
+                    }
+                }
+                dashboardTelemetryStatsSeen.set(scriptId, { runs, errors });
+            }
+            dashboardTelemetryStatsSeeded = true;
+        } catch {
+            // Stats are best-effort; the dashboard still works without them.
+        }
+
+        if (typeof ScriptDebugger !== 'undefined' && typeof ScriptDebugger.ingestConsoleEntries === 'function') {
+            for (const script of scripts) {
+                try {
+                    const response = await chrome.runtime.sendMessage({ action: 'getScriptConsole', data: { scriptId: script.id } });
+                    const entries = Array.isArray(response?.entries) ? response.entries : [];
+                    let seen = dashboardTelemetryConsoleSeen.get(script.id);
+                    if (!seen) {
+                        seen = new Set();
+                        dashboardTelemetryConsoleSeen.set(script.id, seen);
+                    }
+                    const fresh = entries.filter(entry => {
+                        const key = `${entry.timestamp || entry.time || 0}|${entry.level || 'log'}|${JSON.stringify(entry.args || [])}`;
+                        if (!key || seen.has(key)) return false;
+                        seen.add(key);
+                        return true;
+                    });
+                    if (seen.size > 500) {
+                        const keys = Array.from(seen).slice(-250);
+                        dashboardTelemetryConsoleSeen.set(script.id, new Set(keys));
+                    }
+                    if (fresh.length) publishDashboardTelemetry('consoleEntries', { scriptId: script.id, entries: fresh });
+                } catch {
+                    // Per-script console fetch is best-effort.
+                }
+            }
+        }
+
+        if (typeof ScriptDebugger !== 'undefined' && typeof ScriptDebugger.recordError === 'function') {
+            try {
+                const response = await chrome.runtime.sendMessage({ action: 'getErrorLog', data: {} });
+                const log = Array.isArray(response) ? response : (response?.log || response?.entries || []);
+                for (const entry of log) {
+                    const scriptId = entry.scriptId || entry.scriptID || '';
+                    if (!scriptId) continue;
+                    const key = `${entry.timestamp || entry.time || 0}|${scriptId}|${entry.error || entry.message || entry.detail || ''}`;
+                    if (dashboardTelemetryErrorsSeen.has(key)) continue;
+                    dashboardTelemetryErrorsSeen.add(key);
+                    ScriptDebugger.recordError(scriptId, {
+                        message: entry.error || entry.message || entry.detail || 'Script error',
+                        stack: entry.stack || '',
+                        line: entry.line || null
+                    });
+                }
+            } catch {
+                // Error log sync is best-effort.
+            }
+        }
+    }
+
+    function initDashboardTelemetryBus() {
+        if (dashboardTelemetryTimer) return;
+        document.addEventListener('securitypolicyviolation', event => {
+            publishDashboardTelemetry('cspViolation', {
+                url: event.documentURI || location.href,
+                blockedURI: event.blockedURI || '',
+                directive: event.effectiveDirective || event.violatedDirective || 'default-src',
+                detail: event.originalPolicy || event.disposition || '',
+                scriptId: state.currentScriptId || 'dashboard',
+                scriptName: getScriptById(state.currentScriptId || '')?.metadata?.name || 'Dashboard'
+            });
+        });
+        if (typeof chrome !== 'undefined') {
+            chrome.runtime?.onMessage?.addListener?.((message) => {
+                if (message?.action === 'dashboardTelemetry' && message.type) {
+                    publishDashboardTelemetry(message.type, message.data || {});
+                }
+                return false;
+            });
+        }
+        syncDashboardTelemetry();
+        dashboardTelemetryTimer = setInterval(syncDashboardTelemetry, DASHBOARD_TELEMETRY_SYNC_MS);
+    }
+
     function getSelectedScriptIds() {
         return state.selectedScripts instanceof Set ? Array.from(state.selectedScripts) : [];
     }
@@ -2461,6 +2657,7 @@
             if (response?.error) return { success: false, error: response.error };
         }
         await loadScripts();
+        publishDashboardTelemetry('scriptEdited', { scriptId });
         return { success: true };
     }
 
@@ -2676,6 +2873,7 @@
                 await ActivityHeatmap.init(elements.heatmapContainer);
             }
         });
+        syncDashboardTelemetry();
     }
 
     function initStandaloneExportControls() {
@@ -2743,6 +2941,7 @@
         if (typeof GistIntegration !== 'undefined' && _dashboardModulesInited.has('gist')) {
             GistIntegration.refresh?.();
         }
+        syncDashboardTelemetry();
     }
 
     // On-demand module loader — call from UI handlers when a specific feature is triggered
@@ -10921,9 +11120,7 @@
                 }
             }
             markScriptSaved(savingScriptId, Date.now());
-            if (typeof ScriptDebugger !== 'undefined' && typeof ScriptDebugger.onScriptSaved === 'function') {
-                ScriptDebugger.onScriptSaved(savingScriptId);
-            }
+            publishDashboardTelemetry('scriptEdited', { scriptId: savingScriptId });
             showToast('Saved', 'success');
         } catch (e) {
             markScriptSaveFailed(savingScriptId, e?.message || 'Failed to save');
@@ -11088,6 +11285,7 @@
                     return false;
                 }
                 showToast(`${name} updated to v${newVersion}`, 'success');
+                publishDashboardTelemetry('scriptUpdated', { scriptId });
                 setTimeout(() => loadScripts(), 800);
                 return true;
             } catch (err) {
@@ -11122,6 +11320,7 @@
                 const response = await chrome.runtime.sendMessage({ action: 'forceUpdate', scriptId });
                 if (response?.success) {
                     showToast(`${name} force-updated to v${response.script?.meta?.version || '?'}`, 'success');
+                    publishDashboardTelemetry('scriptUpdated', { scriptId });
                     setTimeout(() => loadScripts(), 800);
                     return true;
                 }
@@ -11130,9 +11329,11 @@
             }
 
             const updates = await chrome.runtime.sendMessage({ action: 'checkUpdates', scriptId });
+            publishDashboardTelemetry('updatesChecked', { scriptId });
             if (updates && updates.length > 0) {
                 await chrome.runtime.sendMessage({ action: 'applyUpdate', scriptId, code: updates[0].code });
                 showToast(`${name} updated to v${updates[0].newVersion}`, 'success');
+                publishDashboardTelemetry('scriptUpdated', { scriptId });
                 setTimeout(() => loadScripts(), 800);
                 return true;
             }
@@ -11422,6 +11623,7 @@
                 await loadScripts();
                 updateStats();
                 openEditorForScript(response.scriptId);
+                publishDashboardTelemetry('scriptCreated', { scriptId: response.scriptId });
             } else {
                 // The background wraps handler errors into a resolved { error }
                 // (never a rejection), so the catch below won't fire for
@@ -11741,6 +11943,7 @@
         a.download = `${name}.user.js`;
         a.click();
         setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+        publishDashboardTelemetry('scriptShared', { scriptId: script.id, scriptName: meta.name || 'script' });
         showToast(`Exported ${meta.name || 'script'}`, 'success');
     }
 
@@ -11867,6 +12070,7 @@
                     await loadScripts();
                     updateStats();
                     openEditorForScript(response.scriptId);
+                    publishDashboardTelemetry('scriptCreated', { scriptId: response.scriptId });
                     showToast('Bookmarklet converted — review and save', 'success');
                 } else {
                     showToast(response?.error || 'Conversion failed', 'error');
@@ -11883,6 +12087,7 @@
                 await loadScripts();
                 updateStats();
                 elements.importUrlInput.value = '';
+                publishDashboardTelemetry('scriptInstalled', { scriptName: url });
                 showToast('Installed', 'success');
             } else {
                 showToast(res?.error || 'Failed', 'error');
@@ -12067,6 +12272,7 @@
             if (res?.success) {
                 await loadScripts();
                 updateStats();
+                publishDashboardTelemetry('scriptInstalled', { scriptName: label || 'file' });
                 showToast(label ? `Installed ${label}` : 'Installed', 'success');
                 return true;
             }
@@ -13288,6 +13494,7 @@
         });
         const script = getCurrentScript();
         if (script?.id) ScriptDebugger.captureConsole(script.id);
+        syncDashboardTelemetry();
     }
 
     async function openDiffTool() {
@@ -14933,6 +15140,7 @@
                         if (r.settingsIncluded) {
                             parts.push(r.settingsCredentialsIncluded ? 'sync credentials included' : 'sync credentials redacted');
                         }
+                        publishDashboardTelemetry('backupCreated', { count: Number(r.exported || 0) });
                         showToast(`Cloud backup ready: ${parts.join(', ')}`, 'success');
                     } else {
                         showToast(r?.error || 'Export failed', 'error');

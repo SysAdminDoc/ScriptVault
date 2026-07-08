@@ -219,6 +219,13 @@ const GistIntegration = (() => {
         });
     }
 
+    async function syncLinkedScriptOnSave(scriptId) {
+        if (!_state.autoSync || !scriptId || !isConfigured()) return { skipped: true };
+        const script = _state.getScript?.(scriptId);
+        if (!script?.settings?.gistId) return { skipped: true };
+        return await syncToGist(scriptId);
+    }
+
     // =========================================
     // GitHub API helpers
     // =========================================
@@ -1523,6 +1530,14 @@ const GistIntegration = (() => {
 
         async syncFromGist(scriptId) {
             return syncFromGist(scriptId);
+        },
+
+        async onScriptSaved(scriptId) {
+            return syncLinkedScriptOnSave(scriptId);
+        },
+
+        isAutoSyncEnabled() {
+            return _state.autoSync === true;
         },
 
         async listUserGists() {

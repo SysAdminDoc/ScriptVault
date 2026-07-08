@@ -76,6 +76,56 @@ describe('Update confirmation diff modal sequencing (2026-07 regression)', () =>
   });
 });
 
+describe('Dashboard telemetry/event bus wiring (2026-07 P1 regression)', () => {
+  const dashboard = read('pages/dashboard.js');
+  const debuggerSrc = read('pages/dashboard-debugger.js');
+  const gist = read('pages/dashboard-gist.js');
+
+  it('fans dashboard/background activity into the five previously-dead surfaces', () => {
+    expect(dashboard).toContain('function publishDashboardTelemetry');
+    expect(dashboard).toContain('scriptvault:dashboard-telemetry');
+    expect(dashboard).toContain("document.addEventListener('securitypolicyviolation'");
+    expect(dashboard).toContain("chrome.runtime.sendMessage({ action: 'getScriptStats' })");
+    expect(dashboard).toContain("action: 'getScriptConsole'");
+    expect(dashboard).toContain("action: 'getErrorLog'");
+    expect(dashboard).toContain('ActivityHeatmap._recordActivity');
+    expect(dashboard).toContain('Gamification.recordActivity');
+    expect(dashboard).toContain('CSPReporter.recordFailure');
+    expect(dashboard).toContain('GistIntegration.onScriptSaved');
+  });
+
+  it('publishes real producer events from script workflows', () => {
+    for (const eventName of [
+      'scriptEdited',
+      'scriptCreated',
+      'scriptInstalled',
+      'scriptUpdated',
+      'updatesChecked',
+      'scriptShared',
+      'backupCreated',
+    ]) {
+      expect(dashboard).toContain(`publishDashboardTelemetry('${eventName}'`);
+    }
+  });
+
+  it('connects debugger console and GM value panels to background data', () => {
+    expect(debuggerSrc).toContain('ingestConsoleEntries(scriptId, entries = [])');
+    expect(debuggerSrc).toContain('async function getVariableStore(scriptId)');
+    expect(debuggerSrc).toContain("action: 'getScriptValues'");
+    expect(debuggerSrc).toContain("action: 'GM_setValue'");
+    expect(debuggerSrc).toContain("action: 'deleteScriptValue'");
+    expect(debuggerSrc.indexOf("action: 'getScriptValues'")).toBeLessThan(debuggerSrc.indexOf('localStorage.length'));
+  });
+
+  it('makes saved Gist autosync actionable on script save', () => {
+    expect(gist).toContain('async function syncLinkedScriptOnSave');
+    expect(gist).toContain('if (!_state.autoSync || !scriptId || !isConfigured())');
+    expect(gist).toContain('return await syncToGist(scriptId);');
+    expect(gist).toContain('async onScriptSaved(scriptId)');
+    expect(gist).toContain('isAutoSyncEnabled()');
+  });
+});
+
 describe('KeyboardNav does not hijack focused row controls (2026-07 regression)', () => {
   const src = read('pages/dashboard-keyboard.js');
   it('adds an interactive-control focus guard', () => {
