@@ -1487,6 +1487,112 @@ describe('source cloud sync module', () => {
     expect(JSON.stringify(getRemoteData())).not.toContain('local-token');
   });
 
+  it('uploads newer local GM value bundles instead of stale preserved remote bundles', async () => {
+    await chrome.storage.local.set({
+      syncTombstones: {},
+    });
+
+    const harness = await loadFreshCloudSync(
+      [
+        {
+          id: 'script_values',
+          code: '// ==UserScript==\n// @name Values\n// ==/UserScript==\n// local',
+          enabled: true,
+          position: 0,
+          meta: { name: 'Values' },
+          settings: { syncValues: true },
+          syncBaseCode: '// ==UserScript==\n// @name Values\n// ==/UserScript==\n// local',
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+      {
+        version: 1,
+        timestamp: 20,
+        scripts: [
+          {
+            id: 'script_values',
+            code: '// ==UserScript==\n// @name Values\n// ==/UserScript==\n// remote',
+            enabled: true,
+            position: 0,
+            settings: { syncValues: true },
+            updatedAt: 20,
+          },
+        ],
+        tombstones: {},
+        valueBundles: {
+          script_values: {
+            schema: 'scriptvault-gm-value-sync/v1',
+            scriptId: 'script_values',
+            keyCount: 1,
+            bytes: 100,
+            lastValueUpdatedAt: 2000,
+            values: { token: 'remote-token' },
+          },
+        },
+      },
+      {},
+      {
+        script_values: {
+          token: 'local-token',
+        },
+      },
+      {
+        script_values: {
+          valueCount: 1,
+          lastUpdatedAt: 3000,
+        },
+      },
+    );
+    const { CloudSync, ScriptValues, getRemoteData, scriptState } = harness;
+
+    const result = await CloudSync.sync();
+    expect(result).toEqual({
+      success: true,
+      valueBundleSync: {
+        applied: 0,
+        preserved: 1,
+        conflictBlocked: 1,
+        skippedNonEmpty: 1,
+        skippedUserModified: 0,
+        skippedUnavailable: 0,
+        failures: 0,
+        preservedRemoteNewer: 0,
+        preservedLocalNewer: 1,
+        preservedSameTimestamp: 0,
+        preservedRemoteTimestampOnly: 0,
+        preservedLocalTimestampOnly: 0,
+        preservedTimestampUnknown: 0,
+        preservedCandidateMergeReady: 0,
+        preservedCandidateMergeManualReview: 1,
+        preservedCandidateMergeUnavailable: 0,
+        preservedCandidateResultKeyTotal: 1,
+        preservedCandidateAutoSelectedKeyTotal: 0,
+        preservedCandidateReviewKeyTotal: 1,
+        preservedCandidateAcceptedResultKeyTotal: 0,
+        preservedCandidateBlockedSameTimestamp: 0,
+        preservedCandidateBlockedUnknownTimestamp: 1,
+        preservedCandidateBlockedOneSidedTimestamp: 0,
+        preservedCandidateBlockedUnavailable: 0,
+        preservedCandidateBlockedNoCandidateKeys: 0,
+      },
+    });
+    expectPreservedCandidateSummaryInvariants(result.valueBundleSync);
+
+    expect(ScriptValues.setAll).not.toHaveBeenCalled();
+    expect(scriptState[0].code).toContain('// remote');
+    expect(getRemoteData().valueBundles.script_values).toEqual(expect.objectContaining({
+      schema: 'scriptvault-gm-value-sync/v1',
+      scriptId: 'script_values',
+      keyCount: 1,
+      lastValueUpdatedAt: 3000,
+      values: {
+        token: 'local-token',
+      },
+    }));
+    expect(JSON.stringify(getRemoteData())).not.toContain('remote-token');
+  });
+
   it('reports user-modified GM value-bundle preserves separately during sync', async () => {
     await chrome.storage.local.set({
       syncTombstones: {},

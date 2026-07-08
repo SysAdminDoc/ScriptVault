@@ -1002,6 +1002,21 @@ const CloudSync = (() => {
     }
     return { valueBundles, optIns, warnings };
   }
+  function mergeValueBundlesForUpload(localValueBundles, preservedRemoteValueBundles) {
+    const uploadValueBundles = { ...localValueBundles };
+    for (const [scriptId, remoteBundle] of Object.entries(preservedRemoteValueBundles)) {
+      const localBundle = localValueBundles[scriptId];
+      const localHasValues = localBundle && safeBundleMetric(localBundle.keyCount) > 0 && isPlainRecord(localBundle.values) && Object.keys(localBundle.values).length > 0;
+      if (localHasValues && compareValueBundleLastWrite(
+        getValueBundleLastUpdatedAt(localBundle) ?? null,
+        getValueBundleLastUpdatedAt(remoteBundle) ?? null
+      ) === "local-newer") {
+        continue;
+      }
+      uploadValueBundles[scriptId] = remoteBundle;
+    }
+    return uploadValueBundles;
+  }
   var CloudSync = {
     // Use providers from imported CloudSyncProviders module
     get providers() {
@@ -1419,10 +1434,10 @@ const CloudSync = (() => {
           syncBaseCode: s.syncBaseCode ?? null
         }));
         const postMergeValueBundleData = await buildValueBundlesForScripts(uploadScripts);
-        const uploadValueBundles = {
-          ...postMergeValueBundleData.valueBundles,
-          ...remoteValueApplyResult.preservedValueBundles
-        };
+        const uploadValueBundles = mergeValueBundlesForUpload(
+          postMergeValueBundleData.valueBundles,
+          remoteValueApplyResult.preservedValueBundles
+        );
         const uploadData = {
           version: 1,
           timestamp: Date.now(),

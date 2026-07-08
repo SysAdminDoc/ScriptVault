@@ -1242,6 +1242,31 @@ async function buildValueBundlesForScripts(scripts: Script[] | SyncScript[]): Pr
   return { valueBundles, optIns, warnings };
 }
 
+function mergeValueBundlesForUpload(
+  localValueBundles: Record<string, GmValueSyncBundle>,
+  preservedRemoteValueBundles: Record<string, GmValueSyncBundle>,
+): Record<string, GmValueSyncBundle> {
+  const uploadValueBundles: Record<string, GmValueSyncBundle> = { ...localValueBundles };
+  for (const [scriptId, remoteBundle] of Object.entries(preservedRemoteValueBundles)) {
+    const localBundle = localValueBundles[scriptId];
+    const localHasValues = localBundle
+      && safeBundleMetric(localBundle.keyCount) > 0
+      && isPlainRecord(localBundle.values)
+      && Object.keys(localBundle.values).length > 0;
+    if (
+      localHasValues &&
+      compareValueBundleLastWrite(
+        getValueBundleLastUpdatedAt(localBundle) ?? null,
+        getValueBundleLastUpdatedAt(remoteBundle) ?? null,
+      ) === 'local-newer'
+    ) {
+      continue;
+    }
+    uploadValueBundles[scriptId] = remoteBundle;
+  }
+  return uploadValueBundles;
+}
+
 // ---------------------------------------------------------------------------
 // CloudSync object
 // ---------------------------------------------------------------------------
@@ -1759,10 +1784,10 @@ export const CloudSync = {
         syncBaseCode: s.syncBaseCode ?? null,
       }));
       const postMergeValueBundleData = await buildValueBundlesForScripts(uploadScripts);
-      const uploadValueBundles = {
-        ...postMergeValueBundleData.valueBundles,
-        ...remoteValueApplyResult.preservedValueBundles,
-      };
+      const uploadValueBundles = mergeValueBundlesForUpload(
+        postMergeValueBundleData.valueBundles,
+        remoteValueApplyResult.preservedValueBundles,
+      );
       const uploadData: SyncEnvelope = {
         version: 1,
         timestamp: Date.now(),
