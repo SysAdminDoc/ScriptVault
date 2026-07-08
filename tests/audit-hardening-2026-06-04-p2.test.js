@@ -54,7 +54,7 @@ describe('compareVersions pre-release (2026-06-04 p2)', () => {
   it('install page update review uses the same pre-release ordering branch', () => {
     const src = fs.readFileSync(path.join(ROOT, 'pages/install.js'), 'utf8');
     expect(src).toContain('if (preRelease1 && preRelease2)');
-    expect(src).toContain("v1.replace(/^[^-]*-/, '')");
+    expect(src).toContain("version1.replace(/^[^-]*-/, '')");
     expect(src).toContain('Number.isNaN');
   });
 });

@@ -515,23 +515,11 @@ async function init() {
     }
   }
 
-  // Load and apply theme
-  const settings = await chrome.runtime.sendMessage({ action: 'getSettings' });
-  const themeSettings = settings?.settings || settings || {};
-  const layoutPref = themeSettings.layout || 'dark';
-  const theme = layoutPref === 'auto'
-    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-    : layoutPref;
-  document.documentElement.setAttribute('data-theme', theme);
-  if (layoutPref === 'auto') {
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-      document.documentElement.setAttribute('data-theme', e.matches ? 'dark' : 'light');
-    });
-  }
-
   const content = document.getElementById('content');
 
   try {
+    await applySavedTheme();
+
     // Get pending install data
     const data = await chrome.storage.local.get('pendingInstall');
 
@@ -590,6 +578,26 @@ async function init() {
   } catch (e) {
     console.error('Install error:', e);
     showError('Error loading script', e.message);
+  }
+}
+
+async function applySavedTheme() {
+  try {
+    const settings = await chrome.runtime.sendMessage({ action: 'getSettings' });
+    const themeSettings = settings?.settings || settings || {};
+    const layoutPref = themeSettings.layout || 'dark';
+    const theme = layoutPref === 'auto'
+      ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+      : layoutPref;
+    document.documentElement.setAttribute('data-theme', theme);
+    if (layoutPref === 'auto') {
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+        document.documentElement.setAttribute('data-theme', e.matches ? 'dark' : 'light');
+      });
+    }
+  } catch (e) {
+    console.warn('Theme settings unavailable; defaulting install page to dark theme.', e);
+    document.documentElement.setAttribute('data-theme', 'dark');
   }
 }
 
@@ -1931,9 +1939,14 @@ function showInstallError(message) {
   let errorEl = document.getElementById('installError') || document.querySelector('.install-error');
   if (!errorEl) {
     errorEl = document.createElement('div');
+    errorEl.id = 'installError';
     errorEl.className = 'install-error';
     const actions = document.querySelector('.actions');
-    if (actions) actions.before(errorEl);
+    if (actions) {
+      actions.before(errorEl);
+    } else {
+      (document.getElementById('content') || document.body).append(errorEl);
+    }
   }
   errorEl.setAttribute('role', 'alert');
   errorEl.setAttribute('aria-live', 'assertive');
@@ -2061,10 +2074,12 @@ function requireIsPinned(url) {
 }
 
 function compareVersions(v1, v2) {
-  const preRelease1 = v1.includes('-');
-  const preRelease2 = v2.includes('-');
-  const clean1 = (typeof v1 === 'string' ? v1 : String(v1)).replace(/-.*$/, '');
-  const clean2 = (typeof v2 === 'string' ? v2 : String(v2)).replace(/-.*$/, '');
+  const version1 = typeof v1 === 'string' ? v1 : String(v1 ?? '');
+  const version2 = typeof v2 === 'string' ? v2 : String(v2 ?? '');
+  const preRelease1 = version1.includes('-');
+  const preRelease2 = version2.includes('-');
+  const clean1 = version1.replace(/-.*$/, '');
+  const clean2 = version2.replace(/-.*$/, '');
   const parts1 = clean1.split('.').map(n => parseInt(n, 10) || 0);
   const parts2 = clean2.split('.').map(n => parseInt(n, 10) || 0);
 
@@ -2079,8 +2094,8 @@ function compareVersions(v1, v2) {
   if (preRelease1 && !preRelease2) return -1;
   if (!preRelease1 && preRelease2) return 1;
   if (preRelease1 && preRelease2) {
-    const pre1 = v1.replace(/^[^-]*-/, '').split('.');
-    const pre2 = v2.replace(/^[^-]*-/, '').split('.');
+    const pre1 = version1.replace(/^[^-]*-/, '').split('.');
+    const pre2 = version2.replace(/^[^-]*-/, '').split('.');
     for (let i = 0; i < Math.max(pre1.length, pre2.length); i++) {
       const hasA = i < pre1.length;
       const hasB = i < pre2.length;
@@ -2583,4 +2598,7 @@ async function runStaticAnalysis(code) {
 }
 
 // Initialize
-init();
+init().catch((e) => {
+  console.error('Install page failed to initialize:', e);
+  showError('Error loading script', e?.message || 'The install page could not initialize. Try re-opening the userscript URL.');
+});

@@ -97,6 +97,33 @@ describe('Dashboard light-theme status contrast (2026-07 regression)', () => {
   });
 });
 
+describe('Install page startup and error resilience (2026-07 regression)', () => {
+  const src = read('pages/install.js');
+
+  it('loads theme settings through a fail-soft helper inside init error handling', () => {
+    expect(src).toContain('async function applySavedTheme()');
+    expect(src).toContain("console.warn('Theme settings unavailable; defaulting install page to dark theme.'");
+    expect(src).toMatch(/try \{\s*await applySavedTheme\(\);\s*\/\/ Get pending install data/s);
+    expect(src).toContain('init().catch((e) => {');
+    expect(src).toContain("showError('Error loading script', e?.message");
+  });
+
+  it('inserts install errors even when the normal action row is missing', () => {
+    const fn = src.slice(src.indexOf('function showInstallError'), src.indexOf('function clearInstallError'));
+    expect(fn).toContain("errorEl.id = 'installError'");
+    expect(fn).toContain("(document.getElementById('content') || document.body).append(errorEl);");
+  });
+
+  it('coerces version inputs before checking pre-release markers', () => {
+    const fn = src.slice(src.indexOf('function compareVersions'), src.indexOf('async function runSignatureVerification'));
+    expect(fn).toContain("const version1 = typeof v1 === 'string' ? v1 : String(v1 ?? '');");
+    expect(fn).toContain("const version2 = typeof v2 === 'string' ? v2 : String(v2 ?? '');");
+    expect(fn.indexOf('const version1')).toBeLessThan(fn.indexOf('version1.includes'));
+    expect(fn).not.toContain('v1.includes');
+    expect(fn).not.toContain('v2.includes');
+  });
+});
+
 describe('Update confirmation diff modal sequencing (2026-07 regression)', () => {
   const src = read('pages/dashboard.js');
 
