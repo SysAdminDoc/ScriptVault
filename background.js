@@ -16604,7 +16604,6 @@ const StorageModule = (() => {
     async delete(id) {
       await openScriptDB();
       if (await isStorageBucketPartitioningActive()) {
-        await ValuesDAO.deleteAll(id);
         await withTransaction(
           [Stores.scripts, Stores.stats, Stores.localWorkspaceBindings],
           "readwrite",
@@ -16617,6 +16616,11 @@ const StorageModule = (() => {
             }, IDBKeyRange.only(id));
           }
         );
+        try {
+          await ValuesDAO.deleteAll(id);
+        } catch (e) {
+          console.warn("[ScriptVault] Removed script but could not clean up orphaned GM values:", e);
+        }
         return;
       }
       await withTransaction(

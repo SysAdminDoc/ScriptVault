@@ -224,7 +224,6 @@ export const ScriptsDAO = {
   async delete(id: string): Promise<void> {
     await openScriptDB();
     if (await isStorageBucketPartitioningActive()) {
-      await ValuesDAO.deleteAll(id);
       await withTransaction(
         [Stores.scripts, Stores.stats, Stores.localWorkspaceBindings] as StoreName[],
         'readwrite',
@@ -237,6 +236,11 @@ export const ScriptsDAO = {
           }, IDBKeyRange.only(id));
         },
       );
+      try {
+        await ValuesDAO.deleteAll(id);
+      } catch (e) {
+        console.warn('[ScriptVault] Removed script but could not clean up orphaned GM values:', e);
+      }
       return;
     }
     // Legacy single-DB fallback can still wipe the script row and associated

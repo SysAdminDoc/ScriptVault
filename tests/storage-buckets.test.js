@@ -8,6 +8,7 @@ import {
   ScriptValues,
 } from '../src/modules/storage.ts';
 import { closeDB, DB_NAME, StorageBucketNames } from '../src/storage/idb.ts';
+import { ValuesDAO } from '../src/storage/script-db.ts';
 
 function makeScript(id = 'alpha', overrides = {}) {
   return {
@@ -168,5 +169,28 @@ describe('storage bucket partitioning', () => {
     await ScriptValues.setAll('alpha', { token: 'remote-merged' });
     expect((await ScriptStorage.get('alpha'))?.syncBaseCode).toBe('merged code');
     expect(await ScriptValues.get('alpha', 'token', null)).toBe('remote-merged');
+  });
+
+  it('deletes the script row before best-effort cross-bucket value cleanup', async () => {
+    installStorageBucketsMock();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const deleteAllSpy = vi
+      .spyOn(ValuesDAO, 'deleteAll')
+      .mockRejectedValueOnce(new Error('values bucket unavailable'));
+
+    await ScriptStorage.set('alpha', makeScript('alpha', { code: 'saved code' }));
+    await ScriptValues.setAll('alpha', { token: 'recoverable-orphan' });
+
+    await expect(ScriptStorage.delete('alpha')).resolves.toBeUndefined();
+
+    expect(await ScriptStorage.get('alpha')).toBeNull();
+    expect(await ScriptValues.get('alpha', 'token', null)).toBe('recoverable-orphan');
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[ScriptVault] Removed script but could not clean up orphaned GM values:',
+      expect.any(Error),
+    );
+
+    deleteAllSpy.mockRestore();
+    warnSpy.mockRestore();
   });
 });
