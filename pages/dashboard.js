@@ -4400,12 +4400,12 @@
             } else if (health?.connected) {
                 const account = health.user?.email || health.user?.name || health.endpointHost || '';
                 elements.syncHealthStatus.textContent = `${health.providerLabel || provider} connected${account ? ` (${account})` : ''}`;
-                elements.syncHealthStatus.style.color = 'var(--accent)';
+                elements.syncHealthStatus.style.color = 'var(--accent-primary)';
             } else {
                 elements.syncHealthStatus.textContent = health?.error
                     ? `${health.providerLabel || provider}: ${health.error}`
                     : `${health.providerLabel || provider} not connected`;
-                elements.syncHealthStatus.style.color = 'var(--danger)';
+                elements.syncHealthStatus.style.color = 'var(--accent-error)';
             }
         }
         if (elements.syncStorageDisclosure) {
@@ -9113,7 +9113,7 @@
             ? `<div class="panel-empty-inline" style="margin-bottom:10px">${escapeHtml(preflight.warnings.join(' | '))}</div>`
             : '';
         const missingHtml = preflight.missing.length
-            ? `<div class="panel-empty-inline" style="margin-bottom:10px;color:var(--danger)">Missing required metadata: ${escapeHtml(preflight.missing.join(', '))}</div>`
+            ? `<div class="panel-empty-inline" style="margin-bottom:10px;color:var(--accent-error)">Missing required metadata: ${escapeHtml(preflight.missing.join(', '))}</div>`
             : '';
         const rowsHtml = metadataRows.map(([label, value]) => `
             <div class="info-item">
@@ -15022,7 +15022,7 @@
             try {
                 const r = await chrome.runtime.sendMessage({ action: 'cloudStatus', provider });
                 if (r?.connected) {
-                    if (st) { st.textContent = 'Connected'; st.style.color = 'var(--accent)'; }
+                    if (st) { st.textContent = 'Connected'; st.style.color = 'var(--accent-primary)'; }
                     if (ui) ui.textContent = r.user?.email || r.user?.name || '';
                     if (bc) bc.style.display = 'none';
                     if (bd) bd.style.display = '';
@@ -15035,7 +15035,7 @@
                     if (ar) ar.style.display = 'none';
                 }
             } catch (e) {
-                if (st) { st.textContent = 'Error'; st.style.color = 'var(--danger)'; }
+                if (st) { st.textContent = 'Error'; st.style.color = 'var(--accent-error)'; }
             }
             updateUtilitiesOverview();
         }

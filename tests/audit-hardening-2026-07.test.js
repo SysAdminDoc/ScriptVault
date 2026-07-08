@@ -56,6 +56,16 @@ describe('Vim key-mapping setting is wired (2026-07 regression)', () => {
   });
 });
 
+describe('Dashboard inline colors use defined theme tokens (2026-07 regression)', () => {
+  const src = read('pages/dashboard.js');
+  it('does not reference undefined accent/danger aliases', () => {
+    expect(src).not.toContain('var(--accent)');
+    expect(src).not.toContain('var(--danger)');
+    expect(src).toContain('var(--accent-primary)');
+    expect(src).toContain('var(--accent-error)');
+  });
+});
+
 describe('Update confirmation diff modal sequencing (2026-07 regression)', () => {
   const src = read('pages/dashboard.js');
 
