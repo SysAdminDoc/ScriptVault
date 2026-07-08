@@ -11901,6 +11901,32 @@
     }
 
     // Import/Export
+    function hasStructuredImportFiles(files = []) {
+        return files.some(file => /\.(zip|json)$/i.test(file.name || ''));
+    }
+
+    function buildStructuredImportConfirmationMessage(files = [], transfer = getTransferPreferences()) {
+        return `Import ${files.length} file${files.length === 1 ? '' : 's'}? Matching scripts may be overwritten. Imported archive scripts stay disabled for review. ${
+            transfer.includeSettingsCredentials
+                ? 'Archived sync credentials restore only when archive metadata proves they were intentionally included.'
+                : 'Archived sync credentials stay local-only.'
+        }`;
+    }
+
+    function getImportUndoToastOptions(receiptIds, reason = 'import') {
+        const ids = (Array.isArray(receiptIds) ? receiptIds : [receiptIds]).filter(Boolean);
+        if (ids.length === 0) return {};
+        return {
+            actionLabel: 'Undo',
+            action: async () => {
+                for (const receiptId of ids) {
+                    await rollbackRestoreReceipt(receiptId, { reason });
+                }
+            },
+            duration: 15000
+        };
+    }
+
     async function importScript() {
         const input = document.createElement('input');
         input.type = 'file';
@@ -11910,15 +11936,11 @@
             const files = Array.from(e.target.files);
             if (!files.length) return;
             const transfer = getTransferPreferences();
-            const hasStructuredImports = files.some(file => /\.(zip|json)$/i.test(file.name));
+            const hasStructuredImports = hasStructuredImportFiles(files);
             if (hasStructuredImports) {
                 const confirmed = await showConfirmModal(
                     'Import Files',
-                    `Import ${files.length} file${files.length === 1 ? '' : 's'}? Matching scripts may be overwritten. Imported archive scripts stay disabled for review. ${
-                        transfer.includeSettingsCredentials
-                            ? 'Archived sync credentials restore only when archive metadata proves they were intentionally included.'
-                            : 'Archived sync credentials stay local-only.'
-                    }`
+                    buildStructuredImportConfirmationMessage(files, transfer)
                 );
                 if (!confirmed) return;
             }
@@ -11944,11 +11966,7 @@
                         showToast(
                             r?.error ? r.error : `${file.name}: ${formatImportSummary(r)}`,
                             r?.error ? 'error' : getImportResultTone(r),
-                            r?.receiptId ? {
-                                actionLabel: 'Undo',
-                                action: () => rollbackRestoreReceipt(r.receiptId, { reason: 'import' }),
-                                duration: 15000
-                            } : {}
+                            getImportUndoToastOptions(r?.receiptId, 'import')
                         );
                     } else if (name.endsWith('.json')) {
                         const data = JSON.parse(await file.text());
@@ -11969,11 +11987,7 @@
                         showToast(
                             r?.error ? r.error : `${file.name}: ${formatImportSummary(r)}`,
                             r?.error ? 'error' : getImportResultTone(r),
-                            r?.receiptId ? {
-                                actionLabel: 'Undo',
-                                action: () => rollbackRestoreReceipt(r.receiptId, { reason: 'import' }),
-                                duration: 15000
-                            } : {}
+                            getImportUndoToastOptions(r?.receiptId, 'import')
                         );
                     } else {
                         const code = await file.text();
@@ -15633,7 +15647,17 @@
             const files = [...(e.dataTransfer?.files || [])];
             if (files.length === 0) return;
 
+            if (files.some(file => (file.name || '').toLowerCase().endsWith('.zip'))) {
+                const transfer = getTransferPreferences();
+                const confirmed = await showConfirmModal(
+                    'Import Files',
+                    buildStructuredImportConfirmationMessage(files, transfer)
+                );
+                if (!confirmed) return;
+            }
+
             let installed = 0, errors = 0;
+            const receiptIds = [];
             showProgress('Installing dropped files…');
 
             for (let i = 0; i < files.length; i++) {
@@ -15655,9 +15679,18 @@
                             binary += String.fromCharCode.apply(null, bytes.subarray(j, j + 8192));
                         }
                         const base64 = btoa(binary);
-                        const res = await chrome.runtime.sendMessage({ action: 'importFromZip', zipData: base64, options: { overwrite: true, trustImportedScripts: false } });
+                        const res = await chrome.runtime.sendMessage({
+                            action: 'importFromZip',
+                            zipData: base64,
+                            options: { overwrite: true, trustImportedScripts: false, sourceLabel: `Dropped ZIP: ${file.name}` }
+                        });
+                        if (res?.error) {
+                            errors++;
+                            continue;
+                        }
                         installed += res?.imported || 0;
                         errors += res?.errors?.length || 0;
+                        if (res?.receiptId) receiptIds.push(res.receiptId);
                     }
                 } catch (err) {
                     console.error('Drop install error:', err);
@@ -15668,7 +15701,8 @@
             hideProgress();
             await loadScripts();
             updateStats();
-            if (installed > 0) showToast(`Installed ${installed} script${installed > 1 ? 's' : ''}${errors > 0 ? ` (${errors} failed)` : ''}`, 'success');
+            const undoOptions = getImportUndoToastOptions(receiptIds, 'import');
+            if (installed > 0) showToast(`Installed ${installed} script${installed > 1 ? 's' : ''}${errors > 0 ? ` (${errors} failed)` : ''}`, 'success', undoOptions);
             else showToast('No valid userscripts found in dropped files', 'error');
         });
     }

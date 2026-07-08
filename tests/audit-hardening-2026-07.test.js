@@ -389,6 +389,24 @@ describe('Script list load failures (2026-07 regression)', () => {
   });
 });
 
+describe('Dropped ZIP import confirmation and undo (2026-07 regression)', () => {
+  const src = read('pages/dashboard.js');
+
+  it('uses the archive import confirmation and receipt-backed Undo for dropped zips', () => {
+    const dropBlock = src.slice(
+      src.indexOf('// Drag-and-drop file installation'),
+      src.indexOf('function applyColumnVisibility()')
+    );
+    expect(src).toContain('function buildStructuredImportConfirmationMessage');
+    expect(src).toContain('function getImportUndoToastOptions');
+    expect(dropBlock).toContain('buildStructuredImportConfirmationMessage(files, transfer)');
+    expect(dropBlock).toContain('const receiptIds = [];');
+    expect(dropBlock).toContain('sourceLabel: `Dropped ZIP: ${file.name}`');
+    expect(dropBlock).toContain("const undoOptions = getImportUndoToastOptions(receiptIds, 'import');");
+    expect(dropBlock).toContain("showToast(`Installed ${installed} script${installed > 1 ? 's' : ''}${errors > 0 ? ` (${errors} failed)` : ''}`, 'success', undoOptions);");
+  });
+});
+
 describe('Script chains use the real background API (2026-07 regression)', () => {
   const src = read('pages/dashboard-chains.js');
   it('runs steps via runScriptNow, not the non-existent executeScript action', () => {
