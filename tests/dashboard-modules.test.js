@@ -531,6 +531,52 @@ describe('dashboard surface modules', () => {
     CollectionManager.destroy();
   });
 
+  it('collections import the data URL emitted by share', async () => {
+    const CollectionManager = createCollectionManager();
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+
+    const installed = [
+      { id: 'script-1', name: 'Alpha Script', enabled: true, code: '// one' },
+    ];
+    let sharedUrl = '';
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: vi.fn(async (value) => { sharedUrl = value; }),
+      },
+    });
+
+    await CollectionManager.init(host, { scripts: installed, onToggle: vi.fn() });
+    const collection = CollectionManager.createCollection('Share Bundle', ['script-1'], {
+      notes: { 'script-1': 'Install first' },
+    });
+
+    const card = host.querySelector(`[data-id="${collection.id}"]`);
+    card?.querySelector('.sv-coll-card-header')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    const shareButton = card?.querySelector('[data-action="share"]');
+    shareButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await flushPromises();
+
+    expect(sharedUrl).toMatch(/^data:application\/json;base64,/);
+    const result = CollectionManager.importCollection(sharedUrl);
+    const imported = CollectionManager.getCollections().find((entry) => entry.id === result.id);
+
+    expect(result.success).toBe(true);
+    expect(imported).toMatchObject({
+      name: 'Share Bundle',
+      builtIn: false,
+      scripts: [
+        expect.objectContaining({
+          name: 'Alpha Script',
+          note: 'Install first',
+        }),
+      ],
+    });
+
+    CollectionManager.destroy();
+  });
+
   it('collections preserve notes for script ids with selector characters', async () => {
     const CollectionManager = createCollectionManager();
     const host = document.createElement('div');

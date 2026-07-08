@@ -1302,9 +1302,25 @@ const CollectionManager = (() => {
   /*  Import / Export / Share                                             */
   /* ------------------------------------------------------------------ */
 
+  function decodeCollectionImportInput(input) {
+    if (typeof input !== 'string') return input;
+    const trimmed = input.trim();
+    const match = trimmed.match(/^data:application\/json(?:;charset=[^;,]+)?;base64,(.+)$/i);
+    if (!match) return trimmed;
+
+    try {
+      const binary = atob(match[1]);
+      const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+      return new TextDecoder().decode(bytes);
+    } catch {
+      throw new Error('Invalid collection data URL');
+    }
+  }
+
   function importCollection(json) {
     let data;
-    try { data = typeof json === 'string' ? JSON.parse(json) : json; } catch { throw new Error('Invalid JSON'); }
+    const decoded = decodeCollectionImportInput(json);
+    try { data = typeof decoded === 'string' ? JSON.parse(decoded) : decoded; } catch { throw new Error('Invalid JSON'); }
 
     if (!data.name || !Array.isArray(data.scripts)) {
       throw new Error('Invalid collection manifest: requires "name" and "scripts" array');
