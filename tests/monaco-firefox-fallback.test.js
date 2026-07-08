@@ -83,4 +83,19 @@ describe('Firefox Monaco fallback', () => {
     expect(editor.getValue()).toBe('edited code');
     expect(onChange).toHaveBeenCalledTimes(1);
   });
+
+  it('forwards Monaco action IDs through execCommand', () => {
+    const { frame, editor } = installAdapter();
+    const postMessage = vi.spyOn(frame.contentWindow, 'postMessage').mockImplementation(() => {});
+
+    editor.execCommand('actions.find');
+    editor.execCommand('editor.action.startFindReplaceAction');
+    editor.execCommand('findPersistent');
+    editor.execCommand('replace');
+
+    expect(postMessage).toHaveBeenNthCalledWith(1, { type: 'action', id: 'actions.find' }, '*');
+    expect(postMessage).toHaveBeenNthCalledWith(2, { type: 'action', id: 'editor.action.startFindReplaceAction' }, '*');
+    expect(postMessage).toHaveBeenNthCalledWith(3, { type: 'action', id: 'actions.find' }, '*');
+    expect(postMessage).toHaveBeenNthCalledWith(4, { type: 'action', id: 'editor.action.startFindReplaceAction' }, '*');
+  });
 });

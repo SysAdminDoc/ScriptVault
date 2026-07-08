@@ -349,8 +349,10 @@
     getSearchCursor() { return { findNext() { return false; }, from() {}, to() {} }; },
     showHint() { /* Monaco handles completions internally */ },
     execCommand(cmd) {
-      if (cmd === 'findPersistent') sendToFrame({ type: 'action', id: 'actions.find' });
-      else if (cmd === 'replace') sendToFrame({ type: 'action', id: 'editor.action.startFindReplaceAction' });
+      let actionId = cmd;
+      if (cmd === 'findPersistent') actionId = 'actions.find';
+      else if (cmd === 'replace') actionId = 'editor.action.startFindReplaceAction';
+      if (typeof actionId === 'string' && actionId) sendToFrame({ type: 'action', id: actionId });
     },
 
     // isMonaco flag for feature detection in dashboard.js
