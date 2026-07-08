@@ -7187,6 +7187,10 @@
                         <span class="help-icon" title="Requests browser access only for each script's declared run, update, dependency, and connect hosts. Scripts that ask for every site need explicit broad-access approval.">?</span>
                     </div>
                     <div class="setting-row">
+                        <label><input type="checkbox" id="settingsOnDeviceAiEnabled"> <span>Enable on-device AI assistance</span></label>
+                        <span class="help-icon" title="Uses Chrome Prompt API locally for install summaries and editor explain/draft assistance. Script text is not sent to a remote AI service.">?</span>
+                    </div>
+                    <div class="setting-row">
                         <span class="label-text" data-i18n="settingsAllowCommunicationLabel">Allow communication with cooperate pages:</span>
                         <select class="select-field" id="settingsAllowCommunication" aria-describedby="settingsAllowCommunicationError">
                             <option value="version" selected data-i18n="communicationVersion">ScriptVault + script version</option>
@@ -8438,6 +8442,15 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
             <button type="button" class="toolbar-btn" id="tbtnDiff" title="Compare saved and current code" data-i18n-title="diffTitle">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3v18M18 3v18"/><path d="M10 8h8M10 16h8"/></svg>
                 <span data-i18n="diffAction">Diff</span>
+            </button>
+            <div class="toolbar-separator" data-on-device-ai-control hidden></div>
+            <button type="button" class="toolbar-btn" id="tbtnAiExplain" title="Explain with local on-device AI" data-on-device-ai-control hidden>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v4"/><path d="M12 18v4"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="M4.93 4.93l2.83 2.83"/><path d="M16.24 16.24l2.83 2.83"/><path d="M19.07 4.93l-2.83 2.83"/><path d="M7.76 16.24l-2.83 2.83"/></svg>
+                <span>Explain</span>
+            </button>
+            <button type="button" class="toolbar-btn" id="tbtnAiDraft" title="Draft with local on-device AI" data-on-device-ai-control hidden>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                <span>Draft</span>
             </button>
             <button type="button" class="toolbar-btn" id="tbtnBindLocalFile" title="Bind local file" data-i18n-title="bindLocalFileTitle" aria-describedby="editorLocalWorkspaceStatus" hidden>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/></svg>

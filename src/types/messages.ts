@@ -1242,6 +1242,19 @@ interface AnalyzeScript {
   code: string;
 }
 
+interface GetOnDeviceAIStatus {
+  action: 'getOnDeviceAIStatus';
+}
+
+interface RunOnDeviceAI {
+  action: 'runOnDeviceAI';
+  mode?: 'install-summary' | 'editor-explain' | 'editor-draft' | string;
+  code?: string;
+  metadata?: Record<string, unknown> | null;
+  analysis?: Record<string, unknown> | null;
+  prompt?: string;
+}
+
 // ─── Signing ─────────────────────────────────────────────────────────
 
 interface SigningGetPublicKey {
@@ -1641,7 +1654,7 @@ export type BackgroundMessage =
   // Network log
   | GetNetworkLog | GetNetworkLogStats | ClearNetworkLog | NetlogRecord
   // Analysis
-  | AnalyzeScript
+  | AnalyzeScript | GetOnDeviceAIStatus | RunOnDeviceAI
   // Signing
   | SigningGetPublicKey | SigningSign | SigningVerify
   | SigningTrustKey | SigningUntrustKey | SigningGetTrustedKeys | SigningGenerateNewKeypair
@@ -1968,6 +1981,8 @@ export interface ResponseMap {
 
   // ── Static analysis / signing ─────────────────────────────────────
   analyzeScript: { totalRisk: number; riskLevel: string; findings: unknown[]; categories: Record<string, unknown[]>; summary: string };
+  getOnDeviceAIStatus: unknown;
+  runOnDeviceAI: SuccessOrError<{ text?: string; localOnly?: true; provider?: string; mode?: string; status?: unknown; progress?: number[] }>;
   signScript: SuccessOrError<{ signature: string; publicKey: string; algorithm: string; timestamp: number }>;
   verifyScript: { valid: boolean; trusted?: boolean; trustedName?: string | null; reason?: string };
   trustSigningKey: SuccessOrError;

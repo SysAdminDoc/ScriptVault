@@ -120,7 +120,7 @@ async function buildBackground() {
     readFile("modules/resources.js"),
 
     // v2.0 modules (conditionally included if they exist)
-    ...["npm-resolve", "host-permission-patterns", "error-log", "event-log", "notifications", "sync-crypto", "cloud-sync", "sync-easycloud",
+    ...["npm-resolve", "host-permission-patterns", "on-device-ai", "error-log", "event-log", "notifications", "sync-crypto", "cloud-sync", "sync-easycloud",
         "script-config", "backup-scheduler", "userstyles", "public-api", "migration", "quota-manager",
         "subscriptions", "sigstore-bundle-parser", "sigstore-bundle-verifier"]
       .map(m => { try { return readFile(`modules/${m}.js`); } catch { return ""; } })

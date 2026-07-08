@@ -7454,6 +7454,37 @@ async function handleMessage(message, sender) {
         return ScriptAnalyzer.analyzeAsync(code);
       }
 
+      case 'getOnDeviceAIStatus': {
+        const settings = await SettingsManager.get();
+        if (typeof OnDeviceAI === 'undefined' || typeof OnDeviceAI.getStatus !== 'function') {
+          return {
+            enabled: settings?.onDeviceAiEnabled === true,
+            localOnly: true,
+            provider: 'chrome-prompt-api',
+            available: false,
+            availability: 'module-missing',
+            downloadable: false,
+            downloading: false,
+            reason: 'On-device AI module is unavailable.'
+          };
+        }
+        return await OnDeviceAI.getStatus(settings);
+      }
+
+      case 'runOnDeviceAI': {
+        const settings = await SettingsManager.get();
+        if (typeof OnDeviceAI === 'undefined' || typeof OnDeviceAI.runPrompt !== 'function') {
+          return { success: false, error: 'On-device AI module is unavailable.' };
+        }
+        return await OnDeviceAI.runPrompt(settings, {
+          mode: data.mode,
+          code: data.code || '',
+          metadata: data.metadata || null,
+          analysis: data.analysis || null,
+          prompt: data.prompt || ''
+        });
+      }
+
       // ── Script Signing (Ed25519) ──────────────────────────────────────────
       case 'signing_getPublicKey':
         return { publicKey: await ScriptSigning.getPublicKeyJwk() };

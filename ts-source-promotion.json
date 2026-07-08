@@ -76,6 +76,14 @@
       "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs."
     },
     {
+      "runtime": "modules/on-device-ai.js",
+      "sources": [
+        "src/modules/on-device-ai.ts"
+      ],
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for Chrome Prompt API local assistance."
+    },
+    {
       "runtime": "modules/user-script-message-policy.js",
       "sources": [
         "src/background/user-script-message-policy.ts"

@@ -71,6 +71,7 @@
       "notifyOnError",
       "notifyOnInstall",
       "notifyOnUpdate",
+      "onDeviceAiEnabled",
       "pageFilterMode",
       "popupColumns",
       "reindent",
@@ -209,6 +210,14 @@
       "help": "Requests browser access only for a script's declared run, update, dependency, and connect hosts. Broad all-site scripts require per-script approval.",
       "elementId": "settingsScopedHostPermissions",
       "default": true
+    },
+    "onDeviceAiEnabled": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "Enable on-device AI assistance",
+      "help": "Uses Chrome Prompt API locally for install summaries and editor explain/draft assistance. Script text is not sent to a remote AI service.",
+      "elementId": "settingsOnDeviceAiEnabled",
+      "default": false
     },
     "allowHttpHeaders": {
       "type": "string",

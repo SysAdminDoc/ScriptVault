@@ -1663,6 +1663,19 @@ function renderInstallUI(sourceUrl) {
           </div>
         </div>
 
+        <div class="surface-card analysis-card review-section" id="reviewOnDeviceAI" hidden>
+          <div id="onDeviceAiInstallMount">
+            <div class="install-card-header">
+              <div>
+                <div class="install-card-title">Local AI Review</div>
+                <div class="install-card-subtitle">Optional Chrome Prompt API summary generated on this device.</div>
+              </div>
+              <span class="count status-neutral">Opt-in</span>
+            </div>
+            <div class="analysis-summary">Enable on-device AI in Settings to summarize this install review locally.</div>
+          </div>
+        </div>
+
       ${dependencyCard}
 
         <div class="surface-card trust-card review-section" id="reviewTrust">
@@ -2723,6 +2736,91 @@ async function checkRequireProvenance(meta) {
   }
 }
 
+async function renderOnDeviceAiInstallSummary(code, analysisResult) {
+  const card = document.getElementById('reviewOnDeviceAI');
+  const mount = document.getElementById('onDeviceAiInstallMount');
+  if (!card || !mount) return;
+
+  let status;
+  try {
+    status = await chrome.runtime.sendMessage({ action: 'getOnDeviceAIStatus' });
+  } catch (error) {
+    card.hidden = true;
+    return;
+  }
+
+  if (status?.enabled !== true) {
+    card.hidden = true;
+    return;
+  }
+
+  card.hidden = false;
+  const available = status.available === true;
+  const statusClass = available ? 'status-good' : 'status-neutral';
+  const summary = available
+    ? 'Generate a short local summary from ScriptVault static analysis and this script source. This may download the Chrome on-device model if it is not ready yet.'
+    : (status.reason || 'Chrome Prompt API is not available in this browser context.');
+
+  safeSetHtml(mount, `
+    <div class="install-card-header">
+      <div>
+        <div class="install-card-title">Local AI Review</div>
+        <div class="install-card-subtitle">Chrome Prompt API summary. Script text stays on this device.</div>
+      </div>
+      <span class="count ${statusClass}">${escapeHtml(String(status.availability || 'unknown'))}</span>
+    </div>
+    <div class="analysis-summary">${escapeHtml(summary)}</div>
+    <button type="button" class="btn btn-secondary" id="btnOnDeviceAiInstallSummary" ${available ? '' : 'disabled'}>Summarize locally</button>
+  `);
+
+  document.getElementById('btnOnDeviceAiInstallSummary')?.addEventListener('click', async event => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    button.textContent = 'Summarizing...';
+    safeSetHtml(mount, `
+      <div class="install-card-header">
+        <div>
+          <div class="install-card-title">Local AI Review</div>
+          <div class="install-card-subtitle">Chrome Prompt API summary. Script text stays on this device.</div>
+        </div>
+        <span class="count status-neutral">Running</span>
+      </div>
+      <div class="analysis-summary">The local model is reviewing the analyzer output.</div>
+    `);
+    try {
+      const result = await chrome.runtime.sendMessage({
+        action: 'runOnDeviceAI',
+        mode: 'install-summary',
+        code,
+        metadata: scriptMeta,
+        analysis: analysisResult || null
+      });
+      const text = result?.text || result?.error || 'The local model did not return a summary.';
+      safeSetHtml(mount, `
+        <div class="install-card-header">
+          <div>
+            <div class="install-card-title">Local AI Review</div>
+            <div class="install-card-subtitle">Generated locally with Chrome Prompt API.</div>
+          </div>
+          <span class="count ${result?.success ? 'status-good' : 'status-warn'}">${result?.success ? 'Ready' : 'Unavailable'}</span>
+        </div>
+        <div class="analysis-summary" style="white-space:pre-wrap">${escapeHtml(text)}</div>
+      `);
+    } catch (error) {
+      safeSetHtml(mount, `
+        <div class="install-card-header">
+          <div>
+            <div class="install-card-title">Local AI Review</div>
+            <div class="install-card-subtitle">Chrome Prompt API summary could not run.</div>
+          </div>
+          <span class="count status-warn">Unavailable</span>
+        </div>
+        <div class="analysis-summary">${escapeHtml(error?.message || 'Local AI summary failed.')}</div>
+      `);
+    }
+  });
+}
+
 // Static analysis
 async function runStaticAnalysis(code) {
   try {
@@ -2750,6 +2848,7 @@ async function runStaticAnalysis(code) {
         </div>
         <div class="analysis-summary">You can still review permissions, scope, and source details before deciding.</div>
       `);
+      renderOnDeviceAiInstallSummary(code, null).catch(() => {});
       return;
     }
 
@@ -2790,6 +2889,7 @@ async function runStaticAnalysis(code) {
         ${findings.length > 10 ? `<span class="tag neutral">+${findings.length - 10} more</span>` : ''}
       </div>
     `);
+    renderOnDeviceAiInstallSummary(code, result).catch(() => {});
   } catch (e) {
     console.warn('Static analysis failed:', e);
     analysisDecisionState = {
@@ -2811,6 +2911,7 @@ async function runStaticAnalysis(code) {
         <div class="analysis-summary">Review the install details manually and open the code preview if the source is unfamiliar.</div>
       `);
     }
+    renderOnDeviceAiInstallSummary(code, null).catch(() => {});
   }
 }
 

@@ -182,6 +182,7 @@ Two additional zero-config flows ship as separate modules: **Easy Cloud** for on
 - Real-time userscript metadata linting
 - **Code beautifier** &mdash; One-click indentation normalization
 - **Snippet insert** &mdash; 7 GM API code templates from the toolbar
+- **On-device AI assistance** &mdash; Optional Chrome Prompt API controls explain the current script or draft an edit locally; disabled by default
 - Open in vscode.dev for external editing
 
 ### DevTools Panel
@@ -212,6 +213,7 @@ Two additional zero-config flows ship as separate modules: **Easy Cloud** for on
 - **Risk scoring** &mdash; Color-coded risk level (minimal/low/medium/high)
 - Categories: execution, data access, network, fingerprinting, obfuscation, mining, DOM hijacking
 - Shown on install page before script installation
+- Optional on-device AI review can summarize static analyzer findings with Chrome Prompt API after you enable it in Settings
 
 ### Security
 
@@ -220,6 +222,7 @@ Two additional zero-config flows ship as separate modules: **Easy Cloud** for on
 - **Script signing** &mdash; Ed25519 cryptographic signatures with trust store
 - **Blacklist system** &mdash; Remote + manual blacklists
 - **Permission analysis** &mdash; Visual `@grant` permission breakdown on install
+- **Local AI gate** &mdash; On-device AI assistance is opt-in, uses Chrome Prompt API only, and never sends script text to a remote AI service
 - **`@connect` validation** &mdash; Restrict XHR/WebSocket domains and block internal-host requests by default
 - **SRI verification** &mdash; `@require` URLs with `#sha256=` hash are verified after fetch
 - **CSP handling** &mdash; Works on sites with strict Content Security Policies
@@ -614,7 +617,7 @@ AI tools can generate userscripts from natural language descriptions. To manage 
 2. Open the ScriptVault dashboard &rarr; click **New** (or paste into Utilities &rarr; Import)
 3. Review the script in the editor before saving
 
-ScriptVault's 31-detector AST analyzer automatically flags common issues in AI-generated scripts: overbroad `@match <all_urls>` patterns, unnecessary `@grant` declarations, `eval()` usage, hardcoded credentials, and other risk patterns. Review the analysis results in the script info panel before enabling.
+ScriptVault's 31-detector AST analyzer automatically flags common issues in generated scripts: overbroad `@match <all_urls>` patterns, unnecessary `@grant` declarations, `eval()` usage, hardcoded credentials, and other risk patterns. If you enable on-device AI assistance, ScriptVault can also ask Chrome Prompt API for a local-only explanation or draft while keeping script text on the device.
 
 ---
 

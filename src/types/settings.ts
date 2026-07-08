@@ -93,6 +93,7 @@ export interface Settings {
   allowInternalSyncEndpoints: boolean;
   allowHighPrivilegeScriptApis: boolean;
   scopedHostPermissions: boolean;
+  onDeviceAiEnabled: boolean;
   modifyCSP: 'auto' | 'yes' | 'no';
   // Subresource Integrity mode for @require/@resource. "validate" (default):
   // verify declared hashes, allow un-pinned. "require": refuse un-pinned remote

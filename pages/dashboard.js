@@ -1722,6 +1722,9 @@
         elements.tbtnTemplate = document.getElementById('tbtnTemplate');
         elements.tbtnPattern = document.getElementById('tbtnPattern');
         elements.tbtnDiff = document.getElementById('tbtnDiff');
+        elements.tbtnAiExplain = document.getElementById('tbtnAiExplain');
+        elements.tbtnAiDraft = document.getElementById('tbtnAiDraft');
+        elements.onDeviceAiControls = document.querySelectorAll('[data-on-device-ai-control]');
         elements.tbtnBindLocalFile = document.getElementById('tbtnBindLocalFile');
         elements.tbtnRefreshLocalFile = document.getElementById('tbtnRefreshLocalFile');
         elements.tbtnUnbindLocalFile = document.getElementById('tbtnUnbindLocalFile');
@@ -1890,6 +1893,7 @@
         elements.settingsAllowCookies = document.getElementById('settingsAllowCookies');
         elements.settingsAllowHighPrivilegeScriptApis = document.getElementById('settingsAllowHighPrivilegeScriptApis');
         elements.settingsScopedHostPermissions = document.getElementById('settingsScopedHostPermissions');
+        elements.settingsOnDeviceAiEnabled = document.getElementById('settingsOnDeviceAiEnabled');
         elements.settingsAllowCommunication = document.getElementById('settingsAllowCommunication');
         elements.settingsSRI = document.getElementById('settingsSRI');
         elements.settingsIncludeMode = document.getElementById('settingsIncludeMode');
@@ -3683,6 +3687,7 @@
         if (elements.settingsAllowCookies) elements.settingsAllowCookies.value = s.allowCookies || 'all';
         if (elements.settingsAllowHighPrivilegeScriptApis) elements.settingsAllowHighPrivilegeScriptApis.checked = s.allowHighPrivilegeScriptApis === true;
         if (elements.settingsScopedHostPermissions) elements.settingsScopedHostPermissions.checked = s.scopedHostPermissions !== false;
+        if (elements.settingsOnDeviceAiEnabled) elements.settingsOnDeviceAiEnabled.checked = s.onDeviceAiEnabled === true;
         if (elements.settingsAllowCommunication) elements.settingsAllowCommunication.value = s.allowCommunication || 'version';
         if (elements.settingsSRI) elements.settingsSRI.value = s.sri || 'validate';
         if (elements.settingsIncludeMode) elements.settingsIncludeMode.value = s.includeMode || 'default';
@@ -3729,6 +3734,7 @@
         } else if (customStyle) {
             customStyle.remove();
         }
+        refreshOnDeviceAiControls();
         updateSupportSnapshotSummary();
     }
 
@@ -3786,6 +3792,7 @@
             allowLocalFiles: elements.settingsAllowLocalFiles,
             allowCookies: elements.settingsAllowCookies,
             scopedHostPermissions: elements.settingsScopedHostPermissions,
+            onDeviceAiEnabled: elements.settingsOnDeviceAiEnabled,
             allowCommunication: elements.settingsAllowCommunication,
             sri: elements.settingsSRI,
             includeMode: elements.settingsIncludeMode,
@@ -4310,6 +4317,7 @@
             if (key === 'keyMapping') applyKeyMapping(value);
             if (key === 'configMode') applyConfigMode();
             if (key === 'customCss') applySettingsToUI();
+            if (key === 'onDeviceAiEnabled') refreshOnDeviceAiControls();
             if (key === 'layout') updateHelpOverview();
             if (key === 'syncProvider') {
                 syncSettingsProviderSelection(value);
@@ -9403,6 +9411,75 @@
         return state.currentScriptId ? state.scripts.find(s => s.id === state.currentScriptId) || null : null;
     }
 
+    function refreshOnDeviceAiControls() {
+        const enabled = state.settings?.onDeviceAiEnabled === true;
+        elements.onDeviceAiControls?.forEach(control => {
+            control.hidden = !enabled;
+        });
+        for (const button of [elements.tbtnAiExplain, elements.tbtnAiDraft]) {
+            if (!button) continue;
+            button.disabled = !enabled;
+            button.title = enabled
+                ? button.title.replace('Enable on-device AI in Settings first. ', '')
+                : `Enable on-device AI in Settings first. ${button.title.replace(/^Enable on-device AI in Settings first\.\s*/, '')}`;
+        }
+    }
+
+    function formatOnDeviceAiModalHtml(result) {
+        const text = result?.text || result?.error || 'No local AI response was returned.';
+        const status = result?.status || {};
+        const statusLine = [
+            status.availability ? `Availability: ${status.availability}` : '',
+            result?.localOnly ? 'Local only' : '',
+            result?.provider ? `Provider: ${result.provider}` : ''
+        ].filter(Boolean).join(' · ');
+        return `
+            <div class="editor-panel-note" style="margin-bottom:12px">${escapeHtml(statusLine || 'Local on-device AI')}</div>
+            <pre style="white-space:pre-wrap; margin:0; max-height:55vh; overflow:auto; background:var(--bg-input); color:var(--text-primary); border:1px solid var(--border-color); border-radius:6px; padding:12px;">${escapeHtml(text)}</pre>
+        `;
+    }
+
+    async function runEditorOnDeviceAi(mode) {
+        const enabled = state.settings?.onDeviceAiEnabled === true;
+        if (!enabled) {
+            showToast('Enable on-device AI in Settings first', 'info');
+            return;
+        }
+        const script = getCurrentScript();
+        const code = state.editor?.getValue?.() || script?.code || '';
+        if (!code.trim()) {
+            showToast('No script code to inspect', 'info');
+            return;
+        }
+
+        let analysis = null;
+        try {
+            analysis = await chrome.runtime.sendMessage({ action: 'analyzeScript', code });
+        } catch (_) {
+            analysis = null;
+        }
+
+        const result = await chrome.runtime.sendMessage({
+            action: 'runOnDeviceAI',
+            mode,
+            code,
+            metadata: script?.metadata || script?.meta || null,
+            analysis
+        });
+
+        const title = mode === 'editor-draft' ? 'Local AI Draft' : 'Local AI Explanation';
+        showModal(title, formatOnDeviceAiModalHtml(result), [
+            result?.text ? {
+                label: 'Copy',
+                callback: async () => {
+                    await navigator.clipboard.writeText(result.text);
+                    showToast('Copied local AI output', 'success');
+                }
+            } : null,
+            { label: 'Close', callback: () => {} }
+        ].filter(Boolean));
+    }
+
     function ensureOpenTabStatus(scriptId, script = null) {
         if (!scriptId || !state.openTabs[scriptId]) return null;
         const tabData = state.openTabs[scriptId];
@@ -14244,6 +14321,12 @@
         elements.tbtnTemplate?.addEventListener('click', openTemplateManager);
         elements.tbtnPattern?.addEventListener('click', openPatternBuilder);
         elements.tbtnDiff?.addEventListener('click', openDiffTool);
+        elements.tbtnAiExplain?.addEventListener('click', event => {
+            runButtonTask(event.currentTarget, () => runEditorOnDeviceAi('editor-explain'), { busyLabel: 'Thinking...' });
+        });
+        elements.tbtnAiDraft?.addEventListener('click', event => {
+            runButtonTask(event.currentTarget, () => runEditorOnDeviceAi('editor-draft'), { busyLabel: 'Drafting...' });
+        });
         elements.tbtnDebug?.addEventListener('click', openScriptDebugger);
         elements.tbtnShare?.addEventListener('click', shareCurrentScript);
 
@@ -14492,6 +14575,7 @@
             settingsAllowCookies: ['allowCookies', 'value'],
             settingsAllowHighPrivilegeScriptApis: ['allowHighPrivilegeScriptApis', 'checked'],
             settingsScopedHostPermissions: ['scopedHostPermissions', 'checked'],
+            settingsOnDeviceAiEnabled: ['onDeviceAiEnabled', 'checked'],
             settingsAllowCommunication: ['allowCommunication', 'value'],
             settingsSRI: ['sri', 'value'],
             settingsIncludeMode: ['includeMode', 'value'],
@@ -14642,6 +14726,7 @@
                 await saveSettingOrThrow('whitelistedPages', elements.settingsWhitelistedPages?.value || '');
                 await saveSettingOrThrow('blacklistedPages', elements.settingsBlacklistedPages?.value || '');
                 await saveSettingOrThrow('scopedHostPermissions', elements.settingsScopedHostPermissions?.checked !== false);
+                await saveSettingOrThrow('onDeviceAiEnabled', elements.settingsOnDeviceAiEnabled?.checked === true);
                 const hostsText = elements.settingsDeniedHosts?.value || '';
                 await saveSettingOrThrow('deniedHosts', hostsText.split('\n').map(s => s.trim()).filter(Boolean));
                 showToast('Security settings saved', 'success');

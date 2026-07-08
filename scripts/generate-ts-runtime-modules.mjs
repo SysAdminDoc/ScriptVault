@@ -152,6 +152,13 @@ export const TS_RUNTIME_MODULES = [
     exportName: 'HostPermissionPatterns',
   },
   {
+    id: 'on-device-ai',
+    source: 'src/modules/on-device-ai.ts',
+    output: 'modules/on-device-ai.js',
+    exportName: 'OnDeviceAI',
+    selfExportName: 'OnDeviceAI',
+  },
+  {
     id: 'user-script-message-policy',
     source: 'src/background/user-script-message-policy.ts',
     output: 'modules/user-script-message-policy.js',
