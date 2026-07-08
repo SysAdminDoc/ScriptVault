@@ -66,6 +66,37 @@ describe('Dashboard inline colors use defined theme tokens (2026-07 regression)'
   });
 });
 
+describe('Dashboard light-theme status contrast (2026-07 regression)', () => {
+  const html = read('pages/dashboard.html');
+  const lightSelectors = [
+    'html[data-theme="light"] .trash-eyebrow',
+    'html[data-theme="light"] .editor-save-state[data-state="dirty"]',
+    'html[data-theme="light"] .editor-save-state[data-state="error"]',
+    'html[data-theme="light"] .info-tag',
+    'html[data-theme="light"] .info-tag.grant',
+    'html[data-theme="light"] .info-tag.success',
+    'html[data-theme="light"] .info-tag.error',
+    'html[data-theme="light"] .info-tag.warning',
+    'html[data-theme="light"] .script-health-badge.warning',
+    'html[data-theme="light"] .script-health-badge.antifeature',
+    'html[data-theme="light"] .script-health-badge.alert',
+    'html[data-theme="light"] .script-health-badge.good',
+    'html[data-theme="light"] .script-health-badge.neutral',
+    'html[data-theme="light"] .script-health-badge.esm',
+    'html[data-theme="light"] .script-tag',
+  ];
+
+  it('overrides dark-background status tones in light mode', () => {
+    for (const selector of lightSelectors) {
+      expect(html).toContain(selector);
+    }
+    expect(html).toContain('color: #92400e;');
+    expect(html).toContain('color: #991b1b;');
+    expect(html).toContain('color: #166534;');
+    expect(html).toContain('color: #334155;');
+  });
+});
+
 describe('Update confirmation diff modal sequencing (2026-07 regression)', () => {
   const src = read('pages/dashboard.js');
 
