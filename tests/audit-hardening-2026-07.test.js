@@ -373,7 +373,7 @@ describe('Userscript file import errors (2026-07 regression)', () => {
       src.indexOf('async function exportAllScripts()')
     );
     expect(importBlock).toContain("const res = await chrome.runtime.sendMessage({ action: 'createScript', code });");
-    expect(importBlock).toContain("showToast(`${file.name}: ${res?.error || 'Import failed'}`, 'error');");
+    expect(importBlock).toContain("importResults.push({ file: file.name, success: false, message: res?.error || 'Import failed' });");
   });
 });
 
@@ -482,6 +482,34 @@ describe('Editor panel failure and autosave flushes (2026-07 regression)', () =>
     expect(src).toContain('void saveCurrentScript({ autosave: true, silentSuccess: true });');
     expect(src).toContain('flushPendingEditorAutosave(previousScriptId);');
     expect(src).toContain('flushPendingEditorAutosave(state.currentScriptId);');
+  });
+});
+
+describe('Import and toast microcopy polish (2026-07 regression)', () => {
+  const src = read('pages/dashboard.js');
+
+  it('aggregates multi-file import feedback into one toast with shared Undo', () => {
+    const importBlock = src.slice(
+      src.indexOf('async function importScript()'),
+      src.indexOf('async function exportAllScripts()')
+    );
+    expect(src).toContain('function buildImportFilesToast(results = [])');
+    expect(importBlock).toContain('const importResults = [];');
+    expect(importBlock).toContain('const receiptIds = [];');
+    expect(importBlock).toContain('const feedback = buildImportFilesToast(importResults);');
+    expect(importBlock).toContain("showToast(feedback.message, feedback.tone, getImportUndoToastOptions(receiptIds, 'import'));");
+    expect(importBlock).not.toContain('showToast(`Imported: ${file.name}`');
+    expect(importBlock).not.toContain('showToast(`Failed: ${file.name}`');
+  });
+
+  it('does not use bare Failed, Deleted, or Empty toast copy', () => {
+    expect(src).not.toContain("showToast('Failed'");
+    expect(src).not.toContain("showToast('Deleted'");
+    expect(src).not.toContain("showToast('Empty'");
+    expect(src).not.toContain("res?.error || 'Failed'");
+    expect(src).toContain("showToast(getErrorMessage(e, 'Failed to create folder'), 'error');");
+    expect(src).toContain('Deleted storage value');
+    expect(src).toContain('Paste JSON to restore before importing');
   });
 });
 

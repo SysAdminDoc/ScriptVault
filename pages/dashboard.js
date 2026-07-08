@@ -7197,7 +7197,9 @@
             } else {
                 showToast(res?.error || 'Failed to create folder', 'error');
             }
-        } catch (e) { showToast('Failed', 'error'); }
+        } catch (e) {
+            showToast(getErrorMessage(e, 'Failed to create folder'), 'error');
+        }
     }
 
     async function deleteFolder(folderId) {
@@ -11111,7 +11113,7 @@
             if (await showConfirmModal('Delete', `Delete "${currentKey}"?`)) {
                 await chrome.runtime.sendMessage({ action: 'deleteScriptValue', scriptId, key: currentKey });
                 await loadScriptStorage(state.scripts.find(s => s.id === scriptId) || { id: scriptId });
-                showToast('Deleted', 'success');
+                showToast(`Deleted storage value "${currentKey}"`, 'success');
             }
         });
 
@@ -11321,7 +11323,7 @@
             }
             return true;
         } catch (e) {
-            if (!skipReload) showToast('Failed', 'error');
+            if (!skipReload) showToast(getErrorMessage(e, 'Failed to delete script'), 'error');
             return false;
         }
     }
@@ -11996,6 +11998,34 @@
         };
     }
 
+    function buildImportFilesToast(results = []) {
+        const total = results.length;
+        const successes = results.filter(result => result.success);
+        const failures = results.filter(result => !result.success);
+        const fileLabel = count => count === 1 ? 'file' : 'files';
+        const failureNames = summarizeNames(failures.map(result => result.file), 2);
+
+        if (total === 0) {
+            return { message: 'No files imported', tone: 'info' };
+        }
+        if (failures.length === 0) {
+            return {
+                message: `Imported ${numberFormatter.format(successes.length)} ${fileLabel(successes.length)}`,
+                tone: 'success'
+            };
+        }
+        if (successes.length > 0) {
+            return {
+                message: `Imported ${numberFormatter.format(successes.length)} of ${numberFormatter.format(total)} ${fileLabel(total)}. Failed: ${failureNames}.`,
+                tone: 'warning'
+            };
+        }
+        return {
+            message: `Import failed for ${numberFormatter.format(total)} ${fileLabel(total)}${failureNames ? `: ${failureNames}` : ''}.`,
+            tone: 'error'
+        };
+    }
+
     async function importScript() {
         const input = document.createElement('input');
         input.type = 'file';
@@ -12014,13 +12044,18 @@
                 if (!confirmed) return;
             }
             showProgress(`Importing ${files.length} file${files.length > 1 ? 's' : ''}…`);
+            const importResults = [];
+            const receiptIds = [];
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
                 updateProgress(i + 1, files.length, `${file.name} (${i + 1}/${files.length})`);
                 try {
                     const name = file.name.toLowerCase();
                     if (name.endsWith('.zip')) {
-                        if (file.size > 50 * 1024 * 1024) { showToast(`${file.name}: too large (max 50 MB)`, 'error'); continue; }
+                        if (file.size > 50 * 1024 * 1024) {
+                            importResults.push({ file: file.name, success: false, message: 'too large (max 50 MB)' });
+                            continue;
+                        }
                         const buf = await file.arrayBuffer();
                         const bytes = new Uint8Array(buf);
                         let binary = '';
@@ -12032,11 +12067,8 @@
                             zipData: btoa(binary),
                             options: { overwrite: true, trustImportedScripts: false, sourceLabel: `ZIP: ${file.name}` }
                         });
-                        showToast(
-                            r?.error ? r.error : `${file.name}: ${formatImportSummary(r)}`,
-                            r?.error ? 'error' : getImportResultTone(r),
-                            getImportUndoToastOptions(r?.receiptId, 'import')
-                        );
+                        if (r?.receiptId) receiptIds.push(r.receiptId);
+                        importResults.push({ file: file.name, success: !r?.error, message: r?.error || formatImportSummary(r) });
                     } else if (name.endsWith('.json')) {
                         const data = JSON.parse(await file.text());
                         const r = await chrome.runtime.sendMessage({
@@ -12053,27 +12085,26 @@
                                 }
                             }
                         });
-                        showToast(
-                            r?.error ? r.error : `${file.name}: ${formatImportSummary(r)}`,
-                            r?.error ? 'error' : getImportResultTone(r),
-                            getImportUndoToastOptions(r?.receiptId, 'import')
-                        );
+                        if (r?.receiptId) receiptIds.push(r.receiptId);
+                        importResults.push({ file: file.name, success: !r?.error, message: r?.error || formatImportSummary(r) });
                     } else {
                         const code = await file.text();
                         const res = await chrome.runtime.sendMessage({ action: 'createScript', code });
                         if (res?.success) {
-                            showToast(`Imported: ${file.name}`, 'success');
+                            importResults.push({ file: file.name, success: true, message: 'imported' });
                         } else {
-                            showToast(`${file.name}: ${res?.error || 'Import failed'}`, 'error');
+                            importResults.push({ file: file.name, success: false, message: res?.error || 'Import failed' });
                         }
                     }
                 } catch (err) {
-                    showToast(`Failed: ${file.name}`, 'error');
+                    importResults.push({ file: file.name, success: false, message: getErrorMessage(err, 'Import failed') });
                 }
             }
             await loadScripts();
             updateStats();
             hideProgress();
+            const feedback = buildImportFilesToast(importResults);
+            showToast(feedback.message, feedback.tone, getImportUndoToastOptions(receiptIds, 'import'));
         };
         input.click();
     }
@@ -12109,7 +12140,7 @@
                 showToast(`JSON export ready: ${exportDetails.join(', ')}`, 'success');
             }
         } catch (e) {
-            showToast('Failed', 'error');
+            showToast(getErrorMessage(e, 'Failed to export JSON'), 'error');
         }
     }
 
@@ -12152,7 +12183,7 @@
                 );
             }
         } catch (e) {
-            showToast('Failed', 'error');
+            showToast(getErrorMessage(e, 'Failed to export ZIP'), 'error');
         }
     }
 
@@ -12269,10 +12300,10 @@
                 publishDashboardTelemetry('scriptInstalled', { scriptName: url });
                 showToast('Installed', 'success');
             } else {
-                showToast(res?.error || 'Failed', 'error');
+                showToast(res?.error || 'Install from URL failed', 'error');
             }
         } catch (e) {
-            showToast('Failed', 'error');
+            showToast(getErrorMessage(e, 'Install from URL failed'), 'error');
         }
     }
 
@@ -12455,9 +12486,9 @@
                 showToast(label ? `Installed ${label}` : 'Installed', 'success');
                 return true;
             }
-            showToast(res?.error || 'Failed', 'error');
+            showToast(res?.error || 'Install failed', 'error');
         } catch (e) {
-            showToast('Failed', 'error');
+            showToast(getErrorMessage(e, 'Install failed'), 'error');
         }
         return false;
     }
@@ -15553,7 +15584,7 @@
         elements.btnTextareaImport?.addEventListener('click', async event => {
             await runButtonTask(event.currentTarget, async () => {
                 const txt = elements.textareaData?.value?.trim();
-                if (!txt) return showToast('Empty', 'error');
+                if (!txt) return showToast('Paste JSON to restore before importing', 'error');
                 try {
                     const data = JSON.parse(txt);
                     const transfer = getTransferPreferences();
