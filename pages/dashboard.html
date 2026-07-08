@@ -6840,6 +6840,7 @@
                         <select class="select-field" id="settingsSyncType">
                             <option value="none" selected data-i18n="syncNotConfigured">Not configured</option>
                             <option value="webdav" data-i18n="syncProviderWebdav">WebDAV</option>
+                            <option value="localfolder">Local folder</option>
                             <option value="googledrive" data-i18n="syncProviderGoogleDrive">Google Drive</option>
                             <option value="dropbox" data-i18n="syncProviderDropbox">Dropbox</option>
                             <option value="onedrive" data-i18n="syncProviderOneDrive">OneDrive</option>
@@ -6901,6 +6902,21 @@
                         </div>
                         <div class="setting-row" style="font-size:0.6875rem;color:var(--text-muted);line-height:1.4" data-i18n="settingsS3CredentialNote">
                             Credentials are AWS SigV4-signed and sent only to the configured endpoint. Cloudflare R2 uses region "auto"; MinIO and Backblaze B2 use path-style addressing (default for non-AWS endpoints).
+                        </div>
+                    </div>
+
+                    <!-- Local Folder Settings (hidden by default) -->
+                    <div id="syncLocalFolderSettings" class="sync-provider-settings" style="display:none; margin-top: 10px; padding: 10px; background: var(--bg-input); border-radius: 4px;">
+                        <div class="setting-row">
+                            <span class="label-text">Folder:</span>
+                            <span id="syncLocalFolderStatus" class="utility-inline-status" role="status" aria-live="polite">No local sync folder selected</span>
+                        </div>
+                        <div class="setting-row">
+                            <button type="button" class="btn btn-primary" id="btnSyncBindLocalFolder">Choose Folder</button>
+                            <button type="button" class="btn btn-danger" id="btnSyncClearLocalFolder">Forget Folder</button>
+                        </div>
+                        <div class="setting-row" style="font-size:0.6875rem;color:var(--text-muted);line-height:1.4">
+                            Sync reads and writes scriptvault-backup.json in the selected folder. The folder handle stays in extension IndexedDB.
                         </div>
                     </div>
 
@@ -7493,6 +7509,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                             <option value="dropbox" data-i18n="syncProviderDropbox">Dropbox</option>
                             <option value="onedrive" data-i18n="syncProviderOneDrive">OneDrive</option>
                             <option value="webdav" data-i18n="syncProviderWebdav">WebDAV</option>
+                            <option value="localfolder">Local folder</option>
                         </select>
                     </div>
                     <div class="setting-row" id="firefoxCloudNote" hidden>

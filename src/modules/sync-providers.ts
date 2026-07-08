@@ -14,6 +14,12 @@ declare const SettingsManager: {
   set(key: keyof Settings | Partial<Settings>, value?: Settings[keyof Settings]): Promise<Settings>;
 };
 
+declare const LocalWorkspaceBindings: {
+  get(bindingId: string): Promise<LocalFolderBindingSummary | null>;
+  getHandle(bindingId: string): Promise<LocalFolderDirectoryHandle | null>;
+  delete(bindingId: string): Promise<void>;
+};
+
 /** Helper to get full Settings object with correct type (works around conditional return). */
 async function getRawSettings(): Promise<Settings> {
   return SettingsManager.get() as unknown as Promise<Settings>;
@@ -102,7 +108,42 @@ interface GoogleDriveFile {
   modifiedTime: string;
 }
 
+interface LocalFolderBindingSummary {
+  bindingId: string;
+  scriptId: string;
+  displayName?: string;
+  permissionState?: string;
+  updatedAt?: number;
+}
+
+interface LocalFolderFile {
+  text(): Promise<string>;
+  size?: number;
+  lastModified?: number;
+}
+
+interface LocalFolderFileWritable {
+  write(data: string): Promise<void> | void;
+  close(): Promise<void> | void;
+}
+
+interface LocalFolderFileHandle {
+  name?: string;
+  getFile(): Promise<LocalFolderFile>;
+  createWritable(): Promise<LocalFolderFileWritable>;
+}
+
+interface LocalFolderDirectoryHandle {
+  kind?: string;
+  name?: string;
+  queryPermission?(descriptor?: { mode?: 'read' | 'readwrite' }): Promise<string>;
+  requestPermission?(descriptor?: { mode?: 'read' | 'readwrite' }): Promise<string>;
+  getFileHandle(name: string, options?: { create?: boolean }): Promise<LocalFolderFileHandle>;
+}
+
 const SYNC_SESSION_CREDENTIALS_KEY = 'sv_sync_session_credentials';
+const LOCAL_FOLDER_SYNC_BINDING_ID = 'sync_local_folder';
+const LOCAL_FOLDER_SYNC_FILE_NAME = 'scriptvault-backup.json';
 
 const SYNC_CREDENTIAL_DEFAULTS = {
   webdavUrl: '',
@@ -400,6 +441,115 @@ function syncStorageDisclosure(
   };
 }
 
+function isExpectedMissingLocalFolderFileError(error: unknown): boolean {
+  const value = error as { name?: string; message?: string };
+  const name = String(value?.name || '').toLowerCase();
+  const message = String(value?.message || '').toLowerCase();
+  return name.includes('notfound') ||
+    name.includes('not_found') ||
+    message.includes('not found') ||
+    message.includes('no such file');
+}
+
+async function queryLocalFolderPermission(
+  handle: LocalFolderDirectoryHandle,
+  mode: 'read' | 'readwrite',
+): Promise<string> {
+  if (typeof handle.queryPermission !== 'function') return 'unknown';
+  try {
+    const result = await handle.queryPermission({ mode });
+    return result === 'granted' || result === 'prompt' || result === 'denied'
+      ? result
+      : 'unknown';
+  } catch (_) {
+    return 'unknown';
+  }
+}
+
+async function requestLocalFolderPermission(
+  handle: LocalFolderDirectoryHandle,
+  mode: 'read' | 'readwrite',
+): Promise<string> {
+  if (typeof handle.requestPermission !== 'function') {
+    return queryLocalFolderPermission(handle, mode);
+  }
+  try {
+    const result = await handle.requestPermission({ mode });
+    return result === 'granted' || result === 'prompt' || result === 'denied'
+      ? result
+      : 'unknown';
+  } catch (_) {
+    return 'unknown';
+  }
+}
+
+function assertLocalWorkspaceBindingsAvailable(): void {
+  if (
+    typeof LocalWorkspaceBindings === 'undefined' ||
+    typeof LocalWorkspaceBindings.getHandle !== 'function'
+  ) {
+    throw new Error('Local folder sync is not available in this build');
+  }
+}
+
+async function getLocalFolderSyncHandle(options: {
+  requestPermission?: boolean;
+  mode?: 'read' | 'readwrite';
+} = {}): Promise<LocalFolderDirectoryHandle> {
+  assertLocalWorkspaceBindingsAvailable();
+  const mode = options.mode ?? 'read';
+  const handle = await LocalWorkspaceBindings.getHandle(LOCAL_FOLDER_SYNC_BINDING_ID);
+  if (!handle) {
+    throw new Error('Choose a local sync folder before syncing');
+  }
+  if (handle.kind && handle.kind !== 'directory') {
+    throw new Error('Stored local sync handle is not a directory');
+  }
+  if (typeof handle.getFileHandle !== 'function') {
+    throw new Error('Stored local sync folder handle is unavailable');
+  }
+
+  let permission = await queryLocalFolderPermission(handle, mode);
+  if (permission !== 'granted' && options.requestPermission) {
+    permission = await requestLocalFolderPermission(handle, mode);
+  }
+  if (permission === 'denied') {
+    throw new Error('Local sync folder permission was denied');
+  }
+  if (permission !== 'granted' && options.requestPermission) {
+    throw new Error('Local sync folder permission was not granted');
+  }
+  return handle;
+}
+
+async function readLocalFolderSyncFile(
+  handle: LocalFolderDirectoryHandle,
+  fileName: string,
+): Promise<string | null> {
+  try {
+    const fileHandle = await handle.getFileHandle(fileName);
+    const file = await fileHandle.getFile();
+    return await file.text();
+  } catch (error) {
+    if (isExpectedMissingLocalFolderFileError(error)) return null;
+    throw error;
+  }
+}
+
+async function writeLocalFolderSyncFile(
+  handle: LocalFolderDirectoryHandle,
+  fileName: string,
+  text: string,
+): Promise<void> {
+  const fileHandle = await handle.getFileHandle(fileName, { create: true });
+  const writable = await fileHandle.createWritable();
+  try {
+    await writable.write(text);
+  } finally {
+    await writable.close();
+  }
+}
+
 async function _oauthFetchWithTimeout(
   url: string,
   init: RequestInit,
@@ -464,6 +614,119 @@ async function fetchWithTimeout(
     externalSignal?.removeEventListener('abort', abortFromExternal);
   }
 }
+
+// ============================================================================
+// Local Folder Provider
+// ============================================================================
+
+const localfolder = {
+  name: 'Local Folder' as const,
+  icon: 'Folder' as const,
+  requiresOAuth: false as const,
+  fileName: LOCAL_FOLDER_SYNC_FILE_NAME,
+  supportsManualSync: true as const,
+  supportsDryRun: true as const,
+
+  getStorageDisclosure(): SyncStorageDisclosure {
+    return {
+      storage: 'chrome.storage.local',
+      credentialStorageMode: 'local',
+      sessionFallback: false,
+      reconnectRequired: false,
+      protection: 'A browser File System Access directory handle is stored in extension IndexedDB; sync data stays in the folder you choose.',
+      fields: [
+        {
+          key: LOCAL_FOLDER_SYNC_BINDING_ID,
+          label: 'Selected local sync folder handle',
+          type: 'metadata',
+          present: true,
+        },
+      ],
+      hasStoredSecrets: false,
+      revokeAction: 'Forget the local sync folder handle stored in extension IndexedDB.',
+      notes: `Reads and writes ${LOCAL_FOLDER_SYNC_FILE_NAME} in the selected folder.`,
+    };
+  },
+
+  async upload(
+    data: unknown,
+    _settings: Settings,
+    opts: SyncRequestOptions = {},
+  ): Promise<SyncUploadResult> {
+    const handle = await getLocalFolderSyncHandle({
+      requestPermission: true,
+      mode: 'readwrite',
+    });
+    const fileName = resolveRemoteObjectName(opts.objectName, this.fileName);
+    await writeLocalFolderSyncFile(handle, fileName, JSON.stringify(data, null, 2));
+    return { success: true, timestamp: Date.now() };
+  },
+
+  async download(
+    _settings: Settings,
+    opts: SyncRequestOptions = {},
+  ): Promise<unknown | null> {
+    const handle = await getLocalFolderSyncHandle({ mode: 'read' });
+    const fileName = resolveRemoteObjectName(opts.objectName, this.fileName);
+    const text = await readLocalFolderSyncFile(handle, fileName);
+    if (text == null || !text.trim()) return null;
+    return JSON.parse(text) as unknown;
+  },
+
+  async test(): Promise<SyncTestResult> {
+    try {
+      const handle = await getLocalFolderSyncHandle({ mode: 'read' });
+      const permission = await queryLocalFolderPermission(handle, 'readwrite');
+      if (permission === 'denied') {
+        return { success: false, error: 'Local sync folder permission was denied' };
+      }
+      return { success: true };
+    } catch (e: unknown) {
+      return { success: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  },
+
+  async getStatus(): Promise<SyncStatusResult> {
+    try {
+      assertLocalWorkspaceBindingsAvailable();
+      const binding = await LocalWorkspaceBindings.get(LOCAL_FOLDER_SYNC_BINDING_ID);
+      if (!binding) {
+        return {
+          connected: false,
+          status: 'not_configured',
+          error: 'Choose a local sync folder before syncing',
+        };
+      }
+      const handle = await LocalWorkspaceBindings.getHandle(LOCAL_FOLDER_SYNC_BINDING_ID);
+      if (!handle) {
+        return {
+          connected: false,
+          status: 'handle_missing',
+          error: 'Local sync folder handle is unavailable',
+        };
+      }
+      const permission = await queryLocalFolderPermission(handle, 'readwrite');
+      return {
+        connected: permission === 'granted',
+        status: permission === 'granted' ? 'ok' : permission,
+        error: permission === 'denied' ? 'Local sync folder permission was denied' : null,
+        user: { email: '', name: binding.displayName || handle.name || 'Local sync folder' },
+      };
+    } catch (e: unknown) {
+      return {
+        connected: false,
+        status: 'error',
+        error: e instanceof Error ? e.message : String(e),
+      };
+    }
+  },
+
+  async disconnect(): Promise<SyncDisconnectResult> {
+    assertLocalWorkspaceBindingsAvailable();
+    await LocalWorkspaceBindings.delete(LOCAL_FOLDER_SYNC_BINDING_ID);
+    return { success: true };
+  },
+};
 
 // ============================================================================
 // WebDAV Provider
@@ -1949,6 +2212,9 @@ const s3 = {
 
 export const CloudSyncProviders = {
   webdav,
+  localfolder,
+  localFolder: localfolder,
+  local: localfolder,
   googledrive,
   google: googledrive,
   dropbox,

@@ -162,11 +162,12 @@ Per-script `@match`/`@include`/`@exclude` still apply on top of these global gat
 
 ### Cloud Sync
 
-Sync scripts across devices with 5 providers:
+Sync scripts across devices with 6 providers:
 
 | Provider | Method |
 |----------|--------|
 | WebDAV | Self-hosted or any WebDAV server |
+| Local folder | Browser-selected folder with `scriptvault-backup.json` for self-managed backups |
 | Google Drive | OAuth2 integration |
 | Dropbox | App folder sync |
 | OneDrive | Microsoft account integration |
@@ -505,7 +506,7 @@ that script in the dashboard editor.
 | Side Panel | Yes | No | No |
 | Script Signing (Ed25519) | Yes | No | No |
 | AST Static Analysis (31 detectors) | Yes | No | No |
-| Cloud Sync (WebDAV, Google Drive, Dropbox, OneDrive, S3) | Yes&sup1; | Yes | Yes |
+| Cloud Sync (WebDAV, local folder, Google Drive, Dropbox, OneDrive, S3) | Yes&sup1; | Yes | Yes |
 | 3-Way Sync Merge | Yes | No | No |
 | Tabbed Multi-Script Editor | Yes | No | No |
 | Built-in Script Search | Yes | No | No |
@@ -556,7 +557,7 @@ ScriptVault/
 │   └── workspaces.js          # Workspace state manager
 ├── modules/
 │   ├── storage.js             # Settings, scripts, values, folders
-│   ├── sync-providers.js      # WebDAV, Google Drive, Dropbox, OneDrive
+│   ├── sync-providers.js      # WebDAV, local folder, Google Drive, Dropbox, OneDrive, S3
 │   ├── resources.js           # @resource/@require cache
 │   ├── xhr.js                 # XHR abort tracking
 │   └── i18n.js                # Inline translations (9 languages)

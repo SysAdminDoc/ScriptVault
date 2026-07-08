@@ -10,7 +10,85 @@ beforeEach(() => {
 afterEach(() => {
   globalThis.fetch = originalFetch;
   Reflect.deleteProperty(globalThis, 'SettingsManager');
+  Reflect.deleteProperty(globalThis, 'LocalWorkspaceBindings');
 });
+
+function createNotFoundError() {
+  const error = new Error('File not found');
+  error.name = 'NotFoundError';
+  return error;
+}
+
+class FakeLocalFolderFileHandle {
+  constructor(directory, name) {
+    this.directory = directory;
+    this.name = name;
+  }
+
+  async getFile() {
+    if (!this.directory.files.has(this.name)) throw createNotFoundError();
+    const text = this.directory.files.get(this.name);
+    return {
+      size: text.length,
+      lastModified: 123456,
+      text: async () => text,
+    };
+  }
+
+  async createWritable() {
+    let nextText = '';
+    return {
+      write: async (data) => {
+        nextText = String(data);
+      },
+      close: async () => {
+        this.directory.files.set(this.name, nextText);
+      },
+    };
+  }
+}
+
+class FakeLocalFolderDirectoryHandle {
+  constructor({ name = 'Vault Sync', permission = 'granted' } = {}) {
+    this.kind = 'directory';
+    this.name = name;
+    this.permission = permission;
+    this.files = new Map();
+  }
+
+  async queryPermission() {
+    return this.permission;
+  }
+
+  async requestPermission() {
+    return this.permission;
+  }
+
+  async getFileHandle(name, options = {}) {
+    if (!options.create && !this.files.has(name)) throw createNotFoundError();
+    return new FakeLocalFolderFileHandle(this, name);
+  }
+}
+
+function installLocalFolderBinding(directory = new FakeLocalFolderDirectoryHandle()) {
+  let record = {
+    bindingId: 'sync_local_folder',
+    scriptId: '__scriptvault_sync__',
+    displayName: directory.name,
+    handle: directory,
+  };
+  const LocalWorkspaceBindings = {
+    get: vi.fn(async (bindingId) => (bindingId === 'sync_local_folder' && record
+      ? { bindingId: record.bindingId, scriptId: record.scriptId, displayName: record.displayName }
+      : null)),
+    getHandle: vi.fn(async (bindingId) => (bindingId === 'sync_local_folder' && record ? record.handle : null)),
+    delete: vi.fn(async (bindingId) => {
+      if (bindingId === 'sync_local_folder') record = null;
+    }),
+  };
+  globalThis.LocalWorkspaceBindings = LocalWorkspaceBindings;
+  return { directory, LocalWorkspaceBindings };
+}
 
 async function loadFreshSyncProviders() {
   vi.resetModules();
@@ -423,6 +501,69 @@ describe('source sync providers module', () => {
 
     expect(CloudSyncProviders.google).toBe(CloudSyncProviders.googledrive);
     expect(CloudSyncProviders.google.name).toBe('Google Drive');
+  });
+
+  it('round-trips sync envelopes through the local folder provider', async () => {
+    const { directory, LocalWorkspaceBindings } = installLocalFolderBinding();
+    const { CloudSyncProviders } = await loadFreshSyncProviders();
+    const envelope = {
+      version: 1,
+      timestamp: 42,
+      scripts: [
+        {
+          id: 'script_alpha',
+          code: '// ==UserScript==\n// @name Alpha\n// ==/UserScript==\nconsole.log("alpha");',
+          enabled: true,
+          position: 0,
+          settings: { syncValues: true },
+          updatedAt: 42,
+          syncBaseCode: '// base',
+        },
+      ],
+      tombstones: {},
+      valueBundles: {
+        script_alpha: {
+          values: { key: 'value' },
+          keyMetadata: {
+            key: { updatedAt: 42, updatedBy: 'script' },
+          },
+        },
+      },
+    };
+
+    const upload = await CloudSyncProviders.localfolder.upload(envelope, {});
+    const storedText = directory.files.get('scriptvault-backup.json');
+    const download = await CloudSyncProviders.localfolder.download({});
+    const status = await CloudSyncProviders.localfolder.getStatus();
+    const disconnect = await CloudSyncProviders.localfolder.disconnect();
+
+    expect(upload).toEqual({ success: true, timestamp: expect.any(Number) });
+    expect(JSON.parse(storedText)).toEqual(envelope);
+    expect(download).toEqual(envelope);
+    expect(status).toEqual({
+      connected: true,
+      status: 'ok',
+      error: null,
+      user: { email: '', name: 'Vault Sync' },
+    });
+    expect(disconnect).toEqual({ success: true });
+    expect(LocalWorkspaceBindings.delete).toHaveBeenCalledWith('sync_local_folder');
+  });
+
+  it('returns null for an empty local sync folder and reports missing bindings clearly', async () => {
+    installLocalFolderBinding();
+    const { CloudSyncProviders } = await loadFreshSyncProviders();
+
+    await expect(CloudSyncProviders.localfolder.download({})).resolves.toBeNull();
+
+    await CloudSyncProviders.localfolder.disconnect();
+    await expect(CloudSyncProviders.localfolder.download({})).rejects.toThrow(
+      'Choose a local sync folder before syncing',
+    );
+    await expect(CloudSyncProviders.localfolder.getStatus()).resolves.toMatchObject({
+      connected: false,
+      status: 'not_configured',
+    });
   });
 
   it('discloses OAuth token storage fields without exposing token values', async () => {

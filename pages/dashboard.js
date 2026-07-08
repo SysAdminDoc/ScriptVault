@@ -267,6 +267,9 @@
     const LOCAL_WORKSPACE_DB_NAME = 'scriptvault';
     const LOCAL_WORKSPACE_DB_VERSION = 3;
     const LOCAL_WORKSPACE_STORE = 'localWorkspaceBindings';
+    const LOCAL_SYNC_FOLDER_BINDING_ID = 'sync_local_folder';
+    const LOCAL_SYNC_FOLDER_SCRIPT_ID = '__scriptvault_sync__';
+    const LOCAL_SYNC_FOLDER_FILE_NAME = 'scriptvault-backup.json';
     const PUBLICATION_RECEIPTS_STORE = 'publicationReceipts';
     const MAX_PUBLICATION_RECEIPTS_PER_SCRIPT = 10;
     const LOCAL_WORKSPACE_MAX_SCRIPT_BYTES = 5 * 1024 * 1024;
@@ -364,7 +367,7 @@
     const DASHBOARD_TELEMETRY_SYNC_MS = 5000;
     const DASHBOARD_TABS = ['scripts', 'updates', 'settings', 'utilities', 'trash', 'help'];
     const OAUTH_SYNC_PROVIDERS = ['googledrive', 'dropbox', 'onedrive'];
-    const ALL_SYNC_PROVIDERS = ['none', 'webdav', 'googledrive', 'dropbox', 'onedrive', 's3'];
+    const ALL_SYNC_PROVIDERS = ['none', 'webdav', 'localfolder', 'googledrive', 'dropbox', 'onedrive', 's3'];
     let modalLastFocusedElement = null;
     let modalFocusManaged = false;
     let progressLastFocusedElement = null;
@@ -1834,11 +1837,15 @@
         elements.lastSyncTime = document.getElementById('lastSyncTime');
         elements.syncWebdavSettings = document.getElementById('syncWebdavSettings');
         elements.syncOAuthSettings = document.getElementById('syncOAuthSettings');
+        elements.syncLocalFolderSettings = document.getElementById('syncLocalFolderSettings');
+        elements.syncLocalFolderStatus = document.getElementById('syncLocalFolderStatus');
         elements.oauthStatus = document.getElementById('oauthStatus');
         elements.oauthUser = document.getElementById('oauthUser');
         elements.oauthUserRow = document.getElementById('oauthUserRow');
         elements.btnConnectOAuth = document.getElementById('btnConnectOAuth');
         elements.btnDisconnectOAuth = document.getElementById('btnDisconnectOAuth');
+        elements.btnSyncBindLocalFolder = document.getElementById('btnSyncBindLocalFolder');
+        elements.btnSyncClearLocalFolder = document.getElementById('btnSyncClearLocalFolder');
         elements.settingsWebdavUrl = document.getElementById('settingsWebdavUrl');
         elements.settingsWebdavUsername = document.getElementById('settingsWebdavUsername');
         elements.settingsWebdavPassword = document.getElementById('settingsWebdavPassword');
@@ -4355,10 +4362,14 @@
         if (elements.syncWebdavSettings) elements.syncWebdavSettings.style.display = 'none';
         if (elements.syncOAuthSettings) elements.syncOAuthSettings.style.display = 'none';
         if (elements.syncS3Settings) elements.syncS3Settings.style.display = 'none';
+        if (elements.syncLocalFolderSettings) elements.syncLocalFolderSettings.style.display = 'none';
 
         // Show selected provider settings
         if (syncType === 'webdav' && elements.syncWebdavSettings) {
             elements.syncWebdavSettings.style.display = 'block';
+        } else if (syncType === 'localfolder' && elements.syncLocalFolderSettings) {
+            elements.syncLocalFolderSettings.style.display = 'block';
+            refreshLocalSyncFolderStatus();
         } else if (syncType === 's3' && elements.syncS3Settings) {
             elements.syncS3Settings.style.display = 'block';
         } else if (OAUTH_SYNC_PROVIDERS.includes(syncType) && elements.syncOAuthSettings) {
@@ -4765,6 +4776,7 @@
     }
     
     function capitalize(str) {
+        if (str === 'localfolder') return 'Local Folder';
         return str.charAt(0).toUpperCase() + str.slice(1);
     }
     
@@ -9573,8 +9585,16 @@
 
     let localWorkspaceDbPromise = null;
 
+    function isLocalWorkspaceHandleStorageSupported() {
+        return typeof indexedDB !== 'undefined';
+    }
+
     function isLocalWorkspaceFileAccessSupported() {
-        return typeof window.showOpenFilePicker === 'function' && typeof indexedDB !== 'undefined';
+        return typeof window.showOpenFilePicker === 'function' && isLocalWorkspaceHandleStorageSupported();
+    }
+
+    function isLocalSyncFolderAccessSupported() {
+        return typeof window.showDirectoryPicker === 'function' && isLocalWorkspaceHandleStorageSupported();
     }
 
     function ensureLocalWorkspaceIndex(store, name, keyPath, options = {}) {
@@ -9696,7 +9716,7 @@
     }
 
     async function getDashboardLocalWorkspaceBindingsByScript(scriptId) {
-        if (!scriptId || !isLocalWorkspaceFileAccessSupported()) return [];
+        if (!scriptId || !isLocalWorkspaceHandleStorageSupported()) return [];
         return withDashboardLocalWorkspaceStore('readonly', (store) => new Promise((resolve, reject) => {
             const out = [];
             const request = store.index('by-script').openCursor(IDBKeyRange.only(scriptId));
@@ -9714,7 +9734,7 @@
     }
 
     async function deleteDashboardLocalWorkspaceBindingsForScript(scriptId) {
-        if (!scriptId || !isLocalWorkspaceFileAccessSupported()) return;
+        if (!scriptId || !isLocalWorkspaceHandleStorageSupported()) return;
         await withDashboardLocalWorkspaceStore('readwrite', (store) => new Promise((resolve, reject) => {
             const request = store.index('by-script').openCursor(IDBKeyRange.only(scriptId));
             request.onsuccess = () => {
@@ -9731,12 +9751,12 @@
     }
 
     async function getDashboardLocalWorkspaceBindingRecord(bindingId) {
-        if (!bindingId || !isLocalWorkspaceFileAccessSupported()) return null;
+        if (!bindingId || !isLocalWorkspaceHandleStorageSupported()) return null;
         return withDashboardLocalWorkspaceStore('readonly', store => localWorkspaceRequest(store.get(bindingId)));
     }
 
     async function deleteDashboardLocalWorkspaceBinding(bindingId) {
-        if (!bindingId || !isLocalWorkspaceFileAccessSupported()) return;
+        if (!bindingId || !isLocalWorkspaceHandleStorageSupported()) return;
         await withDashboardLocalWorkspaceStore('readwrite', store => localWorkspaceRequest(store.delete(bindingId)));
     }
 
@@ -9865,6 +9885,132 @@
             return state === 'granted' || state === 'prompt' || state === 'denied' ? state : 'unknown';
         } catch {
             return 'unknown';
+        }
+    }
+
+    function formatLocalSyncFolderStatus(record, permissionState) {
+        const name = record?.displayName || record?.handle?.name || 'Local sync folder';
+        if (!record) return 'No local sync folder selected';
+        switch (permissionState) {
+            case 'granted': return `${name} ready (${LOCAL_SYNC_FOLDER_FILE_NAME})`;
+            case 'prompt': return `${name} needs permission before sync`;
+            case 'denied': return `${name} permission denied`;
+            default: return `${name} saved; permission unknown`;
+        }
+    }
+
+    async function refreshLocalSyncFolderStatus() {
+        const supported = isLocalSyncFolderAccessSupported();
+        if (elements.btnSyncBindLocalFolder) {
+            elements.btnSyncBindLocalFolder.disabled = !supported;
+            elements.btnSyncBindLocalFolder.title = supported ? 'Choose local sync folder' : 'Local folder sync is not available in this browser';
+        }
+        if (elements.btnSyncClearLocalFolder) {
+            elements.btnSyncClearLocalFolder.disabled = true;
+        }
+        if (!elements.syncLocalFolderStatus) return null;
+        if (!supported) {
+            elements.syncLocalFolderStatus.textContent = 'Local folder sync is not available in this browser';
+            elements.syncLocalFolderStatus.style.color = 'var(--text-muted)';
+            return null;
+        }
+
+        try {
+            const record = await getDashboardLocalWorkspaceBindingRecord(LOCAL_SYNC_FOLDER_BINDING_ID);
+            if (!record) {
+                elements.syncLocalFolderStatus.textContent = 'No local sync folder selected';
+                elements.syncLocalFolderStatus.style.color = 'var(--text-muted)';
+                return null;
+            }
+            const permissionState = await queryLocalWorkspacePermission(record.handle, 'readwrite');
+            elements.syncLocalFolderStatus.textContent = formatLocalSyncFolderStatus(record, permissionState);
+            elements.syncLocalFolderStatus.style.color = permissionState === 'granted'
+                ? 'var(--accent-primary)'
+                : permissionState === 'denied'
+                    ? 'var(--accent-error)'
+                    : 'var(--text-secondary)';
+            if (elements.btnSyncClearLocalFolder) {
+                elements.btnSyncClearLocalFolder.disabled = false;
+            }
+            return { record, permissionState };
+        } catch (error) {
+            console.warn('[ScriptVault] Failed to read local sync folder binding:', error);
+            elements.syncLocalFolderStatus.textContent = error?.message || 'Local sync folder status unavailable';
+            elements.syncLocalFolderStatus.style.color = 'var(--accent-error)';
+            return null;
+        }
+    }
+
+    async function bindLocalSyncFolder(options = {}) {
+        if (!isLocalSyncFolderAccessSupported()) {
+            showToast('Local folder sync is not available in this browser', 'warning');
+            await refreshLocalSyncFolderStatus();
+            return false;
+        }
+
+        let handle;
+        try {
+            handle = await window.showDirectoryPicker({
+                id: 'scriptvault-sync-folder',
+                mode: 'readwrite'
+            });
+        } catch (error) {
+            if (error?.name !== 'AbortError') showToast(error?.message || 'Failed to choose local sync folder', 'error');
+            return false;
+        }
+        if (!handle) return false;
+
+        const permissionState = await requestLocalWorkspacePermission(handle, 'readwrite');
+        if (permissionState === 'denied') {
+            showToast('Local sync folder permission denied', 'error');
+            await refreshLocalSyncFolderStatus();
+            return false;
+        }
+
+        try {
+            const existing = await getDashboardLocalWorkspaceBindingRecord(LOCAL_SYNC_FOLDER_BINDING_ID);
+            await putDashboardLocalWorkspaceBinding({
+                bindingId: LOCAL_SYNC_FOLDER_BINDING_ID,
+                scriptId: LOCAL_SYNC_FOLDER_SCRIPT_ID,
+                handle,
+                displayName: handle.name || 'Local sync folder',
+                permissionState,
+                createdAt: existing?.createdAt || Date.now(),
+                updatedAt: Date.now(),
+                lastRefreshAt: null,
+                lastErrorKind: '',
+                lastStatusKind: 'bound'
+            });
+            if (options.persistProvider !== false) {
+                state.settings.syncProvider = 'localfolder';
+                state.settings.syncEnabled = true;
+                if (elements.settingsEnableSync) elements.settingsEnableSync.checked = true;
+                syncSettingsProviderSelection('localfolder');
+                syncCloudProviderSelection('localfolder');
+                await saveSetting('syncProvider', 'localfolder', { quiet: true });
+                await saveSetting('syncEnabled', true, { quiet: true });
+            }
+            await refreshLocalSyncFolderStatus();
+            await loadSyncProviderStatus();
+            showToast(`Local sync folder selected: ${handle.name || 'folder'}`, 'success');
+            return true;
+        } catch (error) {
+            showToast(error?.message || 'Failed to save local sync folder', 'error');
+            await refreshLocalSyncFolderStatus();
+            return false;
+        }
+    }
+
+    async function clearLocalSyncFolder() {
+        try {
+            await deleteDashboardLocalWorkspaceBinding(LOCAL_SYNC_FOLDER_BINDING_ID);
+            await refreshLocalSyncFolderStatus();
+            await loadSyncProviderStatus();
+            showToast('Local sync folder forgotten', 'success');
+            return true;
+        } catch (error) {
+            showToast(error?.message || 'Failed to forget local sync folder', 'error');
+            return false;
         }
     }
 
@@ -14844,6 +14990,18 @@
             if (elements.syncLog) elements.syncLog.value = '';
             showToast('Sync log cleared', 'success');
         });
+
+        elements.btnSyncBindLocalFolder?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, async () => {
+                await bindLocalSyncFolder();
+            }, { busyLabel: 'Choosing...', errorMessage: 'Failed to choose local sync folder' });
+        });
+
+        elements.btnSyncClearLocalFolder?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, async () => {
+                await clearLocalSyncFolder();
+            }, { busyLabel: 'Forgetting...', errorMessage: 'Failed to forget local sync folder' });
+        });
         
         // OAuth connection
         elements.btnConnectOAuth?.addEventListener('click', async () => {
@@ -15315,6 +15473,10 @@
             const bc = elements.btnCloudConnect;
             const bd = elements.btnCloudDisconnect;
             const ar = elements.cloudActionsRow;
+            if (bc) bc.textContent = provider === 'localfolder' ? 'Choose Folder' : 'Connect';
+            if (bd) bd.textContent = provider === 'localfolder' ? 'Forget Folder' : 'Disconnect';
+            if (elements.btnCloudExport) elements.btnCloudExport.textContent = provider === 'localfolder' ? 'Backup to Folder' : 'Backup to Cloud';
+            if (elements.btnCloudImport) elements.btnCloudImport.textContent = provider === 'localfolder' ? 'Restore from Folder' : 'Restore from Cloud';
             if (!provider || provider === 'none') {
                 if (st) { st.textContent = 'Not configured'; st.style.color = 'var(--text-muted)'; }
                 if (ui) ui.textContent = '';
@@ -15370,6 +15532,11 @@
                 }
                 if (!isSyncProviderSupported(provider)) {
                     showToast(`${state.runtimeDescriptor?.buildLabel || 'This build'} does not support ${capitalize(provider)} sync`, 'info');
+                    return;
+                }
+                if (provider === 'localfolder') {
+                    await bindLocalSyncFolder();
+                    await updateCloudUI();
                     return;
                 }
                 // Request identity permission if needed for OAuth providers

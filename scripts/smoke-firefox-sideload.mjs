@@ -537,7 +537,7 @@ async function dashboardSmoke(baseUrl, sessionId, dashboardUrl) {
   await navigate(baseUrl, sessionId, dashboardUrl);
   await waitFor(baseUrl, sessionId, 'dashboard load', `
     const unsupportedSyncOptions = Array.from(document.querySelectorAll('#settingsSyncType option, #cloudProvider option'))
-      .filter(option => ['googledrive', 'dropbox', 'onedrive', 's3'].includes(option.value))
+      .filter(option => ['localfolder', 'googledrive', 'dropbox', 'onedrive', 's3'].includes(option.value))
       .map(option => ({ value: option.value, hidden: option.hidden, disabled: option.disabled }));
     const aboutBrowserBuild = document.querySelector('#aboutBrowserBuild')?.textContent || '';
     return {
@@ -579,7 +579,7 @@ async function dashboardSmoke(baseUrl, sessionId, dashboardUrl) {
       aboutBrowserBuild: document.querySelector('#aboutBrowserBuild')?.textContent || '',
       browserBuild: document.documentElement.dataset.browserBuild,
       unsupportedSyncOptions: Array.from(document.querySelectorAll('#settingsSyncType option, #cloudProvider option'))
-        .filter(option => ['googledrive', 'dropbox', 'onedrive', 's3'].includes(option.value))
+        .filter(option => ['localfolder', 'googledrive', 'dropbox', 'onedrive', 's3'].includes(option.value))
         .map(option => ({ value: option.value, hidden: option.hidden, disabled: option.disabled })),
       themeChecks
     };

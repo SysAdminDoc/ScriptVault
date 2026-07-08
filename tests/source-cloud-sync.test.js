@@ -947,6 +947,81 @@ describe('source cloud sync module', () => {
     expect(SettingsManager.set).not.toHaveBeenCalled();
   });
 
+  it('previews local folder provider conflicts through the shared 3-way engine', async () => {
+    const remoteEnvelope = {
+      version: 1,
+      timestamp: 50,
+      scripts: [
+        {
+          id: 'script_local_folder_conflict',
+          code: '// remote local-folder edit',
+          enabled: true,
+          position: 0,
+          settings: {},
+          updatedAt: 50,
+        },
+      ],
+      tombstones: {},
+    };
+    const localFolderProvider = {
+      name: 'Local Folder',
+      supportsDryRun: true,
+      download: vi.fn(async () => structuredClone(remoteEnvelope)),
+      upload: vi.fn(async () => {}),
+    };
+    const harness = await loadFreshCloudSync(
+      [
+        {
+          id: 'script_local_folder_conflict',
+          code: '// local folder edit',
+          enabled: true,
+          position: 0,
+          meta: { name: 'Local Folder Conflict' },
+          settings: {},
+          syncBaseCode: '// shared base',
+          createdAt: 1,
+          updatedAt: 45,
+        },
+      ],
+      null,
+      { syncProvider: 'localfolder' },
+      {},
+      null,
+      { localfolder: localFolderProvider },
+    );
+    const { CloudSync, ScriptStorage, SettingsManager } = harness;
+
+    const preview = await CloudSync.preview('localfolder');
+
+    expect(preview).toEqual(
+      expect.objectContaining({
+        success: true,
+        dryRun: true,
+        noWrites: true,
+        provider: 'localfolder',
+        providerLabel: 'Local Folder',
+        summary: expect.objectContaining({
+          localScripts: 1,
+          remoteScripts: 1,
+          conflicts: 1,
+          wouldUpload: true,
+          wouldDownload: true,
+        }),
+      }),
+    );
+    expect(preview.conflicts).toEqual([
+      expect.objectContaining({
+        id: 'script_local_folder_conflict',
+        name: 'Local Folder Conflict',
+        reason: 'Both local and remote changed since the last sync base',
+      }),
+    ]);
+    expect(localFolderProvider.download).toHaveBeenCalledTimes(1);
+    expect(localFolderProvider.upload).not.toHaveBeenCalled();
+    expect(ScriptStorage.set).not.toHaveBeenCalled();
+    expect(SettingsManager.set).not.toHaveBeenCalled();
+  });
+
   it('previews GM value-bundle counts without uploading provider data', async () => {
     const harness = await loadFreshCloudSync(
       [

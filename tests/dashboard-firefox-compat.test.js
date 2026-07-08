@@ -164,6 +164,7 @@ describe('Firefox dashboard compatibility layer', () => {
     expect(descriptor.supportedSyncProviders).toEqual([
       'none',
       'webdav',
+      'localfolder',
       'googledrive',
       'dropbox',
       'onedrive',

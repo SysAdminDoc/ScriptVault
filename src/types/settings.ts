@@ -130,6 +130,7 @@ export interface Settings {
 export type SyncProvider =
   | 'none'
   | 'webdav'
+  | 'localfolder'
   | 'google'
   | 'googledrive'
   | 'dropbox'

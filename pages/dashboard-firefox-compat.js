@@ -522,7 +522,7 @@ const FirefoxCompat = (() => {
             buildIndicator: `${buildLabel}${_browserVersion ? ` - ${browserLabel} ${_browserVersion}` : ''}`,
             supportedSyncProviders: _isFirefox
                 ? ['none', 'webdav']
-                : ['none', 'webdav', 'googledrive', 'dropbox', 'onedrive', 's3'],
+                : ['none', 'webdav', 'localfolder', 'googledrive', 'dropbox', 'onedrive', 's3'],
         };
     }
 
