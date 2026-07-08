@@ -418,6 +418,25 @@ const EasyCloudSync = (() => {
     await _uploadToDrive(token, prepared.envelope);
     await markSyncEncryptionEstablished(prepared.settings);
   }
+  function getScriptOperationLocks() {
+    const host = globalThis;
+    if (!host._toggleLocks) host._toggleLocks = /* @__PURE__ */ new Map();
+    return host._toggleLocks;
+  }
+  async function runExclusiveScriptOperation(scriptId, operation) {
+    if (!scriptId) return await operation();
+    const locks = getScriptOperationLocks();
+    const previous = locks.get(scriptId) || Promise.resolve();
+    let operationPromise;
+    operationPromise = previous.catch(() => {
+    }).then(operation).finally(() => {
+      if (locks.get(scriptId) === operationPromise) {
+        locks.delete(scriptId);
+      }
+    });
+    locks.set(scriptId, operationPromise);
+    return await operationPromise;
+  }
   function setStatus(newStatus) {
     if (_status === newStatus) return;
     _status = newStatus;
@@ -739,35 +758,42 @@ const EasyCloudSync = (() => {
         let localMutated = false;
         for (const localScript of scripts) {
           if (!mergedTombstones[localScript.id]) continue;
-          await _deleteSyncedScript(localScript.id);
-          localMutated = true;
+          const deleted = await runExclusiveScriptOperation(localScript.id, async () => {
+            await _deleteSyncedScript(localScript.id);
+            return true;
+          });
+          if (deleted) localMutated = true;
         }
         for (const script of merged.scripts) {
           if (mergedTombstones[script.id]) continue;
-          const existing = await ScriptStorage.get(script.id);
-          if (existing?.settings?.userModified) continue;
-          const existingUpdatedAt = existing?.updatedAt || 0;
-          const mergeChangedCode = !!existing && script.code !== existing.code && script.updatedAt >= existingUpdatedAt;
-          if (!existing || script.updatedAt > existingUpdatedAt || mergeChangedCode) {
-            const parsed = typeof parseUserscript === "function" ? parseUserscript(script.code) : { meta: {}, error: null };
-            if (!parsed.error) {
-              const nextScript = {
-                ...existing || {},
-                id: script.id,
-                code: script.code,
-                meta: parsed.meta,
-                enabled: script.enabled,
-                position: script.position,
-                settings: mergeSyncedScriptSettings(existing?.settings, script.settings),
-                updatedAt: script.updatedAt,
-                createdAt: existing?.createdAt || script.updatedAt,
-                syncBaseCode: script.code
-              };
-              await ScriptStorage.set(script.id, nextScript);
-              await _refreshScriptRuntime(nextScript);
-              localMutated = true;
+          const applied = await runExclusiveScriptOperation(script.id, async () => {
+            const existing = await ScriptStorage.get(script.id);
+            if (existing?.settings?.userModified) return false;
+            const existingUpdatedAt = existing?.updatedAt || 0;
+            const mergeChangedCode = !!existing && script.code !== existing.code && script.updatedAt >= existingUpdatedAt;
+            if (!existing || script.updatedAt > existingUpdatedAt || mergeChangedCode) {
+              const parsed = typeof parseUserscript === "function" ? parseUserscript(script.code) : { meta: {}, error: null };
+              if (!parsed.error) {
+                const nextScript = {
+                  ...existing || {},
+                  id: script.id,
+                  code: script.code,
+                  meta: parsed.meta,
+                  enabled: script.enabled,
+                  position: script.position,
+                  settings: mergeSyncedScriptSettings(existing?.settings, script.settings),
+                  updatedAt: script.updatedAt,
+                  createdAt: existing?.createdAt || script.updatedAt,
+                  syncBaseCode: script.code
+                };
+                await ScriptStorage.set(script.id, nextScript);
+                await _refreshScriptRuntime(nextScript);
+                return true;
+              }
             }
-          }
+            return false;
+          });
+          if (applied) localMutated = true;
         }
         const mergedIds = Object.keys(mergedTombstones);
         const localIds = Object.keys(tombstones);

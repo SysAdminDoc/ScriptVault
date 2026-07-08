@@ -1267,6 +1267,33 @@ function mergeValueBundlesForUpload(
   return uploadValueBundles;
 }
 
+type ScriptOperationLockHost = typeof globalThis & {
+  _toggleLocks?: Map<string, Promise<unknown>>;
+};
+
+function getScriptOperationLocks(): Map<string, Promise<unknown>> {
+  const host = globalThis as ScriptOperationLockHost;
+  if (!host._toggleLocks) host._toggleLocks = new Map();
+  return host._toggleLocks;
+}
+
+async function runExclusiveScriptOperation<T>(scriptId: string, operation: () => Promise<T>): Promise<T> {
+  if (!scriptId) return await operation();
+  const locks = getScriptOperationLocks();
+  const previous = locks.get(scriptId) || Promise.resolve();
+  let operationPromise: Promise<T>;
+  operationPromise = previous
+    .catch(() => {})
+    .then(operation)
+    .finally(() => {
+      if (locks.get(scriptId) === operationPromise) {
+        locks.delete(scriptId);
+      }
+    });
+  locks.set(scriptId, operationPromise);
+  return await operationPromise;
+}
+
 // ---------------------------------------------------------------------------
 // CloudSync object
 // ---------------------------------------------------------------------------
@@ -1645,8 +1672,11 @@ export const CloudSync = {
 
       for (const localScript of scripts) {
         if (!mergedTombstones[localScript.id]) continue;
-        await deleteSyncedScript(localScript.id);
-        localMutated = true;
+        const deleted = await runExclusiveScriptOperation(localScript.id, async () => {
+          await deleteSyncedScript(localScript.id);
+          return true;
+        });
+        if (deleted) localMutated = true;
       }
 
       // Apply merged data locally, skipping tombstoned (deleted) scripts
@@ -1655,9 +1685,10 @@ export const CloudSync = {
       for (const script of merged.scripts) {
         if (signal?.aborted) throw new Error('Sync aborted');
         if (mergedTombstones[script.id]) continue; // deleted on some device, don't re-import
+        const applied = await runExclusiveScriptOperation(script.id, async () => {
         const existing = await ScriptStorage.get(script.id);
         // Skip scripts marked as locally modified — user edits take precedence over remote
-        if (existing?.settings?.userModified) continue;
+        if (existing?.settings?.userModified) return false;
 
         const remoteScript = remoteData.scripts?.find((s: SyncScript) => s.id === script.id);
 
@@ -1728,9 +1759,12 @@ export const CloudSync = {
             } as Script;
             await ScriptStorage.set(script.id, nextScript);
             await refreshSyncedScriptRuntime(nextScript);
-            localMutated = true;
+            return true;
           }
         }
+        return false;
+        });
+        if (applied) localMutated = true;
       }
 
       // Persist merged tombstones locally whenever the set CHANGED (added or

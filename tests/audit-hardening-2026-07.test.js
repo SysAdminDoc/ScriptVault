@@ -182,6 +182,35 @@ describe('Easy Cloud reacts to real script mutations (2026-07 P2 regression)', (
   });
 });
 
+describe('Sync apply loops share the per-script operation lock (2026-07 P2 regression)', () => {
+  const cloudSync = read('src/background/cloud-sync.ts');
+  const easyCloud = read('src/modules/sync-easycloud.ts');
+
+  function expectSyncApplyLocking(src, label) {
+    expect(src, label).toContain('_toggleLocks');
+    expect(src, label).toContain('function getScriptOperationLocks');
+    expect(src, label).toContain('async function runExclusiveScriptOperation');
+
+    const deleteLoop = src.slice(src.indexOf('for (const localScript of scripts)'), src.indexOf('// Apply', src.indexOf('for (const localScript of scripts)')));
+    expect(deleteLoop, label).toContain('runExclusiveScriptOperation(localScript.id');
+    expect(deleteLoop, label).toContain('deleteSyncedScript(localScript.id)');
+
+    const applyLoop = src.slice(src.indexOf('for (const script of merged.scripts)'), src.indexOf('// Persist merged tombstones', src.indexOf('for (const script of merged.scripts)')));
+    expect(applyLoop, label).toContain('runExclusiveScriptOperation(script.id');
+    expect(applyLoop, label).toContain('const existing');
+    expect(applyLoop, label).toContain('ScriptStorage.get(script.id)');
+    expect(applyLoop, label).toContain('ScriptStorage.set(script.id, nextScript)');
+  }
+
+  it('wraps CloudSync per-script apply and delete work', () => {
+    expectSyncApplyLocking(cloudSync, 'cloud-sync');
+  });
+
+  it('wraps Easy Cloud per-script apply and delete work', () => {
+    expectSyncApplyLocking(easyCloud, 'sync-easycloud');
+  });
+});
+
 describe('KeyboardNav does not hijack focused row controls (2026-07 regression)', () => {
   const src = read('pages/dashboard-keyboard.js');
   it('adds an interactive-control focus guard', () => {

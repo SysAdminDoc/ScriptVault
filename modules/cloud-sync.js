@@ -1017,6 +1017,25 @@ const CloudSync = (() => {
     }
     return uploadValueBundles;
   }
+  function getScriptOperationLocks() {
+    const host = globalThis;
+    if (!host._toggleLocks) host._toggleLocks = /* @__PURE__ */ new Map();
+    return host._toggleLocks;
+  }
+  async function runExclusiveScriptOperation(scriptId, operation) {
+    if (!scriptId) return await operation();
+    const locks = getScriptOperationLocks();
+    const previous = locks.get(scriptId) || Promise.resolve();
+    let operationPromise;
+    operationPromise = previous.catch(() => {
+    }).then(operation).finally(() => {
+      if (locks.get(scriptId) === operationPromise) {
+        locks.delete(scriptId);
+      }
+    });
+    locks.set(scriptId, operationPromise);
+    return await operationPromise;
+  }
   var CloudSync = {
     // Use providers from imported CloudSyncProviders module
     get providers() {
@@ -1335,68 +1354,75 @@ const CloudSync = (() => {
         let localMutated = false;
         for (const localScript of scripts) {
           if (!mergedTombstones[localScript.id]) continue;
-          await deleteSyncedScript(localScript.id);
-          localMutated = true;
+          const deleted = await runExclusiveScriptOperation(localScript.id, async () => {
+            await deleteSyncedScript(localScript.id);
+            return true;
+          });
+          if (deleted) localMutated = true;
         }
         for (const script of merged.scripts) {
           if (signal?.aborted) throw new Error("Sync aborted");
           if (mergedTombstones[script.id]) continue;
-          const existing = await ScriptStorage.get(script.id);
-          if (existing?.settings?.userModified) continue;
-          const remoteScript = remoteData.scripts?.find((s) => s.id === script.id);
-          let codeToSave = script.code;
-          let mergeConflict = false;
-          let didThreeWayMerge = false;
-          let selectedOneSidedCodeChange = false;
-          if (existing && remoteScript && existing.code !== remoteScript.code) {
-            const base = existing.syncBaseCode ?? null;
-            if (base != null) {
-              const localChangedFromBase = existing.code !== base;
-              const remoteChangedFromBase = remoteScript.code !== base;
-              if (localChangedFromBase !== remoteChangedFromBase) {
-                codeToSave = localChangedFromBase ? existing.code : remoteScript.code;
-                selectedOneSidedCodeChange = true;
-              } else if (localChangedFromBase && remoteChangedFromBase) {
-                try {
-                  const mergeResult = await mergeScriptText(base, existing.code, remoteScript.code);
-                  if (mergeResult && !mergeResult.error) {
-                    codeToSave = mergeResult.merged ?? script.code;
-                    mergeConflict = mergeResult.conflicts ?? false;
-                    didThreeWayMerge = true;
-                    debugLog(`[CloudSync] 3-way merge for ${script.id}: conflicts=${String(mergeConflict)}`);
+          const applied = await runExclusiveScriptOperation(script.id, async () => {
+            const existing = await ScriptStorage.get(script.id);
+            if (existing?.settings?.userModified) return false;
+            const remoteScript = remoteData.scripts?.find((s) => s.id === script.id);
+            let codeToSave = script.code;
+            let mergeConflict = false;
+            let didThreeWayMerge = false;
+            let selectedOneSidedCodeChange = false;
+            if (existing && remoteScript && existing.code !== remoteScript.code) {
+              const base = existing.syncBaseCode ?? null;
+              if (base != null) {
+                const localChangedFromBase = existing.code !== base;
+                const remoteChangedFromBase = remoteScript.code !== base;
+                if (localChangedFromBase !== remoteChangedFromBase) {
+                  codeToSave = localChangedFromBase ? existing.code : remoteScript.code;
+                  selectedOneSidedCodeChange = true;
+                } else if (localChangedFromBase && remoteChangedFromBase) {
+                  try {
+                    const mergeResult = await mergeScriptText(base, existing.code, remoteScript.code);
+                    if (mergeResult && !mergeResult.error) {
+                      codeToSave = mergeResult.merged ?? script.code;
+                      mergeConflict = mergeResult.conflicts ?? false;
+                      didThreeWayMerge = true;
+                      debugLog(`[CloudSync] 3-way merge for ${script.id}: conflicts=${String(mergeConflict)}`);
+                    }
+                  } catch (e) {
+                    const msg = e instanceof Error ? e.message : String(e);
+                    debugLog("[CloudSync] 3-way merge failed, using timestamp winner:", msg);
                   }
-                } catch (e) {
-                  const msg = e instanceof Error ? e.message : String(e);
-                  debugLog("[CloudSync] 3-way merge failed, using timestamp winner:", msg);
                 }
               }
             }
-          }
-          const mergeChangedCode = didThreeWayMerge && existing != null && codeToSave !== existing.code;
-          const oneSidedChangedCode = selectedOneSidedCodeChange && existing != null && codeToSave !== existing.code;
-          if (!existing || script.updatedAt > existing.updatedAt || mergeConflict || mergeChangedCode || oneSidedChangedCode) {
-            const parsed = parseUserscript(codeToSave);
-            if (!parsed.error && parsed.meta) {
-              const nextScript = {
-                ...existing || {},
-                id: script.id,
-                code: codeToSave,
-                meta: parsed.meta,
-                enabled: script.enabled,
-                position: script.position,
-                settings: mergeSyncedScriptSettings(existing?.settings, script.settings, {
-                  mergeConflict
-                }),
-                updatedAt: Math.max(script.updatedAt, existing?.updatedAt ?? 0),
-                createdAt: existing?.createdAt ?? script.updatedAt,
-                syncBaseCode: codeToSave
-                // record merged result as new base for future syncs
-              };
-              await ScriptStorage.set(script.id, nextScript);
-              await refreshSyncedScriptRuntime(nextScript);
-              localMutated = true;
+            const mergeChangedCode = didThreeWayMerge && existing != null && codeToSave !== existing.code;
+            const oneSidedChangedCode = selectedOneSidedCodeChange && existing != null && codeToSave !== existing.code;
+            if (!existing || script.updatedAt > existing.updatedAt || mergeConflict || mergeChangedCode || oneSidedChangedCode) {
+              const parsed = parseUserscript(codeToSave);
+              if (!parsed.error && parsed.meta) {
+                const nextScript = {
+                  ...existing || {},
+                  id: script.id,
+                  code: codeToSave,
+                  meta: parsed.meta,
+                  enabled: script.enabled,
+                  position: script.position,
+                  settings: mergeSyncedScriptSettings(existing?.settings, script.settings, {
+                    mergeConflict
+                  }),
+                  updatedAt: Math.max(script.updatedAt, existing?.updatedAt ?? 0),
+                  createdAt: existing?.createdAt ?? script.updatedAt,
+                  syncBaseCode: codeToSave
+                  // record merged result as new base for future syncs
+                };
+                await ScriptStorage.set(script.id, nextScript);
+                await refreshSyncedScriptRuntime(nextScript);
+                return true;
+              }
             }
-          }
+            return false;
+          });
+          if (applied) localMutated = true;
         }
         const mergedTombstoneIds = Object.keys(mergedTombstones);
         const localTombstoneIds = Object.keys(tombstones);

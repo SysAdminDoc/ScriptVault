@@ -436,6 +436,33 @@ async function uploadSyncEnvelopeToDrive(token: string, envelope: SyncEnvelope):
   await markSyncEncryptionEstablished(prepared.settings);
 }
 
+type ScriptOperationLockHost = typeof globalThis & {
+  _toggleLocks?: Map<string, Promise<unknown>>;
+};
+
+function getScriptOperationLocks(): Map<string, Promise<unknown>> {
+  const host = globalThis as ScriptOperationLockHost;
+  if (!host._toggleLocks) host._toggleLocks = new Map();
+  return host._toggleLocks;
+}
+
+async function runExclusiveScriptOperation<T>(scriptId: string, operation: () => Promise<T>): Promise<T> {
+  if (!scriptId) return await operation();
+  const locks = getScriptOperationLocks();
+  const previous = locks.get(scriptId) || Promise.resolve();
+  let operationPromise: Promise<T>;
+  operationPromise = previous
+    .catch(() => {})
+    .then(operation)
+    .finally(() => {
+      if (locks.get(scriptId) === operationPromise) {
+        locks.delete(scriptId);
+      }
+    });
+  locks.set(scriptId, operationPromise);
+  return await operationPromise;
+}
+
 function setStatus(newStatus: string): void {
   if (_status === newStatus) return;
   _status = newStatus;
@@ -902,18 +929,22 @@ async function _performSync(): Promise<SyncResult> {
 
       for (const localScript of scripts) {
         if (!mergedTombstones[localScript.id]) continue;
-        await _deleteSyncedScript(localScript.id);
-        localMutated = true;
+        const deleted = await runExclusiveScriptOperation(localScript.id, async () => {
+          await _deleteSyncedScript(localScript.id);
+          return true;
+        });
+        if (deleted) localMutated = true;
       }
 
       // Apply merged scripts locally
       for (const script of merged.scripts) {
         if (mergedTombstones[script.id]) continue;
 
+        const applied = await runExclusiveScriptOperation(script.id, async () => {
         const existing: Script | null = await ScriptStorage.get(script.id);
 
         // Skip user-modified scripts
-        if (existing?.settings?.userModified) continue;
+        if (existing?.settings?.userModified) return false;
 
         // Save when the merged script is new, the remote side is newer, OR a
         // clean 3-way merge produced text that differs from the local copy — a
@@ -948,9 +979,12 @@ async function _performSync(): Promise<SyncResult> {
             } as Script;
             await ScriptStorage.set(script.id, nextScript);
             await _refreshScriptRuntime(nextScript);
-            localMutated = true;
+            return true;
           }
         }
+        return false;
+        });
+        if (applied) localMutated = true;
       }
 
       // Persist merged tombstones whenever the set CHANGED (added OR removed) —
