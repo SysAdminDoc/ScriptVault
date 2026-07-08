@@ -1050,6 +1050,10 @@ const ScriptChains = (() => {
         if (s.id === step.scriptId) opt.selected = true;
         scriptSelect.appendChild(opt);
       }
+      scriptSelect.addEventListener('change', () => {
+        step.scriptId = scriptSelect.value || null;
+        step.label = scriptSelect.selectedOptions?.[0]?.textContent || `Step ${idx + 1}`;
+      });
       bodyEl.appendChild(scriptSelect);
       stepEl.appendChild(bodyEl);
 
@@ -1090,6 +1094,12 @@ const ScriptChains = (() => {
       delayInput.value = step.delay || 0;
       delayInput.title = 'Delay (ms)';
       delayInput.placeholder = 'ms';
+      const syncDelay = (updateField) => {
+        step.delay = Math.min(Math.max(parseInt(delayInput.value, 10) || 0, 0), MAX_DELAY);
+        if (updateField) delayInput.value = String(step.delay);
+      };
+      delayInput.addEventListener('input', () => syncDelay(false));
+      delayInput.addEventListener('change', () => syncDelay(true));
       ctrlEl.appendChild(delayInput);
 
       const removeBtn = document.createElement('button');

@@ -219,6 +219,90 @@ describe('dashboard audit surfaces', () => {
     ScriptChains.destroy();
   });
 
+  it('chains preserve unsaved step edits across pipeline rebuilds', async () => {
+    const ScriptChains = createScriptChains();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+
+    chrome.runtime.sendMessage = vi.fn((message) => {
+      if (message.action === 'getScripts') {
+        return Promise.resolve({
+          scripts: [
+            { id: 'alpha', meta: { name: 'Alpha Script' } },
+            { id: 'beta', meta: { name: 'Beta Script' } },
+          ],
+        });
+      }
+      return Promise.resolve({});
+    });
+
+    await ScriptChains.init(container);
+    const chainId = await ScriptChains.createChain('Editable', [
+      { scriptId: 'alpha', delay: 10 },
+      { scriptId: 'beta', delay: 20 },
+    ]);
+
+    const editButton = Array.from(container.querySelectorAll(`[data-chain-id="${chainId}"] .sv-chains-btn`))
+      .find((button) => button.textContent === 'Edit');
+    editButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    const controls = () => ({
+      rows: Array.from(document.querySelectorAll('.sv-chain-step')),
+      scripts: Array.from(document.querySelectorAll('.step-script-select')),
+      delays: Array.from(document.querySelectorAll('.step-delay-input')),
+      removes: Array.from(document.querySelectorAll('.step-remove')),
+    });
+    const setSelect = (select, value) => {
+      select.value = value;
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+    const setDelay = (input, value) => {
+      input.value = value;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+
+    let view = controls();
+    setSelect(view.scripts[0], 'beta');
+    setDelay(view.delays[0], '777');
+
+    document.querySelector('#sv-chain-add-step')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    view = controls();
+    expect(view.scripts[0].value).toBe('beta');
+    expect(view.delays[0].value).toBe('777');
+
+    setSelect(view.scripts[2], 'alpha');
+    setDelay(view.delays[2], '333');
+    view.removes[1].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    view = controls();
+    expect(view.scripts.map((select) => select.value)).toEqual(['beta', 'alpha']);
+    expect(view.delays.map((input) => input.value)).toEqual(['777', '333']);
+
+    const dataTransfer = { effectAllowed: '', dropEffect: '', setData: vi.fn() };
+    const dragStart = new Event('dragstart', { bubbles: true, cancelable: true });
+    Object.defineProperty(dragStart, 'dataTransfer', { value: dataTransfer });
+    view.rows[0].dispatchEvent(dragStart);
+    const drop = new Event('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, 'dataTransfer', { value: dataTransfer });
+    view.rows[1].dispatchEvent(drop);
+
+    view = controls();
+    expect(view.scripts.map((select) => select.value)).toEqual(['alpha', 'beta']);
+    expect(view.delays.map((input) => input.value)).toEqual(['333', '777']);
+
+    document.querySelector('#sv-chain-save')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await flushPromises();
+
+    expect(ScriptChains.getChains()[chainId].steps.map((step) => ({
+      scriptId: step.scriptId,
+      delay: step.delay,
+    }))).toEqual([
+      { scriptId: 'alpha', delay: 333 },
+      { scriptId: 'beta', delay: 777 },
+    ]);
+
+    ScriptChains.destroy();
+  });
+
   it('standalone exports remove inline handlers and keep safe generated defaults', () => {
     const StandaloneExport = createStandaloneExport();
     URL.createObjectURL = vi.fn(() => 'blob:test');
