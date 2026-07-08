@@ -316,6 +316,26 @@ function parseArchiveJson<T>(
   return JSON.parse(archiveEntryText(files, name, maxBytes)) as T;
 }
 
+const RESERVED_IMPORT_VALUE_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+
+function isImportValueMap(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function sanitizeImportedValueMap(value: unknown): Record<string, unknown> {
+  if (!isImportValueMap(value)) return {};
+  const hasDataEnvelope = Object.prototype.hasOwnProperty.call(value, 'data');
+  const candidate = hasDataEnvelope ? value.data : value;
+  if (!isImportValueMap(candidate)) return {};
+
+  const sanitized: Record<string, unknown> = {};
+  for (const [key, entryValue] of Object.entries(candidate)) {
+    if (RESERVED_IMPORT_VALUE_KEYS.has(key)) continue;
+    sanitized[key] = entryValue;
+  }
+  return sanitized;
+}
+
 function utf8ByteLength(value: string): number {
   return new TextEncoder().encode(value).byteLength;
 }
@@ -787,10 +807,11 @@ export async function importFromZip(
         // Parse storage file if exists
         if (storageFileData) {
           try {
-            const storageData = parseArchiveJson<{
-              data?: Record<string, unknown>;
-            }>(unzipped, `${baseName}.storage.json`, ARCHIVE_MAX_JSON_ENTRY_BYTES);
-            storedValues = storageData.data || storageData as unknown as Record<string, unknown> || {};
+            storedValues = sanitizeImportedValueMap(parseArchiveJson<unknown>(
+              unzipped,
+              `${baseName}.storage.json`,
+              ARCHIVE_MAX_JSON_ENTRY_BYTES,
+            ));
           } catch (e: unknown) {
             console.warn('Failed to parse storage file:', e);
           }

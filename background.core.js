@@ -4169,6 +4169,26 @@ function parseArchiveJson(files, name, maxBytes = archiveEntryLimit(name)) {
   return JSON.parse(archiveEntryText(files, name, maxBytes));
 }
 
+const RESERVED_IMPORT_VALUE_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+
+function isImportValueMap(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function sanitizeImportedValueMap(value) {
+  if (!isImportValueMap(value)) return {};
+  const hasDataEnvelope = Object.prototype.hasOwnProperty.call(value, 'data');
+  const candidate = hasDataEnvelope ? value.data : value;
+  if (!isImportValueMap(candidate)) return {};
+
+  const sanitized = {};
+  for (const [key, entryValue] of Object.entries(candidate)) {
+    if (RESERVED_IMPORT_VALUE_KEYS.has(key)) continue;
+    sanitized[key] = entryValue;
+  }
+  return sanitized;
+}
+
 function utf8ByteLength(value) {
   return new TextEncoder().encode(value).byteLength;
 }
@@ -5292,8 +5312,11 @@ async function importFromZip(zipData, options = {}) {
         // Parse storage file if exists
         if (storageFileData) {
           try {
-            const storageData = parseArchiveJson(unzipped, `${baseName}.storage.json`, ARCHIVE_MAX_JSON_ENTRY_BYTES);
-            storedValues = storageData.data || storageData || {};
+            storedValues = sanitizeImportedValueMap(parseArchiveJson(
+              unzipped,
+              `${baseName}.storage.json`,
+              ARCHIVE_MAX_JSON_ENTRY_BYTES
+            ));
           } catch (e) {
             console.warn('Failed to parse storage file:', e);
           }

@@ -326,6 +326,47 @@ describe('runtime import/export archive identity', () => {
     expect(harness.generateId).not.toHaveBeenCalled();
   });
 
+  it('sanitizes ZIP storage value maps before importing script values', async () => {
+    const harness = createRuntimeHarness();
+    const zipBytes = harness.fakeFflate.zipSync({
+      'Values.user.js': harness.fakeFflate.strToU8(userscriptText('Value Import Script')),
+      'Values.options.json': harness.fakeFflate.strToU8(JSON.stringify({
+        scriptId: 'script_values',
+        settings: { enabled: false },
+      })),
+      'Values.storage.json': harness.fakeFflate.strToU8(
+        '{"data":{"draft":true,"__proto__":{"polluted":true},"constructor":"ctor","prototype":"proto"}}',
+      ),
+    });
+
+    const result = await harness.importFromZip(bytesToBase64(zipBytes), { overwrite: true });
+
+    expect(result).toMatchObject({ imported: 1, skipped: 0 });
+    expect(harness.ScriptValues.setAll).toHaveBeenCalledTimes(1);
+    const [, importedValues] = harness.ScriptValues.setAll.mock.calls[0];
+    expect(importedValues).toEqual({ draft: true });
+    expect(Object.hasOwn(importedValues, '__proto__')).toBe(false);
+    expect(Object.hasOwn(importedValues, 'constructor')).toBe(false);
+    expect(Object.hasOwn(importedValues, 'prototype')).toBe(false);
+    expect({}.polluted).toBeUndefined();
+
+    const invalidHarness = createRuntimeHarness();
+    const invalidZipBytes = invalidHarness.fakeFflate.zipSync({
+      'Invalid Values.user.js': invalidHarness.fakeFflate.strToU8(userscriptText('Invalid Value Import')),
+      'Invalid Values.storage.json': invalidHarness.fakeFflate.strToU8(
+        '{"data":["not","a","value","map"],"legacy":true}',
+      ),
+    });
+
+    const invalidResult = await invalidHarness.importFromZip(
+      bytesToBase64(invalidZipBytes),
+      { overwrite: true },
+    );
+
+    expect(invalidResult).toMatchObject({ imported: 1, skipped: 0 });
+    expect(invalidHarness.ScriptValues.setAll).not.toHaveBeenCalled();
+  });
+
   it('preserves existing per-script settings when a ZIP backup restore overwrites an installed script', async () => {
     // Regression: BackupScheduler.restoreBackup routes through importFromZip
     // with overwrite:true; the ZIP path used an empty settings base, wiping
