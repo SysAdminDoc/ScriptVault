@@ -926,3 +926,22 @@ describe("action-icons toolbar keyboard navigation", () => {
     expect(dashboardJs).toContain("'End'");
   });
 });
+
+describe("script reorder controls", () => {
+  test("script rows expose keyboard-accessible move controls instead of drag-only reorder", () => {
+    expect(dashboardJs).toContain('class="script-reorder-controls" role="group"');
+    expect(dashboardJs).toContain('class="script-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"');
+    expect(dashboardJs).toContain('data-action="moveScriptUp"');
+    expect(dashboardJs).toContain('data-action="moveScriptDown"');
+    expect(dashboardJs).toContain("moveScriptInVisibleOrder(script.id, -1)");
+    expect(dashboardJs).toContain("moveScriptInVisibleOrder(script.id, 1)");
+  });
+
+  test("reorder persistence is based on the rendered visible order", () => {
+    expect(dashboardJs).toContain("function getRenderedScriptRowIds()");
+    expect(dashboardJs).toContain("function mergeVisibleOrderIntoScripts(nextVisibleIds)");
+    expect(dashboardJs).toContain("const previousScripts = state.scripts.slice();");
+    expect(dashboardJs).toContain("return applyVisibleScriptOrder(nextVisibleIds);");
+    expect(dashboardJs).toContain("state.sortColumn = 'order';");
+  });
+});

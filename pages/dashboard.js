@@ -8088,6 +8088,7 @@
                 columnCount: 13,
                 createRow: (script, index) => createScriptRow(script, index + 1),
                 onAfterRender: () => {
+                    syncScriptReorderButtonStates();
                     updateBulkCheckboxes();
                     applyColumnVisibility();
                     if (typeof KeyboardNav !== 'undefined' && typeof KeyboardNav.resetFocus === 'function') {
@@ -8171,11 +8172,88 @@
 
         elements.scriptTableBody.appendChild(fragment);
 
+        syncScriptReorderButtonStates();
         updateBulkCheckboxes();
         applyColumnVisibility();
         if (typeof KeyboardNav !== 'undefined' && typeof KeyboardNav.resetFocus === 'function') {
             KeyboardNav.resetFocus();
         }
+    }
+
+    function getRenderedScriptRowIds() {
+        if (!elements.scriptTableBody) return [];
+        return [...elements.scriptTableBody.querySelectorAll('tr[data-script-id]')]
+            .map(row => row.dataset.scriptId)
+            .filter(Boolean);
+    }
+
+    function getVisibleReorderIds() {
+        const renderedIds = getRenderedScriptRowIds();
+        if (renderedIds.length) return renderedIds;
+        return getFilteredScripts().map(script => script.id);
+    }
+
+    function syncScriptReorderButtonStates() {
+        const renderedIds = getRenderedScriptRowIds();
+        const renderedRows = [...(elements.scriptTableBody?.querySelectorAll('tr[data-script-id]') || [])];
+        const lastIndex = renderedIds.length - 1;
+        renderedIds.forEach((id, index) => {
+            const row = renderedRows.find(candidate => candidate.dataset.scriptId === id);
+            row?.querySelector('[data-action="moveScriptUp"]')?.toggleAttribute('disabled', index === 0);
+            row?.querySelector('[data-action="moveScriptDown"]')?.toggleAttribute('disabled', index === lastIndex);
+        });
+    }
+
+    function mergeVisibleOrderIntoScripts(nextVisibleIds) {
+        const visibleSet = new Set(nextVisibleIds);
+        const byId = new Map(state.scripts.map(script => [script.id, script]));
+        let visibleIndex = 0;
+        return state.scripts.map(script => {
+            if (!visibleSet.has(script.id)) return script;
+            const replacement = byId.get(nextVisibleIds[visibleIndex]);
+            visibleIndex += 1;
+            return replacement || script;
+        });
+    }
+
+    async function applyVisibleScriptOrder(nextVisibleIds) {
+        const uniqueIds = [...new Set(nextVisibleIds.filter(Boolean))];
+        if (uniqueIds.length < 2) return false;
+        const previousScripts = state.scripts.slice();
+        const previousPositions = new Map(state.scripts.map(script => [script.id, script.position]));
+        const nextScripts = mergeVisibleOrderIntoScripts(uniqueIds);
+        state.scripts = nextScripts;
+        state.scripts.forEach((script, index) => { script.position = index; });
+
+        try {
+            const orderedIds = state.scripts.map(script => script.id);
+            const response = await chrome.runtime.sendMessage({ action: 'reorderScripts', data: { orderedIds } });
+            if (response?.error) throw new Error(response.error);
+            state.sortColumn = 'order';
+            state.sortDirection = 'asc';
+            updateSortIndicators();
+            renderScriptTable();
+            showToast('Script order updated', 'success');
+            return true;
+        } catch (error) {
+            state.scripts = previousScripts;
+            state.scripts.forEach(script => {
+                if (previousPositions.has(script.id)) script.position = previousPositions.get(script.id);
+            });
+            renderScriptTable();
+            showToast(error?.message || 'Failed to reorder scripts', 'error');
+            return false;
+        }
+    }
+
+    async function moveScriptInVisibleOrder(scriptId, direction) {
+        const visibleIds = getVisibleReorderIds();
+        const fromIndex = visibleIds.indexOf(scriptId);
+        const toIndex = fromIndex + direction;
+        if (fromIndex === -1 || toIndex < 0 || toIndex >= visibleIds.length) return false;
+        const nextVisibleIds = visibleIds.slice();
+        [nextVisibleIds[fromIndex], nextVisibleIds[toIndex]] = [nextVisibleIds[toIndex], nextVisibleIds[fromIndex]];
+        return applyVisibleScriptOrder(nextVisibleIds);
     }
 
     function createScriptRow(script, index) {
@@ -8290,11 +8368,23 @@
         if (overBudget) tr.classList.add('row-over-budget');
 
         const scriptIdAttr = escapeHtml(String(script.id));
-        tr.draggable = true;
+        tr.draggable = false;
         tr.dataset.scriptId = script.id;
         safeSetHtml(tr, `
             <td class="center"><input type="checkbox" class="script-checkbox" data-id="${scriptIdAttr}" aria-label="Select ${escapeHtml(name)}"></td>
-            <td class="center drag-handle" title="Drag to reorder" style="cursor:grab;color:var(--text-muted)">⠿</td>
+            <td class="center script-reorder-cell">
+                <div class="script-reorder-controls" role="group" aria-label="Reorder ${escapeHtml(name)}">
+                    <span class="script-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="5" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="19" r="1"/></svg>
+                    </span>
+                    <button type="button" class="script-reorder-btn" title="Move up" aria-label="Move ${escapeHtml(name)} up" data-action="moveScriptUp" data-id="${scriptIdAttr}">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 15l-6-6-6 6"/></svg>
+                    </button>
+                    <button type="button" class="script-reorder-btn" title="Move down" aria-label="Move ${escapeHtml(name)} down" data-action="moveScriptDown" data-id="${scriptIdAttr}">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+                    </button>
+                </div>
+            </td>
             <td class="center">
                 <label class="toggle-switch">
                     <input type="checkbox" class="script-toggle" data-id="${scriptIdAttr}" ${enabled ? 'checked' : ''} aria-label="${enabled ? 'Disable' : 'Enable'} ${escapeHtml(name)}">
@@ -8453,14 +8543,21 @@
         tr.querySelector('[data-action="checkUpdate"]')?.addEventListener('click', async () => {
             tr.querySelector('[data-action="updateScript"]')?.click();
         });
+        tr.querySelector('[data-action="moveScriptUp"]')?.addEventListener('click', async e => {
+            await runButtonTask(e.currentTarget, () => moveScriptInVisibleOrder(script.id, -1), { busyLabel: 'Moving...' });
+        });
+        tr.querySelector('[data-action="moveScriptDown"]')?.addEventListener('click', async e => {
+            await runButtonTask(e.currentTarget, () => moveScriptInVisibleOrder(script.id, 1), { busyLabel: 'Moving...' });
+        });
 
         // Drag-and-drop reorder
-        tr.addEventListener('dragstart', e => {
+        const dragHandle = tr.querySelector('.script-drag-handle');
+        dragHandle?.addEventListener('dragstart', e => {
             tr.classList.add('dragging');
             e.dataTransfer.effectAllowed = 'move';
             e.dataTransfer.setData('text/plain', script.id);
         });
-        tr.addEventListener('dragend', () => {
+        dragHandle?.addEventListener('dragend', () => {
             tr.classList.remove('dragging');
             document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
         });
@@ -8509,29 +8606,17 @@
         return tr;
     }
 
-    // Reorder scripts by moving draggedId before targetId
+    // Reorder scripts by moving draggedId to the target row slot in the visible order.
     async function reorderScripts(draggedId, targetId) {
-        const ids = state.scripts.map(s => s.id);
-        const fromIdx = ids.indexOf(draggedId);
-        const toIdx = ids.indexOf(targetId);
+        const visibleIds = getVisibleReorderIds();
+        const fromIdx = visibleIds.indexOf(draggedId);
+        const toIdx = visibleIds.indexOf(targetId);
         if (fromIdx === -1 || toIdx === -1) return;
 
-        // Move in local array
-        const [moved] = state.scripts.splice(fromIdx, 1);
-        state.scripts.splice(toIdx, 0, moved);
-
-        // Update positions
-        state.scripts.forEach((s, i) => s.position = i);
-
-        // Persist reorder
-        const orderedIds = state.scripts.map(s => s.id);
-        await chrome.runtime.sendMessage({ action: 'reorderScripts', data: { orderedIds } });
-
-        // Reset sort to order to show the new positions
-        state.sortColumn = 'order';
-        state.sortDirection = 'asc';
-        updateSortIndicators();
-        renderScriptTable();
+        const nextVisibleIds = visibleIds.filter(id => id !== draggedId);
+        const targetIndex = nextVisibleIds.indexOf(targetId);
+        nextVisibleIds.splice(fromIdx < toIdx ? targetIndex + 1 : targetIndex, 0, draggedId);
+        return applyVisibleScriptOrder(nextVisibleIds);
     }
 
     // Extract unique domains from @match/@include patterns

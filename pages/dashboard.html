@@ -1193,8 +1193,60 @@
             pointer-events: none;
         }
 
-        .drag-handle:hover {
-            color: var(--text-primary) !important;
+        .script-reorder-controls {
+            display: inline-grid;
+            grid-template-columns: 22px 22px;
+            grid-template-rows: 18px 18px;
+            gap: 2px;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .script-drag-handle {
+            grid-row: 1 / span 2;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 22px;
+            height: 38px;
+            color: var(--text-muted);
+            cursor: grab;
+        }
+
+        .script-drag-handle:hover,
+        .script-drag-handle:focus-visible {
+            color: var(--text-primary);
+        }
+
+        .script-reorder-btn {
+            width: 22px;
+            height: 18px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            border: 0;
+            border-radius: 4px;
+            background: transparent;
+            color: var(--text-muted);
+            cursor: pointer;
+        }
+
+        .script-reorder-btn:hover,
+        .script-reorder-btn:focus-visible {
+            color: var(--text-primary);
+            background: var(--bg-button);
+        }
+
+        .script-reorder-btn:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+        }
+
+        .script-reorder-btn svg,
+        .script-drag-handle svg {
+            width: 13px;
+            height: 13px;
         }
 
         .script-name { color: var(--text-primary); cursor: pointer; font-weight: 500; transition: color 0.2s ease; }
