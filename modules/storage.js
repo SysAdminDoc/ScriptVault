@@ -977,20 +977,25 @@ const StorageModule = (() => {
     },
     async reset() {
       await this.init();
-      const previousDefaults = cloneSettingsState(this.defaults);
-      const previousCache = cloneSettingsState(this.cache);
-      const nextDefaults = cloneDefaultSettings();
-      const nextCache = cloneDefaultSettings();
-      try {
-        await chrome.storage.local.set({ settings: nextCache });
-      } catch (e) {
-        this.defaults = previousDefaults;
-        this.cache = previousCache;
-        throw e;
-      }
-      this.defaults = nextDefaults;
-      this.cache = nextCache;
-      return cloneSettingsState(this.cache);
+      const run = async () => {
+        const previousDefaults = cloneSettingsState(this.defaults);
+        const previousCache = cloneSettingsState(this.cache);
+        const nextDefaults = cloneDefaultSettings();
+        const nextCache = cloneDefaultSettings();
+        try {
+          await chrome.storage.local.set({ settings: cloneSettingsState(nextCache) });
+        } catch (e) {
+          this.defaults = previousDefaults;
+          this.cache = previousCache;
+          throw e;
+        }
+        this.defaults = nextDefaults;
+        this.cache = nextCache;
+        return cloneSettingsState(this.cache);
+      };
+      const result = _settingsWriteChain.then(run, run);
+      _settingsWriteChain = result.then(() => void 0, () => void 0);
+      return result;
     }
   };
   function debugLog(...args) {

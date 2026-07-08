@@ -184,6 +184,27 @@ describe('SettingsManager', () => {
     expect(await SettingsManager.get('deniedHosts')).toEqual([]);
   });
 
+  it('serializes reset() behind an in-flight set() write', async () => {
+    const originalSet = chrome.storage.local.set.getMockImplementation();
+    let releaseSetWrite;
+    chrome.storage.local.set.mockImplementationOnce((items) => new Promise((resolve) => {
+      releaseSetWrite = () => {
+        Promise.resolve(originalSet(items)).then(resolve);
+      };
+    }));
+
+    const setPromise = SettingsManager.set('googleDriveToken', 'late-token');
+    await vi.waitFor(() => expect(releaseSetWrite).toBeTypeOf('function'));
+    const resetPromise = SettingsManager.reset();
+
+    releaseSetWrite();
+    await Promise.all([setPromise, resetPromise]);
+
+    expect(await SettingsManager.get('googleDriveToken')).toBe('');
+    const persisted = (await chrome.storage.local.get('settings')).settings;
+    expect(persisted.googleDriveToken).toBe('');
+  });
+
   it('serializes concurrent cold-start callers', async () => {
     await Promise.all([
       SettingsManager.init(),
