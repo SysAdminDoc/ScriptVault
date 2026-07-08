@@ -80,8 +80,9 @@ describe('source DNR GM_webRequest rules', () => {
       { selector: { url: '||example.com' }, action: { cancel: true } },
     ], { script: scriptContext() });
 
-    const ruleId = first._makeRuleId('script-a', 0);
+    const ruleId = dnr.liveRules()[0].id;
     expect(result).toMatchObject({ success: true, count: 1 });
+    expect(ruleId).toBeGreaterThan(first.WEB_REQUEST_RULE_ID_BASE);
     expect(dnr.liveRules().map((rule) => rule.id)).toEqual([ruleId]);
     expect(dnr.liveRules()[0].condition.initiatorDomains).toEqual(['example.com']);
     expect(await readStoredMap()).toEqual({ 'script-a': [ruleId] });
@@ -103,10 +104,42 @@ describe('source DNR GM_webRequest rules', () => {
     ], { script: scriptContext({ id: 'script-b', meta: { match: ['https://rollback.example/*'] } }) });
 
     expect(dnr.liveRules()).toEqual([]);
+    const addCall = dnr.updateDynamicRules.mock.calls.find(([arg]) => arg.addRules?.length);
+    const addedRuleId = addCall?.[0]?.addRules?.[0]?.id;
+    expect(addedRuleId).toBeGreaterThan(module.WEB_REQUEST_RULE_ID_BASE);
     expect(dnr.updateDynamicRules).toHaveBeenCalledWith(expect.objectContaining({
-      addRules: expect.arrayContaining([expect.objectContaining({ id: module._makeRuleId('script-b', 0) })]),
+      addRules: expect.arrayContaining([expect.objectContaining({ id: addedRuleId })]),
     }));
-    expect(dnr.updateDynamicRules).toHaveBeenCalledWith({ removeRuleIds: [module._makeRuleId('script-b', 0)] });
+    expect(dnr.updateDynamicRules).toHaveBeenCalledWith({ removeRuleIds: [addedRuleId] });
+  });
+
+  it('allocates unique rule IDs for scripts that collide under the legacy hash range', async () => {
+    const dnr = createDnrHarness();
+    const module = await loadFreshDnrModule();
+    const collidingScriptIds = ['script-160', 'script-28001'];
+
+    const legacyId = (scriptId) => {
+      let h = 0;
+      for (let i = 0; i < scriptId.length; i += 1) {
+        h = (h * 31 + scriptId.charCodeAt(i)) & 0x7fffffff;
+      }
+      return (((h & 0x1fffff) << 10) | 0) + 1;
+    };
+    expect(legacyId(collidingScriptIds[0])).toBe(legacyId(collidingScriptIds[1]));
+
+    for (const scriptId of collidingScriptIds) {
+      const result = await module.applyWebRequestRules(scriptId, [
+        { selector: { url: '||example.com' }, action: { cancel: true } },
+      ], { script: scriptContext({ id: scriptId }) });
+      expect(result).toMatchObject({ success: true, count: 1 });
+    }
+
+    const storedMap = await readStoredMap();
+    const firstRuleId = storedMap[collidingScriptIds[0]][0];
+    const secondRuleId = storedMap[collidingScriptIds[1]][0];
+    expect(firstRuleId).toBeGreaterThan(module.WEB_REQUEST_RULE_ID_BASE);
+    expect(secondRuleId).toBe(firstRuleId + 1);
+    expect(dnr.liveRules().map((rule) => rule.id).sort((a, b) => a - b)).toEqual([firstRuleId, secondRuleId]);
   });
 
   it('keeps persisted ownership when DNR removal fails and the live rule still exists', async () => {

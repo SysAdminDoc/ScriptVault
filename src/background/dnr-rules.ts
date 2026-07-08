@@ -76,25 +76,63 @@ export interface ApplyWebRequestRulesResult {
 /** Maps scriptId -> array of DNR rule IDs applied via @webRequest / GM_webRequest */
 const _webRequestRuleMap = new Map<string, number[]>();
 const WEB_REQUEST_RULE_MAP_STORAGE_KEY = '_webRequestRuleMap';
+export const WEB_REQUEST_RULE_ID_BASE = 1_000_000_000;
+export const WEB_REQUEST_RULE_ID_MAX = 2_147_483_647;
 let _webRequestRuleMapHydrated = false;
 let _webRequestRuleMapHydratingPromise: Promise<void> | null = null;
+let _webRequestRuleIdCounter = WEB_REQUEST_RULE_ID_BASE;
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Stable numeric rule ID derived from a scriptId string and a rule index.
- * 21-bit hash (0..2097151) shifted by 10 bits plus a 10-bit index yields ids
- * up to ~2.1B, within Chrome's safe integer DNR rule id range. Adds 1 so that
- * a zero-hash never collapses to rule id 0.
- */
-export function _makeRuleId(scriptId: string, index: number): number {
-  let h = 0;
-  for (let i = 0; i < scriptId.length; i++) {
-    h = (h * 31 + scriptId.charCodeAt(i)) & 0x7fffffff;
+function seedWebRequestRuleIdCounter(ruleIds: Iterable<unknown>): void {
+  for (const rawId of ruleIds) {
+    const id = Number(rawId);
+    if (
+      Number.isInteger(id)
+      && id >= WEB_REQUEST_RULE_ID_BASE
+      && id > _webRequestRuleIdCounter
+    ) {
+      _webRequestRuleIdCounter = Math.min(id, WEB_REQUEST_RULE_ID_MAX);
+    }
   }
-  return (((h & 0x1fffff) << 10) | (index & 0x3ff)) + 1;
+}
+
+function collectUsedWebRequestRuleIds(
+  liveRules: chrome.declarativeNetRequest.Rule[] = [],
+): Set<number> {
+  const usedRuleIds = new Set<number>();
+  for (const ruleIds of _webRequestRuleMap.values()) {
+    for (const id of ruleIds) usedRuleIds.add(id);
+  }
+  for (const rule of liveRules) {
+    if (Number.isInteger(rule?.id) && rule.id > 0) {
+      usedRuleIds.add(rule.id);
+    }
+  }
+  seedWebRequestRuleIdCounter(usedRuleIds);
+  return usedRuleIds;
+}
+
+/**
+ * Allocate a new dynamic-rule ID from a monotonic GM_webRequest-only pool.
+ * The scriptId/index parameters are retained for older white-box callers, but
+ * are intentionally not used for ownership; the persisted rule map owns cleanup.
+ */
+export function _makeRuleId(
+  _scriptId: string,
+  _index: number,
+  usedRuleIds: Set<number> = new Set<number>(),
+): number {
+  do {
+    _webRequestRuleIdCounter += 1;
+    if (_webRequestRuleIdCounter > WEB_REQUEST_RULE_ID_MAX) {
+      throw new Error('GM_webRequest DNR rule ID pool exhausted');
+    }
+  } while (usedRuleIds.has(_webRequestRuleIdCounter));
+  usedRuleIds.add(_webRequestRuleIdCounter);
+  return _webRequestRuleIdCounter;
 }
 
 function normalizeRuleIds(value: unknown): number[] {
@@ -117,6 +155,7 @@ async function hydrateWebRequestRuleMap(): Promise<void> {
           const normalized = normalizeRuleIds(ruleIds);
           if (normalized.length > 0) {
             _webRequestRuleMap.set(scriptId, normalized);
+            seedWebRequestRuleIdCounter(normalized);
           }
         }
       }
@@ -504,11 +543,13 @@ export async function applyWebRequestRules(
     // Remove any existing rules for this script first
     await removeWebRequestRules(scriptId);
 
+    const existing = await chrome.declarativeNetRequest.getDynamicRules();
+    const usedRuleIds = collectUsedWebRequestRuleIds(existing);
     const dnrRules: chrome.declarativeNetRequest.Rule[] = [];
     const ruleIds: number[] = [];
 
     rules.forEach((rule, idx) => {
-      const ruleId = _makeRuleId(scriptId, idx);
+      const ruleId = _makeRuleId(scriptId, idx, usedRuleIds);
       const dnr = _translateWebRequestRule(rule, ruleId, { initiatorDomains: policy.initiatorDomains });
       if (dnr) {
         dnrRules.push(dnr);
@@ -518,7 +559,6 @@ export async function applyWebRequestRules(
 
     if (dnrRules.length > 0) {
       // Check dynamic rule quota (Chrome limit: 30,000)
-      const existing = await chrome.declarativeNetRequest.getDynamicRules();
       if (existing.length + dnrRules.length > 30000) {
         console.warn(
           `[ScriptVault] DNR rule limit would be exceeded: ${existing.length} + ${dnrRules.length} > 30000`,
