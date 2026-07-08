@@ -608,11 +608,29 @@
         return BULK_ACTION_LABELS[action] || 'Apply';
     }
 
+    function isTrashDisabled() {
+        return (state.settings?.trashMode || '30') === 'disabled';
+    }
+
+    function getSingleDeleteDialogCopy(name) {
+        const retentionLabel = formatTrashRetention(state.settings?.trashMode || '30');
+        if (isTrashDisabled()) {
+            return {
+                title: `Delete "${name}"?`,
+                message: 'Permanently delete this script? Trash is disabled, so this cannot be undone.',
+            };
+        }
+        return {
+            title: `Move "${name}" to Trash?`,
+            message: `You can restore it from the Trash tab for ${retentionLabel.toLowerCase()}.`,
+        };
+    }
+
     function getBulkDeleteDialogCopy(count) {
         const formattedCount = numberFormatter.format(count);
         const plural = count === 1 ? 'script' : 'scripts';
         const retentionLabel = formatTrashRetention(state.settings?.trashMode || '30');
-        const isPermanent = retentionLabel === 'Disabled';
+        const isPermanent = isTrashDisabled();
 
         if (isPermanent) {
             return {
@@ -687,7 +705,7 @@
             };
         }
 
-        const deleteSuccessLabel = formatTrashRetention(state.settings?.trashMode || '30') === 'Disabled' ? 'Deleted' : 'Moved to Trash';
+        const deleteSuccessLabel = isTrashDisabled() ? 'Deleted' : 'Moved to Trash';
         const actionCopy = {
             enable: { success: 'Enabled', failure: 'enable' },
             disable: { success: 'Disabled', failure: 'disable' },
@@ -2788,7 +2806,8 @@
                                 const deleteTask = async () => {
                                     const script = state.scripts.find(s => s.id === id);
                                     const name = script?.metadata?.name || id;
-                                    if (await showConfirmModal(`Delete "${name}"?`, 'This action cannot be undone.')) {
+                                    const deleteCopy = getSingleDeleteDialogCopy(name);
+                                    if (await showConfirmModal(deleteCopy.title, deleteCopy.message)) {
                                         await deleteScript(id);
                                     }
                                 };
@@ -8357,7 +8376,8 @@
         });
         tr.querySelector('[data-action="delete"]')?.addEventListener('click', async () => {
             const name = script.metadata?.name || script.id;
-            if (await showConfirmModal(`Delete "${name}"?`, 'This action cannot be undone.')) {
+            const deleteCopy = getSingleDeleteDialogCopy(name);
+            if (await showConfirmModal(deleteCopy.title, deleteCopy.message)) {
                 deleteScript(script.id);
             }
         });
@@ -11260,7 +11280,16 @@
             if (!skipReload) {
                 await loadScripts();
                 updateStats();
-                showToast('Deleted', 'success');
+                const movedToTrash = !isTrashDisabled();
+                showToast(
+                    movedToTrash ? 'Moved to Trash' : 'Deleted',
+                    'success',
+                    movedToTrash ? {
+                        actionLabel: 'Open Trash',
+                        duration: 6500,
+                        action: () => switchTab('trash', { focusControl: true }),
+                    } : {}
+                );
             }
             return true;
         } catch (e) {
@@ -13948,8 +13977,10 @@
             if (!state.currentScriptId) return;
             const script = state.scripts.find(s => s.id === state.currentScriptId);
             const name = script?.metadata?.name || 'this script';
-            if (await showConfirmModal(`Delete "${name}"?`, 'This action cannot be undone.')) {
-                deleteScript(state.currentScriptId);
+            const scriptId = state.currentScriptId;
+            const deleteCopy = getSingleDeleteDialogCopy(name);
+            if (await showConfirmModal(deleteCopy.title, deleteCopy.message)) {
+                deleteScript(scriptId);
             }
         });
         // Close button removed - tabs handle closing

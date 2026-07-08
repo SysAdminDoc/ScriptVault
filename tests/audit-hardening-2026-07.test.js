@@ -407,6 +407,20 @@ describe('Dropped ZIP import confirmation and undo (2026-07 regression)', () => 
   });
 });
 
+describe('Trash-aware single script delete copy (2026-07 regression)', () => {
+  const src = read('pages/dashboard.js');
+
+  it('does not claim Trash-enabled deletes are irreversible', () => {
+    expect(src).toContain('function isTrashDisabled()');
+    expect(src).toContain('function getSingleDeleteDialogCopy(name)');
+    expect(src).toContain('Permanently delete this script? Trash is disabled, so this cannot be undone.');
+    expect(src).toContain('Move "${name}" to Trash?');
+    expect(src).toContain("movedToTrash ? 'Moved to Trash' : 'Deleted'");
+    expect(src).not.toContain("retentionLabel === 'Disabled'");
+    expect(src).not.toContain("showConfirmModal(`Delete \"${name}\"?`, 'This action cannot be undone.')");
+  });
+});
+
 describe('Script chains use the real background API (2026-07 regression)', () => {
   const src = read('pages/dashboard-chains.js');
   it('runs steps via runScriptNow, not the non-existent executeScript action', () => {
