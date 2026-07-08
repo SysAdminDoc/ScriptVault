@@ -421,6 +421,21 @@ describe('Trash-aware single script delete copy (2026-07 regression)', () => {
   });
 });
 
+describe('Update check error handling (2026-07 regression)', () => {
+  it('does not treat error objects as an up-to-date result', () => {
+    const src = read('pages/dashboard.js');
+    const fn = src.slice(
+      src.indexOf('async function checkScriptForUpdates'),
+      src.indexOf('function isBroadMatch')
+    );
+    expect(fn).toContain('if (updates?.error) {');
+    expect(fn).toContain("showToast(updates.error || 'Update check failed', 'error');");
+    expect(fn).toContain('if (!Array.isArray(updates)) {');
+    expect(fn).toContain("showToast('Update check failed', 'error');");
+    expect(fn).not.toContain('if (updates && updates.length > 0)');
+  });
+});
+
 describe('Script chains use the real background API (2026-07 regression)', () => {
   const src = read('pages/dashboard-chains.js');
   it('runs steps via runScriptNow, not the non-existent executeScript action', () => {

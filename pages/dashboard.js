@@ -11451,8 +11451,20 @@
 
             const updates = await chrome.runtime.sendMessage({ action: 'checkUpdates', scriptId });
             publishDashboardTelemetry('updatesChecked', { scriptId });
-            if (updates && updates.length > 0) {
-                await chrome.runtime.sendMessage({ action: 'applyUpdate', scriptId, code: updates[0].code });
+            if (updates?.error) {
+                showToast(updates.error || 'Update check failed', 'error');
+                return false;
+            }
+            if (!Array.isArray(updates)) {
+                showToast('Update check failed', 'error');
+                return false;
+            }
+            if (updates.length > 0) {
+                const response = await chrome.runtime.sendMessage({ action: 'applyUpdate', scriptId, code: updates[0].code });
+                if (response?.error) {
+                    showToast(response.error || 'Update failed', 'error');
+                    return false;
+                }
                 showToast(`${name} updated to v${updates[0].newVersion}`, 'success');
                 publishDashboardTelemetry('scriptUpdated', { scriptId });
                 setTimeout(() => loadScripts(), 800);
