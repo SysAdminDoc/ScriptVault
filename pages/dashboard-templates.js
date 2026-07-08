@@ -314,7 +314,7 @@ const TemplateManager = (() => {
             media.dataset.dlBtn = '1';
             const btn = document.createElement('button');
             btn.textContent = 'Download';
-            btn.style.cssText = 'position:absolute;top:4px;right:4px;padding:4px 8px;background:#333;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:0.6875rem;z-index:100;';
+            btn.style.cssText = 'position:absolute;top:4px;right:4px;padding:4px 8px;background:var(--sv-download-button-bg, ButtonFace);color:var(--sv-download-button-fg, ButtonText);border:1px solid var(--sv-download-button-border, currentColor);border-radius:4px;cursor:pointer;font-size:0.6875rem;z-index:100;';
             btn.onclick = (e) => {
                 e.stopPropagation();
                 const url = media.src || media.querySelector('source')?.src;
@@ -543,7 +543,7 @@ const TemplateManager = (() => {
 }
 .tm-cat-btn.active {
     background: var(--accent-green-dark, #22c55e);
-    color: #fff;
+    color: var(--text-on-accent, #fff);
     border-color: var(--accent-green-dark, #22c55e);
 }
 .tm-content {
@@ -622,7 +622,7 @@ const TemplateManager = (() => {
 }
 .tm-btn-primary {
     background: var(--accent-green-dark, #22c55e);
-    color: #fff;
+    color: var(--text-on-accent, #fff);
 }
 .tm-btn-primary:hover:not(:disabled) {
     background: var(--accent-green, #4ade80);
@@ -638,7 +638,7 @@ const TemplateManager = (() => {
 }
 .tm-btn-danger {
     background: var(--accent-red, #f87171);
-    color: #fff;
+    color: var(--text-on-accent, #fff);
 }
 .tm-btn-danger:hover:not(:disabled) {
     opacity: 0.85;
@@ -665,7 +665,7 @@ const TemplateManager = (() => {
 .tm-modal-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,0.6);
+    background: var(--overlay-scrim, rgba(0,0,0,0.55));
     display: flex;
     align-items: center;
     justify-content: center;
@@ -686,7 +686,7 @@ const TemplateManager = (() => {
     max-height: 85vh;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    box-shadow: var(--shadow-lg, 0 8px 32px rgba(0,0,0,0.35));
 }
 .tm-modal-header {
     display: flex;
@@ -791,7 +791,7 @@ const TemplateManager = (() => {
     padding: 10px 18px;
     border-radius: 8px;
     font-size: 0.8125rem;
-    color: #fff;
+    color: var(--text-on-accent, #fff);
     z-index: 10001;
     animation: tm-toast-in 0.25s ease, tm-toast-out 0.25s ease 2.5s forwards;
     pointer-events: none;

@@ -66,6 +66,37 @@ describe('Dashboard inline colors use defined theme tokens (2026-07 regression)'
   });
 });
 
+describe('Dashboard fallback and snippet UI colors follow the active theme (2026-07 regression)', () => {
+  it('uses theme variables for the Monaco fallback textarea', () => {
+    const html = read('pages/dashboard.html');
+    const textarea = html.match(/<textarea id="editorTextarea"[^>]*>/)?.[0] ?? '';
+    expect(textarea).toContain('background:var(--bg-input)');
+    expect(textarea).toContain('color:var(--text-primary)');
+    expect(textarea).not.toContain('background:#1a1a1a');
+    expect(textarea).not.toContain('color:#e0e0e0');
+  });
+
+  it('keeps copied UI snippets off fixed dark panel colors', () => {
+    const snippets = read('pages/dashboard-snippets.js');
+    expect(snippets).toContain('var(--sv-modal-bg, Canvas)');
+    expect(snippets).toContain('var(--sv-panel-bg, Canvas)');
+    expect(snippets).toContain('var(--sv-toast-bg, Canvas)');
+    expect(snippets).not.toContain("background: '#2a2a2a'");
+    expect(snippets).not.toContain('background:#333');
+    expect(snippets).not.toContain('background:#555');
+    expect(snippets).not.toContain("color: '#e0e0e0'");
+    expect(snippets).not.toContain('color:#e0e0e0');
+  });
+
+  it('keeps built-in template UI controls theme-adaptive', () => {
+    const templates = read('pages/dashboard-templates.js');
+    expect(templates).toContain('var(--sv-download-button-bg, ButtonFace)');
+    expect(templates).toContain('var(--overlay-scrim, rgba(0,0,0,0.55))');
+    expect(templates).toContain('var(--text-on-accent, #fff)');
+    expect(templates).not.toContain('background:#333;color:#fff');
+  });
+});
+
 describe('Dashboard light-theme status contrast (2026-07 regression)', () => {
   const html = read('pages/dashboard.html');
   const lightSelectors = [

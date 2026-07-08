@@ -261,13 +261,13 @@ $CURSOR$`
             code: `function showModal({ title, body, buttons = ['OK'], onAction }) {
     const overlay = document.createElement('div');
     Object.assign(overlay.style, {
-        position: 'fixed', inset: '0', background: 'rgba(0,0,0,0.6)',
+        position: 'fixed', inset: '0', background: 'var(--sv-modal-scrim, rgba(0,0,0,0.45))',
         display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: '99999'
     });
     const modal = document.createElement('div');
     Object.assign(modal.style, {
-        background: '#2a2a2a', color: '#e0e0e0', borderRadius: '8px',
-        padding: '20px', minWidth: '300px', maxWidth: '500px', boxShadow: '0 8px 32px rgba(0,0,0,0.4)'
+        background: 'var(--sv-modal-bg, Canvas)', color: 'var(--sv-modal-fg, CanvasText)', borderRadius: '8px',
+        padding: '20px', minWidth: '300px', maxWidth: '500px', boxShadow: 'var(--sv-panel-shadow, 0 8px 32px rgba(0,0,0,0.18))'
     });
     const heading = document.createElement('h3');
     heading.textContent = title;
@@ -282,7 +282,7 @@ $CURSOR$`
         const btn = document.createElement('button');
         btn.textContent = label;
         btn.style.cssText = 'padding:6px 16px;border:none;border-radius:4px;cursor:pointer;' +
-            (i === buttons.length - 1 ? 'background:#22c55e;color:#fff' : 'background:#555;color:#e0e0e0');
+            (i === buttons.length - 1 ? 'background:var(--sv-accent-bg, #16a34a);color:var(--sv-accent-fg, white)' : 'background:var(--sv-button-bg, ButtonFace);color:var(--sv-button-fg, ButtonText)');
         btn.onclick = () => { overlay.remove(); onAction?.(label, i); };
         btnRow.append(btn);
     });
@@ -300,13 +300,13 @@ $CURSOR$`
             description: 'Show a temporary toast notification at the bottom of the screen.',
             category: 'ui',
             code: `function showToast(message, duration = 3000, type = 'info') {
-    const colors = { info: '#60a5fa', success: '#4ade80', error: '#f87171', warning: '#fbbf24' };
+    const colors = { info: 'var(--sv-info, #2563eb)', success: 'var(--sv-success, #16a34a)', error: 'var(--sv-error, #dc2626)', warning: 'var(--sv-warning, #ca8a04)' };
     const toast = document.createElement('div');
     Object.assign(toast.style, {
         position: 'fixed', bottom: '20px', right: '20px', zIndex: '99999',
-        background: '#333', color: '#e0e0e0', padding: '12px 20px',
+        background: 'var(--sv-toast-bg, Canvas)', color: 'var(--sv-toast-fg, CanvasText)', padding: '12px 20px',
         borderRadius: '8px', borderLeft: \`4px solid \${colors[type] || colors.info}\`,
-        boxShadow: '0 4px 16px rgba(0,0,0,0.3)', fontSize: '13px',
+        boxShadow: 'var(--sv-toast-shadow, 0 4px 16px rgba(0,0,0,0.16))', fontSize: '13px',
         transition: 'opacity 0.3s, transform 0.3s', opacity: '0', transform: 'translateY(10px)'
     });
     toast.textContent = message;
@@ -328,7 +328,7 @@ $CURSOR$`
     const panel = document.createElement('div');
     const header = document.createElement('div');
     header.className = 'fp-header';
-    header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:#333;cursor:move;border-radius:8px 8px 0 0;user-select:none';
+    header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--sv-panel-header-bg, ButtonFace);cursor:move;border-radius:8px 8px 0 0;user-select:none';
     const titleEl = document.createElement('span');
     titleEl.textContent = title;
     titleEl.style.cssText = 'font-weight:600';
@@ -336,11 +336,11 @@ $CURSOR$`
     const minBtn = document.createElement('button');
     minBtn.className = 'fp-min';
     minBtn.textContent = '_';
-    minBtn.style.cssText = 'background:none;border:none;color:#e0e0e0;cursor:pointer;font-size:1rem';
+    minBtn.style.cssText = 'background:none;border:none;color:var(--sv-panel-fg, CanvasText);cursor:pointer;font-size:1rem';
     const closeBtn = document.createElement('button');
     closeBtn.className = 'fp-close';
     closeBtn.textContent = 'x';
-    closeBtn.style.cssText = 'background:none;border:none;color:#f87171;cursor:pointer;font-size:1rem';
+    closeBtn.style.cssText = 'background:none;border:none;color:var(--sv-error, #dc2626);cursor:pointer;font-size:1rem';
     controls.append(minBtn, closeBtn);
     header.append(titleEl, controls);
     const body = document.createElement('div');
@@ -350,8 +350,8 @@ $CURSOR$`
     panel.append(header, body);
     Object.assign(panel.style, {
         position: 'fixed', top: '50px', right: '20px', width: width + 'px', height: height + 'px',
-        background: '#2a2a2a', color: '#e0e0e0', borderRadius: '8px', zIndex: '99999',
-        border: '1px solid #404040', boxShadow: '0 8px 32px rgba(0,0,0,0.4)', fontSize: '13px'
+        background: 'var(--sv-panel-bg, Canvas)', color: 'var(--sv-panel-fg, CanvasText)', borderRadius: '8px', zIndex: '99999',
+        border: '1px solid var(--sv-panel-border, currentColor)', boxShadow: 'var(--sv-panel-shadow, 0 8px 32px rgba(0,0,0,0.18))', fontSize: '13px'
     });
     // Drag logic. Reuse the header element created above (redeclaring it here
     // with 'const' would be a duplicate-declaration SyntaxError). Keep named
