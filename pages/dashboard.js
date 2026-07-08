@@ -8397,11 +8397,19 @@
         tr.querySelector('[data-action="pin"]')?.addEventListener('click', async () => {
             const s = state.scripts.find(x => x.id === script.id);
             if (!s) return;
-            if (!s.settings) s.settings = {};
-            s.settings.pinned = !s.settings.pinned;
-            await chrome.runtime.sendMessage({ action: 'setScriptSettings', scriptId: script.id, settings: s.settings });
+            const previousSettings = { ...(s.settings || {}) };
+            const nextSettings = { ...previousSettings, pinned: !previousSettings.pinned };
+            s.settings = nextSettings;
             renderScriptTable();
-            showToast(s.settings.pinned ? 'Pinned' : 'Unpinned', 'success');
+            try {
+                const response = await chrome.runtime.sendMessage({ action: 'setScriptSettings', scriptId: script.id, settings: nextSettings });
+                if (response?.error) throw new Error(response.error);
+                showToast(nextSettings.pinned ? 'Pinned' : 'Unpinned', 'success');
+            } catch (error) {
+                s.settings = previousSettings;
+                renderScriptTable();
+                showToast(error?.message || 'Failed to update pin', 'error');
+            }
         });
         tr.querySelector('[data-action="updateScript"]')?.addEventListener('click', async (e) => {
             // Phase 38.9 — VM v2.37.1 footgun fix: normal click is
@@ -11233,27 +11241,36 @@
             }
             markScriptSaved(savingScriptId, Date.now());
             publishDashboardTelemetry('scriptEdited', { scriptId: savingScriptId });
-            showToast('Saved', 'success');
+            if (!options.silentSuccess) showToast('Saved', 'success');
+            return true;
         } catch (e) {
             markScriptSaveFailed(savingScriptId, e?.message || 'Failed to save');
             showToast('Failed to save', 'error');
+            return false;
         }
     }
 
     async function duplicateCurrentScript() {
         if (!state.currentScriptId) return;
+        const sourceScriptId = state.currentScriptId;
+        if (state.unsavedChanges || state.openTabs[sourceScriptId]?.unsaved) {
+            const saved = await saveCurrentScript({ silentSuccess: true });
+            if (!saved) return;
+        }
         try {
-            const response = await chrome.runtime.sendMessage({ action: 'duplicateScript', scriptId: state.currentScriptId });
+            const response = await chrome.runtime.sendMessage({ action: 'duplicateScript', scriptId: sourceScriptId });
             if (response?.success) {
                 await loadScripts();
-                closeEditor();
+                if (state.currentScriptId === sourceScriptId && state.openTabs[sourceScriptId]) {
+                    await Promise.resolve(closeScriptTab(sourceScriptId));
+                }
                 openEditorForScript(response.newScriptId);
                 showToast('Duplicated', 'success');
             } else {
                 showToast(response?.error || 'Failed to duplicate script', 'error');
             }
         } catch (e) {
-            showToast('Failed', 'error');
+            showToast(e?.message || 'Failed to duplicate script', 'error');
         }
     }
 

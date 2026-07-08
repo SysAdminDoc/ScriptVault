@@ -436,6 +436,33 @@ describe('Update check error handling (2026-07 regression)', () => {
   });
 });
 
+describe('Optimistic dashboard actions (2026-07 regression)', () => {
+  const src = read('pages/dashboard.js');
+
+  it('reverts pin state when setScriptSettings fails', () => {
+    const pinBlock = src.slice(
+      src.indexOf("tr.querySelector('[data-action=\"pin\"]')"),
+      src.indexOf("tr.querySelector('[data-action=\"updateScript\"]')")
+    );
+    expect(pinBlock).toContain('const previousSettings = { ...(s.settings || {}) };');
+    expect(pinBlock).toContain('if (response?.error) throw new Error(response.error);');
+    expect(pinBlock).toContain('s.settings = previousSettings;');
+    expect(pinBlock).toContain("showToast(error?.message || 'Failed to update pin', 'error');");
+  });
+
+  it('saves dirty editor content before duplicating the current script', () => {
+    const duplicateBlock = src.slice(
+      src.indexOf('async function duplicateCurrentScript()'),
+      src.indexOf('async function deleteScript')
+    );
+    expect(duplicateBlock).toContain('const sourceScriptId = state.currentScriptId;');
+    expect(duplicateBlock).toContain('state.unsavedChanges || state.openTabs[sourceScriptId]?.unsaved');
+    expect(duplicateBlock).toContain('const saved = await saveCurrentScript({ silentSuccess: true });');
+    expect(duplicateBlock).toContain("await Promise.resolve(closeScriptTab(sourceScriptId));");
+    expect(duplicateBlock).toContain("showToast(e?.message || 'Failed to duplicate script', 'error');");
+  });
+});
+
 describe('Script chains use the real background API (2026-07 regression)', () => {
   const src = read('pages/dashboard-chains.js');
   it('runs steps via runScriptNow, not the non-existent executeScript action', () => {
