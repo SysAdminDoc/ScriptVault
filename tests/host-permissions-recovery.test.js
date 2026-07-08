@@ -2,10 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { runtimeHostPermissionPatternForUrl } from '../src/background/host-permission-patterns.ts';
-import {
-  buildOptionalHostPrototype,
-  renderReport,
-} from '../scripts/check-host-permission-prototype.mjs';
+import { deriveOptionalHostPermissionPlan } from '../src/background/host-permission-patterns.ts';
 
 const ROOT = process.cwd();
 
@@ -75,29 +72,62 @@ describe('runtime host permission recovery wiring', () => {
   });
 });
 
-describe('optional host permission prototype gate', () => {
-  it('moves required all_urls into optional HTTP(S) host grants without changing shipping manifests', () => {
+describe('optional host permission shipping gate', () => {
+  it('ships Chrome with optional HTTP(S) host grants and leaves Firefox on required all_urls fallback', () => {
     const chromeManifest = json('manifest.json');
     const firefoxManifest = json('manifest-firefox.json');
-    const prototype = buildOptionalHostPrototype(chromeManifest);
 
-    expect(chromeManifest.host_permissions).toContain('<all_urls>');
+    expect(chromeManifest.host_permissions || []).not.toContain('<all_urls>');
+    expect(chromeManifest.optional_host_permissions).toEqual(expect.arrayContaining(['http://*/*', 'https://*/*']));
     expect(firefoxManifest.host_permissions).toContain('<all_urls>');
-    expect(prototype.host_permissions || []).not.toContain('<all_urls>');
-    expect(prototype.optional_host_permissions).toEqual(expect.arrayContaining(['http://*/*', 'https://*/*']));
-    expect(prototype.content_scripts[0].matches).toContain('<all_urls>');
+    expect(chromeManifest.content_scripts[0].matches).toContain('<all_urls>');
   });
 
-  it('keeps the generated prototype report current with reviewer copy', () => {
-    const report = renderReport({
-      chromeManifest: json('manifest.json'),
-      firefoxManifest: json('manifest-firefox.json'),
-      privacy: source('PRIVACY.md'),
-      storeCopy: source('docs/store-listing-copy.md'),
+  it('derives scoped host grants from run, dependency, update, and connect metadata', () => {
+    const plan = deriveOptionalHostPermissionPlan({
+      match: ['https://example.com/*', '*://docs.example.org/*'],
+      include: [],
+      matchTop: ['https://top.example/*'],
+      require: ['https://cdn.example.net/lib.js'],
+      resource: { icon: 'https://static.example.net/icon.png' },
+      updateURL: 'https://updates.example.net/script.user.js',
+      downloadURL: '',
+      connect: ['api.example.com'],
     });
 
-    expect(report.failures).toEqual([]);
-    expect(report.text).toContain('Reviewer copy status: pass.');
-    expect(report.text).toContain('optional_host_permissions');
+    expect(plan.requiresBroadHostAccess).toBe(false);
+    expect(plan.origins).toEqual(expect.arrayContaining([
+      'https://example.com/*',
+      'http://docs.example.org/*',
+      'https://docs.example.org/*',
+      'https://top.example/*',
+      'https://cdn.example.net/*',
+      'https://static.example.net/*',
+      'https://updates.example.net/*',
+      'http://api.example.com/*',
+      'https://api.example.com/*',
+    ]));
+  });
+
+  it('keeps universal host rules out of scoped grants until broad access is approved', () => {
+    const plan = deriveOptionalHostPermissionPlan({
+      match: ['<all_urls>'],
+      include: [],
+      matchTop: [],
+      require: [],
+      resource: {},
+      updateURL: '',
+      downloadURL: '',
+      connect: ['*'],
+    });
+
+    expect(plan.requiresBroadHostAccess).toBe(true);
+    expect(plan.origins).toEqual([]);
+    expect(plan.broadOrigins).toEqual(['http://*/*', 'https://*/*']);
+
+    expect(deriveOptionalHostPermissionPlan({
+      match: ['<all_urls>'],
+      connect: [],
+    }, { allowBroad: true }).origins).toEqual(['http://*/*', 'https://*/*']);
   });
 });

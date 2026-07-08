@@ -266,6 +266,12 @@ export interface ScriptTrustReceipt {
     denied: string[];
     unavailable: string[];
   } | null;
+  optionalHostPermissions?: {
+    requested: string[];
+    granted: string[];
+    denied: string[];
+    unavailable: string[];
+  } | null;
   diff: {
     previousVersion: string;
     nextVersion: string;

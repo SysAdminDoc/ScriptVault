@@ -31,9 +31,19 @@ function extractHelpers() {
   // They have no DOM dependencies and only touch chrome.permissions.
   const _body = `
     ${extractBlock('OPTIONAL_GRANT_PERMISSION_MAP', installSource)}
+    ${extractBlock('OPTIONAL_BROAD_HOST_ORIGINS', installSource)}
     ${extractBlock('function getRequiredOptionalPermissions', installSource)}
     ${extractBlock('async function ensureOptionalPermissions', installSource)}
-    return { getRequiredOptionalPermissions, ensureOptionalPermissions };
+    ${extractBlock('function uniqueStrings', installSource)}
+    ${extractBlock('function addOptionalHostOrigin', installSource)}
+    ${extractBlock('function addBroadHostOrigin', installSource)}
+    ${extractBlock('function addHostMatchPattern', installSource)}
+    ${extractBlock('function addHostUrlOrigin', installSource)}
+    ${extractBlock('function addHostConnectPattern', installSource)}
+    ${extractBlock('function asArray', installSource)}
+    ${extractBlock('function deriveOptionalHostPermissionPlan', installSource)}
+    ${extractBlock('async function ensureOptionalHostPermissions', installSource)}
+    return { getRequiredOptionalPermissions, ensureOptionalPermissions, deriveOptionalHostPermissionPlan, ensureOptionalHostPermissions };
   `;
   let fn;
   try { const vm = require('node:vm'); fn = vm.compileFunction(_body, ['chrome'], { filename: resolve(repoRoot, 'pages/install.js') }); } catch { fn = new Function('chrome', _body); }
@@ -46,11 +56,12 @@ function extractBlock(needle, src) {
   // install page DOM bootstrap.
   const start = src.indexOf(needle);
   if (start === -1) throw new Error(`extractBlock: ${needle} not found`);
+  const declStart = src.slice(Math.max(0, start - 6), start) === 'const ' ? start - 6 : start;
   const headEnd = src.indexOf('{', start);
-  if (headEnd === -1) {
+  const semi = src.indexOf(';', start);
+  if (headEnd === -1 || (semi !== -1 && semi < headEnd)) {
     // Const map assignment with no braces — fall back to up-to-semicolon.
-    const semi = src.indexOf(';', start);
-    return src.slice(start - 6, semi + 1); // include leading `const ` (6 chars)
+    return src.slice(declStart, semi + 1);
   }
   let depth = 1;
   for (let i = headEnd + 1; i < src.length; i++) {
@@ -60,7 +71,7 @@ function extractBlock(needle, src) {
       if (depth === 0) {
         // Return the declaration prefixed with whatever keyword was already
         // captured by the needle (function / async function / const).
-        return src.slice(start, i + 1);
+        return src.slice(declStart, i + 1) + (src[i + 1] === ';' ? ';' : '');
       }
     }
   }
@@ -154,8 +165,75 @@ describe('handleInstall threads optionalPermissions through saveScript', () => {
     // Source-level pin so a future refactor that drops the field from the
     // saveScript message round-trips a CI failure instead of a silent regression.
     expect(installSource).toMatch(/optionalPermissions:\s*optionalPermissionsResult/);
+    expect(installSource).toMatch(/optionalHostPermissions:\s*optionalHostPermissionsResult/);
     expect(installSource).toMatch(/await ensureOptionalPermissions\(optionalPermissionTokens\)/);
+    expect(installSource).toMatch(/await ensureOptionalHostPermissions\(hostPermissionPlan\.origins\)/);
     expect(installSource).toMatch(/getRequiredOptionalPermissions\(scriptMeta\)/);
+    expect(installSource).toMatch(/settings:\s*\{\s*allowBroadHostAccess\s*\}/);
+  });
+});
+
+describe('install-page optional host permission helpers', () => {
+  let factory;
+  beforeEach(() => {
+    factory = extractHelpers();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    chrome.permissions.contains.mockReset();
+    chrome.permissions.request.mockReset();
+  });
+
+  it('derives scoped origins from run, dependency, update, and connect metadata', () => {
+    const { deriveOptionalHostPermissionPlan } = factory(globalThis.chrome);
+    const plan = deriveOptionalHostPermissionPlan({
+      match: ['https://example.com/*', '*://docs.example.org/*'],
+      include: [],
+      matchTop: [],
+      require: ['https://cdn.example.net/lib.js'],
+      resource: { style: 'https://static.example.net/style.css' },
+      updateURL: 'https://updates.example.net/script.user.js',
+      connect: ['api.example.com'],
+    });
+
+    expect(plan.requiresBroadHostAccess).toBe(false);
+    expect(plan.origins).toEqual(expect.arrayContaining([
+      'https://example.com/*',
+      'http://docs.example.org/*',
+      'https://docs.example.org/*',
+      'https://cdn.example.net/*',
+      'https://static.example.net/*',
+      'https://updates.example.net/*',
+      'http://api.example.com/*',
+      'https://api.example.com/*',
+    ]));
+  });
+
+  it('keeps universal origins out of requests until broad access is approved', () => {
+    const { deriveOptionalHostPermissionPlan } = factory(globalThis.chrome);
+    const plan = deriveOptionalHostPermissionPlan({ match: ['<all_urls>'], connect: ['*'] });
+    expect(plan.requiresBroadHostAccess).toBe(true);
+    expect(plan.origins).toEqual([]);
+    expect(plan.broadOrigins).toEqual(['http://*/*', 'https://*/*']);
+    expect(deriveOptionalHostPermissionPlan({ match: ['<all_urls>'] }, { allowBroad: true }).origins).toEqual(['http://*/*', 'https://*/*']);
+  });
+
+  it('requests only missing scoped host origins', async () => {
+    chrome.permissions.contains.mockImplementation(({ origins }) => Promise.resolve(origins[0] === 'https://example.com/*'));
+    chrome.permissions.request.mockResolvedValue(true);
+    const { ensureOptionalHostPermissions } = factory(globalThis.chrome);
+    const result = await ensureOptionalHostPermissions(['https://example.com/*', 'https://other.example/*']);
+    expect(result.granted).toEqual(['https://example.com/*', 'https://other.example/*']);
+    expect(chrome.permissions.request).toHaveBeenCalledWith({ origins: ['https://other.example/*'] });
+  });
+
+  it('records denied scoped host origins when the browser prompt is declined', async () => {
+    chrome.permissions.contains.mockResolvedValue(false);
+    chrome.permissions.request.mockResolvedValue(false);
+    const { ensureOptionalHostPermissions } = factory(globalThis.chrome);
+    const result = await ensureOptionalHostPermissions(['https://example.com/*']);
+    expect(result.denied).toEqual(['https://example.com/*']);
   });
 });
 

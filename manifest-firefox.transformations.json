@@ -6,6 +6,7 @@
       "removeKeys": [
         "minimum_chrome_version",
         "omnibox",
+        "optional_host_permissions",
         "side_panel",
         "devtools_page",
         "sandbox",
@@ -36,6 +37,10 @@
           "value": {
             "scripts": ["background.js"]
           }
+        },
+        {
+          "path": "host_permissions",
+          "value": ["<all_urls>"]
         }
       ],
       "removeObjectKeys": [

@@ -364,7 +364,7 @@ _Last generated: 2026-07-02 with `npm run support:matrix`. Version source: `mani
 
 ## Permission and Privacy Review
 
-ScriptVault has broad extension permissions because it is a userscript manager: users can install scripts for user-chosen sites, run them in the browser `USER_SCRIPT` world, sync backups through configured providers, and expose script APIs such as `GM_download`, `GM_xmlhttpRequest`, clipboard, and tab helpers. The reviewer-facing permission justifications live in [docs/store-listing-copy.md](docs/store-listing-copy.md), the CWS remote-code review memo lives in [docs/cws-remote-code-compliance.md](docs/cws-remote-code-compliance.md), and the privacy policy keeps the same manifest inventory in [PRIVACY.md](PRIVACY.md).
+ScriptVault requests Chrome site access with optional HTTP(S) host grants derived from each script's declared run, update, dependency, and `@connect` hosts. Scripts that declare universal access require an explicit per-script broad-access approval; Firefox keeps the required `<all_urls>` fallback until its MV3 userscript host-grant behavior is equivalent. The reviewer-facing permission justifications live in [docs/store-listing-copy.md](docs/store-listing-copy.md), the CWS remote-code review memo lives in [docs/cws-remote-code-compliance.md](docs/cws-remote-code-compliance.md), and the privacy policy keeps the same manifest inventory in [PRIVACY.md](PRIVACY.md).
 
 Before release, run:
 

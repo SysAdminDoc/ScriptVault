@@ -34,8 +34,9 @@
     "cookies",
     "downloads"
   ],
-  "host_permissions": [
-    "<all_urls>"
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
   ],
   "storage": {
     "managed_schema": "managed-storage-schema.json"

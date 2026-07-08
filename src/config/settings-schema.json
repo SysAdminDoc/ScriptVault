@@ -82,6 +82,7 @@
       "sandboxMode",
       "scriptOrder",
       "searchIntegration",
+      "scopedHostPermissions",
       "showBadge",
       "showFixedSource",
       "sri",
@@ -200,6 +201,14 @@
       "help": "Controls allow high privilege script apis.",
       "elementId": "settingsAllowHighPrivilegeScriptApis",
       "default": false
+    },
+    "scopedHostPermissions": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "Use scoped host permissions",
+      "help": "Requests browser access only for a script's declared run, update, dependency, and connect hosts. Broad all-site scripts require per-script approval.",
+      "elementId": "settingsScopedHostPermissions",
+      "default": true
     },
     "allowHttpHeaders": {
       "type": "string",

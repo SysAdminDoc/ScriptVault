@@ -1889,6 +1889,7 @@
         elements.settingsAllowLocalFiles = document.getElementById('settingsAllowLocalFiles');
         elements.settingsAllowCookies = document.getElementById('settingsAllowCookies');
         elements.settingsAllowHighPrivilegeScriptApis = document.getElementById('settingsAllowHighPrivilegeScriptApis');
+        elements.settingsScopedHostPermissions = document.getElementById('settingsScopedHostPermissions');
         elements.settingsAllowCommunication = document.getElementById('settingsAllowCommunication');
         elements.settingsSRI = document.getElementById('settingsSRI');
         elements.settingsIncludeMode = document.getElementById('settingsIncludeMode');
@@ -3681,6 +3682,7 @@
         if (elements.settingsAllowLocalFiles) elements.settingsAllowLocalFiles.value = s.allowLocalFiles || 'all';
         if (elements.settingsAllowCookies) elements.settingsAllowCookies.value = s.allowCookies || 'all';
         if (elements.settingsAllowHighPrivilegeScriptApis) elements.settingsAllowHighPrivilegeScriptApis.checked = s.allowHighPrivilegeScriptApis === true;
+        if (elements.settingsScopedHostPermissions) elements.settingsScopedHostPermissions.checked = s.scopedHostPermissions !== false;
         if (elements.settingsAllowCommunication) elements.settingsAllowCommunication.value = s.allowCommunication || 'version';
         if (elements.settingsSRI) elements.settingsSRI.value = s.sri || 'validate';
         if (elements.settingsIncludeMode) elements.settingsIncludeMode.value = s.includeMode || 'default';
@@ -3783,6 +3785,7 @@
             defaultTabTypes: elements.settingsDefaultTabTypes,
             allowLocalFiles: elements.settingsAllowLocalFiles,
             allowCookies: elements.settingsAllowCookies,
+            scopedHostPermissions: elements.settingsScopedHostPermissions,
             allowCommunication: elements.settingsAllowCommunication,
             sri: elements.settingsSRI,
             includeMode: elements.settingsIncludeMode,
@@ -14488,6 +14491,7 @@
             settingsAllowLocalFiles: ['allowLocalFiles', 'value'],
             settingsAllowCookies: ['allowCookies', 'value'],
             settingsAllowHighPrivilegeScriptApis: ['allowHighPrivilegeScriptApis', 'checked'],
+            settingsScopedHostPermissions: ['scopedHostPermissions', 'checked'],
             settingsAllowCommunication: ['allowCommunication', 'value'],
             settingsSRI: ['sri', 'value'],
             settingsIncludeMode: ['includeMode', 'value'],
@@ -14637,6 +14641,7 @@
             await runButtonTask(event.currentTarget, async () => {
                 await saveSettingOrThrow('whitelistedPages', elements.settingsWhitelistedPages?.value || '');
                 await saveSettingOrThrow('blacklistedPages', elements.settingsBlacklistedPages?.value || '');
+                await saveSettingOrThrow('scopedHostPermissions', elements.settingsScopedHostPermissions?.checked !== false);
                 const hostsText = elements.settingsDeniedHosts?.value || '';
                 await saveSettingOrThrow('deniedHosts', hostsText.split('\n').map(s => s.trim()).filter(Boolean));
                 showToast('Security settings saved', 'success');

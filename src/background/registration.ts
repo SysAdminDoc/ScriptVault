@@ -19,6 +19,7 @@ import {
   convertIncludeToMatch,
 } from './url-matcher';
 import { applyWebRequestRules, removeWebRequestRules } from './dnr-rules';
+import { deriveOptionalHostPermissionPlan } from './host-permission-patterns';
 
 // ---------------------------------------------------------------------------
 // External functions defined in background.core.js but not yet migrated
@@ -87,6 +88,35 @@ function isFirefoxRuntime(): boolean {
 
 function supportsUserScriptsWorldId(): boolean {
   return !isFirefoxRuntime() && getChromeMajorVersion() >= 133;
+}
+
+function shouldEnforceScopedHostPermissions(settings: Settings): boolean {
+  if ((settings as unknown as Record<string, unknown>).scopedHostPermissions === false) return false;
+  if (isFirefoxRuntime()) return false;
+  return typeof chrome?.permissions?.contains === 'function';
+}
+
+async function ensureScopedHostPermissions(script: Script, settings: Settings): Promise<void> {
+  if (!shouldEnforceScopedHostPermissions(settings)) return;
+  const allowBroad = (script.settings as Record<string, unknown> | undefined)?.allowBroadHostAccess === true;
+  const plan = deriveOptionalHostPermissionPlan(script.meta as unknown as Record<string, unknown>, { allowBroad });
+  if (plan.requiresBroadHostAccess && !allowBroad) {
+    await chrome.userScripts.unregister({ ids: [script.id] }).catch(() => undefined);
+    throw new Error('Broad host access requires explicit per-script opt-in before registration');
+  }
+  if (plan.origins.length === 0) return;
+  let granted = false;
+  try {
+    granted = await chrome.permissions.contains({ origins: plan.origins });
+  } catch {
+    granted = false;
+  }
+  if (!granted) {
+    await chrome.userScripts.unregister({ ids: [script.id] }).catch(() => undefined);
+    const sample = plan.origins.slice(0, 3).join(', ');
+    const suffix = plan.origins.length > 3 ? `, +${plan.origins.length - 3} more` : '';
+    throw new Error(`Browser host access not granted for ${sample}${suffix}`);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -366,6 +396,8 @@ export async function registerScript(
     if (matches.length === 0) {
       matches.push('<all_urls>');
     }
+
+    await ensureScopedHostPermissions(script, globalSettings);
 
     // Map run-at values (with per-script setting override)
     const runAtMap: Record<string, ChromeRunAt> = {

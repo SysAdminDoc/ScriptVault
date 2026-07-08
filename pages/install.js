@@ -105,6 +105,7 @@ const OPTIONAL_GRANT_PERMISSION_MAP = {
   'GM_download': 'downloads',
   'GM.download': 'downloads',
 };
+const OPTIONAL_BROAD_HOST_ORIGINS = ['http://*/*', 'https://*/*'];
 
 const ANTIFEATURE_LABELS = Object.freeze({
   ads: 'Contains advertising',
@@ -224,6 +225,157 @@ async function ensureOptionalPermissions(tokens) {
   return result;
 }
 
+function uniqueStrings(values) {
+  return Array.from(new Set(values.filter(Boolean))).sort();
+}
+
+function addOptionalHostOrigin(target, scheme, host) {
+  const cleanScheme = String(scheme || '').replace(/:$/, '').toLowerCase();
+  const cleanHost = String(host || '').trim().toLowerCase().replace(/:(\d{1,5})$/, '');
+  if (!['http', 'https'].includes(cleanScheme) || !cleanHost) return;
+  target.add(`${cleanScheme}://${cleanHost}/*`);
+}
+
+function addBroadHostOrigin(target, scheme = '*') {
+  const cleanScheme = String(scheme || '*').replace(/:$/, '').toLowerCase();
+  if (cleanScheme === '*') {
+    OPTIONAL_BROAD_HOST_ORIGINS.forEach(origin => target.add(origin));
+  } else if (['http', 'https'].includes(cleanScheme)) {
+    target.add(`${cleanScheme}://*/*`);
+  }
+}
+
+function addHostMatchPattern(pattern, origins, broadOrigins, unsupported) {
+  const raw = String(pattern || '').trim();
+  if (!raw) return;
+  if (raw === '<all_urls>' || raw === '*://*/*') {
+    addBroadHostOrigin(broadOrigins);
+    return;
+  }
+  const match = raw.match(/^(\*|https?|file|ftp):\/\/([^/]+)(?:\/.*)?$/i);
+  if (!match) {
+    unsupported.add(raw);
+    return;
+  }
+  const scheme = String(match[1] || '').toLowerCase();
+  const host = String(match[2] || '').toLowerCase();
+  if (scheme === 'file' || scheme === 'ftp') {
+    unsupported.add(raw);
+    return;
+  }
+  if (host === '*') {
+    addBroadHostOrigin(broadOrigins, scheme);
+    return;
+  }
+  if (scheme === '*') {
+    addOptionalHostOrigin(origins, 'http', host);
+    addOptionalHostOrigin(origins, 'https', host);
+    return;
+  }
+  addOptionalHostOrigin(origins, scheme, host);
+}
+
+function addHostUrlOrigin(rawUrl, origins, unsupported) {
+  const raw = String(rawUrl || '').trim();
+  if (!raw) return;
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      unsupported.add(raw);
+      return;
+    }
+    addOptionalHostOrigin(origins, parsed.protocol, parsed.hostname);
+  } catch {
+    unsupported.add(raw);
+  }
+}
+
+function addHostConnectPattern(pattern, origins, broadOrigins, unsupported) {
+  const raw = String(pattern || '').trim();
+  if (!raw || raw === 'self') return;
+  if (raw === '*' || raw === '<all_urls>' || raw === '*://*/*') {
+    addBroadHostOrigin(broadOrigins);
+    return;
+  }
+  if (/^(?:\*|https?):\/\//i.test(raw)) {
+    addHostMatchPattern(raw.endsWith('/*') || raw.includes('/', raw.indexOf('://') + 3) ? raw : `${raw}/*`, origins, broadOrigins, unsupported);
+    return;
+  }
+  const host = raw.replace(/\/.*$/, '').toLowerCase();
+  if (!host || /[\s?#]/.test(host)) {
+    unsupported.add(raw);
+    return;
+  }
+  addOptionalHostOrigin(origins, 'http', host);
+  addOptionalHostOrigin(origins, 'https', host);
+}
+
+function asArray(value) {
+  return Array.isArray(value) ? value : (value ? [value] : []);
+}
+
+function deriveOptionalHostPermissionPlan(meta, options) {
+  options = options || {};
+  const origins = new Set();
+  const broadOrigins = new Set();
+  const unsupported = new Set();
+  const source = meta || {};
+  asArray(source.match).forEach(pattern => addHostMatchPattern(pattern, origins, broadOrigins, unsupported));
+  asArray(source.include).forEach(pattern => addHostMatchPattern(pattern, origins, broadOrigins, unsupported));
+  asArray(source.matchTop).forEach(pattern => addHostMatchPattern(pattern, origins, broadOrigins, unsupported));
+  asArray(source.connect).forEach(pattern => addHostConnectPattern(pattern, origins, broadOrigins, unsupported));
+  asArray(source.require).forEach(url => addHostUrlOrigin(url, origins, unsupported));
+  Object.values(source.resource || {}).forEach(url => addHostUrlOrigin(url, origins, unsupported));
+  addHostUrlOrigin(source.updateURL, origins, unsupported);
+  addHostUrlOrigin(source.downloadURL, origins, unsupported);
+  if (options.allowBroad) {
+    broadOrigins.forEach(origin => origins.add(origin));
+  }
+  return {
+    origins: uniqueStrings(Array.from(origins)),
+    broadOrigins: uniqueStrings(Array.from(broadOrigins)),
+    unsupported: uniqueStrings(Array.from(unsupported)),
+    requiresBroadHostAccess: broadOrigins.size > 0
+  };
+}
+
+async function ensureOptionalHostPermissions(origins) {
+  const result = { requested: origins.slice(), granted: [], denied: [], unavailable: [] };
+  if (!origins.length) return result;
+  if (!chrome.permissions || !chrome.permissions.request) {
+    result.unavailable = origins.slice();
+    return result;
+  }
+  const needed = [];
+  for (const origin of origins) {
+    let already = false;
+    try {
+      already = !!(await chrome.permissions.contains({ origins: [origin] }));
+    } catch {
+      already = false;
+    }
+    if (already) {
+      result.granted.push(origin);
+    } else {
+      needed.push(origin);
+    }
+  }
+  if (needed.length > 0) {
+    let approved = false;
+    try {
+      approved = !!(await chrome.permissions.request({ origins: needed }));
+    } catch {
+      approved = false;
+    }
+    if (approved) {
+      result.granted.push(...needed);
+    } else {
+      result.denied.push(...needed);
+    }
+  }
+  return result;
+}
+
 // CodeMirror theme mapping per dashboard theme
 const CM_THEME_MAP = {
   dark: 'monokai',
@@ -238,6 +390,7 @@ let existingScript = null;
 let codeEditor = null;
 let autoUpdate = true;
 let enableOnInstall = true;
+let allowBroadHostAccess = false;
 let installSourceUrl = '';
 let signatureVerification = null;
 const numberFormatter = new Intl.NumberFormat();
@@ -568,6 +721,7 @@ async function init() {
       s && s.meta && s.meta.name === scriptMeta.name &&
       (s.meta.namespace === scriptMeta.namespace || (!s.meta.namespace && !scriptMeta.namespace))
     );
+    allowBroadHostAccess = existingScript?.settings?.allowBroadHostAccess === true;
 
     // Render the install UI
     renderInstallUI(sourceUrl);
@@ -1080,6 +1234,7 @@ function renderInstallUI(sourceUrl) {
   const matches = [...scriptMeta.match, ...scriptMeta.include];
   const excludes = [...scriptMeta.exclude, ...scriptMeta['exclude-match']];
   const grants = scriptMeta.grant.length > 0 ? scriptMeta.grant : ['none'];
+  const hostPermissionPlan = deriveOptionalHostPermissionPlan(scriptMeta, { allowBroad: allowBroadHostAccess });
   const dangerousPermissions = scriptMeta.grant.filter(g => DANGEROUS_PERMISSIONS.includes(g));
   const hasDangerousPerms = dangerousPermissions.length > 0;
   const resourceCount = scriptMeta.require.length + Object.keys(scriptMeta.resource).length;
@@ -1176,6 +1331,13 @@ function renderInstallUI(sourceUrl) {
       'is-danger',
       'Elevated Browser Access',
       `This script requests ${numberFormatter.format(dangerousPermissions.length)} high-trust permission${dangerousPermissions.length === 1 ? '' : 's'}, including ${dangerousPermissions.slice(0, 3).map(escapeHtml).join(', ')}.`
+    ));
+  }
+  if (hostPermissionPlan.requiresBroadHostAccess) {
+    alerts.push(buildInstallAlert(
+      'is-warning',
+      'All-Sites Browser Access',
+      'This script declares a universal run or connect rule. ScriptVault will not grant all-site browser access unless you explicitly approve broad access in the install options.'
     ));
   }
 
@@ -1441,6 +1603,26 @@ function renderInstallUI(sourceUrl) {
         </div>
       </div>
 
+      <div class="section">
+        <div class="section-title">
+          <span>Browser Host Grants</span>
+          <span class="count">${hostPermissionPlan.origins.length > 0 ? numberFormatter.format(hostPermissionPlan.origins.length) : hostPermissionPlan.requiresBroadHostAccess ? 'Broad' : 'None'}</span>
+        </div>
+        <p class="optional-perm-note" style="margin-top:0;margin-bottom:8px;font-size:0.85em;color:var(--text-muted,#888);">
+          ScriptVault asks the browser only for hosts this script declares in run rules, update URLs, dependencies, or @connect. Universal rules stay blocked until you approve broad access.
+        </p>
+        <div class="tag-list">
+          ${hostPermissionPlan.origins.length > 0
+            ? hostPermissionPlan.origins.slice(0, 12).map(origin => `<span class="tag safe">${escapeHtml(origin)}</span>`).join('')
+            : hostPermissionPlan.requiresBroadHostAccess
+              ? '<span class="tag warning">Awaiting broad-access approval</span>'
+              : '<span class="tag safe">No HTTP(S) host grants needed</span>'}
+          ${hostPermissionPlan.origins.length > 12 ? `<span class="tag neutral">+${numberFormatter.format(hostPermissionPlan.origins.length - 12)} more</span>` : ''}
+          ${hostPermissionPlan.requiresBroadHostAccess ? hostPermissionPlan.broadOrigins.map(origin => `<span class="tag warning">${escapeHtml(origin)}</span>`).join('') : ''}
+          ${hostPermissionPlan.unsupported.length > 0 ? `<span class="tag neutral" title="${escapeHtml(hostPermissionPlan.unsupported.slice(0, 6).join(', '))}">${numberFormatter.format(hostPermissionPlan.unsupported.length)} non-HTTP rule${hostPermissionPlan.unsupported.length === 1 ? '' : 's'}</span>` : ''}
+        </div>
+      </div>
+
       ${resourceCount > 0 ? `
         <div class="section">
           <div class="section-title">
@@ -1560,6 +1742,10 @@ function renderInstallUI(sourceUrl) {
               <span>Network access</span>
               <strong>${scriptMeta.connect.length > 0 ? numberFormatter.format(scriptMeta.connect.length) : 'None declared'}</strong>
             </div>
+            <div class="decision-row">
+              <span>Browser access</span>
+              <strong>${hostPermissionPlan.requiresBroadHostAccess && !allowBroadHostAccess ? 'Broad approval needed' : hostPermissionPlan.origins.length > 0 ? `${numberFormatter.format(hostPermissionPlan.origins.length)} scoped host${hostPermissionPlan.origins.length === 1 ? '' : 's'}` : 'No HTTP(S) grants'}</strong>
+            </div>
           </div>
 
           <div class="options">
@@ -1587,6 +1773,18 @@ function renderInstallUI(sourceUrl) {
                   <span class="toggle-slider"></span>
                 </label>
             </div>
+            ` : ''}
+            ${hostPermissionPlan.requiresBroadHostAccess ? `
+              <div class="option-row">
+                <div class="option-info">
+                  <span class="option-label">Allow all-site browser access</span>
+                  <span class="option-description">Required only because this script declares &lt;all_urls&gt;, *://*/*, or another universal host rule.</span>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="allow-broad-host-access" ${allowBroadHostAccess ? 'checked' : ''}>
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
             ` : ''}
           </div>
 
@@ -1644,6 +1842,13 @@ function renderInstallUI(sourceUrl) {
     clearInstallError();
     setCancelReviewArmed(false);
     updateDecisionSummary();
+  });
+
+  document.getElementById('allow-broad-host-access')?.addEventListener('change', (e) => {
+    allowBroadHostAccess = e.target.checked;
+    clearInstallError();
+    setCancelReviewArmed(false);
+    renderInstallUI(sourceUrl);
   });
 
   if (dependencyCount > 0) {
@@ -1863,6 +2068,14 @@ async function handleInstall() {
 
   try {
     const scriptId = existingScript?.id || null;
+    const hostPermissionPlan = deriveOptionalHostPermissionPlan(scriptMeta, { allowBroad: allowBroadHostAccess });
+    if (hostPermissionPlan.requiresBroadHostAccess && !allowBroadHostAccess) {
+      throw new Error('This script asks for all-site browser access. Approve broad access or narrow its @match/@connect rules before installing.');
+    }
+    const optionalHostPermissionsResult = await ensureOptionalHostPermissions(hostPermissionPlan.origins);
+    if (optionalHostPermissionsResult.denied.length > 0) {
+      throw new Error(`Browser host access was not granted for ${optionalHostPermissionsResult.denied.slice(0, 3).join(', ')}.`);
+    }
 
     // Request optional Chrome permissions for grants that need them
     // (GM_cookie → cookies, GM_setClipboard → clipboardWrite). Run before
@@ -1894,10 +2107,14 @@ async function handleInstall() {
         id: scriptId,
         enabled: enableOnInstall,
         autoUpdate: autoUpdate,
+        settings: {
+          allowBroadHostAccess
+        },
         trust: {
           recordReceipt: true,
           sourceUrl: installSourceUrl,
           optionalPermissions: optionalPermissionsResult,
+          optionalHostPermissions: optionalHostPermissionsResult,
           operation: presentation.isDowngrade
             ? 'downgrade'
             : presentation.isReinstall

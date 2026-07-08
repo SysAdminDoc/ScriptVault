@@ -114,6 +114,7 @@ const StorageModule = (() => {
     allowInternalXhr: false,
     allowInternalSyncEndpoints: false,
     allowHighPrivilegeScriptApis: false,
+    scopedHostPermissions: true,
     modifyCSP: "auto",
     statsUrlRetention: "full",
     blacklist: [],
