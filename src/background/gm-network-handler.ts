@@ -40,7 +40,11 @@ declare const GM_WEBSOCKET_MAX_MESSAGE_BYTES: number;
 declare const evaluateConnectPolicy: (script: any, url: string) => { allowed: boolean; error?: string; hostname?: string };
 declare const shouldAllowInternalXhr: (script: any, url: string, settings: any, check: any) => boolean;
 declare const internalXhrError: (label: string, check: any) => string;
-declare const prepareCookieRoutingForFetch: (data?: GMNetworkPayload, apiName?: string) => Promise<{ applies?: boolean; cookieHeader?: string; error?: string }>;
+declare const prepareCookieRoutingForFetch: (
+  data?: GMNetworkPayload,
+  apiName?: string,
+  context?: { script?: any; scriptId?: string },
+) => Promise<{ applies?: boolean; cookieHeader?: string; error?: string }>;
 declare const withCookieHeaderSessionRule: (url: string, cookieHeader: string | undefined, fetcher: () => Promise<Response>) => Promise<Response>;
 declare const downloadNeedsFetchBridge: (data?: GMNetworkPayload) => boolean;
 declare const responseToDownloadDataUrl: (response: Response) => Promise<string>;
@@ -173,7 +177,10 @@ export async function handleGMNetworkMessage(
         if (!xhrPreCheck.ok && !shouldAllowInternalXhr(xhrScript, data.url, settings, xhrPreCheck)) {
           return { error: internalXhrError('GM_xmlhttpRequest URL rejected', xhrPreCheck), type: 'error' };
         }
-        const cookieRouting = await prepareCookieRoutingForFetch(data, 'GM_xmlhttpRequest');
+        const cookieRouting = await prepareCookieRoutingForFetch(data, 'GM_xmlhttpRequest', {
+          script: xhrScript,
+          scriptId: ownedScriptId,
+        });
         if (cookieRouting.error) return { error: cookieRouting.error, type: 'error' };
 
         const tabId: any = sender.tab?.id;
@@ -700,7 +707,10 @@ export async function handleGMNetworkMessage(
           if (!downloadPreCheck.ok && !shouldAllowInternalXhr(downloadScript, data.url, downloadSettings, downloadPreCheck)) {
             return { error: internalXhrError('GM_download URL rejected', downloadPreCheck) };
           }
-          cookieRouting = await prepareCookieRoutingForFetch(data, 'GM_download') as { applies: boolean; cookieHeader: string };
+          cookieRouting = await prepareCookieRoutingForFetch(data, 'GM_download', {
+            script: downloadScript,
+            scriptId: ownedScriptId,
+          }) as { applies: boolean; cookieHeader: string };
           if ((cookieRouting as any).error) return { error: (cookieRouting as any).error };
           if (downloadNeedsFetchBridge(data) || cookieRouting.applies) {
             const fetchOptions = XhrManager.buildFetchOptions({

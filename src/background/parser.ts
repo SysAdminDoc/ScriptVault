@@ -186,6 +186,12 @@ function parseAntifeatureDirective(value: string, locale = ''): ScriptAntifeatur
   };
 }
 
+function parseBooleanDirective(value: string): boolean {
+  if (!value) return true;
+  const normalized: string = value.trim().toLowerCase();
+  return !['0', 'false', 'no', 'off', 'disabled'].includes(normalized);
+}
+
 /**
  * Parse a userscript's metadata block and extract all supported directives.
  *
@@ -250,6 +256,7 @@ export function parseUserscript(code: string): ParseResult {
     priority: 0,
     weight: 0,
     background: false,
+    isolationCookie: false,
   };
 
   const metaBlock: string = metaBlockMatch[1]!;
@@ -318,6 +325,12 @@ export function parseUserscript(code: string): ParseResult {
           break;
         case 'background':
           meta.background = true;
+          break;
+        case 'isolationCookie':
+        case 'isolation-cookie':
+        case 'cookieIsolation':
+        case 'cookie-isolation':
+          meta.isolationCookie = parseBooleanDirective(value);
           break;
         case 'priority':
           meta.priority = parseInt(value, 10) || 0;

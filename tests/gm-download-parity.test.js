@@ -99,12 +99,13 @@ describe('GM_download parity surface', () => {
 
     expect(core).toContain('function hasCookieRoutingOptions(data = {})');
     expect(core).toContain('async function prepareCookieRoutingForFetch(data = {}, apiName =');
+    expect(core).toContain('function resolveScriptCookieIsolationPartitionKey');
     expect(core).toContain('chrome.cookies.getAll(details)');
     expect(core).toContain('chrome.declarativeNetRequest.updateSessionRules');
-    expect(xhrBlock?.[0]).toContain("prepareCookieRoutingForFetch(data, 'GM_xmlhttpRequest')");
+    expect(xhrBlock?.[0]).toContain("prepareCookieRoutingForFetch(data, 'GM_xmlhttpRequest',");
     expect(xhrBlock?.[0]).toContain("fetchOptions.credentials = 'omit'");
     expect(xhrBlock?.[0]).toContain('withCookieHeaderSessionRule(data.url, cookieRouting.cookieHeader');
-    expect(gmDownloadBlock?.[0]).toContain("prepareCookieRoutingForFetch(data, 'GM_download')");
+    expect(gmDownloadBlock?.[0]).toContain("prepareCookieRoutingForFetch(data, 'GM_download',");
     expect(gmDownloadBlock?.[0]).toContain('downloadNeedsFetchBridge(data) || cookieRouting.applies');
     expect(gmDownloadBlock?.[0]).toContain("fetchOptions.credentials = 'omit'");
     expect(wrapper).toContain('partitionKey: details.partitionKey');

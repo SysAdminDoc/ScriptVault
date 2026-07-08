@@ -848,6 +848,12 @@ function parseAntifeatureDirective(value, locale = '') {
   };
 }
 
+function parseBooleanDirective(value) {
+  if (!value) return true;
+  const normalized = String(value).trim().toLowerCase();
+  return !['0', 'false', 'no', 'off', 'disabled'].includes(normalized);
+}
+
 /**
  * Parse a userscript's metadata block and extract all supported directives.
  * @param {string} code - The full userscript source code
@@ -907,6 +913,7 @@ function parseUserscript(code) {
     priority: 0,
     weight: 0,
     background: false,
+    isolationCookie: false,
     crontab: ''
   };
 
@@ -1029,6 +1036,12 @@ function parseUserscript(code) {
         break;
       case 'background':
         meta.background = true;
+        break;
+      case 'isolationCookie':
+      case 'isolation-cookie':
+      case 'cookieIsolation':
+      case 'cookie-isolation':
+        meta.isolationCookie = parseBooleanDirective(value);
         break;
       case 'priority':
         meta.priority = parseInt(value, 10) || 0;
@@ -4421,6 +4434,54 @@ const GM_DOWNLOAD_TRACKING_TTL_MS = 5 * 60 * 1000;
 const GM_DOWNLOAD_PENDING_CAP = 500;
 const GM_DOWNLOAD_FETCH_MAX_BYTES = 50 * 1024 * 1024;
 
+function metadataFlagEnabled(value) {
+  if (value === true) return true;
+  if (typeof value !== 'string') return false;
+  const normalized = value.trim().toLowerCase();
+  return !!normalized && !['0', 'false', 'no', 'off', 'disabled'].includes(normalized);
+}
+
+function scriptHasIsolatedCookieJar(script) {
+  if (!script || typeof script !== 'object') return false;
+  const meta = script.meta && typeof script.meta === 'object' ? script.meta : {};
+  const settings = script.settings && typeof script.settings === 'object' ? script.settings : {};
+  return metadataFlagEnabled(settings.isolationCookie)
+    || metadataFlagEnabled(meta.isolationCookie)
+    || metadataFlagEnabled(meta['isolation-cookie'])
+    || metadataFlagEnabled(meta.cookieIsolation)
+    || metadataFlagEnabled(meta['cookie-isolation']);
+}
+
+function stableCookieIsolationLabel(source) {
+  const normalized = String(source || '').trim() || 'anonymous';
+  let hash = 2166136261;
+  for (let i = 0; i < normalized.length; i += 1) {
+    hash ^= normalized.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  const suffix = normalized
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 28)
+    .replace(/-+$/g, '');
+  const hashPart = (hash >>> 0).toString(36);
+  return suffix ? `sv-${hashPart}-${suffix}` : `sv-${hashPart}`;
+}
+
+function resolveScriptCookieIsolationPartitionKey(script, fallbackScriptId = '') {
+  if (!scriptHasIsolatedCookieJar(script)) return { partitionKey: null };
+  const scriptId = String(script?.id || fallbackScriptId || '').trim();
+  if (!scriptId) return { error: 'isolated cookie jar requires a script id' };
+  return {
+    partitionKey: {
+      topLevelSite: `https://${stableCookieIsolationLabel(scriptId)}.scriptvault.invalid`,
+      hasCrossSiteAncestor: false
+    },
+    isolatedCookie: true
+  };
+}
+
 function hasCookieRoutingOptions(data = {}) {
   return data.partitionKey !== undefined
     || data.cookiePartition !== undefined
@@ -4428,8 +4489,22 @@ function hasCookieRoutingOptions(data = {}) {
     || data.cookieStore !== undefined;
 }
 
-function normalizeNetworkCookieRouting(data = {}, apiName = 'GM_xmlhttpRequest') {
-  if (!hasCookieRoutingOptions(data)) return { applies: false };
+function normalizeNetworkCookieRouting(data = {}, apiName = 'GM_xmlhttpRequest', context = {}) {
+  const hasExplicitCookieRouting = hasCookieRoutingOptions(data);
+  if (!hasExplicitCookieRouting) {
+    const isolated = resolveScriptCookieIsolationPartitionKey(context.script, context.scriptId || data.scriptId);
+    if (isolated.error) return { error: isolated.error };
+    if (!isolated.partitionKey) return { applies: false };
+    if (data.anonymous === true) {
+      return { error: apiName + ' cookie routing cannot be combined with anonymous requests' };
+    }
+    return {
+      applies: true,
+      partitionKey: isolated.partitionKey,
+      storeId: '',
+      isolatedCookie: true
+    };
+  }
   if (data.anonymous === true) {
     return { error: apiName + ' cookie routing cannot be combined with anonymous requests' };
   }
@@ -4471,8 +4546,8 @@ function cookieHeaderFromCookies(cookies = []) {
     .join('; ');
 }
 
-async function prepareCookieRoutingForFetch(data = {}, apiName = 'GM_xmlhttpRequest') {
-  const routing = normalizeNetworkCookieRouting(data, apiName);
+async function prepareCookieRoutingForFetch(data = {}, apiName = 'GM_xmlhttpRequest', context = {}) {
+  const routing = normalizeNetworkCookieRouting(data, apiName, context);
   if (routing.error || !routing.applies) return routing;
   if (!isHttpCookieUrl(data.url)) return { error: apiName + ' cookie routing requires an http(s) URL' };
   if (!chrome.cookies || typeof chrome.cookies.getAll !== 'function') {

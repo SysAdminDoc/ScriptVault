@@ -199,7 +199,10 @@ describe('GM network handler', () => {
     expect(globalThis.InternalHostGuard.classifyFetchUrl).toHaveBeenCalledWith('https://api.example.com/data', ['http:', 'https:']);
     expect(globalThis.prepareCookieRoutingForFetch).toHaveBeenCalledWith(expect.objectContaining({
       url: 'https://api.example.com/data',
-    }), 'GM_xmlhttpRequest');
+    }), 'GM_xmlhttpRequest', {
+      script: expect.objectContaining({ id: 'script-1' }),
+      scriptId: 'script-1',
+    });
     expect(globalThis.XhrManager.create).toHaveBeenCalledWith(7, 'script-1', expect.any(Object));
     await flushNetworkTasks();
     expect(globalThis.fetch).toHaveBeenCalledWith('https://api.example.com/data', expect.objectContaining({
@@ -354,7 +357,10 @@ describe('GM network handler', () => {
     expect(globalThis.evaluateConnectPolicy).toHaveBeenCalledWith(expect.objectContaining({ id: 'script-1' }), 'https://api.example.com/file.txt');
     expect(globalThis.prepareCookieRoutingForFetch).toHaveBeenCalledWith(expect.objectContaining({
       url: 'https://api.example.com/file.txt',
-    }), 'GM_download');
+    }), 'GM_download', {
+      script: expect.objectContaining({ id: 'script-1' }),
+      scriptId: 'script-1',
+    });
     expect(chrome.permissions.contains).toHaveBeenCalledWith({ permissions: ['downloads'] });
     expect(chrome.downloads.download).toHaveBeenCalledWith({
       url: 'https://api.example.com/file.txt',

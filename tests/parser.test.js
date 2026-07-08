@@ -133,6 +133,17 @@ describe('parseUserscript', () => {
     expect(meta['top-level-await']).toBe(true);
   });
 
+  it('parses per-script isolated cookie jar metadata aliases', () => {
+    const direct = parseUserscript('// ==UserScript==\n// @name Cookie Jar\n// @isolationCookie\n// ==/UserScript==\n');
+    expect(direct.meta.isolationCookie).toBe(true);
+
+    const hyphenated = parseUserscript('// ==UserScript==\n// @name Cookie Jar\n// @cookie-isolation true\n// ==/UserScript==\n');
+    expect(hyphenated.meta.isolationCookie).toBe(true);
+
+    const disabled = parseUserscript('// ==UserScript==\n// @name Cookie Jar\n// @isolation-cookie off\n// ==/UserScript==\n');
+    expect(disabled.meta.isolationCookie).toBe(false);
+  });
+
   it('parses @priority as integer', () => {
     const code = makeScript({ name: 'Pri', priority: '5' });
     const { meta } = parseUserscript(code);

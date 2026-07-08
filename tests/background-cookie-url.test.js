@@ -40,6 +40,10 @@ function extractFunction(src, name) {
 
 const isHttpCookieUrlSrc = extractFunction(source, 'isHttpCookieUrl');
 const normalizeCookiePartitionKeySrc = extractFunction(source, 'normalizeCookiePartitionKey');
+const metadataFlagEnabledSrc = extractFunction(source, 'metadataFlagEnabled');
+const scriptHasIsolatedCookieJarSrc = extractFunction(source, 'scriptHasIsolatedCookieJar');
+const stableCookieIsolationLabelSrc = extractFunction(source, 'stableCookieIsolationLabel');
+const resolveScriptCookieIsolationPartitionKeySrc = extractFunction(source, 'resolveScriptCookieIsolationPartitionKey');
 const hasCookieRoutingOptionsSrc = extractFunction(source, 'hasCookieRoutingOptions');
 const normalizeNetworkCookieRoutingSrc = extractFunction(source, 'normalizeNetworkCookieRouting');
 const cookieHeaderFromCookiesSrc = extractFunction(source, 'cookieHeaderFromCookies');
@@ -50,7 +54,9 @@ function _invoke(body) {
 }
 const isHttpCookieUrl = _invoke(`${isHttpCookieUrlSrc}\nreturn isHttpCookieUrl;`);
 const normalizeCookiePartitionKey = _invoke(`${isHttpCookieUrlSrc}\n${normalizeCookiePartitionKeySrc}\nreturn normalizeCookiePartitionKey;`);
-const normalizeNetworkCookieRouting = _invoke(`${isHttpCookieUrlSrc}\n${normalizeCookiePartitionKeySrc}\n${hasCookieRoutingOptionsSrc}\n${normalizeNetworkCookieRoutingSrc}\nreturn normalizeNetworkCookieRouting;`);
+const cookieIsolationHelpers = `${metadataFlagEnabledSrc}\n${scriptHasIsolatedCookieJarSrc}\n${stableCookieIsolationLabelSrc}\n${resolveScriptCookieIsolationPartitionKeySrc}`;
+const resolveScriptCookieIsolationPartitionKey = _invoke(`${cookieIsolationHelpers}\nreturn resolveScriptCookieIsolationPartitionKey;`);
+const normalizeNetworkCookieRouting = _invoke(`${isHttpCookieUrlSrc}\n${normalizeCookiePartitionKeySrc}\n${cookieIsolationHelpers}\n${hasCookieRoutingOptionsSrc}\n${normalizeNetworkCookieRoutingSrc}\nreturn normalizeNetworkCookieRouting;`);
 const cookieHeaderFromCookies = _invoke(`${cookieHeaderFromCookiesSrc}\nreturn cookieHeaderFromCookies;`);
 const exactDnrRegexForUrl = _invoke(`${exactDnrRegexForUrlSrc}\nreturn exactDnrRegexForUrl;`);
 
@@ -119,6 +125,47 @@ describe('normalizeCookiePartitionKey', () => {
 });
 
 describe('partition-aware network cookie routing helpers', () => {
+  it('builds deterministic per-script isolated cookie partitions', () => {
+    const partition = resolveScriptCookieIsolationPartitionKey({
+      id: 'script_ABC:123',
+      meta: { isolationCookie: true },
+    });
+    expect(partition).toEqual({
+      isolatedCookie: true,
+      partitionKey: {
+        topLevelSite: expect.stringMatching(/^https:\/\/sv-[a-z0-9]+-script-abc-123\.scriptvault\.invalid$/),
+        hasCrossSiteAncestor: false,
+      },
+    });
+    expect(resolveScriptCookieIsolationPartitionKey({
+      id: 'script_ABC:123',
+      meta: { isolationCookie: true },
+    })).toEqual(partition);
+    expect(resolveScriptCookieIsolationPartitionKey({
+      id: 'script_ABC:123',
+      meta: { isolationCookie: false },
+    })).toEqual({ partitionKey: null });
+  });
+
+  it('auto-applies isolated partitions only when explicit routing is absent', () => {
+    const script = { id: 'script_one', meta: { isolationCookie: true } };
+    expect(normalizeNetworkCookieRouting({}, 'GM_xmlhttpRequest', { script, scriptId: 'script_one' })).toMatchObject({
+      applies: true,
+      isolatedCookie: true,
+      partitionKey: {
+        topLevelSite: expect.stringMatching(/^https:\/\/sv-[a-z0-9]+-script-one\.scriptvault\.invalid$/),
+        hasCrossSiteAncestor: false,
+      },
+      storeId: '',
+    });
+    expect(normalizeNetworkCookieRouting({
+      partitionKey: { topLevelSite: 'https://explicit.example' },
+    }, 'GM_xmlhttpRequest', { script, scriptId: 'script_one' })).toMatchObject({
+      applies: true,
+      partitionKey: { topLevelSite: 'https://explicit.example' },
+    });
+  });
+
   it('accepts partition aliases and cookie-store IDs for XHR/download routing', () => {
     expect(normalizeNetworkCookieRouting({
       partitionKey: { topLevelSite: 'https://top.example/path' },
@@ -191,9 +238,10 @@ describe('GM_cookie handlers wire the validator', () => {
     expect(listMatch?.[0]).toContain('enforceCookiePolicy');
     expect(cookieHandlerSource).toContain('evaluateScriptHostScopePolicy');
     expect(listMatch?.[0]).toContain('resolveCookiePolicyTarget');
-    expect(setMatch?.[0]).toContain('normalizeCookiePartitionKey(data.partitionKey)');
-    expect(delMatch?.[0]).toContain('normalizeCookiePartitionKey(data.partitionKey)');
-    expect(listMatch?.[0]).toContain('normalizeCookiePartitionKey(data.partitionKey)');
+    expect(setMatch?.[0]).toContain('resolveCookiePartition(data');
+    expect(delMatch?.[0]).toContain('resolveCookiePartition(data');
+    expect(listMatch?.[0]).toContain('resolveCookiePartition(data');
+    expect(cookieHandlerSource).toContain('resolveScriptCookieIsolationPartitionKey');
     expect(setMatch?.[0]).toContain('partitionKey: partition.partitionKey');
     expect(delMatch?.[0]).toContain('partitionKey: partition.partitionKey');
     expect(listMatch?.[0]).toContain('details.partitionKey = partition.partitionKey');

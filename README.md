@@ -58,6 +58,11 @@ TypeScript userscripts can reference `lib/scriptvault.d.ts` for generated ambien
 
 `GM.fetch` returns a Fetch-compatible `Response`; modern browser contexts expose `res.body` as a `ReadableStream` so scripts can read cross-origin responses chunk-by-chunk while ScriptVault still applies the script's `@connect` hosts and internal-host guards. Older contexts fall back to the existing `GM_xmlhttpRequest` response path.
 
+Scripts can opt into a per-script isolated cookie jar with `@isolationCookie`.
+ScriptVault maps that script to a deterministic CHIPS partition for `GM_cookie`,
+`GM_xmlhttpRequest`, and `GM_download` cookie routing; explicit `partitionKey`
+or `cookiePartition` options still override the automatic jar.
+
 #### SPA URL Changes
 
 Scripts that need to re-run on soft navigation can grant `window.onurlchange`.
@@ -461,6 +466,7 @@ that script in the dashboard editor.
 // @contributionURL https://example.com/donate
 // @webRequest     {"selector":"*ad*","action":"cancel"}
 // @top-level-await
+// @isolationCookie
 // ==/UserScript==
 ```
 

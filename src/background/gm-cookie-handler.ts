@@ -70,6 +70,10 @@ declare const ScriptStorage: ScriptStorageRuntime;
 declare const SettingsManager: SettingsManagerRuntime;
 declare const isHttpCookieUrl: (url: unknown) => boolean;
 declare const normalizeCookiePartitionKey: (value: unknown) => CookiePartitionResult;
+declare const resolveScriptCookieIsolationPartitionKey: (
+  script: ScriptRecord,
+  fallbackScriptId?: string,
+) => CookiePartitionResult;
 declare const resolveCookiePolicyTarget: (data: GMCookiePayload, sender: RuntimeMessageSender) => string;
 declare const evaluateScriptHostScopePolicy: (
   script: ScriptRecord,
@@ -114,6 +118,13 @@ async function enforceCookiePolicy(script: ScriptRecord, url: string): Promise<s
   return policy.allowed ? null : policy.error || 'Cookie access denied';
 }
 
+function resolveCookiePartition(data: GMCookiePayload, script: ScriptRecord, scriptId?: string): CookiePartitionResult {
+  if (Object.prototype.hasOwnProperty.call(data, 'partitionKey')) {
+    return normalizeCookiePartitionKey(data.partitionKey);
+  }
+  return resolveScriptCookieIsolationPartitionKey(script, scriptId);
+}
+
 export function isGMCookieAction(action: unknown): action is GMCookieAction {
   return typeof action === 'string' && GM_COOKIE_ACTION_SET.has(action);
 }
@@ -136,7 +147,7 @@ export async function handleGMCookieMessage(
         if (data.domain) details.domain = data.domain;
         if (data.name) details.name = data.name;
         if (data.path) details.path = data.path;
-        const partition = normalizeCookiePartitionKey(data.partitionKey);
+        const partition = resolveCookiePartition(data, context.script as ScriptRecord, context.scriptId);
         if (partition.error) return { error: partition.error };
         if (partition.partitionKey) details.partitionKey = partition.partitionKey;
         const cookieTargetUrl = resolveCookiePolicyTarget(data, sender);
@@ -161,7 +172,7 @@ export async function handleGMCookieMessage(
         if (context.error) return { error: context.error };
         const policyError = await enforceCookiePolicy(context.script as ScriptRecord, data.url);
         if (policyError) return { error: policyError };
-        const partition = normalizeCookiePartitionKey(data.partitionKey);
+        const partition = resolveCookiePartition(data, context.script as ScriptRecord, context.scriptId);
         if (partition.error) return { error: partition.error };
         const cookie = await cookieSet()({
           url: data.url,
@@ -189,7 +200,7 @@ export async function handleGMCookieMessage(
         if (context.error) return { error: context.error };
         const policyError = await enforceCookiePolicy(context.script as ScriptRecord, data.url);
         if (policyError) return { error: policyError };
-        const partition = normalizeCookiePartitionKey(data.partitionKey);
+        const partition = resolveCookiePartition(data, context.script as ScriptRecord, context.scriptId);
         if (partition.error) return { error: partition.error };
         await cookieRemove()({
           url: data.url,

@@ -138,7 +138,10 @@ const GMNetworkHandler = (() => {
           if (!xhrPreCheck.ok && !shouldAllowInternalXhr(xhrScript, data.url, settings, xhrPreCheck)) {
             return { error: internalXhrError("GM_xmlhttpRequest URL rejected", xhrPreCheck), type: "error" };
           }
-          const cookieRouting = await prepareCookieRoutingForFetch(data, "GM_xmlhttpRequest");
+          const cookieRouting = await prepareCookieRoutingForFetch(data, "GM_xmlhttpRequest", {
+            script: xhrScript,
+            scriptId: ownedScriptId
+          });
           if (cookieRouting.error) return { error: cookieRouting.error, type: "error" };
           const tabId = sender.tab?.id;
           const request = XhrManager.create(tabId, ownedScriptId, data);
@@ -634,7 +637,10 @@ const GMNetworkHandler = (() => {
             if (!downloadPreCheck.ok && !shouldAllowInternalXhr(downloadScript, data.url, downloadSettings, downloadPreCheck)) {
               return { error: internalXhrError("GM_download URL rejected", downloadPreCheck) };
             }
-            cookieRouting = await prepareCookieRoutingForFetch(data, "GM_download");
+            cookieRouting = await prepareCookieRoutingForFetch(data, "GM_download", {
+              script: downloadScript,
+              scriptId: ownedScriptId
+            });
             if (cookieRouting.error) return { error: cookieRouting.error };
             if (downloadNeedsFetchBridge(data) || cookieRouting.applies) {
               const fetchOptions = XhrManager.buildFetchOptions({

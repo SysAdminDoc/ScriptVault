@@ -78,6 +78,8 @@ export interface ScriptMeta {
   weight: number;
   /** Default-off ScriptCat-compatible DOM-less background script marker. */
   background: boolean;
+  /** Opt-in per-script isolated cookie jar backed by a deterministic CHIPS partition. */
+  isolationCookie: boolean;
 
   // Tags & compat
   antifeature: ScriptAntifeature[];

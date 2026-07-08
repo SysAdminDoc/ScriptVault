@@ -9,6 +9,7 @@ const originalScriptStorage = globalThis.ScriptStorage;
 const originalSettingsManager = globalThis.SettingsManager;
 const originalIsHttpCookieUrl = globalThis.isHttpCookieUrl;
 const originalNormalizeCookiePartitionKey = globalThis.normalizeCookiePartitionKey;
+const originalResolveScriptCookieIsolationPartitionKey = globalThis.resolveScriptCookieIsolationPartitionKey;
 const originalResolveCookiePolicyTarget = globalThis.resolveCookiePolicyTarget;
 const originalEvaluateScriptHostScopePolicy = globalThis.evaluateScriptHostScopePolicy;
 
@@ -25,6 +26,16 @@ beforeEach(() => {
     if (value && value.bad) return { error: 'bad partition' };
     return { partitionKey: value ?? null };
   });
+  globalThis.resolveScriptCookieIsolationPartitionKey = vi.fn((script, scriptId) => (
+    script?.meta?.isolationCookie || script?.settings?.isolationCookie
+      ? {
+          partitionKey: {
+            topLevelSite: `https://${scriptId || script?.id}.scriptvault.invalid`,
+            hasCrossSiteAncestor: false,
+          },
+        }
+      : { partitionKey: null }
+  ));
   globalThis.resolveCookiePolicyTarget = vi.fn((data, sender) => data.url || sender.tab?.url || (data.domain ? `https://${data.domain}/` : ''));
   globalThis.evaluateScriptHostScopePolicy = vi.fn().mockReturnValue({ allowed: true });
   chrome.cookies.getAll.mockResolvedValue([{ name: 'sid', value: '1' }]);
@@ -37,6 +48,7 @@ afterEach(() => {
   globalThis.SettingsManager = originalSettingsManager;
   globalThis.isHttpCookieUrl = originalIsHttpCookieUrl;
   globalThis.normalizeCookiePartitionKey = originalNormalizeCookiePartitionKey;
+  globalThis.resolveScriptCookieIsolationPartitionKey = originalResolveScriptCookieIsolationPartitionKey;
   globalThis.resolveCookiePolicyTarget = originalResolveCookiePolicyTarget;
   globalThis.evaluateScriptHostScopePolicy = originalEvaluateScriptHostScopePolicy;
 });
@@ -113,6 +125,31 @@ describe('GM cookie handler', () => {
       url: 'https://example.com/',
       name: 'sid',
     });
+  });
+
+  it('uses an isolated per-script partition when no explicit partition is provided', async () => {
+    globalThis.ScriptStorage.get.mockResolvedValueOnce({
+      id: 'script-1',
+      meta: { isolationCookie: true, match: ['https://example.com/*'] },
+    });
+
+    await expect(handleGMCookieMessage('GM_cookie_set', {
+      scriptId: 'script-1',
+      url: 'https://example.com/',
+      name: 'sid',
+      value: 'isolated',
+    })).resolves.toEqual({ success: true, cookie: { name: 'sid', value: '2' } });
+
+    expect(globalThis.resolveScriptCookieIsolationPartitionKey).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'script-1' }),
+      'script-1',
+    );
+    expect(chrome.cookies.set).toHaveBeenCalledWith(expect.objectContaining({
+      partitionKey: {
+        topLevelSite: 'https://script-1.scriptvault.invalid',
+        hasCrossSiteAncestor: false,
+      },
+    }));
   });
 
   it('returns validation and policy errors before Chrome cookie calls', async () => {
