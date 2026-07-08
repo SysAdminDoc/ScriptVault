@@ -123,13 +123,13 @@ describe("popup UX controller", () => {
     expect(popupJs).toMatch(/if \(e\.key === 'Escape' && elements\.utilitiesSubmenu\?\.classList\.contains\('open'\)\)/);
     expect(popupJs).toMatch(/if \(e\.key === 'Escape' && document\.getElementById\('scriptDropdown'\)\?\.classList\.contains\('open'\)\)/);
     expect(popupJs).toMatch(/document\.addEventListener\('click', \(e\) => \{/);
-    expect(popupJs).toMatch(/showPopupToast\('Checking for updates…'\)/);
+    expect(popupJs).toMatch(/showPopupToast\(tPopup\('popupCheckingForUpdates', 'Checking for updates\.\.\.'\)\)/);
     expect(popupJs).toMatch(/closeScriptDropdown\(\);[\s\S]*?safeSetHtml\(elements\.scriptList, displayScripts\.map/);
     expect(popupJs).toMatch(/await copyTextToClipboard\(url\);/);
     expect(popupJs).toMatch(/updateBtn\.disabled = !hasUpdateUrl;/);
     expect(popupJs).toMatch(/copyUrlBtn\.disabled = !installUrl;/);
     expect(popupJs).toMatch(/pinBtn\.textContent = script\?\.settings\?\.pinned \? tPopup\('popupUnpinScript', 'Unpin Script'\) : tPopup\('popupPinScript', 'Pin Script'\);/);
-    expect(popupJs).toMatch(/dropdown\.setAttribute\('aria-label', `Actions for \$\{name\}`\);/);
+    expect(popupJs).toMatch(/dropdown\.setAttribute\('aria-label', tPopup\('popupDropdownActionsForScript', 'Actions for \{name\}', \{ name \}\)\);/);
     expect(popupJs).toMatch(/queuePopupFocusRestore\(getPopupFocusDescriptor\(getDropdownTriggerButton\(scriptId\)\)\);/);
     expect(popupJs).toMatch(/dropdown\.addEventListener\('keydown', \(e\) => \{/);
     expect(popupJs).toMatch(/openScriptDropdown\(scriptId, moreBtn, \{ focusTarget: 0 \}\);/);

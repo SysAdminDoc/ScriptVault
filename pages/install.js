@@ -23,9 +23,16 @@ function getInstallI18n() {
   }
 }
 
+function formatInstallI18nFallback(template, placeholders = {}) {
+  return String(template ?? '').replace(/\{(\w+)\}/g, (_, name) =>
+    Object.prototype.hasOwnProperty.call(placeholders, name) ? String(placeholders[name]) : `{${name}}`
+  );
+}
+
 function tInstall(key, fallback = key, placeholders = {}) {
   const i18n = getInstallI18n();
-  return i18n?.getMessage ? i18n.getMessage(key, placeholders) : fallback;
+  const message = i18n?.getMessage ? i18n.getMessage(key, placeholders) : '';
+  return message && message !== key ? message : formatInstallI18nFallback(fallback, placeholders);
 }
 
 function applyInstallI18n() {
@@ -402,24 +409,24 @@ const dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
   minute: '2-digit'
 });
 let analysisDecisionState = {
-  label: 'Scanning',
+  label: tInstall('installStateScanning', 'Scanning'),
   tone: 'neutral',
-  detail: 'Static analysis is running in the background.'
+  detail: tInstall('installAnalysisRunningBackground', 'Static analysis is running in the background.')
 };
 let dependencyDecisionState = {
-  label: 'Pending',
+  label: tInstall('installStatePending', 'Pending'),
   tone: 'neutral',
-  detail: 'Dependency checks have not started yet.'
+  detail: tInstall('installDependencyNotStarted', 'Dependency checks have not started yet.')
 };
 let provenanceDecisionState = {
-  label: 'Pending',
+  label: tInstall('installStatePending', 'Pending'),
   tone: 'neutral',
-  detail: 'Dependency provenance checks have not started yet.'
+  detail: tInstall('installProvenanceNotStarted', 'Dependency provenance checks have not started yet.')
 };
 let signatureDecisionState = {
-  label: 'Reviewing',
+  label: tInstall('installStateReviewing', 'Reviewing'),
   tone: 'neutral',
-  detail: 'Checking embedded signature and signer trust.'
+  detail: tInstall('installSignatureCheckingDetail', 'Checking embedded signature and signer trust.')
 };
 let cancelReviewArmed = false;
 let cancelReviewTimer = null;
@@ -463,9 +470,10 @@ function updateDecisionHint() {
   const presentation = getInstallPresentation();
   const hint = document.getElementById('decisionHint');
   if (!hint) return;
+  const action = getInstallActionVerb(presentation);
   hint.textContent = cancelReviewArmed
-    ? 'Press Cancel again to discard this review, or wait a few seconds to keep reviewing.'
-    : `Press Enter to ${presentation.isUpdate ? 'update' : presentation.isDowngrade ? 'downgrade' : presentation.isReinstall ? 'reinstall' : 'install'} when the install button is focused. Press Esc to arm cancel.`;
+    ? tInstall('installDecisionHintArmed', 'Press Cancel again to discard this review, or wait a few seconds to keep reviewing.')
+    : tInstall('installDecisionHintDefault', 'Press Enter to {action} when the install button is focused. Press Esc to arm cancel.', { action });
 }
 
 function setCancelReviewArmed(armed) {
@@ -476,7 +484,7 @@ function setCancelReviewArmed(armed) {
   }
   const cancelButton = document.getElementById('btn-cancel');
   if (cancelButton) {
-    cancelButton.textContent = armed ? 'Discard Review' : 'Cancel';
+    cancelButton.textContent = armed ? tInstall('installDiscardReview', 'Discard Review') : tInstall('cancel', 'Cancel');
     cancelButton.classList.toggle('is-armed', armed);
   }
   updateDecisionHint();
@@ -503,94 +511,94 @@ function getDecisionHeroState() {
   if (hasPendingCheck) {
     return {
       tone: 'neutral',
-      badge: 'In review',
-      title: 'Checks are still running',
-      copy: 'ScriptVault is still checking this script. You can keep reviewing permissions, scope, source, and code. The final checks will update here.'
+      badge: tInstall('installDecisionBadgeInReview', 'In review'),
+      title: tInstall('installDecisionChecksRunning', 'Checks are still running'),
+      copy: tInstall('installDecisionChecksRunningCopy', 'ScriptVault is still checking this script. You can keep reviewing permissions, scope, source, and code. The final checks will update here.')
     };
   }
 
   if (analysisDecisionState.tone === 'warn') {
     return {
       tone: 'warn',
-      badge: 'Needs review',
-      title: 'Proceed with caution',
-      copy: analysisDecisionState.detail || 'Review these items first.'
+      badge: tInstall('installDecisionNeedsReview', 'Needs review'),
+      title: tInstall('installDecisionProceedWithCaution', 'Proceed with caution'),
+      copy: analysisDecisionState.detail || tInstall('installDecisionReviewItemsFirst', 'Review these items first.')
     };
   }
 
   if (dependencyDecisionState.tone === 'warn') {
     return {
       tone: 'warn',
-      badge: 'Dependency issue',
-      title: 'Dependency checks failed',
-      copy: dependencyDecisionState.detail || 'Some dependency checks failed. Review them before you install.'
+      badge: tInstall('installDecisionDependencyIssue', 'Dependency issue'),
+      title: tInstall('installDecisionDependencyFailed', 'Dependency checks failed'),
+      copy: dependencyDecisionState.detail || tInstall('installDecisionDependencyFailedCopy', 'Some dependency checks failed. Review them before you install.')
     };
   }
 
   if (provenanceDecisionState.tone === 'warn') {
     return {
       tone: 'warn',
-      badge: 'Provenance issue',
-      title: 'Dependency provenance needs review',
-      copy: provenanceDecisionState.detail || 'One or more @require provenance checks failed or did not finish. Review them before you install.'
+      badge: tInstall('installDecisionProvenanceIssue', 'Provenance issue'),
+      title: tInstall('installDecisionProvenanceReview', 'Dependency provenance needs review'),
+      copy: provenanceDecisionState.detail || tInstall('installDecisionProvenanceReviewCopy', 'One or more @require provenance checks failed or did not finish. Review them before you install.')
     };
   }
 
   if (signatureDecisionState.tone === 'warn') {
     return {
       tone: 'warn',
-      badge: 'Signature warning',
-      title: 'Signer trust needs attention',
-      copy: signatureDecisionState.detail || 'A signature check found a warning. Review the signer before you install.'
+      badge: tInstall('installDecisionSignatureWarning', 'Signature warning'),
+      title: tInstall('installDecisionSignerAttention', 'Signer trust needs attention'),
+      copy: signatureDecisionState.detail || tInstall('installDecisionSignatureWarningCopy', 'A signature check found a warning. Review the signer before you install.')
     };
   }
 
   if (
-    signatureDecisionState.label === 'Trusted' &&
+    signatureDecisionState.label === tInstall('installStateTrusted', 'Trusted') &&
     analysisDecisionState.tone === 'good' &&
     dependencyDecisionState.tone === 'good' &&
     provenanceDecisionState.tone !== 'warn'
   ) {
     return {
       tone: 'good',
-      badge: 'Ready',
-      title: 'Ready to install',
-      copy: 'The scans, dependency checks, provenance, and signer trust all look good.'
+      badge: tInstall('installDecisionReady', 'Ready'),
+      title: tInstall('installDecisionReadyToInstall', 'Ready to install'),
+      copy: tInstall('installDecisionReadyCopy', 'The scans, dependency checks, provenance, and signer trust all look good.')
     };
   }
 
-  if (signatureDecisionState.label === 'Valid') {
+  if (signatureDecisionState.label === tInstall('installStateValid', 'Valid')) {
     return {
       tone: 'neutral',
-      badge: 'Review signer',
-      title: 'Install looks clean so far',
-      copy: 'The signature is valid, but this signer is not trusted in ScriptVault yet.'
+      badge: tInstall('installDecisionReviewSigner', 'Review signer'),
+      title: tInstall('installDecisionCleanSoFar', 'Install looks clean so far'),
+      copy: tInstall('installDecisionCleanSoFarCopy', 'The signature is valid, but this signer is not trusted in ScriptVault yet.')
     };
   }
 
-  if (signatureDecisionState.label === 'Unsigned') {
+  if (signatureDecisionState.label === tInstall('installStateUnsigned', 'Unsigned')) {
     return {
       tone: 'neutral',
-      badge: 'Unsigned',
-      title: 'Manual review recommended',
-      copy: 'This script does not declare an embedded signature, so source and code review matter more here.'
+      badge: tInstall('installStateUnsigned', 'Unsigned'),
+      title: tInstall('installDecisionManualReview', 'Manual review recommended'),
+      copy: tInstall('installDecisionManualReviewCopy', 'This script does not declare an embedded signature, so source and code review matter more here.')
     };
   }
 
   if (analysisDecisionState.tone === 'good' && dependencyDecisionState.tone !== 'warn') {
     return {
       tone: 'good',
-      badge: 'Review complete',
-      title: 'Ready for your decision',
-      copy: 'ScriptVault finished its checks. Review the install options and decide how you want this script to land.'
+      badge: tInstall('installDecisionReviewComplete', 'Review complete'),
+      title: tInstall('installDecisionReadyForDecision', 'Ready for your decision'),
+      copy: tInstall('installDecisionReadyForDecisionCopy', 'ScriptVault finished its checks. Review the install options and decide how you want this script to land.')
     };
   }
 
   return {
     tone: 'neutral',
-    badge: 'Review',
-    title: 'Keep reviewing',
-    copy: 'ScriptVault has enough detail to proceed, but this install still deserves a quick manual review.'
+    badge: tInstall('installStateReview', 'Review'),
+    title: tInstall('installDecisionKeepReviewing', 'Keep reviewing'),
+    copy: tInstall('installDecisionKeepReviewingCopy', 'ScriptVault has enough detail to proceed, but this install still deserves a quick manual review.')
   };
 }
 
@@ -656,10 +664,10 @@ async function init() {
         safeSetHtml(content, `
           <div class="install-terminal error" role="alert" aria-live="assertive" aria-atomic="true" aria-labelledby="installTerminalTitle" aria-describedby="installTerminalMessage">
             <div class="install-state-mark is-warning error-icon" aria-hidden="true">!</div>
-            <div class="error-title" id="installTerminalTitle">ScriptVault is not allowed in private windows</div>
-            <div class="error-message" id="installTerminalMessage">This script cannot be installed from an incognito window until ScriptVault is allowed to use extension storage there. Enable <strong>Allow in Incognito</strong>, then re-open the script URL, or install from a regular window.</div>
+            <div class="error-title" id="installTerminalTitle">${escapeHtml(tInstall('installIncognitoBlockedTitle', 'ScriptVault is not allowed in private windows'))}</div>
+            <div class="error-message" id="installTerminalMessage">${escapeHtml(tInstall('installIncognitoBlockedMessage', 'This script cannot be installed from an incognito window until ScriptVault is allowed to use extension storage there. Enable Allow in Incognito, then re-open the script URL, or install from a regular window.'))}</div>
             <div class="error-actions actions">
-              <a class="btn btn-secondary" href="${escapeHtml(detailsHref)}" target="_blank" rel="noopener">Open Extension Details</a>
+              <a class="btn btn-secondary" href="${escapeHtml(detailsHref)}" target="_blank" rel="noopener">${escapeHtml(tInstall('installOpenExtensionDetails', 'Open Extension Details'))}</a>
             </div>
           </div>
         `);
@@ -677,20 +685,26 @@ async function init() {
     const data = await chrome.storage.local.get('pendingInstall');
 
     if (!data.pendingInstall) {
-      showError('No userscript was found', 'ScriptVault could not find a pending install request. Download the userscript again from its source page.');
+      showError(
+        tInstall('installErrorNoUserscriptFoundTitle', 'No userscript was found'),
+        tInstall('installErrorNoUserscriptFoundMessage', 'ScriptVault could not find a pending install request. Download the userscript again from its source page.')
+      );
       return;
     }
 
     // Handle fetch error from background
     if (data.pendingInstall.error) {
-      showError('Failed to download script', data.pendingInstall.error);
+      showError(tInstall('installErrorFailedDownloadTitle', 'Failed to download script'), data.pendingInstall.error);
       chrome.storage.local.remove('pendingInstall');
       return;
     }
 
     // Reject stale pendingInstall (older than 5 minutes)
     if (data.pendingInstall.timestamp && Date.now() - data.pendingInstall.timestamp > 300000) {
-      showError('Install expired', 'This install request is too old. Please try downloading the script again.');
+      showError(
+        tInstall('installErrorExpiredTitle', 'Install expired'),
+        tInstall('installErrorExpiredMessage', 'This install request is too old. Please try downloading the script again.')
+      );
       chrome.storage.local.remove('pendingInstall');
       return;
     }
@@ -700,7 +714,7 @@ async function init() {
     installSourceUrl = sourceUrl;
 
     if (!scriptCode) {
-      showError('Empty script', 'The downloaded script was empty.');
+      showError(tInstall('installErrorEmptyScriptTitle', 'Empty script'), tInstall('installErrorEmptyScriptMessage', 'The downloaded script was empty.'));
       chrome.storage.local.remove('pendingInstall');
       return;
     }
@@ -709,7 +723,7 @@ async function init() {
     scriptMeta = parseMetadata(scriptCode);
 
     if (!scriptMeta) {
-      showError('Invalid userscript', 'No valid userscript metadata block found.');
+      showError(tInstall('installErrorInvalidUserscriptTitle', 'Invalid userscript'), tInstall('installErrorInvalidUserscriptMessage', 'No valid userscript metadata block found.'));
       chrome.storage.local.remove('pendingInstall');
       return;
     }
@@ -731,7 +745,7 @@ async function init() {
 
   } catch (e) {
     console.error('Install error:', e);
-    showError('Error loading script', e.message);
+    showError(tInstall('installErrorLoadingScriptTitle', 'Error loading script'), e.message);
   }
 }
 
@@ -852,10 +866,10 @@ function getInstallPresentation() {
       currentVersion,
       incomingVersion,
       versionChange,
-      badgeHtml: '<span class="update-badge">Update Available</span>',
-      installLabel: 'Update Script',
+      badgeHtml: `<span class="update-badge">${escapeHtml(tInstall('installBadgeUpdateAvailable', 'Update Available'))}</span>`,
+      installLabel: tInstall('installButtonUpdate', 'Update Script'),
       installClass: 'btn-update',
-      modeLabel: 'Update',
+      modeLabel: tInstall('installModeUpdate', 'Update'),
       summaryLabel: versionChange
     };
   }
@@ -868,10 +882,10 @@ function getInstallPresentation() {
       currentVersion,
       incomingVersion,
       versionChange,
-      badgeHtml: '<span class="downgrade-badge">Downgrade</span>',
-      installLabel: 'Downgrade Script',
+      badgeHtml: `<span class="downgrade-badge">${escapeHtml(tInstall('installBadgeDowngrade', 'Downgrade'))}</span>`,
+      installLabel: tInstall('installButtonDowngrade', 'Downgrade Script'),
       installClass: 'btn-downgrade',
-      modeLabel: 'Downgrade',
+      modeLabel: tInstall('installModeDowngrade', 'Downgrade'),
       summaryLabel: versionChange
     };
   }
@@ -884,10 +898,10 @@ function getInstallPresentation() {
       currentVersion,
       incomingVersion,
       versionChange,
-      badgeHtml: '<span class="reinstall-badge">Reinstall</span>',
-      installLabel: 'Reinstall Script',
+      badgeHtml: `<span class="reinstall-badge">${escapeHtml(tInstall('installBadgeReinstall', 'Reinstall'))}</span>`,
+      installLabel: tInstall('installButtonReinstall', 'Reinstall Script'),
       installClass: 'btn-primary',
-      modeLabel: 'Reinstall',
+      modeLabel: tInstall('installModeReinstall', 'Reinstall'),
       summaryLabel: `v${incomingVersion}`
     };
   }
@@ -900,16 +914,29 @@ function getInstallPresentation() {
     incomingVersion,
     versionChange,
     badgeHtml: '',
-    installLabel: 'Install Script',
+    installLabel: tInstall('installButtonInstall', 'Install Script'),
     installClass: 'btn-primary',
-    modeLabel: 'New Install',
+    modeLabel: tInstall('installModeNewInstall', 'New Install'),
     summaryLabel: `v${incomingVersion}`
   };
 }
 
+function getInstallActionVerb(presentation = getInstallPresentation()) {
+  if (presentation.isUpdate) return tInstall('installVerbUpdate', 'update');
+  if (presentation.isDowngrade) return tInstall('installVerbDowngrade', 'downgrade');
+  if (presentation.isReinstall) return tInstall('installVerbReinstall', 'reinstall');
+  return tInstall('installVerbInstall', 'install');
+}
+
 function getSourceSummary(sourceUrl) {
   if (!sourceUrl) {
-    return { host: 'Local file', label: 'Local file', shortLabel: 'Opened from a local file', safeUrl: '' };
+    const localFile = tInstall('installSourceLocalFile', 'Local file');
+    return {
+      host: localFile,
+      label: localFile,
+      shortLabel: tInstall('installSourceOpenedFromLocalFile', 'Opened from a local file'),
+      safeUrl: ''
+    };
   }
 
   try {
@@ -923,7 +950,7 @@ function getSourceSummary(sourceUrl) {
     };
   } catch {
     return {
-      host: 'Remote source',
+      host: tInstall('installSourceRemoteSource', 'Remote source'),
       label: sourceUrl,
       shortLabel: truncateUrl(sourceUrl),
       safeUrl: sanitizeUrl(sourceUrl) || ''
@@ -933,7 +960,7 @@ function getSourceSummary(sourceUrl) {
 
 function renderExternalLink(url, label = truncateUrl(url)) {
   const safeUrl = sanitizeUrl(url);
-  if (!url) return '-';
+  if (!url) return tInstall('installValueMissingDash', '-');
   return safeUrl
     ? `<a href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}</a>`
     : escapeHtml(url);
@@ -967,9 +994,9 @@ function renderExpandablePatternSection(sectionId, title, items, visibleCount) {
             type="button"
             aria-expanded="false"
             aria-controls="${overflowId}"
-            data-show-label="Show ${numberFormatter.format(overflowItems.length)} more"
-            data-hide-label="Show fewer"
-          >Show ${numberFormatter.format(overflowItems.length)} more</button>
+            data-show-label="${escapeHtml(tInstall('installShowMoreCount', 'Show {count} more', { count: numberFormatter.format(overflowItems.length) }))}"
+            data-hide-label="${escapeHtml(tInstall('installShowFewer', 'Show fewer'))}"
+          >${escapeHtml(tInstall('installShowMoreCount', 'Show {count} more', { count: numberFormatter.format(overflowItems.length) }))}</button>
         </div>
       ` : ''}
     </div>
@@ -996,21 +1023,21 @@ function getProvenanceSummary(sourceUrl, meta) {
   const comparisonUrl = updateUrl || downloadUrl || installSource.label;
   let label = installSource.host;
   let detail = sourceUrl
-    ? 'Review where this script came from. Check the update channel before you trust future updates.'
-    : 'This review started from a local file rather than a remote install page.';
+    ? tInstall('installProvenanceReviewSourceDetail', 'Review where this script came from. Check the update channel before you trust future updates.')
+    : tInstall('installProvenanceLocalFileDetail', 'This review started from a local file rather than a remote install page.');
 
   if (/greasyfork\.org/i.test(comparisonUrl)) {
     label = 'Greasy Fork';
-    detail = 'Install and update provenance points at a Greasy Fork listing or payload.';
+    detail = tInstall('installProvenanceGreasyForkDetail', 'Install and update provenance points at a Greasy Fork listing or payload.');
   } else if (/openuserjs\.org/i.test(comparisonUrl)) {
     label = 'OpenUserJS';
-    detail = 'Install and update provenance points at OpenUserJS.';
+    detail = tInstall('installProvenanceOpenUserJsDetail', 'Install and update provenance points at OpenUserJS.');
   } else if (/(github\.com|raw\.githubusercontent\.com)/i.test(comparisonUrl)) {
     label = 'GitHub';
-    detail = 'Install or update metadata points at GitHub-hosted source.';
+    detail = tInstall('installProvenanceGitHubDetail', 'Install or update metadata points at GitHub-hosted source.');
   } else if (/gitlab\.com/i.test(comparisonUrl)) {
     label = 'GitLab';
-    detail = 'Install or update metadata points at GitLab-hosted source.';
+    detail = tInstall('installProvenanceGitLabDetail', 'Install or update metadata points at GitLab-hosted source.');
   }
 
   if (sourceUrl && updateUrl) {
@@ -1018,13 +1045,13 @@ function getProvenanceSummary(sourceUrl, meta) {
       const installHost = new URL(sourceUrl).host;
       const updateHost = new URL(updateUrl).host;
       if (installHost !== updateHost) {
-        detail = `Installed from ${installHost}, but future updates come from ${updateHost}.`;
+        detail = tInstall('installProvenanceHostMismatchDetail', 'Installed from {installHost}, but future updates come from {updateHost}.', { installHost, updateHost });
       }
     } catch {}
   }
 
   if (!sourceUrl && (updateUrl || downloadUrl)) {
-    detail = 'Local install with a remote update channel declared in metadata.';
+    detail = tInstall('installProvenanceLocalRemoteUpdateDetail', 'Local install with a remote update channel declared in metadata.');
   }
 
   // Surface a source-registry change when the user is updating a script and
@@ -1059,96 +1086,109 @@ function renderTrustCard(sourceUrl) {
   if (!mount || !scriptMeta) return;
   const provenance = getProvenanceSummary(sourceUrl, scriptMeta);
   const verification = signatureVerification;
+  const noSignatureReason = tInstall('installNoSignatureFound', 'No signature found in script');
+  const isUnsignedSignature = verification?.reason === noSignatureReason || verification?.reason === 'No signature found in script';
   const signatureState = verification?.valid
     ? verification.trusted
       ? {
-          label: verification.trustedName ? `Trusted as ${verification.trustedName}` : 'Trusted signer',
-          badge: 'Trusted',
+          label: verification.trustedName
+            ? tInstall('installSignatureTrustedAs', 'Trusted as {name}', { name: verification.trustedName })
+            : tInstall('installSignatureTrustedSigner', 'Trusted signer'),
+          badge: tInstall('installStateTrusted', 'Trusted'),
           tone: 'status-good',
-          detail: verification.timestamp ? `Signed ${dateTimeFormatter.format(new Date(verification.timestamp))}.` : 'Signature is valid and the signing key is trusted.'
+          detail: verification.timestamp
+            ? tInstall('installSignatureSignedDate', 'Signed {date}.', { date: dateTimeFormatter.format(new Date(verification.timestamp)) })
+            : tInstall('installSignatureTrustedDetail', 'Signature is valid and the signing key is trusted.')
         }
       : {
-          label: 'Valid signature',
-          badge: 'Review signer',
+          label: tInstall('installSignatureValidSignature', 'Valid signature'),
+          badge: tInstall('installDecisionReviewSigner', 'Review signer'),
           tone: 'status-neutral',
-          detail: 'This script is signed, but the signing key is not yet trusted in ScriptVault.'
+          detail: tInstall('installSignatureUntrustedDetail', 'This script is signed, but the signing key is not yet trusted in ScriptVault.')
         }
     : verification
       ? {
-          label: verification.reason === 'No signature found in script' ? 'Unsigned script' : 'Signature warning',
-          badge: verification.reason === 'No signature found in script' ? 'Unsigned' : 'Warning',
-          tone: verification.reason === 'No signature found in script' ? 'status-neutral' : 'status-warn',
-          detail: verification.reason || 'Signature verification did not complete cleanly.'
+          label: isUnsignedSignature
+            ? tInstall('installSignatureUnsignedScript', 'Unsigned script')
+            : tInstall('installSignatureWarning', 'Signature warning'),
+          badge: isUnsignedSignature ? tInstall('installStateUnsigned', 'Unsigned') : tInstall('warning', 'Warning'),
+          tone: isUnsignedSignature ? 'status-neutral' : 'status-warn',
+          detail: verification.reason || tInstall('installSignatureIncompleteDetail', 'Signature verification did not complete cleanly.')
         }
       : {
-          label: 'Checking signature',
-          badge: 'Scanning',
+          label: tInstall('installSignatureChecking', 'Checking signature'),
+          badge: tInstall('installStateScanning', 'Scanning'),
           tone: 'status-neutral',
-          detail: 'ScriptVault is checking the embedded signature and signer trust.'
+          detail: tInstall('installSignatureCheckingTrustDetail', 'ScriptVault is checking the embedded signature and signer trust.')
         };
 
   safeSetHtml(mount, `
     <div class="install-card-header">
       <div>
-        <div class="install-card-title">Source & Trust</div>
-        <div class="install-card-subtitle">Review where this script came from and whether you trust its signer.</div>
+        <div class="install-card-title">${escapeHtml(tInstall('installSourceTrustTitle', 'Source & Trust'))}</div>
+        <div class="install-card-subtitle">${escapeHtml(tInstall('installSourceTrustSubtitle', 'Review where this script came from and whether you trust its signer.'))}</div>
       </div>
       <span class="count ${signatureState.tone}">${escapeHtml(signatureState.badge)}</span>
     </div>
     <div class="trust-grid">
       <div class="trust-row">
         <div class="trust-copy">
-          <strong>Provenance</strong>
+          <strong>${escapeHtml(tInstall('installTrustProvenance', 'Provenance'))}</strong>
           <span>${escapeHtml(provenance.detail)}</span>
         </div>
         <span class="count status-neutral">${escapeHtml(provenance.label)}</span>
       </div>
       <div class="trust-row">
         <div class="trust-copy">
-          <strong>Install source</strong>
-          <span>${provenance.installSource.shortLabel ? escapeHtml(provenance.installSource.shortLabel) : 'Local file'}</span>
+          <strong>${escapeHtml(tInstall('installTrustInstallSource', 'Install source'))}</strong>
+          <span>${provenance.installSource.shortLabel ? escapeHtml(provenance.installSource.shortLabel) : escapeHtml(tInstall('installSourceLocalFile', 'Local file'))}</span>
         </div>
-        <span class="trust-link">${provenance.installSource.safeUrl ? renderExternalLink(provenance.installSource.label, 'Open') : 'Local'}</span>
+        <span class="trust-link">${provenance.installSource.safeUrl ? renderExternalLink(provenance.installSource.label, tInstall('installOpenLink', 'Open')) : escapeHtml(tInstall('installSourceLocalShort', 'Local'))}</span>
       </div>
       ${provenance.sourceChange ? `
         <div class="trust-row" role="alert">
           <div class="trust-copy">
-            <strong>Source registry changed</strong>
-            <span>Previous install came from ${escapeHtml(provenance.sourceChange.previous.name)} (${escapeHtml(provenance.sourceChange.previous.hostname || '—')}). This update is from ${escapeHtml(provenance.sourceChange.next.name)} (${escapeHtml(provenance.sourceChange.next.hostname || '—')}). Confirm you trust the new origin before installing.</span>
+            <strong>${escapeHtml(tInstall('installTrustSourceRegistryChanged', 'Source registry changed'))}</strong>
+            <span>${escapeHtml(tInstall('installTrustSourceRegistryChangedBody', 'Previous install came from {previousName} ({previousHost}). This update is from {nextName} ({nextHost}). Confirm you trust the new origin before installing.', {
+              previousName: provenance.sourceChange.previous.name,
+              previousHost: provenance.sourceChange.previous.hostname || '-',
+              nextName: provenance.sourceChange.next.name,
+              nextHost: provenance.sourceChange.next.hostname || '-'
+            }))}</span>
           </div>
-          <span class="count status-warn">Review</span>
+          <span class="count status-warn">${escapeHtml(tInstall('installStateReview', 'Review'))}</span>
         </div>
       ` : ''}
       ${provenance.updateUrl ? `
         <div class="trust-row">
           <div class="trust-copy">
-            <strong>Update channel</strong>
+            <strong>${escapeHtml(tInstall('installMetaUpdateChannel', 'Update channel'))}</strong>
             <span>${escapeHtml(truncateUrl(provenance.updateUrl))}</span>
           </div>
-          <span class="trust-link">${renderExternalLink(provenance.updateUrl, 'Open')}</span>
+          <span class="trust-link">${renderExternalLink(provenance.updateUrl, tInstall('installOpenLink', 'Open'))}</span>
         </div>
       ` : ''}
       ${provenance.downloadUrl && provenance.downloadUrl !== provenance.updateUrl ? `
         <div class="trust-row">
           <div class="trust-copy">
-            <strong>Download channel</strong>
+            <strong>${escapeHtml(tInstall('installMetaDownloadChannel', 'Download channel'))}</strong>
             <span>${escapeHtml(truncateUrl(provenance.downloadUrl))}</span>
           </div>
-          <span class="trust-link">${renderExternalLink(provenance.downloadUrl, 'Open')}</span>
+          <span class="trust-link">${renderExternalLink(provenance.downloadUrl, tInstall('installOpenLink', 'Open'))}</span>
         </div>
       ` : ''}
       ${provenance.homepageUrl ? `
         <div class="trust-row">
           <div class="trust-copy">
-            <strong>Homepage</strong>
+            <strong>${escapeHtml(tInstall('installMetaHomepage', 'Homepage'))}</strong>
             <span>${escapeHtml(truncateUrl(provenance.homepageUrl))}</span>
           </div>
-          <span class="trust-link">${renderExternalLink(provenance.homepageUrl, 'Open')}</span>
+          <span class="trust-link">${renderExternalLink(provenance.homepageUrl, tInstall('installOpenLink', 'Open'))}</span>
         </div>
       ` : ''}
       <div class="trust-row">
         <div class="trust-copy">
-          <strong>Signature status</strong>
+          <strong>${escapeHtml(tInstall('installTrustSignatureStatus', 'Signature status'))}</strong>
           <span>${escapeHtml(signatureState.label)}</span>
         </div>
         <span class="count ${signatureState.tone}">${escapeHtml(signatureVerification?.publicKey ? `${signatureVerification.publicKey.slice(0, 10)}…` : signatureState.badge)}</span>
@@ -1157,7 +1197,7 @@ function renderTrustCard(sourceUrl) {
     ${signatureState.detail ? `<div class="analysis-summary" style="margin-top:14px">${escapeHtml(signatureState.detail)}</div>` : ''}
     ${verification?.valid && !verification.trusted && verification.publicKey ? `
       <div class="trust-actions">
-        <button class="btn btn-secondary" id="btnTrustSigner" type="button">Trust signer</button>
+        <button class="btn btn-secondary" id="btnTrustSigner" type="button">${escapeHtml(tInstall('installTrustSigner', 'Trust signer'))}</button>
       </div>
     ` : ''}
   `);
@@ -1175,18 +1215,18 @@ function renderTrustCard(sourceUrl) {
       }
       await runSignatureVerification(sourceUrl);
     } catch (error) {
-      showInstallError(error?.message || 'Failed to trust signer');
+      showInstallError(error?.message || tInstall('installFailedTrustSigner', 'Failed to trust signer'));
     }
   });
 }
 
 function formatRunTiming(meta) {
   const parts = [meta['run-at'] || 'document-idle'];
-  if (meta.noframes) parts.push('top frame only');
-  if (meta.delay) parts.push(`delay ${numberFormatter.format(meta.delay)}ms`);
-  if (meta.nodownload) parts.push('manual updates only');
+  if (meta.noframes) parts.push(tInstall('installRunTimingTopFrameOnly', 'top frame only'));
+  if (meta.delay) parts.push(tInstall('installRunTimingDelayMs', 'delay {delay}ms', { delay: numberFormatter.format(meta.delay) }));
+  if (meta.nodownload) parts.push(tInstall('installRunTimingManualUpdatesOnly', 'manual updates only'));
   // @unwrap warning surface — script ships without the GM API wrapper.
-  if (meta.unwrap) parts.push('unwrapped (no GM_* APIs)');
+  if (meta.unwrap) parts.push(tInstall('installRunTimingUnwrapped', 'unwrapped (no GM_* APIs)'));
   return parts.join(' • ');
 }
 
@@ -1205,12 +1245,16 @@ function buildInstallAlert(tone, title, body) {
 function updateDecisionSummary() {
   const decisionEnableState = document.getElementById('decisionEnableState');
   if (decisionEnableState) {
-    decisionEnableState.textContent = enableOnInstall ? 'Enabled immediately' : 'Installed disabled';
+    decisionEnableState.textContent = enableOnInstall
+      ? tInstall('installEnabledImmediately', 'Enabled immediately')
+      : tInstall('installInstalledDisabled', 'Installed disabled');
   }
 
   const decisionUpdateState = document.getElementById('decisionUpdateState');
   if (decisionUpdateState) {
-    decisionUpdateState.textContent = autoUpdate ? 'Automatic' : 'Manual only';
+    decisionUpdateState.textContent = autoUpdate
+      ? tInstall('installAutomatic', 'Automatic')
+      : tInstall('installManualOnly', 'Manual only');
   }
 
   updateDecisionStates();
@@ -1247,74 +1291,87 @@ function renderInstallUI(sourceUrl) {
   const hasUpdater = Boolean(scriptMeta.updateURL || scriptMeta.downloadURL);
   const hasSignature = Boolean(extractSignatureInfo(scriptCode));
   analysisDecisionState = {
-    label: 'Scanning',
+    label: tInstall('installStateScanning', 'Scanning'),
     tone: 'neutral',
-    detail: 'Static analysis is still running.'
+    detail: tInstall('installAnalysisRunningDetail', 'Static analysis is still running.')
   };
   dependencyDecisionState = dependencyCount > 0
     ? {
-        label: `Checking ${numberFormatter.format(dependencyCount)}`,
+        label: tInstall('installStateCheckingCount', 'Checking {count}', { count: numberFormatter.format(dependencyCount) }),
         tone: 'neutral',
-        detail: 'Verifying each @require URL before install.'
+        detail: tInstall('installDependencyVerifyingEach', 'Verifying each @require URL before install.')
       }
     : {
-        label: 'None declared',
+        label: tInstall('installStateNoneDeclared', 'None declared'),
         tone: 'good',
-        detail: 'No external @require dependencies were declared.'
+        detail: tInstall('installNoExternalRequires', 'No external @require dependencies were declared.')
       };
   provenanceDecisionState = dependencyCount > 0
     ? hasRequireProvenance
       ? {
-          label: 'Checking',
+          label: tInstall('installStateChecking', 'Checking'),
           tone: 'neutral',
-          detail: 'Verifying declared Sigstore provenance for @require dependencies.'
+          detail: tInstall('installProvenanceVerifyingDeclared', 'Verifying declared Sigstore provenance for @require dependencies.')
         }
       : {
-          label: 'Not declared',
+          label: tInstall('installStateNotDeclared', 'Not declared'),
           tone: 'neutral',
-          detail: 'No @require-provenance metadata was declared for these dependencies.'
+          detail: tInstall('installNoRequireProvenance', 'No @require-provenance metadata was declared for these dependencies.')
         }
     : {
-        label: 'None declared',
+        label: tInstall('installStateNoneDeclared', 'None declared'),
         tone: 'good',
-        detail: 'No external @require dependencies were declared.'
+        detail: tInstall('installNoExternalRequires', 'No external @require dependencies were declared.')
       };
   signatureDecisionState = hasSignature
     ? {
-        label: 'Verifying',
+        label: tInstall('installStateVerifying', 'Verifying'),
         tone: 'neutral',
-        detail: 'Checking the embedded signature and signer trust.'
+        detail: tInstall('installSignatureCheckingDetail', 'Checking the embedded signature and signer trust.')
       }
     : {
-        label: 'Unsigned',
+        label: tInstall('installStateUnsigned', 'Unsigned'),
         tone: 'neutral',
-        detail: 'No embedded @signature metadata was found.'
+        detail: tInstall('installNoEmbeddedSignature', 'No embedded @signature metadata was found.')
       };
   signatureVerification = null;
   const summaryCards = [
     {
-      label: 'Source',
+      label: tInstall('installSummarySource', 'Source'),
       value: source.host,
       meta: source.shortLabel
     },
     {
-      label: 'Permissions',
-      value: scriptMeta.grant.length > 0 ? `${numberFormatter.format(scriptMeta.grant.length)} requested` : 'No special grants',
+      label: tInstall('installSummaryPermissions', 'Permissions'),
+      value: scriptMeta.grant.length > 0 ? tInstall('installPermissionsRequested', '{count} requested', { count: numberFormatter.format(scriptMeta.grant.length) }) : tInstall('installNoSpecialGrants', 'No special grants'),
       meta: hasDangerousPerms
-        ? `${numberFormatter.format(dangerousPermissions.length)} elevated permission${dangerousPermissions.length === 1 ? '' : 's'} need review`
-        : 'Metadata only asks for low-risk userscript APIs'
+        ? tInstall('installElevatedPermissionsNeedReview', '{count} elevated {permissions} need review', {
+            count: numberFormatter.format(dangerousPermissions.length),
+            permissions: dangerousPermissions.length === 1 ? tInstall('permissionSingular', 'permission') : tInstall('permissionPlural', 'permissions')
+          })
+        : tInstall('installMetadataLowRiskApis', 'Metadata only asks for low-risk userscript APIs')
     },
     {
-      label: 'Scope',
-      value: matches.length > 0 ? `${numberFormatter.format(matches.length)} run rule${matches.length === 1 ? '' : 's'}` : 'No explicit match rules',
+      label: tInstall('installSummaryScope', 'Scope'),
+      value: matches.length > 0 ? tInstall('installRunRulesCount', '{count} run {rules}', {
+        count: numberFormatter.format(matches.length),
+        rules: matches.length === 1 ? tInstall('ruleSingular', 'rule') : tInstall('rulePlural', 'rules')
+      }) : tInstall('installNoExplicitMatchRules', 'No explicit match rules'),
       meta: excludes.length > 0
-        ? `${numberFormatter.format(excludes.length)} exclusion${excludes.length === 1 ? '' : 's'} applied`
-        : 'No extra exclusions declared'
+        ? tInstall('installExclusionsApplied', '{count} {exclusions} applied', {
+            count: numberFormatter.format(excludes.length),
+            exclusions: excludes.length === 1 ? tInstall('exclusionSingular', 'exclusion') : tInstall('exclusionPlural', 'exclusions')
+          })
+        : tInstall('installNoExtraExclusions', 'No extra exclusions declared')
     },
     {
-      label: 'Payload',
+      label: tInstall('installSummaryPayload', 'Payload'),
       value: formatBytes(codeSize),
-      meta: `${numberFormatter.format(lineCount)} lines • ${numberFormatter.format(resourceCount)} external asset${resourceCount === 1 ? '' : 's'}`
+      meta: tInstall('installPayloadMeta', '{lines} lines • {assets} external {assetLabel}', {
+        lines: numberFormatter.format(lineCount),
+        assets: numberFormatter.format(resourceCount),
+        assetLabel: resourceCount === 1 ? tInstall('assetSingular', 'asset') : tInstall('assetPlural', 'assets')
+      })
     }
   ];
 
@@ -1322,22 +1379,26 @@ function renderInstallUI(sourceUrl) {
   if (presentation.isDowngrade) {
     alerts.push(buildInstallAlert(
       'is-warning',
-      'Version Downgrade',
-      `This replaces your current version with an older build (${escapeHtml(presentation.versionChange)}).`
+      tInstall('installAlertVersionDowngrade', 'Version Downgrade'),
+      escapeHtml(tInstall('installAlertVersionDowngradeBody', 'This replaces your current version with an older build ({versionChange}).', { versionChange: presentation.versionChange }))
     ));
   }
   if (hasDangerousPerms) {
     alerts.push(buildInstallAlert(
       'is-danger',
-      'Elevated Browser Access',
-      `This script requests ${numberFormatter.format(dangerousPermissions.length)} high-trust permission${dangerousPermissions.length === 1 ? '' : 's'}, including ${dangerousPermissions.slice(0, 3).map(escapeHtml).join(', ')}.`
+      tInstall('installAlertElevatedAccess', 'Elevated Browser Access'),
+      escapeHtml(tInstall('installAlertElevatedAccessBody', 'This script requests {count} high-trust {permissions}, including {examples}.', {
+        count: numberFormatter.format(dangerousPermissions.length),
+        permissions: dangerousPermissions.length === 1 ? tInstall('permissionSingular', 'permission') : tInstall('permissionPlural', 'permissions'),
+        examples: dangerousPermissions.slice(0, 3).join(', ')
+      }))
     ));
   }
   if (hostPermissionPlan.requiresBroadHostAccess) {
     alerts.push(buildInstallAlert(
       'is-warning',
-      'All-Sites Browser Access',
-      'This script declares a universal run or connect rule. ScriptVault will not grant all-site browser access unless you explicitly approve broad access in the install options.'
+      tInstall('installAlertAllSitesAccess', 'All-Sites Browser Access'),
+      escapeHtml(tInstall('installAlertAllSitesAccessBody', 'This script declares a universal run or connect rule. ScriptVault will not grant all-site browser access unless you explicitly approve broad access in the install options.'))
     ));
   }
 
@@ -1363,66 +1424,71 @@ function renderInstallUI(sourceUrl) {
   if (cryptoKeywordMatch && !fromTrustedCatalog) {
     alerts.push(buildInstallAlert(
       'is-danger',
-      'Crypto / Wallet Keywords from Untrusted Source',
-      `This script mentions wallet, seed phrase, or other crypto-related terms AND was loaded from a source that is not a known userscript repository (Greasy Fork, OpenUserJS, GitHub). Active scam campaigns distribute wallet-draining scripts this way — verify the author before installing.`
+      tInstall('installAlertCryptoKeywords', 'Crypto / Wallet Keywords from Untrusted Source'),
+      escapeHtml(tInstall('installAlertCryptoKeywordsBody', 'This script mentions wallet, seed phrase, or other crypto-related terms and was loaded from a source that is not a known userscript repository. Active scam campaigns distribute wallet-draining scripts this way — verify the author before installing.'))
     ));
   }
   const declaredAntifeatures = getDeclaredAntifeatures(scriptMeta);
   if (declaredAntifeatures.length > 0) {
     alerts.push(buildInstallAlert(
       'is-warning',
-      'Anti-Features Declared',
+      tInstall('installAlertAntifeatures', 'Anti-Features Declared'),
       `<div class="install-alert-list">${declaredAntifeatures.map(af => `<div class="install-alert-list-item">• ${escapeHtml(formatAntifeatureLabel(af))}</div>`).join('')}</div>`
     ));
   }
   if (codeSize > 500000) {
     alerts.push(buildInstallAlert(
       'is-info',
-      'Large Payload',
-      `This script is ${formatBytes(codeSize)} across ${numberFormatter.format(lineCount)} lines, so first-run parsing may take longer than usual.`
+      tInstall('installAlertLargePayload', 'Large Payload'),
+      escapeHtml(tInstall('installAlertLargePayloadBody', 'This script is {size} across {lines} lines, so first-run parsing may take longer than usual.', {
+        size: formatBytes(codeSize),
+        lines: numberFormatter.format(lineCount)
+      }))
     ));
   }
 
   const installTitle = presentation.isUpdate
-    ? 'Update this script'
+    ? tInstall('installTitleUpdate', 'Update this script')
     : presentation.isDowngrade
-      ? 'Review the downgrade'
+      ? tInstall('installTitleDowngrade', 'Review the downgrade')
       : presentation.isReinstall
-        ? 'Reinstall this script'
-        : 'Install into ScriptVault';
+        ? tInstall('installTitleReinstall', 'Reinstall this script')
+        : tInstall('installTitleInstall', 'Install into ScriptVault');
 
   const installCopy = presentation.isUpdate
-    ? `ScriptVault will replace your current copy with ${escapeHtml(presentation.summaryLabel)} and preserve its script ID.`
+    ? escapeHtml(tInstall('installCopyUpdate', 'ScriptVault will replace your current copy with {summary} and preserve its script ID.', { summary: presentation.summaryLabel }))
     : presentation.isDowngrade
-      ? `This will intentionally roll the script back to an older version from ${escapeHtml(source.host)}.`
+      ? escapeHtml(tInstall('installCopyDowngrade', 'This will intentionally roll the script back to an older version from {host}.', { host: source.host }))
       : presentation.isReinstall
-        ? 'This installs the same version again, which is useful when you want a clean replacement from the original source.'
-        : `ScriptVault will add this as a new userscript from ${escapeHtml(source.host)}.`;
+        ? escapeHtml(tInstall('installCopyReinstall', 'This installs the same version again, which is useful when you want a clean replacement from the original source.'))
+        : escapeHtml(tInstall('installCopyInstall', 'ScriptVault will add this as a new userscript from {host}.', { host: source.host }));
 
   const dependencyCard = dependencyCount > 0 ? `
     <div class="surface-card analysis-card review-section" id="reviewDependencies">
       <div class="install-card-header">
         <div>
-          <div class="install-card-title">Dependency Reachability & Provenance</div>
-          <div class="install-card-subtitle">Check whether each @require URL is reachable and whether declared Sigstore provenance verifies.</div>
+          <div class="install-card-title">${escapeHtml(tInstall('installDependencyCardTitle', 'Dependency Reachability & Provenance'))}</div>
+          <div class="install-card-subtitle">${escapeHtml(tInstall('installDependencyCardSubtitle', 'Check whether each @require URL is reachable and whether declared Sigstore provenance verifies.'))}</div>
         </div>
-        <span class="count status-neutral" id="dep-status" role="status" aria-live="polite" aria-atomic="true">Checking…</span>
+        <span class="count status-neutral" id="dep-status" role="status" aria-live="polite" aria-atomic="true">${escapeHtml(tInstall('installStateCheckingEllipsis', 'Checking...'))}</span>
       </div>
       <div class="tag-list" id="dep-list">
         ${scriptMeta.require.map(url => {
           const pinned = requireIsPinned(url);
           const badge = pinned
             ? ''
-            : ` <span class="tag warning" title="This @require has no SRI hash — it loads whatever the CDN serves. Pin it with #sha256=… to verify, or set Security → Subresource Integrity to Require to block un-pinned dependencies.">unverified remote code</span>`;
+            : ` <span class="tag warning" title="${escapeHtml(tInstall('installUnverifiedRemoteCodeTitle', 'This @require has no SRI hash. It loads whatever the CDN serves. Pin it with #sha256=... to verify, or set Security > Subresource Integrity to Require to block un-pinned dependencies.'))}">${escapeHtml(tInstall('installUnverifiedRemoteCode', 'unverified remote code'))}</span>`;
           return `<span class="tag" data-dep-url="${escapeHtml(url)}" title="${escapeHtml(url)}">${escapeHtml(getUrlFilename(url))}</span>${badge}`;
         }).join('')}
       </div>
       <div class="install-card-header" style="margin-top:14px;margin-bottom:8px">
-        <div class="install-card-subtitle">Sigstore provenance</div>
-        <span class="count status-neutral" id="provenance-status" role="status" aria-live="polite" aria-atomic="true">${hasRequireProvenance ? 'Checking' : 'Not declared'}</span>
+        <div class="install-card-subtitle">${escapeHtml(tInstall('installSigstoreProvenance', 'Sigstore provenance'))}</div>
+        <span class="count status-neutral" id="provenance-status" role="status" aria-live="polite" aria-atomic="true">${hasRequireProvenance ? escapeHtml(tInstall('installStateChecking', 'Checking')) : escapeHtml(tInstall('installStateNotDeclared', 'Not declared'))}</span>
       </div>
       <div class="analysis-summary" id="provenance-summary" style="margin-top:12px">
-        ${hasRequireProvenance ? 'Checking declared @require-provenance bundles.' : 'No @require-provenance metadata was declared for these dependencies.'}
+        ${escapeHtml(hasRequireProvenance
+          ? tInstall('installProvenanceCheckingDeclaredBundles', 'Checking declared @require-provenance bundles.')
+          : tInstall('installNoRequireProvenance', 'No @require-provenance metadata was declared for these dependencies.'))}
       </div>
       <div class="tag-list" id="provenance-list">
         ${scriptMeta.require.map((url, index) => {
@@ -1431,31 +1497,31 @@ function renderInstallUI(sourceUrl) {
           const title = bundleUrl && identity
             ? `${url} — ${bundleUrl} — ${identity}`
             : bundleUrl
-              ? `${url} — missing @require-identity`
+              ? tInstall('installProvenanceTitleMissingIdentity', '{url} - missing @require-identity', { url })
               : identity
-                ? `${url} — missing @require-provenance`
-                : `${url} — no provenance declared`;
-          return `<span class="tag neutral" data-provenance-index="${index}" title="${escapeHtml(title)}">${escapeHtml(bundleUrl || identity ? 'Checking provenance' : 'No provenance')}</span>`;
+                ? tInstall('installProvenanceTitleMissingProvenance', '{url} - missing @require-provenance', { url })
+                : tInstall('installProvenanceTitleNoneDeclared', '{url} - no provenance declared', { url });
+          return `<span class="tag neutral" data-provenance-index="${index}" title="${escapeHtml(title)}">${escapeHtml(bundleUrl || identity ? tInstall('installCheckingProvenance', 'Checking provenance') : tInstall('installNoProvenance', 'No provenance'))}</span>`;
         }).join('')}
       </div>
     </div>
   ` : '';
 
   const reviewNavItems = [
-    { id: 'reviewSummary', label: 'Summary' },
-    { id: 'reviewDetails', label: 'Details' },
-    { id: 'reviewSecurity', label: 'Security' },
-    ...(dependencyCount > 0 ? [{ id: 'reviewDependencies', label: 'Dependencies' }] : []),
-    { id: 'reviewTrust', label: 'Trust' },
-    { id: 'reviewCode', label: 'Code' },
-    { id: 'reviewInstall', label: 'Install' }
+    { id: 'reviewSummary', label: tInstall('installReviewSummary', 'Summary') },
+    { id: 'reviewDetails', label: tInstall('installReviewDetails', 'Details') },
+    { id: 'reviewSecurity', label: tInstall('installReviewSecurity', 'Security') },
+    ...(dependencyCount > 0 ? [{ id: 'reviewDependencies', label: tInstall('installReviewDependencies', 'Dependencies') }] : []),
+    { id: 'reviewTrust', label: tInstall('installReviewTrust', 'Trust') },
+    { id: 'reviewCode', label: tInstall('installReviewCode', 'Code') },
+    { id: 'reviewInstall', label: tInstall('installReviewInstall', 'Install') }
   ];
 
   const html = `
     <div class="install-layout">
       <div class="install-main stack">
         ${alerts.length > 0 ? `<div class="install-alert-stack">${alerts.join('')}</div>` : ''}
-        <nav class="review-nav" id="reviewNav" aria-label="Review sections">
+        <nav class="review-nav" id="reviewNav" aria-label="${escapeHtml(tInstall('installReviewSectionsAria', 'Review sections'))}">
           ${reviewNavItems.map((item, index) => `
             <button
               class="review-nav-btn${index === 0 ? ' is-active' : ''}"
@@ -1468,7 +1534,7 @@ function renderInstallUI(sourceUrl) {
           `).join('')}
         </nav>
         <div class="review-nav-meta">
-          <p class="review-nav-status" id="reviewNavStatus" role="status" aria-live="polite" aria-atomic="true">Reviewing Summary. Use Left and Right arrow keys to move between sections.</p>
+          <p class="review-nav-status" id="reviewNavStatus" role="status" aria-live="polite" aria-atomic="true">${escapeHtml(tInstall('installReviewNavStatus', 'Reviewing {section}. Use Left and Right arrow keys to move between sections.', { section: tInstall('installReviewSummary', 'Summary') }))}</p>
         </div>
         <section class="review-section" id="reviewSummary">
           <div class="summary-grid">
@@ -1505,68 +1571,68 @@ function renderInstallUI(sourceUrl) {
         <div class="meta-grid">
           ${scriptMeta.author ? `
             <div class="meta-item">
-              <span class="meta-label">Author</span>
+              <span class="meta-label">${escapeHtml(tInstall('installMetaAuthor', 'Author'))}</span>
               <span class="meta-value">${escapeHtml(scriptMeta.author)}</span>
             </div>
           ` : ''}
 
           ${scriptMeta.namespace ? `
             <div class="meta-item">
-              <span class="meta-label">Namespace</span>
+              <span class="meta-label">${escapeHtml(tInstall('installMetaNamespace', 'Namespace'))}</span>
               <span class="meta-value">${escapeHtml(scriptMeta.namespace)}</span>
             </div>
           ` : ''}
 
           ${scriptMeta.license ? `
             <div class="meta-item">
-              <span class="meta-label">License</span>
+              <span class="meta-label">${escapeHtml(tInstall('installMetaLicense', 'License'))}</span>
               <span class="meta-value">${escapeHtml(scriptMeta.license)}</span>
             </div>
           ` : ''}
 
           ${scriptMeta.homepage ? `
             <div class="meta-item">
-              <span class="meta-label">Homepage</span>
+              <span class="meta-label">${escapeHtml(tInstall('installMetaHomepage', 'Homepage'))}</span>
               <span class="meta-value">${renderExternalLink(scriptMeta.homepage)}</span>
             </div>
           ` : ''}
 
           <div class="meta-item">
-            <span class="meta-label">Size</span>
-            <span class="meta-value">${formatBytes(codeSize)} (${numberFormatter.format(lineCount)} lines)</span>
+            <span class="meta-label">${escapeHtml(tInstall('installMetaSize', 'Size'))}</span>
+            <span class="meta-value">${escapeHtml(tInstall('installMetaSizeValue', '{size} ({lines} lines)', { size: formatBytes(codeSize), lines: numberFormatter.format(lineCount) }))}</span>
           </div>
 
           <div class="meta-item">
-            <span class="meta-label">Runs at</span>
+            <span class="meta-label">${escapeHtml(tInstall('installMetaRunsAt', 'Runs at'))}</span>
             <span class="meta-value">${escapeHtml(formatRunTiming(scriptMeta))}</span>
           </div>
 
           <div class="meta-item full-width">
-            <span class="meta-label">Install Source</span>
+            <span class="meta-label">${escapeHtml(tInstall('installMetaInstallSource', 'Install Source'))}</span>
             <span class="meta-value">${source.safeUrl ? renderExternalLink(source.label) : escapeHtml(source.label)}</span>
           </div>
           ${scriptMeta.updateURL ? `
             <div class="meta-item full-width">
-              <span class="meta-label">Update Channel</span>
+              <span class="meta-label">${escapeHtml(tInstall('installMetaUpdateChannel', 'Update Channel'))}</span>
               <span class="meta-value">${renderExternalLink(scriptMeta.updateURL)}</span>
             </div>
           ` : ''}
           ${scriptMeta.downloadURL && scriptMeta.downloadURL !== scriptMeta.updateURL ? `
             <div class="meta-item full-width">
-              <span class="meta-label">Download Channel</span>
+              <span class="meta-label">${escapeHtml(tInstall('installMetaDownloadChannel', 'Download Channel'))}</span>
               <span class="meta-value">${renderExternalLink(scriptMeta.downloadURL)}</span>
             </div>
           ` : ''}
         </div>
       </div>
 
-      ${renderExpandablePatternSection('matchRules', 'Runs on', matches, 8)}
+      ${renderExpandablePatternSection('matchRules', tInstall('installRunsOn', 'Runs on'), matches, 8)}
 
-      ${renderExpandablePatternSection('excludeRules', 'Excludes', excludes, 3)}
+      ${renderExpandablePatternSection('excludeRules', tInstall('installExcludes', 'Excludes'), excludes, 3)}
 
       <div class="section">
         <div class="section-title">
-          <span>Permissions</span>
+          <span>${escapeHtml(tInstall('installPermissions', 'Permissions'))}</span>
           <span class="count">${grants.length}</span>
         </div>
         <div class="tag-list">
@@ -1576,57 +1642,57 @@ function renderInstallUI(sourceUrl) {
                 const desc = GRANT_DESCRIPTIONS[g] || '';
                 const needsOptional = !!OPTIONAL_GRANT_PERMISSION_MAP[g];
                 const augmentedDesc = needsOptional
-                  ? `${desc}${desc ? ' — ' : ''}Will prompt for the Chrome '${OPTIONAL_GRANT_PERMISSION_MAP[g]}' permission at install.`
+                  ? `${desc}${desc ? ' - ' : ''}${tInstall('installGrantWillPromptPermission', "Will prompt for the Chrome '{permission}' permission at install.", { permission: OPTIONAL_GRANT_PERMISSION_MAP[g] })}`
                   : desc;
                 return `<span class="tag ${isDangerous ? 'warning' : isSafe ? 'safe' : ''}" ${augmentedDesc ? `title="${escapeHtml(augmentedDesc)}"` : ''}>${escapeHtml(g)}${needsOptional ? '<span class="optional-perm-hint" aria-hidden="true"> *</span>' : ''}</span>`;
               }).join('')}
         </div>
         ${grants.some(g => OPTIONAL_GRANT_PERMISSION_MAP[g]) ? `
           <p class="optional-perm-note" style="margin-top:8px;font-size:0.85em;color:var(--text-muted,#888);">
-            * Chrome will ask you for the matching browser permission after you click install. Decline to keep the script working without that capability.
+            ${escapeHtml(tInstall('installOptionalPermissionNote', '* Chrome will ask you for the matching browser permission after you click install. Decline to keep the script working without that capability.'))}
           </p>
         ` : ''}
       </div>
 
       <div class="section">
         <div class="section-title">
-          <span>Privileged Host Scope</span>
-          <span class="count">${scriptMeta.connect.length > 0 ? numberFormatter.format(scriptMeta.connect.length) : 'Run hosts'}</span>
+          <span>${escapeHtml(tInstall('installPrivilegedHostScope', 'Privileged Host Scope'))}</span>
+          <span class="count">${scriptMeta.connect.length > 0 ? numberFormatter.format(scriptMeta.connect.length) : escapeHtml(tInstall('installRunHosts', 'Run hosts'))}</span>
         </div>
         <p class="optional-perm-note" style="margin-top:0;margin-bottom:8px;font-size:0.85em;color:var(--text-muted,#888);">
-          GM_xmlhttpRequest, GM_webSocket, GM_download, GM_cookie, and GM_webRequest are limited to the declared run hosts. @connect entries explicitly widen network, download, WebSocket, and DNR targets; cookie access stays run-host scoped unless the advanced cross-scope override is enabled.
+          ${escapeHtml(tInstall('installPrivilegedHostScopeNote', 'GM_xmlhttpRequest, GM_webSocket, GM_download, GM_cookie, and GM_webRequest are limited to the declared run hosts. @connect entries explicitly widen network, download, WebSocket, and DNR targets; cookie access stays run-host scoped unless the advanced cross-scope override is enabled.'))}
         </p>
         <div class="tag-list">
           ${scriptMeta.connect.length > 0
             ? scriptMeta.connect.map(d => `<span class="tag">${escapeHtml(d)}</span>`).join('')
-            : '<span class="tag safe">No extra @connect hosts</span>'}
+            : `<span class="tag safe">${escapeHtml(tInstall('installNoExtraConnectHosts', 'No extra @connect hosts'))}</span>`}
         </div>
       </div>
 
       <div class="section">
         <div class="section-title">
-          <span>Browser Host Grants</span>
-          <span class="count">${hostPermissionPlan.origins.length > 0 ? numberFormatter.format(hostPermissionPlan.origins.length) : hostPermissionPlan.requiresBroadHostAccess ? 'Broad' : 'None'}</span>
+          <span>${escapeHtml(tInstall('installBrowserHostGrants', 'Browser Host Grants'))}</span>
+          <span class="count">${hostPermissionPlan.origins.length > 0 ? numberFormatter.format(hostPermissionPlan.origins.length) : hostPermissionPlan.requiresBroadHostAccess ? escapeHtml(tInstall('installBroad', 'Broad')) : escapeHtml(tInstall('installNone', 'None'))}</span>
         </div>
         <p class="optional-perm-note" style="margin-top:0;margin-bottom:8px;font-size:0.85em;color:var(--text-muted,#888);">
-          ScriptVault asks the browser only for hosts this script declares in run rules, update URLs, dependencies, or @connect. Universal rules stay blocked until you approve broad access.
+          ${escapeHtml(tInstall('installBrowserHostGrantsNote', 'ScriptVault asks the browser only for hosts this script declares in run rules, update URLs, dependencies, or @connect. Universal rules stay blocked until you approve broad access.'))}
         </p>
         <div class="tag-list">
           ${hostPermissionPlan.origins.length > 0
             ? hostPermissionPlan.origins.slice(0, 12).map(origin => `<span class="tag safe">${escapeHtml(origin)}</span>`).join('')
             : hostPermissionPlan.requiresBroadHostAccess
-              ? '<span class="tag warning">Awaiting broad-access approval</span>'
-              : '<span class="tag safe">No HTTP(S) host grants needed</span>'}
-          ${hostPermissionPlan.origins.length > 12 ? `<span class="tag neutral">+${numberFormatter.format(hostPermissionPlan.origins.length - 12)} more</span>` : ''}
+              ? `<span class="tag warning">${escapeHtml(tInstall('installAwaitingBroadAccessApproval', 'Awaiting broad-access approval'))}</span>`
+              : `<span class="tag safe">${escapeHtml(tInstall('installNoHttpHostGrantsNeeded', 'No HTTP(S) host grants needed'))}</span>`}
+          ${hostPermissionPlan.origins.length > 12 ? `<span class="tag neutral">${escapeHtml(tInstall('installMoreCount', '+{count} more', { count: numberFormatter.format(hostPermissionPlan.origins.length - 12) }))}</span>` : ''}
           ${hostPermissionPlan.requiresBroadHostAccess ? hostPermissionPlan.broadOrigins.map(origin => `<span class="tag warning">${escapeHtml(origin)}</span>`).join('') : ''}
-          ${hostPermissionPlan.unsupported.length > 0 ? `<span class="tag neutral" title="${escapeHtml(hostPermissionPlan.unsupported.slice(0, 6).join(', '))}">${numberFormatter.format(hostPermissionPlan.unsupported.length)} non-HTTP rule${hostPermissionPlan.unsupported.length === 1 ? '' : 's'}</span>` : ''}
+          ${hostPermissionPlan.unsupported.length > 0 ? `<span class="tag neutral" title="${escapeHtml(hostPermissionPlan.unsupported.slice(0, 6).join(', '))}">${escapeHtml(tInstall('installNonHttpRulesCount', '{count} non-HTTP {rules}', { count: numberFormatter.format(hostPermissionPlan.unsupported.length), rules: hostPermissionPlan.unsupported.length === 1 ? tInstall('ruleSingular', 'rule') : tInstall('rulePlural', 'rules') }))}</span>` : ''}
         </div>
       </div>
 
       ${resourceCount > 0 ? `
         <div class="section">
           <div class="section-title">
-            <span>External Resources</span>
+            <span>${escapeHtml(tInstall('installExternalResources', 'External Resources'))}</span>
             <span class="count">${resourceCount}</span>
           </div>
           <div class="tag-list">
@@ -1641,7 +1707,7 @@ function renderInstallUI(sourceUrl) {
       ${scriptMeta.tag.length > 0 ? `
         <div class="section">
           <div class="section-title">
-            <span>Tags</span>
+            <span>${escapeHtml(tInstall('installTags', 'Tags'))}</span>
           </div>
           <div class="tag-list">
             ${scriptMeta.tag.map(t => `<span class="tag">#${escapeHtml(t)}</span>`).join('')}
@@ -1654,12 +1720,12 @@ function renderInstallUI(sourceUrl) {
           <div id="analysisMount">
             <div class="install-card-header">
               <div>
-                <div class="install-card-title">Security Analysis</div>
-                <div class="install-card-subtitle">Scanning the script metadata and source for risky patterns.</div>
+                <div class="install-card-title">${escapeHtml(tInstall('installSecurityAnalysisTitle', 'Security Analysis'))}</div>
+                <div class="install-card-subtitle">${escapeHtml(tInstall('installSecurityAnalysisSubtitleScanning', 'Scanning the script metadata and source for risky patterns.'))}</div>
               </div>
-              <span class="count status-neutral" id="analysisStatus" role="status" aria-live="polite" aria-atomic="true">Scanning</span>
+              <span class="count status-neutral" id="analysisStatus" role="status" aria-live="polite" aria-atomic="true">${escapeHtml(tInstall('installStateScanning', 'Scanning'))}</span>
             </div>
-            <div class="analysis-summary">ScriptVault checks the script in the background while you review it.</div>
+            <div class="analysis-summary">${escapeHtml(tInstall('installSecurityAnalysisCheckingBackground', 'ScriptVault checks the script in the background while you review it.'))}</div>
           </div>
         </div>
 
@@ -1667,12 +1733,12 @@ function renderInstallUI(sourceUrl) {
           <div id="onDeviceAiInstallMount">
             <div class="install-card-header">
               <div>
-                <div class="install-card-title">Local AI Review</div>
-                <div class="install-card-subtitle">Optional Chrome Prompt API summary generated on this device.</div>
+                <div class="install-card-title">${escapeHtml(tInstall('installLocalAiReviewTitle', 'Local AI Review'))}</div>
+                <div class="install-card-subtitle">${escapeHtml(tInstall('installLocalAiReviewSubtitleOptIn', 'Optional Chrome Prompt API summary generated on this device.'))}</div>
               </div>
-              <span class="count status-neutral">Opt-in</span>
+              <span class="count status-neutral">${escapeHtml(tInstall('installOptIn', 'Opt-in'))}</span>
             </div>
-            <div class="analysis-summary">Enable on-device AI in Settings to summarize this install review locally.</div>
+            <div class="analysis-summary">${escapeHtml(tInstall('installLocalAiEnableInSettings', 'Enable on-device AI in Settings to summarize this install review locally.'))}</div>
           </div>
         </div>
 
@@ -1682,21 +1748,21 @@ function renderInstallUI(sourceUrl) {
           <div id="trustMount">
             <div class="install-card-header">
               <div>
-                <div class="install-card-title">Source & Trust</div>
-                <div class="install-card-subtitle">Review where this script came from and whether you trust its signer.</div>
+                <div class="install-card-title">${escapeHtml(tInstall('installSourceTrustTitle', 'Source & Trust'))}</div>
+                <div class="install-card-subtitle">${escapeHtml(tInstall('installSourceTrustSubtitle', 'Review where this script came from and whether you trust its signer.'))}</div>
               </div>
-              <span class="count status-neutral">${hasSignature ? 'Verifying' : 'Unsigned'}</span>
+              <span class="count status-neutral">${hasSignature ? escapeHtml(tInstall('installStateVerifying', 'Verifying')) : escapeHtml(tInstall('installStateUnsigned', 'Unsigned'))}</span>
             </div>
-            <div class="analysis-summary">${hasSignature ? 'ScriptVault is checking the embedded signature and signer trust.' : 'This script does not declare an embedded signature.'}</div>
+            <div class="analysis-summary">${escapeHtml(hasSignature ? tInstall('installSignatureCheckingTrustDetail', 'ScriptVault is checking the embedded signature and signer trust.') : tInstall('installNoEmbeddedSignaturePlain', 'This script does not declare an embedded signature.'))}</div>
           </div>
         </div>
 
       <div class="code-preview surface-card review-section" id="reviewCode">
           <div class="code-preview-header">
-            <span class="code-preview-title">Script Code <span class="install-card-subtitle">(${numberFormatter.format(lineCount)} lines)</span></span>
+            <span class="code-preview-title">${escapeHtml(tInstall('installScriptCodeTitle', 'Script Code'))} <span class="install-card-subtitle">${escapeHtml(tInstall('installLinesParen', '({lines} lines)', { lines: numberFormatter.format(lineCount) }))}</span></span>
         <button class="code-preview-toggle" id="toggle-code" type="button" aria-expanded="false" aria-controls="code-container">
           <span id="toggle-icon">\u25BC</span>
-          <span id="toggle-text">Show code</span>
+          <span id="toggle-text">${escapeHtml(tInstall('installShowCode', 'Show code'))}</span>
         </button>
       </div>
       <div class="code-container" id="code-container" hidden aria-hidden="true">
@@ -1712,62 +1778,69 @@ function renderInstallUI(sourceUrl) {
           <div class="decision-copy">${installCopy}</div>
           <div class="decision-hero" id="decisionHero" data-tone="neutral">
             <div class="decision-hero-meta">
-              <span class="decision-hero-badge" id="decisionHeroBadge">In review</span>
+              <span class="decision-hero-badge" id="decisionHeroBadge">${escapeHtml(tInstall('installDecisionBadgeInReview', 'In review'))}</span>
             </div>
-            <div class="decision-hero-title" id="decisionHeroTitle">Checks are still running</div>
-            <div class="decision-hero-copy" id="decisionHeroCopy" role="status" aria-live="polite" aria-atomic="true">ScriptVault is still checking this script. You can keep reviewing permissions, scope, source, and code. The final checks will update here.</div>
+            <div class="decision-hero-title" id="decisionHeroTitle">${escapeHtml(tInstall('installDecisionChecksRunning', 'Checks are still running'))}</div>
+            <div class="decision-hero-copy" id="decisionHeroCopy" role="status" aria-live="polite" aria-atomic="true">${escapeHtml(tInstall('installDecisionChecksRunningCopy', 'ScriptVault is still checking this script. You can keep reviewing permissions, scope, source, and code. The final checks will update here.'))}</div>
           </div>
 
           <div class="decision-list">
             <div class="decision-row">
-              <span>Version</span>
+              <span>${escapeHtml(tInstall('installDecisionVersion', 'Version'))}</span>
               <strong>${escapeHtml(presentation.summaryLabel)}</strong>
             </div>
             <div class="decision-row">
-              <span>After install</span>
-              <strong id="decisionEnableState">${enableOnInstall ? 'Enabled immediately' : 'Installed disabled'}</strong>
+              <span>${escapeHtml(tInstall('installAfterInstall', 'After install'))}</span>
+              <strong id="decisionEnableState">${escapeHtml(enableOnInstall ? tInstall('installEnabledImmediately', 'Enabled immediately') : tInstall('installInstalledDisabled', 'Installed disabled'))}</strong>
             </div>
             ${hasUpdater ? `
               <div class="decision-row">
-                <span>Update policy</span>
-                <strong id="decisionUpdateState">${autoUpdate ? 'Automatic' : 'Manual only'}</strong>
+                <span>${escapeHtml(tInstall('installUpdatePolicy', 'Update policy'))}</span>
+                <strong id="decisionUpdateState">${escapeHtml(autoUpdate ? tInstall('installAutomatic', 'Automatic') : tInstall('installManualOnly', 'Manual only'))}</strong>
               </div>
             ` : ''}
             <div class="decision-row">
-              <span>Risk review</span>
-              <span class="count status-neutral" id="decisionRiskState" title="Static analysis is still running.">Scanning</span>
+              <span>${escapeHtml(tInstall('installRiskReview', 'Risk review'))}</span>
+              <span class="count status-neutral" id="decisionRiskState" title="${escapeHtml(tInstall('installAnalysisRunningDetail', 'Static analysis is still running.'))}">${escapeHtml(tInstall('installStateScanning', 'Scanning'))}</span>
             </div>
             <div class="decision-row">
-              <span>Dependencies</span>
-              <span class="count status-neutral" id="decisionDependencyState" title="${escapeHtml(dependencyCount > 0 ? 'Verifying external @require URLs.' : 'No external @require dependencies were declared.')}">${dependencyCount > 0 ? `Checking ${numberFormatter.format(dependencyCount)}` : 'None declared'}</span>
+              <span>${escapeHtml(tInstall('installReviewDependencies', 'Dependencies'))}</span>
+              <span class="count status-neutral" id="decisionDependencyState" title="${escapeHtml(dependencyCount > 0 ? tInstall('installDependencyVerifyingExternalUrls', 'Verifying external @require URLs.') : tInstall('installNoExternalRequires', 'No external @require dependencies were declared.'))}">${escapeHtml(dependencyCount > 0 ? tInstall('installStateCheckingCount', 'Checking {count}', { count: numberFormatter.format(dependencyCount) }) : tInstall('installStateNoneDeclared', 'None declared'))}</span>
             </div>
             ${dependencyCount > 0 ? `
               <div class="decision-row">
-                <span>Dependency provenance</span>
-                <span class="count status-neutral" id="decisionProvenanceState" title="${escapeHtml(hasRequireProvenance ? 'Verifying declared Sigstore provenance for @require dependencies.' : 'No @require-provenance metadata was declared.')}">${hasRequireProvenance ? 'Checking' : 'Not declared'}</span>
+                <span>${escapeHtml(tInstall('installDependencyProvenance', 'Dependency provenance'))}</span>
+                <span class="count status-neutral" id="decisionProvenanceState" title="${escapeHtml(hasRequireProvenance ? tInstall('installProvenanceVerifyingDeclared', 'Verifying declared Sigstore provenance for @require dependencies.') : tInstall('installNoRequireProvenance', 'No @require-provenance metadata was declared.'))}">${escapeHtml(hasRequireProvenance ? tInstall('installStateChecking', 'Checking') : tInstall('installStateNotDeclared', 'Not declared'))}</span>
               </div>
             ` : ''}
             <div class="decision-row">
-              <span>Signature</span>
-              <span class="count status-neutral" id="decisionSignatureState" title="${escapeHtml(hasSignature ? 'Checking the embedded signature and signer trust.' : 'No embedded @signature metadata was found.')}">${hasSignature ? 'Verifying' : 'Unsigned'}</span>
+              <span>${escapeHtml(tInstall('installSignature', 'Signature'))}</span>
+              <span class="count status-neutral" id="decisionSignatureState" title="${escapeHtml(hasSignature ? tInstall('installSignatureCheckingDetail', 'Checking the embedded signature and signer trust.') : tInstall('installNoEmbeddedSignature', 'No embedded @signature metadata was found.'))}">${escapeHtml(hasSignature ? tInstall('installStateVerifying', 'Verifying') : tInstall('installStateUnsigned', 'Unsigned'))}</span>
             </div>
             <div class="decision-row">
-              <span>Network access</span>
-              <strong>${scriptMeta.connect.length > 0 ? numberFormatter.format(scriptMeta.connect.length) : 'None declared'}</strong>
+              <span>${escapeHtml(tInstall('installNetworkAccess', 'Network access'))}</span>
+              <strong>${scriptMeta.connect.length > 0 ? numberFormatter.format(scriptMeta.connect.length) : escapeHtml(tInstall('installStateNoneDeclared', 'None declared'))}</strong>
             </div>
             <div class="decision-row">
-              <span>Browser access</span>
-              <strong>${hostPermissionPlan.requiresBroadHostAccess && !allowBroadHostAccess ? 'Broad approval needed' : hostPermissionPlan.origins.length > 0 ? `${numberFormatter.format(hostPermissionPlan.origins.length)} scoped host${hostPermissionPlan.origins.length === 1 ? '' : 's'}` : 'No HTTP(S) grants'}</strong>
+              <span>${escapeHtml(tInstall('installBrowserAccess', 'Browser access'))}</span>
+              <strong>${escapeHtml(hostPermissionPlan.requiresBroadHostAccess && !allowBroadHostAccess
+                ? tInstall('installBroadApprovalNeeded', 'Broad approval needed')
+                : hostPermissionPlan.origins.length > 0
+                  ? tInstall('installScopedHostsCount', '{count} scoped {hosts}', {
+                      count: numberFormatter.format(hostPermissionPlan.origins.length),
+                      hosts: hostPermissionPlan.origins.length === 1 ? tInstall('hostSingular', 'host') : tInstall('hostPlural', 'hosts')
+                    })
+                  : tInstall('installNoHttpGrants', 'No HTTP(S) grants'))}</strong>
             </div>
           </div>
 
           <div class="options">
-            <div class="options-title">Installation Options</div>
+            <div class="options-title">${escapeHtml(tInstall('installOptionsTitle', 'Installation Options'))}</div>
 
             <div class="option-row">
               <div class="option-info">
-                <span class="option-label">Enable on install</span>
-                <span class="option-description">Start running the script immediately after installation.</span>
+                <span class="option-label">${escapeHtml(tInstall('installEnableOnInstall', 'Enable on install'))}</span>
+                <span class="option-description">${escapeHtml(tInstall('installEnableOnInstallDescription', 'Start running the script immediately after installation.'))}</span>
               </div>
               <label class="toggle">
                 <input type="checkbox" id="enable-install" checked>
@@ -1778,8 +1851,8 @@ function renderInstallUI(sourceUrl) {
             ${hasUpdater ? `
               <div class="option-row">
                 <div class="option-info">
-                  <span class="option-label">Auto-update</span>
-                  <span class="option-description">Keep checking the published source for newer versions.</span>
+                  <span class="option-label">${escapeHtml(tInstall('installAutoUpdate', 'Auto-update'))}</span>
+                  <span class="option-description">${escapeHtml(tInstall('installAutoUpdateDescription', 'Keep checking the published source for newer versions.'))}</span>
                 </div>
                 <label class="toggle">
                   <input type="checkbox" id="auto-update" checked>
@@ -1790,8 +1863,8 @@ function renderInstallUI(sourceUrl) {
             ${hostPermissionPlan.requiresBroadHostAccess ? `
               <div class="option-row">
                 <div class="option-info">
-                  <span class="option-label">Allow all-site browser access</span>
-                  <span class="option-description">Required only because this script declares &lt;all_urls&gt;, *://*/*, or another universal host rule.</span>
+                  <span class="option-label">${escapeHtml(tInstall('installAllowAllSiteBrowserAccess', 'Allow all-site browser access'))}</span>
+                  <span class="option-description">${escapeHtml(tInstall('installAllowAllSiteBrowserAccessDescription', 'Required only because this script declares <all_urls>, *://*/*, or another universal host rule.'))}</span>
                 </div>
                 <label class="toggle">
                   <input type="checkbox" id="allow-broad-host-access" ${allowBroadHostAccess ? 'checked' : ''}>
@@ -1805,10 +1878,10 @@ function renderInstallUI(sourceUrl) {
 
           <div class="actions">
             <button class="btn ${presentation.installClass}" id="btn-install" type="button">${escapeHtml(presentation.installLabel)}</button>
-            <button class="btn btn-secondary" id="btn-cancel" type="button">Cancel</button>
+            <button class="btn btn-secondary" id="btn-cancel" type="button">${escapeHtml(tInstall('cancel', 'Cancel'))}</button>
           </div>
 
-          <div class="decision-hint" id="decisionHint">Press Enter to ${presentation.isUpdate ? 'update' : presentation.isDowngrade ? 'downgrade' : presentation.isReinstall ? 'reinstall' : 'install'} when the install button is focused. Press Esc to arm cancel.</div>
+          <div class="decision-hint" id="decisionHint">${escapeHtml(tInstall('installDecisionHintDefault', 'Press Enter to {action} when the install button is focused. Press Esc to arm cancel.', { action: getInstallActionVerb(presentation) }))}</div>
         </div>
       </aside>
     </div>
@@ -1954,7 +2027,11 @@ function setupReviewNav() {
       }
     });
     if (announce && status && activeButton) {
-      status.textContent = `Reviewing ${activeButton.textContent.trim()}. Use Left and Right arrow keys to move between sections.`;
+      status.textContent = tInstall(
+        'installReviewNavStatus',
+        'Reviewing {section}. Use Left and Right arrow keys to move between sections.',
+        { section: activeButton.textContent.trim() }
+      );
     }
     if (moveFocus && activeButton) {
       activeButton.focus({ preventScroll: true });
@@ -2030,11 +2107,11 @@ function setCodePreviewExpanded(expanded, { restoreFocus = false } = {}) {
 
   if (expanded) {
     icon.textContent = '\u25B2';
-    text.textContent = 'Hide code';
+    text.textContent = tInstall('installHideCode', 'Hide code');
     codeEditor?.refresh();
   } else {
     icon.textContent = '\u25BC';
-    text.textContent = 'Show code';
+    text.textContent = tInstall('installShowCode', 'Show code');
   }
   if (toggle) toggle.setAttribute('aria-expanded', String(expanded));
   if (!expanded && restoreFocus) {
@@ -2077,17 +2154,17 @@ async function handleInstall() {
   setCancelReviewArmed(false);
   clearInstallError();
   btn.disabled = true;
-  safeSetHtml(btn, '<span class="loading-spinner install-inline-spinner"></span> Installing…');
+  safeSetHtml(btn, `<span class="loading-spinner install-inline-spinner"></span> ${escapeHtml(tInstall('installInstallingEllipsis', 'Installing...'))}`);
 
   try {
     const scriptId = existingScript?.id || null;
     const hostPermissionPlan = deriveOptionalHostPermissionPlan(scriptMeta, { allowBroad: allowBroadHostAccess });
     if (hostPermissionPlan.requiresBroadHostAccess && !allowBroadHostAccess) {
-      throw new Error('This script asks for all-site browser access. Approve broad access or narrow its @match/@connect rules before installing.');
+      throw new Error(tInstall('installErrorBroadHostAccessRequired', 'This script asks for all-site browser access. Approve broad access or narrow its @match/@connect rules before installing.'));
     }
     const optionalHostPermissionsResult = await ensureOptionalHostPermissions(hostPermissionPlan.origins);
     if (optionalHostPermissionsResult.denied.length > 0) {
-      throw new Error(`Browser host access was not granted for ${optionalHostPermissionsResult.denied.slice(0, 3).join(', ')}.`);
+      throw new Error(tInstall('installErrorHostAccessDenied', 'Browser host access was not granted for {hosts}.', { hosts: optionalHostPermissionsResult.denied.slice(0, 3).join(', ') }));
     }
 
     // Request optional Chrome permissions for grants that need them
@@ -2140,7 +2217,7 @@ async function handleInstall() {
     });
 
     if (!result) {
-      throw new Error('No response from background (service worker may have stopped)');
+      throw new Error(tInstall('installErrorNoBackgroundResponse', 'No response from background (service worker may have stopped)'));
     }
     if (result.error) {
       throw new Error(result.error);
@@ -2186,7 +2263,7 @@ function showInstallError(message) {
     <span class="install-inline-mark" aria-hidden="true">!</span>
     <span class="install-error-message">
       <span>${escapeHtml(message)}</span>
-      <span class="install-error-helper">No script was saved. Review the install details, then try again.</span>
+      <span class="install-error-helper">${escapeHtml(tInstall('installErrorHelperNoScriptSaved', 'No script was saved. Review the install details, then try again.'))}</span>
     </span>
   `);
   errorEl.style.display = 'flex';
@@ -2210,7 +2287,7 @@ function showError(title, message) {
       <div class="error-title" id="installTerminalTitle">${escapeHtml(title)}</div>
       <div class="error-message" id="installTerminalMessage">${escapeHtml(message)}</div>
       <div class="error-actions actions">
-        <button class="btn btn-secondary" id="btnCloseError" type="button">Close review</button>
+        <button class="btn btn-secondary" id="btnCloseError" type="button">${escapeHtml(tInstall('installCloseReview', 'Close review'))}</button>
       </div>
     </div>
   `);
@@ -2227,28 +2304,28 @@ function showSuccess(name, action, scriptId) {
   const content = document.getElementById('content');
   if (!content) return;
   const titleMap = {
-    installed: 'Script Installed',
-    updated: 'Script Updated',
-    downgraded: 'Script Downgraded',
-    reinstalled: 'Script Reinstalled'
+    installed: tInstall('installSuccessTitleInstalled', 'Script Installed'),
+    updated: tInstall('installSuccessTitleUpdated', 'Script Updated'),
+    downgraded: tInstall('installSuccessTitleDowngraded', 'Script Downgraded'),
+    reinstalled: tInstall('installSuccessTitleReinstalled', 'Script Reinstalled')
   };
   const statusCopy = enableOnInstall
-    ? `${name} is active now. You can inspect settings, storage, and update history from the dashboard.`
-    : `${name} was saved disabled. Enable it from the dashboard when you are ready to let it run.`;
+    ? tInstall('installSuccessActiveCopy', '{name} is active now. You can inspect settings, storage, and update history from the dashboard.', { name })
+    : tInstall('installSuccessDisabledCopy', '{name} was saved disabled. Enable it from the dashboard when you are ready to let it run.', { name });
   const nextStepCopy = action === 'downgraded'
-    ? 'Version changes are applied immediately, but the script keeps your existing per-script settings.'
+    ? tInstall('installSuccessDowngradedNextStep', 'Version changes are applied immediately, but the script keeps your existing per-script settings.')
     : action === 'updated'
-      ? 'Existing script settings and stored values were preserved during the update.'
-      : 'ScriptVault saved the script locally before leaving the install review.';
+      ? tInstall('installSuccessUpdatedNextStep', 'Existing script settings and stored values were preserved during the update.')
+      : tInstall('installSuccessSavedNextStep', 'ScriptVault saved the script locally before leaving the install review.');
   safeSetHtml(content, `
     <div class="success install-terminal" role="status" aria-live="polite" aria-atomic="true" aria-labelledby="installTerminalTitle" aria-describedby="installTerminalMessage">
-      <div class="install-state-mark is-success success-icon" aria-hidden="true">OK</div>
-      <div class="success-title" id="installTerminalTitle">${escapeHtml(titleMap[action] || 'Script Installed')}</div>
+      <div class="install-state-mark is-success success-icon" aria-hidden="true">${escapeHtml(tInstall('ok', 'OK'))}</div>
+      <div class="success-title" id="installTerminalTitle">${escapeHtml(titleMap[action] || tInstall('installSuccessTitleInstalled', 'Script Installed'))}</div>
       <div class="success-message" id="installTerminalMessage">${escapeHtml(statusCopy)}</div>
       <div class="success-next-step">${escapeHtml(nextStepCopy)}</div>
       <div class="success-actions">
-        <button class="btn btn-primary" id="btnOpenDashboard" type="button">Open Dashboard</button>
-        <button class="btn btn-secondary" id="btnSuccessClose" type="button">Close review</button>
+        <button class="btn btn-primary" id="btnOpenDashboard" type="button">${escapeHtml(tInstall('installOpenDashboard', 'Open Dashboard'))}</button>
+        <button class="btn btn-secondary" id="btnSuccessClose" type="button">${escapeHtml(tInstall('installCloseReview', 'Close review'))}</button>
       </div>
     </div>
   `);
@@ -2353,13 +2430,14 @@ function compareVersions(v1, v2) {
 }
 
 async function runSignatureVerification(sourceUrl) {
+  const noSignatureReason = tInstall('installNoSignatureFound', 'No signature found in script');
   const signatureInfo = extractSignatureInfo(scriptCode);
   if (!signatureInfo) {
-    signatureVerification = { valid: false, reason: 'No signature found in script' };
+    signatureVerification = { valid: false, reason: noSignatureReason };
     signatureDecisionState = {
-      label: 'Unsigned',
+      label: tInstall('installStateUnsigned', 'Unsigned'),
       tone: 'neutral',
-      detail: 'No embedded @signature metadata was found.'
+      detail: tInstall('installNoEmbeddedSignature', 'No embedded @signature metadata was found.')
     };
     updateDecisionStates();
     renderTrustCard(sourceUrl);
@@ -2367,9 +2445,9 @@ async function runSignatureVerification(sourceUrl) {
   }
 
   signatureDecisionState = {
-    label: 'Verifying',
+    label: tInstall('installStateVerifying', 'Verifying'),
     tone: 'neutral',
-    detail: 'Checking the embedded signature and signer trust.'
+    detail: tInstall('installSignatureCheckingDetail', 'Checking the embedded signature and signer trust.')
   };
   updateDecisionStates();
   renderTrustCard(sourceUrl);
@@ -2379,34 +2457,35 @@ async function runSignatureVerification(sourceUrl) {
       action: 'signing_verify',
       data: { code: scriptCode }
     });
-    signatureVerification = result || { valid: false, reason: 'Verification unavailable' };
+    signatureVerification = result || { valid: false, reason: tInstall('installSignatureVerificationUnavailable', 'Verification unavailable') };
     if (result?.valid && result?.trusted) {
       signatureDecisionState = {
-        label: 'Trusted',
+        label: tInstall('installStateTrusted', 'Trusted'),
         tone: 'good',
         detail: result.trustedName
-          ? `Signed by trusted key "${result.trustedName}".`
-          : 'Signed by a trusted key.'
+          ? tInstall('installSignedByTrustedKeyNamed', 'Signed by trusted key "{name}".', { name: result.trustedName })
+          : tInstall('installSignedByTrustedKey', 'Signed by a trusted key.')
       };
     } else if (result?.valid) {
       signatureDecisionState = {
-        label: 'Valid',
+        label: tInstall('installStateValid', 'Valid'),
         tone: 'neutral',
-        detail: 'Signature is valid, but this signer is not trusted yet.'
+        detail: tInstall('installSignatureValidUntrusted', 'Signature is valid, but this signer is not trusted yet.')
       };
     } else {
+      const isUnsignedReason = result?.reason === noSignatureReason || result?.reason === 'No signature found in script';
       signatureDecisionState = {
-        label: result?.reason === 'No signature found in script' ? 'Unsigned' : 'Warning',
-        tone: result?.reason === 'No signature found in script' ? 'neutral' : 'warn',
-        detail: result?.reason || 'Signature verification failed.'
+        label: isUnsignedReason ? tInstall('installStateUnsigned', 'Unsigned') : tInstall('warning', 'Warning'),
+        tone: isUnsignedReason ? 'neutral' : 'warn',
+        detail: result?.reason || tInstall('installSignatureVerificationFailed', 'Signature verification failed.')
       };
     }
   } catch (error) {
-    signatureVerification = { valid: false, reason: error?.message || 'Verification failed' };
+    signatureVerification = { valid: false, reason: error?.message || tInstall('installVerificationFailed', 'Verification failed') };
     signatureDecisionState = {
-      label: 'Unavailable',
+      label: tInstall('installStateUnavailable', 'Unavailable'),
       tone: 'warn',
-      detail: error?.message || 'Signature verification failed.'
+      detail: error?.message || tInstall('installSignatureVerificationFailed', 'Signature verification failed.')
     };
   }
 
@@ -2467,27 +2546,44 @@ async function checkDependencies(requires) {
   const refreshDependencyState = () => {
     if (counters.pending > 0) {
       dependencyDecisionState = {
-        label: `${numberFormatter.format(requires.length - counters.pending)}/${numberFormatter.format(requires.length)} checked`,
+        label: tInstall('installDependenciesCheckedProgress', '{checked}/{total} checked', {
+          checked: numberFormatter.format(requires.length - counters.pending),
+          total: numberFormatter.format(requires.length)
+        }),
         tone: 'neutral',
-        detail: `Verified ${numberFormatter.format(counters.ok)} reachable, ${numberFormatter.format(counters.unverifiable)} unverified, ${numberFormatter.format(counters.fail)} failed.`
+        detail: tInstall('installDependenciesCheckedDetail', 'Verified {ok} reachable, {unverified} unverified, {failed} failed.', {
+          ok: numberFormatter.format(counters.ok),
+          unverified: numberFormatter.format(counters.unverifiable),
+          failed: numberFormatter.format(counters.fail)
+        })
       };
     } else if (counters.fail === 0 && counters.unverifiable === 0) {
       dependencyDecisionState = {
-        label: 'All reachable',
+        label: tInstall('installAllReachable', 'All reachable'),
         tone: 'good',
-        detail: `${numberFormatter.format(counters.ok)} dependency URL${counters.ok === 1 ? ' is' : 's are'} reachable.`
+        detail: tInstall('installAllReachableDetail', '{count} dependency {urls} {verb} reachable.', {
+          count: numberFormatter.format(counters.ok),
+          urls: counters.ok === 1 ? tInstall('urlSingular', 'URL') : tInstall('urlPlural', 'URLs'),
+          verb: counters.ok === 1 ? tInstall('isVerb', 'is') : tInstall('areVerb', 'are')
+        })
       };
     } else if (counters.fail === 0) {
       dependencyDecisionState = {
-        label: `${numberFormatter.format(counters.unverifiable)} unverified`,
+        label: tInstall('installUnverifiedCount', '{count} unverified', { count: numberFormatter.format(counters.unverifiable) }),
         tone: 'neutral',
-        detail: `${numberFormatter.format(counters.ok)} reachable, ${numberFormatter.format(counters.unverifiable)} reachable but status could not be verified.`
+        detail: tInstall('installReachableUnverifiedDetail', '{ok} reachable, {unverified} reachable but status could not be verified.', {
+          ok: numberFormatter.format(counters.ok),
+          unverified: numberFormatter.format(counters.unverifiable)
+        })
       };
     } else {
       dependencyDecisionState = {
-        label: `${numberFormatter.format(counters.fail)} failed`,
+        label: tInstall('installFailedCount', '{count} failed', { count: numberFormatter.format(counters.fail) }),
         tone: 'warn',
-        detail: `${numberFormatter.format(counters.fail)} dependency URL${counters.fail === 1 ? '' : 's'} failed to respond cleanly.`
+        detail: tInstall('installDependencyFailedDetail', '{count} dependency {urls} failed to respond cleanly.', {
+          count: numberFormatter.format(counters.fail),
+          urls: counters.fail === 1 ? tInstall('urlSingular', 'URL') : tInstall('urlPlural', 'URLs')
+        })
       };
     }
 
@@ -2508,29 +2604,29 @@ async function checkDependencies(requires) {
   const checks = requires.map(async (url) => {
     const tag = document.querySelector(`[data-dep-url="${CSS.escape(url)}"]`);
     let outcome = 'fail';
-    let detail = `${url} — unreachable`;
+    let detail = tInstall('installDependencyUnreachableDetail', '{url} - unreachable', { url });
 
     if (!_isProbeableDepUrl(url)) {
       // Refuse to probe non-http(s) or internal/loopback hosts — surface it as
       // unverified rather than fetching (avoids a renderer-side host probe).
       outcome = 'unverifiable';
-      detail = `${url} — not probed (only external http(s) URLs are checked)`;
+      detail = tInstall('installDependencyNotProbedDetail', '{url} - not probed (only external http(s) URLs are checked)', { url });
     } else {
       try {
         const resp = await fetch(url, { method: 'HEAD' });
         if (resp.ok) {
           outcome = 'ok';
-          detail = `${url} — OK (${resp.status})`;
+          detail = tInstall('installDependencyOkDetail', '{url} - OK ({status})', { url, status: resp.status });
         } else {
-          detail = `${url} — HTTP ${resp.status}`;
+          detail = tInstall('installDependencyHttpDetail', '{url} - HTTP {status}', { url, status: resp.status });
         }
       } catch {
         try {
           await fetch(url, { method: 'HEAD', mode: 'no-cors' });
           outcome = 'unverifiable';
-          detail = `${url} — server reachable (status unverifiable)`;
+          detail = tInstall('installDependencyStatusUnverifiableDetail', '{url} - server reachable (status unverifiable)', { url });
         } catch {
-          detail = `${url} — unreachable`;
+          detail = tInstall('installDependencyUnreachableDetail', '{url} - unreachable', { url });
         }
       }
     }
@@ -2575,30 +2671,30 @@ function requireProvenanceNeedsReview(entry) {
 }
 
 function getRequireProvenanceLabel(entry) {
-  if (isVerifiedRequireProvenanceEntry(entry)) return 'Verified author';
-  if (!entry || entry.status === 'not-declared') return 'No provenance';
-  if (entry.status === 'missing-identity') return 'Missing identity';
-  if (entry.status === 'missing-bundle') return 'Missing bundle';
-  if (entry.verification === 'root-verification-failed') return 'Root failed';
-  if (entry.verification === 'signature-failed') return 'Signature failed';
-  if (entry.verification === 'bundle-unavailable') return 'Bundle unavailable';
-  if (entry.verification === 'unsupported-bundle') return 'Unsupported bundle';
-  if (entry.verification === 'signature-verified') return 'Signature verified';
-  return 'Pending provenance';
+  if (isVerifiedRequireProvenanceEntry(entry)) return tInstall('installVerifiedAuthor', 'Verified author');
+  if (!entry || entry.status === 'not-declared') return tInstall('installNoProvenance', 'No provenance');
+  if (entry.status === 'missing-identity') return tInstall('installMissingIdentity', 'Missing identity');
+  if (entry.status === 'missing-bundle') return tInstall('installMissingBundle', 'Missing bundle');
+  if (entry.verification === 'root-verification-failed') return tInstall('installRootFailed', 'Root failed');
+  if (entry.verification === 'signature-failed') return tInstall('installSignatureFailed', 'Signature failed');
+  if (entry.verification === 'bundle-unavailable') return tInstall('installBundleUnavailable', 'Bundle unavailable');
+  if (entry.verification === 'unsupported-bundle') return tInstall('installUnsupportedBundle', 'Unsupported bundle');
+  if (entry.verification === 'signature-verified') return tInstall('installSignatureVerified', 'Signature verified');
+  return tInstall('installPendingProvenance', 'Pending provenance');
 }
 
 function getRequireProvenanceDetail(entry) {
-  if (!entry) return 'No provenance result returned.';
+  if (!entry) return tInstall('installNoProvenanceResultReturned', 'No provenance result returned.');
   if (entry.error) return entry.error;
   if (isVerifiedRequireProvenanceEntry(entry)) {
-    const identity = entry.certificateIdentity || entry.identity || 'declared author';
+    const identity = entry.certificateIdentity || entry.identity || tInstall('installDeclaredAuthor', 'declared author');
     const issuer = entry.certificateIssuer ? ` via ${entry.certificateIssuer}` : '';
-    return `${entry.url} — verified ${identity}${issuer}`;
+    return tInstall('installProvenanceVerifiedDetail', '{url} - verified {identity}{issuer}', { url: entry.url, identity, issuer });
   }
-  if (entry.status === 'not-declared') return `${entry.url} — no @require-provenance declared`;
-  if (entry.status === 'missing-identity') return `${entry.url} — bundle declared without @require-identity`;
-  if (entry.status === 'missing-bundle') return `${entry.url} — identity declared without @require-provenance`;
-  return `${entry.url} — ${getRequireProvenanceLabel(entry)}`;
+  if (entry.status === 'not-declared') return tInstall('installProvenanceNotDeclaredDetail', '{url} - no @require-provenance declared', { url: entry.url });
+  if (entry.status === 'missing-identity') return tInstall('installProvenanceMissingIdentityDetail', '{url} - bundle declared without @require-identity', { url: entry.url });
+  if (entry.status === 'missing-bundle') return tInstall('installProvenanceMissingBundleDetail', '{url} - identity declared without @require-provenance', { url: entry.url });
+  return tInstall('installProvenanceGenericDetail', '{url} - {label}', { url: entry.url, label: getRequireProvenanceLabel(entry) });
 }
 
 function setRequireProvenanceStatus(state) {
@@ -2621,7 +2717,7 @@ function renderRequireProvenanceEntries(entries = []) {
   if (!listEl) return;
 
   if (entries.length === 0) {
-    safeSetHtml(listEl, '<span class="tag neutral">No provenance</span>');
+    safeSetHtml(listEl, `<span class="tag neutral">${escapeHtml(tInstall('installNoProvenance', 'No provenance'))}</span>`);
     return;
   }
 
@@ -2644,21 +2740,21 @@ async function checkRequireProvenance(meta) {
 
   if (requires.length === 0) {
     setRequireProvenanceStatus({
-      label: 'None declared',
+      label: tInstall('installStateNoneDeclared', 'None declared'),
       tone: 'good',
-      detail: 'No external @require dependencies were declared.'
+      detail: tInstall('installNoExternalRequires', 'No external @require dependencies were declared.')
     });
-    if (summaryEl) summaryEl.textContent = 'No external @require dependencies were declared.';
+    if (summaryEl) summaryEl.textContent = tInstall('installNoExternalRequires', 'No external @require dependencies were declared.');
     return;
   }
 
   if (!hasDeclarations) {
     setRequireProvenanceStatus({
-      label: 'Not declared',
+      label: tInstall('installStateNotDeclared', 'Not declared'),
       tone: 'neutral',
-      detail: 'No @require-provenance metadata was declared for these dependencies.'
+      detail: tInstall('installNoRequireProvenance', 'No @require-provenance metadata was declared for these dependencies.')
     });
-    if (summaryEl) summaryEl.textContent = 'No @require-provenance metadata was declared for these dependencies.';
+    if (summaryEl) summaryEl.textContent = tInstall('installNoRequireProvenance', 'No @require-provenance metadata was declared for these dependencies.');
     renderRequireProvenanceEntries(requires.map((url, index) => ({
       index,
       url,
@@ -2669,11 +2765,11 @@ async function checkRequireProvenance(meta) {
   }
 
   setRequireProvenanceStatus({
-    label: 'Checking',
+    label: tInstall('installStateChecking', 'Checking'),
     tone: 'neutral',
-    detail: 'Verifying Sigstore bundle signatures and Fulcio identities.'
+    detail: tInstall('installVerifyingSigstoreBundles', 'Verifying Sigstore bundle signatures and Fulcio identities.')
   });
-  if (summaryEl) summaryEl.textContent = 'Checking declared @require-provenance bundles.';
+  if (summaryEl) summaryEl.textContent = tInstall('installProvenanceCheckingDeclaredBundles', 'Checking declared @require-provenance bundles.');
   if (statusEl) statusEl.setAttribute('aria-busy', 'true');
 
   try {
@@ -2687,7 +2783,7 @@ async function checkRequireProvenance(meta) {
     });
 
     if (!result || result.error) {
-      throw new Error(result?.error || 'No provenance result returned');
+      throw new Error(result?.error || tInstall('installNoProvenanceResultReturned', 'No provenance result returned'));
     }
 
     const entries = Array.isArray(result.entries) ? result.entries : [];
@@ -2696,41 +2792,44 @@ async function checkRequireProvenance(meta) {
 
     if (result.status === 'verified') {
       setRequireProvenanceStatus({
-        label: 'Verified author',
+        label: tInstall('installVerifiedAuthor', 'Verified author'),
         tone: 'good',
-        detail: `${numberFormatter.format(counts.verified || entries.length)} @require dependencies were signed by the declared Fulcio identities.`
+        detail: tInstall('installVerifiedAuthorDetail', '{count} @require dependencies were signed by the declared Fulcio identities.', { count: numberFormatter.format(counts.verified || entries.length) })
       });
-      if (summaryEl) summaryEl.textContent = 'All declared @require-provenance bundles verified against the dependency bytes and expected author identities.';
+      if (summaryEl) summaryEl.textContent = tInstall('installAllProvenanceVerified', 'All declared @require-provenance bundles verified against the dependency bytes and expected author identities.');
     } else if (result.status === 'partial') {
       setRequireProvenanceStatus({
-        label: `${numberFormatter.format(counts.verified || 0)} verified`,
+        label: tInstall('installVerifiedCount', '{count} verified', { count: numberFormatter.format(counts.verified || 0) }),
         tone: 'neutral',
-        detail: 'Declared provenance verified for some dependencies; other dependencies do not declare provenance.'
+        detail: tInstall('installPartialProvenanceDetail', 'Declared provenance verified for some dependencies; other dependencies do not declare provenance.')
       });
-      if (summaryEl) summaryEl.textContent = 'Declared provenance verified, but not every @require dependency has provenance metadata.';
+      if (summaryEl) summaryEl.textContent = tInstall('installPartialProvenanceSummary', 'Declared provenance verified, but not every @require dependency has provenance metadata.');
     } else if (result.status === 'review-required') {
       const failed = (counts.failed || 0) + (counts.missing || 0);
       setRequireProvenanceStatus({
-        label: `${numberFormatter.format(failed)} issue${failed === 1 ? '' : 's'}`,
+        label: tInstall('installIssueCount', '{count} {issues}', {
+          count: numberFormatter.format(failed),
+          issues: failed === 1 ? tInstall('issueSingular', 'issue') : tInstall('issuePlural', 'issues')
+        }),
         tone: 'warn',
-        detail: 'One or more @require provenance checks failed or are incomplete.'
+        detail: tInstall('installProvenanceFailedOrIncomplete', 'One or more @require provenance checks failed or are incomplete.')
       });
-      if (summaryEl) summaryEl.textContent = 'One or more declared provenance checks failed or are missing required metadata. Review before installing.';
+      if (summaryEl) summaryEl.textContent = tInstall('installProvenanceReviewBeforeInstalling', 'One or more declared provenance checks failed or are missing required metadata. Review before installing.');
     } else {
       setRequireProvenanceStatus({
-        label: 'Not declared',
+        label: tInstall('installStateNotDeclared', 'Not declared'),
         tone: 'neutral',
-        detail: 'No @require-provenance metadata was declared for these dependencies.'
+        detail: tInstall('installNoRequireProvenance', 'No @require-provenance metadata was declared for these dependencies.')
       });
-      if (summaryEl) summaryEl.textContent = 'No @require-provenance metadata was declared for these dependencies.';
+      if (summaryEl) summaryEl.textContent = tInstall('installNoRequireProvenance', 'No @require-provenance metadata was declared for these dependencies.');
     }
   } catch (error) {
     setRequireProvenanceStatus({
-      label: 'Unavailable',
+      label: tInstall('installStateUnavailable', 'Unavailable'),
       tone: 'warn',
-      detail: error?.message || 'Dependency provenance verification failed.'
+      detail: error?.message || tInstall('installDependencyProvenanceFailed', 'Dependency provenance verification failed.')
     });
-    if (summaryEl) summaryEl.textContent = error?.message || 'Dependency provenance verification failed.';
+    if (summaryEl) summaryEl.textContent = error?.message || tInstall('installDependencyProvenanceFailed', 'Dependency provenance verification failed.');
   } finally {
     if (statusEl) statusEl.removeAttribute('aria-busy');
   }
@@ -2758,34 +2857,34 @@ async function renderOnDeviceAiInstallSummary(code, analysisResult) {
   const available = status.available === true;
   const statusClass = available ? 'status-good' : 'status-neutral';
   const summary = available
-    ? 'Generate a short local summary from ScriptVault static analysis and this script source. This may download the Chrome on-device model if it is not ready yet.'
-    : (status.reason || 'Chrome Prompt API is not available in this browser context.');
+    ? tInstall('installLocalAiReadySummary', 'Generate a short local summary from ScriptVault static analysis and this script source. This may download the Chrome on-device model if it is not ready yet.')
+    : (status.reason || tInstall('installLocalAiUnavailableSummary', 'Chrome Prompt API is not available in this browser context.'));
 
   safeSetHtml(mount, `
     <div class="install-card-header">
       <div>
-        <div class="install-card-title">Local AI Review</div>
-        <div class="install-card-subtitle">Chrome Prompt API summary. Script text stays on this device.</div>
+        <div class="install-card-title">${escapeHtml(tInstall('installLocalAiReviewTitle', 'Local AI Review'))}</div>
+        <div class="install-card-subtitle">${escapeHtml(tInstall('installLocalAiReviewSubtitleDevice', 'Chrome Prompt API summary. Script text stays on this device.'))}</div>
       </div>
       <span class="count ${statusClass}">${escapeHtml(String(status.availability || 'unknown'))}</span>
     </div>
     <div class="analysis-summary">${escapeHtml(summary)}</div>
-    <button type="button" class="btn btn-secondary" id="btnOnDeviceAiInstallSummary" ${available ? '' : 'disabled'}>Summarize locally</button>
+    <button type="button" class="btn btn-secondary" id="btnOnDeviceAiInstallSummary" ${available ? '' : 'disabled'}>${escapeHtml(tInstall('installSummarizeLocally', 'Summarize locally'))}</button>
   `);
 
   document.getElementById('btnOnDeviceAiInstallSummary')?.addEventListener('click', async event => {
     const button = event.currentTarget;
     button.disabled = true;
-    button.textContent = 'Summarizing...';
+    button.textContent = tInstall('installSummarizingEllipsis', 'Summarizing...');
     safeSetHtml(mount, `
       <div class="install-card-header">
         <div>
-          <div class="install-card-title">Local AI Review</div>
-          <div class="install-card-subtitle">Chrome Prompt API summary. Script text stays on this device.</div>
+          <div class="install-card-title">${escapeHtml(tInstall('installLocalAiReviewTitle', 'Local AI Review'))}</div>
+          <div class="install-card-subtitle">${escapeHtml(tInstall('installLocalAiReviewSubtitleDevice', 'Chrome Prompt API summary. Script text stays on this device.'))}</div>
         </div>
-        <span class="count status-neutral">Running</span>
+        <span class="count status-neutral">${escapeHtml(tInstall('installStateRunning', 'Running'))}</span>
       </div>
-      <div class="analysis-summary">The local model is reviewing the analyzer output.</div>
+      <div class="analysis-summary">${escapeHtml(tInstall('installLocalAiReviewingOutput', 'The local model is reviewing the analyzer output.'))}</div>
     `);
     try {
       const result = await chrome.runtime.sendMessage({
@@ -2795,14 +2894,14 @@ async function renderOnDeviceAiInstallSummary(code, analysisResult) {
         metadata: scriptMeta,
         analysis: analysisResult || null
       });
-      const text = result?.text || result?.error || 'The local model did not return a summary.';
+      const text = result?.text || result?.error || tInstall('installLocalAiNoSummary', 'The local model did not return a summary.');
       safeSetHtml(mount, `
         <div class="install-card-header">
           <div>
-            <div class="install-card-title">Local AI Review</div>
-            <div class="install-card-subtitle">Generated locally with Chrome Prompt API.</div>
+            <div class="install-card-title">${escapeHtml(tInstall('installLocalAiReviewTitle', 'Local AI Review'))}</div>
+            <div class="install-card-subtitle">${escapeHtml(tInstall('installLocalAiGeneratedSubtitle', 'Generated locally with Chrome Prompt API.'))}</div>
           </div>
-          <span class="count ${result?.success ? 'status-good' : 'status-warn'}">${result?.success ? 'Ready' : 'Unavailable'}</span>
+          <span class="count ${result?.success ? 'status-good' : 'status-warn'}">${escapeHtml(result?.success ? tInstall('installDecisionReady', 'Ready') : tInstall('installStateUnavailable', 'Unavailable'))}</span>
         </div>
         <div class="analysis-summary" style="white-space:pre-wrap">${escapeHtml(text)}</div>
       `);
@@ -2810,12 +2909,12 @@ async function renderOnDeviceAiInstallSummary(code, analysisResult) {
       safeSetHtml(mount, `
         <div class="install-card-header">
           <div>
-            <div class="install-card-title">Local AI Review</div>
-            <div class="install-card-subtitle">Chrome Prompt API summary could not run.</div>
+            <div class="install-card-title">${escapeHtml(tInstall('installLocalAiReviewTitle', 'Local AI Review'))}</div>
+            <div class="install-card-subtitle">${escapeHtml(tInstall('installLocalAiCouldNotRunSubtitle', 'Chrome Prompt API summary could not run.'))}</div>
           </div>
-          <span class="count status-warn">Unavailable</span>
+          <span class="count status-warn">${escapeHtml(tInstall('installStateUnavailable', 'Unavailable'))}</span>
         </div>
-        <div class="analysis-summary">${escapeHtml(error?.message || 'Local AI summary failed.')}</div>
+        <div class="analysis-summary">${escapeHtml(error?.message || tInstall('installLocalAiSummaryFailed', 'Local AI summary failed.'))}</div>
       `);
     }
   });
@@ -2830,23 +2929,23 @@ async function runStaticAnalysis(code) {
     if (!mount || !status) return;
 
     if (!result) {
-      status.textContent = 'Unavailable';
+      status.textContent = tInstall('installStateUnavailable', 'Unavailable');
       status.className = 'count status-neutral';
       analysisDecisionState = {
-        label: 'Unavailable',
+        label: tInstall('installStateUnavailable', 'Unavailable'),
         tone: 'neutral',
-        detail: 'ScriptVault could not finish this scan.'
+        detail: tInstall('installAnalysisCouldNotFinish', 'ScriptVault could not finish this scan.')
       };
       updateDecisionStates();
       safeSetHtml(mount, `
         <div class="install-card-header">
           <div>
-            <div class="install-card-title">Security Analysis</div>
-            <div class="install-card-subtitle">ScriptVault could not finish this scan.</div>
+            <div class="install-card-title">${escapeHtml(tInstall('installSecurityAnalysisTitle', 'Security Analysis'))}</div>
+            <div class="install-card-subtitle">${escapeHtml(tInstall('installAnalysisCouldNotFinish', 'ScriptVault could not finish this scan.'))}</div>
           </div>
-          <span class="count status-neutral">Unavailable</span>
+          <span class="count status-neutral">${escapeHtml(tInstall('installStateUnavailable', 'Unavailable'))}</span>
         </div>
-        <div class="analysis-summary">You can still review permissions, scope, and source details before deciding.</div>
+        <div class="analysis-summary">${escapeHtml(tInstall('installAnalysisManualReviewCopy', 'You can still review permissions, scope, and source details before deciding.'))}</div>
       `);
       renderOnDeviceAiInstallSummary(code, null).catch(() => {});
       return;
@@ -2859,43 +2958,43 @@ async function runStaticAnalysis(code) {
         : 'status-neutral';
     const findings = result.findings || [];
     analysisDecisionState = {
-      label: result.riskLevel ? `${String(result.riskLevel).toUpperCase()} (${numberFormatter.format(result.totalRisk || 0)})` : 'Unknown',
+      label: result.riskLevel ? `${String(result.riskLevel).toUpperCase()} (${numberFormatter.format(result.totalRisk || 0)})` : tInstall('installStateUnknown', 'Unknown'),
       tone: result.riskLevel === 'high' || result.riskLevel === 'medium'
         ? 'warn'
         : result.riskLevel === 'low' || result.riskLevel === 'minimal'
           ? 'good'
           : 'neutral',
-      detail: result.summary || 'Static analysis completed.'
+      detail: result.summary || tInstall('installAnalysisCompleted', 'Static analysis completed.')
     };
     updateDecisionStates();
 
     safeSetHtml(mount, `
       <div class="install-card-header">
         <div>
-          <div class="install-card-title">Security Analysis</div>
-          <div class="install-card-subtitle">Static scan results for this specific install payload.</div>
+          <div class="install-card-title">${escapeHtml(tInstall('installSecurityAnalysisTitle', 'Security Analysis'))}</div>
+          <div class="install-card-subtitle">${escapeHtml(tInstall('installSecurityAnalysisSubtitleResults', 'Static scan results for this specific install payload.'))}</div>
         </div>
-        <span class="count ${riskClass}">${escapeHtml(String(result.riskLevel || 'unknown').toUpperCase())} (${numberFormatter.format(result.totalRisk || 0)}/100)</span>
+        <span class="count ${riskClass}">${escapeHtml(String(result.riskLevel || tInstall('installStateUnknown', 'unknown')).toUpperCase())} (${numberFormatter.format(result.totalRisk || 0)}/100)</span>
       </div>
-      <div class="analysis-summary">${escapeHtml(result.summary || 'No notable findings returned from static analysis.')}</div>
+      <div class="analysis-summary">${escapeHtml(result.summary || tInstall('installNoNotableFindingsReturned', 'No notable findings returned from static analysis.'))}</div>
       <div class="tag-list">
         ${findings.length > 0
           ? findings.slice(0, 10).map(f => {
               const cls = f.risk >= 20 ? 'warning' : f.risk >= 10 ? '' : 'safe';
               return `<span class="tag ${cls}" title="${escapeHtml(f.desc)}${f.count > 1 ? ` (${f.count}x)` : ''}">${escapeHtml(f.label)}</span>`;
             }).join('')
-          : '<span class="tag safe">No notable findings</span>'
+          : `<span class="tag safe">${escapeHtml(tInstall('installNoNotableFindings', 'No notable findings'))}</span>`
         }
-        ${findings.length > 10 ? `<span class="tag neutral">+${findings.length - 10} more</span>` : ''}
+        ${findings.length > 10 ? `<span class="tag neutral">${escapeHtml(tInstall('installMoreCount', '+{count} more', { count: numberFormatter.format(findings.length - 10) }))}</span>` : ''}
       </div>
     `);
     renderOnDeviceAiInstallSummary(code, result).catch(() => {});
   } catch (e) {
     console.warn('Static analysis failed:', e);
     analysisDecisionState = {
-      label: 'Unavailable',
+      label: tInstall('installStateUnavailable', 'Unavailable'),
       tone: 'neutral',
-      detail: 'The scanner hit an error while it checked this script.'
+      detail: tInstall('installAnalysisScannerError', 'The scanner hit an error while it checked this script.')
     };
     updateDecisionStates();
     const mount = document.getElementById('analysisMount');
@@ -2903,12 +3002,12 @@ async function runStaticAnalysis(code) {
       safeSetHtml(mount, `
         <div class="install-card-header">
           <div>
-            <div class="install-card-title">Security Analysis</div>
-            <div class="install-card-subtitle">The scanner hit an error while it checked this script.</div>
+            <div class="install-card-title">${escapeHtml(tInstall('installSecurityAnalysisTitle', 'Security Analysis'))}</div>
+            <div class="install-card-subtitle">${escapeHtml(tInstall('installAnalysisScannerError', 'The scanner hit an error while it checked this script.'))}</div>
           </div>
-          <span class="count status-neutral">Unavailable</span>
+          <span class="count status-neutral">${escapeHtml(tInstall('installStateUnavailable', 'Unavailable'))}</span>
         </div>
-        <div class="analysis-summary">Review the install details manually and open the code preview if the source is unfamiliar.</div>
+        <div class="analysis-summary">${escapeHtml(tInstall('installAnalysisOpenCodePreview', 'Review the install details manually and open the code preview if the source is unfamiliar.'))}</div>
       `);
     }
     renderOnDeviceAiInstallSummary(code, null).catch(() => {});
@@ -2918,5 +3017,8 @@ async function runStaticAnalysis(code) {
 // Initialize
 init().catch((e) => {
   console.error('Install page failed to initialize:', e);
-  showError('Error loading script', e?.message || 'The install page could not initialize. Try re-opening the userscript URL.');
+  showError(
+    tInstall('installErrorLoadingScriptTitle', 'Error loading script'),
+    e?.message || tInstall('installErrorInitializeMessage', 'The install page could not initialize. Try re-opening the userscript URL.')
+  );
 });

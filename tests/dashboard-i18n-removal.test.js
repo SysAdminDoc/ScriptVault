@@ -294,7 +294,10 @@ describe('dashboard i18n-v2 removal', () => {
     expect(popupHtml).toContain('data-i18n="popupFindNewScriptsEllipsis"');
     expect(popupHtml).toContain('data-i18n-aria-label="popupScriptActionsAria"');
     expect(popupJs).toContain('function applyPopupI18n()');
+    expect(popupJs).toContain('formatPopupI18nFallback');
     expect(popupJs).toContain("'popupInstallUrlCopied'");
+    expect(popupJs).toContain("'popupNoActiveTab'");
+    expect(popupJs).toContain("'popupUpdatesQueued'");
 
     expect(sidepanelHtml).toContain('data-i18n="sideOnThisPage"');
     expect(sidepanelHtml).toContain('data-i18n-placeholder="sideSearchScriptsPlaceholder"');
@@ -304,6 +307,11 @@ describe('dashboard i18n-v2 removal', () => {
 
     expect(installHtml).toContain('data-i18n="installUserscriptTitle"');
     expect(installJs).toContain('function applyInstallI18n()');
+    expect(installJs).toContain('formatInstallI18nFallback');
+    expect(installJs).toContain("'installDecisionHintDefault'");
+    expect(installJs).toContain("'installReviewNavStatus'");
+    expect(installJs).toContain("'installSuccessTitleUpdated'");
+    expect(installJs).toContain("'installButtonInstall'");
 
     expect(devtoolsHtml).toContain('data-i18n="devtoolsTitle"');
     expect(devtoolsJs).toContain('I18n.applyToDOM?.(document)');

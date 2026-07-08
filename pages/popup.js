@@ -15,9 +15,16 @@
         }
     }
 
+    function formatPopupI18nFallback(template, placeholders = {}) {
+        return String(template ?? '').replace(/\{(\w+)\}/g, (_, name) =>
+            Object.prototype.hasOwnProperty.call(placeholders, name) ? String(placeholders[name]) : `{${name}}`
+        );
+    }
+
     function tPopup(key, fallback = key, placeholders = {}) {
         const i18n = getPopupI18n();
-        return i18n?.getMessage ? i18n.getMessage(key, placeholders) : fallback;
+        const message = i18n?.getMessage ? i18n.getMessage(key, placeholders) : '';
+        return message && message !== key ? message : formatPopupI18nFallback(fallback, placeholders);
     }
 
     function applyPopupI18n() {
@@ -531,12 +538,12 @@
 
     async function requestFirefoxUserScriptsPermissionFromPopup() {
         if (!chrome.permissions?.request) {
-            showPopupToast('Firefox permission request API is unavailable', 'error');
+            showPopupToast(tPopup('popupFirefoxPermissionUnavailable', 'Firefox permission request API is unavailable'), 'error');
             return false;
         }
         const granted = await chrome.permissions.request({ permissions: ['userScripts'] });
         if (!granted) {
-            showPopupToast('Firefox userScripts permission was not granted', 'error');
+            showPopupToast(tPopup('popupFirefoxPermissionDenied', 'Firefox userScripts permission was not granted'), 'error');
             return false;
         }
         const result = await chrome.runtime.sendMessage({ action: 'repairRuntimeState' });
@@ -544,7 +551,7 @@
             showPopupToast(result?.error || result?.setupMessage || 'Runtime still needs setup', 'error');
             return false;
         }
-        showPopupToast('Firefox userScripts permission granted');
+        showPopupToast(tPopup('popupFirefoxPermissionGranted', 'Firefox userScripts permission granted'));
         await checkUserScriptsAvailability();
         await loadPageScripts();
         return true;
@@ -603,7 +610,7 @@
     async function requestHostPermissionFromPopup() {
         const status = hostPermissionStatus || await refreshHostPermissionWarning();
         if (!status?.supported || !status.pattern) {
-            showPopupToast(status?.message || 'Host access is not available for this page', 'warning');
+            showPopupToast(status?.message || tPopup('popupHostAccessUnavailable', 'Host access is not available for this page'), 'warning');
             return false;
         }
 
@@ -616,7 +623,7 @@
             if (response?.error || response?.success === false) {
                 throw new Error(response?.error || 'Could not queue site access request');
             }
-            showPopupToast(response.message || 'Site access request added', 'info');
+            showPopupToast(response.message || tPopup('popupSiteAccessRequestAdded', 'Site access request added'), 'info');
             await refreshHostPermissionWarning();
             return true;
         }
@@ -624,11 +631,11 @@
         if (chrome.permissions?.request) {
             const granted = await chrome.permissions.request({ origins: [status.pattern] });
             if (!granted) {
-                showPopupToast('Site access was not granted', 'warning');
+                showPopupToast(tPopup('popupSiteAccessNotGranted', 'Site access was not granted'), 'warning');
                 await refreshHostPermissionWarning();
                 return false;
             }
-            showPopupToast('Site access granted');
+            showPopupToast(tPopup('popupSiteAccessGranted', 'Site access granted'));
             await loadPageScripts();
             return true;
         }
@@ -713,12 +720,12 @@
         }
         panel.hidden = false;
         btn?.setAttribute('aria-expanded', 'true');
-        safeSetHtml(panel, `<div class="diagnose-summary">Checking this page…</div>`);
+        safeSetHtml(panel, `<div class="diagnose-summary">${escapeHtml(tPopup('popupCheckingThisPage', 'Checking this page...'))}</div>`);
         try {
             const res = await chrome.runtime.sendMessage({ action: 'diagnoseScripts', url: currentUrl });
             renderDiagnostics(res);
         } catch (e) {
-            safeSetHtml(panel, `<div class="diagnose-summary">Could not reach the background service.</div>`);
+            safeSetHtml(panel, `<div class="diagnose-summary">${escapeHtml(tPopup('popupCouldNotReachBackground', 'Could not reach the background service.'))}</div>`);
         }
     }
 
@@ -727,7 +734,7 @@
         if (!panel) return;
         const scripts = Array.isArray(res?.scripts) ? res.scripts : [];
         if (scripts.length === 0) {
-            safeSetHtml(panel, `<div class="diagnose-summary">No scripts are installed yet.</div>`);
+            safeSetHtml(panel, `<div class="diagnose-summary">${escapeHtml(tPopup('popupNoScriptsInstalledYet', 'No scripts are installed yet.'))}</div>`);
             return;
         }
         const running = scripts.filter(s => s.status === 'running').length;
@@ -847,10 +854,10 @@
         const skipped = Number(result.skipped || 0);
         const failed = Array.isArray(result.errors) ? result.errors.length : 0;
         const parts = [];
-        if (imported) parts.push(`Imported ${numberFormatter.format(imported)}`);
-        if (skipped) parts.push(`Skipped ${numberFormatter.format(skipped)}`);
-        if (failed) parts.push(`Failed ${numberFormatter.format(failed)}`);
-        return parts.join(' • ') || 'Nothing changed';
+        if (imported) parts.push(tPopup('popupImportSummaryImported', 'Imported {count}', { count: numberFormatter.format(imported) }));
+        if (skipped) parts.push(tPopup('popupImportSummarySkipped', 'Skipped {count}', { count: numberFormatter.format(skipped) }));
+        if (failed) parts.push(tPopup('popupImportSummaryFailed', 'Failed {count}', { count: numberFormatter.format(failed) }));
+        return parts.join(' • ') || tPopup('popupImportSummaryNoChange', 'Nothing changed');
     }
 
     // Shared dropdown state (module-level to avoid listener accumulation)
@@ -909,22 +916,22 @@
         const copyUrlBtn = dropdown.querySelector('[data-action="copyUrl"]');
         const pinBtn = dropdown.querySelector('[data-action="pin"]');
 
-        dropdown.setAttribute('aria-label', `Actions for ${name}`);
+        dropdown.setAttribute('aria-label', tPopup('popupDropdownActionsForScript', 'Actions for {name}', { name }));
 
         if (updateBtn) {
             updateBtn.disabled = !hasUpdateUrl;
             updateBtn.textContent = hasUpdateUrl ? tPopup('popupCheckForUpdate', 'Check for Update') : tPopup('popupNoUpdateChannel', 'No Update Channel');
             updateBtn.title = hasUpdateUrl
-                ? `Check ${name} against its remote update URL.`
-                : `${name} does not declare @updateURL or @downloadURL metadata.`;
+                ? tPopup('popupCheckScriptRemoteTitle', 'Check {name} against its remote update URL.', { name })
+                : tPopup('popupNoUpdateMetadataTitle', '{name} does not declare @updateURL or @downloadURL metadata.', { name });
         }
 
         if (copyUrlBtn) {
             copyUrlBtn.disabled = !installUrl;
             copyUrlBtn.textContent = installUrl ? tPopup('popupCopyInstallUrl', 'Copy Install URL') : tPopup('popupNoInstallUrl', 'No Install URL');
             copyUrlBtn.title = installUrl
-                ? `Copy ${name}'s remote install URL.`
-                : `${name} does not declare a remote install URL.`;
+                ? tPopup('popupCopyScriptInstallUrlTitle', "Copy {name}'s remote install URL.", { name })
+                : tPopup('popupNoRemoteInstallUrlTitle', '{name} does not declare a remote install URL.', { name });
         }
 
         if (pinBtn) {
@@ -974,7 +981,7 @@
             deleteBtn.textContent = tPopup('popupConfirmDelete', 'Confirm Delete');
             deleteBtn.classList.add('confirming');
         }
-        showPopupToast(`Click delete again to remove "${name}"`);
+        showPopupToast(tPopup('popupConfirmDeleteToast', 'Click delete again to remove "{name}"', { name }));
     }
 
     // Render script list
@@ -1007,15 +1014,15 @@
         count.textContent = String(ctxScripts.length);
         safeSetHtml(list, ctxScripts.map((script) => {
             const meta = script.metadata || script.meta || {};
-            const name = meta.name || 'Unnamed Script';
+            const name = meta.name || tPopup('popupUnnamedScript', 'Unnamed Script');
             const icon = getScriptIcon(script);
             const idAttr = escapeHtml(script.id);
             return `
                 <button class="context-menu-script-row" type="button" role="listitem"
-                        data-ctx-run-id="${idAttr}" aria-label="Run ${escapeHtml(name)} on this tab">
+                        data-ctx-run-id="${idAttr}" aria-label="${escapeHtml(tPopup('popupRunNamedScriptOnTab', 'Run {name} on this tab', { name }))}">
                     <span class="ctx-icon" aria-hidden="true">${icon}</span>
                     <span class="ctx-name">${escapeHtml(name)}</span>
-                    <span class="ctx-run-hint" aria-hidden="true">Run</span>
+                    <span class="ctx-run-hint" aria-hidden="true">${escapeHtml(tPopup('popupRunHint', 'Run'))}</span>
                 </button>
             `;
         }).join(''));
@@ -1027,14 +1034,14 @@
                 await runScriptAction(scriptId, async () => {
                     try {
                         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-                        if (!tab?.id) { showPopupToast('No active tab', 'error'); return; }
+                        if (!tab?.id) { showPopupToast(tPopup('popupNoActiveTab', 'No active tab'), 'error'); return; }
                         const result = await chrome.runtime.sendMessage({
                             action: 'runScriptNow', scriptId, tabId: tab.id,
                         });
-                        if (result?.success) showPopupToast('Script ran on this tab');
-                        else showPopupToast(result?.error || 'Run failed', 'error');
+                        if (result?.success) showPopupToast(tPopup('popupScriptRanOnTab', 'Script ran on this tab'));
+                        else showPopupToast(result?.error || tPopup('popupRunFailed', 'Run failed'), 'error');
                     } catch (err) {
-                        showPopupToast(err?.message || 'Run failed', 'error');
+                        showPopupToast(err?.message || tPopup('popupRunFailed', 'Run failed'), 'error');
                     }
                 });
             });
@@ -1098,12 +1105,12 @@
 
         safeSetHtml(elements.scriptList, displayScripts.map((script, i) => {
             const meta = script.metadata || script.meta || {};
-            const name = meta.name || 'Unnamed Script';
+            const name = meta.name || tPopup('popupUnnamedScript', 'Unnamed Script');
             const version = meta.version || '';
             const enabled = script.enabled !== false;
             const icon = getScriptIcon(script);
             const animDelay = `style="animation-delay: ${i * 30}ms"`;
-            const rowLabel = [name, version ? `version ${version}` : ''].filter(Boolean).join(', ');
+            const rowLabel = [name, version ? tPopup('popupVersionLabel', 'version {version}', { version }) : ''].filter(Boolean).join(', ');
             const scriptIdAttr = escapeHtml(script.id);
 
             // Phase 40.17 — Surface the script's execution-world intent inline
@@ -1124,21 +1131,21 @@
             return `
                 <div class="script-item${enabled ? '' : ' not-running'}" data-script-id="${scriptIdAttr}" role="listitem" tabindex="0" aria-posinset="${i + 1}" aria-setsize="${displayScripts.length}" aria-label="${escapeHtml(rowLabel)}" ${animDelay}>
                     <label class="script-toggle">
-                        <input type="checkbox" ${enabled ? 'checked' : ''} data-toggle-id="${scriptIdAttr}" aria-label="${escapeHtml(enabled ? `Disable ${name}` : `Enable ${name}`)}">
+                        <input type="checkbox" ${enabled ? 'checked' : ''} data-toggle-id="${scriptIdAttr}" aria-label="${escapeHtml(enabled ? tPopup('popupDisableNamedScript', 'Disable {name}', { name }) : tPopup('popupEnableNamedScript', 'Enable {name}', { name }))}">
                         <span class="slider"></span>
                     </label>
                     <div class="script-icon">${icon}</div>
                     <div class="script-main">
-                        <button class="script-name-btn" data-edit-id="${scriptIdAttr}" type="button" aria-label="Open ${escapeHtml(name)} in editor">
+                        <button class="script-name-btn" data-edit-id="${scriptIdAttr}" type="button" aria-label="${escapeHtml(tPopup('popupOpenNamedScriptInEditor', 'Open {name} in editor', { name }))}">
                             <span class="script-name-label">${escapeHtml(name)}</span>${version ? ` <span class="script-version">${escapeHtml(version)}</span>` : ''}${worldBadgeHtml}
                         </button>
                     </div>
-                    <button class="script-quick-edit" data-quickedit-id="${scriptIdAttr}" type="button" aria-label="Quick edit ${escapeHtml(name)}" title="Quick edit">
+                    <button class="script-quick-edit" data-quickedit-id="${scriptIdAttr}" type="button" aria-label="${escapeHtml(tPopup('popupQuickEditNamedScript', 'Quick edit {name}', { name }))}" title="${escapeHtml(tPopup('popupQuickEdit', 'Quick edit'))}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
                         </svg>
                     </button>
-                    <button class="script-more" data-more-id="${scriptIdAttr}" type="button" aria-label="More actions for ${escapeHtml(name)}" aria-haspopup="menu" aria-controls="scriptDropdown" aria-expanded="false">
+                    <button class="script-more" data-more-id="${scriptIdAttr}" type="button" aria-label="${escapeHtml(tPopup('popupMoreActionsForScript', 'More actions for {name}', { name }))}" aria-haspopup="menu" aria-controls="scriptDropdown" aria-expanded="false">
                         <svg viewBox="0 0 24 24" fill="currentColor">
                             <circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/>
                         </svg>
@@ -1239,19 +1246,19 @@
                     try {
                         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
                         if (!tab?.id) {
-                            showPopupToast('No active tab', 'error');
+                            showPopupToast(tPopup('popupNoActiveTab', 'No active tab'), 'error');
                             return;
                         }
                         const result = await chrome.runtime.sendMessage({
                             action: 'runScriptNow', scriptId, tabId: tab.id
                         });
                         if (result?.success) {
-                            showPopupToast('Script ran on this tab');
+                            showPopupToast(tPopup('popupScriptRanOnTab', 'Script ran on this tab'));
                         } else {
-                            showPopupToast(result?.error || 'Run failed', 'error');
+                            showPopupToast(result?.error || tPopup('popupRunFailed', 'Run failed'), 'error');
                         }
                     } catch (err) {
-                        showPopupToast(err?.message || 'Run failed', 'error');
+                        showPopupToast(err?.message || tPopup('popupRunFailed', 'Run failed'), 'error');
                     }
                 });
             });
@@ -1263,18 +1270,18 @@
                 closeScriptDropdown();
                 if (!scriptId) return;
                 await runScriptAction(scriptId, async () => {
-                    showPopupToast('Checking for update…');
+                    showPopupToast(tPopup('popupCheckingForUpdate', 'Checking for update...'));
                     try {
                         const updates = await chrome.runtime.sendMessage({ action: 'checkUpdates', scriptId });
                         if (updates && updates.length > 0) {
                             await chrome.runtime.sendMessage({ action: 'applyUpdate', scriptId, code: updates[0].code, sourceUrl: updates[0].sourceUrl || '' });
-                            showPopupToast(`Updated to v${updates[0].newVersion}`);
+                            showPopupToast(tPopup('popupUpdatedToVersion', 'Updated to v{version}', { version: updates[0].newVersion }));
                             await loadPageScripts();
                         } else {
-                            showPopupToast('Already up to date');
+                            showPopupToast(tPopup('popupAlreadyUpToDate', 'Already up to date'));
                         }
                     } catch (err) {
-                        showPopupToast('Update check failed', 'error');
+                        showPopupToast(tPopup('popupUpdateCheckFailed', 'Update check failed'), 'error');
                     }
                 });
             });
@@ -1290,9 +1297,9 @@
                     try {
                         await copyTextToClipboard(url);
                         showPopupToast(tPopup('popupInstallUrlCopied', 'Install URL copied'));
-                    } catch { showPopupToast('Copy failed', 'error'); }
+                    } catch { showPopupToast(tPopup('popupCopyFailed', 'Copy failed'), 'error'); }
                 } else {
-                    showPopupToast('No download URL', 'error');
+                    showPopupToast(tPopup('popupNoDownloadUrl', 'No download URL'), 'error');
                 }
             });
 
@@ -1308,16 +1315,16 @@
                     const nextSettings = { ...(script.settings || {}), pinned: !script.settings?.pinned };
                     try {
                         const result = await chrome.runtime.sendMessage({ action: 'setScriptSettings', scriptId, settings: nextSettings });
-                        const error = getRuntimeError(result, 'Unable to update pin state');
+                        const error = getRuntimeError(result, tPopup('popupUnableUpdatePin', 'Unable to update pin state'));
                         if (error) throw new Error(error);
                         script.settings = nextSettings;
                         const allScript = allScripts.find(s => s.id === scriptId);
                         if (allScript) allScript.settings = nextSettings;
                         renderScriptList();
                         updateEnabledState();
-                        showPopupToast(nextSettings.pinned ? 'Pinned' : 'Unpinned');
+                        showPopupToast(nextSettings.pinned ? tPopup('popupPinned', 'Pinned') : tPopup('popupUnpinned', 'Unpinned'));
                     } catch (error) {
-                        showPopupToast(error.message || 'Unable to update pin state', 'error');
+                        showPopupToast(error.message || tPopup('popupUnableUpdatePin', 'Unable to update pin state'), 'error');
                     }
                 });
             });
@@ -1343,8 +1350,8 @@
                     hostPattern = `*://${host}/*`;
                 } catch (err) {
                     const msg = err && err.message === 'unsupported-host'
-                        ? 'This site can’t be scoped (IP-literal host)'
-                        : 'Open a normal web page first';
+                        ? tPopup('popupUnsupportedScopeHost', "This site can't be scoped (IP-literal host)")
+                        : tPopup('popupOpenNormalPageFirst', 'Open a normal web page first');
                     showPopupToast(msg, 'info');
                     return;
                 }
@@ -1363,15 +1370,15 @@
                     };
                     try {
                         const result = await chrome.runtime.sendMessage({ action: 'setScriptSettings', scriptId, settings: nextSettings });
-                        const error = getRuntimeError(result, 'Unable to restrict scope');
+                        const error = getRuntimeError(result, tPopup('popupUnableRestrictScope', 'Unable to restrict scope'));
                         if (error) throw new Error(error);
                         script.settings = nextSettings;
                         const allScript = allScripts.find(s => s.id === scriptId);
                         if (allScript) allScript.settings = nextSettings;
                         renderScriptList();
-                        showPopupToast(`Restricted to ${new URL(currentUrl).hostname}`);
+                        showPopupToast(tPopup('popupRestrictedToHost', 'Restricted to {host}', { host: new URL(currentUrl).hostname }));
                     } catch (error) {
-                        showPopupToast(error.message || 'Unable to restrict scope', 'error');
+                        showPopupToast(error.message || tPopup('popupUnableRestrictScope', 'Unable to restrict scope'), 'error');
                     }
                 });
             });
@@ -1489,7 +1496,7 @@
                     scriptId: scriptId,
                     enabled: enabled
                 });
-                const error = getRuntimeError(result, 'Failed to update script');
+                const error = getRuntimeError(result, tPopup('popupFailedUpdateScript', 'Failed to update script'));
                 if (error) throw new Error(error);
 
                 // Update local state in both arrays
@@ -1504,7 +1511,7 @@
                 updateBadgeForTab();
             } catch (error) {
                 console.error('Failed to toggle script:', error);
-                showPopupToast(error.message || 'Failed to update script', 'error');
+                showPopupToast(error.message || tPopup('popupFailedUpdateScript', 'Failed to update script'), 'error');
                 // Toggle failed — restore both arrays to the pre-toggle state so
                 // the re-render puts the checkbox back. (Local state is only
                 // mutated on success above, but keep this explicit and correct.)
@@ -1525,7 +1532,7 @@
                     action: 'deleteScript',
                     scriptId: scriptId
                 });
-                const error = getRuntimeError(result, 'Failed to delete script');
+                const error = getRuntimeError(result, tPopup('popupFailedDeleteScript', 'Failed to delete script'));
                 if (error) throw new Error(error);
 
                 // Remove from both local arrays and re-render
@@ -1534,11 +1541,11 @@
                 renderScriptList();
                 updateEnabledState();
                 updateBadgeForTab();
-                const deletedName = result?.scriptName || 'Script deleted';
-                showPopupToast(`Deleted ${deletedName}`);
+                const deletedName = result?.scriptName || tPopup('scriptDeleted', 'Script deleted');
+                showPopupToast(tPopup('popupDeletedScript', 'Deleted {name}', { name: deletedName }));
             } catch (error) {
                 console.error('Failed to delete script:', error);
-                showPopupToast(error.message || 'Failed to delete script', 'error');
+                showPopupToast(error.message || tPopup('popupFailedDeleteScript', 'Failed to delete script'), 'error');
             }
         });
     }
@@ -1552,7 +1559,7 @@
                 action: 'setSettings',
                 settings: { enabled: newEnabled }
             });
-            const error = getRuntimeError(result, 'Failed to update ScriptVault');
+            const error = getRuntimeError(result, tPopup('popupFailedUpdateScriptVault', 'Failed to update ScriptVault'));
             if (error) throw new Error(error);
 
             settings.enabled = result?.enabled ?? newEnabled;
@@ -1560,10 +1567,10 @@
 
             // Update badge
             updateBadgeForTab();
-            showPopupToast(settings.enabled === false ? 'ScriptVault paused' : 'ScriptVault enabled');
+            showPopupToast(settings.enabled === false ? tPopup('popupScriptVaultPaused', 'ScriptVault paused') : tPopup('popupScriptVaultEnabled', 'ScriptVault enabled'));
         } catch (error) {
             console.error('Failed to toggle global enabled:', error);
-            showPopupToast(error.message || 'Failed to update ScriptVault', 'error');
+            showPopupToast(error.message || tPopup('popupFailedUpdateScriptVault', 'Failed to update ScriptVault'), 'error');
         }
     }
 
@@ -1656,7 +1663,7 @@
     // Export to ZIP
     async function exportToZip() {
         try {
-            showPopupToast('Preparing backup…');
+            showPopupToast(tPopup('popupPreparingBackup', 'Preparing backup...'));
             const response = await chrome.runtime.sendMessage({ action: 'exportZip' });
             
             if (response?.zipData) {
@@ -1680,7 +1687,7 @@
             }
         } catch (error) {
             console.error('Failed to export:', error);
-            showPopupToast(error.message || 'Export failed', 'error');
+            showPopupToast(error.message || tPopup('popupExportFailed', 'Export failed'), 'error');
         }
     }
 
@@ -1721,17 +1728,17 @@
                         data: { data, options: { overwrite: true } }
                     });
                 }
-                const error = getRuntimeError(result, 'Import failed');
+                const error = getRuntimeError(result, tPopup('popupImportFailed', 'Import failed'));
                 if (error) throw new Error(error);
                 
                 // Reload and close
                 await loadAllScripts();
                 await loadPageScripts();
                 updateBadgeForTab();
-                showPopupToast(formatImportSummary(result) || `Imported ${file.name}`);
+                showPopupToast(formatImportSummary(result) || tPopup('popupImportedFile', 'Imported {name}', { name: file.name }));
             } catch (error) {
                 console.error('Failed to import:', error);
-                showPopupToast(error.message || 'Import failed', 'error');
+                showPopupToast(error.message || tPopup('popupImportFailed', 'Import failed'), 'error');
             }
         });
 
@@ -1742,18 +1749,21 @@
     async function checkForUpdates() {
         try {
             const result = await chrome.runtime.sendMessage({ action: 'queueUpdates', source: 'popup' });
-            const error = getRuntimeError(result, 'Update check failed');
+            const error = getRuntimeError(result, tPopup('popupUpdateCheckFailed', 'Update check failed'));
             if (error) throw new Error(error);
             const updateCount = Number(result?.queued || 0);
             await refreshPendingUpdatesBadge(result?.pendingUpdates);
             showPopupToast(
                 updateCount > 0
-                    ? `${numberFormatter.format(updateCount)} update${updateCount === 1 ? '' : 's'} queued`
-                    : 'All scripts are up to date'
+                    ? tPopup('popupUpdatesQueued', '{count} {updates} queued', {
+                        count: numberFormatter.format(updateCount),
+                        updates: updateCount === 1 ? tPopup('updateSingular', 'update') : tPopup('updatePlural', 'updates')
+                    })
+                    : tPopup('noUpdates', 'All scripts are up to date')
             );
         } catch (error) {
             console.error('Failed to check updates:', error);
-            showPopupToast(error.message || 'Update check failed', 'error');
+            showPopupToast(error.message || tPopup('popupUpdateCheckFailed', 'Update check failed'), 'error');
         }
     }
 
@@ -1766,7 +1776,10 @@
             if (elements.pendingUpdatesBadge) {
                 elements.pendingUpdatesBadge.hidden = count === 0;
                 elements.pendingUpdatesBadge.textContent = numberFormatter.format(count);
-                elements.pendingUpdatesBadge.setAttribute('aria-label', `${numberFormatter.format(count)} queued update${count === 1 ? '' : 's'}`);
+                elements.pendingUpdatesBadge.setAttribute('aria-label', tPopup('popupQueuedUpdatesAria', '{count} queued {updates}', {
+                    count: numberFormatter.format(count),
+                    updates: count === 1 ? tPopup('updateSingular', 'update') : tPopup('updatePlural', 'updates')
+                }));
             }
         } catch (_error) {
             if (elements.pendingUpdatesBadge) elements.pendingUpdatesBadge.hidden = true;
@@ -1828,7 +1841,9 @@
             const res = await chrome.runtime.sendMessage({ action: 'getSettings' });
             const deniedHosts = (res?.settings || res || {}).deniedHosts || [];
             const isDenied = deniedHosts.includes(domain);
-            menuText.textContent = isDenied ? `Allow ${domain} again` : `Do not run on ${domain}`;
+            menuText.textContent = isDenied
+                ? tPopup('popupAllowDomainAgain', 'Allow {domain} again', { domain })
+                : tPopup('popupDoNotRunOnDomainNamed', 'Do not run on {domain}', { domain });
         } catch (_) {}
     }
 
@@ -1847,7 +1862,9 @@
             const httpPattern = `http://${domain}/*`;
             const alreadyAllowed = mode === 'whitelist'
                 && (whitelist.includes(wildcardPattern) || whitelist.includes(httpPattern));
-            menuText.textContent = alreadyAllowed ? `Clear "only this site" lock` : `Run only on ${domain}`;
+            menuText.textContent = alreadyAllowed
+                ? tPopup('popupClearOnlyThisSiteLock', 'Clear "only this site" lock')
+                : tPopup('popupRunOnlyOnDomainNamed', 'Run only on {domain}', { domain });
         } catch (_) {}
     }
 
@@ -1884,13 +1901,13 @@
         });
         elements.btnImport?.addEventListener('click', () => {
             setUtilitiesSubmenuOpen(false);
-            showPopupToast('Select a backup to import…');
+            showPopupToast(tPopup('popupSelectBackupToImport', 'Select a backup to import...'));
             importFromFile();
         });
         elements.btnCheckUpdates?.addEventListener('click', () => {
             setUtilitiesSubmenuOpen(false);
             runBusyControl(elements.btnCheckUpdates, async () => {
-                showPopupToast('Checking for updates…');
+                showPopupToast(tPopup('popupCheckingForUpdates', 'Checking for updates...'));
                 await checkForUpdates();
                 if (!elements.pendingUpdatesBadge?.hidden) {
                     await openUpdatesDashboard();
@@ -1919,11 +1936,11 @@
                             action: 'setSettings',
                             settings: { pageFilterMode: 'blacklist', whitelistedPages: next }
                         });
-                        const error = getRuntimeError(result, 'Failed to clear site lock');
+                        const error = getRuntimeError(result, tPopup('popupFailedClearSiteLock', 'Failed to clear site lock'));
                         if (error) throw new Error(error);
                         setUtilitiesSubmenuOpen(false);
                         await loadPageScripts();
-                        showPopupToast(`Cleared "only on ${domain}" lock`);
+                        showPopupToast(tPopup('popupClearedOnlyOnDomainLock', 'Cleared "only on {domain}" lock', { domain }));
                         return;
                     }
                     const nextList = whitelist.includes(wildcardPattern)
@@ -1933,14 +1950,14 @@
                         action: 'setSettings',
                         settings: { pageFilterMode: 'whitelist', whitelistedPages: nextList.join('\n') }
                     });
-                    const error = getRuntimeError(result, `Failed to lock to ${domain}`);
+                    const error = getRuntimeError(result, tPopup('popupFailedLockToDomain', 'Failed to lock to {domain}', { domain }));
                     if (error) throw new Error(error);
                     setUtilitiesSubmenuOpen(false);
                     await loadPageScripts();
-                    showPopupToast(`ScriptVault will only run on ${domain}`);
+                    showPopupToast(tPopup('popupScriptVaultOnlyRunOnDomain', 'ScriptVault will only run on {domain}', { domain }));
                 } catch (e) {
                     console.error('Failed to whitelist:', e);
-                    showPopupToast(e.message || 'Failed to update site lock', 'error');
+                    showPopupToast(e.message || tPopup('popupFailedUpdateSiteLock', 'Failed to update site lock'), 'error');
                 }
             });
         });
@@ -1958,23 +1975,23 @@
                     if (existingIdx !== -1) {
                         deniedHosts.splice(existingIdx, 1);
                         const result = await chrome.runtime.sendMessage({ action: 'setSettings', settings: { deniedHosts } });
-                        const error = getRuntimeError(result, `Failed to allow ${domain}`);
+                        const error = getRuntimeError(result, tPopup('popupFailedAllowDomain', 'Failed to allow {domain}', { domain }));
                         if (error) throw new Error(error);
                         setUtilitiesSubmenuOpen(false);
                         await loadPageScripts();
-                        showPopupToast(`ScriptVault can run on ${domain} again`);
+                        showPopupToast(tPopup('popupScriptVaultCanRunOnDomainAgain', 'ScriptVault can run on {domain} again', { domain }));
                         return;
                     }
                     deniedHosts.push(domain);
                     const result = await chrome.runtime.sendMessage({ action: 'setSettings', settings: { deniedHosts } });
-                    const error = getRuntimeError(result, `Failed to block ${domain}`);
+                    const error = getRuntimeError(result, tPopup('popupFailedBlockDomain', 'Failed to block {domain}', { domain }));
                     if (error) throw new Error(error);
                     setUtilitiesSubmenuOpen(false);
                     await loadPageScripts();
-                    showPopupToast(`ScriptVault will not run on ${domain}`);
+                    showPopupToast(tPopup('popupScriptVaultWillNotRunOnDomain', 'ScriptVault will not run on {domain}', { domain }));
                 } catch (e) {
                     console.error('Failed to blacklist:', e);
-                    showPopupToast(e.message || 'Failed to update blocked domains', 'error');
+                    showPopupToast(e.message || tPopup('popupFailedUpdateBlockedDomains', 'Failed to update blocked domains'), 'error');
                 }
             });
         });
@@ -1993,7 +2010,7 @@
                 try {
                     await requestHostPermissionFromPopup();
                 } catch (error) {
-                    showPopupToast(error?.message || 'Failed to request site access', 'error');
+                    showPopupToast(error?.message || tPopup('sideRequestSiteAccessFailed', 'Failed to request site access'), 'error');
                 }
                 return;
             }

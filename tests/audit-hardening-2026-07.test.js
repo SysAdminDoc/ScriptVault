@@ -136,7 +136,8 @@ describe('Install page startup and error resilience (2026-07 regression)', () =>
     expect(src).toContain("console.warn('Theme settings unavailable; defaulting install page to dark theme.'");
     expect(src).toMatch(/try \{\s*await applySavedTheme\(\);\s*\/\/ Get pending install data/s);
     expect(src).toContain('init().catch((e) => {');
-    expect(src).toContain("showError('Error loading script', e?.message");
+    expect(src).toContain("showError(tInstall('installErrorLoadingScriptTitle', 'Error loading script'), e.message");
+    expect(src).toContain("tInstall('installErrorInitializeMessage'");
   });
 
   it('inserts install errors even when the normal action row is missing', () => {
