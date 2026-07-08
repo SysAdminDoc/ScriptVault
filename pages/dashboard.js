@@ -10458,6 +10458,12 @@
         }
     }
 
+    function flushPendingEditorAutosave(scriptId) {
+        if (!scriptId || scriptId !== state.currentScriptId) return;
+        if (!state.settings.autoSave || !state.openTabs[scriptId]?.unsaved || !state.editor) return;
+        void saveCurrentScript({ autosave: true, silentSuccess: true });
+    }
+
     function activateScriptTab(scriptId, options = {}) {
         const { updateRoute = true } = options;
         const script = state.scripts.find(s => s.id === scriptId);
@@ -10483,6 +10489,7 @@
             try {
                 state.openTabs[previousScriptId].code = state.editor.getValue();
                 state.openTabs[previousScriptId].unsaved = state.unsavedChanges;
+                flushPendingEditorAutosave(previousScriptId);
             } catch {}
         }
         if (previousScriptId && previousScriptId !== scriptId && state.userCssPreview.scriptId === previousScriptId) {
@@ -11039,6 +11046,10 @@
             if (elements.storageSizeInfo) elements.storageSizeInfo.textContent = `${formatBytes(JSON.stringify(values).length)} used`;
         } catch (e) {
             console.error('Failed to load storage:', e);
+            const message = getErrorMessage(e, 'Failed to load stored values');
+            safeSetHtml(elements.storageList, `<div class="panel-empty is-error"><strong>Storage unavailable</strong><span>${escapeHtml(message)}</span></div>`);
+            if (elements.storageSizeInfo) elements.storageSizeInfo.textContent = 'Storage unavailable';
+            showToast(message, 'error');
         }
     }
 
@@ -17021,6 +17032,7 @@
             if (state.currentScriptId && state.editor && state.openTabs[state.currentScriptId]) {
                 state.openTabs[state.currentScriptId].code = state.editor.getValue();
                 state.openTabs[state.currentScriptId].unsaved = state.unsavedChanges;
+                flushPendingEditorAutosave(state.currentScriptId);
             }
             state.currentScriptId = null;
             hideEditorOverlay();

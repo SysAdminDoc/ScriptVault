@@ -463,6 +463,28 @@ describe('Optimistic dashboard actions (2026-07 regression)', () => {
   });
 });
 
+describe('Editor panel failure and autosave flushes (2026-07 regression)', () => {
+  const src = read('pages/dashboard.js');
+
+  it('clears stale storage values with an inline error state', () => {
+    const storageBlock = src.slice(
+      src.indexOf('async function loadScriptStorage(script)'),
+      src.indexOf('function createStorageItem')
+    );
+    expect(storageBlock).toContain("const message = getErrorMessage(e, 'Failed to load stored values');");
+    expect(storageBlock).toContain('Storage unavailable');
+    expect(storageBlock).toContain('safeSetHtml(elements.storageList');
+    expect(storageBlock).toContain("showToast(message, 'error');");
+  });
+
+  it('flushes dirty autosave buffers before switching away from an editor tab', () => {
+    expect(src).toContain('function flushPendingEditorAutosave(scriptId)');
+    expect(src).toContain('void saveCurrentScript({ autosave: true, silentSuccess: true });');
+    expect(src).toContain('flushPendingEditorAutosave(previousScriptId);');
+    expect(src).toContain('flushPendingEditorAutosave(state.currentScriptId);');
+  });
+});
+
 describe('Script chains use the real background API (2026-07 regression)', () => {
   const src = read('pages/dashboard-chains.js');
   it('runs steps via runScriptNow, not the non-existent executeScript action', () => {
