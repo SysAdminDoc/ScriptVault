@@ -377,6 +377,18 @@ describe('Userscript file import errors (2026-07 regression)', () => {
   });
 });
 
+describe('Script list load failures (2026-07 regression)', () => {
+  const src = read('pages/dashboard.js');
+
+  it('renders a retryable unavailable state instead of the empty vault prompt', () => {
+    expect(src).toContain("scriptLoadError: ''");
+    expect(src).toContain("state.scriptLoadError = getErrorMessage(e, 'Failed to load scripts');");
+    expect(src).toContain("tDashboard('scriptsUnavailableTitle', 'Scripts unavailable')");
+    expect(src).toContain("elements.emptyStatePrimaryAction.onclick = () => loadScripts();");
+    expect(src).toContain("showToast(`Scripts unavailable: ${state.scriptLoadError}`, 'error');");
+  });
+});
+
 describe('Script chains use the real background API (2026-07 regression)', () => {
   const src = read('pages/dashboard-chains.js');
   it('runs steps via runScriptNow, not the non-existent executeScript action', () => {

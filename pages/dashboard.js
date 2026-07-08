@@ -21,6 +21,7 @@
     // State
     const state = {
         scripts: [],
+        scriptLoadError: '',
         settings: {},
         folders: [],
         workspaces: [],
@@ -7227,17 +7228,23 @@
     async function loadScripts() {
         try {
             const response = await chrome.runtime.sendMessage({ action: 'getScripts' });
-            if (response?.scripts) {
-                state.scripts = response.scripts;
-                reconcileOpenEditorTabs();
-                updateTagFilterOptions();
-                renderScriptTable();
-                refreshStandaloneScriptSelect();
-                refreshDashboardModuleSurfaces();
-                updateSupportSnapshotSummary();
-            }
+            if (response?.error) throw new Error(response.error);
+            if (!Array.isArray(response?.scripts)) throw new Error('Script list unavailable');
+            state.scriptLoadError = '';
+            state.scripts = response.scripts;
+            reconcileOpenEditorTabs();
+            updateTagFilterOptions();
+            renderScriptTable();
+            refreshStandaloneScriptSelect();
+            refreshDashboardModuleSurfaces();
+            updateSupportSnapshotSummary();
         } catch (e) {
             console.error('Failed to load scripts:', e);
+            state.scriptLoadError = getErrorMessage(e, 'Failed to load scripts');
+            renderScriptTable();
+            refreshDashboardModuleSurfaces();
+            updateSupportSnapshotSummary();
+            showToast(`Scripts unavailable: ${state.scriptLoadError}`, 'error');
         }
     }
     
@@ -7838,6 +7845,30 @@
         const filterValue = elements.filterSelect?.value || 'all';
         const hasSearch = searchQuery.length > 0;
         const hasFilter = filterValue !== 'all';
+
+        if (state.scriptLoadError && !hasScripts) {
+            if (elements.emptyStateTitle) elements.emptyStateTitle.textContent = tDashboard('scriptsUnavailableTitle', 'Scripts unavailable');
+            if (elements.emptyStateDescription) {
+                elements.emptyStateDescription.textContent = tDashboard(
+                    'scriptsUnavailableDescription',
+                    'ScriptVault could not load installed scripts right now. Retry loading the vault once the background service responds.'
+                );
+            }
+            if (elements.emptyStatePrimaryAction) {
+                elements.emptyStatePrimaryAction.hidden = false;
+                elements.emptyStatePrimaryAction.textContent = tDashboard('retryLoadingScripts', 'Retry');
+                elements.emptyStatePrimaryAction.onclick = () => loadScripts();
+            }
+            if (elements.emptyStateSecondaryAction) {
+                elements.emptyStateSecondaryAction.hidden = true;
+                elements.emptyStateSecondaryAction.onclick = null;
+            }
+            if (elements.emptyStateMigrationHint) {
+                elements.emptyStateMigrationHint.textContent = state.scriptLoadError;
+                elements.emptyStateMigrationHint.hidden = false;
+            }
+            return;
+        }
 
         if (!hasScripts) {
             if (elements.emptyStateTitle) elements.emptyStateTitle.textContent = tDashboard('emptyVaultTitle', 'Your vault is empty');
