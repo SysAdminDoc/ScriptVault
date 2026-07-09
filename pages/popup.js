@@ -1358,15 +1358,18 @@
                 await runScriptAction(scriptId, async () => {
                     const script = pageScripts.find(s => s.id === scriptId);
                     if (!script) return;
-                    // Replace the script's original @match AND @include with a single
-                    // site-scoped pattern so it only runs on the current site. Both
-                    // must be overridden — a legacy script with only @include *
-                    // would otherwise keep running everywhere.
+                    const existingUserMatches = Array.isArray(script.settings?.userMatches)
+                        ? script.settings.userMatches.filter(pattern => typeof pattern === 'string' && pattern.trim())
+                        : [];
+                    const userMatches = Array.from(new Set([...existingUserMatches, hostPattern]));
+                    // Override original @match AND @include so broad source metadata
+                    // cannot keep running everywhere, but preserve curated user
+                    // match overrides instead of replacing them with this host.
                     const nextSettings = {
                         ...(script.settings || {}),
                         useOriginalMatches: false,
                         useOriginalIncludes: false,
-                        userMatches: [hostPattern],
+                        userMatches,
                     };
                     try {
                         const result = await chrome.runtime.sendMessage({ action: 'setScriptSettings', scriptId, settings: nextSettings });

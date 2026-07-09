@@ -55,7 +55,10 @@ describe('popup restrict-to-site action', () => {
     const handler = popupJs.slice(popupJs.indexOf('[data-action="restrictSite"]'));
     expect(handler).toContain('`*://${host}/*`');
     expect(handler).toContain('useOriginalMatches: false');
-    expect(handler).toContain('userMatches: [hostPattern]');
+    expect(handler).toContain('const existingUserMatches = Array.isArray(script.settings?.userMatches)');
+    expect(handler).toContain('const userMatches = Array.from(new Set([...existingUserMatches, hostPattern]))');
+    expect(handler).toContain('userMatches,');
+    expect(handler).not.toContain('userMatches: [hostPattern]');
     expect(handler).toContain("action: 'setScriptSettings'");
   });
 
