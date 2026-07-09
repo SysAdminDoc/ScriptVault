@@ -47936,13 +47936,42 @@ async function registerScript(script, { useUpdate = false, throwOnError = false 
     // the opposite of the restriction. When positive patterns were requested
     // but none survived, fail closed instead of expanding scope.
     let requestedPositivePatterns = 0;
+    let needsPositiveRuntimeMatchGuard = false;
+    const positiveRuntimeMatchPatterns = [];
+
+    // Collect regex @include/@exclude patterns for runtime filtering. Ported
+    // @match patterns are widened for Chrome registration and added here as
+    // exact runtime guards so localhost:3000 does not run on localhost:8080.
+    const regexIncludes = [];
+    const regexExcludes = [];
+
+    const addPositiveMatchPattern = pattern => {
+      const nativePattern = nativeMatchPatternForRegistration(pattern);
+      if (!nativePattern) return false;
+      matches.push(nativePattern);
+      positiveRuntimeMatchPatterns.push(pattern);
+      if (nativePattern !== pattern) needsPositiveRuntimeMatchGuard = true;
+      return true;
+    };
+
+    const addExcludeMatchPattern = pattern => {
+      const nativePattern = nativeMatchPatternForRegistration(pattern);
+      if (!nativePattern) return false;
+      if (nativePattern === pattern) {
+        excludeMatches.push(nativePattern);
+      } else {
+        const runtimeRegex = matchPatternToRuntimeRegex(pattern);
+        if (runtimeRegex) regexExcludes.push(runtimeRegex);
+      }
+      return true;
+    };
 
     // Process @match (if enabled in settings)
     if (settings.useOriginalMatches !== false && meta.match && Array.isArray(meta.match)) {
       for (const m of meta.match) {
         if (typeof m === 'string' && m.trim()) requestedPositivePatterns++;
         if (isValidMatchPattern(m)) {
-          matches.push(m);
+          addPositiveMatchPattern(m);
         }
       }
     }
@@ -47952,21 +47981,17 @@ async function registerScript(script, { useUpdate = false, throwOnError = false 
       for (const m of settings.userMatches) {
         if (typeof m === 'string' && m.trim()) requestedPositivePatterns++;
         if (isValidMatchPattern(m)) {
-          matches.push(m);
+          addPositiveMatchPattern(m);
         } else {
           // Try to convert glob-style to match pattern
           const converted = convertIncludeToMatch(m);
           if (converted && isValidMatchPattern(converted)) {
-            matches.push(converted);
+            addPositiveMatchPattern(converted);
           }
         }
       }
     }
     
-    // Collect regex @include/@exclude patterns for runtime filtering
-    const regexIncludes = [];
-    const regexExcludes = [];
-
     // Process @include (if enabled in settings)
     if (settings.useOriginalIncludes !== false && meta.include && Array.isArray(meta.include)) {
       for (const inc of meta.include) {
@@ -47981,9 +48006,9 @@ async function registerScript(script, { useUpdate = false, throwOnError = false 
         } else {
           const converted = convertIncludeToMatch(inc);
           if (converted && isValidMatchPattern(converted)) {
-            matches.push(converted);
+            addPositiveMatchPattern(converted);
           } else if (inc === '*') {
-            matches.push('<all_urls>');
+            addPositiveMatchPattern('<all_urls>');
           }
         }
       }
@@ -47993,12 +48018,12 @@ async function registerScript(script, { useUpdate = false, throwOnError = false 
     if (settings.userIncludes && Array.isArray(settings.userIncludes)) {
       for (const inc of settings.userIncludes) {
         if (typeof inc === 'string' && inc.trim()) requestedPositivePatterns++;
-        const converted = convertIncludeToMatch(inc);
-        if (converted && isValidMatchPattern(converted)) {
-          matches.push(converted);
-        } else if (inc === '*') {
-          matches.push('<all_urls>');
-        }
+      const converted = convertIncludeToMatch(inc);
+      if (converted && isValidMatchPattern(converted)) {
+          addPositiveMatchPattern(converted);
+      } else if (inc === '*') {
+          addPositiveMatchPattern('<all_urls>');
+      }
       }
     }
     
@@ -48006,7 +48031,7 @@ async function registerScript(script, { useUpdate = false, throwOnError = false 
     if (meta.excludeMatch && Array.isArray(meta.excludeMatch)) {
       for (const m of meta.excludeMatch) {
         if (isValidMatchPattern(m)) {
-          excludeMatches.push(m);
+          addExcludeMatchPattern(m);
         }
       }
     }
@@ -48020,7 +48045,7 @@ async function registerScript(script, { useUpdate = false, throwOnError = false 
         }
         const converted = convertIncludeToMatch(exc);
         if (converted && isValidMatchPattern(converted)) {
-          excludeMatches.push(converted);
+          addExcludeMatchPattern(converted);
         }
       }
     }
@@ -48030,7 +48055,7 @@ async function registerScript(script, { useUpdate = false, throwOnError = false 
       for (const exc of settings.userExcludes) {
         const converted = convertIncludeToMatch(exc);
         if (converted && isValidMatchPattern(converted)) {
-          excludeMatches.push(converted);
+          addExcludeMatchPattern(converted);
         }
       }
     }
@@ -48049,8 +48074,15 @@ async function registerScript(script, { useUpdate = false, throwOnError = false 
       for (const p of blacklist) {
         const converted = convertIncludeToMatch(p);
         if (converted && isValidMatchPattern(converted)) {
-          excludeMatches.push(converted);
+          addExcludeMatchPattern(converted);
         }
+      }
+    }
+
+    if (needsPositiveRuntimeMatchGuard) {
+      for (const pattern of positiveRuntimeMatchPatterns) {
+        const runtimeRegex = matchPatternToRuntimeRegex(pattern);
+        if (runtimeRegex) regexIncludes.push(runtimeRegex);
       }
     }
 
@@ -51673,6 +51705,44 @@ function isValidMatchPattern(pattern) {
   // Match pattern validation (allows ports: http://localhost:3000/*)
   const matchRegex = /^(\*|https?|file|ftp):\/\/(\*|\*\.[^/*]+|[^/*:]+(?::\d+)?)\/.*$/;
   return matchRegex.test(pattern);
+}
+
+function nativeMatchPatternForRegistration(pattern) {
+  if (!isValidMatchPattern(pattern)) return null;
+  if (pattern === '<all_urls>') return pattern;
+  const match = pattern.match(/^(\*|https?|file|ftp):\/\/([^/]*)(\/.*)$/);
+  if (!match) return null;
+  const [, scheme, host, path] = match;
+  const nativeHost = host.replace(/:\d+$/, '');
+  return `${scheme}://${nativeHost}${path}`;
+}
+
+function escapeRuntimeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function globPathToRuntimeRegex(path) {
+  return escapeRuntimeRegex(String(path).replace(/\*+/g, '*')).replace(/\\\*/g, '.*');
+}
+
+function matchPatternToRuntimeRegex(pattern) {
+  if (!isValidMatchPattern(pattern)) return null;
+  if (pattern === '<all_urls>') return '/^[^:]+:\\/\\//i';
+  const match = pattern.match(/^(\*|https?|file|ftp):\/\/([^/]*)(\/.*)$/);
+  if (!match) return null;
+  const [, scheme, host, path] = match;
+  const schemeRegex = scheme === '*' ? '[^:]+' : escapeRuntimeRegex(scheme);
+  let hostRegex = '';
+  if (host === '*') {
+    hostRegex = '[^/]*';
+  } else if (host.startsWith('*.')) {
+    const base = escapeRuntimeRegex(host.slice(2));
+    hostRegex = `(?:${base}|[^/]+\\.${base})`;
+  } else {
+    hostRegex = escapeRuntimeRegex(host);
+  }
+  const source = `^${schemeRegex}://${hostRegex}${globPathToRuntimeRegex(path)}$`;
+  return `/${source.replace(/\//g, '\\/')}/i`;
 }
 
 // Check if a pattern is a regex @include (wrapped in /regex/)

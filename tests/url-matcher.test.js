@@ -7,11 +7,19 @@ import {
   convertIncludeToMatch,
   isRegexPattern,
   matchPattern,
+  matchPatternToRuntimeRegex,
   matchIncludePattern,
+  nativeMatchPatternForRegistration,
   doesScriptMatchUrl,
   isUrlBlockedByGlobalSettings,
   MatchSet,
 } from '../src/background/url-matcher.ts';
+
+function regexFromLiteral(literal) {
+  const match = literal.match(/^\/(.+)\/([a-z]*)$/i);
+  if (!match) throw new Error(`Invalid regex literal: ${literal}`);
+  return new RegExp(match[1], match[2]);
+}
 
 // ── isValidMatchPattern ─────────────────────────────────────────────────────
 
@@ -77,6 +85,26 @@ describe('isValidMatchPattern', () => {
 
   it('rejects bare wildcard', () => {
     expect(isValidMatchPattern('*')).toBe(false);
+  });
+});
+
+describe('nativeMatchPatternForRegistration', () => {
+  it('strips ports for Chrome registration while preserving path and scheme', () => {
+    expect(nativeMatchPatternForRegistration('http://localhost:3000/*')).toBe('http://localhost/*');
+    expect(nativeMatchPatternForRegistration('https://*.example.com:8443/path/*')).toBe('https://*.example.com/path/*');
+  });
+
+  it('keeps native-safe patterns unchanged', () => {
+    expect(nativeMatchPatternForRegistration('https://example.com/*')).toBe('https://example.com/*');
+    expect(nativeMatchPatternForRegistration('<all_urls>')).toBe('<all_urls>');
+  });
+});
+
+describe('matchPatternToRuntimeRegex', () => {
+  it('keeps ported native-registration supersets exact at runtime', () => {
+    const guard = regexFromLiteral(matchPatternToRuntimeRegex('http://localhost:3000/*'));
+    expect(guard.test('http://localhost:3000/path')).toBe(true);
+    expect(guard.test('http://localhost:8080/path')).toBe(false);
   });
 });
 

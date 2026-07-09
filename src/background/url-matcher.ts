@@ -275,6 +275,48 @@ export function isValidMatchPattern(pattern: string): boolean {
   return matchRegex.test(pattern);
 }
 
+export function nativeMatchPatternForRegistration(pattern: string): string | null {
+  if (!isValidMatchPattern(pattern)) return null;
+  if (pattern === '<all_urls>') return pattern;
+
+  const match = pattern.match(/^(\*|https?|file|ftp):\/\/([^/]*)(\/.*)$/);
+  if (!match) return null;
+
+  const [, scheme, host, path] = match as [string, string, string, string];
+  const nativeHost = host.replace(/:\d+$/, '');
+  return `${scheme}://${nativeHost}${path}`;
+}
+
+function escapeRuntimeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function globPathToRuntimeRegex(path: string): string {
+  return escapeRuntimeRegex(path.replace(/\*+/g, '*')).replace(/\\\*/g, '.*');
+}
+
+export function matchPatternToRuntimeRegex(pattern: string): string | null {
+  if (!isValidMatchPattern(pattern)) return null;
+  if (pattern === '<all_urls>') return '/^[^:]+:\\/\\//i';
+
+  const match = pattern.match(/^(\*|https?|file|ftp):\/\/([^/]*)(\/.*)$/);
+  if (!match) return null;
+
+  const [, scheme, host, path] = match as [string, string, string, string];
+  const schemeRegex = scheme === '*' ? '[^:]+' : escapeRuntimeRegex(scheme);
+  let hostRegex = '';
+  if (host === '*') {
+    hostRegex = '[^/]*';
+  } else if (host.startsWith('*.')) {
+    const base = escapeRuntimeRegex(host.slice(2));
+    hostRegex = `(?:${base}|[^/]+\\.${base})`;
+  } else {
+    hostRegex = escapeRuntimeRegex(host);
+  }
+  const source = `^${schemeRegex}://${hostRegex}${globPathToRuntimeRegex(path)}$`;
+  return `/${source.replace(/\//g, '\\/')}/i`;
+}
+
 /**
  * Check if a pattern is a regex `@include` (wrapped in `/regex/`).
  */

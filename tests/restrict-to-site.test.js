@@ -31,7 +31,7 @@ describe('dashboard @match pattern validation', () => {
   });
 
   it('rejects malformed patterns', () => {
-    for (const p of ['', 'example.com', 'https://example.com', 'ftp://', 'javascript://x/*', '*://*', 'not a url']) {
+    for (const p of ['', 'example.com', 'https://example.com', 'ftp://', 'javascript://x/*', '*://*', 'http://localhost:8080/*', 'not a url']) {
       expect(isValidMatchPattern(p), p).toBe(false);
     }
   });
@@ -88,5 +88,12 @@ describe('registration fails closed on all-invalid positive patterns', () => {
 
   it('is mirrored into the generated background runtime', () => {
     expect(regJs).toContain('requestedPositivePatterns');
+  });
+
+  it('normalizes ported match patterns before native registration', () => {
+    expect(regTs).toContain('nativeMatchPatternForRegistration');
+    expect(regTs).toContain('matchPatternToRuntimeRegex');
+    expect(regJs).toContain('nativeMatchPatternForRegistration');
+    expect(regJs).toContain('matchPatternToRuntimeRegex');
   });
 });

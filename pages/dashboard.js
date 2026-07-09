@@ -5165,7 +5165,8 @@
         if (typeof pattern !== 'string' || !pattern.trim()) return false;
         const p = pattern.trim();
         if (p === '<all_urls>') return true;
-        return /^(\*|https?|file|ftp):\/\/(\*|(?:\*\.)?[^/*]+|)(\/.*)$/.test(p);
+        if (/^(\*|https?|ftp):\/\/[^/]*:\d+\//.test(p)) return false;
+        return /^(\*|https?|file|ftp):\/\/(\*|(?:\*\.)?[^/*:]+|)(\/.*)$/.test(p);
     }
 
     function addUserPattern(listId, pattern, type) {

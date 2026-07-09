@@ -17,6 +17,8 @@ import {
   isRegexPattern,
   extractMatchPatternsFromRegex,
   convertIncludeToMatch,
+  nativeMatchPatternForRegistration,
+  matchPatternToRuntimeRegex,
 } from './url-matcher';
 import { applyWebRequestRules, removeWebRequestRules } from './dnr-rules';
 import { deriveOptionalHostPermissionPlan } from './host-permission-patterns';
@@ -262,13 +264,42 @@ export async function registerScript(
     // the script on every site, the exact opposite of the user's intent. When
     // positive patterns were requested but none survived, fail closed instead.
     let requestedPositivePatterns = 0;
+    let needsPositiveRuntimeMatchGuard = false;
+    const positiveRuntimeMatchPatterns: string[] = [];
+
+    // Collect regex @include/@exclude patterns for runtime filtering. Ported
+    // @match patterns are widened for Chrome registration and added here as
+    // exact runtime guards so localhost:3000 does not run on localhost:8080.
+    const regexIncludes: string[] = [];
+    const regexExcludes: string[] = [];
+
+    const addPositiveMatchPattern = (pattern: string): boolean => {
+      const nativePattern = nativeMatchPatternForRegistration(pattern);
+      if (!nativePattern) return false;
+      matches.push(nativePattern);
+      positiveRuntimeMatchPatterns.push(pattern);
+      if (nativePattern !== pattern) needsPositiveRuntimeMatchGuard = true;
+      return true;
+    };
+
+    const addExcludeMatchPattern = (pattern: string): boolean => {
+      const nativePattern = nativeMatchPatternForRegistration(pattern);
+      if (!nativePattern) return false;
+      if (nativePattern === pattern) {
+        excludeMatches.push(nativePattern);
+      } else {
+        const runtimeRegex = matchPatternToRuntimeRegex(pattern);
+        if (runtimeRegex) regexExcludes.push(runtimeRegex);
+      }
+      return true;
+    };
 
     // Process @match (if enabled in settings)
     if ((settings as Record<string, unknown>).useOriginalMatches !== false && meta.match && Array.isArray(meta.match)) {
       for (const m of meta.match) {
         if (typeof m === 'string' && m.trim()) requestedPositivePatterns++;
         if (isValidMatchPattern(m)) {
-          matches.push(m);
+          addPositiveMatchPattern(m);
         }
       }
     }
@@ -279,20 +310,16 @@ export async function registerScript(
       for (const m of userMatches as string[]) {
         if (typeof m === 'string' && m.trim()) requestedPositivePatterns++;
         if (isValidMatchPattern(m)) {
-          matches.push(m);
+          addPositiveMatchPattern(m);
         } else {
           // Try to convert glob-style to match pattern
           const converted: string | null = convertIncludeToMatch(m);
           if (converted && isValidMatchPattern(converted)) {
-            matches.push(converted);
+            addPositiveMatchPattern(converted);
           }
         }
       }
     }
-
-    // Collect regex @include/@exclude patterns for runtime filtering
-    const regexIncludes: string[] = [];
-    const regexExcludes: string[] = [];
 
     // Process @include (if enabled in settings)
     if ((settings as Record<string, unknown>).useOriginalIncludes !== false && meta.include && Array.isArray(meta.include)) {
@@ -308,9 +335,9 @@ export async function registerScript(
         } else {
           const converted: string | null = convertIncludeToMatch(inc);
           if (converted && isValidMatchPattern(converted)) {
-            matches.push(converted);
+            addPositiveMatchPattern(converted);
           } else if (inc === '*') {
-            matches.push('<all_urls>');
+            addPositiveMatchPattern('<all_urls>');
           }
         }
       }
@@ -323,9 +350,9 @@ export async function registerScript(
         if (typeof inc === 'string' && inc.trim()) requestedPositivePatterns++;
         const converted: string | null = convertIncludeToMatch(inc);
         if (converted && isValidMatchPattern(converted)) {
-          matches.push(converted);
+          addPositiveMatchPattern(converted);
         } else if (inc === '*') {
-          matches.push('<all_urls>');
+          addPositiveMatchPattern('<all_urls>');
         }
       }
     }
@@ -334,7 +361,7 @@ export async function registerScript(
     if (meta.excludeMatch && Array.isArray(meta.excludeMatch)) {
       for (const m of meta.excludeMatch) {
         if (isValidMatchPattern(m)) {
-          excludeMatches.push(m);
+          addExcludeMatchPattern(m);
         }
       }
     }
@@ -348,7 +375,7 @@ export async function registerScript(
         }
         const converted: string | null = convertIncludeToMatch(exc);
         if (converted && isValidMatchPattern(converted)) {
-          excludeMatches.push(converted);
+          addExcludeMatchPattern(converted);
         }
       }
     }
@@ -359,7 +386,7 @@ export async function registerScript(
       for (const exc of userExcludes as string[]) {
         const converted: string | null = convertIncludeToMatch(exc);
         if (converted && isValidMatchPattern(converted)) {
-          excludeMatches.push(converted);
+          addExcludeMatchPattern(converted);
         }
       }
     }
@@ -378,8 +405,15 @@ export async function registerScript(
       for (const p of blacklist) {
         const converted: string | null = convertIncludeToMatch(p);
         if (converted && isValidMatchPattern(converted)) {
-          excludeMatches.push(converted);
+          addExcludeMatchPattern(converted);
         }
+      }
+    }
+
+    if (needsPositiveRuntimeMatchGuard) {
+      for (const pattern of positiveRuntimeMatchPatterns) {
+        const runtimeRegex = matchPatternToRuntimeRegex(pattern);
+        if (runtimeRegex) regexIncludes.push(runtimeRegex);
       }
     }
 
