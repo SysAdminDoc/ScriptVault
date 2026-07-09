@@ -4672,6 +4672,7 @@ async function prepareCookieRoutingForFetch(data = {}, apiName = 'GM_xmlhttpRequ
 }
 
 let _cookieRoutingRuleSeq = 0;
+const _cookieRoutingLocks = new Map();
 function nextCookieRoutingRuleId() {
   _cookieRoutingRuleSeq = (_cookieRoutingRuleSeq + 1) % 100000;
   return 1500000000 + _cookieRoutingRuleSeq;
@@ -4683,6 +4684,26 @@ function exactDnrRegexForUrl(url) {
     return { error: 'cookie-routed request URL is too long for an exact DNR guard' };
   }
   return { regex };
+}
+
+async function withCookieRoutingUrlLock(lockKey, task) {
+  const prior = _cookieRoutingLocks.get(lockKey) || Promise.resolve();
+  let release = () => {};
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  const current = prior.catch(() => {}).then(() => gate);
+  _cookieRoutingLocks.set(lockKey, current);
+
+  await prior.catch(() => {});
+  try {
+    return await task();
+  } finally {
+    release();
+    if (_cookieRoutingLocks.get(lockKey) === current) {
+      _cookieRoutingLocks.delete(lockKey);
+    }
+  }
 }
 
 async function withCookieHeaderSessionRule(url, cookieHeader, fetcher) {
@@ -4706,19 +4727,21 @@ async function withCookieHeaderSessionRule(url, cookieHeader, fetcher) {
     }
   };
 
-  await chrome.declarativeNetRequest.updateSessionRules({
-    removeRuleIds: [ruleId],
-    addRules: [rule]
-  });
-  try {
-    return await fetcher();
-  } finally {
+  return await withCookieRoutingUrlLock(regex.regex, async () => {
+    await chrome.declarativeNetRequest.updateSessionRules({
+      removeRuleIds: [ruleId],
+      addRules: [rule]
+    });
     try {
-      await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: [ruleId] });
-    } catch (e) {
-      console.warn('[ScriptVault] Failed to remove cookie-routing DNR session rule:', e?.message || e);
+      return await fetcher();
+    } finally {
+      try {
+        await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: [ruleId] });
+      } catch (e) {
+        console.warn('[ScriptVault] Failed to remove cookie-routing DNR session rule:', e?.message || e);
+      }
     }
-  }
+  });
 }
 
 function downloadNeedsFetchBridge(data = {}) {

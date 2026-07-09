@@ -1,7 +1,7 @@
 // Regression test for the audit fix that added scheme validation to the
 // GM_cookie handlers. Loads background.core.js, extracts the pure
 // isHttpCookieUrl helper, and asserts it rejects non-http(s) URLs.
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -12,6 +12,10 @@ function extractFunction(src, name) {
   const marker = `function ${name}(`;
   const start = src.indexOf(marker);
   if (start === -1) throw new Error(`function ${name} not found`);
+  const asyncPrefixStart = start - 'async '.length;
+  const functionStart = asyncPrefixStart >= 0 && src.slice(asyncPrefixStart, start) === 'async '
+    ? asyncPrefixStart
+    : start;
   // Find the opening brace of the function body, not a default parameter like `data = {}`.
   let parenDepth = 0;
   let paramsEnd = -1;
@@ -32,7 +36,7 @@ function extractFunction(src, name) {
     if (src[i] === '{') depth += 1;
     if (src[i] === '}') {
       depth -= 1;
-      if (depth === 0) return src.slice(start, i + 1);
+      if (depth === 0) return src.slice(functionStart, i + 1);
     }
   }
   throw new Error(`function ${name} body did not close`);
@@ -47,10 +51,18 @@ const resolveScriptCookieIsolationPartitionKeySrc = extractFunction(source, 'res
 const hasCookieRoutingOptionsSrc = extractFunction(source, 'hasCookieRoutingOptions');
 const normalizeNetworkCookieRoutingSrc = extractFunction(source, 'normalizeNetworkCookieRouting');
 const cookieHeaderFromCookiesSrc = extractFunction(source, 'cookieHeaderFromCookies');
+const nextCookieRoutingRuleIdSrc = extractFunction(source, 'nextCookieRoutingRuleId');
 const exactDnrRegexForUrlSrc = extractFunction(source, 'exactDnrRegexForUrl');
+const withCookieRoutingUrlLockSrc = extractFunction(source, 'withCookieRoutingUrlLock');
+const withCookieHeaderSessionRuleSrc = extractFunction(source, 'withCookieHeaderSessionRule');
 const _srcFile = resolve(process.cwd(), 'background.core.js');
 function _invoke(body) {
   try { const vm = require('node:vm'); return vm.compileFunction(body, [], { filename: _srcFile })(); } catch { return new Function(body)(); }
+}
+function _invokeWithParams(body, params) {
+  const names = Object.keys(params);
+  const values = names.map((name) => params[name]);
+  try { const vm = require('node:vm'); return vm.compileFunction(body, names, { filename: _srcFile })(...values); } catch { return new Function(...names, body)(...values); }
 }
 const isHttpCookieUrl = _invoke(`${isHttpCookieUrlSrc}\nreturn isHttpCookieUrl;`);
 const normalizeCookiePartitionKey = _invoke(`${isHttpCookieUrlSrc}\n${normalizeCookiePartitionKeySrc}\nreturn normalizeCookiePartitionKey;`);
@@ -59,6 +71,61 @@ const resolveScriptCookieIsolationPartitionKey = _invoke(`${cookieIsolationHelpe
 const normalizeNetworkCookieRouting = _invoke(`${isHttpCookieUrlSrc}\n${normalizeCookiePartitionKeySrc}\n${cookieIsolationHelpers}\n${hasCookieRoutingOptionsSrc}\n${normalizeNetworkCookieRoutingSrc}\nreturn normalizeNetworkCookieRouting;`);
 const cookieHeaderFromCookies = _invoke(`${cookieHeaderFromCookiesSrc}\nreturn cookieHeaderFromCookies;`);
 const exactDnrRegexForUrl = _invoke(`${exactDnrRegexForUrlSrc}\nreturn exactDnrRegexForUrl;`);
+
+function createDeferred() {
+  let resolvePromise;
+  let rejectPromise;
+  const promise = new Promise((resolve, reject) => {
+    resolvePromise = resolve;
+    rejectPromise = reject;
+  });
+  return { promise, resolve: resolvePromise, reject: rejectPromise };
+}
+
+async function flushMicrotasks(count = 5) {
+  for (let i = 0; i < count; i += 1) {
+    await Promise.resolve();
+  }
+}
+
+function buildWithCookieHeaderSessionRule() {
+  return _invokeWithParams(`
+    let _cookieRoutingRuleSeq = 0;
+    const _cookieRoutingLocks = new Map();
+    ${nextCookieRoutingRuleIdSrc}
+    ${exactDnrRegexForUrlSrc}
+    ${withCookieRoutingUrlLockSrc}
+    ${withCookieHeaderSessionRuleSrc}
+    return withCookieHeaderSessionRule;
+  `, { chrome: globalThis.chrome });
+}
+
+function installDnrSessionRuleMock() {
+  const activeRules = new Map();
+  const updateSessionRules = vi.fn(async ({ removeRuleIds = [], addRules = [] } = {}) => {
+    for (const ruleId of removeRuleIds) {
+      activeRules.delete(ruleId);
+    }
+    for (const rule of addRules) {
+      activeRules.set(rule.id, rule);
+    }
+  });
+  globalThis.chrome = { declarativeNetRequest: { updateSessionRules } };
+  return {
+    activeRules,
+    updateSessionRules,
+    cleanup() {
+      delete globalThis.chrome;
+    }
+  };
+}
+
+function activeCookieHeaders(activeRules) {
+  return [...activeRules.values()]
+    .map((rule) => rule.action?.requestHeaders?.find((header) => header.header === 'Cookie')?.value)
+    .filter(Boolean)
+    .sort();
+}
 
 describe('isHttpCookieUrl', () => {
   it('accepts http and https URLs', () => {
@@ -214,6 +281,76 @@ describe('partition-aware network cookie routing helpers', () => {
     expect(exactDnrRegexForUrl(`https://example.com/${'a'.repeat(1900)}`)).toMatchObject({
       error: 'cookie-routed request URL is too long for an exact DNR guard',
     });
+  });
+
+  it('serializes same-url cookie-routed DNR rules so headers cannot clobber', async () => {
+    const dnr = installDnrSessionRuleMock();
+    try {
+      const withCookieHeaderSessionRule = buildWithCookieHeaderSessionRule();
+      const firstEntered = createDeferred();
+      const releaseFirst = createDeferred();
+      const secondStarted = vi.fn();
+      const url = 'https://example.com/account?view=1';
+
+      const first = withCookieHeaderSessionRule(url, 'sid=first', async () => {
+        expect(activeCookieHeaders(dnr.activeRules)).toEqual(['sid=first']);
+        firstEntered.resolve();
+        await releaseFirst.promise;
+        return 'first';
+      });
+      await firstEntered.promise;
+
+      const second = withCookieHeaderSessionRule(url, 'sid=second', async () => {
+        secondStarted();
+        expect(activeCookieHeaders(dnr.activeRules)).toEqual(['sid=second']);
+        return 'second';
+      });
+      await flushMicrotasks();
+      expect(secondStarted).not.toHaveBeenCalled();
+
+      releaseFirst.resolve();
+      await expect(Promise.all([first, second])).resolves.toEqual(['first', 'second']);
+      expect(secondStarted).toHaveBeenCalledTimes(1);
+      expect(dnr.activeRules.size).toBe(0);
+      expect(dnr.updateSessionRules).toHaveBeenCalledTimes(4);
+    } finally {
+      dnr.cleanup();
+    }
+  });
+
+  it('keeps different cookie-routed URLs concurrent', async () => {
+    const dnr = installDnrSessionRuleMock();
+    try {
+      const withCookieHeaderSessionRule = buildWithCookieHeaderSessionRule();
+      const firstEntered = createDeferred();
+      const secondEntered = createDeferred();
+      const releaseBoth = createDeferred();
+      const started = [];
+
+      const first = withCookieHeaderSessionRule('https://one.example/api', 'one=1', async () => {
+        started.push('first');
+        firstEntered.resolve();
+        await releaseBoth.promise;
+        return 'first';
+      });
+      await firstEntered.promise;
+
+      const second = withCookieHeaderSessionRule('https://two.example/api', 'two=2', async () => {
+        started.push('second');
+        secondEntered.resolve();
+        await releaseBoth.promise;
+        return 'second';
+      });
+      await secondEntered.promise;
+
+      expect(started).toEqual(['first', 'second']);
+      expect(activeCookieHeaders(dnr.activeRules)).toEqual(['one=1', 'two=2']);
+      releaseBoth.resolve();
+      await expect(Promise.all([first, second])).resolves.toEqual(['first', 'second']);
+      expect(dnr.activeRules.size).toBe(0);
+    } finally {
+      dnr.cleanup();
+    }
   });
 });
 
