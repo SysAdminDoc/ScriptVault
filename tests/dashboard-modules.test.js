@@ -11,6 +11,7 @@ const dashboardJs = readFileSync(resolve(process.cwd(), 'pages/dashboard.js'), '
 const dashboardKeyboardJs = readFileSync(resolve(process.cwd(), 'pages/dashboard-keyboard.js'), 'utf8');
 const profilesCode = readFileSync(resolve(process.cwd(), 'pages/dashboard-profiles.js'), 'utf8');
 const snippetsCode = readFileSync(resolve(process.cwd(), 'pages/dashboard-snippets.js'), 'utf8');
+const templateCode = readFileSync(resolve(process.cwd(), 'pages/dashboard-templates.js'), 'utf8');
 const backgroundCoreJs = readFileSync(resolve(process.cwd(), 'background.core.js'), 'utf8');
 const popupJs = readFileSync(resolve(process.cwd(), 'pages/popup.js'), 'utf8');
 const installJs = readFileSync(resolve(process.cwd(), 'pages/install.js'), 'utf8');
@@ -38,6 +39,10 @@ function createProfileManager() {
 
 function createSnippetLibrary() {
   return _invoke(snippetsCode + '\nreturn SnippetLibrary;', [], [], resolve(process.cwd(), 'pages/dashboard-snippets.js'));
+}
+
+function createTemplateManager() {
+  return _invoke(templateCode + '\nreturn TemplateManager;', [], [], resolve(process.cwd(), 'pages/dashboard-templates.js'));
 }
 
 function createDashboardRouteParser() {
@@ -276,6 +281,69 @@ describe('dashboard surface modules', () => {
     expect(onDelete).toHaveBeenCalledWith('script "alpha"/beta', expect.any(Object));
 
     CardView.destroy();
+  });
+
+  it('template icons decode legacy entity values while keeping rendered icons escaped', async () => {
+    const TemplateManager = createTemplateManager();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const lockIcon = String.fromCodePoint(0x1F512);
+    const pageIcon = String.fromCodePoint(0x1F4C4);
+    const wrenchIcon = String.fromCodePoint(0x1F527);
+
+    await chrome.storage.local.set({
+      customTemplates: [
+        {
+          id: 'legacy-lock',
+          name: 'Legacy Lock',
+          description: 'Entity icon',
+          category: 'privacy',
+          icon: '&#128274;',
+          code: '// ==UserScript==\n// @name {{SCRIPT_NAME}}\n// ==/UserScript==',
+          builtIn: false,
+        },
+        {
+          id: 'escaped-markup',
+          name: 'Escaped Markup',
+          description: 'Escaped icon markup',
+          category: 'utility',
+          icon: '&lt;img src=x onerror=alert(1)&gt;',
+          code: '// ==UserScript==\n// @name {{SCRIPT_NAME}}\n// ==/UserScript==',
+          builtIn: false,
+        },
+      ],
+    });
+
+    await TemplateManager.init(container, {});
+
+    const iconFor = (name) => Array.from(container.querySelectorAll('.tm-card'))
+      .find((card) => card.querySelector('.tm-card-name')?.textContent === name)
+      ?.querySelector('.tm-card-icon');
+    const escapedIcon = iconFor('Escaped Markup');
+
+    expect(iconFor('Blank Script')?.textContent).toBe(pageIcon);
+    expect(iconFor('Legacy Lock')?.textContent).toBe(lockIcon);
+    expect(escapedIcon?.textContent).toBe('<img src=x onerror=alert(1)>');
+    expect(escapedIcon?.querySelector('img')).toBeNull();
+    expect(escapedIcon?.innerHTML).toContain('&lt;img');
+
+    const stored = await chrome.storage.local.get('customTemplates');
+    expect(stored.customTemplates[0].icon).toBe(lockIcon);
+    expect(stored.customTemplates[1].icon).toBe('<img src=x onerror=alert(1)>');
+
+    const exported = JSON.parse(TemplateManager.exportTemplate('legacy-lock'));
+    expect(exported.icon).toBe(lockIcon);
+
+    const imported = await TemplateManager.importTemplate(JSON.stringify({
+      name: 'Imported Entity Icon',
+      description: '',
+      category: 'utility',
+      icon: '&#128295;',
+      code: '// ==UserScript==\n// @name {{SCRIPT_NAME}}\n// ==/UserScript==',
+    }));
+    expect(imported.icon).toBe(wrenchIcon);
+
+    TemplateManager.destroy();
   });
 
   it('dashboard card view integration reuses guarded controller paths', () => {

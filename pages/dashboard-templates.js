@@ -22,6 +22,20 @@ const TemplateManager = (() => {
     };
 
     const STORAGE_KEY = 'customTemplates';
+    const ICONS = Object.freeze({
+        all: '\u2630',
+        my: '\u2605',
+        community: '\u{1F310}',
+        blank: '\u{1F4C4}',
+        modifier: '\u270E',
+        utility: '\u{1F527}',
+        privacy: '\u{1F512}',
+        social: '\u{1F4AC}',
+        style: '\u{1F3A8}',
+        keyboard: '\u2328',
+        storage: '\u{1F4BE}'
+    });
+    const DEFAULT_TEMPLATE_ICON = ICONS.blank;
 
     const _safeSetHtml = (typeof window.ScriptVaultDashboardUI?.safeSetHtml === 'function')
         ? window.ScriptVaultDashboardUI.safeSetHtml
@@ -30,14 +44,14 @@ const TemplateManager = (() => {
         };
 
     const CATEGORIES = [
-        { id: 'all', label: 'All', icon: '&#9776;' },
-        { id: 'my', label: 'My Templates', icon: '&#9733;' },
-        { id: 'community', label: 'Community', icon: '&#127760;' },
-        { id: 'blank', label: 'Blank', icon: '&#128196;' },
-        { id: 'modifier', label: 'Modifier', icon: '&#9998;' },
-        { id: 'utility', label: 'Utility', icon: '&#128295;' },
-        { id: 'privacy', label: 'Privacy', icon: '&#128274;' },
-        { id: 'social', label: 'Social', icon: '&#128172;' }
+        { id: 'all', label: 'All', icon: ICONS.all },
+        { id: 'my', label: 'My Templates', icon: ICONS.my },
+        { id: 'community', label: 'Community', icon: ICONS.community },
+        { id: 'blank', label: 'Blank', icon: ICONS.blank },
+        { id: 'modifier', label: 'Modifier', icon: ICONS.modifier },
+        { id: 'utility', label: 'Utility', icon: ICONS.utility },
+        { id: 'privacy', label: 'Privacy', icon: ICONS.privacy },
+        { id: 'social', label: 'Social', icon: ICONS.social }
     ];
 
     const TEMPLATE_VARS = [
@@ -57,7 +71,7 @@ const TemplateManager = (() => {
             name: 'Blank Script',
             description: 'Empty userscript with standard metadata block',
             category: 'blank',
-            icon: '&#128196;',
+            icon: ICONS.blank,
             builtIn: true,
             code: `// ==UserScript==
 // @name         {{SCRIPT_NAME}}
@@ -80,7 +94,7 @@ const TemplateManager = (() => {
             name: 'DOM Modifier',
             description: 'Modify page elements with MutationObserver',
             category: 'modifier',
-            icon: '&#9998;',
+            icon: ICONS.modifier,
             builtIn: true,
             code: `// ==UserScript==
 // @name         {{SCRIPT_NAME}}
@@ -123,7 +137,7 @@ const TemplateManager = (() => {
             name: 'CSS Injector',
             description: 'Inject custom CSS into any page',
             category: 'modifier',
-            icon: '&#127912;',
+            icon: ICONS.style,
             builtIn: true,
             code: `// ==UserScript==
 // @name         {{SCRIPT_NAME}}
@@ -151,7 +165,7 @@ const TemplateManager = (() => {
             name: 'API Interceptor',
             description: 'Intercept and modify fetch/XHR requests',
             category: 'utility',
-            icon: '&#128295;',
+            icon: ICONS.utility,
             builtIn: true,
             code: `// ==UserScript==
 // @name         {{SCRIPT_NAME}}
@@ -192,7 +206,7 @@ const TemplateManager = (() => {
             name: 'Keyboard Shortcuts',
             description: 'Add custom keyboard shortcuts to any page',
             category: 'utility',
-            icon: '&#9000;',
+            icon: ICONS.keyboard,
             builtIn: true,
             code: `// ==UserScript==
 // @name         {{SCRIPT_NAME}}
@@ -233,7 +247,7 @@ const TemplateManager = (() => {
             name: 'Tracker Blocker',
             description: 'Block tracking scripts and pixels',
             category: 'privacy',
-            icon: '&#128274;',
+            icon: ICONS.privacy,
             builtIn: true,
             code: `// ==UserScript==
 // @name         {{SCRIPT_NAME}}
@@ -285,7 +299,7 @@ const TemplateManager = (() => {
             name: 'Social Media Enhancer',
             description: 'Clean up social media feeds and add features',
             category: 'social',
-            icon: '&#128172;',
+            icon: ICONS.social,
             builtIn: true,
             code: `// ==UserScript==
 // @name         {{SCRIPT_NAME}}
@@ -338,7 +352,7 @@ const TemplateManager = (() => {
             name: 'GM Storage Utility',
             description: 'Template with GM_getValue/setValue for persistent settings',
             category: 'utility',
-            icon: '&#128190;',
+            icon: ICONS.storage,
             builtIn: true,
             code: `// ==UserScript==
 // @name         {{SCRIPT_NAME}}
@@ -387,19 +401,41 @@ const TemplateManager = (() => {
     // =========================================
     // Storage
     // =========================================
-    function loadTemplates() {
-        return new Promise(resolve => {
-            chrome.storage.local.get(STORAGE_KEY, (data) => {
-                _state.templates = data[STORAGE_KEY] || [];
-                resolve();
-            });
-        });
+    function decodeIconEntities(icon) {
+        const raw = String(icon || '').trim();
+        if (!raw) return DEFAULT_TEMPLATE_ICON;
+        if (!/&(?:#\d+|#x[\da-f]+|[a-z][\w]+);/i.test(raw)) return raw;
+        const textarea = document.createElement('textarea');
+        textarea.innerHTML = raw;
+        return textarea.value || raw;
     }
 
-    function saveTemplates() {
-        return new Promise(resolve => {
-            chrome.storage.local.set({ [STORAGE_KEY]: _state.templates }, resolve);
+    function normalizeTemplateIcon(icon) {
+        return decodeIconEntities(icon || DEFAULT_TEMPLATE_ICON) || DEFAULT_TEMPLATE_ICON;
+    }
+
+    function normalizeTemplate(template) {
+        return {
+            ...template,
+            icon: normalizeTemplateIcon(template?.icon)
+        };
+    }
+
+    async function loadTemplates() {
+        const data = await chrome.storage.local.get(STORAGE_KEY);
+        const stored = Array.isArray(data[STORAGE_KEY]) ? data[STORAGE_KEY] : [];
+        let changed = false;
+        _state.templates = stored.map((template) => {
+            const normalized = normalizeTemplate(template);
+            if (normalized.icon !== template?.icon) changed = true;
+            return normalized;
         });
+        if (changed) await saveTemplates();
+    }
+
+    async function saveTemplates() {
+        _state.templates = _state.templates.map(normalizeTemplate);
+        await chrome.storage.local.set({ [STORAGE_KEY]: _state.templates });
     }
 
     function getAllTemplates() {
@@ -971,7 +1007,7 @@ const TemplateManager = (() => {
         for (const cat of CATEGORIES) {
             const btn = document.createElement('button');
             btn.className = `tm-cat-btn${_state.category === cat.id ? ' active' : ''}`;
-            _safeSetHtml(btn, `${cat.icon} ${cat.label}`);
+            btn.textContent = `${cat.icon} ${cat.label}`;
             btn.onclick = () => {
                 _state.category = cat.id;
                 catBar.querySelectorAll('.tm-cat-btn').forEach(b => b.classList.remove('active'));
@@ -1023,7 +1059,7 @@ const TemplateManager = (() => {
             card.onclick = () => showCreateFromTemplate(tpl);
 
             _safeSetHtml(card, `
-                <div class="tm-card-icon">${escHtml(tpl.icon || '\u{1F4C4}')}</div>
+                <div class="tm-card-icon">${escHtml(normalizeTemplateIcon(tpl.icon))}</div>
                 <div class="tm-card-name">${escHtml(tpl.name)}</div>
                 <div class="tm-card-desc">${escHtml(tpl.description || '')}</div>
             `);
@@ -1205,7 +1241,7 @@ const TemplateManager = (() => {
         let tplName = meta.name || '';
         let tplDesc = meta.description || '';
         let tplCat = meta.category || 'utility';
-        let tplIcon = meta.icon || '&#128196;';
+        let tplIcon = normalizeTemplateIcon(meta.icon);
         let tplCode = stripped;
 
         createModal('Save as Template', (body) => {
@@ -1247,7 +1283,7 @@ const TemplateManager = (() => {
             // Icon input
             const iconGroup = document.createElement('div');
             iconGroup.className = 'tm-form-group';
-            _safeSetHtml(iconGroup, `<label class="tm-form-label">Icon (HTML entity or emoji)</label>`);
+            _safeSetHtml(iconGroup, `<label class="tm-form-label">Icon (emoji or icon text)</label>`);
             const iconInput = document.createElement('input');
             iconInput.className = 'tm-form-input';
             iconInput.value = tplIcon;
@@ -1286,7 +1322,7 @@ const TemplateManager = (() => {
                     name,
                     description: modal.querySelector('[data-field="desc"]').value.trim(),
                     category: modal.querySelector('[data-field="category"]').value,
-                    icon: modal.querySelector('[data-field="icon"]').value || '&#128196;',
+                    icon: normalizeTemplateIcon(modal.querySelector('[data-field="icon"]').value),
                     code: modal.querySelector('[data-field="code"]').value,
                     builtIn: false,
                     createdAt: new Date().toISOString()
@@ -1345,7 +1381,7 @@ const TemplateManager = (() => {
             _safeSetHtml(iconGroup, `<label class="tm-form-label">Icon</label>`);
             const iconInput = document.createElement('input');
             iconInput.className = 'tm-form-input';
-            iconInput.value = tpl.icon || '';
+            iconInput.value = normalizeTemplateIcon(tpl.icon);
             iconInput.dataset.field = 'icon';
             iconGroup.appendChild(iconInput);
             body.appendChild(iconGroup);
@@ -1380,7 +1416,7 @@ const TemplateManager = (() => {
                     name: modal.querySelector('[data-field="name"]').value.trim() || tpl.name,
                     description: modal.querySelector('[data-field="desc"]').value.trim(),
                     category: modal.querySelector('[data-field="category"]').value,
-                    icon: modal.querySelector('[data-field="icon"]').value || tpl.icon,
+                    icon: normalizeTemplateIcon(modal.querySelector('[data-field="icon"]').value || tpl.icon),
                     code: modal.querySelector('[data-field="code"]').value,
                     updatedAt: new Date().toISOString()
                 };
@@ -1402,7 +1438,7 @@ const TemplateManager = (() => {
             name: tpl.name,
             description: tpl.description || '',
             category: tpl.category,
-            icon: tpl.icon || '&#128196;',
+            icon: normalizeTemplateIcon(tpl.icon),
             code: tpl.code,
             exportedAt: new Date().toISOString(),
             source: 'ScriptVault'
@@ -1542,7 +1578,7 @@ const TemplateManager = (() => {
             name: data.name,
             description: data.description || '',
             category: data.category || 'utility',
-            icon: data.icon || '&#128196;',
+            icon: normalizeTemplateIcon(data.icon),
             code: data.code,
             builtIn: false,
             createdAt: new Date().toISOString(),
@@ -1571,7 +1607,7 @@ const TemplateManager = (() => {
             name: source.name + ' (Copy)',
             description: source.description || '',
             category: source.category,
-            icon: source.icon || '&#128196;',
+            icon: normalizeTemplateIcon(source.icon),
             code: source.code,
             builtIn: false,
             createdAt: new Date().toISOString()
@@ -1669,7 +1705,7 @@ const TemplateManager = (() => {
                 name: tpl.name,
                 description: tpl.description || '',
                 category: tpl.category,
-                icon: tpl.icon || '&#128196;',
+                icon: normalizeTemplateIcon(tpl.icon),
                 code: tpl.code,
                 exportedAt: new Date().toISOString(),
                 source: 'ScriptVault'
