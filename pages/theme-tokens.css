@@ -3,22 +3,22 @@
    Each page <link>s this file; page-specific layout CSS stays local. */
 
 :root, [data-theme="dark"] {
-  --sv-bg: #1a1a1a;
-  --sv-bg-raised: #242424;
-  --sv-bg-hover: #2e2e2e;
-  --sv-border: #333;
-  --sv-border-subtle: #2a2a2a;
-  --sv-text: #e0e0e0;
-  --sv-text-muted: #888;
-  --sv-text-dim: #666;
-  --sv-accent: #4CAF50;
-  --sv-accent-dim: #2d6a30;
+  --sv-bg: #090d0b;
+  --sv-bg-raised: #111713;
+  --sv-bg-hover: #19221c;
+  --sv-border: #263129;
+  --sv-border-subtle: #1b251e;
+  --sv-text: #f0f5f2;
+  --sv-text-muted: #a3afa8;
+  --sv-text-dim: #6f7d75;
+  --sv-accent: #35d07f;
+  --sv-accent-dim: #173d29;
   --sv-danger: #ef4444;
   --sv-warning: #f59e0b;
   --sv-info: #60a5fa;
-  --sv-badge-bg: #2a2a2a;
-  --sv-scrollbar: #444;
-  --sv-scrollbar-hover: #555;
+  --sv-badge-bg: #172019;
+  --sv-scrollbar: #324038;
+  --sv-scrollbar-hover: #45564c;
   --sv-radius-panel: 8px;
   --sv-radius-control: 6px;
   --sv-focus-ring: 0 0 0 2px rgb(from var(--sv-accent) r g b / 0.72), 0 0 0 4px rgb(from var(--sv-accent) r g b / 0.16);
@@ -36,22 +36,22 @@
 }
 
 [data-theme="light"] {
-  --sv-bg: #f5f5f5;
+  --sv-bg: #f2f6f3;
   --sv-bg-raised: #ffffff;
-  --sv-bg-hover: #ebebeb;
-  --sv-border: #ddd;
-  --sv-border-subtle: #e8e8e8;
-  --sv-text: #333;
-  --sv-text-muted: #777;
-  --sv-text-dim: #aaa;
+  --sv-bg-hover: #e8f0eb;
+  --sv-border: #d2ddd6;
+  --sv-border-subtle: #e3ebe6;
+  --sv-text: #17231c;
+  --sv-text-muted: #58675e;
+  --sv-text-dim: #839087;
   --sv-accent: #16a34a;
   --sv-accent-dim: #dcfce7;
   --sv-danger: #dc2626;
   --sv-warning: #d97706;
   --sv-info: #2563eb;
-  --sv-badge-bg: #f0f0f0;
-  --sv-scrollbar: #ccc;
-  --sv-scrollbar-hover: #bbb;
+  --sv-badge-bg: #edf3ef;
+  --sv-scrollbar: #bcc9c0;
+  --sv-scrollbar-hover: #9eaea3;
   --sv-focus-ring: 0 0 0 2px rgb(from var(--sv-accent) r g b / 0.68), 0 0 0 4px rgb(from var(--sv-accent) r g b / 0.16);
   /* Timing badge tokens — light backgrounds with legible dark text */
   --timing-fast-bg: #dcfce7;
@@ -136,4 +136,39 @@
   --sv-overlay-strong: rgb(from var(--sv-text) r g b / 0.075);
   --sv-overlay-bright: rgb(from var(--sv-text) r g b / 0.12);
   --sv-overlay-active: rgb(from var(--sv-text) r g b / 0.24);
+  --sv-surface-sunken: color-mix(in srgb, var(--sv-bg) 92%, black);
+  --sv-surface-raised: color-mix(in srgb, var(--sv-bg-raised) 94%, var(--sv-text) 6%);
+  --sv-surface-elevated: color-mix(in srgb, var(--sv-bg-raised) 88%, var(--sv-text) 12%);
+  --sv-border-strong: color-mix(in srgb, var(--sv-border) 68%, var(--sv-text) 32%);
+  --sv-accent-soft: color-mix(in srgb, var(--sv-accent) 13%, transparent);
+  --sv-accent-border: color-mix(in srgb, var(--sv-accent) 34%, transparent);
+  --sv-danger-soft: color-mix(in srgb, var(--sv-danger) 12%, transparent);
+  --sv-warning-soft: color-mix(in srgb, var(--sv-warning) 13%, transparent);
+  --sv-info-soft: color-mix(in srgb, var(--sv-info) 12%, transparent);
+  --sv-shadow-xs: 0 1px 2px rgb(0 0 0 / 0.18);
+  --sv-shadow-sm: 0 8px 22px rgb(0 0 0 / 0.2);
+  --sv-shadow-md: 0 18px 48px rgb(0 0 0 / 0.28);
+  --sv-shadow-lg: 0 30px 84px rgb(0 0 0 / 0.36);
+  --sv-transition-fast: 140ms ease;
+  --sv-transition-base: 180ms ease;
+}
+
+[data-theme="light"] {
+  --sv-surface-sunken: #e9efeb;
+  --sv-surface-raised: #ffffff;
+  --sv-surface-elevated: #f8fbf9;
+  --sv-shadow-xs: 0 1px 2px rgb(15 23 42 / 0.07);
+  --sv-shadow-sm: 0 8px 22px rgb(15 23 42 / 0.08);
+  --sv-shadow-md: 0 18px 48px rgb(15 23 42 / 0.12);
+  --sv-shadow-lg: 0 30px 84px rgb(15 23 42 / 0.16);
+}
+
+[data-theme="oled"] {
+  --sv-surface-sunken: #000000;
+  --sv-surface-raised: #090d0a;
+  --sv-surface-elevated: #101711;
+  --sv-shadow-xs: 0 1px 2px rgb(0 0 0 / 0.72);
+  --sv-shadow-sm: 0 8px 22px rgb(0 0 0 / 0.68);
+  --sv-shadow-md: 0 18px 48px rgb(0 0 0 / 0.72);
+  --sv-shadow-lg: 0 30px 84px rgb(0 0 0 / 0.78);
 }

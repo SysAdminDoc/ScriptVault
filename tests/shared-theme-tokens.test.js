@@ -26,6 +26,10 @@ describe('shared theme token system', () => {
       '--sv-border:', '--sv-text:', '--sv-text-muted:',
       '--sv-accent:', '--sv-danger:', '--sv-warning:', '--sv-info:',
       '--sv-focus-ring:', '--sv-radius-panel:', '--sv-radius-control:',
+      '--sv-surface-sunken:', '--sv-surface-raised:', '--sv-surface-elevated:',
+      '--sv-border-strong:', '--sv-accent-soft:', '--sv-accent-border:',
+      '--sv-shadow-xs:', '--sv-shadow-sm:', '--sv-shadow-md:', '--sv-shadow-lg:',
+      '--sv-transition-fast:', '--sv-transition-base:',
     ];
     for (const token of required) {
       expect(css).toContain(token);
