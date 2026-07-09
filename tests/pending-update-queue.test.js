@@ -80,6 +80,10 @@ function makeCode(name, version) {
   ].join('\n');
 }
 
+function cloneScript(script) {
+  return JSON.parse(JSON.stringify(script));
+}
+
 function parseQueuedCode(code) {
   const version = code.match(/@version\s+([^\n]+)/)?.[1]?.trim() || '1.0.0';
   const name = code.match(/@name\s+([^\n]+)/)?.[1]?.trim() || 'Queued Script';
@@ -321,5 +325,38 @@ describe('pending update queue', () => {
       operation: 'subscription-install',
     });
     expect(await UpdateSystem.getPendingUpdates()).toEqual([]);
+  });
+
+  it('serializes concurrent applyUpdate calls on the same script', async () => {
+    const scripts = new Map([['serial', makeScript('serial')]]);
+    globalThis.ScriptStorage = {
+      get: vi.fn(async id => {
+        const script = scripts.get(id);
+        return script ? cloneScript(script) : null;
+      }),
+      getAll: vi.fn(async () => Array.from(scripts.values()).map(cloneScript)),
+      set: vi.fn(async (id, script) => {
+        scripts.set(id, cloneScript(script));
+      }),
+    };
+
+    const first = UpdateSystem.applyUpdate('serial', makeCode('Queued Script', '2.0.0'), {
+      force: true,
+      sourceUrl: 'https://cdn.example.com/queued.user.js',
+    });
+    const second = UpdateSystem.applyUpdate('serial', makeCode('Queued Script', '3.0.0'), {
+      force: true,
+      sourceUrl: 'https://cdn.example.com/queued.user.js',
+    });
+
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      expect.objectContaining({ success: true }),
+      expect.objectContaining({ success: true }),
+    ]);
+
+    expect(scripts.get('serial').meta.version).toBe('3.0.0');
+    expect(scripts.get('serial').versionHistory.map(entry => entry.version)).toEqual(['1.0.0', '2.0.0']);
+    expect(globalThis.ScriptStorage.get).toHaveBeenCalledTimes(2);
+    expect(globalThis.ScriptStorage.set).toHaveBeenCalledTimes(2);
   });
 });

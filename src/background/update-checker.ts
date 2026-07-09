@@ -121,6 +121,23 @@ async function fetchRequireScriptForTrustReceipt(url: string): Promise<string | 
   return await fetchRequireScript(url, { bypassCache: true, cacheResult: false, allowUnpinned: true });
 }
 
+const updateApplyLocks: Map<string, Promise<unknown>> = new Map();
+
+async function runExclusiveUpdateOperation<T>(scriptId: string, operation: () => Promise<T>): Promise<T> {
+  if (!scriptId) return await operation();
+  const previous = updateApplyLocks.get(scriptId) || Promise.resolve();
+  const operationPromise = previous
+    .catch(() => undefined)
+    .then(operation)
+    .finally(() => {
+      if (updateApplyLocks.get(scriptId) === operationPromise) {
+        updateApplyLocks.delete(scriptId);
+      }
+    });
+  updateApplyLocks.set(scriptId, operationPromise);
+  return await operationPromise;
+}
+
 // ---------------------------------------------------------------------------
 // UpdateSystem
 // ---------------------------------------------------------------------------
@@ -299,6 +316,7 @@ export const UpdateSystem = {
       fetchProvenanceBundle?: (url: string) => Promise<string | null | undefined>;
     } = {},
   ): Promise<ApplyUpdateResult> {
+    return await runExclusiveUpdateOperation(scriptId, async () => {
     const script: Script | null = await ScriptStorage.get(scriptId);
     if (!script) return { error: 'Script not found' };
     // Don't auto-update scripts the user has locally edited
@@ -405,6 +423,7 @@ export const UpdateSystem = {
     }
 
     return { success: true, script };
+    });
   },
 
   async _loadPendingUpdates(): Promise<PendingUpdateInfo[]> {
