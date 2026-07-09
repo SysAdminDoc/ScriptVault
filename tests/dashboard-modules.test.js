@@ -627,6 +627,30 @@ describe('dashboard surface modules', () => {
     CollectionManager.destroy();
   });
 
+  it('collections use the shared confirmation modal for destructive deletes', async () => {
+    const CollectionManager = createCollectionManager();
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+
+    const confirmMock = vi.fn(async () => true);
+    window.ScriptVaultDashboardUI = { confirm: confirmMock };
+
+    await CollectionManager.init(host, { scripts: [] });
+    const collection = CollectionManager.createCollection('Delete Me', []);
+    const card = host.querySelector(`[data-id="${collection.id}"]`);
+    card?.querySelector('.sv-coll-card-header')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    const deleteButton = host.querySelector(`[data-id="${collection.id}"] [data-action="delete"]`);
+    deleteButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await flushPromises();
+
+    expect(confirmMock).toHaveBeenCalledWith('Delete Collection', 'Delete collection "Delete Me"?');
+    expect(CollectionManager.getCollections().some((entry) => entry.id === collection.id)).toBe(false);
+
+    CollectionManager.destroy();
+    delete window.ScriptVaultDashboardUI;
+  });
+
   it('collections import the data URL emitted by share', async () => {
     const CollectionManager = createCollectionManager();
     const host = document.createElement('div');

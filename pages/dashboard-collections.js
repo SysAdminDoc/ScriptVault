@@ -659,6 +659,15 @@ const CollectionManager = (() => {
     setTimeout(() => { el.remove(); }, duration);
   }
 
+  function confirmCollectionDelete(coll) {
+    const title = 'Delete Collection';
+    const message = `Delete collection "${coll.name}"?`;
+    if (typeof window.ScriptVaultDashboardUI?.confirm === 'function') {
+      return window.ScriptVaultDashboardUI.confirm(title, message);
+    }
+    return Promise.resolve(window.confirm(message));
+  }
+
   /* ------------------------------------------------------------------ */
   /*  Storage                                                            */
   /* ------------------------------------------------------------------ */
@@ -1085,8 +1094,8 @@ const CollectionManager = (() => {
     if (delBtn) {
       delBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        await runCollectionButtonTask(delBtn, () => {
-          if (!window.confirm(`Delete "${coll.name}"?`)) return false;
+        await runCollectionButtonTask(delBtn, async () => {
+          if (!await confirmCollectionDelete(coll)) return false;
           return Promise.resolve(deleteCollection(coll.id));
         }, { busyLabel: 'Deleting…' });
       });
