@@ -290,16 +290,31 @@ describe('GM network handler', () => {
     }
   });
 
-  it('aborts tracked GM_xmlhttpRequest entries', async () => {
+  it('aborts tracked GM_xmlhttpRequest entries for the owning script', async () => {
     const controller = { abort: vi.fn() };
-    xhrRequests.set('xhr_abort', { id: 'xhr_abort', aborted: false, controller });
+    xhrRequests.set('xhr_abort', { id: 'xhr_abort', scriptId: 'script-1', aborted: false, controller });
 
     await expect(handleGMNetworkMessage('GM_xmlhttpRequest_abort', {
+      scriptId: 'script-1',
       requestId: 'xhr_abort',
     })).resolves.toEqual({ success: true });
 
     expect(controller.abort).toHaveBeenCalled();
     expect(globalThis.XhrManager.remove).toHaveBeenCalledWith('xhr_abort');
+  });
+
+  it('refuses to abort another script\'s in-flight GM_xmlhttpRequest', async () => {
+    const controller = { abort: vi.fn() };
+    xhrRequests.set('xhr_victim', { id: 'xhr_victim', scriptId: 'victim-script', aborted: false, controller });
+
+    // Attacker forges data.scriptId and guesses the enumerable requestId.
+    await expect(handleGMNetworkMessage('GM_xmlhttpRequest_abort', {
+      scriptId: 'attacker-script',
+      requestId: 'xhr_victim',
+    })).resolves.toEqual({ success: false });
+
+    expect(controller.abort).not.toHaveBeenCalled();
+    expect(globalThis.XhrManager.remove).not.toHaveBeenCalledWith('xhr_victim');
   });
 
   it('starts, sends, and closes GM_webSocket records behind grant and policy guards', async () => {

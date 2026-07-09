@@ -419,7 +419,8 @@ const GMNetworkHandler = (() => {
       }
       case "GM_xmlhttpRequest_abort": {
         const request = XhrManager.get(data.requestId);
-        if (request && !request.aborted) {
+        if (!request || request.scriptId !== ownedScriptId) return { success: false };
+        if (!request.aborted) {
           request.aborted = true;
           if (request.controller) {
             request.controller.abort();

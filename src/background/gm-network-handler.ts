@@ -481,7 +481,11 @@ export async function handleGMNetworkMessage(
 
     case 'GM_xmlhttpRequest_abort': {
       const request = XhrManager.get(data.requestId);
-      if (request && !request.aborted) {
+      // Bind to the authenticated caller: requestIds are enumerable
+      // (`xhr_<counter>_<timestamp>`), so without this a script could abort
+      // another script's in-flight requests. Mirrors GM_xmlhttpRequest_result.
+      if (!request || request.scriptId !== ownedScriptId) return { success: false };
+      if (!request.aborted) {
         request.aborted = true;
         if (request.controller) {
           request.controller.abort();
