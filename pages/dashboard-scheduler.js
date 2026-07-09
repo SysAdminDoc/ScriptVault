@@ -439,8 +439,14 @@ const ScriptScheduler = (() => {
 
   function formatDate(isoStr) {
     if (!isoStr) return '';
-    const d = new Date(isoStr);
+    const d = parseLocalDateInput(isoStr);
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  function parseLocalDateInput(value) {
+    const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return new Date(value);
+    return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
   }
 
   function cloneSchedule(sched) {
@@ -475,26 +481,34 @@ const ScriptScheduler = (() => {
   /* ------------------------------------------------------------------ */
 
   async function syncAlarms() {
-    // Clear old ScriptVault schedule alarms
+    const existingScheduleAlarms = new Map();
     try {
       const alarms = await chrome.alarms.getAll();
       for (const alarm of alarms) {
         if (alarm.name.startsWith(ALARM_PREFIX)) {
-          await chrome.alarms.clear(alarm.name);
+          existingScheduleAlarms.set(alarm.name, alarm);
         }
       }
     } catch { /* alarms API may not be available in all contexts */ }
 
-    // Create alarms for interval and one-time schedules
+    const desiredAlarms = new Set();
+
     for (const [scriptId, sched] of Object.entries(_schedules)) {
       if (!sched.enabled) continue;
+      const name = `${ALARM_PREFIX}${scriptId}`;
 
       if (sched.type === 'interval') {
         const periodMinutes = sched.intervalUnit === 'hours'
           ? (sched.interval || 1) * 60
           : (sched.interval || 1);
+        desiredAlarms.add(name);
+        const existing = existingScheduleAlarms.get(name);
+        if (existing && existing.periodInMinutes === periodMinutes) {
+          continue;
+        }
         try {
-          await chrome.alarms.create(`${ALARM_PREFIX}${scriptId}`, {
+          if (existing) await chrome.alarms.clear(name);
+          await chrome.alarms.create(name, {
             delayInMinutes: periodMinutes,
             periodInMinutes: periodMinutes,
           });
@@ -504,10 +518,24 @@ const ScriptScheduler = (() => {
       if (sched.type === 'oneTime' && sched.oneTime) {
         const when = new Date(sched.oneTime).getTime();
         if (when > Date.now()) {
+          desiredAlarms.add(name);
+          const existing = existingScheduleAlarms.get(name);
+          if (existing && Math.abs((existing.scheduledTime || 0) - when) < 1000 && !existing.periodInMinutes) {
+            continue;
+          }
           try {
-            await chrome.alarms.create(`${ALARM_PREFIX}${scriptId}`, { when });
+            if (existing) await chrome.alarms.clear(name);
+            await chrome.alarms.create(name, { when });
           } catch { /* ignore */ }
         }
+      }
+    }
+
+    for (const name of existingScheduleAlarms.keys()) {
+      if (!desiredAlarms.has(name)) {
+        try {
+          await chrome.alarms.clear(name);
+        } catch { /* ignore */ }
       }
     }
   }

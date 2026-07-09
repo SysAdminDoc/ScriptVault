@@ -100,6 +100,8 @@ describe('ScriptScheduler module', () => {
     // Both the runtime shouldRunNow and the emitted guard must key on local
     // Y-M-D so a <input type="date"> boundary matches the user's calendar day.
     expect(schedulerCode).not.toContain("now.toISOString().slice(0, 10)");
+    expect(schedulerCode).toContain('function parseLocalDateInput');
+    expect(schedulerCode).not.toContain('const d = new Date(isoStr)');
     const guard = ScriptScheduler.generateGuardCode({
       enabled: true, type: 'dateRange', dateStart: '2026-01-01', dateEnd: '2026-12-31',
     });
@@ -111,6 +113,25 @@ describe('ScriptScheduler module', () => {
     expect(globalThis.chrome.runtime.sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'rescheduleScript', scriptId: 'script-1' }),
     );
+  });
+
+  it('keeps an existing interval alarm phase when the period is unchanged on init', async () => {
+    globalThis.chrome.storage.local.get = vi.fn(() => Promise.resolve({
+      sv_schedules: {
+        'script-1': { enabled: true, type: 'interval', interval: 15, intervalUnit: 'minutes' },
+      },
+    }));
+    globalThis.chrome.alarms.getAll = vi.fn(() => Promise.resolve([
+      { name: 'sv_sched_script-1', periodInMinutes: 15, scheduledTime: Date.now() + 300000 },
+    ]));
+
+    await ScriptScheduler.init();
+
+    expect(globalThis.chrome.alarms.create).not.toHaveBeenCalledWith(
+      'sv_sched_script-1',
+      expect.anything(),
+    );
+    expect(globalThis.chrome.alarms.clear).not.toHaveBeenCalledWith('sv_sched_script-1');
   });
 
   it('does not let a close timeout remove a freshly reopened modal', () => {
