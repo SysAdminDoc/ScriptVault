@@ -109,6 +109,10 @@ function makeScript(id, name) {
   };
 }
 
+function cloneValue(value) {
+  return value === undefined ? undefined : structuredClone(value);
+}
+
 function extractRuntimeImportExportCode() {
   const parserStart = backgroundCoreCode.indexOf('function parseUserscript');
   const parserEnd = backgroundCoreCode.indexOf('// URL Matching', parserStart);
@@ -122,13 +126,14 @@ function extractRuntimeImportExportCode() {
   return `${backgroundCoreCode.slice(parserStart, parserEnd)}\n${backgroundCoreCode.slice(importStart, importEnd)}`;
 }
 
-function createRuntimeHarness(existingScripts = [], storedValuesByScript = {}, settings = { enabled: true }) {
+function createRuntimeHarness(existingScripts = [], storedValuesByScript = {}, settings = { enabled: true }, storageLocalState = {}) {
   const fakeFflate = makeFakeFflate();
   let generatedIdCounter = 1;
   const scriptCache = new Map(existingScripts.map(script => [script.id, structuredClone(script)]));
   const valueCache = new Map(
     Object.entries(storedValuesByScript).map(([id, values]) => [id, structuredClone(values)]),
   );
+  const chromeStorage = structuredClone(storageLocalState);
 
   const ScriptStorage = {
     getAll: vi.fn(async () => Array.from(scriptCache.values()).map(script => structuredClone(script))),
@@ -143,26 +148,60 @@ function createRuntimeHarness(existingScripts = [], storedValuesByScript = {}, s
     setAll: vi.fn(async (id, values) => {
       valueCache.set(id, structuredClone(values));
     }),
+    deleteAll: vi.fn(async (id) => {
+      valueCache.delete(id);
+    }),
   };
   const SettingsManager = {
     get: vi.fn(async () => structuredClone(settings)),
     set: vi.fn(),
   };
+  const chrome = {
+    storage: {
+      local: {
+        get: vi.fn(async (keys) => {
+          if (typeof keys === 'string') return { [keys]: cloneValue(chromeStorage[keys]) };
+          if (Array.isArray(keys)) {
+            return Object.fromEntries(keys.map(key => [key, cloneValue(chromeStorage[key])]));
+          }
+          if (keys && typeof keys === 'object') {
+            return Object.fromEntries(
+              Object.entries(keys).map(([key, fallback]) => [
+                key,
+                Object.prototype.hasOwnProperty.call(chromeStorage, key)
+                  ? cloneValue(chromeStorage[key])
+                  : cloneValue(fallback),
+              ]),
+            );
+          }
+          return cloneValue(chromeStorage);
+        }),
+        set: vi.fn(async (entries) => {
+          Object.entries(entries || {}).forEach(([key, value]) => {
+            chromeStorage[key] = cloneValue(value);
+          });
+        }),
+      },
+    },
+  };
+  globalThis.chrome = chrome;
   const registerAllScripts = vi.fn().mockResolvedValue();
   const updateBadge = vi.fn().mockResolvedValue();
   const generateId = vi.fn(() => `generated_script_${generatedIdCounter++}`);
 
   const _body = `${extractRuntimeImportExportCode()}; return { exportAllScripts, exportToZip, importFromZip, importScripts };`;
   let fn;
-  try { const vm = require('node:vm'); fn = vm.compileFunction(_body, ['fflate', 'ScriptStorage', 'ScriptValues', 'SettingsManager', 'registerAllScripts', 'updateBadge', 'generateId'], { filename: resolve(process.cwd(), 'background.core.js') }); } catch { fn = new Function('fflate', 'ScriptStorage', 'ScriptValues', 'SettingsManager', 'registerAllScripts', 'updateBadge', 'generateId', _body); }
+  try { const vm = require('node:vm'); fn = vm.compileFunction(_body, ['fflate', 'ScriptStorage', 'ScriptValues', 'SettingsManager', 'registerAllScripts', 'updateBadge', 'generateId', 'chrome'], { filename: resolve(process.cwd(), 'background.core.js') }); } catch { fn = new Function('fflate', 'ScriptStorage', 'ScriptValues', 'SettingsManager', 'registerAllScripts', 'updateBadge', 'generateId', 'chrome', _body); }
 
   return {
-    ...fn(fakeFflate, ScriptStorage, ScriptValues, SettingsManager, registerAllScripts, updateBadge, generateId),
+    ...fn(fakeFflate, ScriptStorage, ScriptValues, SettingsManager, registerAllScripts, updateBadge, generateId, chrome),
     fakeFflate,
     generateId,
     ScriptStorage,
     ScriptValues,
     SettingsManager,
+    chrome,
+    chromeStorage,
     scriptCache,
     valueCache,
   };
@@ -228,6 +267,54 @@ describe('runtime import/export archive identity', () => {
     expect(JSON.stringify(exported)).not.toContain('binding-secret');
     expect(JSON.stringify(exported)).not.toContain('secret\\\\local.user.js');
     expect(JSON.stringify(exported)).not.toContain('handle');
+  });
+
+  it('round-trips JSON vault exports with stored values, folders, and workspaces', async () => {
+    const script = makeScript('script_full_json', 'Full JSON Script');
+    script.settings = { notes: 'portable note' };
+    const folders = [{ id: 'folder_json', name: 'Pinned', scriptIds: ['script_full_json'] }];
+    const workspaces = [{ id: 'workspace_json', name: 'Daily', scriptIds: ['script_full_json'] }];
+    const harness = createRuntimeHarness(
+      [script],
+      { script_full_json: { draft: true, count: 2 } },
+      { enabled: true, theme: 'dark' },
+      { scriptFolders: folders, workspaces },
+    );
+
+    const exported = await harness.exportAllScripts({
+      includeSettings: true,
+      includeStorage: true,
+    });
+
+    expect(exported.storageIncluded).toBe(true);
+    expect(exported.scripts[0].storage).toEqual({ draft: true, count: 2 });
+    expect(exported.folders).toEqual(folders);
+    expect(exported.workspaces).toEqual(workspaces);
+    expect(exported.foldersIncluded).toBe(true);
+    expect(exported.workspacesIncluded).toBe(true);
+
+    const restoreHarness = createRuntimeHarness([], {}, { enabled: true, theme: 'light' });
+    const result = await restoreHarness.importScripts(exported, {
+      overwrite: true,
+      importSettings: true,
+      importStorage: true,
+      trustImportedScripts: true,
+    });
+
+    expect(result.errors).toEqual([]);
+    expect(result).toMatchObject({
+      imported: 1,
+      storageImported: 1,
+      settingsImported: true,
+      restoredFolders: true,
+      restoredWorkspaces: true,
+    });
+    expect(restoreHarness.valueCache.get('script_full_json')).toEqual({ draft: true, count: 2 });
+    expect(restoreHarness.chromeStorage.scriptFolders).toEqual(folders);
+    expect(restoreHarness.chromeStorage.workspaces).toEqual(workspaces);
+    expect(restoreHarness.SettingsManager.set).toHaveBeenCalledWith(
+      expect.objectContaining({ theme: 'dark' }),
+    );
   });
 
   it('restores JSON settings credentials only when archive metadata and import option both opt in', async () => {

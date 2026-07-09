@@ -4392,6 +4392,29 @@ function prepareSettingsForPortableImport(settings, options = {}) {
   };
 }
 
+async function readPortableLocalState(key) {
+  if (typeof chrome === 'undefined' || !chrome?.storage?.local?.get) return undefined;
+  const data = await chrome.storage.local.get(key);
+  return data?.[key];
+}
+
+async function writePortableLocalState(key, value) {
+  if (typeof chrome === 'undefined' || !chrome?.storage?.local?.set) {
+    throw new Error('chrome.storage.local unavailable');
+  }
+  await chrome.storage.local.set({ [key]: value });
+}
+
+function resetPortableLocalStateCaches(key) {
+  if (key === 'scriptFolders' && typeof FolderStorage !== 'undefined' && FolderStorage) {
+    FolderStorage.cache = null;
+  }
+  if (key === 'workspaces' && typeof WorkspaceManager !== 'undefined' && WorkspaceManager) {
+    WorkspaceManager._cache = null;
+    WorkspaceManager._initPromise = null;
+  }
+}
+
 async function exportAllScripts(options = {}) {
   const {
     includeSettings = true,
@@ -4404,6 +4427,8 @@ async function exportAllScripts(options = {}) {
         includeCredentials: includeSettingsCredentials
       })
     : null;
+  const foldersExport = includeSettings ? await readPortableLocalState('scriptFolders') : undefined;
+  const workspacesExport = includeSettings ? await readPortableLocalState('workspaces') : undefined;
 
   const exportedScripts = await Promise.all(scripts.map(async s => {
     const entry = {
@@ -4441,6 +4466,15 @@ async function exportAllScripts(options = {}) {
       settingsCredentialsIncluded: settingsExport.settingsCredentialsIncluded,
       redactedSettingsCredentialKeys: settingsExport.redactedSettingsCredentialKeys
     } : {}),
+    ...(includeSettings && foldersExport !== undefined ? {
+      folders: foldersExport,
+      foldersIncluded: true
+    } : {}),
+    ...(includeSettings && workspacesExport !== undefined ? {
+      workspaces: workspacesExport,
+      workspacesIncluded: true
+    } : {}),
+    storageIncluded: includeStorage,
     scripts: exportedScripts
   };
 }
@@ -5111,6 +5145,8 @@ async function importScripts(data, options = {}) {
     settingsCredentialsImported: false,
     skippedSettingsCredentialKeys: [],
     storageImported: 0,
+    restoredFolders: false,
+    restoredWorkspaces: false,
     replacedScripts: [],
     quarantinedScripts: 0,
     preservedDisabledScripts: 0,
@@ -5243,6 +5279,26 @@ async function importScripts(data, options = {}) {
     results.settingsImported = true;
     results.settingsCredentialsImported = settingsImport.settingsCredentialsImported;
     results.skippedSettingsCredentialKeys = settingsImport.skippedSettingsCredentialKeys;
+  }
+
+  if (importSettings && Object.prototype.hasOwnProperty.call(data, 'folders')) {
+    try {
+      await writePortableLocalState('scriptFolders', data.folders);
+      resetPortableLocalStateCaches('scriptFolders');
+      results.restoredFolders = true;
+    } catch (e) {
+      results.errors.push({ name: 'folders', error: e.message });
+    }
+  }
+
+  if (importSettings && Object.prototype.hasOwnProperty.call(data, 'workspaces')) {
+    try {
+      await writePortableLocalState('workspaces', data.workspaces);
+      resetPortableLocalStateCaches('workspaces');
+      results.restoredWorkspaces = true;
+    } catch (e) {
+      results.errors.push({ name: 'workspaces', error: e.message });
+    }
   }
 
   // Re-register all scripts after import

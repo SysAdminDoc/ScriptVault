@@ -1546,6 +1546,8 @@
         } else if (Array.isArray(result?.skippedSettingsCredentialKeys) && result.skippedSettingsCredentialKeys.length) {
             parts.push('sync credentials kept local');
         }
+        if (result?.restoredFolders) parts.push('folders restored');
+        if (result?.restoredWorkspaces) parts.push('workspaces restored');
         return parts.join(', ');
     }
 
@@ -1553,9 +1555,10 @@
         if (result?.error) return 'error';
         const imported = Number(result?.imported || 0);
         const failed = Array.isArray(result?.errors) ? result.errors.length : 0;
-        if (failed > 0 && imported === 0) return 'error';
+        const restoredVaultState = !!(result?.settingsImported || result?.restoredFolders || result?.restoredWorkspaces);
+        if (failed > 0 && imported === 0 && !restoredVaultState) return 'error';
         if (failed > 0) return 'warning';
-        if (Number(result?.skipped || 0) > 0 && imported === 0) return 'info';
+        if (Number(result?.skipped || 0) > 0 && imported === 0 && !restoredVaultState) return 'info';
         return 'success';
     }
 
@@ -12860,6 +12863,8 @@
                     `${numberFormatter.format(exportedCount)} scripts`,
                     transfer.includeStorage ? 'stored values included' : 'stored values excluded',
                     transfer.includeSettings ? 'app settings included' : 'app settings excluded',
+                    ...(response.foldersIncluded ? ['folders included'] : []),
+                    ...(response.workspacesIncluded ? ['workspaces included'] : []),
                     ...(transfer.includeSettings
                         ? [transfer.includeSettingsCredentials ? 'sync credentials included' : 'sync credentials redacted']
                         : [])
