@@ -119,7 +119,11 @@ const GistIntegration = (() => {
         const data = await chrome.storage.local.get([
             STORAGE_KEY_TOKEN, STORAGE_KEY_TOKEN_LEGACY, STORAGE_KEY_TOKEN_SESSION_ONLY, STORAGE_KEY_AUTOSYNC
         ]);
-        _state.tokenSessionOnly = data[STORAGE_KEY_TOKEN_SESSION_ONLY] === true;
+        const hasStoredToken = Boolean(data[STORAGE_KEY_TOKEN] || data[STORAGE_KEY_TOKEN_LEGACY]);
+        const hasStoragePreference = Object.prototype.hasOwnProperty.call(data, STORAGE_KEY_TOKEN_SESSION_ONLY);
+        _state.tokenSessionOnly = hasStoragePreference
+            ? data[STORAGE_KEY_TOKEN_SESSION_ONLY] === true
+            : !hasStoredToken;
         if (_state.tokenSessionOnly) {
             const sessionToken = await readSessionToken();
             if (sessionToken) {
@@ -316,12 +320,23 @@ const GistIntegration = (() => {
         try {
             const resp = await fetch('https://api.github.com/user', { headers: apiHeaders() });
             if (!resp.ok) return { valid: false, scopes: [] };
-            const scopes = (resp.headers.get('x-oauth-scopes') || '').split(',').map(s => s.trim()).filter(Boolean);
+            const rawScopes = resp.headers.get('x-oauth-scopes');
+            const hasScopeHeader = rawScopes != null && rawScopes !== '';
+            const scopes = (rawScopes || '').split(',').map(s => s.trim()).filter(Boolean);
             const user = await resp.json();
-            return { valid: true, scopes, login: user.login, hasGistScope: scopes.includes('gist') };
+            return { valid: true, scopes, login: user.login, hasGistScope: !hasScopeHeader || scopes.includes('gist'), hasScopeHeader };
         } catch {
             return { valid: false, scopes: [] };
         }
+    }
+
+    function tokenScopeInfo(result) {
+        if (!result.hasScopeHeader) return 'scope header unavailable; fine-grained token accepted';
+        return result.hasGistScope ? 'gist scope present' : 'WARNING: gist scope missing';
+    }
+
+    function tokenScopeToastType(result) {
+        return result.hasGistScope ? 'success' : 'error';
     }
 
     // =========================================
@@ -1306,8 +1321,7 @@ const GistIntegration = (() => {
                 verifyBtn.disabled = false;
                 verifyBtn.textContent = 'Verify';
                 if (result.valid) {
-                    const scopeInfo = result.hasGistScope ? 'gist scope present' : 'WARNING: gist scope missing';
-                    toast(`Token valid for @${result.login} (${scopeInfo})`, result.hasGistScope ? 'success' : 'error');
+                    toast(`Token valid for @${result.login} (${tokenScopeInfo(result)})`, tokenScopeToastType(result));
                 } else {
                     toast('Token is invalid or expired', 'error');
                 }
@@ -1343,8 +1357,7 @@ const GistIntegration = (() => {
                 saveBtn.disabled = false;
                 saveBtn.textContent = 'Save Token';
                 if (result.valid) {
-                    const scopeInfo = result.hasGistScope ? 'gist scope present' : 'WARNING: gist scope missing';
-                    toast(`Token saved. Logged in as @${result.login} (${scopeInfo})`, result.hasGistScope ? 'success' : 'error');
+                    toast(`Token saved. Logged in as @${result.login} (${tokenScopeInfo(result)})`, tokenScopeToastType(result));
                 } else {
                     toast('Token saved but could not verify. Check the token value.', 'error');
                 }

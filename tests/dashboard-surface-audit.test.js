@@ -416,6 +416,56 @@ describe('dashboard audit surfaces', () => {
     GistIntegration.destroy();
   });
 
+  it('Gist token setup defaults new tokens to session-only and accepts missing scope headers', async () => {
+    const GistIntegration = createGistIntegration();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    globalThis.fetch = vi.fn(async () => ({
+      ok: true,
+      headers: { get: () => null },
+      json: async () => ({ login: 'fine-grained-user' }),
+    }));
+
+    await GistIntegration.init(container, {});
+    container.querySelector('.gi-header .gi-btn')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    const storageToggle = container.querySelector('.gi-toggle-row input[type="checkbox"]');
+    expect(storageToggle?.checked).toBe(true);
+
+    const tokenInput = container.querySelector('.gi-input[type="password"]');
+    tokenInput.value = 'github_pat_fine_grained';
+    const saveButton = Array.from(container.querySelectorAll('button')).find(button => button.textContent === 'Save Token');
+    saveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await flushPromises();
+
+    const local = await chrome.storage.local.get(['gist_pat', 'gist_pat_session_only']);
+    const session = await chrome.storage.session.get('sv_gist_pat_session');
+    expect(local.gist_pat).toBeUndefined();
+    expect(local.gist_pat_session_only).toBe(true);
+    expect(session.sv_gist_pat_session).toBe('github_pat_fine_grained');
+    expect(document.querySelector('.gi-toast')?.textContent).toContain('scope header unavailable');
+    expect(document.querySelector('.gi-toast')?.className).toContain('success');
+
+    GistIntegration.destroy();
+  });
+
+  it('Gist token setup preserves existing persistent-token mode without a stored preference', async () => {
+    const GistIntegration = createGistIntegration();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    await chrome.storage.local.set({ gist_pat: 'persisted-token' });
+
+    await GistIntegration.init(container, {});
+    Array.from(container.querySelectorAll('.gi-tab'))
+      .find(button => button.textContent === 'Settings')
+      ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    const storageToggle = container.querySelector('.gi-toggle-row input[type="checkbox"]');
+
+    expect(storageToggle?.checked).toBe(false);
+    expect(container.textContent).toContain('gist_pat in chrome.storage.local');
+
+    GistIntegration.destroy();
+  });
+
   it('standalone exports remove inline handlers and keep safe generated defaults', () => {
     const StandaloneExport = createStandaloneExport();
     URL.createObjectURL = vi.fn(() => 'blob:test');
