@@ -17,6 +17,7 @@ const PatternBuilder = (() => {
   };
   let _testUrls = [];
   let _onInsert = null;   // callback set externally
+  const PATTERN_LENGTH_WARNING = 200;
 
   const _safeSetHtml = (typeof window.ScriptVaultDashboardUI?.safeSetHtml === 'function')
       ? window.ScriptVaultDashboardUI.safeSetHtml
@@ -63,6 +64,7 @@ const PatternBuilder = (() => {
     .pb-toggle::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .2s}
     .pb-toggle.active::after{transform:translateX(16px)}
     .pb-preview{background:var(--bg-body,#1a1a1a);border:1px solid var(--border-color,#404040);border-radius:6px;padding:12px 14px;font-family:'Cascadia Code','Fira Code',monospace;font-size:0.8125rem;word-break:break-all;color:var(--accent-blue,#60a5fa);line-height:1.6;min-height:36px;user-select:all}
+    .pb-warning{margin-top:8px;color:var(--accent-yellow,#facc15);font-size:0.75rem;line-height:1.5}
     .pb-segment{display:inline-flex;align-items:center;background:var(--bg-input,#333);border:1px solid var(--border-color,#404040);border-radius:4px;padding:4px 8px;font-size:0.75rem;gap:6px;cursor:default}
     .pb-segment .seg-sep{color:var(--text-muted,#707070);font-weight:700}
     .pb-segment select,.pb-segment input{background:transparent;border:1px solid transparent;color:var(--text-primary,#e0e0e0);font-size:0.75rem;padding:0;min-width:40px;font-family:inherit;border-radius:3px}
@@ -143,6 +145,14 @@ const PatternBuilder = (() => {
     );
   }
 
+  function showBuilderToast(message, type = 'error') {
+    window.ScriptVaultDashboardUI?.toast?.(message, type);
+  }
+
+  function isPatternLong(pattern) {
+    return pattern.length > PATTERN_LENGTH_WARNING;
+  }
+
   /** Convert current _state to @match pattern string */
   function buildPattern() {
     const proto = _state.protocol === '*' ? '*' : _state.protocol;
@@ -158,25 +168,44 @@ const PatternBuilder = (() => {
       path += _state.pathSegments.map(s => s.mode === 'wildcard' ? '*' : sanitizeSegmentValue(s.value)).join('/');
     }
     const result = `${proto}://${host}${path}`;
-    if (result.length > 200) return result.slice(0, 200);
     return result;
   }
 
-  /** Test a URL against a @match-style pattern (simplified) */
+  function globPathToRegex(path) {
+    return path.replace(/\*+/g, '*').replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
+  }
+
+  /** Test a URL against a Chrome @match-style pattern */
   function matchUrl(url, pattern) {
     try {
       if (pattern.length > 500) return false;
-      const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const withWildcards = escaped.replace(/\\\*/g, '.*?');
-      let re;
-      if (pattern.startsWith('*://')) {
-        re = '^(https?|\\*):\\/\\/' + withWildcards.replace(/^\.\*\?:\/\//, '') + '$';
-      } else {
-        re = '^' + withWildcards + '$';
+      if (pattern === '<all_urls>') return /^(https?|file|ftp):/.test(url);
+      const parsed = new URL(url);
+      const match = pattern.match(/^(\*|https?|file|ftp):\/\/([^/]+)(\/.*)$/);
+      if (!match) return false;
+
+      const [, scheme, host, path] = match;
+      const pageScheme = parsed.protocol.slice(0, -1);
+      if (scheme === '*') {
+        if (pageScheme !== 'http' && pageScheme !== 'https') return false;
+      } else if (scheme !== pageScheme) {
+        return false;
       }
-      return new RegExp(re).test(url);
+
+      if (host !== '*') {
+        const pageHost = parsed.hostname.toLowerCase();
+        if (host.startsWith('*.')) {
+          const base = host.slice(2).toLowerCase();
+          if (pageHost !== base && !pageHost.endsWith(`.${base}`)) return false;
+        } else if (pageHost !== host.toLowerCase()) {
+          return false;
+        }
+      }
+
+      const pathRe = new RegExp(`^${globPathToRegex(path)}$`);
+      return pathRe.test(parsed.pathname + parsed.search) || pathRe.test(parsed.pathname);
     } catch {
-      return url === pattern;
+      return false;
     }
   }
 
@@ -220,6 +249,8 @@ const PatternBuilder = (() => {
         _state.pathSegments = parsed.pathSegments;
         _state.query = parsed.query;
         render();
+      } else {
+        showBuilderToast('Could not parse URL', 'error');
       }
     });
     input.addEventListener('keydown', e => { if (e.key === 'Enter') btn.click(); });
@@ -328,18 +359,28 @@ const PatternBuilder = (() => {
   function renderPreview() {
     const sec = el('div', { class: 'pb-section' });
     sec.appendChild(el('div', { class: 'pb-section-title', text: 'Pattern Preview' }));
-    const preview = el('div', { class: 'pb-preview', id: 'pb-preview-text', text: buildPattern() });
+    const pattern = buildPattern();
+    const preview = el('div', { class: 'pb-preview', id: 'pb-preview-text', text: pattern });
     sec.appendChild(preview);
+    const warning = el('div', {
+      class: 'pb-warning',
+      id: 'pb-preview-warning',
+      text: 'Pattern is long; review it before inserting because Chrome may reject malformed match patterns.',
+    });
+    warning.hidden = !isPatternLong(pattern);
+    sec.appendChild(warning);
     return sec;
   }
 
   /** Lightweight update — preview text only, no full re-render */
   function renderPreviewOnly() {
     const previewEl = _container.querySelector('#pb-preview-text');
-    if (previewEl) previewEl.textContent = buildPattern();
+    const pattern = buildPattern();
+    if (previewEl) previewEl.textContent = pattern;
+    const warningEl = _container.querySelector('#pb-preview-warning');
+    if (warningEl) warningEl.hidden = !isPatternLong(pattern);
     // Also refresh test results
     const badges = _container.querySelectorAll('[data-test-index]');
-    const pattern = buildPattern();
     badges.forEach(badge => {
       const idx = parseInt(badge.dataset.testIndex, 10);
       const url = _testUrls[idx];
@@ -514,7 +555,10 @@ const PatternBuilder = (() => {
      */
     fromUrl(url) {
       const parsed = parseUrl(url);
-      if (!parsed) return;
+      if (!parsed) {
+        showBuilderToast('Could not parse URL', 'error');
+        return;
+      }
       _state.protocol = parsed.protocol;
       _state.host = parsed.host;
       _state.hostWildcard = false;

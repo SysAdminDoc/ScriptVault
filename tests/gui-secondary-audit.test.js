@@ -33,6 +33,13 @@ describe("secondary dashboard UX audit", () => {
     expect(patternBuilderJs).toMatch(/const chip = el\('button', \{ class: 'pb-preset-chip'/);
   });
 
+  test("pattern builder warns instead of truncating long or unparseable patterns", () => {
+    expect(patternBuilderJs).not.toContain('slice(0, 200)');
+    expect(patternBuilderJs).toContain('PATTERN_LENGTH_WARNING');
+    expect(patternBuilderJs).toContain('pb-preview-warning');
+    expect(patternBuilderJs).toContain("showBuilderToast('Could not parse URL', 'error')");
+  });
+
   test("scheduler exposes tab and day controls as accessible buttons", () => {
     expect(schedulerJs).not.toMatch(/transition:\s*all/);
     expect(schedulerJs).toMatch(/role: 'tablist'/);
@@ -123,7 +130,10 @@ describe("pattern builder regex hardening", () => {
     expect(PB.testUrl("https://example.com/path", "https://example.com/*")).toBe(true);
     expect(PB.testUrl("https://example.com/", "*://*/*")).toBe(true);
     expect(PB.testUrl("http://example.com/foo", "https://example.com/*")).toBe(false);
+    expect(PB.testUrl("https://example.com/x", "*://*.example.com/*")).toBe(true);
     expect(PB.testUrl("https://sub.example.com/x", "*://*.example.com/*")).toBe(true);
+    expect(PB.testUrl("https://badexample.com/x", "*://*.example.com/*")).toBe(false);
+    expect(PB.testUrl("not a url", "*://*/*")).toBe(false);
   });
 
   test("testUrl rejects patterns exceeding 500 chars", () => {
