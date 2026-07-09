@@ -1,95 +1,111 @@
 # Research — ScriptVault
 
-Date: 2026-07-02 — replaces all prior research (previous pass 2026-07-01, v3.12.0).
+Date: 2026-07-09 — replaces all prior research.
 
 ## Executive Summary
 
-ScriptVault is a mature, trust-first, local-first, zero-telemetry Chrome MV3 userscript manager (now v3.16.0). Since the last research pass it shipped a per-tab run diagnostic, a functional 3-way cloud-sync merge, a full editor redesign, removal of the Script Store, and a deep security/data-safety audit (GM handler caller-authentication, attribute-injection XSS fixes, sync tombstone-resurrection fix, Chrome-as-Firefox misdetection fix). The prior pass's headline opportunities are now shipped. The product is past feature-catching-up; the field has moved and the highest-value direction for 2026 is **(a) turning its existing Ed25519/AST/trust story into enforced guarantees, and (b) a single, identity-consistent leapfrog: on-device AI via Chrome's built-in Prompt API (Gemini Nano), which is stable for extensions since Chrome 138 and runs fully locally with no network egress — exactly the precondition UC-3 was waiting for.** ScriptCat is racing to a cloud AI agent; a keyless, telemetry-free local one wins on the axis ScriptVault already owns.
+ScriptVault is a mature, local-first, zero-telemetry Manifest V3 userscript manager at v3.18.0. Its strongest shape is no longer basic Tampermonkey parity: it already has a published Chrome package, Firefox/Edge package paths, a hardened install/update review loop, Monaco editing, sync providers, local workspace binding, managed-policy provisioning, signing/provenance scaffolding, and broad GM API coverage. The highest-value direction is release-trust hardening and developer-loop polish: make browser support evidence impossible to misread, remove remaining "not-yet-implemented" trust states, prove Chromium-derivative behavior, deepen catalog/source interoperability, and use platform advances like `documentId`, File System Observer, and Vitest browser traces where they close concrete gaps.
 
-Top opportunities in priority order:
-1. Enforce/warn on un-pinned `@require`/`@resource` (SRI is currently optional — `verifySRI` returns true when no hash is declared). Complements existing signing; directly counters 2026 scam-script campaigns.
-2. On-device AI module (Prompt API / Gemini Nano): explain-this-script, plain-language AST risk summary, draft-a-script — strictly opt-in, feature-detected, local-only. Promotes UC-3 (its precondition is now met).
-3. `GM.fetch` — a `Response`/`ReadableStream`-shaped fetch API (streaming, real headers). Absent today; the modern shape every competitor still lacks.
-4. Per-script isolated cookie jars (`isolationCookie`) — a novel privacy differentiator a local-first manager can offer with no backend.
-5. One-click "restrict this script to the current site" + inline domain editor with validation — cheap, high-satisfaction match-management UX users repeatedly ask for.
-6. Scam/crypto-drain AST detector category + install-time warning — extends the existing 31-detector analyzer against an active 2026 threat.
-7. Local-folder sync + plain git-remote sync, and File System Observer event-driven hot-reload (upgrades the existing poll-based local-file binding, X-8).
+Top opportunities, in priority order:
+1. P1 - Make support-matrix evidence failure-aware so a failed Edge smoke cannot be rendered as "no current evidence".
+2. P1 - Retire the `not-yet-implemented` trust receipt state or surface it as an explicit unsupported verification result.
+3. P1 - Add local smoke evidence for Brave, Vivaldi, Opera, and Arc before calling Chromium derivatives compatible.
+4. P2 - Add configurable Find Scripts source templates instead of hardcoding Greasy Fork/OpenUserJS/GitHub.
+5. P2 - Add a local shared-library / `@require-local` workflow on top of the existing local workspace binding.
+6. P2 - Group diagnostics by `documentId` so SPA/frame navigation can be traced without stale-frame ambiguity.
+7. P2 - Add Vitest/Playwright trace artifacts for browser-mode visual failures.
+8. P2 - Turn Firefox lint warnings into a budgeted release gate.
+9. P3 - Evaluate Monaco native LSP support for userscript metadata, GM APIs, and type-aware completions.
 
 ## Product Map
 
-- Core workflows: install/import userscripts → review metadata + AST risk → edit in Monaco → register via `chrome.userScripts` (USER_SCRIPT world, per-script `worldId` on Chrome 133+) → expose 35+ GM APIs → review updates with diff/rollback → sync/backup scripts + GM values → inspect per-tab run diagnostics and network/execution → package Chrome/Firefox/Edge.
-- Personas: privacy-conscious userscript users, MV2-era migrants, script authors, extension reviewers, enterprise operators (managed policy), multi-device sync users.
-- Platforms/distribution: Chrome MV3 (published), Firefox AMO (Phase 5, `FIREFOX-PORT.md`), Edge (package path); Safari and Firefox-Android deferred (API/effort).
-- Integrations/data: IndexedDB + Storage Buckets (scripts, GM values, stats, backups, local bindings); `chrome.storage.local` (settings, receipts, managed policy); `chrome.storage.session` (session-only sync secrets); WebDAV/Drive/Dropbox/OneDrive/S3/Gist/EasyCloud sync; offscreen/Firefox fallbacks for AST + merge.
+- Core workflows: install/import scripts; review metadata, permissions, risk, SRI, and provenance; edit in dashboard/Monaco; register through `chrome.userScripts`; expose GM APIs and runtime diagnostics; update with diff/rollback; sync and back up scripts, values, folders, workspaces, and settings.
+- User personas: privacy-conscious userscript users, MV2-era migrants, script authors, enterprise operators using managed policy, extension reviewers, and multi-browser power users.
+- Platforms and distribution: Chrome MV3 published target; Firefox Desktop AMO-validation package; Microsoft Edge-compatible ZIP with publication blocked by store credentials; Firefox Android, Safari/Orion, and some Firefox 153 APIs are deferred or blocked in `Roadmap_Blocked.md`.
+- Key integrations and data flows: IndexedDB and Storage Buckets for scripts/values/backups; `chrome.storage.local`, `session`, and `managed`; WebDAV/Drive/Dropbox/OneDrive/S3/Gist/EasyCloud sync; local folder handles/File System Observer; Greasy Fork/OpenUserJS/GitHub search/install; Monaco, Acorn, diff, fflate, Sigstore verification modules; public API and local MCP prototype gated by trusted origins.
 
 ## Competitive Landscape
 
-- **Tampermonkey** (closed-source incumbent): 2026 issue tracker shows loud demand for per-script cookie isolation (#2815), a network request-modification API (#2398/#2215), a streaming `GM.fetch` (#1278), and SR-accessible dashboard controls (#2813); it also can't install scripts when its own domain is down (#2675). Learn from its dev-workflow polish; ScriptVault's zero-phone-home posture already beats its offline-install and telemetry weaknesses — market that.
-- **ScriptCat** (v1.4.0, 2026): shipping a cloud-leaning AI Agent + MCP + Skills (#1324), `@unwrap` (already in ScriptVault), `window.onurlchange` via Navigation API (already in ScriptVault), and `cron once(...)`. Learn the AI-copilot direction; avoid the hosted-inference dependency — do it on-device instead. Patched a prototype-pollution-via-user-config bug (beta.4); ScriptVault already guards `POLLUTED_KEYS` in `src/modules/script-config.ts:25`.
-- **Violentmonkey** (2026 issues): ESM/module userscripts (#2528), cross-userscript `@require-local` (#2419), one-click "only for {site}" (#2410/#2403/#2559), one-click publish (#2425), hold-execution-until-sync (#2067), git-remote (#2176) and local-directory (#2125) sync. A concentrated backlog of match-management and sync UX ScriptVault can pick off cheaply.
-- **GreasyFork** (catalog): still lacks enforced SRI on remote code (#1070) and documents a real cross-script/account-takeover propagation risk (#682). ScriptVault's signing + Storage Buckets isolation + *enforced* SRI would make it the clear security leader.
-- **quoid/Userscripts (Safari)** + **vite-plugin-monkey**: directory-of-files model and localhost HMR — the pattern behind File System Observer hot-reload; learn the dev-loop, avoid the Safari platform dependency.
+- Tampermonkey: strongest incumbent for broad browser/store presence, update handling, local-file editing, OS policy provisioning, and its new MCP companion. ScriptVault should learn from its rapid-development and managed-deployment polish, but avoid closed-source opacity, notification noise, and cloud/tool coupling that weakens the local-first story.
+- Violentmonkey: best OSS signal for unmet power-user demand. Open issues show users asking for customizable Find Scripts sources, `@require-local`, easier site scoping, ESM loader work, and catalog publishing handoffs. ScriptVault already covers some publish/site-scope work; the remaining actionable gaps are catalog source customization and local shared libraries.
+- ScriptCat: demonstrates demand for background/scheduled scripts, script subscriptions, cloud sync, AI agent/MCP features, and richer editor/debugging. ScriptVault should keep the secure/local version of these ideas and avoid hosted AI/provider sponsorship paths that conflict with zero telemetry.
+- Greasy Fork/OpenUserJS ecosystem: still the main install/update catalog surface; community scripts also implement "find scripts for this site" across multiple catalogs. ScriptVault should treat catalog search and install provenance as product infrastructure, not just a convenience overlay.
+- quoid/userscripts and Stay: Safari/iOS managers show the value of a directory-backed workflow and mobile demand, but ScriptVault's current WebExtension stack makes Safari/iOS a separate product-level port rather than a near-term roadmap item.
+- WXT, Extension.js, and Plasmo: adjacent extension frameworks prove cross-browser build/smoke automation is table-stakes for extension products. ScriptVault should not rewrite into a framework now, but it should copy the release-matrix discipline.
+- Tweeks and PageGuide-style research: natural-language page customization and DOM-grounded assistance are real market signals. ScriptVault already has on-device AI and Prompt API scaffolding; future AI work should stay opt-in, local, reviewable, and tied to generated code diffs.
 
 ## Security, Privacy, and Reliability
 
-- **SRI is optional, not enforced.** `src/background/resource-loader.ts:190` — `verifySRI` returns `true` when no hash is declared. A userscript with an un-pinned `@require https://cdn/...` silently trusts whatever the CDN serves. TOFU receipts exist but there is no warn/enforce mode. This is the single highest-leverage hardening given 2026 scam-script campaigns (Tampermonkey #2783) and GreasyFork's own unresolved SRI gap (#1070). Verified.
-- **`<all_urls>` static host permission** (`manifest.json`) remains the largest privacy surface; `src/background/host-permission-patterns.ts` already computes per-URL patterns. Moving to `optional_host_permissions` with per-script grants is real but large and behavior-risky — already tracked (Research-Driven P2). Keep default-scoped with explicit broad-access opt-in.
-- **GM networking concurrency** (Needs live validation): Tampermonkey (#2215) and ScriptCat (#1377) both hit MV3's "one header-modifying `GM_xmlhttpRequest` at a time via a global DNR rule" wall and moved to request-scoped rules. ScriptVault's cookie-routing uses session DNR rules (`withCookieHeaderSessionRule`); verify it does not serialize concurrent header-modifying requests, and prefer request-scoped rules.
-- **Dependency posture** stays clean (prior pass: 0 `npm audit` vulnerabilities; `esbuild` 0.28.1, `dompurify` 3.4.11, `vitest` 4.1.9 with the CVE-2026-47429 backport — do not chase 5.0-beta). No dependency roadmap action.
-- **Proto-pollution** in user-config is already guarded (`src/modules/script-config.ts:25`); the ScriptCat beta.4 class of bug does not apply here.
+- Verified - Edge support evidence can be misleading. `scripts/generate-browser-support-matrix.mjs` treats Edge smoke as passed only when `status === "passed"` and otherwise renders "no current evidence"; `README.md` then hides whether an attempted smoke failed. This is a release-trust bug, not just documentation.
+- Verified - trust receipt verification still has an explicit incomplete status. `src/background/trust-receipt.ts:129` and `src/background/core.ts:1361` can emit `verification: 'not-yet-implemented'` even though `src/modules/sigstore-bundle-verifier.ts` exists. The install/update UI should never make this look equivalent to verified provenance.
+- Verified - Chromium derivatives are unverified. `README.md` lists Brave/Vivaldi/Opera/Arc as a watchlist with no local smoke or store package evidence, while direct competitors and frameworks position derivative-browser coverage as expected.
+- Verified - Firefox lint has a warning debt. The support matrix reports web-ext lint with 0 errors / 0 notices / 53 warnings; a warning budget would prevent release drift while keeping AMO submission work separate from credential blockers.
+- Verified - MCP/local agent bridges remain high risk if exposed as localhost services. CSA, NSA, and CVE-2025-49596 evidence all point to authentication, origin checks, loopback-only binding, and disabled-by-default posture. ScriptVault's current public-API-based prototype direction matches that constraint; do not add a raw inbound WebSocket listener.
+- Likely - catalog search is too rigid for the ecosystem. `pages/dashboard.js` hardcodes Greasy Fork/OpenUserJS plus external GitHub search, while Violentmonkey users explicitly request customizable source lists and community scripts aggregate multiple catalogs.
+- Likely - local dev loop can be stronger without broad file permissions. ScriptVault already uses local workspace handles and File System Observer, so a reviewed local shared-library workflow is safer than browser-wide file URL access.
 
 ## Architecture Assessment
 
-- Source ownership is clear and correct: TypeScript-authoritative `src/**` → generated runtime (`modules/*.js`, `background.core.js`, `background.js`) → dashboard modules in `pages/**`. **`src/background/core.ts` is a raw bridge** whose function bodies are copied verbatim by the runtime generator — no TS-only syntax (`as`, `: type`) inside those bodies (2026-07-02 finding). Several functions have live copies inlined in `core.ts` and dead extraction copies in `src/background/*.ts` (import/register/firefox-detect); fix the live `core.ts` version.
-- An on-device AI feature must be a **new lazy-loaded module** (feature-detected via `LanguageModel.availability()`), never a hard dependency — the Gemini Nano model is a 2.7–4 GB download needing ~16 GB RAM / 4 GB VRAM. It degrades to "unavailable" cleanly.
-- `BackupScheduler` still stores full ZIP blobs uncompressed (CompressionStream fix already tracked P2). `pages/dashboard.js` (~16.7k lines) is large but lazy-loaded; new features should be focused modules, not dashboard bulk.
-- Test/doc gaps: no per-script-cookie-isolation, SRI-enforcement, or AI-availability coverage exists yet (those features would need it); the stale "editor cursor stuck at Ln 1, Col 1" roadmap item in the Next tier was fixed in v3.16.0 and should be treated as resolved.
+- `src/background/core.ts` remains the generated-runtime bridge hot spot. It is large and contains live copies of security, registration, managed policy, local workspace, and trust receipt logic. New work should prefer promoted TypeScript modules and update drift gates when touching copied runtime logic.
+- `pages/dashboard.js` is still a large UI composition root. Find Scripts, local workspace, Greasy Fork publishing, support snapshots, and settings wiring are all in one file; new feature work should isolate source registry, local-library, and diagnostics logic into existing module patterns where practical.
+- `scripts/generate-browser-support-matrix.mjs` is a good release anchor but needs richer evidence states: passed, failed, unreadable, stale, and not-run should produce distinct matrix output and check behavior.
+- `tests/e2e/local-workspace.spec.js` proves local workspace flows, but there are no tests for `@require-local`-style library reuse. `tests/visual/**` has screenshot failure capture, but `vitest.visual.config.mjs` does not use the new Vitest browser trace tooling.
+- Type declarations lag Chrome API usage. `package.json` pins `chrome-types` at `^0.1.431`, `npm outdated` reports `0.1.433`, and `src/background/registration.ts` still casts around `messaging` and Chrome 133+ `worldId` shape. This is a small maintenance item, not a product feature.
+- Documentation status is mostly honest, but `ROADMAP.md` still has old v3.11/v3.12 section labels while manifests are v3.18.0. Because this pass is append-only for the roadmap, do not rewrite headings here; future cleanup should happen only when it does not disturb task-tracking history.
 
 ## Rejected Ideas
 
-- Cloud/hosted AI agent (ScriptCat #1324, Tweeks.io): conflicts with zero-telemetry. Only the on-device Prompt API path is acceptable. Source: github.com/scriptscat/scriptcat/pull/1324.
-- Mandatory (hard-fail) SRI on every `@require`: would break the large body of existing un-pinned scripts on install; ship as warn-by-default + opt-in enforce instead. Source: greasyfork #1070, resource-loader.ts:190.
-- `@unwrap`, `@run-at context-menu`, `window.onurlchange`, `cron once(...)`-parsing, proto-pollution guard: already implemented/guarded in ScriptVault — do not re-add. Source: parser.ts:313, context-menu.ts, wrapper-builder.ts, script-config.ts:25.
-- Full ESM module-world userscripts with top-level `import` (VM #2528): interesting but niche and large; keep in Under Consideration until demand is concrete. Source: violentmonkey #2528.
-- Safari port / MV2 shims: Safari lacks the `userScripts` shape; MV2 is dead by ~Chrome 150. ScriptVault is already MV3-native. Source: MV2 deprecation timeline.
-- vitest 5.0-beta upgrade: still beta; CVE-2026-47429 already backported to 4.1.x. Source: GHSA-5xrq-8626-4rwp.
+- Full WXT/Extension.js/Plasmo migration: useful patterns, but a framework rewrite would churn a mature build pipeline. Source: WXT/Extension.js docs; local `esbuild.config.mjs`.
+- New hosted AI script generator: market demand is real, but hosted generation conflicts with zero telemetry. Keep AI local, opt-in, and reviewable. Source: Tweeks; Chrome Prompt API; `settingsOnDeviceAiEnabled`.
+- Raw localhost MCP/WebSocket server: directly conflicts with current MCP security evidence. Keep using a disabled-by-default public-API bridge with strict origins and tokening. Source: CSA MCP guide, NSA MCP guidance, CVE-2025-49596.
+- Direct automated publishing to Greasy Fork/OpenUserJS: already covered by existing Greasy Fork handoff/receipt behavior and can require external account/session state. Source: `pages/dashboard.js` Greasy Fork handoff code; Violentmonkey #2425.
+- Safari/iOS port in this roadmap pass: demand exists, but WebKit/App Store packaging makes this a separate native/Safari extension project, not an incremental Chrome/Firefox/Edge task. Source: quoid/userscripts, Stay.
+- Generic "more sync providers": ScriptVault already has many sync providers; remaining sync risks are merge correctness and blocked plain-git work, not provider count. Source: README; `Roadmap_Blocked.md`.
+- Mandatory hard-fail on every unpinned remote library by default: good security direction, but too disruptive for existing scripts. Prefer warning/budget/enforce modes already aligned with prior SRI roadmap work.
 
 ## Sources
 
-Competitors / issue trackers:
-- https://github.com/Tampermonkey/tampermonkey/issues/2815
-- https://github.com/Tampermonkey/tampermonkey/issues/2398
-- https://github.com/Tampermonkey/tampermonkey/issues/2215
-- https://github.com/Tampermonkey/tampermonkey/issues/1278
-- https://github.com/Tampermonkey/tampermonkey/issues/2783
-- https://github.com/Tampermonkey/tampermonkey/issues/2675
-- https://github.com/Tampermonkey/tampermonkey/issues/2813
-- https://github.com/scriptscat/scriptcat/releases/tag/v1.4.0
-- https://github.com/scriptscat/scriptcat/pull/1324
-- https://github.com/scriptscat/scriptcat/pull/1377
-- https://github.com/violentmonkey/violentmonkey/issues/2528
-- https://github.com/violentmonkey/violentmonkey/issues/2410
-- https://github.com/violentmonkey/violentmonkey/issues/2425
-- https://github.com/violentmonkey/violentmonkey/issues/2067
-- https://github.com/violentmonkey/violentmonkey/issues/2176
-- https://github.com/violentmonkey/violentmonkey/issues/2125
-- https://github.com/JasonBarnabe/greasyfork/issues/1070
-- https://github.com/JasonBarnabe/greasyfork/issues/682
+Competitors and ecosystem:
 
-Platform / specs / APIs:
-- https://developer.chrome.com/docs/ai/prompt-api
-- https://developer.chrome.com/docs/ai/built-in
-- https://developer.chrome.com/blog/file-system-observer
+- https://www.tampermonkey.net/changelog.php
+- https://github.com/Tampermonkey/tampermonkey-mcp
+- https://github.com/violentmonkey/violentmonkey/issues
+- https://github.com/violentmonkey/violentmonkey/issues/2425
+- https://violentmonkey.github.io/posts/how-to-edit-scripts-with-your-favorite-editor/
+- https://violentmonkey.github.io/api/metadata-block/
+- https://github.com/scriptscat/scriptcat
+- https://docs.scriptcat.org/en/
+- https://github.com/quoid/userscripts
+- https://github.com/erosman/firemonkey
+- https://github.com/awesome-scripts/awesome-userscripts
+- https://www.tweeks.io/about
+- https://news.ycombinator.com/item?id=45916525
+- https://marketplace.visualstudio.com/items?itemName=brunoais.tampermonkey-fs
+
+Platform and standards:
+
 - https://developer.chrome.com/docs/extensions/reference/api/userScripts
-- https://developer.chrome.com/blog/chrome-userscript
-- https://developer.chrome.com/docs/extensions/develop/migrate/mv2-deprecation-timeline
-- https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/userScripts
-- https://developer.mozilla.org/en-US/docs/Web/API/FileSystemObserver
-- https://web.dev/blog/same-document-view-transitions-are-now-baseline-newly-available
-- https://web.dev/baseline
+- https://developer.chrome.com/docs/extensions/develop/migrate/remote-hosted-code
+- https://developer.chrome.com/blog/file-system-observer
+- https://developer.chrome.com/docs/ai/prompt-api
+- https://developer.chrome.com/blog/ai-webmcp-origin-trial
+- https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/153
+- https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Build_a_cross_browser_extension
+- https://wxt.dev/
+- https://extension.js.org/
+- https://www.plasmo.com/
+
+Security and dependencies:
+
+- https://labs.cloudsecurityalliance.org/agentic/agentic-mcp-security-best-practices-v1/
+- https://www.nsa.gov/Press-Room/Press-Releases-Statements/Press-Release-View/Article/4496698/nsa-releases-security-design-considerations-for-ai-driven-automation-leveraging/
+- https://www.oligo.security/blog/critical-rce-vulnerability-in-anthropic-mcp-inspector-cve-2025-49596
+- https://www.rescana.com/post/operation-reddirection-over-2-million-users-compromised-by-malicious-chrome-and-edge-extensions-in
+- https://vitest.dev/blog/vitest-4-1.html
+- https://github.com/microsoft/monaco-editor/blob/main/CHANGELOG.md
 
 ## Open Questions
 
-- Does ScriptVault's cookie-routing session-DNR path serialize concurrent header-modifying `GM_xmlhttpRequest` calls (the #2215 class), or already run them request-scoped? Needs live validation before scoping the concurrency item.
-- Would gating the on-device AI module behind `LanguageModel.availability()` reach a meaningful share of the user base, given the ~16 GB RAM / model-download requirement? Needs install-base/hardware data only the maintainer has.
-- Is enforced-SRI warn-by-default acceptable UX, or will it flag too many legitimate un-pinned CDN `@require`s to be useful? Needs a corpus check against common installed scripts.
+- Which Chromium derivatives are installed on the maintainer machine and should be first-class local smoke targets: Brave, Vivaldi, Opera, Arc, or only those found automatically?
+- Should custom Find Scripts sources allow only URL-template handoff, or should they support JSON result mapping for one-click install after an allowlisted schema review?
+- Should local shared libraries be script-scoped, workspace-scoped, or global, and how strict should portability warnings be when exporting/importing those scripts?
