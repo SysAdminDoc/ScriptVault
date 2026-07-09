@@ -1735,6 +1735,7 @@
         elements.workspaceInstalledStat = document.getElementById('workspaceInstalledStat');
         elements.workspaceActiveStat = document.getElementById('workspaceActiveStat');
         elements.workspaceStorageStat = document.getElementById('workspaceStorageStat');
+        elements.workspaceUpdatesStat = document.getElementById('workspaceUpdatesStat');
         elements.svRailScriptsCount = document.getElementById('svRailScriptsCount');
         elements.svRailUpdatesCount = document.getElementById('svRailUpdatesCount');
         elements.svRailCollectionsCount = document.getElementById('svRailCollectionsCount');
@@ -3393,6 +3394,9 @@
         if (elements.svRailUpdatesCount) {
             elements.svRailUpdatesCount.hidden = value === 0;
             elements.svRailUpdatesCount.textContent = numberFormatter.format(value);
+        }
+        if (elements.workspaceUpdatesStat) {
+            elements.workspaceUpdatesStat.textContent = numberFormatter.format(value);
         }
         if (elements.scriptsUpdateQueueBadge) {
             elements.scriptsUpdateQueueBadge.textContent = numberFormatter.format(value);

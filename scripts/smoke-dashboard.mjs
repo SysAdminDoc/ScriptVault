@@ -148,7 +148,7 @@ try {
 
     const failures = [];
     if (snapshot.title !== 'ScriptVault Dashboard') failures.push(`unexpected title: ${snapshot.title}`);
-    if (!/installed userscripts/i.test(snapshot.activeTab || '')) failures.push(`unexpected active tab: ${snapshot.activeTab}`);
+    if (!/^scripts$/i.test(snapshot.activeTab || '')) failures.push(`unexpected active tab: ${snapshot.activeTab}`);
     if (snapshot.selectedTab !== 'true') failures.push('installed scripts tab is not selected');
     if (!snapshot.hasHeader) failures.push('dashboard header missing');
     if (!snapshot.hasScriptsPanel) failures.push('scripts panel missing or inactive');

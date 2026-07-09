@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { page } from "vitest/browser";
 import "../../pages/theme-tokens.css";
 import "../../pages/dashboard.css";
+import "../../pages/dashboard-workbench.css";
 
 const rows = [
   ["YouTube Enhancer", "Enhance YouTube with ad block, theme...", "3.2.1", "youtube.com", "2h ago", "Greasy Fork", true],
@@ -42,8 +43,8 @@ function renderRows() {
   `).join("");
 }
 
-function renderDashboardShell() {
-  document.documentElement.dataset.theme = "dark";
+function renderDashboardShell(theme = "dark") {
+  document.documentElement.dataset.theme = theme;
   document.documentElement.dataset.density = "comfortable";
   document.documentElement.dataset.uiScale = "1";
   document.body.innerHTML = `
@@ -83,13 +84,24 @@ function renderDashboardShell() {
         </aside>
         <section class="tm-content sv-workbench-main">
           <div id="scriptsPanel" class="tm-panel active">
+            <div class="scripts-shell-header">
+              <div class="scripts-shell-copy"><h2>Scripts</h2><p>Manage, review, and run your userscripts from one trusted workspace.</p></div>
+              <div class="scripts-shell-actions" role="group" aria-label="Primary script actions">
+                <button class="toolbar-btn primary" id="btnNewScript" type="button">New script</button>
+                <button class="toolbar-btn" id="btnImportScript" type="button">Import</button>
+                <button class="toolbar-btn" id="btnWorkbenchSyncNow" type="button">Sync</button>
+              </div>
+            </div>
+            <div class="scripts-shell-stats" aria-label="Workspace stats">
+              <div class="scripts-shell-stat"><span class="scripts-shell-stat-mark">S</span><div class="scripts-shell-stat-copy"><strong>128</strong><span>Scripts</span></div></div>
+              <div class="scripts-shell-stat" data-tone="good"><span class="scripts-shell-stat-mark">ON</span><div class="scripts-shell-stat-copy"><strong>98</strong><span>Enabled</span></div></div>
+              <div class="scripts-shell-stat" data-tone="info"><span class="scripts-shell-stat-mark">UP</span><div class="scripts-shell-stat-copy"><strong>18</strong><span>Updates</span></div></div>
+              <div class="scripts-shell-health" id="svCommandHealth"><span class="scripts-shell-stat-mark">OK</span><div class="scripts-shell-health-copy"><strong>Sync healthy</strong><small>Last synced 1m ago</small></div></div>
+            </div>
             <div class="scripts-toolbar" role="toolbar" aria-label="Script controls">
               <div class="scripts-toolbar-left toolbar-section">
-                <button class="toolbar-btn primary" id="btnNewScript" type="button">New script <span class="sv-split-caret">v</span></button>
-                <button class="toolbar-btn" id="btnImportScript" type="button">Install from URL</button>
                 <button class="toolbar-btn" id="btnExportAll" type="button">Backup</button>
                 <button class="toolbar-btn" id="btnCheckUpdates" type="button">Check updates</button>
-                <button class="toolbar-btn" id="btnWorkbenchSyncNow" type="button">Sync now</button>
                 <button class="toolbar-btn" id="btnNewFolder" type="button">Folder</button>
                 <button class="toolbar-btn" id="btnFindScripts" type="button">Find</button>
                 <div class="toolbar-divider"></div>
@@ -102,7 +114,6 @@ function renderDashboardShell() {
                 </label>
                 <button class="toolbar-btn compact active" id="btnViewToggle" type="button">List</button>
                 <button class="toolbar-btn compact" id="btnColumnToggle" type="button">Cols</button>
-                <div class="sv-command-health"><span class="sv-status-dot good"></span><span><strong>Sync healthy</strong><small>Last synced 1m ago</small></span></div>
               </div>
             </div>
             <div class="scripts-workbench-grid">
@@ -194,12 +205,13 @@ function renderDashboardShell() {
 }
 
 describe("dashboard visual shell", () => {
-  it("matches the pinned dark list-view baseline", async () => {
+  it.each(["dark", "light", "catppuccin", "oled"])("matches the pinned %s list-view baseline", async (theme) => {
     await page.viewport(1600, 980);
-    renderDashboardShell();
+    renderDashboardShell(theme);
 
     const shell = page.getByTestId("dashboard-shell");
     await expect.element(shell).toBeVisible();
-    await expect.element(shell).toMatchScreenshot("dashboard-list-shell");
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    await expect.element(shell).toMatchScreenshot(`dashboard-list-shell-${theme}`);
   });
 });

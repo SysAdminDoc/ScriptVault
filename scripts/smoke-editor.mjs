@@ -107,7 +107,7 @@ try {
         timeout: 20000,
     });
     await page.waitForSelector('#scriptsPanel.tm-panel.active', { timeout: 15000 });
-    await page.waitForSelector('#btnNewScript', { timeout: 15000 });
+    await page.waitForSelector('#btnNewScript', { visible: true, timeout: 15000 });
 
     // First open after a version bump shows the What's New modal — it renders
     // asynchronously, so wait for it briefly and dismiss it the way a user

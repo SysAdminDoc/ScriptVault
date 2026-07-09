@@ -32,8 +32,9 @@ describe("visual regression gate contract", () => {
       ? readdirSync(screenshotDir, { recursive: true }).filter((entry) => String(entry).endsWith(".png"))
       : [];
 
-    expect(visualTest).toContain('toMatchScreenshot("dashboard-list-shell")');
+    expect(visualTest).toContain('toMatchScreenshot(`dashboard-list-shell-${theme}`)');
     expect(visualTest).toContain("../../pages/dashboard.css");
-    expect(baselines.length).toBeGreaterThan(0);
+    expect(visualTest).toContain("../../pages/dashboard-workbench.css");
+    expect(baselines.length).toBeGreaterThanOrEqual(4);
   });
 });

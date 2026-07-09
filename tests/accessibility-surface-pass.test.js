@@ -157,6 +157,19 @@ describe("accessibility surface pass", () => {
     expect(installHtml).toContain("@keyframes installLoadingSweep");
   });
 
+  test("dashboard workbench exposes the mockup hierarchy and status semantics", () => {
+    expect(dashboardHtml).toContain('href="dashboard-workbench.css"');
+    expect(dashboardHtml).toContain('class="scripts-shell-actions"');
+    expect(dashboardHtml).toContain('id="workspaceUpdatesStat"');
+    expect(dashboardHtml).toContain('id="svCommandHealth" role="status" aria-live="polite"');
+    expect(dashboardHtml).toContain('Manage, review, and run your userscripts from one trusted workspace.');
+    expect(dashboardHtml.match(/id="btnNewScript"/g)).toHaveLength(1);
+    expect(dashboardHtml.match(/id="btnImportScript"/g)).toHaveLength(1);
+    expect(dashboardHtml.match(/id="btnWorkbenchSyncNow"/g)).toHaveLength(1);
+    expect(dashboardJs).toContain("elements.workspaceUpdatesStat = document.getElementById('workspaceUpdatesStat')");
+    expect(dashboardJs).toContain("elements.workspaceUpdatesStat.textContent = numberFormatter.format(value)");
+  });
+
   test("dashboard table shell clips corners without trapping the sticky header", () => {
     const tableContainerBlocks = styleBlocksFor(".scripts-table-container");
     const finalTableContainerBlock = tableContainerBlocks.at(-1) || "";

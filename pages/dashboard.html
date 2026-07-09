@@ -7421,6 +7421,7 @@
             }
         }
     </style>
+    <link rel="stylesheet" href="dashboard-workbench.css">
 </head>
 <body>
     <!-- Accessibility: Skip to main content -->
@@ -7469,7 +7470,7 @@
             <div class="tm-tabs">
                 <button type="button" class="tm-tab" data-tab="newscript" id="tabNewScript" title="Create a new script" aria-label="Create a new script">+</button>
                 <div class="tm-tablist" role="tablist" aria-label="Dashboard sections" data-i18n-aria-label="dashboardSections">
-                    <button type="button" class="tm-tab active" id="dashboardTabScripts" role="tab" aria-selected="true" aria-controls="scriptsPanel" tabindex="0" data-tab="scripts"><span data-i18n="tabScripts">Installed Userscripts</span></button>
+                    <button type="button" class="tm-tab active" id="dashboardTabScripts" role="tab" aria-selected="true" aria-controls="scriptsPanel" tabindex="0" data-tab="scripts"><span data-i18n="tabScripts">Scripts</span></button>
                     <button type="button" class="tm-tab" id="dashboardTabUpdates" role="tab" aria-selected="false" aria-controls="updatesPanel" tabindex="-1" data-tab="updates"><span data-i18n="tabUpdates">Updates</span> <span class="tab-count" id="dashboardUpdatesBadge" hidden>0</span></button>
                     <button type="button" class="tm-tab" id="dashboardTabSettings" role="tab" aria-selected="false" aria-controls="settingsPanel" tabindex="-1" data-tab="settings"><span data-i18n="tabSettings">Settings</span></button>
                     <button type="button" class="tm-tab" id="dashboardTabUtilities" role="tab" aria-selected="false" aria-controls="utilitiesPanel" tabindex="-1" data-tab="utilities"><span data-i18n="tabUtilities">Utilities</span></button>
@@ -7586,43 +7587,48 @@
             <div class="scripts-shell-header">
                 <div class="scripts-shell-copy">
                     <span class="scripts-shell-kicker" data-i18n="scriptsWorkspaceKicker">Workspace</span>
-                    <h2 data-i18n="tabScripts">Installed Userscripts</h2>
-                    <p data-i18n="scriptsWorkspaceDescription">Install, organize, and inspect scripts without slowing down the control surface.</p>
+                    <h2 data-i18n="tabScripts">Scripts</h2>
+                    <p data-i18n="scriptsWorkspaceDescription">Manage, review, and run your userscripts from one trusted workspace.</p>
                 </div>
-                <div class="scripts-shell-stats" aria-label="Workspace stats" data-i18n-aria-label="workspaceStats">
-                    <div class="scripts-shell-stat">
-                        <span data-i18n="installed">Installed</span>
-                        <strong id="workspaceInstalledStat">0</strong>
-                    </div>
-                    <div class="scripts-shell-stat">
-                        <span data-i18n="active">Active</span>
-                        <strong id="workspaceActiveStat">0</strong>
-                    </div>
-                    <div class="scripts-shell-stat">
-                        <span data-i18n="storage">Storage</span>
-                        <strong id="workspaceStorageStat">0 B</strong>
-                    </div>
+                <div class="scripts-shell-actions" role="group" aria-label="Primary script actions">
+                    <button type="button" class="toolbar-btn primary" id="btnNewScript">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        New script
+                    </button>
+                    <button type="button" class="toolbar-btn" id="btnImportScript">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        Import
+                    </button>
+                    <button type="button" class="toolbar-btn" id="btnWorkbenchSyncNow">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 01-14.9 6.8"/><path d="M3 12a9 9 0 0114.9-6.8"/><path d="M7 19H3v-4"/><path d="M17 5h4v4"/></svg>
+                        Sync
+                    </button>
+                </div>
+            </div>
+            <div class="scripts-shell-stats" aria-label="Workspace stats" data-i18n-aria-label="workspaceStats">
+                <div class="scripts-shell-stat">
+                    <span class="scripts-shell-stat-mark" aria-hidden="true">S</span>
+                    <div class="scripts-shell-stat-copy"><strong id="workspaceInstalledStat">0</strong><span data-i18n="installed">Scripts</span></div>
+                </div>
+                <div class="scripts-shell-stat" data-tone="good">
+                    <span class="scripts-shell-stat-mark" aria-hidden="true">ON</span>
+                    <div class="scripts-shell-stat-copy"><strong id="workspaceActiveStat">0</strong><span data-i18n="active">Enabled</span></div>
+                </div>
+                <div class="scripts-shell-stat" data-tone="info">
+                    <span class="scripts-shell-stat-mark" aria-hidden="true">UP</span>
+                    <div class="scripts-shell-stat-copy"><strong id="workspaceUpdatesStat">0</strong><span data-i18n="tabUpdates">Updates</span></div>
+                </div>
+                <div class="scripts-shell-health" id="svCommandHealth" role="status" aria-live="polite">
+                    <span class="scripts-shell-stat-mark" aria-hidden="true">OK</span>
+                    <div class="scripts-shell-health-copy"><strong>Sync healthy</strong><small id="svCommandHealthDetail">Local vault ready</small></div>
                 </div>
             </div>
             <!-- Combined Toolbar -->
             <div class="scripts-toolbar" role="toolbar" aria-label="Script controls" data-i18n-aria-label="scriptControls">
                 <div class="scripts-toolbar-left">
-                    <button type="button" class="toolbar-btn primary" id="btnNewScript">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                        New script
-                        <span class="sv-split-caret" aria-hidden="true">v</span>
-                    </button>
-                    <button type="button" class="toolbar-btn" id="btnImportScript">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                        Install from URL
-                    </button>
                     <button type="button" class="toolbar-btn" id="btnCheckUpdates">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
                         Check updates
-                    </button>
-                    <button type="button" class="toolbar-btn" id="btnWorkbenchSyncNow">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 01-14.9 6.8"/><path d="M3 12a9 9 0 0114.9-6.8"/><path d="M7 19H3v-4"/><path d="M17 5h4v4"/></svg>
-                        Sync now
                     </button>
                     <button type="button" class="toolbar-btn" id="btnExportAll">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -7687,10 +7693,6 @@
                     <button type="button" class="toolbar-btn compact" id="btnColumnToggle" title="Show/hide columns" aria-label="Show or hide columns" data-i18n-title="toggleColumns" data-i18n-aria-label="toggleColumns" aria-haspopup="dialog">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M12 3v18M3 12h18M3 6h18M3 18h18"/></svg>
                     </button>
-                    <div class="sv-command-health" id="svCommandHealth" role="status" aria-live="polite">
-                        <span class="sv-status-dot good" aria-hidden="true"></span>
-                        <span><strong>Sync healthy</strong><small id="svCommandHealthDetail">Local vault ready</small></span>
-                    </div>
                 </div>
             </div>
             <div class="scripts-workbench-grid">

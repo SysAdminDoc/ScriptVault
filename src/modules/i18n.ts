@@ -1761,7 +1761,7 @@ const translations: TranslationMap = {
     refresh: 'Refresh',
 
     // Navigation
-    tabScripts: 'Installed Userscripts',
+    tabScripts: 'Scripts',
     tabUpdates: 'Updates',
     tabSettings: 'Settings',
     tabUtilities: 'Utilities',
@@ -1797,7 +1797,7 @@ const translations: TranslationMap = {
     toggleScriptView: 'Toggle table/card view',
     toggleColumns: 'Show or hide columns',
     scriptsWorkspaceKicker: 'Workspace',
-    scriptsWorkspaceDescription: 'Install, organize, and inspect scripts without slowing down the control surface.',
+    scriptsWorkspaceDescription: 'Manage, review, and run your userscripts from one trusted workspace.',
     workspaceStats: 'Workspace stats',
     scriptControls: 'Script controls',
     bulkActions: 'Bulk actions',
@@ -15205,7 +15205,7 @@ const translations: TranslationMap = {
     setupDismissWarning: 'Dismiss setup warning',
     search: 'Search',
     refresh: 'Refresh',
-    tabScripts: 'Installed Userscripts',
+    tabScripts: 'Scripts',
     tabUpdates: 'Updates',
     tabSettings: 'Settings',
     tabUtilities: 'Utilities',
