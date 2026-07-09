@@ -11829,8 +11829,8 @@
 
         // Myers-like O(ND) diff: compute edit script via LCS
         const n = oldLines.length, m = newLines.length;
-        // For very large files, fall back to simple positional comparison
-        const useSimple = n + m > 10000;
+        // Fall back before the LCS table grows beyond the diff tool's memory envelope.
+        const useSimple = n * m > 5000000;
         const ops = []; // {type: 'eq'|'del'|'add', oldIdx, newIdx}
         if (useSimple) {
             const maxLen = Math.max(n, m);

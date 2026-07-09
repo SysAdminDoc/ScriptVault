@@ -294,6 +294,15 @@ describe('Non-dashboard theme overlays use shared tokens (2026-07 regression)', 
 describe('Update confirmation diff modal sequencing (2026-07 regression)', () => {
   const src = read('pages/dashboard.js');
 
+  it('uses the diff matrix size, not line count sum, for the simple fallback guard', () => {
+    const diffStart = src.indexOf('function showDiffView');
+    const diffEnd = src.indexOf('// Precomputed conflict cache', diffStart);
+    const diffSource = src.slice(diffStart, diffEnd);
+
+    expect(diffSource).toContain('const useSimple = n * m > 5000000;');
+    expect(diffSource).not.toContain('const useSimple = n + m > 10000;');
+  });
+
   it('waits for the diff modal to close before reopening update confirmation', () => {
     const diffStart = src.indexOf('function showDiffView');
     const diffEnd = src.indexOf('// Precomputed conflict cache', diffStart);
