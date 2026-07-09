@@ -152,6 +152,51 @@ describe('script trust receipts', () => {
     });
   });
 
+  it('records explicitly keyed @require provenance on the matching dependency', async () => {
+    const receipt = await createScriptTrustReceipt({
+      operation: 'install',
+      code: '// ==UserScript==\n// @name Receipt Demo\n// ==/UserScript==\nconsole.log("new");',
+      meta: makeMeta({
+        require: [
+          'https://cdn.example.com/lib-a.js',
+          'https://cdn.example.com/lib-b.js',
+        ],
+        requireProvenance: [
+          'https://cdn.example.com/lib-b.js https://bundles.example.com/lib-b.intoto.jsonl',
+          'https://cdn.example.com/lib-a.js https://bundles.example.com/lib-a.intoto.jsonl',
+        ],
+        requireIdentity: [
+          'https://cdn.example.com/lib-b.js https://github.com/lib-b (issuer: https://github.com/login/oauth)',
+          'https://cdn.example.com/lib-a.js https://github.com/lib-a (issuer: https://github.com/login/oauth)',
+        ],
+        requireProvenanceByUrl: {
+          'https://cdn.example.com/lib-a.js': 'https://bundles.example.com/lib-a.intoto.jsonl',
+          'https://cdn.example.com/lib-b.js': 'https://bundles.example.com/lib-b.intoto.jsonl',
+        },
+        requireIdentityByUrl: {
+          'https://cdn.example.com/lib-a.js': 'https://github.com/lib-a (issuer: https://github.com/login/oauth)',
+          'https://cdn.example.com/lib-b.js': 'https://github.com/lib-b (issuer: https://github.com/login/oauth)',
+        },
+      }),
+      fetchDependencyBody: vi.fn(async (url) => `body:${url}`),
+    });
+
+    expect(receipt.dependencies.require[0]).toMatchObject({
+      url: 'https://cdn.example.com/lib-a.js',
+      provenance: {
+        bundleUrl: 'https://bundles.example.com/lib-a.intoto.jsonl',
+        identity: 'https://github.com/lib-a (issuer: https://github.com/login/oauth)',
+      },
+    });
+    expect(receipt.dependencies.require[1]).toMatchObject({
+      url: 'https://cdn.example.com/lib-b.js',
+      provenance: {
+        bundleUrl: 'https://bundles.example.com/lib-b.intoto.jsonl',
+        identity: 'https://github.com/lib-b (issuer: https://github.com/login/oauth)',
+      },
+    });
+  });
+
   it('records local editor saves without treating remote metadata as the save source', async () => {
     const receipt = await createScriptTrustReceipt({
       operation: 'local-save',

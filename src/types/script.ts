@@ -65,6 +65,8 @@ export interface ScriptMeta {
   require: string[];
   requireProvenance: string[];
   requireIdentity: string[];
+  requireProvenanceByUrl?: Record<string, string>;
+  requireIdentityByUrl?: Record<string, string>;
   resource: Record<string, string>;
   connect: string[];
 

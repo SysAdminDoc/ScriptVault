@@ -795,6 +795,8 @@ function parseMetadata(code) {
     require: [],
     requireProvenance: [],
     requireIdentity: [],
+    requireProvenanceByUrl: Object.create(null),
+    requireIdentityByUrl: Object.create(null),
     resource: {},
     'run-at': 'document-idle',
     noframes: false,
@@ -843,10 +845,60 @@ function parseMetadata(code) {
     }
   }
 
+  attachRequireMetadataMaps(meta);
+
   // Normalize homepage
   meta.homepage = meta.homepage || meta.homepageURL;
 
   return meta;
+}
+
+function parseRequireMetadataBinding(value, requireUrls) {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+
+  const requireUrl = requireUrls
+    .filter(url => typeof url === 'string' && url.length > 0)
+    .sort((a, b) => b.length - a.length)
+    .find(url => raw.startsWith(url) && /\s/.test(raw.charAt(url.length)));
+  if (!requireUrl) return null;
+
+  const mappedValue = raw.slice(requireUrl.length).trim();
+  return mappedValue ? { requireUrl, value: mappedValue } : null;
+}
+
+function buildRequireMetadataMap(values, requireUrls) {
+  const map = Object.create(null);
+  if (!Array.isArray(values) || !Array.isArray(requireUrls)) return map;
+
+  for (const value of values) {
+    const binding = parseRequireMetadataBinding(value, requireUrls);
+    if (binding) map[binding.requireUrl] = binding.value;
+  }
+  return map;
+}
+
+function attachRequireMetadataMaps(meta) {
+  const requires = Array.isArray(meta?.require) ? meta.require : [];
+  meta.requireProvenanceByUrl = buildRequireMetadataMap(meta?.requireProvenance, requires);
+  meta.requireIdentityByUrl = buildRequireMetadataMap(meta?.requireIdentity, requires);
+  return meta;
+}
+
+function hasRequireMetadataMap(map) {
+  return !!map && typeof map === 'object' && !Array.isArray(map) && Object.keys(map).length > 0;
+}
+
+function getRequireMetadataForUrl(meta, field, url, index) {
+  const mapField = field === 'requireIdentity' ? 'requireIdentityByUrl' : 'requireProvenanceByUrl';
+  const map = meta?.[mapField];
+  if (map && typeof map === 'object' && !Array.isArray(map)) {
+    if (Object.prototype.hasOwnProperty.call(map, url)) return map[url] || '';
+    if (hasRequireMetadataMap(map)) return '';
+  }
+
+  const values = Array.isArray(meta?.[field]) ? meta[field] : [];
+  return values[index] || '';
 }
 
 function getInstallPresentation() {
@@ -1287,7 +1339,10 @@ function renderInstallUI(sourceUrl) {
   const iconUrl = scriptMeta.icon64 || scriptMeta.icon;
   const source = getSourceSummary(sourceUrl);
   const dependencyCount = scriptMeta.require.length;
-  const hasRequireProvenance = (scriptMeta.requireProvenance || []).length > 0 || (scriptMeta.requireIdentity || []).length > 0;
+  const hasRequireProvenance = (scriptMeta.requireProvenance || []).length > 0
+    || (scriptMeta.requireIdentity || []).length > 0
+    || hasRequireMetadataMap(scriptMeta.requireProvenanceByUrl)
+    || hasRequireMetadataMap(scriptMeta.requireIdentityByUrl);
   const hasUpdater = Boolean(scriptMeta.updateURL || scriptMeta.downloadURL);
   const hasSignature = Boolean(extractSignatureInfo(scriptCode));
   analysisDecisionState = {
@@ -1492,8 +1547,8 @@ function renderInstallUI(sourceUrl) {
       </div>
       <div class="tag-list" id="provenance-list">
         ${scriptMeta.require.map((url, index) => {
-          const bundleUrl = scriptMeta.requireProvenance?.[index] || '';
-          const identity = scriptMeta.requireIdentity?.[index] || '';
+          const bundleUrl = getRequireMetadataForUrl(scriptMeta, 'requireProvenance', url, index);
+          const identity = getRequireMetadataForUrl(scriptMeta, 'requireIdentity', url, index);
           const title = bundleUrl && identity
             ? `${url} — ${bundleUrl} — ${identity}`
             : bundleUrl
@@ -2651,11 +2706,22 @@ function getRequireProvenanceDeclarations(meta) {
   const requires = Array.isArray(meta?.require) ? meta.require : [];
   const bundles = Array.isArray(meta?.requireProvenance) ? meta.requireProvenance : [];
   const identities = Array.isArray(meta?.requireIdentity) ? meta.requireIdentity : [];
+  const bundleByUrl = meta?.requireProvenanceByUrl && typeof meta.requireProvenanceByUrl === 'object'
+    ? meta.requireProvenanceByUrl
+    : Object.create(null);
+  const identityByUrl = meta?.requireIdentityByUrl && typeof meta.requireIdentityByUrl === 'object'
+    ? meta.requireIdentityByUrl
+    : Object.create(null);
   return {
     requires,
     bundles,
     identities,
-    hasDeclarations: bundles.length > 0 || identities.length > 0
+    bundleByUrl,
+    identityByUrl,
+    hasDeclarations: bundles.length > 0
+      || identities.length > 0
+      || hasRequireMetadataMap(bundleByUrl)
+      || hasRequireMetadataMap(identityByUrl)
   };
 }
 
@@ -2734,7 +2800,7 @@ function renderRequireProvenanceEntries(entries = []) {
 }
 
 async function checkRequireProvenance(meta) {
-  const { requires, bundles, identities, hasDeclarations } = getRequireProvenanceDeclarations(meta);
+  const { requires, bundles, identities, bundleByUrl, identityByUrl, hasDeclarations } = getRequireProvenanceDeclarations(meta);
   const summaryEl = document.getElementById('provenance-summary');
   const statusEl = document.getElementById('provenance-status');
 
@@ -2778,7 +2844,9 @@ async function checkRequireProvenance(meta) {
       data: {
         requires,
         requireProvenance: bundles,
-        requireIdentity: identities
+        requireIdentity: identities,
+        requireProvenanceByUrl: bundleByUrl,
+        requireIdentityByUrl: identityByUrl
       }
     });
 

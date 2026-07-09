@@ -19,8 +19,21 @@ describe('install @require provenance preview wiring', () => {
     // permanently "Not declared".
     expect(installPage).toContain('requireProvenance: [],');
     expect(installPage).toContain('requireIdentity: [],');
+    expect(installPage).toContain('requireProvenanceByUrl: Object.create(null)');
+    expect(installPage).toContain('requireIdentityByUrl: Object.create(null)');
     expect(installPage).toContain("key === 'require-provenance'");
     expect(installPage).toContain("key === 'require-identity'");
+  });
+
+  it('pairs declared provenance to explicit @require URLs before legacy index fallback', () => {
+    expect(installPage).toContain("getRequireMetadataForUrl(scriptMeta, 'requireProvenance', url, index)");
+    expect(installPage).toContain("getRequireMetadataForUrl(scriptMeta, 'requireIdentity', url, index)");
+    expect(installPage).toContain('requireProvenanceByUrl: bundleByUrl');
+    expect(installPage).toContain('requireIdentityByUrl: identityByUrl');
+    expect(installPage).not.toContain('scriptMeta.requireProvenance?.[index]');
+    expect(installPage).not.toContain('scriptMeta.requireIdentity?.[index]');
+    expect(backgroundCore).toContain('_receiptMetadataValueForUrl(bundleByUrl, bundleUrls, url, index)');
+    expect(backgroundCore).toContain('_receiptMetadataValueForUrl(identityByUrl, identities, url, index)');
   });
 
   it('requests provenance verification from the background, not the install page', () => {

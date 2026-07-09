@@ -37951,6 +37951,8 @@ function parseUserscript(code) {
     require: [],
     requireProvenance: [],
     requireIdentity: [],
+    requireProvenanceByUrl: Object.create(null),
+    requireIdentityByUrl: Object.create(null),
     resource: Object.create(null),
     'run-at': 'document-idle',
     noframes: false,
@@ -38189,8 +38191,40 @@ function parseUserscript(code) {
     meta.grant = ['none'];
   }
   meta.esm = meta.module === '1' || meta['inject-into'] === 'module';
+  attachRequireMetadataMaps(meta);
 
   return { meta, code, metaBlock: metaBlockMatch[0] };
+}
+
+function parseRequireMetadataBinding(value, requireUrls) {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+
+  const requireUrl = [...requireUrls]
+    .filter(url => typeof url === 'string' && url.length > 0)
+    .sort((a, b) => b.length - a.length)
+    .find(url => raw.startsWith(url) && /\s/.test(raw.charAt(url.length)));
+  if (!requireUrl) return null;
+
+  const mappedValue = raw.slice(requireUrl.length).trim();
+  return mappedValue ? { requireUrl, value: mappedValue } : null;
+}
+
+function buildRequireMetadataMap(values, requireUrls) {
+  const map = Object.create(null);
+  if (!Array.isArray(values) || !Array.isArray(requireUrls)) return map;
+
+  for (const value of values) {
+    const binding = parseRequireMetadataBinding(value, requireUrls);
+    if (binding) map[binding.requireUrl] = binding.value;
+  }
+  return map;
+}
+
+function attachRequireMetadataMaps(meta) {
+  meta.requireProvenanceByUrl = buildRequireMetadataMap(meta.requireProvenance, meta.require);
+  meta.requireIdentityByUrl = buildRequireMetadataMap(meta.requireIdentity, meta.require);
+  return meta;
 }
 
 // ============================================================================
@@ -38204,6 +38238,22 @@ function parseUserscript(code) {
 function _receiptArray(value) {
   if (Array.isArray(value)) return value.filter(item => typeof item === 'string' && item.length > 0);
   return typeof value === 'string' && value.length > 0 ? [value] : [];
+}
+
+function _receiptStringMap(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value).filter(([key, mapValue]) => (
+    typeof key === 'string'
+    && key.length > 0
+    && typeof mapValue === 'string'
+    && mapValue.length > 0
+  )));
+}
+
+function _receiptMetadataValueForUrl(map, values, url, index) {
+  if (Object.hasOwn(map, url)) return map[url] || '';
+  if (Object.keys(map).length > 0) return '';
+  return values[index] || '';
 }
 
 function _receiptHost(url) {
@@ -38486,12 +38536,14 @@ async function previewRequireProvenance(data = {}) {
   const requireUrls = _receiptArray(data.requires || data.require || meta.require);
   const bundleUrls = _receiptArray(data.requireProvenance || meta.requireProvenance);
   const identities = _receiptArray(data.requireIdentity || meta.requireIdentity);
+  const bundleByUrl = _receiptStringMap(data.requireProvenanceByUrl || meta.requireProvenanceByUrl);
+  const identityByUrl = _receiptStringMap(data.requireIdentityByUrl || meta.requireIdentityByUrl);
   const entries = [];
 
   for (let index = 0; index < requireUrls.length; index += 1) {
     const url = requireUrls[index];
-    const bundleUrl = bundleUrls[index] || '';
-    const identity = identities[index] || '';
+    const bundleUrl = _receiptMetadataValueForUrl(bundleByUrl, bundleUrls, url, index);
+    const identity = _receiptMetadataValueForUrl(identityByUrl, identities, url, index);
     let provenance = null;
 
     if (!bundleUrl && !identity) {
@@ -38555,15 +38607,15 @@ async function _snapshotDependency(url, fetchDependencyBody, known, bundleUrl = 
   }
 }
 
-async function _snapshotDependencies(urls, fetchDependencyBody, known, bundleUrls = [], identities = [], fetchProvenanceBundle = null) {
+async function _snapshotDependencies(urls, fetchDependencyBody, known, bundleUrls = [], identities = [], fetchProvenanceBundle = null, bundleByUrl = {}, identityByUrl = {}) {
   const snapshots = [];
   for (const [index, url] of urls.entries()) {
     snapshots.push(await _snapshotDependency(
       url,
       fetchDependencyBody,
       known.get(url),
-      bundleUrls[index] || '',
-      identities[index] || '',
+      _receiptMetadataValueForUrl(bundleByUrl, bundleUrls, url, index),
+      _receiptMetadataValueForUrl(identityByUrl, identities, url, index),
       fetchProvenanceBundle
     ));
   }
@@ -38648,11 +38700,15 @@ async function createScriptTrustReceipt({ operation, code, meta, sourceUrl = '',
   const requireUrls = _receiptArray(meta.require);
   const requireProvenance = _receiptArray(meta.requireProvenance);
   const requireIdentity = _receiptArray(meta.requireIdentity);
+  const requireProvenanceByUrl = _receiptStringMap(meta.requireProvenanceByUrl);
+  const requireIdentityByUrl = _receiptStringMap(meta.requireIdentityByUrl);
   const previousRequireUrls = _receiptArray(previousScript?.meta?.require);
   const previousRequireProvenance = _receiptArray(previousScript?.meta?.requireProvenance);
   const previousRequireIdentity = _receiptArray(previousScript?.meta?.requireIdentity);
-  const previousRequireSnapshots = await _snapshotDependencies(previousRequireUrls, fetchDependencyBody, _knownDependencySnapshots(previousScript), previousRequireProvenance, previousRequireIdentity, fetchProvenanceBundle);
-  const requireSnapshots = await _snapshotDependencies(requireUrls, fetchDependencyBody, new Map(), requireProvenance, requireIdentity, fetchProvenanceBundle);
+  const previousRequireProvenanceByUrl = _receiptStringMap(previousScript?.meta?.requireProvenanceByUrl);
+  const previousRequireIdentityByUrl = _receiptStringMap(previousScript?.meta?.requireIdentityByUrl);
+  const previousRequireSnapshots = await _snapshotDependencies(previousRequireUrls, fetchDependencyBody, _knownDependencySnapshots(previousScript), previousRequireProvenance, previousRequireIdentity, fetchProvenanceBundle, previousRequireProvenanceByUrl, previousRequireIdentityByUrl);
+  const requireSnapshots = await _snapshotDependencies(requireUrls, fetchDependencyBody, new Map(), requireProvenance, requireIdentity, fetchProvenanceBundle, requireProvenanceByUrl, requireIdentityByUrl);
   const resources = meta.resource && typeof meta.resource === 'object'
     ? Object.entries(meta.resource)
         .filter(([, url]) => typeof url === 'string' && url.length > 0)

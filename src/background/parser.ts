@@ -192,6 +192,34 @@ function parseBooleanDirective(value: string): boolean {
   return !['0', 'false', 'no', 'off', 'disabled'].includes(normalized);
 }
 
+function parseRequireMetadataBinding(value: string, requireUrls: string[]): { requireUrl: string; value: string } | null {
+  const raw = value.trim();
+  if (!raw) return null;
+
+  const requireUrl = [...requireUrls]
+    .filter((url) => typeof url === 'string' && url.length > 0)
+    .sort((a, b) => b.length - a.length)
+    .find((url) => raw.startsWith(url) && /\s/.test(raw.charAt(url.length)));
+  if (!requireUrl) return null;
+
+  const mappedValue = raw.slice(requireUrl.length).trim();
+  return mappedValue ? { requireUrl, value: mappedValue } : null;
+}
+
+function buildRequireMetadataMap(values: string[], requireUrls: string[]): Record<string, string> {
+  const map = Object.create(null) as Record<string, string>;
+  for (const value of values) {
+    const binding = parseRequireMetadataBinding(value, requireUrls);
+    if (binding) map[binding.requireUrl] = binding.value;
+  }
+  return map;
+}
+
+function attachRequireMetadataMaps(meta: ScriptMeta): void {
+  meta.requireProvenanceByUrl = buildRequireMetadataMap(meta.requireProvenance, meta.require);
+  meta.requireIdentityByUrl = buildRequireMetadataMap(meta.requireIdentity, meta.require);
+}
+
 /**
  * Parse a userscript's metadata block and extract all supported directives.
  *
@@ -225,6 +253,8 @@ export function parseUserscript(code: string): ParseResult {
     require: [],
     requireProvenance: [],
     requireIdentity: [],
+    requireProvenanceByUrl: Object.create(null) as Record<string, string>,
+    requireIdentityByUrl: Object.create(null) as Record<string, string>,
     resource: Object.create(null) as Record<string, string>,
     'run-at': 'document-idle',
     noframes: false,
@@ -428,6 +458,7 @@ export function parseUserscript(code: string): ParseResult {
     meta.grant = ['none'];
   }
   meta.esm = meta.module === '1' || meta['inject-into'] === 'module';
+  attachRequireMetadataMaps(meta);
 
   return { meta, code, metaBlock: metaBlockMatch[0]! };
 }

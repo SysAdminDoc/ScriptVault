@@ -14,6 +14,24 @@ function asArray(value: unknown): string[] {
   return typeof value === 'string' && value.length > 0 ? [value] : [];
 }
 
+function asStringMap(value: unknown): Record<string, string> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value).filter((entry): entry is [string, string] => (
+      typeof entry[0] === 'string'
+      && entry[0].length > 0
+      && typeof entry[1] === 'string'
+      && entry[1].length > 0
+    )),
+  );
+}
+
+function metadataValueForUrl(map: Record<string, string>, values: string[], url: string, index: number): string {
+  if (Object.hasOwn(map, url)) return map[url] || '';
+  if (Object.keys(map).length > 0) return '';
+  return values[index] || '';
+}
+
 function hostFromUrl(url: string): string {
   try {
     return new URL(url).host;
@@ -177,6 +195,8 @@ async function snapshotDependencies(
   bundleUrls: string[] = [],
   identities: string[] = [],
   fetchProvenanceBundle?: (url: string) => Promise<string | null | undefined>,
+  bundleByUrl: Record<string, string> = {},
+  identityByUrl: Record<string, string> = {},
 ): Promise<ScriptTrustReceiptDependency[]> {
   const snapshots: ScriptTrustReceiptDependency[] = [];
   for (const [index, url] of urls.entries()) {
@@ -184,8 +204,8 @@ async function snapshotDependencies(
       url,
       fetchDependencyBody,
       known.get(url),
-      bundleUrls[index] || '',
-      identities[index] || '',
+      metadataValueForUrl(bundleByUrl, bundleUrls, url, index),
+      metadataValueForUrl(identityByUrl, identities, url, index),
       fetchProvenanceBundle,
     ));
   }
@@ -302,9 +322,13 @@ export async function createScriptTrustReceipt(options: {
   const requires = asArray(meta.require);
   const requireProvenance = asArray(meta.requireProvenance);
   const requireIdentity = asArray(meta.requireIdentity);
+  const requireProvenanceByUrl = asStringMap(meta.requireProvenanceByUrl);
+  const requireIdentityByUrl = asStringMap(meta.requireIdentityByUrl);
   const previousRequires = asArray(previousScript?.meta?.require);
   const previousRequireProvenance = asArray(previousScript?.meta?.requireProvenance);
   const previousRequireIdentity = asArray(previousScript?.meta?.requireIdentity);
+  const previousRequireProvenanceByUrl = asStringMap(previousScript?.meta?.requireProvenanceByUrl);
+  const previousRequireIdentityByUrl = asStringMap(previousScript?.meta?.requireIdentityByUrl);
   const knownDependencySnapshots = getKnownDependencySnapshots(previousScript);
   const previousRequireSnapshots = await snapshotDependencies(
     previousRequires,
@@ -313,6 +337,8 @@ export async function createScriptTrustReceipt(options: {
     previousRequireProvenance,
     previousRequireIdentity,
     options.fetchProvenanceBundle,
+    previousRequireProvenanceByUrl,
+    previousRequireIdentityByUrl,
   );
   const requireSnapshots = await snapshotDependencies(
     requires,
@@ -321,6 +347,8 @@ export async function createScriptTrustReceipt(options: {
     requireProvenance,
     requireIdentity,
     options.fetchProvenanceBundle,
+    requireProvenanceByUrl,
+    requireIdentityByUrl,
   );
   const resources = meta.resource && typeof meta.resource === 'object'
     ? Object.entries(meta.resource)
