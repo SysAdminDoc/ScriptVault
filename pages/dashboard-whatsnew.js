@@ -11,6 +11,21 @@ const WhatsNew = (() => {
     : '2.0.0';
 
   const CHANGELOG = {
+    '3.19.0': {
+      title: 'ScriptVault 3.19.0 â€” Professional Workbench',
+      date: '2026-07-09',
+      highlights: [
+        { icon: 'WORK', title: 'Focused Script Workspace', desc: 'Scripts now open into a clear page header, primary action group, live vault metrics, dense filter controls, and a contextual trust/access inspector that stays useful without competing with the table.' },
+        { icon: 'SURF', title: 'One Interface Across Every Surface', desc: 'The dashboard, popup, side panel, install review, DevTools diagnostics, and editor chrome now share the same graphite-and-emerald surface hierarchy, controls, focus treatment, and state language.' },
+        { icon: 'VIEW', title: 'Four Themes, Visually Gated', desc: 'Dark, light, Catppuccin, and OLED dashboard layouts each have a browser-rendered regression baseline so theme-specific contrast and layout drift fail locally before release.' },
+      ],
+      improvements: [
+        'Setup guidance is calmer and more compact without hiding the main workspace.',
+        'Empty, loading, warning, selected, disabled, and diagnostics states use consistent hierarchy and recovery copy.',
+        'Screenshot capture now covers dashboard, popup, side panel, install review, and DevTools without the release modal obscuring the product.',
+        'Dashboard and editor smoke tests wait for the final workbench stylesheet and verify the redesigned controls are hit-testable.',
+      ],
+    },
     '3.18.2': {
       title: 'ScriptVault 3.18.2 — Deep Audit Hardening 2',
       date: '2026-07-09',

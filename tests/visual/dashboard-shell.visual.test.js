@@ -53,7 +53,7 @@ function renderDashboardShell(theme = "dark") {
         <aside class="sv-nav-rail" aria-label="ScriptVault workspace">
           <div class="sv-rail-brand">
             <div class="script-icon-placeholder" aria-hidden="true">SV</div>
-            <div><strong>ScriptVault</strong><span>v3.18.0</span></div>
+            <div><strong>ScriptVault</strong><span>v3.19.0</span></div>
           </div>
           <nav class="sv-rail-nav" aria-label="Dashboard sections">
             <button class="sv-rail-item active" type="button"><span class="sv-rail-icon">#</span><span>Scripts</span><span class="sv-rail-count">128</span></button>

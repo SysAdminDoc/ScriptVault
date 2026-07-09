@@ -2,6 +2,30 @@
 
 All notable changes to ScriptVault will be documented in this file.
 
+## [v3.19.0] â€” Professional workbench redesign (2026-07-09)
+
+- **Recomposed the Scripts workspace around the primary workflow.** A clear
+  page title and action group, four live vault-health metrics, a focused
+  search/filter command bar, stronger row selection, and a contextual
+  trust/access inspector now match the new high-fidelity dashboard concept.
+- **Established a shared premium surface system.** Dark mode now uses a calmer
+  graphite/emerald palette; light mode has stronger text and boundary contrast;
+  shared sunken, raised, elevated, semantic, shadow, and motion tokens keep all
+  four themes coherent.
+- **Aligned every compact and diagnostic surface.** Popup branding, side-panel
+  sections, install review/error containment, and DevTools diagnostics now use
+  the same hierarchy, focus states, borders, and interaction timing as the
+  dashboard and editor.
+- **Expanded visual regression coverage from one theme to four.** Browser-mode
+  baselines now pin dark, light, Catppuccin, and OLED dashboard layouts.
+- **Strengthened rendered QA.** The screenshot workflow now captures dashboard,
+  popup, side panel, install review, and DevTools; it dismisses the release
+  modal before dashboard capture and waits for final layout paints. Dashboard
+  and editor smoke tests were updated for the new workbench hierarchy.
+- **Refined UX copy and states.** The main workspace now says exactly what it
+  supports, Import is consistently labeled, the setup warning is less dominant,
+  and empty/error surfaces provide clear recovery actions.
+
 ## [v3.18.2] — Deep audit hardening pass 2 (2026-07-09)
 
 - **Security: revoke EasyCloud OAuth token via POST body, not URL query.**

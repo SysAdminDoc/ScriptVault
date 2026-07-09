@@ -1,4 +1,4 @@
-// ScriptVault v3.18.2 - Background Service Worker
+// ScriptVault v3.19.0 - Background Service Worker
 // Comprehensive userscript manager with cloud sync and auto-updates
 // NOTE: This file is built from source modules. Edit the individual files in
 // shared/, modules/, and lib/, then run `npm run build` to regenerate.
@@ -4898,7 +4898,7 @@ const I18n = (() => {
       search: "Search",
       refresh: "Refresh",
       // Navigation
-      tabScripts: "Installed Userscripts",
+      tabScripts: "Scripts",
       tabUpdates: "Updates",
       tabSettings: "Settings",
       tabUtilities: "Utilities",
@@ -4931,7 +4931,7 @@ const I18n = (() => {
       toggleScriptView: "Toggle table/card view",
       toggleColumns: "Show or hide columns",
       scriptsWorkspaceKicker: "Workspace",
-      scriptsWorkspaceDescription: "Install, organize, and inspect scripts without slowing down the control surface.",
+      scriptsWorkspaceDescription: "Manage, review, and run your userscripts from one trusted workspace.",
       workspaceStats: "Workspace stats",
       scriptControls: "Script controls",
       bulkActions: "Bulk actions",
@@ -18324,7 +18324,7 @@ const I18n = (() => {
       setupDismissWarning: "Dismiss setup warning",
       search: "Search",
       refresh: "Refresh",
-      tabScripts: "Installed Userscripts",
+      tabScripts: "Scripts",
       tabUpdates: "Updates",
       tabSettings: "Settings",
       tabUtilities: "Utilities",
