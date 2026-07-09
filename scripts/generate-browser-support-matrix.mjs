@@ -85,12 +85,11 @@ function edgeBuildSummary(version) {
     artifact,
     generatedAt: report.generatedAt || null,
     packageCommand: report.packageCommand || 'npm run build:edge:check',
-    browserSmoke: smokePassed
-      ? `Dedicated local Edge sideload smoke passed on ${smoke.edgeVersion || 'Microsoft Edge'}; dashboard, popup, userScripts toggle, save/toggle, and local target execution were verified`
-      : report.edgeReadiness?.browserSmoke || 'No dedicated Edge browser smoke evidence is present.',
+    browserSmoke: edgeSmokeDescription(smoke, report, version),
     browserSmokeCommand: report.edgeReadiness?.browserSmokeCommand || null,
-    browserSmokeEvidence: smokePassed ? smoke.path : report.edgeReadiness?.browserSmokeEvidence || null,
+    browserSmokeEvidence: smoke?.path || report.edgeReadiness?.browserSmokeEvidence || null,
     browserSmokePassed: smokePassed,
+    browserSmokeStatus: smoke?.status || 'missing',
     browserSmokeGeneratedAt: smoke?.generatedAt || null,
     initialPublication: report.edgeReadiness?.initialPublication || 'Manual Partner Center upload remains required.',
     updateAutomation: report.edgeReadiness?.updateAutomation || 'Edge Add-ons REST update automation is deferred.',
@@ -106,18 +105,28 @@ function edgeSmokeSummary(version) {
     if (!existsSync(fullPath)) continue;
     try {
       const report = readJson(path);
+      const reportVersion = report.version || null;
+      const status = reportVersion && reportVersion !== version
+        ? 'stale'
+        : report.status || 'unknown';
       return {
         path,
-        status: report.status || 'unknown',
+        status,
+        reportedStatus: report.status || 'unknown',
+        version: reportVersion,
         generatedAt: report.generatedAt || null,
         edgeVersion: report.edgeVersion || null,
+        failure: report.failure || report.error || report.message || null,
       };
     } catch {
       return {
         path,
         status: 'unreadable',
+        reportedStatus: 'unreadable',
+        version: null,
         generatedAt: null,
         edgeVersion: null,
+        failure: null,
       };
     }
   }
@@ -126,6 +135,58 @@ function edgeSmokeSummary(version) {
 
 function trimSentence(value) {
   return String(value || '').replace(/[.。]+$/u, '');
+}
+
+function compactTableText(value, maxLength = 180) {
+  const text = String(value || '').replace(/\s+/g, ' ').replace(/\|/g, '/').trim();
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength - 3).trimEnd()}...`;
+}
+
+function edgeSmokeAttemptDate(smoke, fallbackDate = 'unknown date') {
+  return smoke?.generatedAt?.slice(0, 10) || fallbackDate;
+}
+
+function edgeSmokeDescription(smoke, report, version) {
+  if (!smoke) {
+    return report.edgeReadiness?.browserSmoke || 'No dedicated Edge browser smoke evidence is present.';
+  }
+
+  if (smoke.status === 'passed') {
+    return `Dedicated local Edge sideload smoke passed on ${smoke.edgeVersion || 'Microsoft Edge'}; dashboard, popup, userScripts toggle, save/toggle, and local target execution were verified`;
+  }
+
+  if (smoke.status === 'stale') {
+    return `Dedicated local Edge sideload smoke evidence is stale: artifact version ${smoke.version || '<missing>'} does not match manifest ${version}; rerun \`npm run smoke:edge\` before release`;
+  }
+
+  if (smoke.status === 'unreadable') {
+    return `Dedicated local Edge sideload smoke evidence is unreadable at \`${smoke.path}\`; rerun \`npm run smoke:edge\` before release`;
+  }
+
+  const detail = compactTableText(smoke.failure);
+  const status = compactTableText(smoke.status || 'unknown');
+  return `Dedicated local Edge sideload smoke ${status} on ${edgeSmokeAttemptDate(smoke)}${detail ? `: ${detail}` : ''}; rerun \`npm run smoke:edge\` before release`;
+}
+
+function edgeLastVerificationSummary(edgeEvidence, date) {
+  if (edgeEvidence.browserSmokeStatus === 'passed') {
+    return `${edgeEvidence.browserSmokeGeneratedAt?.slice(0, 10) || date} Edge sideload smoke passed; package/report generated`;
+  }
+
+  if (edgeEvidence.browserSmokeStatus === 'missing') {
+    return `${date} generated package/report; local Edge smoke command is available but has no current evidence`;
+  }
+
+  if (edgeEvidence.browserSmokeStatus === 'stale') {
+    return `${date} generated package/report; Edge sideload smoke evidence is stale`;
+  }
+
+  if (edgeEvidence.browserSmokeStatus === 'unreadable') {
+    return `${date} generated package/report; Edge sideload smoke evidence is unreadable`;
+  }
+
+  return `${edgeEvidence.browserSmokeGeneratedAt?.slice(0, 10) || date} Edge sideload smoke ${edgeEvidence.browserSmokeStatus}; package/report generated`;
 }
 
 function matrixMarkdown(date) {
@@ -141,9 +202,7 @@ function matrixMarkdown(date) {
     ? `| Firefox for Android | Manifest validation target | Firefox for Android ${firefoxManifest.browser_specific_settings.gecko_android.strict_min_version}+ | ${date} package/manifests; no Android device smoke yet | \`manifest-firefox.json\` \`gecko_android\` target plus Firefox source/package ZIP | Same Firefox API deferrals; no side panel; Android device smoke is not wired |`
     : `| Firefox for Android | Deferred; not an AMO compatibility target | No current \`gecko_android\` manifest target | ${date} | \`manifest-firefox.json\` intentionally omits \`gecko_android\` until an Android smoke gate exists | Android UI/runtime, extension-action overlay, host-permission, import/export, and WebDAV paths are unverified |`;
 
-  const edgeLastVerification = edgeEvidence.browserSmokePassed
-    ? `${edgeEvidence.browserSmokeGeneratedAt?.slice(0, 10) || date} Edge sideload smoke passed; package/report generated`
-    : `${date} generated package/report; local Edge smoke command is available but has no current evidence`;
+  const edgeLastVerification = edgeLastVerificationSummary(edgeEvidence, date);
 
   return `<!-- SCRIPT_VAULT_BROWSER_SUPPORT_MATRIX:START -->
 _Last generated: ${date} with \`npm run support:matrix\`. Version source: \`manifest.json\` / \`manifest-firefox.json\` ${version}._

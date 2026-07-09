@@ -18,6 +18,10 @@ All notable changes to ScriptVault will be documented in this file.
   packaging uses explicit assets instead of copying all of `lib/`, Firefox
   smoke tests refuse stale ZIPs, and installed Firefox package version is
   checked against `package.json`.
+- **Browser support evidence is failure-aware.** The generated support matrix
+  now distinguishes failed, stale, unreadable, missing, and passed Edge sideload
+  smoke evidence instead of flattening every non-passing artifact to "no current
+  evidence."
 - **Dashboard reliability polish.** Collection deletes use the dashboard modal
   confirmation flow, repeated command-palette opens refocus the existing modal,
   sidepanel launch buttons fall back cleanly, DevTools filtered clear preserves
