@@ -232,6 +232,15 @@ const AdvancedLinter = (() => {
 .sv-lint-diff-line-ctx {
   color: var(--text-secondary, #a0a0a0);
 }
+.sv-lint-diff-gap {
+  color: var(--text-muted, #707070);
+  background: var(--bg-input, #333);
+  border-block: 1px solid var(--border-color, #404040);
+  margin: 3px 0;
+  padding: 3px 8px;
+  text-align: center;
+  font-style: italic;
+}
 .sv-lint-diff-footer {
   display: flex;
   justify-content: flex-end;
@@ -961,23 +970,38 @@ const AdvancedLinter = (() => {
     return rule.fix(code, fixData, meta);
   }
 
-  function autoFixAll(code) {
+  function _autoFixAllDetailed(code) {
     let result = code;
-    const maxPasses = 5;
+    const seenStates = new Set([result]);
+    const maxPasses = Math.max(50, Math.min(2000, code.split('\n').length * 4 + RULES.length * 8));
+    let applied = 0;
     for (let pass = 0; pass < maxPasses; pass++) {
       const issues = lint(result).filter(i => i.fixable);
       if (!issues.length) break;
-      // Apply fixes one at a time (re-lint after each since line numbers shift)
-      const issue = issues[0];
-      const rule = RULES.find(r => r.id === issue.ruleId);
-      if (rule && rule.fix) {
+      let changed = false;
+      // Apply one successful fix per pass, then re-lint because line numbers and
+      // metadata offsets shift after each mutation.
+      for (const issue of issues) {
+        const rule = RULES.find(r => r.id === issue.ruleId);
+        if (!rule || !rule.fix) continue;
         const meta = _parseMetadata(result);
         const before = result;
         result = rule.fix(result, issue.fixData, meta);
-        if (result === before) break; // Prevent infinite loop
+        if (result !== before) {
+          changed = true;
+          applied++;
+          break;
+        }
       }
+      if (!changed || seenStates.has(result)) break;
+      seenStates.add(result);
     }
-    return result;
+    const remainingFixable = lint(result).filter(i => i.fixable).length;
+    return { code: result, applied, remainingFixable };
+  }
+
+  function autoFixAll(code) {
+    return _autoFixAllDetailed(code).code;
   }
 
   function getRules() {
@@ -988,7 +1012,7 @@ const AdvancedLinter = (() => {
   /*  Diff Preview                                                       */
   /* ------------------------------------------------------------------ */
 
-  function _showDiffPreview(original, fixed, onAccept) {
+  function _showDiffPreview(original, fixed, onAccept, options = {}) {
     const origLines = original.split('\n');
     const fixedLines = fixed.split('\n');
     const overlay = document.createElement('div');
@@ -1003,6 +1027,13 @@ const AdvancedLinter = (() => {
     const body = document.createElement('div');
     body.className = 'sv-lint-diff-body';
 
+    if (options.notice) {
+      const notice = document.createElement('div');
+      notice.className = 'sv-lint-diff-gap';
+      notice.textContent = options.notice;
+      body.appendChild(notice);
+    }
+
     // Simple LCS-based diff
     const diff = _computeDiff(origLines, fixedLines);
     for (const entry of diff) {
@@ -1013,6 +1044,10 @@ const AdvancedLinter = (() => {
       } else if (entry.type === 'add') {
         div.className = 'sv-lint-diff-line-add';
         div.textContent = '+ ' + entry.text;
+      } else if (entry.type === 'gap') {
+        div.className = 'sv-lint-diff-gap';
+        const noun = entry.count === 1 ? 'line' : 'lines';
+        div.textContent = `... ${entry.count} unchanged ${noun} ...`;
       } else {
         div.className = 'sv-lint-diff-line-ctx';
         div.textContent = '  ' + entry.text;
@@ -1072,6 +1107,35 @@ const AdvancedLinter = (() => {
     return ops;
   }
 
+  function _collapseDiffContext(ops, contextLines = 3) {
+    if (!ops.some(op => op.type !== 'ctx')) return ops;
+    const collapsed = [];
+    let i = 0;
+    while (i < ops.length) {
+      if (ops[i].type !== 'ctx') {
+        collapsed.push(ops[i]);
+        i++;
+        continue;
+      }
+      const start = i;
+      while (i < ops.length && ops[i].type === 'ctx') i++;
+      const run = ops.slice(start, i);
+      const beforeChange = start > 0;
+      const afterChange = i < ops.length;
+      const headCount = beforeChange ? contextLines : 0;
+      const tailCount = afterChange ? contextLines : 0;
+      if (run.length <= headCount + tailCount + 1) {
+        collapsed.push(...run);
+        continue;
+      }
+      const head = headCount ? run.slice(0, headCount) : [];
+      const tail = tailCount ? run.slice(run.length - tailCount) : [];
+      const omitted = run.length - head.length - tail.length;
+      collapsed.push(...head, { type: 'gap', count: omitted }, ...tail);
+    }
+    return collapsed;
+  }
+
   function _computeDiff(a, b) {
     // Myers-like simple diff
     const result = [];
@@ -1079,7 +1143,7 @@ const AdvancedLinter = (() => {
     // Size guard: LCS table allocates ~4*(n+1)*(m+1) bytes; cap at 5M cells
     // to match dashboard-diff.js. For oversized inputs, fall back to a linear
     // hash-based diff that still produces useful ctx/add/remove lines.
-    if (n * m > 5000000) return _computeSimpleDiff(a, b);
+    if (n * m > 5000000) return _collapseDiffContext(_computeSimpleDiff(a, b));
     // Build LCS table
     const dp = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
     for (let i = 1; i <= n; i++) {
@@ -1100,11 +1164,7 @@ const AdvancedLinter = (() => {
       }
     }
     ops.reverse();
-    // NOTE: the fix-preview currently renders the full op list. A prior
-    // "collapse unchanged regions" loop here was a no-op (it copied every op
-    // without eliding any context) — removed. Real hunk collapsing is tracked
-    // on the roadmap.
-    return ops;
+    return _collapseDiffContext(ops);
   }
 
   /* ------------------------------------------------------------------ */
@@ -1170,14 +1230,17 @@ const AdvancedLinter = (() => {
       fixAllBtn.className = 'sv-lint-btn sv-lint-btn-fixall';
       fixAllBtn.textContent = `Fix All (${fixable})`;
       fixAllBtn.onclick = () => {
-        const fixed = autoFixAll(_currentCode);
-        if (fixed !== _currentCode) {
-          _showDiffPreview(_currentCode, fixed, () => {
-            if (_onApplyFix) _onApplyFix(fixed);
-            _currentCode = fixed;
-            _issues = lint(fixed);
+        const fixResult = _autoFixAllDetailed(_currentCode);
+        if (fixResult.code !== _currentCode) {
+          const notice = fixResult.remainingFixable
+            ? `${fixResult.remainingFixable} fixable issue(s) still need manual review.`
+            : '';
+          _showDiffPreview(_currentCode, fixResult.code, () => {
+            if (_onApplyFix) _onApplyFix(fixResult.code);
+            _currentCode = fixResult.code;
+            _issues = lint(fixResult.code);
             _renderPanel();
-          });
+          }, { notice });
         }
       };
       toolbar.appendChild(fixAllBtn);
