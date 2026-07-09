@@ -11,6 +11,7 @@ const FILES = [
   'package.json',
   'esbuild.config.mjs',
   'build.sh',
+  'publish.sh',
   'build-firefox.sh',
   'pages/editor-sandbox.html',
   'docs/monaco-esm-migration-plan.md',
@@ -58,6 +59,17 @@ describe('Monaco package contract check', () => {
     files['build-firefox.sh'] = files['build-firefox.sh'].replace('  pages', '  pages\n  lib/monaco');
 
     expect(messagesFor(files)).toContain('Firefox build must not package Monaco until AMO lint proof exists');
+  });
+
+  it('rejects whole-lib copies from Chrome build and publish packaging', () => {
+    for (const path of ['build.sh', 'publish.sh']) {
+      const files = liveFiles();
+      files[path] = files[path].replace('  lib/monaco-esm', '  lib');
+
+      expect(messagesFor(files)).toContain(
+        `${path === 'build.sh' ? 'CWS build' : 'CWS publish'} must not copy the entire lib/ directory (ships dead Monaco AMD bundle); list lib subdirectories explicitly`,
+      );
+    }
   });
 
   it('rejects missing Chromium local ESM build wiring', () => {

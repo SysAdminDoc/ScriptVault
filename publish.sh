@@ -61,9 +61,8 @@ echo ""
 
 # ── Build ────────────────────────────────────────────────────────────────────
 echo "[1/3] Building extension ZIP..."
-# Full build: concatenates background.js AND copies Monaco to lib/monaco.
-# Publishing with a stale/empty lib/monaco would ship a broken editor because
-# the sandbox CSP blocks the CDN fallback (no external script-src allowed).
+# Full build: concatenates background.js and refreshes the local Monaco ESM
+# bundle that the editor sandbox loads under the extension CSP.
 npm run build --silent
 
 BUILD_DIR="$SCRIPT_DIR/_cws_build"
@@ -77,12 +76,21 @@ INCLUDE=(
   offscreen.html
   offscreen.js
   shared
+  modules/i18n.js
+  modules/script-config.js
+  modules/user-scripts-setup.js
   pages
   images/icon16.png
   images/icon32.png
   images/icon48.png
   images/icon128.png
-  lib
+  lib/codemirror
+  lib/monaco-esm
+  lib/acorn.min.js
+  lib/diff.min.js
+  lib/fflate.js
+  lib/scriptvault.d.ts
+  managed-storage-schema.json
   _locales
 )
 

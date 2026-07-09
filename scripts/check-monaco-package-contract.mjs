@@ -10,6 +10,7 @@ const REQUIRED_FILES = [
   'package.json',
   'esbuild.config.mjs',
   'build.sh',
+  'publish.sh',
   'build-firefox.sh',
   'pages/editor-sandbox.html',
   'docs/monaco-esm-migration-plan.md',
@@ -143,20 +144,28 @@ function checkSandbox(files, failures) {
   }
 }
 
-function checkChromeBuild(files, failures) {
-  const path = 'build.sh';
+function checkChromePackageScript(files, failures, path, label) {
   const text = fileText(files, path, failures);
   if (!text) return;
 
   if (/^\s*lib\s*$/m.test(text)) {
-    addFailure(failures, path, 'CWS build must not copy the entire lib/ directory (ships dead Monaco AMD bundle); list lib subdirectories explicitly');
+    addFailure(
+      failures,
+      path,
+      `${label} must not copy the entire lib/ directory (ships dead Monaco AMD bundle); list lib subdirectories explicitly`,
+    );
   }
   if (hasNeedle(text, 'lib/monaco/') || hasNeedle(text, "lib/monaco\n")) {
-    addFailure(failures, path, 'CWS build must not package the deprecated Monaco AMD bundle (lib/monaco/)');
+    addFailure(failures, path, `${label} must not package the deprecated Monaco AMD bundle (lib/monaco/)`);
   }
   if (!hasNeedle(text, 'lib/monaco-esm')) {
-    addFailure(failures, path, 'CWS build must package lib/monaco-esm');
+    addFailure(failures, path, `${label} must package lib/monaco-esm`);
   }
+}
+
+function checkChromeBuild(files, failures) {
+  checkChromePackageScript(files, failures, 'build.sh', 'CWS build');
+  checkChromePackageScript(files, failures, 'publish.sh', 'CWS publish');
 }
 
 function checkFirefoxBuild(files, failures) {
