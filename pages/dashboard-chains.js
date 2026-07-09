@@ -925,7 +925,7 @@ const ScriptChains = (() => {
           <div class="sv-chain-pipeline" id="sv-chain-pipeline"></div>
           <div>
             <label style="color:var(--text-secondary,#a0a0a0);font-size:0.75rem;">Execution Log</label>
-            <div class="sv-chain-log" id="sv-chain-log"></div>
+            <div class="sv-chain-log" id="sv-chain-log" data-chain-log="true" data-chain-id="${_esc(chainId || '')}"></div>
           </div>
         </div>
         <div class="sv-chain-editor-footer">
@@ -1163,7 +1163,8 @@ const ScriptChains = (() => {
   /* ------------------------------------------------------------------ */
 
   function _renderLogEntry(entry) {
-    const logEl = document.querySelector('#sv-chain-log');
+    if (!entry?.chainId) return;
+    const logEl = document.querySelector(`[data-chain-log="true"][data-chain-id="${_escapeSelectorAttr(entry.chainId)}"]`);
     if (!logEl) return;
     _renderLogEntryTo(logEl, entry);
   }
@@ -1184,6 +1185,10 @@ const ScriptChains = (() => {
   function _esc(str) {
     if (!str) return '';
     return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function _escapeSelectorAttr(value) {
+    return String(value ?? '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
   }
 
   /* ------------------------------------------------------------------ */

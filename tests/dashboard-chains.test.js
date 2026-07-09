@@ -105,4 +105,24 @@ describe('ScriptChains module', () => {
     const b = ScriptChains.getChains();
     expect(a).not.toBe(b);
   });
+
+  it('does not append logs to a different open chain editor', async () => {
+    const chainA = await ScriptChains.createChain('Chain A', []);
+    const chainB = await ScriptChains.createChain('Chain B', []);
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    await ScriptChains.init(host);
+
+    const chainBCard = host.querySelector(`[data-chain-id="${chainB}"]`);
+    const editButton = Array.from(chainBCard?.querySelectorAll('button') || [])
+      .find(button => button.textContent === 'Edit');
+    editButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    const chainBLog = document.querySelector(`[data-chain-log="true"][data-chain-id="${chainB}"]`);
+    expect(chainBLog).toBeTruthy();
+
+    const result = await ScriptChains.executeChain(chainA);
+    expect(result.success).toBe(true);
+    expect(chainBLog?.querySelectorAll('.sv-chain-log-entry')).toHaveLength(0);
+  });
 });
