@@ -101,8 +101,8 @@ describe("accessibility surface pass", () => {
     expect(dashboardJs).toContain("await switchTab('help')");
     expect(popupJs).toContain("data: { tab: 'help' }");
     expect(popupJs).toContain("pages/dashboard.html#tab=help");
-    expect(sidepanelJs).toContain("data: { tab: 'help' }");
-    expect(sidepanelJs).toContain("pages/dashboard.html#tab=help");
+    expect(sidepanelJs).toContain("openDashboardTarget({ tab: 'help' })");
+    expect(sidepanelJs).toContain("chrome.runtime.getURL(`pages/dashboard.html#tab=${encodeURIComponent(data.tab)}`)");
     expect(installJs).toContain("pages/dashboard.html#tab=help");
   });
 

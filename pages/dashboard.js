@@ -18041,8 +18041,19 @@
     // =========================================
     // Command Palette (Ctrl+K)
     // =========================================
+    function refocusOpenCommandPalette(overlay) {
+        const input = overlay?.querySelector('.cmd-input');
+        if (!input) return;
+        input.focus();
+        input.select?.();
+    }
+
     function openCommandPalette() {
         let overlay = document.getElementById('commandPalette');
+        if (overlay?.matches(':popover-open')) {
+            refocusOpenCommandPalette(overlay);
+            return;
+        }
         commandPaletteReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
         if (!overlay) {
             overlay = document.createElement('div');
@@ -18111,7 +18122,7 @@
             input.value = '';
             input.setAttribute('aria-expanded', 'true');
             input.removeAttribute('aria-activedescendant');
-            input.focus();
+            refocusOpenCommandPalette(overlay);
         }
         renderCommandResults('');
     }

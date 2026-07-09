@@ -110,6 +110,11 @@ describe("cross-surface UX audit", () => {
     expect(sidepanelJs).toContain("function updateSearchSummary");
     expect(sidepanelJs).toContain("function setAllScriptsCollapsed");
     expect(sidepanelJs).toContain("function setButtonLabel");
+    expect(sidepanelJs).toContain("async function openDashboardTarget(target = {})");
+    expect(sidepanelJs).toContain("await chrome.tabs.create({ url: getDashboardFallbackUrl(data) });");
+    expect(sidepanelJs).toContain("chrome.runtime.getURL(`pages/dashboard.html#script_${encodeURIComponent(data.scriptId)}`)");
+    expect(sidepanelJs).toContain("chrome.runtime.getURL('pages/dashboard.html#new_script')");
+    expect(sidepanelJs).not.toContain("chrome.runtime.sendMessage({ action: 'openDashboard' }).catch(() => {})");
     expect(sidepanelJs).toContain("const pendingScriptActions = new Set();");
     expect(sidepanelJs).toContain("function setScriptRowsBusy(scriptId, isBusy)");
     expect(sidepanelJs).toContain("function getScriptToggleLabel(script, enabled = script.enabled !== false)");
@@ -180,6 +185,7 @@ describe("cross-surface UX audit", () => {
     expect(devtoolsJs).toContain("function focusNetworkRow(target)");
     expect(devtoolsJs).toContain("function closeDetail");
     expect(devtoolsJs).toContain("function updateToolbarContext");
+    expect(devtoolsJs).toContain("function updateNetworkClearButton()");
     expect(devtoolsJs).toContain("renderConsoleState()");
     expect(devtoolsJs).toContain("event.key === 'ArrowRight'");
     expect(devtoolsJs).toContain("event.key === 'ArrowDown'");
@@ -194,12 +200,14 @@ describe("cross-surface UX audit", () => {
     expect(devtoolsJs).toContain("renderDetailContent(selectedEntry);");
     expect(devtoolsJs).toContain("clearButton.textContent = tDevtools('resetView', 'Reset View');");
     expect(devtoolsJs).toContain("clearButton.setAttribute('aria-label', tDevtools('devtoolsResetExecutionFilter', 'Reset execution filter'));");
+    expect(devtoolsJs).toContain("tDevtools('devtoolsResetNetworkFilter', 'Reset network filter')");
+    expect(devtoolsJs).toContain("if (filterText) {\n          clearFilter({ focus: true });\n          return;\n        }");
     expect(devtoolsJs).toContain("tr.setAttribute('aria-selected', String(selectedRow === entry.id));");
     expect(devtoolsJs).toContain("Console capture isn’t available here yet. Use Network or Execution for current insight.");
     expect(devtoolsJs).toContain("No requests match");
     expect(devtoolsJs).toContain("No scripts match");
-    expect(devtoolsJs).toContain("clearButton.textContent = tDevtools('clearAction', 'Clear');");
-    expect(devtoolsJs).toContain("clearButton.setAttribute('aria-label', tDevtools('devtoolsClearRecordedNetworkRequests', 'Clear recorded network requests'));");
+    expect(devtoolsJs).toContain("tDevtools('devtoolsClearRecordedNetworkRequests', 'Clear recorded network requests')");
+    expect(devtoolsJs).toContain('Reset the filter or try a script, host, or method name.');
     expect(devtoolsJs).toContain("No network or execution data to export yet.");
     expect(devtoolsJs).toContain("Diagnostics refresh failed. Showing the last available data.");
     expect(devtoolsHtml).toContain('.toolbar-btn[aria-busy="true"]');

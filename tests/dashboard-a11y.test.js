@@ -748,6 +748,8 @@ describe("dashboard accessibility markup", () => {
   test("command palette controller exposes active result semantics and item-only keyboard navigation", () => {
     expect(dashboardJs).toMatch(/function getCommandPaletteItems/);
     expect(dashboardJs).toMatch(/function setCommandPaletteActiveItem/);
+    expect(dashboardJs).toMatch(/function refocusOpenCommandPalette/);
+    expect(dashboardJs).toMatch(/if \(overlay\?\.matches\(':popover-open'\)\) \{\s*refocusOpenCommandPalette\(overlay\);\s*return;\s*\}/);
     expect(dashboardJs).toMatch(/type="search"/);
     expect(dashboardJs).toMatch(/name="command_palette_query"/);
     expect(dashboardJs).toMatch(/aria-autocomplete="list"/);

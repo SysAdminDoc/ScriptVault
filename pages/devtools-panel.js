@@ -231,9 +231,7 @@
       filterInput.placeholder = tDevtools('devtoolsFilterRequestsPlaceholder', 'Filter requests, URLs, or scripts…');
       filterInput.setAttribute('aria-label', tDevtools('devtoolsFilterNetworkRequests', 'Filter network requests'));
       clearButton.hidden = false;
-      clearButton.textContent = tDevtools('clearAction', 'Clear');
-      clearButton.setAttribute('aria-label', tDevtools('devtoolsClearRecordedNetworkRequests', 'Clear recorded network requests'));
-      clearButton.disabled = netLog.length === 0;
+      updateNetworkClearButton();
       return;
     }
     if (activeTab === 'execution') {
@@ -251,6 +249,21 @@
     filterInput.setAttribute('aria-label', tDevtools('devtoolsConsoleSearchUnavailable', 'Console search unavailable'));
     clearButton.hidden = true;
     setToolbarStatus(tDevtools('devtoolsConsoleCaptureUnavailable', 'Console capture isn’t available here yet. Use Network or Execution for current insight.'));
+  }
+
+  function updateNetworkClearButton() {
+    const clearButton = $('btnClear');
+    const hasFilter = Boolean(filterText);
+    clearButton.textContent = hasFilter
+      ? tDevtools('resetView', 'Reset View')
+      : tDevtools('clearAction', 'Clear');
+    clearButton.setAttribute(
+      'aria-label',
+      hasFilter
+        ? tDevtools('devtoolsResetNetworkFilter', 'Reset network filter')
+        : tDevtools('devtoolsClearRecordedNetworkRequests', 'Clear recorded network requests')
+    );
+    clearButton.disabled = hasFilter ? false : netLog.length === 0;
   }
 
   // ── Init ─────────────────────────────────────────────────────────────────
@@ -369,6 +382,10 @@
     $('btnRefresh').addEventListener('click', () => refreshAll());
     $('btnClear').addEventListener('click', async () => {
       if (activeTab === 'network') {
+        if (filterText) {
+          clearFilter({ focus: true });
+          return;
+        }
         await chrome.runtime.sendMessage({ action: 'clearNetworkLog' });
         netLog = [];
         selectedRow = null;
@@ -446,7 +463,7 @@
               ? tDevtools('devtoolsNoRequestsMatch', 'No requests match “{query}”', { query: filterText })
               : tDevtools('devtoolsNoNetworkRequestsYet', 'No network requests yet. Open a page that runs userscripts to capture activity.'))
       );
-      $('btnClear').disabled = netLog.length === 0;
+      updateNetworkClearButton();
     }
 
     // Table
@@ -460,7 +477,7 @@
       const tr = document.createElement('tr');
       const title = filterText ? tDevtools('devtoolsNoRequestsMatchTitle', 'No requests match this filter') : tDevtools('devtoolsNoNetworkRequestsTitle', 'No network requests yet');
       const detail = filterText
-        ? tDevtools('devtoolsNoRequestsMatchDetail', 'No requests match "{query}". Clear the filter or try a script, host, or method name.', { query: filterText })
+        ? tDevtools('devtoolsNoRequestsMatchDetail', 'No requests match "{query}". Reset the filter or try a script, host, or method name.', { query: filterText })
         : tDevtools('devtoolsNoNetworkRequestsDetail', 'Open a page that runs userscripts to capture activity.');
       safeSetHtml(tr, `<td colspan="6" class="table-empty-cell">${tableEmptyMarkup(title, detail, 'NET')}</td>`);
       tbody.appendChild(tr);

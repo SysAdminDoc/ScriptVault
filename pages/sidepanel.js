@@ -969,10 +969,27 @@
     }
   }
 
+  function getDashboardFallbackUrl(target = {}) {
+    const data = target && typeof target === 'object' ? target : {};
+    if (data.scriptId) {
+      return chrome.runtime.getURL(`pages/dashboard.html#script_${encodeURIComponent(data.scriptId)}`);
+    }
+    if (data.newScript) return chrome.runtime.getURL('pages/dashboard.html#new_script');
+    if (data.tab) return chrome.runtime.getURL(`pages/dashboard.html#tab=${encodeURIComponent(data.tab)}`);
+    return chrome.runtime.getURL('pages/dashboard.html');
+  }
+
+  async function openDashboardTarget(target = {}) {
+    const data = target && typeof target === 'object' ? target : {};
+    try {
+      await chrome.runtime.sendMessage({ action: 'openDashboard', data });
+    } catch (_error) {
+      await chrome.tabs.create({ url: getDashboardFallbackUrl(data) });
+    }
+  }
+
   function openInEditor(id) {
-    // Swallow rejection — the user will see the dashboard tab open (or not) and
-    // nothing else depends on the response here.
-    chrome.runtime.sendMessage({ action: 'openDashboard', scriptId: id }).catch(() => {});
+    openDashboardTarget({ scriptId: id });
   }
 
   async function refreshPendingUpdatesChip(existingUpdates = null) {
@@ -995,15 +1012,11 @@
   }
 
   function openUpdatesDashboard() {
-    chrome.runtime.sendMessage({ action: 'openDashboard', data: { tab: 'updates' } }).catch(() => {
-      chrome.tabs.create({ url: chrome.runtime.getURL('pages/dashboard.html#tab=updates') });
-    });
+    openDashboardTarget({ tab: 'updates' });
   }
 
   function openHelpDashboard() {
-    chrome.runtime.sendMessage({ action: 'openDashboard', data: { tab: 'help' } }).catch(() => {
-      chrome.tabs.create({ url: chrome.runtime.getURL('pages/dashboard.html#tab=help') });
-    });
+    openDashboardTarget({ tab: 'help' });
   }
 
   // ── Event listeners ───────────────────────────────────────────────────────
@@ -1011,8 +1024,8 @@
     $('btnRefresh').addEventListener('click', refresh);
     $('btnPendingUpdates')?.addEventListener('click', openUpdatesDashboard);
     $('btnHelp')?.addEventListener('click', openHelpDashboard);
-    $('btnDashboard').addEventListener('click', () => chrome.runtime.sendMessage({ action: 'openDashboard' }).catch(() => {}));
-    $('btnNewScript').addEventListener('click', () => chrome.runtime.sendMessage({ action: 'openDashboard', data: { newScript: true } }).catch(() => {}));
+    $('btnDashboard').addEventListener('click', () => openDashboardTarget());
+    $('btnNewScript').addEventListener('click', () => openDashboardTarget({ newScript: true }));
     $('btnFindScripts').addEventListener('click', () => {
       let hostname = '';
       if (canMatchScriptsForUrl(currentTab?.url || '')) {
@@ -1023,7 +1036,7 @@
         : 'https://greasyfork.org/en/scripts';
       chrome.tabs.create({ url });
     });
-    $('btnOpenDash').addEventListener('click', () => chrome.runtime.sendMessage({ action: 'openDashboard' }).catch(() => {}));
+    $('btnOpenDash').addEventListener('click', () => openDashboardTarget());
     $('btnToggleAll').addEventListener('click', toggleAll);
     $('btnGrantHostAccess')?.addEventListener('click', requestHostAccessFromPanel);
     $('allSectionHeader').addEventListener('click', () => {
