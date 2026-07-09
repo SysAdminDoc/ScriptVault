@@ -23,6 +23,7 @@ const ScriptSharing = (() => {
         onInstallScript: null,  // fn(code) => void
         updateScript: null      // fn(id, changes) => void
     };
+    const MAILTO_URL_LIMIT = 1800;
 
     // =========================================
     // CSS
@@ -830,10 +831,10 @@ const ScriptSharing = (() => {
     // =========================================
     // Copy to Clipboard
     // =========================================
-    async function copyToClipboard(text) {
+    async function copyToClipboard(text, options = {}) {
         try {
             await navigator.clipboard.writeText(text);
-            toast('Copied to clipboard');
+            if (options.toast !== false) toast('Copied to clipboard');
         } catch {
             // Fallback
             const ta = document.createElement('textarea');
@@ -843,7 +844,7 @@ const ScriptSharing = (() => {
             ta.select();
             document.execCommand('copy');
             ta.remove();
-            toast('Copied to clipboard');
+            if (options.toast !== false) toast('Copied to clipboard');
         }
     }
 
@@ -858,6 +859,47 @@ const ScriptSharing = (() => {
         a.download = filename;
         a.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    function sanitizeExportName(name) {
+        return ((name || 'script').replace(/[^a-zA-Z0-9_-]/g, '_') || 'script');
+    }
+
+    function uniqueExportName(baseName, usedNames) {
+        const safeBase = sanitizeExportName(baseName);
+        let candidate = `${safeBase}.user.js`;
+        let suffix = 2;
+        while (usedNames.has(candidate)) {
+            candidate = `${safeBase}-${suffix}.user.js`;
+            suffix += 1;
+        }
+        usedNames.add(candidate);
+        return candidate;
+    }
+
+    function buildEmailInstructions(meta) {
+        const title = `Userscript: ${meta.name}${meta.version ? ` v${meta.version}` : ''}`;
+        const lines = [
+            title,
+            meta.description || '',
+            meta.downloadURL
+                ? `Install URL: ${meta.downloadURL}`
+                : 'This script is too large for a mailto link. Use ScriptVault\'s Export File or Copy Data URL action, then attach or paste the exported userscript manually.',
+        ];
+        return lines.filter(Boolean).join('\n\n');
+    }
+
+    async function shareByEmail(meta, dataUrl) {
+        const subject = encodeURIComponent(`Userscript: ${meta.name}`);
+        const bodyText = `Check out this userscript: ${meta.name}${meta.version ? ` v${meta.version}` : ''}\n\n${meta.description ? meta.description + '\n\n' : ''}${meta.downloadURL || dataUrl}`;
+        const body = encodeURIComponent(bodyText);
+        const mailtoUrl = `mailto:?subject=${subject}&body=${body}`;
+        if (mailtoUrl.length <= MAILTO_URL_LIMIT) {
+            window.open(mailtoUrl);
+            return;
+        }
+        await copyToClipboard(buildEmailInstructions(meta), { toast: false });
+        toast('Email body was too large; copied sharing instructions instead');
     }
 
     // =========================================
@@ -1098,14 +1140,11 @@ const ScriptSharing = (() => {
                     incrementShareCount(scriptId);
                     break;
                 case 'share-email': {
-                    const subject = encodeURIComponent(`Userscript: ${meta.name}`);
-                    const body = encodeURIComponent(`Check out this userscript: ${meta.name}${meta.version ? ` v${meta.version}` : ''}\n\n${meta.description ? meta.description + '\n\n' : ''}${meta.downloadURL || dataUrl}`);
-                    window.open(`mailto:?subject=${subject}&body=${body}`);
-                    incrementShareCount(scriptId);
+                    shareByEmail(meta, dataUrl).then(() => incrementShareCount(scriptId));
                     break;
                 }
                 case 'export-file': {
-                    const safeName = meta.name.replace(/[^a-zA-Z0-9_-]/g, '_') || 'script';
+                    const safeName = sanitizeExportName(meta.name);
                     downloadFile(`${safeName}.user.js`, code, 'application/javascript');
                     incrementShareCount(scriptId);
                     break;
@@ -1173,13 +1212,13 @@ const ScriptSharing = (() => {
         if (!_state.getScript || !scriptIds || scriptIds.length === 0) return;
 
         const files = [];
+        const usedNames = new Set();
         for (const id of scriptIds) {
             const script = _state.getScript(id);
             if (!script || !script.code) continue;
             const meta = parseMetadata(script.code);
-            const safeName = (meta.name || 'script').replace(/[^a-zA-Z0-9_-]/g, '_');
             files.push({
-                name: `${safeName}.user.js`,
+                name: uniqueExportName(meta.name || 'script', usedNames),
                 content: script.code
             });
         }
