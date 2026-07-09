@@ -118,7 +118,7 @@ export interface ApplyUpdateSkipped {
 export type ApplyUpdateResult = ApplyUpdateSuccess | ApplyUpdateError | ApplyUpdateSkipped;
 
 async function fetchRequireScriptForTrustReceipt(url: string): Promise<string | null> {
-  return await fetchRequireScript(url, { bypassCache: true, cacheResult: false });
+  return await fetchRequireScript(url, { bypassCache: true, cacheResult: false, allowUnpinned: true });
 }
 
 // ---------------------------------------------------------------------------

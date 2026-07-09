@@ -5,6 +5,7 @@
 
 import { fetchTextBounded } from './fetch-bounded';
 import { classifyFetchUrl, classifyResponseUrl } from './internal-host-guard';
+import { SettingsManager } from '../modules/storage';
 
 // ---------------------------------------------------------------------------
 // External dependencies (not yet migrated to TS modules)
@@ -36,10 +37,6 @@ const MAX_PROVENANCE_BUNDLE_BYTES = 256 * 1024;
 export interface FetchRequireScriptOptions {
   bypassCache?: boolean;
   cacheResult?: boolean;
-  // When true (Security > Subresource Integrity = "require"), refuse to fetch a
-  // remote @require that carries no verifiable SRI hash. npm specs get a
-  // computed SRI and are exempt.
-  enforcePinned?: boolean;
   // Probe/preview/receipt callers set this so install/update review can inspect
   // a dependency even under enforce mode (enforcement applies to execution).
   allowUnpinned?: boolean;
@@ -162,6 +159,16 @@ function parseRequireIntegrity(url: string): { fetchUrl: string; sriHash: string
 export function hasVerifiableRequireIntegrity(url: string): boolean {
   const { sriHash } = parseRequireIntegrity(url);
   return /^(sha256|sha384|sha512)[-=]/i.test(sriHash || '');
+}
+
+async function shouldRequirePinnedRequire(options: FetchRequireScriptOptions): Promise<boolean> {
+  if (options.allowUnpinned) return false;
+  try {
+    const settings = await SettingsManager.get();
+    return settings.sri === 'require';
+  } catch {
+    return false;
+  }
 }
 
 async function buildRequireCacheKey(url: string): Promise<string> {
@@ -311,7 +318,7 @@ export async function fetchRequireScript(url: string, options: FetchRequireScrip
 
   // SRI enforcement: in "require" mode, refuse un-pinned remote requires. npm
   // specs are resolved with a computed SRI above and never reach here.
-  if (options.enforcePinned && !options.allowUnpinned && !hasVerifiableRequireIntegrity(url)) {
+  if (await shouldRequirePinnedRequire(options) && !hasVerifiableRequireIntegrity(url)) {
     console.warn(`[ScriptVault] Refusing un-pinned @require (SRI = require): ${fetchUrl}`);
     return null;
   }

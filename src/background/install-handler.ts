@@ -38,7 +38,7 @@ declare function generateId(): string;
 declare function debugLog(...args: unknown[]): void;
 
 async function fetchRequireScriptForTrustReceipt(url: string): Promise<string | null> {
-  return await fetchRequireScript(url, { bypassCache: true, cacheResult: false });
+  return await fetchRequireScript(url, { bypassCache: true, cacheResult: false, allowUnpinned: true });
 }
 
 // ---------------------------------------------------------------------------

@@ -10,6 +10,7 @@ import {
   hasVerifiableRequireIntegrity,
   requireCache,
 } from '../src/background/resource-loader.ts';
+import { SettingsManager } from '../src/modules/storage.ts';
 
 const read = (p) => readFileSync(resolve(process.cwd(), p), 'utf8');
 
@@ -30,12 +31,14 @@ describe('fetchRequireScript SRI enforcement (enforcePinned)', () => {
   beforeEach(() => {
     globalThis.__resetStorageMock?.();
     globalThis.debugLog = vi.fn();
+    SettingsManager.cache = null;
     requireCache.clear();
     globalThis.fetch = vi.fn(async () => new Response('remote-code', { status: 200 }));
   });
   afterEach(() => {
     globalThis.fetch = originalFetch;
     globalThis.debugLog = originalDebugLog;
+    SettingsManager.cache = null;
     requireCache.clear();
   });
 
@@ -45,19 +48,28 @@ describe('fetchRequireScript SRI enforcement (enforcePinned)', () => {
     expect(globalThis.fetch).toHaveBeenCalled();
   });
 
-  it('enforce-on: refuses an un-pinned require without hitting the network', async () => {
-    const code = await fetchRequireScript('https://cdn.example/lib.js', { enforcePinned: true });
+  it('require mode: refuses an un-pinned require without hitting the network', async () => {
+    await SettingsManager.set('sri', 'require');
+
+    const code = await fetchRequireScript('https://cdn.example/lib.js');
+
     expect(code).toBeNull();
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
-  it('enforce-on: still fetches a hash-pinned require (integrity gate applies later)', async () => {
-    await fetchRequireScript('https://cdn.example/lib.js#sha256-abc', { enforcePinned: true });
+  it('require mode: still fetches a hash-pinned require (integrity gate applies later)', async () => {
+    await SettingsManager.set('sri', 'require');
+
+    await fetchRequireScript('https://cdn.example/lib.js#sha256-abc');
+
     expect(globalThis.fetch).toHaveBeenCalled();
   });
 
-  it('enforce-on but allowUnpinned (probe/preview) still inspects an un-pinned require', async () => {
-    await fetchRequireScript('https://cdn.example/lib.js', { enforcePinned: true, allowUnpinned: true });
+  it('require mode but allowUnpinned (probe/preview) still inspects an un-pinned require', async () => {
+    await SettingsManager.set('sri', 'require');
+
+    await fetchRequireScript('https://cdn.example/lib.js', { allowUnpinned: true });
+
     expect(globalThis.fetch).toHaveBeenCalled();
   });
 });
@@ -78,5 +90,13 @@ describe('install.js requireIsPinned + live core.ts wiring', () => {
     const core = read('background.core.js');
     expect(core).toContain("_sriSettings?.sri === 'require'");
     expect(core).toContain('allowUnpinned: true');
+  });
+
+  it('resource-loader extraction target also uses settings-driven SRI enforcement', () => {
+    const src = read('src/background/resource-loader.ts');
+    expect(src).toContain('SettingsManager.get()');
+    expect(src).not.toContain('options.enforcePinned');
+    expect(read('src/background/install-handler.ts')).toContain('allowUnpinned: true');
+    expect(read('src/background/update-checker.ts')).toContain('allowUnpinned: true');
   });
 });
