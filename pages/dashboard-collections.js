@@ -837,7 +837,13 @@ const CollectionManager = (() => {
 
     // Import/export round-trips the direct install URL as `url`; older code
     // paths used `installUrl`. Accept both so URL-based collection entries
-    // install instead of falling through to a missing-GF-ID error.
+    // install instead of falling through to a missing-GF-ID error. A
+    // user-created collection entry may carry only a `scriptId` with no source
+    // URL — once that script is uninstalled there is nothing to reinstall from,
+    // so surface a clear message instead of a cryptic Greasy Fork ID error.
+    if (!script.installUrl && !script.url && !script.greasyForkId) {
+      throw new Error('This collection entry has no source URL to reinstall from');
+    }
     const installUrl = script.installUrl || script.url || await fetchGreasyForkCodeUrl(script.greasyForkId);
     const result = await chrome.runtime.sendMessage({ action: 'installFromUrl', url: installUrl });
     if (!result?.success) {

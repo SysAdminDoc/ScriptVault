@@ -397,6 +397,10 @@ const GistIntegration = (() => {
         if (!resp.ok) throw new Error(`Failed to fetch Gist (${resp.status})`);
         const gist = await resp.json();
 
+        if (!gist || !gist.files || typeof gist.files !== 'object') {
+            throw new Error('No .user.js files found in this Gist');
+        }
+
         const scripts = [];
         for (const [filename, file] of Object.entries(gist.files)) {
             if (filename.endsWith('.user.js')) {
@@ -459,6 +463,9 @@ const GistIntegration = (() => {
         const gist = await apiRequest(`${API_BASE}/${gistId}`);
 
         // Find the .user.js file
+        if (!gist || !gist.files || typeof gist.files !== 'object') {
+            throw new Error('No .user.js files in linked Gist');
+        }
         const files = Object.entries(gist.files).filter(([f]) => f.endsWith('.user.js'));
         if (files.length === 0) throw new Error('No .user.js files in linked Gist');
 

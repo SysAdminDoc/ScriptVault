@@ -99,4 +99,14 @@ describe('dashboard heatmap', () => {
   it('passes scriptName into heatmap telemetry records', () => {
     expect(dashboardJs).toContain('ActivityHeatmap._recordActivity(heatmapType, event.scriptId || null, new Date(event.timestamp), { scriptName: event.scriptName })');
   });
+
+  it('sizes the canvas to the real column count so the newest days never clip', () => {
+    // Sunday-alignment can push the 52-week window to 53 partial columns; the
+    // canvas width and month-label loop must use that count, not a fixed WEEKS,
+    // or the most recent 1-6 days render off the right edge.
+    expect(heatmapCode).toContain('Math.ceil(dates.length / DAYS_PER_WEEK)');
+    expect(heatmapCode).toContain('numCols * (CELL_SIZE + CELL_GAP)');
+    expect(heatmapCode).toContain('for (let wi = 0; wi < numCols; wi++)');
+    expect(heatmapCode).not.toContain('LABEL_WIDTH + WEEKS * (CELL_SIZE + CELL_GAP)');
+  });
 });

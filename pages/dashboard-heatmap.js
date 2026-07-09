@@ -320,7 +320,11 @@ const ActivityHeatmap = (() => {
   function _drawHeatmap() {
     if (!_canvas || !_ctx) return;
     const dates = _getGridDates();
-    const canvasWidth = LABEL_WIDTH + WEEKS * (CELL_SIZE + CELL_GAP) + CELL_GAP + 20;
+    // Sunday-alignment can push the window to 53 partial columns, so size the
+    // canvas to the real column count — otherwise the newest 1-6 days render
+    // past the right edge and their hover regions fall outside the canvas.
+    const numCols = Math.max(WEEKS, Math.ceil(dates.length / DAYS_PER_WEEK));
+    const canvasWidth = LABEL_WIDTH + numCols * (CELL_SIZE + CELL_GAP) + CELL_GAP + 20;
     const canvasHeight = HEADER_HEIGHT + DAYS_PER_WEEK * (CELL_SIZE + CELL_GAP) + CELL_GAP;
     const dpr = window.devicePixelRatio || 1;
 
@@ -356,7 +360,7 @@ const ActivityHeatmap = (() => {
     // Month labels
     _ctx.textAlign = 'left';
     let lastMonth = -1;
-    for (let wi = 0; wi < WEEKS; wi++) {
+    for (let wi = 0; wi < numCols; wi++) {
       const idx = wi * DAYS_PER_WEEK;
       if (idx < dates.length) {
         const month = dates[idx].getMonth();
