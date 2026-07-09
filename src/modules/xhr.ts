@@ -31,6 +31,8 @@ interface XhrManagerInterface {
   requests: Map<string, XhrRequest>;
   nextId: number;
   cleanupDelayMs: number;
+  maxActiveRequests: number;
+  maxActiveRequestsPerScript: number;
   create(tabId: number, scriptId: string, details: XhrRequestDetails): XhrRequest;
   get(requestId: string): XhrRequest | undefined;
   abort(requestId: string): boolean;
@@ -38,6 +40,7 @@ interface XhrManagerInterface {
   abortByTab(tabId: number): void;
   abortByScript(scriptId: string): void;
   getActiveCount(): number;
+  getActiveCountForScript(scriptId: string): number;
   buildFetchOptions(data: XhrFetchPayload): RequestInit;
 }
 
@@ -59,9 +62,21 @@ const XhrManager: XhrManagerInterface = {
   requests: new Map(), // requestId -> { controller, tabId, scriptId, etc }
   nextId: 1,
   cleanupDelayMs: 300000,
+  maxActiveRequests: 512,
+  maxActiveRequestsPerScript: 64,
 
   // Create a new tracked request (controller added later by caller)
   create(tabId: number, scriptId: string, details: XhrRequestDetails): XhrRequest {
+    if (this.requests.size >= this.maxActiveRequests) {
+      throw new Error(`Too many active GM_xmlhttpRequest requests. Maximum is ${this.maxActiveRequests}.`);
+    }
+
+    if (this.getActiveCountForScript(scriptId) >= this.maxActiveRequestsPerScript) {
+      throw new Error(
+        `Too many active GM_xmlhttpRequest requests for this script. Maximum is ${this.maxActiveRequestsPerScript}.`,
+      );
+    }
+
     const requestId = `xhr_${this.nextId++}_${Date.now()}`;
 
     const request: XhrRequest = {
@@ -132,6 +147,14 @@ const XhrManager: XhrManagerInterface = {
   // Get count of active requests
   getActiveCount(): number {
     return this.requests.size;
+  },
+
+  getActiveCountForScript(scriptId: string): number {
+    let count = 0;
+    for (const request of this.requests.values()) {
+      if (request.scriptId === scriptId) count += 1;
+    }
+    return count;
   },
 
   /**

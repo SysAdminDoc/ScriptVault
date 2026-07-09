@@ -111,6 +111,31 @@ describe('XhrManager', () => {
     XhrManager.create(1, 's2', {});
     expect(XhrManager.getActiveCount()).toBe(2);
   });
+
+  it('caps active requests per script', () => {
+    for (let i = 0; i < XhrManager.maxActiveRequestsPerScript; i += 1) {
+      XhrManager.create(1, 'busy-script', { url: `https://example.test/${i}` });
+    }
+
+    expect(XhrManager.getActiveCountForScript('busy-script')).toBe(XhrManager.maxActiveRequestsPerScript);
+    expect(() => XhrManager.create(1, 'busy-script', { url: 'https://example.test/over' })).toThrow(
+      /Too many active GM_xmlhttpRequest requests for this script/,
+    );
+    expect(() => XhrManager.create(1, 'other-script', { url: 'https://example.test/ok' })).not.toThrow();
+  });
+
+  it('caps active requests globally', () => {
+    XhrManager.maxActiveRequestsPerScript = XhrManager.maxActiveRequests + 1;
+
+    for (let i = 0; i < XhrManager.maxActiveRequests; i += 1) {
+      XhrManager.create(1, `script-${i}`, { url: `https://example.test/${i}` });
+    }
+
+    expect(XhrManager.getActiveCount()).toBe(XhrManager.maxActiveRequests);
+    expect(() => XhrManager.create(1, 'overflow', { url: 'https://example.test/over' })).toThrow(
+      /Too many active GM_xmlhttpRequest requests\. Maximum is/,
+    );
+  });
 });
 
 describe('XhrManager.buildFetchOptions', () => {
@@ -195,13 +220,10 @@ describe('XhrManager.buildFetchOptions', () => {
 describe('Phase 38.11 — XhrManager has no per-request listener/timer leak', () => {
   it('1000 sequential create→remove cycles leave the table empty and timers cleared', () => {
     vi.useFakeTimers();
-    const created = [];
     for (let i = 0; i < 1000; i++) {
       const req = XhrManager.create(1, 'leakprobe', { url: 'https://example.test/' + i });
-      created.push(req);
+      XhrManager.remove(req.id);
     }
-    expect(XhrManager.getActiveCount()).toBe(1000);
-    for (const req of created) XhrManager.remove(req.id);
     expect(XhrManager.getActiveCount()).toBe(0);
     // Advance past the auto-cleanup delay; nothing should be left to fire.
     vi.advanceTimersByTime(XhrManager.cleanupDelayMs + 1000);

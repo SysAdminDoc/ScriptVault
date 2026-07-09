@@ -21691,8 +21691,18 @@ const XhrManager = (() => {
     // requestId -> { controller, tabId, scriptId, etc }
     nextId: 1,
     cleanupDelayMs: 3e5,
+    maxActiveRequests: 512,
+    maxActiveRequestsPerScript: 64,
     // Create a new tracked request (controller added later by caller)
     create(tabId, scriptId, details) {
+      if (this.requests.size >= this.maxActiveRequests) {
+        throw new Error(`Too many active GM_xmlhttpRequest requests. Maximum is ${this.maxActiveRequests}.`);
+      }
+      if (this.getActiveCountForScript(scriptId) >= this.maxActiveRequestsPerScript) {
+        throw new Error(
+          `Too many active GM_xmlhttpRequest requests for this script. Maximum is ${this.maxActiveRequestsPerScript}.`
+        );
+      }
       const requestId = `xhr_${this.nextId++}_${Date.now()}`;
       const request = {
         id: requestId,
@@ -21754,6 +21764,13 @@ const XhrManager = (() => {
     // Get count of active requests
     getActiveCount() {
       return this.requests.size;
+    },
+    getActiveCountForScript(scriptId) {
+      let count = 0;
+      for (const request of this.requests.values()) {
+        if (request.scriptId === scriptId) count += 1;
+      }
+      return count;
     },
     /**
      * Build the `fetch()` init options for a GM_xmlhttpRequest payload.
