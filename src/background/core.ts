@@ -8413,12 +8413,18 @@ async function handleMessage(message, sender) {
           await unregisterScript(s.id);
         }
         await ScriptStorage.clear();
+        // Erase backup blobs + publication receipts too — ScriptStorage.clear()
+        // only touches the scripts partition, so without this a factory reset
+        // leaves fully-restorable script code / GM values in the backups store.
+        if (typeof BackupsDAO !== 'undefined' && BackupsDAO.clear) {
+          await BackupsDAO.clear().catch(() => {});
+        }
         await SettingsManager.reset();
         // Clear ghost state that would otherwise survive the reset
         await chrome.storage.local.remove([
           'syncTombstones', 'trash', 'pendingUpdates', 'scriptFolders',
           'cspReports', 'gistSettings', 'lastSyncResult', 'gmValueSyncRetryHistory', 'gmValueSyncRetryResolution', 'gmValueSyncRetryResolutionHistory', 'liveReloadScripts',
-          'restoreReceipts'
+          'restoreReceipts', 'autoBackups'
         ]).catch(() => {});
         // Clear all alarms (crontab, autoUpdate, autoSync, backup, etc.)
         await chrome.alarms.clearAll().catch(() => {});

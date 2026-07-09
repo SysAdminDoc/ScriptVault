@@ -30,4 +30,13 @@ describe('background factory reset handler', () => {
     expect(handler).not.toContain("chrome.storage.local.remove('userscripts')");
     expect(handler).not.toContain('ScriptStorage.cache = {}');
   });
+
+  it('erases backup blobs and autoBackups metadata so a reset leaves no restorable data', () => {
+    const handler = extractFactoryResetCase(backgroundCoreCode);
+
+    // ScriptStorage.clear() only touches the scripts partition; backup blobs
+    // (full script code + GM values) live in a separate store and must be wiped.
+    expect(handler).toContain('BackupsDAO.clear()');
+    expect(handler).toContain('autoBackups');
+  });
 });

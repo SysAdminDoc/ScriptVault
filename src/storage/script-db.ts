@@ -767,6 +767,21 @@ export const BackupsDAO = {
       await reqToPromise(tx.objectStore(Stores.backups).delete(id));
     });
   },
+
+  // Erase every stored backup blob and publication receipt. Used by factory
+  // reset so that full restorable script code / GM values do not survive an
+  // explicit wipe in the backups partition.
+  async clear(): Promise<void> {
+    await openBackupsDB();
+    await withTransaction(
+      [Stores.backups, Stores.publicationReceipts] as StoreName[],
+      'readwrite',
+      async (tx) => {
+        await reqToPromise(tx.objectStore(Stores.backups).clear());
+        await reqToPromise(tx.objectStore(Stores.publicationReceipts).clear());
+      },
+    );
+  },
 };
 
 // ----------------------------------------------------------------------------

@@ -147,6 +147,22 @@ describe('storage bucket partitioning', () => {
     expect((await BackupsDAO.get('backup_alpha'))?.byteSize).toBe(4);
   });
 
+  it('BackupsDAO.clear() erases stored backup blobs so factory reset leaves no restorable data', async () => {
+    await BackupsDAO.put({
+      id: 'backup_alpha',
+      name: 'backup_alpha',
+      createdAt: 2,
+      byteSize: 4,
+      data: new Uint8Array([1, 2, 3, 4]).buffer,
+    });
+    expect((await BackupsDAO.get('backup_alpha'))?.byteSize).toBe(4);
+
+    await BackupsDAO.clear();
+
+    expect(await BackupsDAO.get('backup_alpha')).toBeNull();
+    expect(await BackupsDAO.list()).toEqual([]);
+  });
+
   it('keeps delete, backup-restore style overwrites, and sync-merge style value writes working across buckets', async () => {
     installStorageBucketsMock();
 
