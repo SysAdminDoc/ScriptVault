@@ -1924,63 +1924,67 @@ async function dispatchExternal(message: ExternalMessage, sender: SenderLike): P
   }
 }
 
-function dispatchWebMessage(event: MessageEvent): void {
+async function dispatchWebMessagePayload(data: unknown, rawOrigin: string): Promise<Record<string, unknown> | null> {
   // Validate origin — deny-by-default when no trusted origins are configured
-  const origin = normalizeIncomingOrigin(event.origin);
+  const origin = normalizeIncomingOrigin(rawOrigin);
   let localMcpOrigin: string | null = null;
   try {
-    localMcpOrigin = normalizeLocalMcpOrigin(event.origin);
+    localMcpOrigin = normalizeLocalMcpOrigin(rawOrigin);
   } catch {
     localMcpOrigin = null;
   }
   if (_trustedOrigins.length === 0 || !origin || !_trustedOrigins.includes(origin)) {
-    if (!localMcpOrigin) return; // ignore untrusted origins
+    if (!localMcpOrigin) return null; // ignore untrusted origins
   }
 
-  const data = event.data as unknown;
-  if (!data || typeof data !== 'object' || !('type' in data)) return;
+  if (!data || typeof data !== 'object' || !('type' in data)) return null;
   const msg = data as WebPageMessage;
   // Type guard: postMessage payloads can carry arbitrary structured-clone
   // data. We must require `data.type` to be a string before calling
   // `.startsWith`, otherwise a sender that passes `data.type = {}` triggers
   // a TypeError surfaced as an unhandled error on chrome://extensions.
-  if (typeof msg.type !== 'string') return;
-  if (!msg.type.startsWith('scriptvault:')) return;
+  if (typeof msg.type !== 'string') return null;
+  if (!msg.type.startsWith('scriptvault:')) return null;
 
   if (msg.type.startsWith('scriptvault:mcp:')) {
-    void dispatchLocalMcpMessage(msg, event.origin).then(response => {
-      if (response && event.source) {
-        try {
-          (event.source as WindowProxy).postMessage(response, event.origin);
-        } catch { /* cross-origin post failed */ }
-      }
-    }).catch((e: unknown) => {
+    try {
+      return await dispatchLocalMcpMessage(msg, rawOrigin);
+    } catch (e: unknown) {
       console.warn('[PublicAPI] Local MCP web handler error:', e);
-    });
-    return;
+      return null;
+    }
   }
 
   if (!origin || _trustedOrigins.length === 0 || !_trustedOrigins.includes(origin)) {
-    return;
+    return null;
   }
 
   const senderId = `web:${origin}`;
   if (!checkRateLimit(senderId)) {
     // Silently drop rate-limited web messages
-    return;
+    return null;
   }
 
   const handler = WEB_HANDLERS[msg.type];
-  if (!handler) return;
+  if (!handler) return null;
 
   audit(msg.type, { origin }, msg, 'processing');
 
-  handler(msg, origin).then(response => {
+  try {
+    return await handler(msg, origin);
+  } catch (e: unknown) {
+    console.warn('[PublicAPI] web handler error:', e);
+    return null;
+  }
+}
+
+function dispatchWebMessage(event: MessageEvent): void {
+  void dispatchWebMessagePayload(event.data as unknown, event.origin).then(response => {
     if (response && event.source) {
       try {
         (event.source as WindowProxy).postMessage(
           response,
-          origin
+          event.origin
         );
       } catch { /* cross-origin post failed */ }
     }
@@ -2056,6 +2060,14 @@ const PublicAPI = {
    */
   handleWebMessage(event: MessageEvent): void {
     dispatchWebMessage(event);
+  },
+
+  /**
+   * Handle a web page message payload relayed by a content script.
+   */
+  async handleWebMessagePayload(message: unknown, origin: string): Promise<Record<string, unknown> | null> {
+    if (!_initialized) await this.init();
+    return dispatchWebMessagePayload(message, origin);
   },
 
   /**

@@ -22199,6 +22199,7 @@ const MessageRouter = (() => {
     "publicApi_getPermissions",
     "publicApi_getTrustedExtensionIds",
     "publicApi_getTrustedOrigins",
+    "publicApi_handleWebMessage",
     "publicApi_setLocalMcpBridgeConfig",
     "publicApi_setTrustedExtensionIds",
     "publicApi_setTrustedOrigins",
@@ -33840,51 +33841,53 @@ const PublicAPI = (() => {
       return { error: "Internal error" };
     }
   }
-  function dispatchWebMessage(event) {
-    const origin = normalizeIncomingOrigin(event.origin);
+  async function dispatchWebMessagePayload(data, rawOrigin) {
+    const origin = normalizeIncomingOrigin(rawOrigin);
     let localMcpOrigin = null;
     try {
-      localMcpOrigin = normalizeLocalMcpOrigin(event.origin);
+      localMcpOrigin = normalizeLocalMcpOrigin(rawOrigin);
     } catch {
       localMcpOrigin = null;
     }
     if (_trustedOrigins.length === 0 || !origin || !_trustedOrigins.includes(origin)) {
-      if (!localMcpOrigin) return;
+      if (!localMcpOrigin) return null;
     }
-    const data = event.data;
-    if (!data || typeof data !== "object" || !("type" in data)) return;
+    if (!data || typeof data !== "object" || !("type" in data)) return null;
     const msg = data;
-    if (typeof msg.type !== "string") return;
-    if (!msg.type.startsWith("scriptvault:")) return;
+    if (typeof msg.type !== "string") return null;
+    if (!msg.type.startsWith("scriptvault:")) return null;
     if (msg.type.startsWith("scriptvault:mcp:")) {
-      void dispatchLocalMcpMessage(msg, event.origin).then((response) => {
-        if (response && event.source) {
-          try {
-            event.source.postMessage(response, event.origin);
-          } catch {
-          }
-        }
-      }).catch((e) => {
+      try {
+        return await dispatchLocalMcpMessage(msg, rawOrigin);
+      } catch (e) {
         console.warn("[PublicAPI] Local MCP web handler error:", e);
-      });
-      return;
+        return null;
+      }
     }
     if (!origin || _trustedOrigins.length === 0 || !_trustedOrigins.includes(origin)) {
-      return;
+      return null;
     }
     const senderId = `web:${origin}`;
     if (!checkRateLimit(senderId)) {
-      return;
+      return null;
     }
     const handler = WEB_HANDLERS[msg.type];
-    if (!handler) return;
+    if (!handler) return null;
     audit(msg.type, { origin }, msg, "processing");
-    handler(msg, origin).then((response) => {
+    try {
+      return await handler(msg, origin);
+    } catch (e) {
+      console.warn("[PublicAPI] web handler error:", e);
+      return null;
+    }
+  }
+  function dispatchWebMessage(event) {
+    void dispatchWebMessagePayload(event.data, event.origin).then((response) => {
       if (response && event.source) {
         try {
           event.source.postMessage(
             response,
-            origin
+            event.origin
           );
         } catch {
         }
@@ -33942,6 +33945,13 @@ const PublicAPI = (() => {
      */
     handleWebMessage(event) {
       dispatchWebMessage(event);
+    },
+    /**
+     * Handle a web page message payload relayed by a content script.
+     */
+    async handleWebMessagePayload(message, origin) {
+      if (!_initialized) await this.init();
+      return dispatchWebMessagePayload(message, origin);
     },
     /**
      * Handle a Local MCP bridge message manually (tests/local helper adapters).
@@ -45259,6 +45269,16 @@ async function handleMessage(message, sender) {
         if (typeof PublicAPI === 'undefined') return { error: 'Public API controls unavailable' };
         await PublicAPI.clearAuditLog();
         return { success: true };
+
+      case 'publicApi_handleWebMessage':
+        if (typeof PublicAPI === 'undefined') return { response: null };
+        if (!data || typeof data.origin !== 'string') return { response: null };
+        return {
+          response: await PublicAPI.handleWebMessagePayload(
+            data.message && typeof data.message === 'object' ? data.message : null,
+            data.origin
+          )
+        };
 
       case 'signing_generateNewKeypair':
         return ScriptSigning.generateAndStoreKeypair();

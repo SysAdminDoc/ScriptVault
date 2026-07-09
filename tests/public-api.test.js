@@ -467,6 +467,24 @@ describe('PublicAPI', () => {
         'https://trusted.example',
       );
     });
+
+    it('returns web page responses for content-script relays', async () => {
+      await PublicAPI.init();
+      await PublicAPI.setTrustedOrigins(['https://trusted.example/install']);
+
+      const response = await PublicAPI.handleWebMessagePayload(
+        {
+          type: 'scriptvault:isInstalled',
+          name: 'Unknown Script',
+        },
+        'https://trusted.example',
+      );
+
+      expect(response).toMatchObject({
+        type: 'scriptvault:isInstalled:response',
+        installed: false,
+      });
+    });
   });
 
   describe('web install hardening', () => {

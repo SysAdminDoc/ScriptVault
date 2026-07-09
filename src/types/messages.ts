@@ -1347,6 +1347,12 @@ interface PublicApiClearAuditLog {
   action: 'publicApi_clearAuditLog';
 }
 
+interface PublicApiHandleWebMessage {
+  action: 'publicApi_handleWebMessage';
+  origin: string;
+  message: unknown;
+}
+
 interface PublicApiLocalMcpBridgeConfig {
   enabled: boolean;
   origins: string[];
@@ -1710,6 +1716,7 @@ export type BackgroundMessage =
   | PublicApiGetTrustedOrigins | PublicApiSetTrustedOrigins
   | PublicApiGetTrustedExtensionIds | PublicApiSetTrustedExtensionIds
   | PublicApiGetPermissions | PublicApiGetAuditLog | PublicApiClearAuditLog
+  | PublicApiHandleWebMessage
   | PublicApiGetLocalMcpBridgeConfig | PublicApiSetLocalMcpBridgeConfig
   // Workspaces
   | GetWorkspaces | CreateWorkspace | SaveWorkspace
@@ -2058,6 +2065,7 @@ export interface ResponseMap {
   publicApi_getPermissions: { permissions: unknown };
   publicApi_getAuditLog: { entries: unknown[] };
   publicApi_clearAuditLog: SuccessOrError;
+  publicApi_handleWebMessage: { response: Record<string, unknown> | null };
   publicApi_getLocalMcpBridgeConfig: { config: PublicApiLocalMcpBridgeConfig };
   publicApi_setLocalMcpBridgeConfig: SuccessOrError<{ config?: PublicApiLocalMcpBridgeConfig }>;
 

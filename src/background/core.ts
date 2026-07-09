@@ -7785,6 +7785,16 @@ async function handleMessage(message, sender) {
         await PublicAPI.clearAuditLog();
         return { success: true };
 
+      case 'publicApi_handleWebMessage':
+        if (typeof PublicAPI === 'undefined') return { response: null };
+        if (!data || typeof data.origin !== 'string') return { response: null };
+        return {
+          response: await PublicAPI.handleWebMessagePayload(
+            data.message && typeof data.message === 'object' ? data.message : null,
+            data.origin
+          )
+        };
+
       case 'signing_generateNewKeypair':
         return ScriptSigning.generateAndStoreKeypair();
 

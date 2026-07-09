@@ -23,6 +23,17 @@
     'reportExecError',
     'reportExecTime'
   ]);
+
+  function isPublicApiPageMessage(msg) {
+    if (!msg || typeof msg !== 'object') return false;
+    if (typeof msg.type !== 'string') return false;
+    if (!msg.type.startsWith('scriptvault:')) return false;
+    // Responses posted back into the page are visible to this listener too.
+    // Do not bounce them back to the service worker.
+    if (msg.type.endsWith(':response')) return false;
+    return true;
+  }
+
   function isAllowedBridgeAction(action) {
     if (typeof action !== 'string') return false;
     return ALLOWED_BRIDGE_ACTIONS.has(action);
@@ -95,6 +106,21 @@
 
     // Check for our message type
     if (!msg || typeof msg !== 'object') return;
+    if (isPublicApiPageMessage(msg)) {
+      try {
+        const result = await chrome.runtime.sendMessage({
+          action: 'publicApi_handleWebMessage',
+          origin: event.origin,
+          message: msg
+        });
+        if (result?.response) {
+          window.postMessage(result.response, event.origin);
+        }
+      } catch (_) {
+        // Public API relay failures are intentionally silent to avoid noisy pages.
+      }
+      return;
+    }
     if (msg.channel !== CHANNEL_ID) return;
     if (msg.direction !== 'to-background') return;
 

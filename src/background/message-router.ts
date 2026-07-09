@@ -159,6 +159,7 @@ export const BACKGROUND_MESSAGE_ACTIONS = [
   'publicApi_getPermissions',
   'publicApi_getTrustedExtensionIds',
   'publicApi_getTrustedOrigins',
+  'publicApi_handleWebMessage',
   'publicApi_setLocalMcpBridgeConfig',
   'publicApi_setTrustedExtensionIds',
   'publicApi_setTrustedOrigins',

@@ -28,9 +28,9 @@ function createBridgeWindow() {
       }
       return true;
     }),
-    postMessage: vi.fn((data) => {
+    postMessage: vi.fn((data, targetOrigin = '*') => {
       queueMicrotask(() => {
-        win.dispatchEvent(new win.MessageEvent('message', { source: win, data }));
+        win.dispatchEvent(new win.MessageEvent('message', { source: win, data, origin: targetOrigin }));
       });
     }),
   };
@@ -39,6 +39,7 @@ function createBridgeWindow() {
       this.type = type;
       this.source = init.source ?? null;
       this.data = init.data;
+      this.origin = init.origin ?? '';
     }
   };
   return win;
@@ -80,6 +81,24 @@ function waitForBridgeResponse(win, id) {
       win.clearTimeout(timeout);
       win.removeEventListener('message', handler);
       resolvePromise(msg);
+    }
+
+    win.addEventListener('message', handler);
+  });
+}
+
+function waitForPageMessage(win, predicate) {
+  return new Promise((resolvePromise, rejectPromise) => {
+    const timeout = win.setTimeout(() => {
+      win.removeEventListener('message', handler);
+      rejectPromise(new Error('Timed out waiting for page message'));
+    }, 1000);
+
+    function handler(event) {
+      if (!predicate(event.data)) return;
+      win.clearTimeout(timeout);
+      win.removeEventListener('message', handler);
+      resolvePromise(event.data);
     }
 
     win.addEventListener('message', handler);
@@ -215,6 +234,43 @@ describe('content script bridge security boundary', () => {
       action: 'reportExecTime',
       data: { scriptId: 'script_alpha', time: 12 },
     });
+  });
+
+  it('relays trusted PublicAPI page messages without rebouncing responses', async () => {
+    const { window: win, chromeMock } = loadContentBridge();
+    const request = {
+      type: 'scriptvault:isInstalled',
+      name: 'Unknown Script',
+    };
+    const response = {
+      type: 'scriptvault:isInstalled:response',
+      installed: false,
+    };
+    chromeMock.runtime.sendMessage.mockResolvedValueOnce({ response });
+
+    const pageResponse = waitForPageMessage(win, msg => msg?.type === 'scriptvault:isInstalled:response');
+    win.dispatchEvent(new win.MessageEvent('message', {
+      source: win,
+      origin: 'https://trusted.example',
+      data: request,
+    }));
+
+    await expect(pageResponse).resolves.toEqual(response);
+    expect(chromeMock.runtime.sendMessage).toHaveBeenCalledWith({
+      action: 'publicApi_handleWebMessage',
+      origin: 'https://trusted.example',
+      message: request,
+    });
+
+    chromeMock.runtime.sendMessage.mockClear();
+    win.dispatchEvent(new win.MessageEvent('message', {
+      source: win,
+      origin: 'https://trusted.example',
+      data: response,
+    }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(chromeMock.runtime.sendMessage).not.toHaveBeenCalled();
   });
 
   it('keeps generated wrapper fallbacks telemetry-only and preserves GM_loadScript context', () => {
