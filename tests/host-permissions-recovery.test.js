@@ -83,6 +83,18 @@ describe('optional host permission shipping gate', () => {
     expect(chromeManifest.content_scripts[0].matches).toContain('<all_urls>');
   });
 
+  it('keeps the install review page out of web-accessible resources', () => {
+    for (const manifestPath of ['manifest.json', 'manifest-firefox.json']) {
+      const manifest = json(manifestPath);
+      const blocks = manifest.web_accessible_resources || [];
+      expect(blocks.flatMap(block => block.resources || [])).not.toContain('pages/install.html');
+      expect(blocks.flatMap(block => block.matches || [])).not.toContain('<all_urls>');
+    }
+
+    const core = source('src/background/core.ts');
+    expect(core).toContain("chrome.runtime.getURL('pages/install.html')");
+  });
+
   it('derives scoped host grants from run, dependency, update, and connect metadata', () => {
     const plan = deriveOptionalHostPermissionPlan({
       match: ['https://example.com/*', '*://docs.example.org/*'],

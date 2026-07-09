@@ -43,8 +43,6 @@ const copyCatalog = [
   ['optional_permission', 'userScripts', ['Firefox optional grant', 'USER_SCRIPT world'], ['Firefox optional grant', 'USER_SCRIPT world']],
   ['host_permission', '<all_urls>', ['Host permission', 'user-chosen sites'], ['Host permission', 'user-chosen sites']],
   ['content_script_match', '<all_urls>', ['Content script match', '.user.js install'], ['Content script match', '.user.js install']],
-  ['web_accessible_match', '<all_urls>', ['Web-accessible match', 'install confirmation page'], ['Web-accessible match', 'install confirmation page']],
-  ['web_accessible_resource', 'pages/install.html', ['install confirmation page', 'web-accessible resource'], ['install confirmation page', 'web-accessible resource']],
   ['sandbox_page', 'pages/editor-sandbox.html', ['sandboxed editor', 'Monaco'], ['sandboxed editor', 'Monaco']],
   ['data_collection_required', 'none', ['Required data collection', 'none'], ['Required data collection', 'none']],
   ['data_collection_optional', 'authenticationInfo', ['authenticationInfo', 'OAuth tokens'], ['authenticationInfo', 'OAuth tokens']],

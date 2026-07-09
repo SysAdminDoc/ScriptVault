@@ -87,16 +87,6 @@
       "all_frames": true
     }
   ],
-  "web_accessible_resources": [
-    {
-      "resources": [
-        "pages/install.html"
-      ],
-      "matches": [
-        "<all_urls>"
-      ]
-    }
-  ],
   "commands": {
     "_execute_action": {
       "suggested_key": {
