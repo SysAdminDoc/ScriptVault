@@ -32621,7 +32621,7 @@ const PublicAPI = (() => {
         rateLimit: true
       },
       installScript: {
-        description: "Install a new userscript. Requires user approval.",
+        description: "Install a new userscript disabled for review. Requires user approval.",
         params: { code: "string \u2014 full userscript source" },
         auth: "prompt",
         rateLimit: true
@@ -32643,7 +32643,7 @@ const PublicAPI = (() => {
         params: { name: "string" }
       },
       "scriptvault:install": {
-        description: "Trigger install flow for a script URL.",
+        description: "Fetch a userscript URL and install it disabled for review.",
         params: { url: "string" }
       }
     },
@@ -32837,6 +32837,41 @@ const PublicAPI = (() => {
     const value = meta[key] ?? existingMeta[key];
     return value === true;
   }
+  function createExternalInstallReviewSettings(source, sourceLabel) {
+    return {
+      _importQuarantine: {
+        source,
+        sourceLabel,
+        importedAt: Date.now(),
+        archiveEnabled: true
+      }
+    };
+  }
+  function matchPatternFromHttpOrigin(value) {
+    if (typeof value !== "string" || !value.trim()) return null;
+    try {
+      const parsed = new URL(value);
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+      if (!parsed.hostname || isInternalHost(parsed.hostname)) return null;
+      return `${parsed.protocol}//${parsed.hostname}/*`;
+    } catch {
+      return null;
+    }
+  }
+  function externalFallbackMatches(sender) {
+    const originPattern = matchPatternFromHttpOrigin(sender?.origin);
+    if (originPattern) return [originPattern];
+    const urlPattern = matchPatternFromHttpOrigin(sender?.url);
+    return urlPattern ? [urlPattern] : [];
+  }
+  function webFallbackMatches(origin) {
+    const pattern = matchPatternFromHttpOrigin(origin);
+    return pattern ? [pattern] : [];
+  }
+  function selectInstallMatches(meta, fallbackMatches) {
+    const declared = asStringArray(meta.match);
+    return declared.length > 0 ? declared : fallbackMatches;
+  }
   function normalizeStoredScript(raw) {
     if (!raw || typeof raw !== "object") return null;
     const script = raw;
@@ -32900,8 +32935,10 @@ const PublicAPI = (() => {
   function createNestedStoredScript(newScript, meta, installedBy, position, existing = null) {
     const existingRecord = existing ?? {};
     const existingMeta = existingRecord.meta && typeof existingRecord.meta === "object" ? existingRecord.meta : {};
-    const matches = asStringArray(newScript.matches ?? newScript.match ?? meta.match ?? ["*://*/*"]);
+    const matches = asStringArray(newScript.matches ?? newScript.match ?? meta.match);
     const resources = meta.resource && typeof meta.resource === "object" ? meta.resource : existingMeta.resource && typeof existingMeta.resource === "object" ? existingMeta.resource : {};
+    const existingSettings = existingRecord.settings && typeof existingRecord.settings === "object" ? existingRecord.settings : {};
+    const incomingSettings = newScript.settings && typeof newScript.settings === "object" ? newScript.settings : {};
     return {
       ...existingRecord,
       id: newScript.id,
@@ -32927,7 +32964,7 @@ const PublicAPI = (() => {
         license: getMetaString(meta, existingMeta, "license"),
         copyright: getMetaString(meta, existingMeta, "copyright"),
         contributionURL: getMetaString(meta, existingMeta, "contributionURL"),
-        match: matches.length > 0 ? matches : ["*://*/*"],
+        match: matches,
         include: getMetaArray(meta, existingMeta, "include"),
         exclude: getMetaArray(meta, existingMeta, "exclude"),
         excludeMatch: getMetaArray(meta, existingMeta, "excludeMatch"),
@@ -32954,7 +32991,7 @@ const PublicAPI = (() => {
         compatible: getMetaArray(meta, existingMeta, "compatible"),
         incompatible: getMetaArray(meta, existingMeta, "incompatible")
       },
-      settings: existingRecord.settings && typeof existingRecord.settings === "object" ? existingRecord.settings : {},
+      settings: { ...existingSettings, ...incomingSettings },
       stats: existingRecord.stats && typeof existingRecord.stats === "object" ? existingRecord.stats : { runs: 0, totalTime: 0, avgTime: 0, lastRun: 0, errors: 0 },
       versionHistory: Array.isArray(existingRecord.versionHistory) ? existingRecord.versionHistory : [],
       createdAt: asNumber(existingRecord.createdAt) ?? newScript.installedAt ?? Date.now(),
@@ -32988,7 +33025,7 @@ const PublicAPI = (() => {
         name: script.name ?? meta.name ?? script.id,
         version: script.version ?? meta.version ?? "1.0",
         description: script.description ?? meta.description ?? "",
-        match: Array.isArray(meta.match) && meta.match.length > 0 ? [...meta.match] : ["*://*/*"],
+        match: Array.isArray(meta.match) ? [...meta.match] : [],
         include: Array.isArray(meta.include) ? [...meta.include] : [],
         exclude: Array.isArray(meta.exclude) ? [...meta.exclude] : [],
         excludeMatch: Array.isArray(meta.excludeMatch) ? [...meta.excludeMatch] : [],
@@ -33019,7 +33056,7 @@ const PublicAPI = (() => {
         console.warn("[PublicAPI] Failed to refresh badge state:", e);
       }
     }
-    if (script && typeof hooks.autoReloadMatchingTabs === "function") {
+    if (script && script.enabled !== false && typeof hooks.autoReloadMatchingTabs === "function") {
       try {
         await hooks.autoReloadMatchingTabs(toRuntimeScriptShape(script, meta));
       } catch (e) {
@@ -33097,26 +33134,29 @@ const PublicAPI = (() => {
       if (!allowed) return { error: "Permission denied", action: "installScript" };
       try {
         const meta = parseUserscriptMeta(code);
+        const installedBy = describeSender(sender);
+        const matches = selectInstallMatches(meta, externalFallbackMatches(sender));
         const scriptId = generateExternalScriptId();
         const newScript = {
           id: scriptId,
           name: meta.name ?? scriptId,
           version: meta.version ?? "1.0",
           description: meta.description ?? "",
-          matches: meta.match ?? ["*://*/*"],
+          matches,
           code,
-          enabled: true,
+          enabled: false,
           installedAt: Date.now(),
-          installedBy: describeSender(sender),
-          runAt: meta.runAt ?? "document_idle"
+          installedBy,
+          runAt: meta.runAt ?? "document_idle",
+          settings: createExternalInstallReviewSettings("public-api-external", installedBy)
         };
         const store = await getScriptStore();
-        const updatedStore = upsertScriptStore(store, newScript, meta, describeSender(sender));
+        const updatedStore = upsertScriptStore(store, newScript, meta, installedBy);
         if (Array.isArray(updatedStore)) {
           await ScriptStorage.set(newScript.id, createNestedStoredScript(
             newScript,
             meta,
-            describeSender(sender),
+            installedBy,
             store.scripts.length,
             null
           ));
@@ -33131,7 +33171,7 @@ const PublicAPI = (() => {
         }
         await refreshRuntimeAfterMutation(newScript, meta);
         void fireWebhook("script.installed", { scriptId, name: newScript.name, version: newScript.version });
-        return { ok: true, scriptId, name: newScript.name };
+        return { ok: true, scriptId, name: newScript.name, enabled: false, reviewRequired: true };
       } catch (e) {
         return { error: "Failed to install script", detail: e.message };
       }
@@ -33233,26 +33273,29 @@ const PublicAPI = (() => {
           throw new Error("Not a valid userscript (missing ==UserScript== header)");
         }
         const meta = parseUserscriptMeta(code);
+        const installedBy = `origin:${origin}`;
+        const matches = selectInstallMatches(meta, webFallbackMatches(origin));
         const scriptId = generateExternalScriptId();
         const newScript = {
           id: scriptId,
           name: meta.name ?? scriptId,
           version: meta.version ?? "1.0",
           description: meta.description ?? "",
-          matches: meta.match ?? ["*://*/*"],
+          matches,
           code,
-          enabled: true,
+          enabled: false,
           installedAt: Date.now(),
-          installedBy: `origin:${origin}`,
-          runAt: meta.runAt ?? "document_idle"
+          installedBy,
+          runAt: meta.runAt ?? "document_idle",
+          settings: createExternalInstallReviewSettings("public-api-web", installedBy)
         };
         const store = await getScriptStore();
-        const updatedStore = upsertScriptStore(store, newScript, meta, `origin:${origin}`);
+        const updatedStore = upsertScriptStore(store, newScript, meta, installedBy);
         if (Array.isArray(updatedStore)) {
           await ScriptStorage.set(newScript.id, createNestedStoredScript(
             newScript,
             meta,
-            `origin:${origin}`,
+            installedBy,
             store.scripts.length,
             null
           ));
@@ -33267,7 +33310,7 @@ const PublicAPI = (() => {
         }
         await refreshRuntimeAfterMutation(newScript, meta);
         void fireWebhook("script.installed", { scriptId, name: newScript.name, version: newScript.version });
-        return { type: "scriptvault:install:response", ok: true, scriptId, name: newScript.name };
+        return { type: "scriptvault:install:response", ok: true, scriptId, name: newScript.name, enabled: false, reviewRequired: true };
       } catch (e) {
         return { type: "scriptvault:install:response", error: "Fetch failed", detail: e.message };
       }

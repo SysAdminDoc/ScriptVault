@@ -21,6 +21,7 @@ interface FlatScript {
   matches?: string[];
   match?: string[];
   code?: string;
+  settings?: Record<string, unknown>;
   lastModified?: number;
   runAt?: string;
   installedAt?: number;
@@ -532,7 +533,7 @@ const API_SCHEMA: APISchemaType = {
       rateLimit: true
     },
     installScript: {
-      description: 'Install a new userscript. Requires user approval.',
+      description: 'Install a new userscript disabled for review. Requires user approval.',
       params: { code: 'string — full userscript source' },
       auth: 'prompt',
       rateLimit: true
@@ -554,7 +555,7 @@ const API_SCHEMA: APISchemaType = {
       params: { name: 'string' }
     },
     'scriptvault:install': {
-      description: 'Trigger install flow for a script URL.',
+      description: 'Fetch a userscript URL and install it disabled for review.',
       params: { url: 'string' }
     }
   },
@@ -822,6 +823,46 @@ function getMetaBoolean(
   return value === true;
 }
 
+function createExternalInstallReviewSettings(source: string, sourceLabel: string): Record<string, unknown> {
+  return {
+    _importQuarantine: {
+      source,
+      sourceLabel,
+      importedAt: Date.now(),
+      archiveEnabled: true,
+    },
+  };
+}
+
+function matchPatternFromHttpOrigin(value: unknown): string | null {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    if (!parsed.hostname || isInternalHost(parsed.hostname)) return null;
+    return `${parsed.protocol}//${parsed.hostname}/*`;
+  } catch {
+    return null;
+  }
+}
+
+function externalFallbackMatches(sender: SenderLike | null | undefined): string[] {
+  const originPattern = matchPatternFromHttpOrigin(sender?.origin);
+  if (originPattern) return [originPattern];
+  const urlPattern = matchPatternFromHttpOrigin(sender?.url);
+  return urlPattern ? [urlPattern] : [];
+}
+
+function webFallbackMatches(origin: string): string[] {
+  const pattern = matchPatternFromHttpOrigin(origin);
+  return pattern ? [pattern] : [];
+}
+
+function selectInstallMatches(meta: ParsedMeta, fallbackMatches: string[]): string[] {
+  const declared = asStringArray(meta.match);
+  return declared.length > 0 ? declared : fallbackMatches;
+}
+
 function normalizeStoredScript(raw: unknown): FlatScript | null {
   if (!raw || typeof raw !== 'object') return null;
 
@@ -929,12 +970,18 @@ function createNestedStoredScript(
   const existingMeta = existingRecord.meta && typeof existingRecord.meta === 'object'
     ? existingRecord.meta as Record<string, unknown>
     : {};
-  const matches = asStringArray(newScript.matches ?? newScript.match ?? meta.match ?? ['*://*/*']);
+  const matches = asStringArray(newScript.matches ?? newScript.match ?? meta.match);
   const resources = meta.resource && typeof meta.resource === 'object'
     ? meta.resource
     : existingMeta.resource && typeof existingMeta.resource === 'object'
       ? existingMeta.resource as Record<string, unknown>
       : {};
+  const existingSettings = existingRecord.settings && typeof existingRecord.settings === 'object'
+    ? existingRecord.settings as Record<string, unknown>
+    : {};
+  const incomingSettings = newScript.settings && typeof newScript.settings === 'object'
+    ? newScript.settings
+    : {};
 
   return {
     ...existingRecord,
@@ -961,7 +1008,7 @@ function createNestedStoredScript(
       license: getMetaString(meta, existingMeta, 'license'),
       copyright: getMetaString(meta, existingMeta, 'copyright'),
       contributionURL: getMetaString(meta, existingMeta, 'contributionURL'),
-      match: matches.length > 0 ? matches : ['*://*/*'],
+      match: matches,
       include: getMetaArray(meta, existingMeta, 'include'),
       exclude: getMetaArray(meta, existingMeta, 'exclude'),
       excludeMatch: getMetaArray(meta, existingMeta, 'excludeMatch'),
@@ -988,9 +1035,7 @@ function createNestedStoredScript(
       compatible: getMetaArray(meta, existingMeta, 'compatible'),
       incompatible: getMetaArray(meta, existingMeta, 'incompatible')
     },
-    settings: existingRecord.settings && typeof existingRecord.settings === 'object'
-      ? existingRecord.settings
-      : {},
+    settings: { ...existingSettings, ...incomingSettings },
     stats: existingRecord.stats && typeof existingRecord.stats === 'object'
       ? existingRecord.stats
       : { runs: 0, totalTime: 0, avgTime: 0, lastRun: 0, errors: 0 },
@@ -1037,7 +1082,7 @@ function toRuntimeScriptShape(script: FlatScript, meta: ParsedMeta): FlatScript 
       name: script.name ?? meta.name ?? script.id,
       version: script.version ?? meta.version ?? '1.0',
       description: script.description ?? meta.description ?? '',
-      match: Array.isArray(meta.match) && meta.match.length > 0 ? [...meta.match] : ['*://*/*'],
+      match: Array.isArray(meta.match) ? [...meta.match] : [],
       include: Array.isArray(meta.include) ? [...meta.include] : [],
       exclude: Array.isArray(meta.exclude) ? [...meta.exclude] : [],
       excludeMatch: Array.isArray(meta.excludeMatch) ? [...meta.excludeMatch] : [],
@@ -1075,7 +1120,7 @@ async function refreshRuntimeAfterMutation(
     }
   }
 
-  if (script && typeof hooks.autoReloadMatchingTabs === 'function') {
+  if (script && script.enabled !== false && typeof hooks.autoReloadMatchingTabs === 'function') {
     try {
       await hooks.autoReloadMatchingTabs(toRuntimeScriptShape(script, meta));
     } catch (e: unknown) {
@@ -1179,6 +1224,8 @@ const HANDLERS: Record<string, HandlerFn> = {
     try {
       // Parse basic userscript metadata
       const meta = parseUserscriptMeta(code);
+      const installedBy = describeSender(sender);
+      const matches = selectInstallMatches(meta, externalFallbackMatches(sender));
 
       const scriptId = generateExternalScriptId();
 
@@ -1187,16 +1234,17 @@ const HANDLERS: Record<string, HandlerFn> = {
         name: meta.name ?? scriptId,
         version: meta.version ?? '1.0',
         description: meta.description ?? '',
-        matches: meta.match ?? ['*://*/*'],
+        matches,
         code,
-        enabled: true,
+        enabled: false,
         installedAt: Date.now(),
-        installedBy: describeSender(sender),
-        runAt: meta.runAt ?? 'document_idle'
+        installedBy,
+        runAt: meta.runAt ?? 'document_idle',
+        settings: createExternalInstallReviewSettings('public-api-external', installedBy),
       };
 
       const store = await getScriptStore();
-      const updatedStore = upsertScriptStore(store, newScript, meta, describeSender(sender));
+      const updatedStore = upsertScriptStore(store, newScript, meta, installedBy);
 
       // v3.0: persist through ScriptStorage so the IDB-backed store stays
       // authoritative. The legacy `userscripts` blob is migrated on first
@@ -1205,7 +1253,7 @@ const HANDLERS: Record<string, HandlerFn> = {
       if (Array.isArray(updatedStore)) {
         // Array-mode legacy path — convert to nested record on the way in.
         await ScriptStorage.set(newScript.id, createNestedStoredScript(
-          newScript, meta, describeSender(sender), store.scripts.length, null
+          newScript, meta, installedBy, store.scripts.length, null
         ) as unknown as Parameters<typeof ScriptStorage.set>[1]);
       } else {
         const entry = updatedStore[newScript.id] ?? Object.values(updatedStore).find((v) => {
@@ -1219,7 +1267,7 @@ const HANDLERS: Record<string, HandlerFn> = {
       await refreshRuntimeAfterMutation(newScript, meta);
 
       void fireWebhook('script.installed', { scriptId, name: newScript.name, version: newScript.version });
-      return { ok: true, scriptId, name: newScript.name };
+      return { ok: true, scriptId, name: newScript.name, enabled: false, reviewRequired: true };
     } catch (e: unknown) {
       return { error: 'Failed to install script', detail: (e as Error).message };
     }
@@ -1348,6 +1396,8 @@ const WEB_HANDLERS: Record<string, WebHandlerFn> = {
 
       // Parse and install directly (authorization already checked above)
       const meta = parseUserscriptMeta(code);
+      const installedBy = `origin:${origin}`;
+      const matches = selectInstallMatches(meta, webFallbackMatches(origin));
 
       const scriptId = generateExternalScriptId();
 
@@ -1356,22 +1406,23 @@ const WEB_HANDLERS: Record<string, WebHandlerFn> = {
         name: meta.name ?? scriptId,
         version: meta.version ?? '1.0',
         description: meta.description ?? '',
-        matches: meta.match ?? ['*://*/*'],
+        matches,
         code,
-        enabled: true,
+        enabled: false,
         installedAt: Date.now(),
-        installedBy: `origin:${origin}`,
-        runAt: meta.runAt ?? 'document_idle'
+        installedBy,
+        runAt: meta.runAt ?? 'document_idle',
+        settings: createExternalInstallReviewSettings('public-api-web', installedBy),
       };
 
       const store = await getScriptStore();
-      const updatedStore = upsertScriptStore(store, newScript, meta, `origin:${origin}`);
+      const updatedStore = upsertScriptStore(store, newScript, meta, installedBy);
 
       // v3.0: route through ScriptStorage (IDB-backed) instead of writing the
       // legacy `userscripts` blob directly.
       if (Array.isArray(updatedStore)) {
         await ScriptStorage.set(newScript.id, createNestedStoredScript(
-          newScript, meta, `origin:${origin}`, store.scripts.length, null
+          newScript, meta, installedBy, store.scripts.length, null
         ) as unknown as Parameters<typeof ScriptStorage.set>[1]);
       } else {
         const entry = updatedStore[newScript.id] ?? Object.values(updatedStore).find((v) => {
@@ -1385,7 +1436,7 @@ const WEB_HANDLERS: Record<string, WebHandlerFn> = {
       await refreshRuntimeAfterMutation(newScript, meta);
 
       void fireWebhook('script.installed', { scriptId, name: newScript.name, version: newScript.version });
-      return { type: 'scriptvault:install:response', ok: true, scriptId, name: newScript.name };
+      return { type: 'scriptvault:install:response', ok: true, scriptId, name: newScript.name, enabled: false, reviewRequired: true };
     } catch (e: unknown) {
       return { type: 'scriptvault:install:response', error: 'Fetch failed', detail: (e as Error).message };
     }

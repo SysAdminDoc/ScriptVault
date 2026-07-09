@@ -159,6 +159,13 @@ describe('PublicAPI', () => {
       const installed = ScriptStorage.set.mock.calls[0][1];
 
       expect(result.ok).toBe(true);
+      expect(result).toMatchObject({ enabled: false, reviewRequired: true });
+      expect(installed.enabled).toBe(false);
+      expect(installed.settings._importQuarantine).toMatchObject({
+        source: 'public-api-external',
+        sourceLabel: 'origin:https://metadata.example',
+        archiveEnabled: true,
+      });
       expect(installed.meta).toMatchObject({
         name: 'Metadata Script',
         namespace: 'scriptvault/tests',
@@ -174,6 +181,41 @@ describe('PublicAPI', () => {
         connect: ['api.example'],
         noframes: true,
         'run-at': 'document-start',
+      });
+    });
+
+    it('keeps extension API installs without @match disabled and non-universal', async () => {
+      const ScriptStorage = {
+        getAll: vi.fn().mockResolvedValue([]),
+        set: vi.fn().mockResolvedValue(),
+      };
+      PublicAPI = createFreshAPI({ ScriptStorage });
+      const sender = { id: 'abcdefghijklmnopqrstuvwxyzabcdef' };
+      await PublicAPI.init();
+      await PublicAPI.setPermissions({ installScript: 'allow' });
+      await PublicAPI.setTrustedExtensionIds([sender.id]);
+
+      const result = await PublicAPI.handleExternalMessage(
+        {
+          action: 'installScript',
+          code: [
+            '// ==UserScript==',
+            '// @name No Match Script',
+            '// @version 1.0.0',
+            '// ==/UserScript==',
+            'console.log("no match");',
+          ].join('\n'),
+        },
+        sender,
+      );
+      const installed = ScriptStorage.set.mock.calls[0][1];
+
+      expect(result).toMatchObject({ ok: true, enabled: false, reviewRequired: true });
+      expect(installed.enabled).toBe(false);
+      expect(installed.meta.match).toEqual([]);
+      expect(installed.settings._importQuarantine).toMatchObject({
+        source: 'public-api-external',
+        sourceLabel: `extension:${sender.id}`,
       });
     });
   });
@@ -618,6 +660,56 @@ describe('PublicAPI', () => {
         }),
         'https://trusted.example',
       );
+    });
+
+    it('installs trusted web URL scripts disabled for review with origin-scoped fallback matches', async () => {
+      const ScriptStorage = {
+        getAll: vi.fn().mockResolvedValue([]),
+        set: vi.fn().mockResolvedValue(),
+      };
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        headers: { get: vi.fn(() => null) },
+        text: vi.fn().mockResolvedValue([
+          '// ==UserScript==',
+          '// @name Web Install Script',
+          '// @version 1.0.0',
+          '// ==/UserScript==',
+          'console.log("web install");',
+        ].join('\n')),
+      });
+      PublicAPI = createFreshAPI({ fetchMock, ScriptStorage });
+      const source = { postMessage: vi.fn() };
+
+      await PublicAPI.init();
+      await PublicAPI.setPermissions({ installScript: 'allow' });
+      await PublicAPI.setTrustedOrigins(['https://trusted.example']);
+      PublicAPI.handleWebMessage({
+        origin: 'https://trusted.example',
+        data: {
+          type: 'scriptvault:install',
+          url: 'https://cdn.example/web.user.js',
+        },
+        source,
+      });
+      await flushPromises();
+
+      const installed = ScriptStorage.set.mock.calls[0][1];
+      expect(source.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'scriptvault:install:response',
+          ok: true,
+          enabled: false,
+          reviewRequired: true,
+        }),
+        'https://trusted.example',
+      );
+      expect(installed.enabled).toBe(false);
+      expect(installed.meta.match).toEqual(['https://trusted.example/*']);
+      expect(installed.settings._importQuarantine).toMatchObject({
+        source: 'public-api-web',
+        sourceLabel: 'origin:https://trusted.example',
+      });
     });
   });
 

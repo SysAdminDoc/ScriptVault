@@ -883,7 +883,14 @@ describe('source public api module', () => {
     const stored = await ScriptsDAO.get(result.scriptId);
 
     expect(result.ok).toBe(true);
+    expect(result).toMatchObject({ enabled: false, reviewRequired: true });
     expect(stored?.id).toBe(result.scriptId);
+    expect(stored?.enabled).toBe(false);
+    expect(stored?.settings?._importQuarantine).toMatchObject({
+      source: 'public-api-external',
+      sourceLabel: 'origin:https://ext-test.example',
+      archiveEnabled: true,
+    });
     expect(stored?.meta.name).toBe('Script Beta');
     expect(stored?.meta.version).toBe('2.1.0');
     expect(stored?.meta.match).toEqual(['https://example.com/*']);
@@ -897,12 +904,6 @@ describe('source public api module', () => {
     expect(stored?.code).toContain('console.log("beta")');
     expect(globalThis.registerAllScripts).toHaveBeenCalledTimes(1);
     expect(globalThis.updateBadge).toHaveBeenCalledTimes(1);
-    expect(globalThis.autoReloadMatchingTabs).toHaveBeenCalledWith(expect.objectContaining({
-      id: result.scriptId,
-      name: 'Script Beta',
-      meta: expect.objectContaining({
-        match: ['https://example.com/*'],
-      }),
-    }));
+    expect(globalThis.autoReloadMatchingTabs).not.toHaveBeenCalled();
   });
 });
