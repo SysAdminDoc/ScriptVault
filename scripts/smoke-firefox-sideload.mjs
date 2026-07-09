@@ -493,6 +493,44 @@ async function grantFirefoxUserScriptsPermission(baseUrl, sessionId) {
   return value;
 }
 
+async function assertFirefoxContainersNotForced(baseUrl, sessionId) {
+  await switchContext(baseUrl, sessionId, 'chrome');
+  const value = await executeAsync(baseUrl, sessionId, `
+    const done = arguments[arguments.length - 1];
+    (async () => {
+      const { ExtensionParent } = ChromeUtils.importESModule('resource://gre/modules/ExtensionParent.sys.mjs');
+      const extension = ExtensionParent.GlobalManager.extensionMap.get(arguments[0])
+        || ExtensionParent.GlobalManager.getExtension(arguments[0]);
+      if (!extension) {
+        done({ error: 'add-on not found' });
+        return;
+      }
+      const prefBranch = globalThis.Services?.prefs
+        || Components.classes['@mozilla.org/preferences-service;1'].getService(Components.interfaces.nsIPrefBranch);
+      done({
+        enabled: prefBranch.getBoolPref('privacy.userContext.enabled', false),
+        permissions: extension.manifest?.permissions || [],
+        optionalPermissions: extension.manifest?.optional_permissions || []
+      });
+    })().catch(error => done({ error: String(error), stack: error.stack }));
+  `, [EXTENSION_ID], 15000);
+  await switchContext(baseUrl, sessionId, 'content');
+  if (value?.error) {
+    fail(`Could not inspect Firefox container pref: ${value.error}`);
+  }
+  if (value?.enabled) {
+    fail('Firefox container identities were force-enabled by the ScriptVault sideload');
+  }
+  const declaredPermissions = [
+    ...(value?.permissions || []),
+    ...(value?.optionalPermissions || []),
+  ];
+  if (declaredPermissions.includes('contextualIdentities')) {
+    fail('Firefox manifest declares contextualIdentities, which forces container identities on');
+  }
+  return { privacyUserContextEnabled: value.enabled, contextualIdentitiesPermission: false };
+}
+
 async function restartFirefoxSession(baseUrl, sessionId, firefox, packagePath, profileDir) {
   await request(baseUrl, 'DELETE', `/session/${sessionId}`).catch(() => {});
   await delay(1500);
@@ -1311,6 +1349,7 @@ async function main() {
       temporary: true,
     }, 60000);
     if (install.value !== EXTENSION_ID) fail(`unexpected installed add-on id: ${install.value}`);
+    const containersResult = await assertFirefoxContainersNotForced(baseUrl, sessionId);
 
     const dashboard = await getExtensionResource(baseUrl, sessionId, 'pages/dashboard.html');
     const popup = await getExtensionResource(baseUrl, sessionId, 'pages/popup.html');
@@ -1335,6 +1374,7 @@ async function main() {
       webdav: webDavResult,
       backup: backupResult,
       storage: storageResult,
+      containers: containersResult,
     }, null, 2));
   } catch (error) {
     const tail = geckoOutput.join('').split(/\r?\n/).filter(Boolean).slice(-25).join('\n');

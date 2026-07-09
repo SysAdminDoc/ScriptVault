@@ -43,8 +43,10 @@ describe('Firefox AMO validation gate', () => {
 
   it('uses Firefox-compatible manifest shape for userScripts and sandboxing', () => {
     expect(firefoxManifest.permissions).not.toContain('userScripts');
+    expect(firefoxManifest.permissions).not.toContain('contextualIdentities');
     expect(firefoxManifest.optional_permissions).toContain('userScripts');
     expect(firefoxManifest.optional_permissions).not.toContain('identity');
+    expect(firefoxManifest.optional_permissions).not.toContain('contextualIdentities');
     expect(firefoxManifest).not.toHaveProperty('sandbox');
     expect(firefoxManifest).not.toHaveProperty('content_security_policy');
   });
@@ -110,6 +112,9 @@ describe('Firefox AMO validation gate', () => {
     expect(firefoxSmoke).toContain('firefoxProfileRestarted');
     expect(firefoxSmoke).toContain('ranOnTargetPage: runResult.ok');
     expect(firefoxSmoke).toContain('scriptvault-firefox-v${version}.zip');
+    expect(firefoxSmoke).toContain('assertFirefoxContainersNotForced');
+    expect(firefoxSmoke).toContain('privacy.userContext.enabled');
+    expect(firefoxSmoke).toContain('contextualIdentities');
   });
 
   it('aliases Firefox menus to the shared contextMenus runtime path', () => {

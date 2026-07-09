@@ -54,10 +54,12 @@ describe('manifest generator', () => {
     expect(manifest.browser_specific_settings).not.toHaveProperty('gecko_android');
     expect(manifest.permissions).toContain('menus');
     expect(manifest.permissions).not.toContain('contextMenus');
+    expect(manifest.permissions).not.toContain('contextualIdentities');
     expect(manifest.permissions).not.toContain('sidePanel');
     expect(manifest.permissions).not.toContain('offscreen');
     expect(manifest.optional_permissions).toContain('userScripts');
     expect(manifest.optional_permissions).not.toContain('identity');
+    expect(manifest.optional_permissions).not.toContain('contextualIdentities');
     expect(manifest).not.toHaveProperty('minimum_chrome_version');
     expect(manifest).not.toHaveProperty('side_panel');
     expect(manifest).not.toHaveProperty('sandbox');
