@@ -2,6 +2,47 @@
 
 All notable changes to ScriptVault will be documented in this file.
 
+## [v3.18.1] — Deep audit hardening pass (2026-07-09)
+
+- **Security: bind reportExecTime/Error to sender identity.** The
+  `reportExecTime` and `reportExecError` message handlers now use
+  `sender.userScriptId` instead of trusting the caller-supplied
+  `data.scriptId`, preventing cross-script chain triggers and stats
+  corruption via forged messages. `data.time` is validated as finite
+  before mutating stats.
+- **Fix: trust-receipt provenance path.** `withProvenance` now passes
+  `undefined` (not `''`) when no dependency body is available, so
+  `buildDependencyProvenance` correctly returns `verification-unavailable`
+  instead of falling through to the JSON signature verifier.
+- **Fix: install page keydown listener leak.** `renderInstallUI()` now
+  aborts the previous keydown listener via AbortController before
+  registering a new one, preventing listener accumulation on broad-host
+  toggle re-renders.
+- **Fix: popup copyUrl scope.** The Copy URL dropdown handler now
+  resolves scripts from both `pageScripts` and `allScripts`, matching the
+  pattern used by `configureScriptDropdown`.
+- **Fix: saveScriptSettings/resetScriptSettings error swallowing.** Both
+  now check the background response for `{ error }` before optimistically
+  updating local state.
+- **Fix: whatsnew changelog HTML escaping.** All CHANGELOG field
+  interpolations in the What's New modal are now escaped via
+  `escapeHtml()` to prevent markup injection from future entries.
+- **Fix: scheduler slider midnight wrap.** Time slider drag clamp
+  changed from 1440 to 1425 so the slider cannot silently wrap to 00:00.
+- **Theme: workbench shell accent tints are now token-based.** All 20+
+  hardcoded `rgba(53,208,127,...)` and `rgba(69,200,255,...)` accent
+  tints in the workbench shell CSS now use `color-mix()` with
+  `--sv-accent` / `--sv-accent-2`, and catppuccin/OLED token overrides
+  are added so the workbench renders with correct palette colors in all
+  four themes.
+- **Theme: sidepanel timing badges and toggle.** Defined `--timing-*`
+  and `--toggle-off-*` tokens across all four themes so these controls
+  no longer fall back to dark-only hardcoded colors.
+- **Theme: dashboard toggle dot.** `.toggle-slider::before` now uses
+  `var(--toggle-dot)` instead of hardcoded `#fff`.
+- **Theme: popup confirming state contrast.** Added light-theme override
+  for `.danger.confirming` to use dark red text instead of pale pink.
+
 ## [v3.18.0] — Release hardening audit (2026-07-09)
 
 - **Encrypted manual cloud sync transfers.** Manual Easy Cloud export/import now

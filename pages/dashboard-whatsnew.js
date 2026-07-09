@@ -11,6 +11,21 @@ const WhatsNew = (() => {
     : '2.0.0';
 
   const CHANGELOG = {
+    '3.18.1': {
+      title: 'ScriptVault 3.18.1 — Deep Audit Hardening',
+      date: '2026-07-09',
+      highlights: [
+        { icon: 'LOCK', title: 'Sender-Bound Execution Reports', desc: 'reportExecTime and reportExecError now validate sender.userScriptId so scripts cannot spoof execution stats or trigger chains for other scripts.' },
+        { icon: 'PAINT', title: 'Theme-Aware Workbench Shell', desc: 'All 20+ hardcoded accent tints in the workbench now use color-mix() with theme tokens. Catppuccin and OLED overrides are added so every surface renders with the correct palette.' },
+        { icon: 'FIX', title: 'Edge Case Reliability', desc: 'Trust receipt provenance, install keydown listeners, popup URL copy, settings save error handling, What\'s New HTML escaping, and scheduler slider bounds are all fixed.' },
+      ],
+      improvements: [
+        'Sidepanel timing badges and toggle controls now respect all four themes instead of dark-only fallbacks.',
+        'Dashboard toggle dot uses the theme token instead of hardcoded white.',
+        'Light-theme popup confirming state uses a legible dark red instead of pale pink.',
+        'Dashboard row separators use var(--sv-overlay-faint) for correct visibility in all themes.',
+      ],
+    },
     '3.18.0': {
       title: 'ScriptVault 3.18.0 — Release Hardening Audit',
       date: '2026-07-09',
