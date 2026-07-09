@@ -6928,6 +6928,437 @@
                 grid-column: auto;
             }
         }
+
+        /* Premium mockup parity pass */
+        :root {
+            --header-height: 0px;
+        }
+
+        .tm-header {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
+            opacity: 0;
+            pointer-events: none;
+            border: 0;
+            box-shadow: none;
+        }
+
+        .sv-workbench-shell {
+            grid-template-columns: 248px minmax(0, 1fr);
+            gap: 0;
+            min-height: 100vh;
+            padding: 0;
+            background:
+                linear-gradient(180deg, rgba(69, 200, 255, 0.055), transparent 220px),
+                linear-gradient(135deg, rgba(53, 208, 127, 0.055), transparent 360px),
+                var(--sv-app-bg);
+        }
+
+        .sv-nav-rail {
+            top: 0;
+            min-height: 100vh;
+            border-width: 0 1px 0 0;
+            border-radius: 0;
+            padding: 16px 14px;
+            box-shadow: none;
+        }
+
+        .sv-rail-brand {
+            grid-template-columns: 36px 1fr;
+            padding-bottom: 14px;
+        }
+
+        .sv-rail-brand strong {
+            font-size: 1.05rem;
+        }
+
+        .sv-rail-brand span {
+            text-transform: none;
+            letter-spacing: 0;
+        }
+
+        .sv-rail-item {
+            grid-template-columns: 28px minmax(0, 1fr) auto;
+            min-height: 40px;
+        }
+
+        .sv-rail-count {
+            min-width: 26px;
+            padding: 2px 6px;
+            border: 1px solid var(--sv-border);
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.07);
+            color: var(--sv-text);
+            font-size: 0.6875rem;
+            font-weight: 750;
+            text-align: center;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .sv-rail-count.warning {
+            border-color: rgba(242, 189, 75, 0.34);
+            background: rgba(242, 189, 75, 0.13);
+            color: var(--sv-warning);
+        }
+
+        .sv-rail-subitem {
+            min-height: 36px;
+        }
+
+        .sv-status-dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: var(--sv-text-muted);
+        }
+
+        .sv-status-dot.good {
+            background: var(--sv-accent);
+            box-shadow: 0 0 0 4px rgba(53, 208, 127, 0.12);
+        }
+
+        .sv-rail-storage {
+            display: grid;
+            gap: 7px;
+            margin-top: auto;
+            padding: 10px;
+            border: 1px solid var(--sv-border);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.035);
+            color: var(--sv-text-soft);
+            font-size: 0.75rem;
+        }
+
+        .sv-rail-storage div:first-child {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .sv-rail-storage strong {
+            color: var(--sv-text);
+            font-weight: 650;
+        }
+
+        .sv-rail-storage-track {
+            height: 7px;
+            overflow: hidden;
+            border-radius: 6px;
+            background: rgba(148, 163, 184, 0.18);
+        }
+
+        .sv-rail-storage-track span {
+            display: block;
+            height: 100%;
+            border-radius: 6px;
+            background: linear-gradient(90deg, var(--sv-accent), var(--sv-accent-2));
+        }
+
+        .sv-rail-footer {
+            margin-top: 0;
+            color: var(--sv-accent-2);
+            font-size: 0.875rem;
+        }
+
+        .sv-workbench-main {
+            min-height: 100vh;
+            padding: 14px 16px 46px;
+        }
+
+        .scripts-shell-header {
+            display: none;
+        }
+
+        .scripts-toolbar {
+            top: 0;
+            z-index: 20;
+            padding: 12px;
+            border-radius: 0 0 8px 8px;
+        }
+
+        .scripts-toolbar-left {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .scripts-toolbar-left .search-box {
+            order: -20;
+            flex: 1 1 340px;
+            min-width: 260px;
+            max-width: 440px;
+            min-height: 42px;
+            background: rgba(0, 0, 0, 0.24);
+            border-color: var(--sv-border-strong);
+        }
+
+        #btnNewScript { order: -19; }
+        #btnImportScript { order: -18; }
+        #btnExportAll { order: -17; }
+        #btnCheckUpdates { order: -16; }
+        #btnWorkbenchSyncNow { order: -15; }
+        .sv-command-health { order: -14; }
+        .scripts-toolbar-left .toolbar-divider {
+            order: 0;
+            display: block;
+            flex: 0 0 100%;
+            height: 0;
+            margin: 0;
+            border: 0;
+        }
+        #filterSelect { order: 5; }
+        #scriptCounter { order: 6; }
+        .bulk-action-cluster { order: 7; }
+        #btnNewFolder { order: 8; }
+        #btnFindScripts { order: 9; }
+        #btnViewToggle { order: 10; }
+        #btnColumnToggle { order: 11; }
+
+        .sv-split-caret {
+            margin-left: 6px;
+            padding-left: 8px;
+            border-left: 1px solid rgba(0, 0, 0, 0.22);
+            font-size: 0.6875rem;
+        }
+
+        .sv-command-health {
+            display: inline-flex;
+            align-items: center;
+            gap: 9px;
+            margin-left: auto;
+            min-height: 42px;
+            padding: 7px 10px;
+            border: 1px solid var(--sv-border);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.035);
+            color: var(--sv-text);
+        }
+
+        .sv-command-health strong,
+        .sv-command-health small {
+            display: block;
+            white-space: nowrap;
+        }
+
+        .sv-command-health small {
+            color: var(--sv-text-muted);
+            font-size: 0.6875rem;
+            margin-top: 2px;
+        }
+
+        .scripts-workbench-grid {
+            grid-template-columns: minmax(0, 1fr) 360px;
+        }
+
+        .scripts-workbench-grid .scripts-table {
+            min-width: 820px;
+        }
+
+        .scripts-workbench-grid .scripts-table th:nth-child(2),
+        .scripts-workbench-grid .scripts-table td:nth-child(2),
+        .scripts-workbench-grid .scripts-table th:nth-child(6),
+        .scripts-workbench-grid .scripts-table td:nth-child(6),
+        .scripts-workbench-grid .scripts-table th:nth-child(7),
+        .scripts-workbench-grid .scripts-table td:nth-child(7),
+        .scripts-workbench-grid .scripts-table th:nth-child(10),
+        .scripts-workbench-grid .scripts-table td:nth-child(10),
+        .scripts-workbench-grid .scripts-table th:nth-child(12),
+        .scripts-workbench-grid .scripts-table td:nth-child(12) {
+            display: none;
+        }
+
+        .scripts-table tbody tr.row-selected,
+        .scripts-table tbody tr.selected {
+            outline: 1px solid rgba(69, 200, 255, 0.8);
+            outline-offset: -1px;
+            box-shadow: inset 0 0 0 1px rgba(69, 200, 255, 0.2);
+        }
+
+        .scripts-update-queue {
+            margin-top: 12px;
+            border: 1px solid var(--sv-border);
+            border-radius: 8px;
+            background: var(--sv-surface);
+            box-shadow: var(--sv-shadow-soft);
+            overflow: hidden;
+        }
+
+        .scripts-update-queue-header,
+        .scripts-update-queue-row {
+            display: grid;
+            grid-template-columns: minmax(180px, 1fr) 110px 130px 132px 96px;
+            gap: 12px;
+            align-items: center;
+            padding: 10px 12px;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+        }
+
+        .scripts-update-queue-header {
+            display: flex;
+            justify-content: space-between;
+            background: var(--sv-surface-2);
+        }
+
+        .scripts-update-queue-header > div {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .scripts-update-queue-actions {
+            margin-left: auto;
+        }
+
+        .scripts-update-queue-row strong,
+        .scripts-update-queue-row span {
+            display: block;
+        }
+
+        .scripts-update-queue-row > div span {
+            color: var(--sv-text-muted);
+            font-size: 0.75rem;
+            margin-top: 2px;
+        }
+
+        .scripts-update-queue-row a {
+            color: var(--sv-accent-2);
+            text-decoration: none;
+            font-size: 0.75rem;
+        }
+
+        .scripts-update-queue-more {
+            padding: 9px 12px;
+            color: var(--sv-text-muted);
+            font-size: 0.75rem;
+        }
+
+        .script-inspector-panel {
+            top: 14px;
+            max-height: calc(100vh - 28px);
+            overflow: auto;
+        }
+
+        .script-inspector-actions {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
+        .script-inspector-action-tile {
+            display: grid;
+            justify-items: center;
+            gap: 5px;
+            min-height: 58px;
+            padding: 8px 6px;
+            font-size: 0.75rem;
+        }
+
+        .script-inspector-action-tile span {
+            color: var(--sv-accent-2);
+            font-size: 0.9rem;
+            font-weight: 800;
+        }
+
+        .script-inspector-tabs {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            border-bottom: 1px solid var(--sv-border);
+        }
+
+        .script-inspector-tabs button {
+            min-height: 34px;
+            border: 0;
+            border-bottom: 2px solid transparent;
+            background: transparent;
+            color: var(--sv-text-soft);
+            font: inherit;
+            font-size: 0.75rem;
+            cursor: pointer;
+        }
+
+        .script-inspector-tabs button.active {
+            color: var(--sv-accent-2);
+            border-bottom-color: var(--sv-accent-2);
+        }
+
+        .script-inspector-checks,
+        .script-inspector-domain-access {
+            display: grid;
+            gap: 8px;
+        }
+
+        .script-inspector-check,
+        .script-inspector-domain-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            color: var(--sv-text-soft);
+            font-size: 0.75rem;
+        }
+
+        .script-inspector-check strong,
+        .script-inspector-domain-row strong {
+            color: var(--sv-accent);
+            font-weight: 700;
+        }
+
+        .script-inspector-check.warn strong {
+            color: var(--sv-warning);
+        }
+
+        .script-inspector-check.neutral strong,
+        .script-inspector-domain-row.muted strong {
+            color: var(--sv-text-muted);
+        }
+
+        .sv-workbench-statusbar {
+            position: fixed;
+            left: 248px;
+            right: 0;
+            bottom: 0;
+            z-index: 18;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            min-height: 36px;
+            margin-top: 0;
+            padding: 8px 16px;
+            border-top: 1px solid var(--sv-border);
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.015)),
+                var(--sv-app-bg);
+            color: var(--sv-text-muted);
+            font-size: 0.75rem;
+        }
+
+        .sv-workbench-statusbar span {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .sv-workbench-statusbar #svFooterUpdateStatus {
+            color: var(--sv-warning);
+        }
+
+        @media (max-width: 90rem) {
+            .scripts-workbench-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .script-inspector-panel {
+                position: static;
+                max-height: none;
+            }
+        }
+
+        @media (max-width: 48rem) {
+            .sv-workbench-statusbar {
+                left: 0;
+            }
+        }
     </style>
 </head>
 <body>
@@ -7014,45 +7445,78 @@
                 <img src="../images/icon48.png" alt="" width="34" height="34">
                 <div>
                     <strong data-i18n="appName">ScriptVault</strong>
-                    <span>Control Desk</span>
+                    <span id="svRailVersion">v3.17.0</span>
                 </div>
             </div>
             <nav class="sv-rail-nav" aria-label="Dashboard sections">
                 <button type="button" class="sv-rail-item active" data-workbench-tab="scripts" aria-pressed="true">
-                    <span class="sv-rail-icon">SV</span>
-                    <span data-i18n="tabScripts">Scripts</span>
+                    <span class="sv-rail-icon" aria-hidden="true">#</span>
+                    <span>Scripts</span>
+                    <span class="sv-rail-count" id="svRailScriptsCount">0</span>
                 </button>
                 <button type="button" class="sv-rail-item" data-workbench-tab="updates" aria-pressed="false">
-                    <span class="sv-rail-icon">UP</span>
+                    <span class="sv-rail-icon" aria-hidden="true">U</span>
                     <span data-i18n="tabUpdates">Updates</span>
+                    <span class="sv-rail-count warning" id="svRailUpdatesCount" hidden>0</span>
                 </button>
                 <button type="button" class="sv-rail-item" data-workbench-tab="utilities" aria-pressed="false">
-                    <span class="sv-rail-icon">UT</span>
-                    <span data-i18n="tabUtilities">Utilities</span>
+                    <span class="sv-rail-icon" aria-hidden="true">C</span>
+                    <span>Collections</span>
+                    <span class="sv-rail-count" id="svRailCollectionsCount">0</span>
+                </button>
+                <button type="button" class="sv-rail-item" data-workbench-tab="help" aria-pressed="false">
+                    <span class="sv-rail-icon" aria-hidden="true">H</span>
+                    <span>History</span>
                 </button>
                 <button type="button" class="sv-rail-item" data-workbench-tab="settings" aria-pressed="false">
-                    <span class="sv-rail-icon">ST</span>
+                    <span class="sv-rail-icon" aria-hidden="true">S</span>
                     <span data-i18n="tabSettings">Settings</span>
                 </button>
-                <button type="button" class="sv-rail-item" data-workbench-tab="trash" aria-pressed="false">
-                    <span class="sv-rail-icon">RC</span>
-                    <span data-i18n="tabTrash">Recovery</span>
+                <button type="button" class="sv-rail-item" data-workbench-tab="utilities" aria-pressed="false">
+                    <span class="sv-rail-icon" aria-hidden="true">W</span>
+                    <span data-i18n="tabUtilities">Utilities</span>
                 </button>
             </nav>
-            <div class="sv-rail-section">
+            <div class="sv-rail-section" aria-label="System tools">
+                <span class="sv-rail-section-title">System</span>
+                <button type="button" class="sv-rail-item sv-rail-subitem" data-workbench-tab="utilities" aria-pressed="false">
+                    <span class="sv-rail-icon" aria-hidden="true">R</span>
+                    <span>Sync &amp; Backup</span>
+                    <span class="sv-status-dot good" aria-hidden="true"></span>
+                </button>
+                <button type="button" class="sv-rail-item sv-rail-subitem" data-workbench-tab="utilities" aria-pressed="false">
+                    <span class="sv-rail-icon" aria-hidden="true">I</span>
+                    <span>Import / Export</span>
+                </button>
+                <button type="button" class="sv-rail-item sv-rail-subitem" data-workbench-tab="utilities" aria-pressed="false">
+                    <span class="sv-rail-icon" aria-hidden="true">L</span>
+                    <span>Logs</span>
+                </button>
+            </div>
+            <div class="sv-rail-section" aria-label="Trust tools">
                 <span class="sv-rail-section-title">Trust</span>
-                <div class="sv-rail-metric">
-                    <span>Host access</span>
-                    <strong>Scoped</strong>
-                </div>
-                <div class="sv-rail-metric">
-                    <span>Backups</span>
-                    <strong>Local</strong>
-                </div>
+                <button type="button" class="sv-rail-item sv-rail-subitem" data-workbench-tab="settings" aria-pressed="false">
+                    <span class="sv-rail-icon" aria-hidden="true">T</span>
+                    <span>Trusted Sources</span>
+                    <span class="sv-status-dot good" aria-hidden="true"></span>
+                </button>
+                <button type="button" class="sv-rail-item sv-rail-subitem" data-workbench-tab="settings" aria-pressed="false">
+                    <span class="sv-rail-icon" aria-hidden="true">P</span>
+                    <span>Permissions</span>
+                </button>
+                <button type="button" class="sv-rail-item sv-rail-subitem" data-workbench-tab="settings" aria-pressed="false">
+                    <span class="sv-rail-icon" aria-hidden="true">D</span>
+                    <span>Domain Access</span>
+                </button>
+            </div>
+            <div class="sv-rail-storage" aria-label="Storage usage">
+                <div><span>Storage</span><strong id="svRailStorageText">0 B / 10 MB</strong></div>
+                <div class="sv-rail-storage-track"><span id="svRailStorageBar" style="width:0%"></span></div>
+                <small id="svRailStoragePct">0%</small>
             </div>
             <div class="sv-rail-footer">
                 <span class="sv-sync-dot" aria-hidden="true"></span>
-                <span>Vault healthy</span>
+                <span>ScriptVault Pro</span>
             </div>
         </aside>
         <main class="tm-content sv-workbench-main" role="main" id="mainContent" tabindex="-1">
@@ -7084,19 +7548,24 @@
                 <div class="scripts-toolbar-left">
                     <button type="button" class="toolbar-btn primary" id="btnNewScript">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                        New
+                        New script
+                        <span class="sv-split-caret" aria-hidden="true">v</span>
                     </button>
                     <button type="button" class="toolbar-btn" id="btnImportScript">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                        Import
+                        Install from URL
                     </button>
                     <button type="button" class="toolbar-btn" id="btnCheckUpdates">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
-                        Updates
+                        Check updates
+                    </button>
+                    <button type="button" class="toolbar-btn" id="btnWorkbenchSyncNow">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 01-14.9 6.8"/><path d="M3 12a9 9 0 0114.9-6.8"/><path d="M7 19H3v-4"/><path d="M17 5h4v4"/></svg>
+                        Sync now
                     </button>
                     <button type="button" class="toolbar-btn" id="btnExportAll">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                        Export
+                        Backup
                     </button>
                     <button type="button" class="toolbar-btn" id="btnNewFolder" title="Create a new folder" data-i18n-title="createFolder">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
@@ -7157,6 +7626,10 @@
                     <button type="button" class="toolbar-btn compact" id="btnColumnToggle" title="Show/hide columns" aria-label="Show or hide columns" data-i18n-title="toggleColumns" data-i18n-aria-label="toggleColumns" aria-haspopup="dialog">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M12 3v18M3 12h18M3 6h18M3 18h18"/></svg>
                     </button>
+                    <div class="sv-command-health" id="svCommandHealth" role="status" aria-live="polite">
+                        <span class="sv-status-dot good" aria-hidden="true"></span>
+                        <span><strong>Sync healthy</strong><small id="svCommandHealthDetail">Local vault ready</small></span>
+                    </div>
                 </div>
             </div>
             <div class="scripts-workbench-grid">
@@ -7225,6 +7698,19 @@
                     </div>
                 </div>
             </div>
+                    <section class="scripts-update-queue" id="scriptsUpdateQueue" aria-label="Update queue" hidden>
+                        <div class="scripts-update-queue-header">
+                            <div>
+                                <strong>Update Queue</strong>
+                                <span class="sv-rail-count warning" id="scriptsUpdateQueueBadge">0</span>
+                            </div>
+                            <div class="scripts-update-queue-actions">
+                                <button type="button" class="toolbar-btn" id="scriptsQueueReviewAll">Review all</button>
+                                <button type="button" class="toolbar-btn" id="scriptsQueueUpdateAll">Update all</button>
+                            </div>
+                        </div>
+                        <div class="scripts-update-queue-list" id="scriptsUpdateQueueList"></div>
+                    </section>
                 </section>
                 <aside class="script-inspector-panel" id="scriptInspectorPanel" aria-label="Selected script inspector" data-state="empty">
                     <div class="script-inspector-header">
@@ -7233,8 +7719,16 @@
                         <span id="scriptInspectorSubtitle">Select a row to inspect trust, access, and runtime details.</span>
                     </div>
                     <div class="script-inspector-actions">
-                        <button type="button" class="btn btn-primary" id="scriptInspectorEdit" data-i18n="edit" disabled>Edit</button>
-                        <button type="button" class="btn" id="scriptInspectorUpdate" data-i18n="popupCheckForUpdate" disabled>Check Update</button>
+                        <button type="button" class="btn btn-primary script-inspector-action-tile" id="scriptInspectorEdit" data-i18n="edit" disabled><span aria-hidden="true">&lt;/&gt;</span>Edit</button>
+                        <button type="button" class="btn script-inspector-action-tile" id="scriptInspectorConfig" disabled><span aria-hidden="true">*</span>Config</button>
+                        <button type="button" class="btn script-inspector-action-tile" id="scriptInspectorAccess" disabled><span aria-hidden="true">@</span>Site access</button>
+                        <button type="button" class="btn script-inspector-action-tile" id="scriptInspectorUpdate" data-i18n="popupCheckForUpdate" disabled><span aria-hidden="true">...</span>Update</button>
+                    </div>
+                    <div class="script-inspector-tabs" role="tablist" aria-label="Inspector views">
+                        <button type="button" class="active" data-inspector-tab="overview" role="tab" aria-selected="true">Overview</button>
+                        <button type="button" data-inspector-tab="access" role="tab" aria-selected="false">Access</button>
+                        <button type="button" data-inspector-tab="grants" role="tab" aria-selected="false">Grants</button>
+                        <button type="button" data-inspector-tab="history" role="tab" aria-selected="false">History</button>
                     </div>
                     <div class="script-inspector-score" id="scriptInspectorScore" data-tone="neutral">
                         <div>
@@ -7248,9 +7742,23 @@
                         <dl class="script-inspector-meta">
                             <div><dt>Status</dt><dd id="scriptInspectorStatus">--</dd></div>
                             <div><dt>Version</dt><dd id="scriptInspectorVersion">--</dd></div>
+                            <div><dt>Author</dt><dd id="scriptInspectorAuthor">--</dd></div>
+                            <div><dt>Source</dt><dd id="scriptInspectorSource">--</dd></div>
+                            <div><dt>License</dt><dd id="scriptInspectorLicense">--</dd></div>
+                            <div><dt>Runs at</dt><dd id="scriptInspectorRunAt">--</dd></div>
                             <div><dt>Updated</dt><dd id="scriptInspectorUpdated">--</dd></div>
+                            <div><dt>Installed</dt><dd id="scriptInspectorInstalled">--</dd></div>
+                            <div><dt>Size</dt><dd id="scriptInspectorSize">--</dd></div>
                             <div><dt>Runtime</dt><dd id="scriptInspectorRuntime">--</dd></div>
                         </dl>
+                    </div>
+                    <div class="script-inspector-section">
+                        <h3>Trust &amp; Security</h3>
+                        <div class="script-inspector-checks" id="scriptInspectorTrustRows">
+                            <div><span>Code signature</span><strong>--</strong></div>
+                            <div><span>Known vulnerabilities</span><strong>--</strong></div>
+                            <div><span>Permissions</span><strong>--</strong></div>
+                        </div>
                     </div>
                     <div class="script-inspector-section">
                         <h3>Access</h3>
@@ -7259,6 +7767,10 @@
                     <div class="script-inspector-section">
                         <h3>Grants</h3>
                         <div class="script-inspector-list" id="scriptInspectorGrants">No grants</div>
+                    </div>
+                    <div class="script-inspector-section">
+                        <h3>Domain Access</h3>
+                        <div class="script-inspector-domain-access" id="scriptInspectorDomainAccess">No domains</div>
                     </div>
                 </aside>
             </div>
@@ -9078,6 +9590,11 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 </div>
             </div>
         </div>
+            <footer class="sv-workbench-statusbar" aria-label="Dashboard status">
+                <span id="svFooterScriptStatus">0 scripts</span>
+                <span id="svFooterUpdateStatus">0 with updates</span>
+                <span id="svFooterEngineStatus"><span class="sv-status-dot good" aria-hidden="true"></span> Engine: chrome.userScripts</span>
+            </footer>
         </main>
     </div>
 

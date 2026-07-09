@@ -1147,7 +1147,7 @@
 
     function syncWorkbenchNavigation(activeTab) {
         Array.from(elements.workbenchNavButtons || []).forEach(button => {
-            const isActive = button.dataset.workbenchTab === activeTab;
+            const isActive = button.dataset.workbenchTab === activeTab && !button.classList.contains('sv-rail-subitem');
             button.classList.toggle('active', isActive);
             button.setAttribute('aria-pressed', String(isActive));
         });
@@ -1637,20 +1637,47 @@
         elements.workspaceInstalledStat = document.getElementById('workspaceInstalledStat');
         elements.workspaceActiveStat = document.getElementById('workspaceActiveStat');
         elements.workspaceStorageStat = document.getElementById('workspaceStorageStat');
+        elements.svRailScriptsCount = document.getElementById('svRailScriptsCount');
+        elements.svRailUpdatesCount = document.getElementById('svRailUpdatesCount');
+        elements.svRailCollectionsCount = document.getElementById('svRailCollectionsCount');
+        elements.svRailStorageText = document.getElementById('svRailStorageText');
+        elements.svRailStorageBar = document.getElementById('svRailStorageBar');
+        elements.svRailStoragePct = document.getElementById('svRailStoragePct');
+        elements.svCommandHealthDetail = document.getElementById('svCommandHealthDetail');
+        elements.svFooterScriptStatus = document.getElementById('svFooterScriptStatus');
+        elements.svFooterUpdateStatus = document.getElementById('svFooterUpdateStatus');
+        elements.svFooterEngineStatus = document.getElementById('svFooterEngineStatus');
+        elements.btnWorkbenchSyncNow = document.getElementById('btnWorkbenchSyncNow');
+        elements.scriptsUpdateQueue = document.getElementById('scriptsUpdateQueue');
+        elements.scriptsUpdateQueueBadge = document.getElementById('scriptsUpdateQueueBadge');
+        elements.scriptsUpdateQueueList = document.getElementById('scriptsUpdateQueueList');
+        elements.scriptsQueueReviewAll = document.getElementById('scriptsQueueReviewAll');
+        elements.scriptsQueueUpdateAll = document.getElementById('scriptsQueueUpdateAll');
         elements.scriptInspectorPanel = document.getElementById('scriptInspectorPanel');
         elements.scriptInspectorTitle = document.getElementById('scriptInspectorTitle');
         elements.scriptInspectorSubtitle = document.getElementById('scriptInspectorSubtitle');
         elements.scriptInspectorEdit = document.getElementById('scriptInspectorEdit');
+        elements.scriptInspectorConfig = document.getElementById('scriptInspectorConfig');
+        elements.scriptInspectorAccess = document.getElementById('scriptInspectorAccess');
         elements.scriptInspectorUpdate = document.getElementById('scriptInspectorUpdate');
+        elements.scriptInspectorTabs = document.querySelectorAll('[data-inspector-tab]');
         elements.scriptInspectorScore = document.getElementById('scriptInspectorScore');
         elements.scriptInspectorTrustScore = document.getElementById('scriptInspectorTrustScore');
         elements.scriptInspectorTrustSummary = document.getElementById('scriptInspectorTrustSummary');
         elements.scriptInspectorStatus = document.getElementById('scriptInspectorStatus');
         elements.scriptInspectorVersion = document.getElementById('scriptInspectorVersion');
+        elements.scriptInspectorAuthor = document.getElementById('scriptInspectorAuthor');
+        elements.scriptInspectorSource = document.getElementById('scriptInspectorSource');
+        elements.scriptInspectorLicense = document.getElementById('scriptInspectorLicense');
+        elements.scriptInspectorRunAt = document.getElementById('scriptInspectorRunAt');
         elements.scriptInspectorUpdated = document.getElementById('scriptInspectorUpdated');
+        elements.scriptInspectorInstalled = document.getElementById('scriptInspectorInstalled');
+        elements.scriptInspectorSize = document.getElementById('scriptInspectorSize');
         elements.scriptInspectorRuntime = document.getElementById('scriptInspectorRuntime');
+        elements.scriptInspectorTrustRows = document.getElementById('scriptInspectorTrustRows');
         elements.scriptInspectorDomains = document.getElementById('scriptInspectorDomains');
         elements.scriptInspectorGrants = document.getElementById('scriptInspectorGrants');
+        elements.scriptInspectorDomainAccess = document.getElementById('scriptInspectorDomainAccess');
         elements.dashboardUpdatesBadge = document.getElementById('dashboardUpdatesBadge');
         elements.pendingUpdatesList = document.getElementById('pendingUpdatesList');
         elements.pendingUpdatesCount = document.getElementById('pendingUpdatesCount');
@@ -2178,12 +2205,12 @@
     // / btnClearPendingUpdates all have data-i18n on the element itself, so they
     // are intentionally NOT listed here.
     const DASHBOARD_I18N_TEXT_TARGETS = Object.freeze({
-        btnNewScript: 'newScript',
-        btnImportScript: 'importScript',
-        btnCheckUpdates: 'checkUpdates',
-        btnExportAll: 'exportAll',
-        btnNewFolder: 'folder',
-        btnFindScripts: 'find',
+        btnNewScript: { key: 'newScript', fallback: 'New script', legacy: 'New Script' },
+        btnImportScript: { key: 'importScript', fallback: 'Install from URL', legacy: 'Import' },
+        btnCheckUpdates: { key: 'checkUpdates', fallback: 'Check updates', legacy: 'Check Updates' },
+        btnExportAll: { key: 'exportAll', fallback: 'Backup', legacy: 'Export All' },
+        btnNewFolder: { key: 'folder', fallback: 'Folder' },
+        btnFindScripts: { key: 'find', fallback: 'Find' },
     });
 
     function getDashboardI18n() {
@@ -2266,9 +2293,14 @@
         document.documentElement.lang = locale;
         i18n.applyToDOM(document);
 
-        Object.entries(DASHBOARD_I18N_TEXT_TARGETS).forEach(([id, key]) => {
+        Object.entries(DASHBOARD_I18N_TEXT_TARGETS).forEach(([id, labelConfig]) => {
             const el = document.getElementById(id);
-            if (el) setLabelPreservingDecor(el, i18n.getMessage(key));
+            if (!el) return;
+            const localizedLabel = i18n.getMessage(labelConfig.key);
+            const label = !localizedLabel || localizedLabel === labelConfig.legacy
+                ? labelConfig.fallback
+                : localizedLabel;
+            setLabelPreservingDecor(el, label);
         });
 
         document.querySelectorAll('[data-sort-i18n]').forEach(button => {
@@ -3248,10 +3280,23 @@
     }
 
     function setPendingUpdateBadge(count) {
-        if (!elements.dashboardUpdatesBadge) return;
         const value = Number(count || 0);
-        elements.dashboardUpdatesBadge.hidden = value === 0;
-        elements.dashboardUpdatesBadge.textContent = numberFormatter.format(value);
+        if (elements.dashboardUpdatesBadge) {
+            elements.dashboardUpdatesBadge.hidden = value === 0;
+            elements.dashboardUpdatesBadge.textContent = numberFormatter.format(value);
+        }
+        if (elements.svRailUpdatesCount) {
+            elements.svRailUpdatesCount.hidden = value === 0;
+            elements.svRailUpdatesCount.textContent = numberFormatter.format(value);
+        }
+        if (elements.scriptsUpdateQueueBadge) {
+            elements.scriptsUpdateQueueBadge.textContent = numberFormatter.format(value);
+        }
+        if (elements.svFooterUpdateStatus) {
+            elements.svFooterUpdateStatus.textContent = value === 0
+                ? '0 with updates'
+                : `${numberFormatter.format(value)} with updates`;
+        }
     }
 
     function getPendingUpdateCounts() {
@@ -3299,6 +3344,7 @@
         if (elements.btnClearPendingUpdates) {
             elements.btnClearPendingUpdates.disabled = counts.queued === 0;
         }
+        renderScriptsUpdateQueue(counts);
         if (!elements.pendingUpdatesList) return;
         if (counts.queued === 0) {
             safeSetHtml(elements.pendingUpdatesList, `<div class="pending-updates-empty">${escapeHtml(tDashboard('noQueuedUpdates', 'No queued updates.'))}</div>`);
@@ -3308,6 +3354,45 @@
         safeSetHtml(elements.pendingUpdatesList, state.pendingUpdates.map(renderPendingUpdateCard).join(''));
         elements.pendingUpdatesList.querySelectorAll('[data-update-action]').forEach(button => {
             button.addEventListener('click', () => handlePendingUpdateAction(button));
+        });
+    }
+
+    function renderScriptsUpdateQueue(counts = getPendingUpdateCounts()) {
+        if (!elements.scriptsUpdateQueue || !elements.scriptsUpdateQueueList) return;
+        elements.scriptsUpdateQueue.hidden = counts.queued === 0;
+        if (elements.scriptsQueueReviewAll) elements.scriptsQueueReviewAll.disabled = counts.queued === 0;
+        if (elements.scriptsQueueUpdateAll) elements.scriptsQueueUpdateAll.disabled = counts.safe === 0;
+        if (counts.queued === 0) {
+            elements.scriptsUpdateQueueList.replaceChildren();
+            return;
+        }
+        const rows = state.pendingUpdates.slice(0, 3).map(update => {
+            const safe = update.safeToApply === true;
+            const versionLabel = update.kind === 'subscription-install'
+                ? `New -> ${escapeHtml(update.newVersion || '?')}`
+                : `${escapeHtml(update.currentVersion || '?')} -> ${escapeHtml(update.newVersion || '?')}`;
+            return `
+                <article class="scripts-update-queue-row${safe ? '' : ' review-required'}" data-update-id="${escapeHtml(update.id)}">
+                    <div>
+                        <strong>${escapeHtml(update.name || update.id || 'Unnamed script')}</strong>
+                        <span>${versionLabel}</span>
+                    </div>
+                    <a href="#" data-update-action="diff" data-update-id="${escapeHtml(update.id)}">Changelog</a>
+                    <span class="pending-update-status${safe ? '' : ' review'}">${escapeHtml(safe ? 'Safe' : 'Requires review')}</span>
+                    <button type="button" class="toolbar-btn" data-update-action="diff" data-update-id="${escapeHtml(update.id)}">Review update</button>
+                    <button type="button" class="toolbar-btn" data-update-action="remove" data-update-id="${escapeHtml(update.id)}">Ignore</button>
+                </article>
+            `;
+        }).join('');
+        const overflow = counts.queued > 3
+            ? `<div class="scripts-update-queue-more">${numberFormatter.format(counts.queued - 3)} more queued in Updates</div>`
+            : '';
+        safeSetHtml(elements.scriptsUpdateQueueList, rows + overflow);
+        elements.scriptsUpdateQueueList.querySelectorAll('[data-update-action]').forEach(control => {
+            control.addEventListener('click', event => {
+                event.preventDefault();
+                handlePendingUpdateAction(control);
+            });
         });
     }
 
@@ -8106,6 +8191,84 @@
         container.appendChild(fragment);
     }
 
+    function normalizeMetadataList(value) {
+        if (Array.isArray(value)) return value;
+        if (value == null || value === false) return [];
+        return [value];
+    }
+
+    function getScriptSourceLabel(script, metadata = {}) {
+        if (script.installSource?.name) return script.installSource.name;
+        const url = metadata.downloadURL || metadata.updateURL || metadata.homepageURL || metadata.homepage;
+        if (!url) return 'Local';
+        try {
+            return new URL(url).hostname.replace(/^www\./, '');
+        } catch (_) {
+            return 'Remote';
+        }
+    }
+
+    function getScriptRunAt(metadata = {}) {
+        return metadata.runAt || metadata['run-at'] || 'document-end';
+    }
+
+    function renderInspectorChecks(script, metadata, grants, trust) {
+        if (!elements.scriptInspectorTrustRows) return;
+        const hasSignature = !!(script.trustReceipt || script.signature || metadata.signature);
+        const permissionLabel = grants.length
+            ? `${numberFormatter.format(grants.length)} granted`
+            : 'none';
+        const rows = [
+            ['Code signature', hasSignature ? 'Valid' : 'Not signed', hasSignature ? 'good' : 'neutral'],
+            ['Known vulnerabilities', trust.tone === 'alert' ? 'Review' : 'Clear', trust.tone === 'alert' ? 'warn' : 'good'],
+            ['Permissions', permissionLabel, grants.length > 4 ? 'warn' : 'good']
+        ];
+        const fragment = document.createDocumentFragment();
+        rows.forEach(([label, value, tone]) => {
+            const row = document.createElement('div');
+            row.className = `script-inspector-check ${tone}`;
+            const labelEl = document.createElement('span');
+            labelEl.textContent = label;
+            const valueEl = document.createElement('strong');
+            valueEl.textContent = value;
+            row.append(labelEl, valueEl);
+            fragment.appendChild(row);
+        });
+        elements.scriptInspectorTrustRows.replaceChildren(fragment);
+    }
+
+    function renderInspectorDomainAccess(domains) {
+        if (!elements.scriptInspectorDomainAccess) return;
+        elements.scriptInspectorDomainAccess.replaceChildren();
+        const filtered = domains.map(value => String(value || '').trim()).filter(Boolean);
+        if (!filtered.length) {
+            elements.scriptInspectorDomainAccess.textContent = 'No domains';
+            return;
+        }
+        const fragment = document.createDocumentFragment();
+        filtered.slice(0, 4).forEach(domain => {
+            const row = document.createElement('div');
+            row.className = 'script-inspector-domain-row';
+            const name = document.createElement('span');
+            name.textContent = domain;
+            const access = document.createElement('strong');
+            access.textContent = 'Allow';
+            row.append(name, access);
+            fragment.appendChild(row);
+        });
+        if (filtered.length > 4) {
+            const row = document.createElement('div');
+            row.className = 'script-inspector-domain-row muted';
+            const name = document.createElement('span');
+            name.textContent = `${numberFormatter.format(filtered.length - 4)} more domain${filtered.length - 4 === 1 ? '' : 's'}`;
+            const access = document.createElement('strong');
+            access.textContent = 'Allow';
+            row.append(name, access);
+            fragment.appendChild(row);
+        }
+        elements.scriptInspectorDomainAccess.appendChild(fragment);
+    }
+
     function getInspectorTrust(script, matches, grants) {
         const issues = [];
         let score = 100;
@@ -8167,12 +8330,24 @@
             setInspectorText(elements.scriptInspectorTrustSummary, 'Waiting for script data');
             setInspectorText(elements.scriptInspectorStatus, '--');
             setInspectorText(elements.scriptInspectorVersion, '--');
+            setInspectorText(elements.scriptInspectorAuthor, '--');
+            setInspectorText(elements.scriptInspectorSource, '--');
+            setInspectorText(elements.scriptInspectorLicense, '--');
+            setInspectorText(elements.scriptInspectorRunAt, '--');
             setInspectorText(elements.scriptInspectorUpdated, '--');
+            setInspectorText(elements.scriptInspectorInstalled, '--');
+            setInspectorText(elements.scriptInspectorSize, '--');
             setInspectorText(elements.scriptInspectorRuntime, '--');
+            if (elements.scriptInspectorTrustRows) {
+                safeSetHtml(elements.scriptInspectorTrustRows, '<div><span>Code signature</span><strong>--</strong></div><div><span>Known vulnerabilities</span><strong>--</strong></div><div><span>Permissions</span><strong>--</strong></div>');
+            }
             renderInspectorTokens(elements.scriptInspectorDomains, [], 'No domains');
             renderInspectorTokens(elements.scriptInspectorGrants, [], 'No grants');
+            renderInspectorDomainAccess([]);
             if (elements.scriptInspectorScore) elements.scriptInspectorScore.dataset.tone = 'neutral';
             if (elements.scriptInspectorEdit) elements.scriptInspectorEdit.disabled = true;
+            if (elements.scriptInspectorConfig) elements.scriptInspectorConfig.disabled = true;
+            if (elements.scriptInspectorAccess) elements.scriptInspectorAccess.disabled = true;
             if (elements.scriptInspectorUpdate) elements.scriptInspectorUpdate.disabled = true;
             return;
         }
@@ -8182,11 +8357,7 @@
             ...(Array.isArray(metadata.match) ? metadata.match : metadata.match ? [metadata.match] : []),
             ...(Array.isArray(metadata.include) ? metadata.include : metadata.include ? [metadata.include] : [])
         ];
-        const grants = Array.isArray(metadata.grant)
-            ? metadata.grant
-            : metadata.grant
-                ? [metadata.grant]
-                : [];
+        const grants = normalizeMetadataList(metadata.grant);
         const domains = extractDomainsFromPatterns(matches);
         const stats = script.stats || {};
         const name = metadata.name || 'Unnamed Script';
@@ -8207,12 +8378,22 @@
         setInspectorText(elements.scriptInspectorTrustSummary, trust.summary);
         setInspectorText(elements.scriptInspectorStatus, script.enabled !== false ? 'Enabled' : 'Disabled');
         setInspectorText(elements.scriptInspectorVersion, version);
+        setInspectorText(elements.scriptInspectorAuthor, metadata.author || '-');
+        setInspectorText(elements.scriptInspectorSource, getScriptSourceLabel(script, metadata));
+        setInspectorText(elements.scriptInspectorLicense, metadata.license || '-');
+        setInspectorText(elements.scriptInspectorRunAt, getScriptRunAt(metadata));
         setInspectorText(elements.scriptInspectorUpdated, script.updatedAt ? formatTime(script.updatedAt) : '-');
+        setInspectorText(elements.scriptInspectorInstalled, (script.installedAt || script.createdAt) ? formatTime(script.installedAt || script.createdAt) : '-');
+        setInspectorText(elements.scriptInspectorSize, formatBytes((script.code || '').length));
         setInspectorText(elements.scriptInspectorRuntime, runtime);
+        renderInspectorChecks(script, metadata, grants, trust);
         renderInspectorTokens(elements.scriptInspectorDomains, domains, 'No domains');
         renderInspectorTokens(elements.scriptInspectorGrants, grants.length ? grants : ['none'], 'No grants');
+        renderInspectorDomainAccess(domains);
         if (elements.scriptInspectorScore) elements.scriptInspectorScore.dataset.tone = trust.tone;
         if (elements.scriptInspectorEdit) elements.scriptInspectorEdit.disabled = false;
+        if (elements.scriptInspectorConfig) elements.scriptInspectorConfig.disabled = false;
+        if (elements.scriptInspectorAccess) elements.scriptInspectorAccess.disabled = false;
         if (elements.scriptInspectorUpdate) elements.scriptInspectorUpdate.disabled = false;
     }
 
@@ -13040,6 +13221,18 @@
         if (elements.statActiveScripts) elements.statActiveScripts.textContent = formattedActive;
         if (elements.workspaceInstalledStat) elements.workspaceInstalledStat.textContent = formattedTotal;
         if (elements.workspaceActiveStat) elements.workspaceActiveStat.textContent = formattedActive;
+        if (elements.svRailScriptsCount) elements.svRailScriptsCount.textContent = formattedTotal;
+        if (elements.svRailCollectionsCount) {
+            elements.svRailCollectionsCount.textContent = numberFormatter.format((state.folders || []).length);
+        }
+        if (elements.svFooterScriptStatus) {
+            elements.svFooterScriptStatus.textContent = `${formattedTotal} scripts - ${formattedActive} enabled - ${numberFormatter.format(total - active)} disabled`;
+        }
+        if (elements.svCommandHealthDetail) {
+            elements.svCommandHealthDetail.textContent = state.settings?.lastSync
+                ? `Last synced ${formatSyncTimestamp(state.settings.lastSync)}`
+                : 'Local vault ready';
+        }
         updateHelpOverview();
         try {
             // Measure usage and quota from the SAME source. Since v3.0.0 scripts,
@@ -13072,6 +13265,15 @@
             const quotaBar = document.getElementById('storageQuotaBar');
             const quotaText = document.getElementById('storageQuotaText');
             const pct = Math.min(100, (usedBytes / quotaBytes) * 100);
+            if (elements.svRailStorageText) {
+                elements.svRailStorageText.textContent = `${formatBytes(usedBytes)} / ${formatBytes(quotaBytes)}`;
+            }
+            if (elements.svRailStorageBar) {
+                elements.svRailStorageBar.style.width = `${pct}%`;
+            }
+            if (elements.svRailStoragePct) {
+                elements.svRailStoragePct.textContent = `${pct.toFixed(0)}%`;
+            }
             if (quotaBar) {
                 quotaBar.style.width = pct + '%';
                 quotaBar.className = 'quota-bar-fill' + (pct > 90 ? ' danger' : pct > 70 ? ' warning' : '');
@@ -13092,6 +13294,8 @@
         } catch (e) {
             if (elements.statTotalStorage) elements.statTotalStorage.textContent = '-';
             if (elements.workspaceStorageStat) elements.workspaceStorageStat.textContent = '-';
+            if (elements.svRailStorageText) elements.svRailStorageText.textContent = '-';
+            if (elements.svRailStoragePct) elements.svRailStoragePct.textContent = '-';
         }
     }
 
@@ -14318,9 +14522,62 @@
             const scriptId = elements.scriptInspectorPanel?.dataset.scriptId;
             if (scriptId) openEditorForScript(scriptId);
         });
+        elements.scriptInspectorConfig?.addEventListener('click', () => {
+            const scriptId = elements.scriptInspectorPanel?.dataset.scriptId;
+            if (!scriptId) return;
+            openEditorForScript(scriptId);
+            setTimeout(() => document.getElementById('editorTabScriptSettings')?.click(), 0);
+        });
+        elements.scriptInspectorAccess?.addEventListener('click', () => {
+            const scriptId = elements.scriptInspectorPanel?.dataset.scriptId;
+            if (!scriptId) return;
+            openEditorForScript(scriptId);
+            setTimeout(() => document.getElementById('editorTabScriptSettings')?.click(), 0);
+        });
         elements.scriptInspectorUpdate?.addEventListener('click', async (event) => {
             const scriptId = elements.scriptInspectorPanel?.dataset.scriptId;
             if (scriptId) await interactiveCheckAndConfirmUpdate(scriptId, event.currentTarget);
+        });
+        elements.scriptInspectorTabs?.forEach(tab => {
+            tab.addEventListener('click', () => {
+                elements.scriptInspectorTabs?.forEach(candidate => {
+                    const active = candidate === tab;
+                    candidate.classList.toggle('active', active);
+                    candidate.setAttribute('aria-selected', String(active));
+                });
+                const target = tab.dataset.inspectorTab;
+                const section = target === 'access'
+                    ? elements.scriptInspectorDomains
+                    : target === 'grants'
+                        ? elements.scriptInspectorGrants
+                        : target === 'history'
+                            ? elements.scriptInspectorRuntime
+                            : elements.scriptInspectorScore;
+                section?.closest?.('.script-inspector-section')?.scrollIntoView?.({ block: 'nearest' });
+            });
+        });
+        elements.scriptsQueueReviewAll?.addEventListener('click', () => switchTab('updates', { focusControl: true }));
+        elements.scriptsQueueUpdateAll?.addEventListener('click', event => {
+            const button = elements.btnApplySafePendingUpdates;
+            if (button && !button.disabled) button.click();
+            else runButtonTask(event.currentTarget, async () => {
+                const result = await chrome.runtime.sendMessage({ action: 'applySafePendingUpdates' });
+                if (result?.error) throw new Error(result.error);
+                if (Array.isArray(result?.pendingUpdates)) state.pendingUpdates = result.pendingUpdates;
+                await loadScripts();
+                renderPendingUpdates();
+                updateStats();
+                showToast(`${numberFormatter.format(result?.applied || 0)} safe update${result?.applied === 1 ? '' : 's'} applied`, 'success');
+            }, { busyLabel: 'Updating...' });
+        });
+        elements.btnWorkbenchSyncNow?.addEventListener('click', async event => {
+            if (elements.btnSyncNow && !elements.btnSyncNow.disabled) {
+                elements.btnSyncNow.click();
+                return;
+            }
+            await switchTab('utilities', { focusControl: true });
+            showToast('Choose a sync provider before syncing', 'info');
+            event.currentTarget.blur?.();
         });
 
         // Scripts
