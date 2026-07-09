@@ -17,6 +17,25 @@
     function safeSetHtml(el, html) {
         el.replaceChildren(htmlToFragment(_svPolicy ? _svPolicy.createHTML(html) : html, el));
     }
+    function escapeUntrustedHtmlFallback(html) {
+        const raw = String(html ?? '');
+        if (typeof escapeHtml === 'function') return escapeHtml(raw);
+        return raw
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+    function setUntrustedHtml(el, html) {
+        if (!el) return;
+        const raw = String(html ?? '');
+        if (typeof el.setHTML === 'function') {
+            el.setHTML(raw);
+            return;
+        }
+        safeSetHtml(el, escapeUntrustedHtmlFallback(raw));
+    }
 
     // State
     const state = {
@@ -13631,9 +13650,11 @@
     function renderFindResults(scripts, page, domain, pageSize = FIND_RESULTS_PAGE_SIZE) {
         // Build installed script lookup for duplicate detection
         const installedNames = new Set(state.scripts.map(s => (s.metadata?.name || '').toLowerCase()));
+        const resultDescriptions = [];
 
         const html = scripts.map((s, index) => {
             const scriptName = s.name || 'Unnamed script';
+            const description = s.description || 'No description';
             const installs = s.total_installs >= 1000 ? Math.round(s.total_installs / 1000) + 'k' : (s.total_installs || 0);
             const daily = s.daily_installs || 0;
             const rating = s.fan_score ? Number.parseFloat(s.fan_score).toFixed(0) + '%' : '--';
@@ -13643,6 +13664,7 @@
             const installedBadge = isInstalled ? '<span class="find-installed-badge">Installed</span>' : '';
             const installLabel = isInstalled ? 'Reinstall' : 'Install';
             const previewId = `find-script-preview-${page}-${index}`;
+            resultDescriptions[index] = description;
 
             // Greasy Fork API responses are trusted but not authenticated end-
             // to-end — pass each URL through sanitizeUrl so a poisoned listing
@@ -13658,7 +13680,7 @@
                         ${s.version ? `<span class="find-script-version">v${escapeHtml(s.version)}</span>` : ''}
                         ${installedBadge}
                     </div>
-                    <div class="find-script-desc" title="${escapeHtml(s.description || '')}">${escapeHtml(s.description || 'No description')}</div>
+                    <div class="find-script-desc" data-find-description-index="${index}" title="${escapeHtml(s.description || '')}"></div>
                     <div class="find-script-meta">
                         <span title="Author">${escapeHtml(author)}</span>
                         <span title="Total installs">${installs} installs</span>
@@ -13690,6 +13712,10 @@
             elements.findScriptsResults.setAttribute('role', 'status');
             elements.findScriptsResults.setAttribute('aria-live', 'polite');
             safeSetHtml(elements.findScriptsResults, countText + html + pagination);
+            elements.findScriptsResults.querySelectorAll('[data-find-description-index]').forEach(descEl => {
+                const descriptionIndex = Number(descEl.dataset.findDescriptionIndex);
+                setUntrustedHtml(descEl, resultDescriptions[descriptionIndex] ?? 'No description');
+            });
         }
 
         // Bind install buttons
@@ -14119,6 +14145,7 @@
         input: showInputModal,
         toast: showToast,
         safeSetHtml: safeSetHtml,
+        setUntrustedHtml: setUntrustedHtml,
         // Exposed for the Monaco sandbox bridge (monaco-adapter.js) so the
         // editor's Ctrl+S / Escape keybindings can reach the IIFE-scoped
         // handlers. Without these, the sandbox's save/close postMessages hit a
@@ -14939,20 +14966,28 @@
                     }
                     return;
                 }
-                if (libSearchResults) safeSetHtml(libSearchResults, data.results.filter(lib =>
-                    lib.name && lib.version && lib.filename &&
-                    !/[\/\\]|\.\./.test(lib.name) && !/[\/\\]|\.\./.test(lib.version) && !/\.\./.test(lib.filename)
-                ).map(lib => {
-                    const cdnUrl = `https://cdnjs.cloudflare.com/ajax/libs/${encodeURIComponent(lib.name)}/${encodeURIComponent(lib.version)}/${lib.filename}`;
-                    return `<div class="lib-result">
-                        <div class="lib-result-info">
-                            <span class="lib-result-name">${escapeHtml(lib.name)}</span>
-                            <span class="lib-result-version">v${escapeHtml(lib.version)}</span>
-                            <div class="lib-result-desc">${escapeHtml(lib.description || '')}</div>
-                        </div>
-                        <button class="toolbar-btn primary lib-add-btn" data-lib-url="${escapeHtml(cdnUrl)}" title="Insert @require into script header">Add</button>
-                    </div>`;
-                }).join(''));
+                if (libSearchResults) {
+                    const libraryDescriptions = [];
+                    safeSetHtml(libSearchResults, data.results.filter(lib =>
+                        lib.name && lib.version && lib.filename &&
+                        !/[\/\\]|\.\./.test(lib.name) && !/[\/\\]|\.\./.test(lib.version) && !/\.\./.test(lib.filename)
+                    ).map((lib, index) => {
+                        const cdnUrl = `https://cdnjs.cloudflare.com/ajax/libs/${encodeURIComponent(lib.name)}/${encodeURIComponent(lib.version)}/${lib.filename}`;
+                        libraryDescriptions[index] = lib.description || '';
+                        return `<div class="lib-result">
+                            <div class="lib-result-info">
+                                <span class="lib-result-name">${escapeHtml(lib.name)}</span>
+                                <span class="lib-result-version">v${escapeHtml(lib.version)}</span>
+                                <div class="lib-result-desc" data-library-description-index="${index}"></div>
+                            </div>
+                            <button class="toolbar-btn primary lib-add-btn" data-lib-url="${escapeHtml(cdnUrl)}" title="Insert @require into script header">Add</button>
+                        </div>`;
+                    }).join(''));
+                    libSearchResults.querySelectorAll('[data-library-description-index]').forEach(descEl => {
+                        const descriptionIndex = Number(descEl.dataset.libraryDescriptionIndex);
+                        setUntrustedHtml(descEl, libraryDescriptions[descriptionIndex] ?? '');
+                    });
+                }
 
                 // Bind add buttons
                 libSearchResults?.querySelectorAll('.lib-add-btn').forEach(btn => {

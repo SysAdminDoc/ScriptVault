@@ -1,8 +1,24 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { compileFunction } from 'node:vm';
 
 const read = (p) => readFileSync(resolve(process.cwd(), p), 'utf8');
+
+function extractFunctionSource(src, name) {
+  const start = src.indexOf(`function ${name}`);
+  expect(start).toBeGreaterThanOrEqual(0);
+  const bodyStart = src.indexOf('{', start);
+  let depth = 0;
+  for (let i = bodyStart; i < src.length; i += 1) {
+    if (src[i] === '{') depth += 1;
+    if (src[i] === '}') {
+      depth -= 1;
+      if (depth === 0) return src.slice(start, i + 1);
+    }
+  }
+  throw new Error(`Unable to extract ${name}`);
+}
 
 describe('safeSetHtml fragment context (2026-07 regression)', () => {
   // A bare document.createRange().createContextualFragment() parses in
@@ -33,6 +49,69 @@ describe('safeSetHtml fragment context (2026-07 regression)', () => {
       );
     });
   }
+});
+
+describe('Dashboard untrusted HTML sanitizer (2026-07 regression)', () => {
+  const src = read('pages/dashboard.js');
+
+  function loadSetUntrustedHtml(safeSetHtml) {
+    const body = [
+      extractFunctionSource(src, 'escapeUntrustedHtmlFallback'),
+      extractFunctionSource(src, 'setUntrustedHtml'),
+      'return setUntrustedHtml;',
+    ].join('\n');
+    return compileFunction(body, ['safeSetHtml', 'escapeHtml'], { filename: 'pages/dashboard.js' })(
+      safeSetHtml,
+      undefined,
+    );
+  }
+
+  it('uses native Element.setHTML for untrusted remote descriptions when available', () => {
+    let fallbackHtml = null;
+    const setUntrustedHtml = loadSetUntrustedHtml((_, html) => {
+      fallbackHtml = html;
+    });
+    const payload = '<strong onclick="alert(1)">Safe</strong><script>alert(1)</script><style>*{}</style>';
+    const el = {
+      innerHTML: '',
+      setHTML(input) {
+        this.received = input;
+        this.innerHTML = String(input)
+          .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+          .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '')
+          .replace(/\s+on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '');
+      },
+    };
+
+    setUntrustedHtml(el, payload);
+
+    expect(el.received).toBe(payload);
+    expect(el.innerHTML).toBe('<strong>Safe</strong>');
+    expect(fallbackHtml).toBeNull();
+  });
+
+  it('falls back to escaped fragments when Element.setHTML is unavailable', () => {
+    let fallbackHtml = null;
+    const setUntrustedHtml = loadSetUntrustedHtml((_, html) => {
+      fallbackHtml = html;
+    });
+
+    setUntrustedHtml({}, '<strong>Safe</strong><script>alert(1)</script>');
+
+    expect(fallbackHtml).toBe('&lt;strong&gt;Safe&lt;/strong&gt;&lt;script&gt;alert(1)&lt;/script&gt;');
+  });
+
+  it('routes remote API description surfaces through the untrusted HTML helper', () => {
+    const gist = read('pages/dashboard-gist.js');
+    expect(src).toContain('setUntrustedHtml: setUntrustedHtml');
+    expect(src).toContain('data-find-description-index');
+    expect(src).toContain('setUntrustedHtml(descEl, resultDescriptions[descriptionIndex] ??');
+    expect(src).toContain('data-library-description-index');
+    expect(src).toContain('setUntrustedHtml(descEl, libraryDescriptions[descriptionIndex] ??');
+    expect(gist).toContain('desc.textContent = gist.description;');
+    expect(src).not.toContain('${escapeHtml(s.description || \'No description\')}</div>');
+    expect(src).not.toContain('${escapeHtml(lib.description || \'\')}</div>');
+  });
 });
 
 describe('Chain editor offers supported automatic triggers (2026-07 regression)', () => {
