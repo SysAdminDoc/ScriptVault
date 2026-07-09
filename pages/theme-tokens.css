@@ -22,6 +22,16 @@
   --sv-radius-panel: 8px;
   --sv-radius-control: 6px;
   --sv-focus-ring: 0 0 0 2px rgb(from var(--sv-accent) r g b / 0.72), 0 0 0 4px rgb(from var(--sv-accent) r g b / 0.16);
+  /* Timing badge tokens */
+  --timing-fast-bg: #14532d;
+  --timing-fast: #4ade80;
+  --timing-med-bg: #78350f;
+  --timing-med: #fbbf24;
+  --timing-slow-bg: #7f1d1d;
+  --timing-slow: #f87171;
+  /* Toggle off-state tokens */
+  --toggle-off-bg: #444;
+  --toggle-off-knob: #888;
   color-scheme: dark;
 }
 
@@ -43,6 +53,16 @@
   --sv-scrollbar: #ccc;
   --sv-scrollbar-hover: #bbb;
   --sv-focus-ring: 0 0 0 2px rgb(from var(--sv-accent) r g b / 0.68), 0 0 0 4px rgb(from var(--sv-accent) r g b / 0.16);
+  /* Timing badge tokens — light backgrounds with legible dark text */
+  --timing-fast-bg: #dcfce7;
+  --timing-fast: #15803d;
+  --timing-med-bg: #fef3c7;
+  --timing-med: #92400e;
+  --timing-slow-bg: #fee2e2;
+  --timing-slow: #991b1b;
+  /* Toggle off-state tokens */
+  --toggle-off-bg: #d1d5db;
+  --toggle-off-knob: #6b7280;
   color-scheme: light;
 }
 
@@ -64,6 +84,16 @@
   --sv-scrollbar: #45475a;
   --sv-scrollbar-hover: #585b70;
   --sv-focus-ring: 0 0 0 2px rgb(from var(--sv-accent) r g b / 0.72), 0 0 0 4px rgb(from var(--sv-accent) r g b / 0.16);
+  /* Timing badge tokens — Catppuccin Mocha palette */
+  --timing-fast-bg: #1e3a2f;
+  --timing-fast: #a6e3a1;
+  --timing-med-bg: #3b2f1e;
+  --timing-med: #f9e2af;
+  --timing-slow-bg: #3a1e2a;
+  --timing-slow: #f38ba8;
+  /* Toggle off-state tokens */
+  --toggle-off-bg: #45475a;
+  --toggle-off-knob: #6c7086;
   color-scheme: dark;
 }
 
@@ -85,6 +115,16 @@
   --sv-scrollbar: #333;
   --sv-scrollbar-hover: #444;
   --sv-focus-ring: 0 0 0 2px rgb(from var(--sv-accent) r g b / 0.72), 0 0 0 4px rgb(from var(--sv-accent) r g b / 0.16);
+  /* Timing badge tokens — pure black backgrounds for OLED */
+  --timing-fast-bg: #0a2010;
+  --timing-fast: #4ade80;
+  --timing-med-bg: #1f1200;
+  --timing-med: #fbbf24;
+  --timing-slow-bg: #1f0808;
+  --timing-slow: #f87171;
+  /* Toggle off-state tokens */
+  --toggle-off-bg: #333;
+  --toggle-off-knob: #777;
   color-scheme: dark;
 }
 
