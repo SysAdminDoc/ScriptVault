@@ -760,6 +760,108 @@ describe('dashboard surface modules', () => {
     expect(snippetsCode).toContain('data-id="${selectorId}"]`');
   });
 
+  it('snippet library tabs through inserted placeholders', async () => {
+    const SnippetLibrary = createSnippetLibrary();
+    const originalGet = chrome.storage.local.get;
+    const originalSet = chrome.storage.local.set;
+    chrome.storage.local.get = vi.fn((keys, callback) => {
+      const result = keys === 'customSnippets' ? { customSnippets: [] } : {};
+      callback?.(result);
+      return Promise.resolve(result);
+    });
+    chrome.storage.local.set = vi.fn((items, callback) => {
+      callback?.();
+      return Promise.resolve();
+    });
+    try {
+      const host = document.createElement('div');
+      document.body.appendChild(host);
+
+      let value = '';
+      let selection = { start: 0, end: 0 };
+      const positionForOffset = (offset) => {
+        const safeOffset = Math.max(0, Math.min(value.length, offset));
+        const before = value.slice(0, safeOffset).split('\n');
+        return { lineNumber: before.length, column: before[before.length - 1].length + 1 };
+      };
+      const offsetForPosition = (position) => {
+        const lines = value.split('\n');
+        let offset = 0;
+        for (let i = 0; i < Math.max(0, (position?.lineNumber || 1) - 1); i += 1) {
+          offset += (lines[i]?.length || 0) + 1;
+        }
+        return Math.min(value.length, offset + Math.max(0, (position?.column || 1) - 1));
+      };
+      const editor = {
+        getSelection: () => ({ getStartPosition: () => positionForOffset(selection.start) }),
+        getModel: () => ({
+          getValueInRange: () => value.slice(selection.start, selection.end),
+          getOffsetAt: offsetForPosition,
+          getPositionAt: positionForOffset,
+        }),
+        executeEdits: vi.fn((_source, edits = []) => {
+          const text = edits[0]?.text || '';
+          value = value.slice(0, selection.start) + text + value.slice(selection.end);
+          const nextOffset = selection.start + text.length;
+          selection = { start: nextOffset, end: nextOffset };
+        }),
+        setSelectionRange: vi.fn((start, end = start) => {
+          selection = { start, end };
+        }),
+        setPosition: vi.fn((position) => {
+          const offset = offsetForPosition(position);
+          selection = { start: offset, end: offset };
+        }),
+        focus: vi.fn(),
+      };
+
+      await SnippetLibrary.init(host, { editor });
+      const snippet = await SnippetLibrary.saveCustomSnippet({
+        title: 'Placeholders',
+        description: '',
+        category: 'custom',
+        code: 'const ${1:name} = $2;\n$CURSOR$',
+      });
+
+      SnippetLibrary.insertSnippet(snippet.id);
+
+      expect(value).toBe('const name = ;\n');
+      expect(selection).toEqual({ start: 6, end: 10 });
+      expect(editor.setSelectionRange).toHaveBeenLastCalledWith(6, 10);
+
+      value = value.slice(0, selection.start) + 'displayName' + value.slice(selection.end);
+      selection = { start: 17, end: 17 };
+
+      const preventDefault = vi.fn();
+      const stopPropagation = vi.fn();
+      expect(SnippetLibrary.handleEditorTab({ shiftKey: false, preventDefault, stopPropagation })).toBe(true);
+      expect(selection).toEqual({ start: 20, end: 20 });
+      expect(preventDefault).toHaveBeenCalled();
+      expect(stopPropagation).toHaveBeenCalled();
+
+      expect(SnippetLibrary.handleEditorTab({ shiftKey: false, preventDefault: vi.fn(), stopPropagation: vi.fn() })).toBe(true);
+      expect(selection).toEqual({ start: 22, end: 22 });
+
+      expect(SnippetLibrary.handleEditorTab({ shiftKey: true, preventDefault: vi.fn(), stopPropagation: vi.fn() })).toBe(true);
+      expect(selection).toEqual({ start: 20, end: 20 });
+
+      expect(SnippetLibrary.handleEditorTab({ shiftKey: true, preventDefault: vi.fn(), stopPropagation: vi.fn() })).toBe(true);
+      expect(selection).toEqual({ start: 6, end: 17 });
+
+      expect(SnippetLibrary.handleEditorTab({ shiftKey: true })).toBe(false);
+    } finally {
+      SnippetLibrary.destroy();
+      chrome.storage.local.get = originalGet;
+      chrome.storage.local.set = originalSet;
+    }
+  });
+
+  it('dashboard editor keymap delegates Tab to active snippet placeholders before indentation', () => {
+    expect(dashboardJs).toContain("SnippetLibrary.handleEditorTab?.({ shiftKey: false })");
+    expect(dashboardJs).toContain("SnippetLibrary.handleEditorTab?.({ shiftKey: true })");
+    expect(dashboardJs).toContain('setSelectionRange(startOffset = 0, endOffset = startOffset)');
+  });
+
   it('csp fix disclosure toggles for row keys with selector characters', async () => {
     const CSPReporter = createCSPReporter();
     const host = document.createElement('div');

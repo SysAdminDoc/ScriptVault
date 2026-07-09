@@ -158,6 +158,10 @@
     else _pendingReady.push(fn);
   }
 
+  function clampOffset(offset, value) {
+    return Math.max(0, Math.min(String(value || '').length, Number.isFinite(offset) ? Math.floor(offset) : 0));
+  }
+
   // ── Monaco Editor API (CodeMirror-compatible surface) ──────────────────────
   const _monacoEditor = {
     // getValue: returns cached value synchronously (Monaco sends updates on every change)
@@ -374,6 +378,17 @@
         return;
       }
       sendToFrame({ type: 'set-position', line: line + 1, col: ch + 1 });
+    },
+    setSelectionRange(startOffset = 0, endOffset = startOffset) {
+      const currentValue = _useFallback && fallbackTextarea ? fallbackTextarea.value : _value;
+      const start = clampOffset(startOffset, currentValue);
+      const end = clampOffset(endOffset, currentValue);
+      if (_useFallback && fallbackTextarea) {
+        fallbackTextarea.focus();
+        fallbackTextarea.setSelectionRange(start, end);
+        return;
+      }
+      sendToFrame({ type: 'set-selection-offsets', start, end });
     },
     markText() { return { clear() {} }; },
     getSearchCursor() { return { findNext() { return false; }, from() {}, to() {} }; },

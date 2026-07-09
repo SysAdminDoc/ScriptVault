@@ -113,4 +113,20 @@ describe('Firefox Monaco fallback', () => {
     expect(editor.getOption('lineWrapping')).toBe(true);
     expect(postMessage).toHaveBeenLastCalledWith({ type: 'set-options', options: { wordWrap: true } }, '*');
   });
+
+  it('forwards absolute selection ranges to Monaco and supports textarea fallback selection', () => {
+    const { frame, textarea, editor } = installAdapter();
+    const postMessage = vi.spyOn(frame.contentWindow, 'postMessage').mockImplementation(() => {});
+
+    editor.setValue('const name = value;');
+    editor.setSelectionRange(6, 10);
+    expect(postMessage).toHaveBeenLastCalledWith({ type: 'set-selection-offsets', start: 6, end: 10 }, '*');
+    expect(sandboxCode).toContain("case 'set-selection-offsets':");
+    expect(sandboxCode).toContain('editor.setSelection({');
+
+    dispatchFrameMessage(frame, { type: 'monaco-load-error', reason: 'missing-bundle' });
+    editor.setSelectionRange(6, 10);
+    expect(textarea.selectionStart).toBe(6);
+    expect(textarea.selectionEnd).toBe(10);
+  });
 });

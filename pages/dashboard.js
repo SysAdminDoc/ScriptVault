@@ -12855,7 +12855,14 @@
                 'Ctrl-F': (cm) => { try { cm.execCommand('findPersistent'); } catch { showToast('Search requires Monaco editor', 'info'); } },
                 'Ctrl-H': (cm) => { try { cm.execCommand('replace'); } catch { showToast('Replace requires Monaco editor', 'info'); } },
                 'Esc': closeEditor,
-                'Tab': cm => cm.somethingSelected() ? cm.indentSelection('add') : cm.replaceSelection(indentStr, 'end'),
+                'Tab': cm => {
+                    if (typeof SnippetLibrary !== 'undefined' && SnippetLibrary.handleEditorTab?.({ shiftKey: false })) return;
+                    return cm.somethingSelected() ? cm.indentSelection('add') : cm.replaceSelection(indentStr, 'end');
+                },
+                'Shift-Tab': cm => {
+                    if (typeof SnippetLibrary !== 'undefined' && SnippetLibrary.handleEditorTab?.({ shiftKey: true })) return;
+                    return cm.indentSelection('subtract');
+                },
                 'Ctrl-Space': 'autocomplete',
                 'Ctrl-/': () => document.getElementById('tbtnComment')?.click(),
                 'Ctrl-G': () => { goToEditorLine(state.editor); }
@@ -14466,6 +14473,21 @@
             executeEdits(_source, edits = []) {
                 const text = edits.find(edit => typeof edit?.text === 'string')?.text || '';
                 if (text) insertTextAtEditor(text);
+            },
+            setSelectionRange(startOffset = 0, endOffset = startOffset) {
+                const code = state.editor?.getValue?.() || '';
+                const start = getEditorPositionForOffset(code, startOffset);
+                const end = getEditorPositionForOffset(code, endOffset);
+                if (typeof state.editor?.setSelectionRange === 'function') {
+                    state.editor.setSelectionRange(startOffset, endOffset);
+                } else if (typeof state.editor?.setSelection === 'function') {
+                    state.editor.setSelection(
+                        { line: start.lineNumber - 1, ch: start.column - 1 },
+                        { line: end.lineNumber - 1, ch: end.column - 1 }
+                    );
+                } else if (typeof state.editor?.setCursor === 'function') {
+                    state.editor.setCursor(end.lineNumber - 1, end.column - 1);
+                }
             },
             setPosition(position) {
                 focusEditorLine(position?.lineNumber || 1);

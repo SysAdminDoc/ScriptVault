@@ -498,6 +498,24 @@
           editor.focus();
         }
         break;
+      case 'set-selection-offsets':
+        if (editor && Number.isFinite(msg.start) && Number.isFinite(msg.end)) {
+          const model = editor.getModel();
+          if (!model) break;
+          const startOffset = Math.max(0, Math.floor(msg.start));
+          const endOffset = Math.max(0, Math.floor(msg.end));
+          const start = model.getPositionAt(startOffset);
+          const end = model.getPositionAt(endOffset);
+          editor.setSelection({
+            startLineNumber: start.lineNumber,
+            startColumn: start.column,
+            endLineNumber: end.lineNumber,
+            endColumn: end.column
+          });
+          editor.revealLineInCenter(start.lineNumber);
+          editor.focus();
+        }
+        break;
       case 'insert-text':
         if (editor) {
           editor.focus();

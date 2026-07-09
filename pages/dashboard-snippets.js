@@ -18,6 +18,7 @@ const SnippetLibrary = (() => {
         customSnippets: [],
         expandedSnippet: null,
         editingSnippet: null,
+        tabStopSession: null,
         visible: false,
     };
 
@@ -1313,13 +1314,162 @@ $CURSOR$`
     }
 
     function processSnippetCode(code, selection = '') {
-        let processed = code.replace(/\$SELECTION\$/g, selection);
-        // Remove tab stop markers for now (future: implement tab stop navigation)
-        processed = processed.replace(/\$\d+/g, '');
-        // Find cursor position
-        const cursorIndex = processed.indexOf('$CURSOR$');
-        processed = processed.replace(/\$CURSOR\$/g, '');
-        return { code: processed, cursorOffset: cursorIndex >= 0 ? cursorIndex : processed.length };
+        const source = String(code || '').replace(/\$SELECTION\$/g, selection);
+        const tabStops = [];
+        let processed = '';
+        let cursorOffset = null;
+        let order = 0;
+
+        for (let i = 0; i < source.length;) {
+            if (source.startsWith('$CURSOR$', i)) {
+                cursorOffset = processed.length;
+                i += '$CURSOR$'.length;
+                continue;
+            }
+
+            const placeholder = source.slice(i).match(/^\$\{(\d+)(?::([^}]*))?\}/);
+            if (placeholder) {
+                const index = parseInt(placeholder[1], 10);
+                const text = placeholder[2] || '';
+                const start = processed.length;
+                processed += text;
+                const end = processed.length;
+                if (index === 0) {
+                    cursorOffset = start;
+                } else {
+                    tabStops.push({ index, start, end, order: order++ });
+                }
+                i += placeholder[0].length;
+                continue;
+            }
+
+            const marker = source.slice(i).match(/^\$(\d+)/);
+            if (marker) {
+                const index = parseInt(marker[1], 10);
+                const start = processed.length;
+                if (index === 0) {
+                    cursorOffset = start;
+                } else {
+                    tabStops.push({ index, start, end: start, order: order++ });
+                }
+                i += marker[0].length;
+                continue;
+            }
+
+            processed += source[i];
+            i += 1;
+        }
+
+        tabStops.sort((a, b) => a.index - b.index || a.order - b.order);
+        const stops = tabStops.map(({ index, start, end }) => ({ index, start, end }));
+        const hasCursorOffset = cursorOffset !== null;
+        return {
+            code: processed,
+            cursorOffset: cursorOffset ?? stops[0]?.start ?? processed.length,
+            hasCursorOffset,
+            tabStops: stops
+        };
+    }
+
+    function getEditorSelectionOffsets(editor) {
+        const selection = editor?.getSelection?.();
+        const model = editor?.getModel?.();
+        if (!selection || typeof model?.getOffsetAt !== 'function') return null;
+
+        const startPosition = selection.getStartPosition?.() || selection.startPosition || null;
+        const endPosition = selection.getEndPosition?.() || selection.endPosition || startPosition;
+        if (!startPosition || !endPosition) return null;
+
+        const start = model.getOffsetAt(startPosition);
+        const end = model.getOffsetAt(endPosition);
+        if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+        return { start: Math.min(start, end), end: Math.max(start, end) };
+    }
+
+    function selectEditorRange(editor, start, end = start) {
+        if (!editor) return;
+        if (typeof editor.setSelectionRange === 'function') {
+            editor.setSelectionRange(start, end);
+        } else {
+            const model = typeof editor.getModel === 'function' ? editor.getModel() : null;
+            if (model && typeof model.getPositionAt === 'function') {
+                const from = model.getPositionAt(start);
+                const to = model.getPositionAt(end);
+                if (typeof editor.setSelection === 'function') {
+                    editor.setSelection(from, to);
+                } else if (typeof editor.setPosition === 'function') {
+                    editor.setPosition(end > start ? to : from);
+                }
+            }
+        }
+        editor.focus?.();
+    }
+
+    function beginSnippetTabStops(editor, baseOffset, tabStops, cursorOffset = null) {
+        const stops = Array.isArray(tabStops) ? tabStops.map(stop => ({
+            start: baseOffset + stop.start,
+            end: baseOffset + stop.end
+        })) : [];
+        if (Number.isFinite(cursorOffset)) {
+            const finalOffset = baseOffset + cursorOffset;
+            if (!stops.some(stop => stop.start === finalOffset && stop.end === finalOffset)) {
+                stops.push({ start: finalOffset, end: finalOffset });
+            }
+        }
+
+        if (stops.length === 0) {
+            _state.tabStopSession = null;
+            return false;
+        }
+
+        _state.tabStopSession = {
+            editor,
+            index: 0,
+            stops
+        };
+        const first = _state.tabStopSession.stops[0];
+        selectEditorRange(editor, first.start, first.end);
+        return true;
+    }
+
+    function syncCurrentTabStop(session) {
+        const current = session.stops[session.index];
+        const offsets = getEditorSelectionOffsets(session.editor);
+        if (!current || !offsets) return;
+
+        const nextEnd = offsets.end;
+        const delta = nextEnd - current.end;
+        if (delta !== 0) {
+            const oldEnd = current.end;
+            for (let i = 0; i < session.stops.length; i += 1) {
+                const stop = session.stops[i];
+                if (i === session.index) {
+                    stop.end = Math.max(stop.start, nextEnd);
+                } else if (stop.start >= oldEnd) {
+                    stop.start += delta;
+                    stop.end += delta;
+                }
+            }
+        }
+    }
+
+    function handleEditorTab(event = {}) {
+        const session = _state.tabStopSession;
+        if (!session || !session.editor || !Array.isArray(session.stops)) return false;
+
+        syncCurrentTabStop(session);
+        const nextIndex = session.index + (event.shiftKey ? -1 : 1);
+        if (nextIndex < 0 || nextIndex >= session.stops.length) {
+            _state.tabStopSession = null;
+            return false;
+        }
+
+        event.preventDefault?.();
+        event.stopPropagation?.();
+        session.index = nextIndex;
+        const next = session.stops[nextIndex];
+        selectEditorRange(session.editor, next.start, next.end);
+        return true;
     }
 
     function insertSnippet(snippetId) {
@@ -1337,18 +1487,23 @@ $CURSOR$`
         if (!model) return;
 
         const selectedText = model.getValueInRange(selection) || '';
-        const { code, cursorOffset } = processSnippetCode(snippet.code, selectedText);
+        const { code, cursorOffset, hasCursorOffset, tabStops } = processSnippetCode(snippet.code, selectedText);
 
         // Insert at current position
         const position = selection.getStartPosition();
+        const baseOffset = model.getOffsetAt(position);
         editor.executeEdits('snippet-library', [{
             range: selection,
             text: code,
             forceMoveMarkers: true
         }]);
 
+        if (beginSnippetTabStops(editor, baseOffset, tabStops, hasCursorOffset ? cursorOffset : null)) {
+            return;
+        }
+
         // Move cursor to $CURSOR$ position
-        const insertOffset = model.getOffsetAt(position) + cursorOffset;
+        const insertOffset = baseOffset + cursorOffset;
         const newPos = model.getPositionAt(insertOffset);
         editor.setPosition(newPos);
         editor.focus();
@@ -1497,6 +1652,10 @@ $CURSOR$`
     // Keyboard Shortcut
     // =========================================
     function handleKeyDown(e) {
+        if (e.key === 'Tab' && handleEditorTab(e)) {
+            return;
+        }
+
         // Ctrl+Shift+S to toggle snippet panel
         if (e.ctrlKey && e.shiftKey && e.key === 'S') {
             e.preventDefault();
@@ -1547,6 +1706,15 @@ $CURSOR$`
          */
         insertSnippet(snippetId) {
             insertSnippet(snippetId);
+        },
+
+        /**
+         * Move through active snippet placeholders from the editor keymap.
+         * @param {KeyboardEvent|object} event
+         * @returns {boolean} true when a placeholder handled the Tab key
+         */
+        handleEditorTab(event) {
+            return handleEditorTab(event);
         },
 
         /**
@@ -1603,6 +1771,7 @@ $CURSOR$`
          */
         setEditor(editor) {
             _state.monacoEditor = editor;
+            _state.tabStopSession = null;
         },
 
         /**
@@ -1634,6 +1803,7 @@ $CURSOR$`
             _state.container = null;
             _state.monacoEditor = null;
             _state.expandedSnippet = null;
+            _state.tabStopSession = null;
             _state.customSnippets = [];
         }
     };
