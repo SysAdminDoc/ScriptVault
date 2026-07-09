@@ -9,6 +9,7 @@ import {
   fetchRequireScript,
   hasVerifiableRequireIntegrity,
   requireCache,
+  SRI_REQUIRE_UNPINNED_REQUIRE_ERROR,
 } from '../src/background/resource-loader.ts';
 import { SettingsManager } from '../src/modules/storage.ts';
 
@@ -24,7 +25,7 @@ describe('hasVerifiableRequireIntegrity', () => {
   });
 });
 
-describe('fetchRequireScript SRI enforcement (enforcePinned)', () => {
+describe('fetchRequireScript SRI enforcement', () => {
   const originalFetch = globalThis.fetch;
   const originalDebugLog = globalThis.debugLog;
 
@@ -51,9 +52,9 @@ describe('fetchRequireScript SRI enforcement (enforcePinned)', () => {
   it('require mode: refuses an un-pinned require without hitting the network', async () => {
     await SettingsManager.set('sri', 'require');
 
-    const code = await fetchRequireScript('https://cdn.example/lib.js');
+    await expect(fetchRequireScript('https://cdn.example/lib.js'))
+      .rejects.toThrow(SRI_REQUIRE_UNPINNED_REQUIRE_ERROR);
 
-    expect(code).toBeNull();
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
@@ -89,12 +90,15 @@ describe('install.js requireIsPinned + live core.ts wiring', () => {
   it('live core.ts fetchRequireScript enforces on sri === "require" and exempts receipt probes', () => {
     const core = read('background.core.js');
     expect(core).toContain("_sriSettings?.sri === 'require'");
+    expect(core).toContain('SRI_REQUIRE_UNPINNED_REQUIRE_ERROR');
+    expect(core).toContain('throw new Error(SRI_REQUIRE_UNPINNED_REQUIRE_ERROR)');
     expect(core).toContain('allowUnpinned: true');
   });
 
   it('resource-loader extraction target also uses settings-driven SRI enforcement', () => {
     const src = read('src/background/resource-loader.ts');
     expect(src).toContain('SettingsManager.get()');
+    expect(src).toContain('SRI_REQUIRE_UNPINNED_REQUIRE_ERROR');
     expect(src).not.toContain('options.enforcePinned');
     expect(read('src/background/install-handler.ts')).toContain('allowUnpinned: true');
     expect(read('src/background/update-checker.ts')).toContain('allowUnpinned: true');

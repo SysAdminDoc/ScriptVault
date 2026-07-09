@@ -37052,6 +37052,8 @@ const LOCAL_ONLY_SCRIPT_SETTING_KEYS = new Set([
   '_registrationError',
 ]);
 
+const SRI_REQUIRE_UNPINNED_REQUIRE_ERROR = 'blocked: unpinned @require under SRI Require';
+
 function cloneScriptSettingValue(value) {
   if (value == null || typeof value !== 'object') return value;
   if (typeof structuredClone === 'function') {
@@ -48523,14 +48525,16 @@ async function fetchRequireScript(url, options = {}) {
   // callers pass allowUnpinned so install/update review can still inspect the
   // dependency — enforcement applies to execution (registration/wrapper build).
   if (!options.allowUnpinned && !hasVerifiableRequireIntegrity(url)) {
+    let shouldBlockForSRIRequire = false;
     try {
       const _sriSettings = await SettingsManager.get();
-      if (_sriSettings?.sri === 'require') {
-        console.warn(`[ScriptVault] Refusing un-pinned @require (SRI = require): ${fetchUrl}`);
-        return null;
-      }
+      shouldBlockForSRIRequire = _sriSettings?.sri === 'require';
     } catch (_e) {
       // Settings unavailable — do not block execution.
+    }
+    if (shouldBlockForSRIRequire) {
+      console.warn(`[ScriptVault] Refusing un-pinned @require (SRI = require): ${fetchUrl}`);
+      throw new Error(SRI_REQUIRE_UNPINNED_REQUIRE_ERROR);
     }
   }
 

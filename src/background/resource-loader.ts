@@ -30,6 +30,7 @@ declare const NpmResolver: {
 // ---------------------------------------------------------------------------
 
 export const requireCache: Map<string, string> = new Map();
+export const SRI_REQUIRE_UNPINNED_REQUIRE_ERROR = 'blocked: unpinned @require under SRI Require';
 
 const MAX_REQUIRE_BYTES = 5 * 1024 * 1024;
 const MAX_PROVENANCE_BUNDLE_BYTES = 256 * 1024;
@@ -320,7 +321,7 @@ export async function fetchRequireScript(url: string, options: FetchRequireScrip
   // specs are resolved with a computed SRI above and never reach here.
   if (await shouldRequirePinnedRequire(options) && !hasVerifiableRequireIntegrity(url)) {
     console.warn(`[ScriptVault] Refusing un-pinned @require (SRI = require): ${fetchUrl}`);
-    return null;
+    throw new Error(SRI_REQUIRE_UNPINNED_REQUIRE_ERROR);
   }
 
   debugLog('Fetching @require:', fetchUrl);
