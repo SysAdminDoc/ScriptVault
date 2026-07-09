@@ -40,4 +40,11 @@ describe('DevTools trace export', () => {
     expect(exportBlock).not.toContain('.code');
     expect(exportBlock).not.toContain('sourceCode');
   });
+
+  it('resolves HAR response content type case-insensitively', () => {
+    expect(panelJs).toContain('function headerValue(headers, name)');
+    expect(panelJs).toContain('String(headerName).toLowerCase() === wanted');
+    expect(panelJs).toContain("mimeType: headerValue(e.responseHeaders, 'content-type') || 'text/plain'");
+    expect(panelJs).not.toContain("(e.responseHeaders || {})['content-type']");
+  });
 });

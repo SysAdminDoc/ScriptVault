@@ -640,6 +640,15 @@
     `;
   }
 
+  function headerValue(headers, name) {
+    if (!headers || !name) return '';
+    const wanted = String(name).toLowerCase();
+    for (const [headerName, value] of Object.entries(headers)) {
+      if (String(headerName).toLowerCase() === wanted) return String(value);
+    }
+    return '';
+  }
+
   // ── HAR Export ────────────────────────────────────────────────────────────
   function exportHAR() {
     if (!netLog.length) {
@@ -665,7 +674,7 @@
         httpVersion: 'HTTP/1.1',
         headers: Object.entries(e.responseHeaders || {}).map(([n, v]) => ({ name: n, value: String(v) })),
         cookies: [],
-        content: { size: e.responseSize || 0, mimeType: (e.responseHeaders || {})['content-type'] || 'text/plain' },
+        content: { size: e.responseSize || 0, mimeType: headerValue(e.responseHeaders, 'content-type') || 'text/plain' },
         redirectURL: '',
         headersSize: -1,
         bodySize: e.responseSize || -1
