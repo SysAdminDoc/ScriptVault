@@ -3,10 +3,11 @@ import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import { existsSync } from 'node:fs';
-import { mkdtemp, readdir, readFile, rm, stat } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
+import { fileURLToPath } from 'node:url';
 
 const ROOT = process.cwd();
 const EXTENSION_ID = 'ScriptVault@sysadmindoc.dev';
@@ -280,21 +281,11 @@ async function sriRequireSmokeServer(dependencyCode) {
   };
 }
 
-async function latestFirefoxPackage(version) {
-  const artifactDir = resolve(ROOT, 'firefox-artifacts');
+export async function latestFirefoxPackage(version, options = {}) {
+  const artifactDir = resolve(options.root || ROOT, 'firefox-artifacts');
   const expected = join(artifactDir, `scriptvault-firefox-v${version}.zip`);
   if (existsSync(expected)) return expected;
-  const entries = await readdir(artifactDir).catch(() => []);
-  const packages = [];
-  for (const name of entries) {
-    if (!/^scriptvault-firefox-v.+\.zip$/i.test(name) || /source/i.test(name)) continue;
-    const path = join(artifactDir, name);
-    const info = await stat(path);
-    packages.push({ path, mtimeMs: info.mtimeMs });
-  }
-  packages.sort((a, b) => b.mtimeMs - a.mtimeMs);
-  if (packages[0]) return packages[0].path;
-  fail('Firefox package missing. Run npm run firefox:package or omit --skip-package.');
+  fail(`Firefox package for ${version} missing at ${expected}. Run npm run firefox:package or omit --skip-package.`);
 }
 
 async function readJsonFile(path) {
@@ -1354,6 +1345,9 @@ async function main() {
     const containersResult = await assertFirefoxContainersNotForced(baseUrl, sessionId);
 
     const dashboard = await getExtensionResource(baseUrl, sessionId, 'pages/dashboard.html');
+    if (dashboard.version !== packageJson.version) {
+      fail(`installed Firefox add-on version ${dashboard.version || 'unknown'} does not match package.json ${packageJson.version}`);
+    }
     const popup = await getExtensionResource(baseUrl, sessionId, 'pages/popup.html');
     const dashboardResult = await dashboardSmoke(baseUrl, sessionId, dashboard.uri);
     const popupResult = await popupSmoke(baseUrl, sessionId, popup.uri);
@@ -1369,6 +1363,7 @@ async function main() {
     console.log(JSON.stringify({
       firefox: firefox.version.output || firefox.version.raw,
       package: basename(packagePath),
+      packageVersion: dashboard.version,
       dashboard: dashboardResult,
       popup: popupResult,
       script: scriptResult,
@@ -1391,7 +1386,9 @@ async function main() {
   }
 }
 
-main().catch(error => {
-  console.error(error?.stack || error?.message || error);
-  process.exit(1);
-});
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch(error => {
+    console.error(error?.stack || error?.message || error);
+    process.exit(1);
+  });
+}
