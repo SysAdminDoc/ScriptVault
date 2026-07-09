@@ -2,6 +2,39 @@
 
 All notable changes to ScriptVault will be documented in this file.
 
+## [v3.18.2] — Deep audit hardening pass 2 (2026-07-09)
+
+- **Security: revoke EasyCloud OAuth token via POST body, not URL query.**
+  `EasyCloudSync.disconnect()` sent the live Google access token as a GET query
+  parameter, where it can leak into request lines, proxy logs, and history. It
+  now revokes via a POST form body, matching the regular Google Drive provider's
+  fix.
+- **Security: bind GM_xmlhttpRequest_abort to the owning script.** The abort
+  handler aborted any request by its enumerable requestId without checking the
+  caller, letting one script cancel another's in-flight network requests. It now
+  enforces `request.scriptId === ownedScriptId`, matching the result handler.
+- **Security: factory reset now erases backup blobs and publication receipts.**
+  `ScriptStorage.clear()` only wiped the scripts partition, so a factory reset
+  left fully-restorable script code / GM values (and possibly credentials) in
+  the IndexedDB backups store. `BackupsDAO.clear()` now clears both the backups
+  and publicationReceipts stores, and `autoBackups` metadata is removed too.
+- **Fix: storage usage is measured origin-wide.** `QuotaManager.getUsage()`
+  derived bytes-used from `chrome.storage.local` (which post-v3 holds only
+  settings/caches) while dividing by the origin-wide quota, so the automatic
+  cleanup level gate never fired. It now uses `navigator.storage.estimate()`
+  usage, falling back to `chrome.storage.local` when unavailable.
+- **Fix: activity heatmap no longer clips the newest days.** Sunday-alignment
+  can push the 52-week window to 53 partial columns; the canvas is now sized to
+  the real column count so the most recent 1-6 days render on-grid.
+- **Fix: Gist import guards a missing `files` map** and shows "No .user.js
+  files found" instead of a raw TypeError on malformed Gist payloads.
+- **Fix: collection reinstall** surfaces a clear "no source URL to reinstall
+  from" message instead of a cryptic Greasy Fork ID error for local-only
+  entries.
+- Completed the trust-receipt provenance rename (`not-yet-implemented` →
+  `verification-unavailable`) across types, update-checker, and install/dashboard
+  review states, with rebuilt runtime.
+
 ## [v3.18.1] — Deep audit hardening pass (2026-07-09)
 
 - **Security: bind reportExecTime/Error to sender identity.** The

@@ -78,6 +78,14 @@ items below are the remaining unfixed findings.
 
 ### Cloud sync & storage (data-safety)
 
+- [ ] P1 — Storage breakdown scans obsolete chrome.storage.local keys post-v3
+  Why: `QuotaManager.getBreakdown()` categorizes only chrome.storage.local keys (`userscripts`, `values_`, `script_`), but scripts/GM values moved to IndexedDB in v3, so the scripts/scriptValues categories report ~0 bytes. Currently no UI consumes `getStorageBreakdown`, so low user impact, but the message API is misleading. Fix by reading counts/bytes from ScriptStorage/ScriptValues/BackupsDAO in IDB.
+  Where: `src/modules/quota-manager.ts` getBreakdown
+
+- [ ] P3 — S3 SigV4 canonical-query sort is order-incorrect (currently unexercised)
+  Why: The SigV4 canonical query builder does not sort params correctly; ScriptVault's S3 object URLs carry no query params today so it is never hit, but any future query-param URL would produce a bad signature.
+  Where: `src/modules/sync-providers.ts` S3 signing
+
 ### Background core & security
 
 - [ ] P2 — GM value cross-script auth gap on Chrome 130 and Firefox
@@ -97,6 +105,10 @@ items below are the remaining unfixed findings.
   Where: `pages/editor-sandbox.html`
 
 ### Non-dashboard UI (popup / install / sidepanel / devtools)
+
+- [ ] P3 — `.user.js` interception uses a single shared `pendingInstall` slot
+  Why: Two concurrent `.user.js` navigations both write the one `pendingInstall` key (last-write-wins) and both tabs redirect to install.html, so a user who opened URL A can be shown/consent to script B. The install UI shows the actual winning script before consent, so it cannot install unseen — confusing-UX, not silent install. Fix with a per-tab keyed slot (`pendingInstall_<tabId>`) or URL in the install-page hash.
+  Where: `src/background/install-handler.ts`, `src/background/core.ts` interceptor, `pages/install.js`
 
 - [ ] P3 — DevTools panel `matchMedia` listener never removed
   Why: `applyTheme()` adds a `prefers-color-scheme` change listener without removal. Currently called once, but if ever called again, listeners would stack.

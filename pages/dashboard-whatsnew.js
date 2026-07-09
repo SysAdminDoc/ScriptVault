@@ -11,6 +11,20 @@ const WhatsNew = (() => {
     : '2.0.0';
 
   const CHANGELOG = {
+    '3.18.2': {
+      title: 'ScriptVault 3.18.2 — Deep Audit Hardening 2',
+      date: '2026-07-09',
+      highlights: [
+        { icon: 'LOCK', title: 'Tighter Credential and Request Boundaries', desc: 'EasyCloud now revokes OAuth tokens via POST body instead of the URL, and GM_xmlhttpRequest_abort is bound to the owning script so one script cannot cancel another\'s network requests.' },
+        { icon: 'ERASE', title: 'Factory Reset Truly Erases Data', desc: 'Factory reset now clears backup blobs and publication receipts from IndexedDB, so full restorable script code and GM values no longer survive a wipe.' },
+        { icon: 'CHART', title: 'Accurate Storage and Activity Views', desc: 'Storage usage is measured origin-wide so automatic cleanup can fire, and the activity heatmap no longer clips the most recent days off the grid.' },
+      ],
+      improvements: [
+        'Gist import shows a clear "No .user.js files found" message on malformed Gist payloads instead of a raw error.',
+        'Collection reinstall explains when a local-only entry has no source URL rather than showing a cryptic Greasy Fork ID error.',
+        'Dependency provenance now reports an explicit "verification unavailable" review state instead of a placeholder.',
+      ],
+    },
     '3.18.1': {
       title: 'ScriptVault 3.18.1 — Deep Audit Hardening',
       date: '2026-07-09',
