@@ -504,6 +504,22 @@ describe('dashboard surface modules', () => {
     expect(dashboardCss).toMatch(/\.modal-overlay\s*\{[\s\S]*?transition:\s*opacity var\(--t-base\)/);
   });
 
+  it('dashboard view transitions are scoped and reduced-motion safe', () => {
+    expect(dashboardJs).toContain('function runDashboardViewTransition(className, update)');
+    expect(dashboardJs).toContain("document.startViewTransition");
+    expect(dashboardJs).toContain("prefers-reduced-motion: reduce");
+    expect(dashboardJs).toContain("runDashboardViewTransition('sv-vt-dashboard'");
+    expect(dashboardJs).toContain("runDashboardViewTransition('sv-vt-editor'");
+    expect(dashboardCss).toContain('html.sv-vt-dashboard #mainContent');
+    expect(dashboardCss).toContain('view-transition-name: sv-dashboard-workbench');
+    expect(dashboardCss).toContain('html.sv-vt-editor #editorOverlay.active .editor-main');
+    expect(dashboardCss).toContain('view-transition-name: sv-editor-workspace');
+    expect(dashboardCss).toContain('::view-transition-old(sv-dashboard-workbench)');
+    expect(dashboardCss).toContain('::view-transition-new(sv-editor-workspace)');
+    expect(dashboardCss).toContain('@media (prefers-reduced-motion: reduce)');
+    expect(dashboardCss).toContain('view-transition-name: none !important');
+  });
+
   it('collections render accessible controls and await async per-script toggles', async () => {
     const CollectionManager = createCollectionManager();
     const host = document.createElement('div');

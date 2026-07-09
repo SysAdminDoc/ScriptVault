@@ -1116,7 +1116,41 @@
         });
     }
 
-    function setEditorTab(panelId, { focusTab = false } = {}) {
+    function prefersReducedMotion() {
+        return window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true;
+    }
+
+    function runDashboardViewTransition(className, update) {
+        if (typeof update !== 'function') return undefined;
+        if (typeof document.startViewTransition !== 'function' || prefersReducedMotion()) {
+            return update();
+        }
+
+        const root = document.documentElement;
+        let updateCalled = false;
+        root.classList.add(className);
+        try {
+            const transition = document.startViewTransition(() => {
+                updateCalled = true;
+                return update();
+            });
+            const cleanup = () => {
+                root.classList.remove(className);
+            };
+            transition.finished.then(cleanup, cleanup);
+            return transition;
+        } catch (error) {
+            root.classList.remove(className);
+            if (!updateCalled) return update();
+            throw error;
+        }
+    }
+
+    function setEditorTab(panelId, options = {}) {
+        return runDashboardViewTransition('sv-vt-editor', () => setEditorTabState(panelId, options));
+    }
+
+    function setEditorTabState(panelId, { focusTab = false } = {}) {
         const tabs = Array.from(elements.editorTabs || []);
         const targetTab = tabs.find(tab => tab.dataset.panel === panelId);
         const targetPanel = elements.editorPanels?.[panelId];
@@ -11410,71 +11444,73 @@
             return;
         }
 
-        const previousScriptId = state.currentScriptId;
-        // Persist the outgoing tab's in-progress code before switching.
-        // Most callers already do this, but Ctrl+Tab cycling and programmatic
-        // switches (e.g., closeScriptTab fallback) skip it — leaving unsaved
-        // edits to be overwritten when the user cycles back.
-        if (previousScriptId && previousScriptId !== scriptId
-            && state.editor && state.openTabs[previousScriptId]) {
-            try {
-                state.openTabs[previousScriptId].code = state.editor.getValue();
-                state.openTabs[previousScriptId].unsaved = state.unsavedChanges;
-                flushPendingEditorAutosave(previousScriptId);
-            } catch {}
-        }
-        if (previousScriptId && previousScriptId !== scriptId && state.userCssPreview.scriptId === previousScriptId) {
-            void clearUserCssPreview({ silent: true });
-        }
-        state.currentScriptId = scriptId;
-        const tabData = ensureOpenTabStatus(scriptId, script);
-        state.unsavedChanges = tabData?.unsaved || false;
+        runDashboardViewTransition('sv-vt-editor', () => {
+            const previousScriptId = state.currentScriptId;
+            // Persist the outgoing tab's in-progress code before switching.
+            // Most callers already do this, but Ctrl+Tab cycling and programmatic
+            // switches (e.g., closeScriptTab fallback) skip it — leaving unsaved
+            // edits to be overwritten when the user cycles back.
+            if (previousScriptId && previousScriptId !== scriptId
+                && state.editor && state.openTabs[previousScriptId]) {
+                try {
+                    state.openTabs[previousScriptId].code = state.editor.getValue();
+                    state.openTabs[previousScriptId].unsaved = state.unsavedChanges;
+                    flushPendingEditorAutosave(previousScriptId);
+                } catch {}
+            }
+            if (previousScriptId && previousScriptId !== scriptId && state.userCssPreview.scriptId === previousScriptId) {
+                void clearUserCssPreview({ silent: true });
+            }
+            state.currentScriptId = scriptId;
+            const tabData = ensureOpenTabStatus(scriptId, script);
+            state.unsavedChanges = tabData?.unsaved || false;
 
-        // Deactivate all tabs and panels
-        getOpenScriptTabs().forEach(t => {
-            t.classList.remove('active');
-            syncScriptTabAccessibility(t, { isActive: false });
+            // Deactivate all tabs and panels
+            getOpenScriptTabs().forEach(t => {
+                t.classList.remove('active');
+                syncScriptTabAccessibility(t, { isActive: false });
+            });
+            clearDashboardSectionSelection();
+            closeFindScripts();
+
+            // Activate script tab
+            const tab = getScriptTabElement(scriptId);
+            if (tab) {
+                tab.classList.add('active');
+                syncScriptTabAccessibility(tab, { isActive: true });
+            }
+            renderEditorScriptTabs();
+
+            // Load editor content
+            if (state.editor) {
+                // Save outgoing tab's undo history before switching
+                if (previousScriptId && state.openTabs[previousScriptId]) {
+                    try { state.openTabs[previousScriptId]._editorHistory = state.editor.getHistory(); } catch {}
+                }
+                if (state.editor.isMonaco) state.editor.setScriptId(script.id);
+                state.editor.setValue(tabData?.code ?? script.code ?? '');
+                // Restore target tab's undo history if available, otherwise clear
+                if (tabData?._editorHistory) {
+                    try { state.editor.setHistory(tabData._editorHistory); } catch { state.editor.clearHistory(); }
+                } else {
+                    state.editor.clearHistory();
+                }
+                setTimeout(() => state.editor.refresh(), 10);
+                updateLineCount();
+                updateCursorPos();
+            }
+
+            updateEditorHeader(script);
+            loadScriptInfo(script);
+            loadScriptStorage(script);
+            loadExternals(script);
+            void refreshLocalWorkspaceBindingForScript(scriptId);
+            void refreshGreasyForkPublicationReceiptForScript(scriptId);
+            openEditorOverlay();
+            if (updateRoute) {
+                setDashboardHash(`script_${encodeURIComponent(scriptId)}`);
+            }
         });
-        clearDashboardSectionSelection();
-        closeFindScripts();
-
-        // Activate script tab
-        const tab = getScriptTabElement(scriptId);
-        if (tab) {
-            tab.classList.add('active');
-            syncScriptTabAccessibility(tab, { isActive: true });
-        }
-        renderEditorScriptTabs();
-
-        // Load editor content
-        if (state.editor) {
-            // Save outgoing tab's undo history before switching
-            if (previousScriptId && state.openTabs[previousScriptId]) {
-                try { state.openTabs[previousScriptId]._editorHistory = state.editor.getHistory(); } catch {}
-            }
-            if (state.editor.isMonaco) state.editor.setScriptId(script.id);
-            state.editor.setValue(tabData?.code ?? script.code ?? '');
-            // Restore target tab's undo history if available, otherwise clear
-            if (tabData?._editorHistory) {
-                try { state.editor.setHistory(tabData._editorHistory); } catch { state.editor.clearHistory(); }
-            } else {
-                state.editor.clearHistory();
-            }
-            setTimeout(() => state.editor.refresh(), 10);
-            updateLineCount();
-            updateCursorPos();
-        }
-
-        updateEditorHeader(script);
-        loadScriptInfo(script);
-        loadScriptStorage(script);
-        loadExternals(script);
-        void refreshLocalWorkspaceBindingForScript(scriptId);
-        void refreshGreasyForkPublicationReceiptForScript(scriptId);
-        openEditorOverlay();
-        if (updateRoute) {
-            setDashboardHash(`script_${encodeURIComponent(scriptId)}`);
-        }
         setTimeout(() => state.editor?.focus(), 100);
     }
 
@@ -18191,21 +18227,23 @@
     async function switchTab(name, options = {}) {
         const { updateRoute = true, focusControl = false } = options;
         const nextTab = DASHBOARD_TABS.includes(name) ? name : 'scripts';
-        const editorActive = elements.editorOverlay?.classList.contains('active');
-        if (editorActive) {
-            if (state.currentScriptId && state.editor && state.openTabs[state.currentScriptId]) {
-                state.openTabs[state.currentScriptId].code = state.editor.getValue();
-                state.openTabs[state.currentScriptId].unsaved = state.unsavedChanges;
-                flushPendingEditorAutosave(state.currentScriptId);
+        runDashboardViewTransition('sv-vt-dashboard', () => {
+            const editorActive = elements.editorOverlay?.classList.contains('active');
+            if (editorActive) {
+                if (state.currentScriptId && state.editor && state.openTabs[state.currentScriptId]) {
+                    state.openTabs[state.currentScriptId].code = state.editor.getValue();
+                    state.openTabs[state.currentScriptId].unsaved = state.unsavedChanges;
+                    flushPendingEditorAutosave(state.currentScriptId);
+                }
+                state.currentScriptId = null;
+                hideEditorOverlay();
             }
-            state.currentScriptId = null;
-            hideEditorOverlay();
-        }
-        document.querySelectorAll('.tm-tab.script-tab').forEach(t => t.classList.remove('active'));
-        setDashboardSection(nextTab, { focusControl });
-        if (updateRoute) {
-            setDashboardHash(nextTab === 'scripts' ? '' : `tab=${nextTab}`);
-        }
+            document.querySelectorAll('.tm-tab.script-tab').forEach(t => t.classList.remove('active'));
+            setDashboardSection(nextTab, { focusControl });
+            if (updateRoute) {
+                setDashboardHash(nextTab === 'scripts' ? '' : `tab=${nextTab}`);
+            }
+        });
         if (nextTab === 'updates') loadPendingUpdates();
         if (nextTab === 'trash') loadTrash();
         if (nextTab === 'utilities') {

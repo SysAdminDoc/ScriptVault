@@ -424,13 +424,15 @@ async function clickElement(baseUrl, sessionId, element) {
 }
 
 async function dismissDashboardWhatsNew(baseUrl, sessionId) {
-  for (let attempt = 0; attempt < 5; attempt += 1) {
+  let sawOverlay = false;
+  for (let attempt = 0; attempt < 10; attempt += 1) {
     const result = await execute(baseUrl, sessionId, `
       const dismiss = document.querySelector('#svWnDismiss');
       if (dismiss) dismiss.click();
       return { dismissed: !!dismiss, overlayPresent: !!document.querySelector('.sv-wn-overlay') };
     `).catch(() => null);
-    if (result?.dismissed || result?.overlayPresent === false) return;
+    if (result?.dismissed || result?.overlayPresent) sawOverlay = true;
+    if (sawOverlay && result?.overlayPresent === false) return;
     await delay(150);
   }
 }

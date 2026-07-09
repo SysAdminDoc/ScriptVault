@@ -77,6 +77,14 @@ async function closeBrowserWithFallback(browser) {
     }
 }
 
+async function removeUserDataDir(profileDir) {
+    try {
+        await rm(profileDir, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 });
+    } catch (error) {
+        console.warn(`Editor smoke temp profile cleanup skipped: ${error?.message || error}`);
+    }
+}
+
 async function findExtensionId(browser) {
     const isScriptVaultTarget = target => {
         const url = target.url();
@@ -139,6 +147,13 @@ try {
     // New Script must open the editor directly — no template modal in between.
     await page.click('#btnNewScript');
     await page.waitForSelector('#editorOverlay.active', { timeout: 15000 });
+    // The dashboard uses same-document View Transitions for editor entry. During
+    // that short snapshot phase Chrome intentionally hit-tests the transition
+    // root, so wait for the live editor DOM before asserting z-index coverage.
+    await page.waitForFunction(
+        () => !document.documentElement.classList.contains('sv-vt-editor'),
+        { timeout: 5000 }
+    );
 
     const geometry = await page.evaluate(() => {
         const rect = id => {
@@ -222,5 +237,5 @@ try {
     }
 } finally {
     await closeBrowserWithFallback(browser);
-    await rm(userDataDir, { recursive: true, force: true });
+    await removeUserDataDir(userDataDir);
 }

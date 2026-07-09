@@ -2250,11 +2250,64 @@ tr.row-over-budget {
   text-align: right;
 }
 
+@keyframes svViewTransitionFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes svViewTransitionFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html.sv-vt-dashboard #mainContent {
+    view-transition-name: sv-dashboard-workbench;
+  }
+
+  html.sv-vt-editor #editorOverlay.active .editor-main {
+    view-transition-name: sv-editor-workspace;
+  }
+
+  html.sv-vt-dashboard::view-transition-group(sv-dashboard-workbench) {
+    animation-duration: var(--t-base);
+    animation-timing-function: var(--ease-out);
+    mix-blend-mode: normal;
+  }
+
+  html.sv-vt-editor::view-transition-group(sv-editor-workspace) {
+    animation-duration: var(--t-base);
+    animation-timing-function: var(--ease-out);
+    mix-blend-mode: normal;
+  }
+
+  html.sv-vt-dashboard::view-transition-old(sv-dashboard-workbench),
+  html.sv-vt-editor::view-transition-old(sv-editor-workspace) {
+    animation-name: svViewTransitionFadeOut;
+  }
+
+  html.sv-vt-dashboard::view-transition-new(sv-dashboard-workbench),
+  html.sv-vt-editor::view-transition-new(sv-editor-workspace) {
+    animation-name: svViewTransitionFadeIn;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+
+  html.sv-vt-dashboard #mainContent,
+  html.sv-vt-editor #editorOverlay .editor-main {
+    view-transition-name: none !important;
+  }
+
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
   }
 }
 
