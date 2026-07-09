@@ -35,14 +35,16 @@ describe('safeSetHtml fragment context (2026-07 regression)', () => {
   }
 });
 
-describe('Chain editor only offers supported triggers (2026-07 regression)', () => {
+describe('Chain editor offers supported automatic triggers (2026-07 regression)', () => {
   const src = read('pages/dashboard-chains.js');
-  it('marks manual as the only supported trigger and filters the editor select', () => {
-    expect(src).toContain('supported: true');
+  it('marks automatic trigger types as supported and renders trigger value controls', () => {
+    expect(src).toMatch(/url:\s*\{[^}]*supported:\s*true/);
+    expect(src).toMatch(/schedule:\s*\{[^}]*supported:\s*true/);
+    expect(src).toMatch(/event:\s*\{[^}]*supported:\s*true/);
+    expect(src).toMatch(/afterScript:\s*\{[^}]*supported:\s*true/);
     expect(src).toContain('.filter(([, v]) => v.supported)');
-    // url/schedule/event/afterScript remain in the map (for legacy badges) but
-    // are not marked supported.
-    expect(src).not.toMatch(/url:\s*\{[^}]*supported/);
+    expect(src).toContain('sv-chain-trigger-value-row');
+    expect(src).toContain("action: 'rescheduleChains'");
   });
 });
 
@@ -662,6 +664,9 @@ describe('Import and toast microcopy polish (2026-07 regression)', () => {
 
 describe('Script chains use the real background API (2026-07 regression)', () => {
   const src = read('pages/dashboard-chains.js');
+  const background = read('src/background/core.ts');
+  const content = read('content.js');
+
   it('runs steps via runScriptNow, not the non-existent executeScript action', () => {
     expect(src).toContain("action: 'runScriptNow'");
     expect(src).not.toContain("action: 'executeScript'");
@@ -676,6 +681,17 @@ describe('Script chains use the real background API (2026-07 regression)', () =>
   it('uses the chain-link glyph, not a baseball', () => {
     expect(src).not.toContain('&#9918;');
     expect(src).toContain('&#9939;');
+  });
+  it('wires URL, schedule, DOM event, and after-script chain dispatch', () => {
+    expect(background).toContain("case 'rescheduleChains'");
+    expect(background).toContain("case 'getChainDomEventTriggers'");
+    expect(background).toContain("case 'chainDomEvent'");
+    expect(background).toContain('triggerChainsForUrl(tab.url, tabId)');
+    expect(background).toContain('triggerChainsForAfterScript(scriptId');
+    expect(background).toContain('CHAIN_ALARM_PREFIX');
+    expect(content).toContain("action: 'getChainDomEventTriggers'");
+    expect(content).toContain("action: 'chainDomEvent'");
+    expect(content).toContain("message.action === 'chainDomTriggersChanged'");
   });
 });
 

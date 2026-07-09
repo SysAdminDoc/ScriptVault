@@ -106,6 +106,14 @@ describe('ScriptChains module', () => {
     expect(a).not.toBe(b);
   });
 
+  it('notifies the background to refresh chain triggers when chains change', async () => {
+    const id = await ScriptChains.createChain('Trigger Refresh', []);
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ action: 'rescheduleChains' });
+
+    await ScriptChains.deleteChain(id);
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ action: 'rescheduleChains' });
+  });
+
   it('does not append logs to a different open chain editor', async () => {
     const chainA = await ScriptChains.createChain('Chain A', []);
     const chainB = await ScriptChains.createChain('Chain B', []);

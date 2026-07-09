@@ -14,16 +14,13 @@ const ScriptChains = (() => {
   const MAX_LOG_ENTRIES = 500;
   const MAX_DELAY = 10000; // 10s
 
-  // `supported: true` marks triggers a trigger engine actually consumes. Only
-  // manual runs are wired today, so the editor offers only supported types
-  // rather than advertising url/schedule/event/afterScript that never fire.
-  // The full map is retained so legacy chains still render a correct badge.
+  // `supported: true` marks triggers consumed by the background chain engine.
   const TRIGGER_TYPES = {
     manual:       { label: 'Manual',       icon: '&#9654;',    supported: true },
-    url:          { label: 'URL Match',    icon: '&#128279;' },
-    schedule:     { label: 'Schedule',     icon: '&#128339;' },
-    event:        { label: 'DOM Event',    icon: '&#9889;' },
-    afterScript:  { label: 'After Script', icon: '&#8627;' },
+    url:          { label: 'URL Match',    icon: '&#128279;',   supported: true },
+    schedule:     { label: 'Schedule',     icon: '&#128339;',   supported: true },
+    event:        { label: 'DOM Event',    icon: '&#9889;',     supported: true },
+    afterScript:  { label: 'After Script', icon: '&#8627;',     supported: true },
   };
 
   const CONDITION_TYPES = {
@@ -479,6 +476,9 @@ const ScriptChains = (() => {
   async function _saveChains() {
     try {
       await chrome.storage.local.set({ [STORAGE_KEY]: _chains });
+      try {
+        chrome.runtime.sendMessage({ action: 'rescheduleChains' }).catch(() => {});
+      } catch (_) {}
     } catch (e) {
       console.error('[ScriptChains] Failed to save chains:', e);
     }
@@ -909,6 +909,7 @@ const ScriptChains = (() => {
                 ).join('')}
             </select>
             <input type="hidden" id="sv-chain-trigger-value" value="${_esc(chain.trigger?.value || '')}" />
+            <div id="sv-chain-trigger-value-row"></div>
           </div>
           <div class="sv-chain-field">
             <label>Error Handling</label>
@@ -950,6 +951,71 @@ const ScriptChains = (() => {
         _renderLogEntryTo(logEl, entry);
       }
     }
+
+    const triggerTypeEl = overlay.querySelector('#sv-chain-trigger-type');
+    const triggerValueEl = overlay.querySelector('#sv-chain-trigger-value');
+    const triggerValueRowEl = overlay.querySelector('#sv-chain-trigger-value-row');
+    const renderTriggerValueControl = ({ resetValue = false } = {}) => {
+      if (resetValue) triggerValueEl.value = '';
+      const type = triggerTypeEl.value || 'manual';
+      const currentValue = triggerValueEl.value || '';
+      triggerValueRowEl.replaceChildren();
+
+      if (type === 'manual') {
+        triggerValueEl.value = '';
+        return;
+      }
+
+      const controlId = 'sv-chain-trigger-value-control';
+      const label = document.createElement('label');
+      label.setAttribute('for', controlId);
+      label.style.marginTop = '10px';
+      label.textContent = {
+        url: 'Match Pattern',
+        schedule: 'Interval Minutes',
+        event: 'DOM Event',
+        afterScript: 'Completed Script',
+      }[type] || 'Trigger Value';
+      triggerValueRowEl.appendChild(label);
+
+      let control;
+      if (type === 'afterScript') {
+        control = document.createElement('select');
+        const empty = document.createElement('option');
+        empty.value = '';
+        empty.textContent = 'Select script';
+        control.appendChild(empty);
+        for (const script of _availableScripts) {
+          const option = document.createElement('option');
+          option.value = script.id;
+          option.textContent = script.name;
+          option.selected = script.id === currentValue;
+          control.appendChild(option);
+        }
+      } else {
+        control = document.createElement('input');
+        control.type = type === 'schedule' ? 'number' : 'text';
+        control.value = currentValue;
+        control.placeholder = {
+          url: '*://example.com/*',
+          schedule: '15',
+          event: 'click',
+        }[type] || '';
+        if (type === 'schedule') {
+          control.min = '1';
+          control.step = '1';
+          control.inputMode = 'numeric';
+        }
+      }
+
+      control.id = controlId;
+      triggerValueEl.value = control.value;
+      control.addEventListener('input', () => { triggerValueEl.value = control.value; });
+      control.addEventListener('change', () => { triggerValueEl.value = control.value; });
+      triggerValueRowEl.appendChild(control);
+    };
+    triggerTypeEl.addEventListener('change', () => renderTriggerValueControl({ resetValue: true }));
+    renderTriggerValueControl();
 
     // Events
     overlay.querySelector('.sv-chain-editor-close').addEventListener('click', () => _closeEditor(overlay));

@@ -36,6 +36,8 @@ const UserScriptMessagePolicy = (() => {
   });
   module.exports = __toCommonJS(user_script_message_policy_exports);
   var USER_SCRIPT_ALLOWED_EXTRAS = Object.freeze([
+    "chainDomEvent",
+    "getChainDomEventTriggers",
     "netlog_record",
     "reportExecError",
     "reportExecTime"

@@ -175,6 +175,7 @@ describe('content script bridge security boundary', () => {
 
     expect(win.__ScriptVault_ChannelID__).toBeUndefined();
     expect(win.__ScriptVault_BridgeReady__).toBe(true);
+    chromeMock.runtime.sendMessage.mockClear();
 
     const blocked = waitForBridgeResponse(win, 'attack');
     win.dispatchEvent(new win.MessageEvent('message', {

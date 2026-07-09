@@ -7913,6 +7913,32 @@ async function handleMessage(message, sender) {
         }
       }
 
+      case 'rescheduleChains':
+        await setupChainAlarms();
+        await notifyChainDomTriggersChanged();
+        return { success: true };
+
+      case 'runChainNow': {
+        return await executeChainById(data.chainId, {
+          reason: data.reason || 'manual',
+          tabId: typeof data.tabId === 'number' ? data.tabId : undefined
+        });
+      }
+
+      case 'getChainDomEventTriggers': {
+        const eventTypes = await getChainDomEventTypes();
+        return { success: true, eventTypes };
+      }
+
+      case 'chainDomEvent': {
+        const eventType = String(data.eventType || '').trim();
+        if (!eventType) return { success: false, error: 'Missing eventType', triggered: 0 };
+        const url = data.url || sender?.tab?.url || '';
+        const tabId = typeof sender?.tab?.id === 'number' ? sender.tab.id : undefined;
+        const triggered = await triggerChainsForDomEvent(eventType, url, tabId);
+        return { success: true, triggered };
+      }
+
       case 'userStylePreviewDraft':
         if (typeof UserStylesEngine === 'undefined') return { success: false, error: 'UserCSS tools unavailable' };
         return await UserStylesEngine.previewDraft(String(data.code || ''), {
@@ -8001,6 +8027,11 @@ async function handleMessage(message, sender) {
           script.stats.lastUrl = _retainStatsUrl(data.url, _statsUrlMode);
           // Update cache only (debounced save to avoid excessive storage writes)
           _debouncedStatsSave();
+          triggerChainsForAfterScript(scriptId, {
+            reason: 'afterScript',
+            tabId: typeof sender?.tab?.id === 'number' ? sender.tab.id : undefined,
+            url: data.url || sender?.tab?.url || ''
+          }).catch(e => console.error('[ScriptVault] After-script chain trigger error:', e));
         }
         return { success: true };
       }
@@ -9110,6 +9141,12 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     return;
   }
 
+  if (alarm.name.startsWith(CHAIN_ALARM_PREFIX)) {
+    const chainId = alarm.name.slice(CHAIN_ALARM_PREFIX.length);
+    executeChainById(chainId, { reason: 'schedule' }).catch(e => console.error('[ScriptVault] Chain alarm error:', e));
+    return;
+  }
+
   // Delegate to NotificationSystem for weekly-digest + internal context alarms.
   // Without this dispatch the `scriptvault-weekly-digest` alarm would fire into
   // nothing (the branches below only handle autoUpdate/autoSync), so the digest
@@ -9520,6 +9557,291 @@ async function setupScheduleAlarms() {
   }
 }
 
+// ============================================================================
+// Dashboard chain trigger engine (sv_chains / sv_chain_ alarms)
+// ============================================================================
+
+const CHAIN_STORAGE_KEY = 'sv_chains';
+const CHAIN_LOG_KEY = 'sv_chain_logs';
+const CHAIN_ALARM_PREFIX = 'sv_chain_';
+const CHAIN_MAX_LOG_ENTRIES = 500;
+const CHAIN_MAX_DELAY_MS = 10000;
+const CHAIN_DOM_EVENT_LIMIT = 20;
+const _runningChainIds = new Set();
+
+async function getChainMap() {
+  try {
+    const data = await chrome.storage.local.get(CHAIN_STORAGE_KEY);
+    const map = data[CHAIN_STORAGE_KEY];
+    return (map && typeof map === 'object') ? map : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function normalizeChainEntry(id, chain) {
+  if (!chain || typeof chain !== 'object') return null;
+  return { ...chain, id: chain.id || id };
+}
+
+async function getChainById(chainId) {
+  const map = await getChainMap();
+  return normalizeChainEntry(chainId, map[chainId]);
+}
+
+function getRunnableChains(map) {
+  return Object.entries(map)
+    .map(([id, chain]) => normalizeChainEntry(id, chain))
+    .filter(chain => chain && chain.enabled !== false && Array.isArray(chain.steps) && chain.steps.length > 0);
+}
+
+function splitChainTriggerValues(value) {
+  return String(value || '')
+    .split(/[\n,]+/)
+    .map(part => part.trim())
+    .filter(Boolean);
+}
+
+function chainTriggerType(chain) {
+  return chain?.trigger?.type || 'manual';
+}
+
+function chainTriggerValue(chain) {
+  return String(chain?.trigger?.value || '').trim();
+}
+
+function chainTriggerPatternMatches(pattern, url) {
+  if (!pattern || !url) return false;
+  try {
+    const urlObj = new URL(url);
+    return matchPattern(pattern, url, urlObj) || matchIncludePattern(pattern, url, urlObj);
+  } catch (_) {
+    return false;
+  }
+}
+
+function chainMatchesUrlTrigger(chain, url) {
+  if (chainTriggerType(chain) !== 'url') return false;
+  const patterns = splitChainTriggerValues(chainTriggerValue(chain));
+  return patterns.some(pattern => chainTriggerPatternMatches(pattern, url));
+}
+
+function parseChainDomEventTrigger(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  const [eventType, ...patterns] = raw.split(/\s+/);
+  if (!/^[A-Za-z][\w:.-]{0,63}$/.test(eventType || '')) return null;
+  return { eventType, patterns: patterns.filter(Boolean) };
+}
+
+function chainMatchesDomEventTrigger(chain, eventType, url) {
+  if (chainTriggerType(chain) !== 'event') return false;
+  const trigger = parseChainDomEventTrigger(chainTriggerValue(chain));
+  if (!trigger || trigger.eventType !== eventType) return false;
+  if (trigger.patterns.length === 0) return true;
+  return trigger.patterns.some(pattern => chainTriggerPatternMatches(pattern, url));
+}
+
+function chainMatchesAfterScriptTrigger(chain, scriptId) {
+  if (chainTriggerType(chain) !== 'afterScript') return false;
+  return chainTriggerValue(chain) === String(scriptId || '');
+}
+
+function parseChainScheduleMinutes(value) {
+  const minutes = Number(String(value || '').trim());
+  if (!Number.isFinite(minutes) || minutes <= 0) return 0;
+  return Math.max(1, minutes);
+}
+
+async function addChainLog(chainId, level, message) {
+  try {
+    const data = await chrome.storage.local.get(CHAIN_LOG_KEY);
+    const logs = Array.isArray(data[CHAIN_LOG_KEY]) ? data[CHAIN_LOG_KEY] : [];
+    logs.push({ chainId, level, message, timestamp: Date.now() });
+    await chrome.storage.local.set({ [CHAIN_LOG_KEY]: logs.slice(-CHAIN_MAX_LOG_ENTRIES) });
+  } catch (_) {}
+}
+
+function chainDelay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function executeChainStep(step, tabId) {
+  if (!step?.scriptId) {
+    return { success: false, error: 'No script assigned to step' };
+  }
+  const message = {
+    action: 'runScriptNow',
+    scriptId: step.scriptId,
+    ...(typeof tabId === 'number' ? { tabId } : {})
+  };
+  const response = await handleMessage(message, { id: chrome.runtime.id });
+  if (response?.success === false || response?.error) {
+    throw new Error(response.error || 'Script execution failed');
+  }
+  return response || { success: true };
+}
+
+async function executeChainById(chainId, options = {}) {
+  const chain = await getChainById(chainId);
+  if (!chain) return { success: false, error: 'Chain not found' };
+  if (chain.enabled === false) return { success: false, error: 'Chain disabled' };
+  if (!Array.isArray(chain.steps) || chain.steps.length === 0) return { success: false, error: 'Chain has no steps' };
+  if (_runningChainIds.has(chain.id)) {
+    await addChainLog(chain.id, 'warn', `Chain "${chain.name || chain.id}" is already running`);
+    return { success: false, error: 'Chain already running', alreadyRunning: true };
+  }
+
+  _runningChainIds.add(chain.id);
+  try {
+    await addChainLog(chain.id, 'info', `Starting chain: ${chain.name || chain.id}`);
+    let lastResult = { success: true };
+
+    for (let i = 0; i < chain.steps.length; i++) {
+      const step = chain.steps[i] || {};
+      const label = step.label || `Step ${i + 1}`;
+
+      if (i > 0) {
+        if (step.condition === 'success' && !lastResult.success) {
+          await addChainLog(chain.id, 'warn', `Skipping step ${i + 1} (${label}): previous step failed`);
+          continue;
+        }
+        if (step.condition === 'failure' && lastResult.success) {
+          await addChainLog(chain.id, 'warn', `Skipping step ${i + 1} (${label}): previous step succeeded`);
+          continue;
+        }
+      }
+
+      const delayMs = Math.min(Math.max(Number(step.delay) || 0, 0), CHAIN_MAX_DELAY_MS);
+      if (delayMs > 0) {
+        await addChainLog(chain.id, 'info', `Waiting ${delayMs}ms before step ${i + 1}...`);
+        await chainDelay(delayMs);
+      }
+
+      await addChainLog(chain.id, 'info', `Executing step ${i + 1}: ${label}`);
+      let retries = chain.errorMode === 'retry' ? 3 : 1;
+      let executed = false;
+
+      while (retries > 0 && !executed) {
+        try {
+          lastResult = await executeChainStep(step, options.tabId);
+          executed = true;
+          if (lastResult.success !== false) {
+            await addChainLog(chain.id, 'success', `Step ${i + 1} completed successfully`);
+          } else {
+            await addChainLog(chain.id, 'error', `Step ${i + 1} failed: ${lastResult.error || 'unknown error'}`);
+          }
+        } catch (e) {
+          retries--;
+          lastResult = { success: false, error: e?.message || 'Script execution failed' };
+          if (retries > 0 && chain.errorMode === 'retry') {
+            await addChainLog(chain.id, 'warn', `Step ${i + 1} failed, retrying (${retries} left)...`);
+            await chainDelay(1000);
+          } else {
+            await addChainLog(chain.id, 'error', `Step ${i + 1} error: ${lastResult.error}`);
+            executed = true;
+          }
+        }
+      }
+
+      if (!lastResult.success && chain.errorMode === 'stop') {
+        await addChainLog(chain.id, 'error', `Chain stopped due to error at step ${i + 1}`);
+        return { success: false, stoppedAt: i, error: lastResult.error };
+      }
+    }
+
+    await addChainLog(chain.id, 'success', `Chain "${chain.name || chain.id}" completed`);
+    return { success: true };
+  } finally {
+    _runningChainIds.delete(chain.id);
+  }
+}
+
+async function triggerMatchingChains(predicate, options = {}) {
+  const map = await getChainMap();
+  const chains = getRunnableChains(map).filter(predicate);
+  let triggered = 0;
+  for (const chain of chains) {
+    const result = await executeChainById(chain.id, options);
+    if (!result?.alreadyRunning) triggered++;
+  }
+  return triggered;
+}
+
+async function triggerChainsForUrl(url, tabId) {
+  return await triggerMatchingChains(
+    chain => chainMatchesUrlTrigger(chain, url),
+    { reason: 'url', tabId, url }
+  );
+}
+
+async function triggerChainsForDomEvent(eventType, url, tabId) {
+  return await triggerMatchingChains(
+    chain => chainMatchesDomEventTrigger(chain, eventType, url),
+    { reason: 'event', tabId, url }
+  );
+}
+
+async function triggerChainsForAfterScript(scriptId, options = {}) {
+  return await triggerMatchingChains(
+    chain => chainMatchesAfterScriptTrigger(chain, scriptId),
+    options
+  );
+}
+
+async function getChainDomEventTypes() {
+  const map = await getChainMap();
+  const eventTypes = [];
+  const seen = new Set();
+  for (const chain of getRunnableChains(map)) {
+    if (chainTriggerType(chain) !== 'event') continue;
+    const trigger = parseChainDomEventTrigger(chainTriggerValue(chain));
+    if (!trigger || seen.has(trigger.eventType)) continue;
+    seen.add(trigger.eventType);
+    eventTypes.push(trigger.eventType);
+    if (eventTypes.length >= CHAIN_DOM_EVENT_LIMIT) break;
+  }
+  return eventTypes;
+}
+
+async function notifyChainDomTriggersChanged() {
+  try {
+    const tabs = await chrome.tabs.query({});
+    await Promise.all((tabs || []).map(tab => {
+      if (typeof tab.id !== 'number') return Promise.resolve();
+      return chrome.tabs.sendMessage(tab.id, { action: 'chainDomTriggersChanged' }).catch(() => {});
+    }));
+  } catch (_) {}
+}
+
+async function setupChainAlarms() {
+  const existing = await chrome.alarms.getAll().catch(() => []);
+  for (const alarm of existing) {
+    if (alarm.name.startsWith(CHAIN_ALARM_PREFIX)) {
+      await chrome.alarms.clear(alarm.name).catch(() => {});
+    }
+  }
+
+  const map = await getChainMap();
+  for (const chain of getRunnableChains(map)) {
+    if (chainTriggerType(chain) !== 'schedule') continue;
+    const periodMinutes = parseChainScheduleMinutes(chainTriggerValue(chain));
+    if (periodMinutes <= 0) continue;
+    await chrome.alarms.create(CHAIN_ALARM_PREFIX + chain.id, {
+      delayInMinutes: periodMinutes,
+      periodInMinutes: periodMinutes
+    }).catch(() => {});
+  }
+}
+
+if (chrome.storage?.onChanged) {
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== 'local' || !(CHAIN_STORAGE_KEY in changes)) return;
+    setupChainAlarms().catch(e => console.error('[ScriptVault] Chain alarm refresh error:', e));
+    notifyChainDomTriggersChanged().catch(() => {});
+  });
+}
+
 async function setupAlarms() {
   const settings = await SettingsManager.get();
   
@@ -9564,6 +9886,8 @@ async function setupAlarms() {
   await setupCrontabAlarms();
   // Setup dashboard-scheduler interval/oneTime alarms
   await setupScheduleAlarms();
+  // Setup chain schedule triggers
+  await setupChainAlarms();
 }
 
 // ============================================================================
@@ -9591,6 +9915,9 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     if (tab.url) {
       rememberRuntimeHostPermissionTarget({ ...tab, id: tabId });
       await updateBadgeForTab(tabId, tab.url);
+      if (changeInfo.status === 'complete') {
+        triggerChainsForUrl(tab.url, tabId).catch(e => console.error('[ScriptVault] URL chain trigger error:', e));
+      }
     }
   }
 

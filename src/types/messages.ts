@@ -83,6 +83,27 @@ interface RunScriptNow {
   tabId?: number;
 }
 
+interface RescheduleChains {
+  action: 'rescheduleChains';
+}
+
+interface RunChainNow {
+  action: 'runChainNow';
+  chainId: string;
+  reason?: string;
+  tabId?: number;
+}
+
+interface GetChainDomEventTriggers {
+  action: 'getChainDomEventTriggers';
+}
+
+interface ChainDomEvent {
+  action: 'chainDomEvent';
+  eventType?: string;
+  url?: string;
+}
+
 interface UserStylePreviewDraft {
   action: 'userStylePreviewDraft';
   code: string;
@@ -1603,6 +1624,7 @@ export type BackgroundMessage =
   // Script management
   | GetScripts | GetScript | SaveScript | CreateScript | DeleteScript
   | ToggleScript | RunScriptNow | DuplicateScript | UserStylePreviewDraft | UserStyleClearPreview | SearchScripts | ReorderScripts
+  | RescheduleChains | RunChainNow | GetChainDomEventTriggers | ChainDomEvent
   | ImportScript | GetHostPermissionStatus | QueueHostAccessRequest | OpenDashboard | FactoryReset
   // Trash
   | GetTrash | RestoreFromTrash | EmptyTrash | RescheduleScript | PermanentlyDelete
@@ -1756,6 +1778,10 @@ export interface ResponseMap {
   deleteScript: SuccessResponse | ErrorResponse;
   toggleScript: SuccessResponse;
   runScriptNow: SuccessOrError<{ mode: 'userScripts.execute' | 'scripting.executeScript' }>;
+  rescheduleChains: SuccessOrError;
+  runChainNow: SuccessOrError<{ alreadyRunning?: boolean }>;
+  getChainDomEventTriggers: SuccessOrError<{ eventTypes: string[] }>;
+  chainDomEvent: SuccessOrError<{ triggered: number }>;
   userStylePreviewDraft: UserStylePreviewResponse | ErrorResponse;
   userStyleClearPreview: UserStyleClearPreviewResponse;
   duplicateScript: { success: true; script: Script } | ErrorResponse;

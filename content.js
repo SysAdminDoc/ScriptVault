@@ -40,6 +40,52 @@
     return safe;
   }
 
+  const CHAIN_DOM_EVENT_LIMIT = 20;
+  const chainDomEventListeners = new Map();
+
+  function normalizeChainDomEventTypes(eventTypes) {
+    const seen = new Set();
+    const normalized = [];
+    for (const eventType of Array.isArray(eventTypes) ? eventTypes : []) {
+      const value = String(eventType || '').trim();
+      if (!/^[A-Za-z][\w:.-]{0,63}$/.test(value) || seen.has(value)) continue;
+      seen.add(value);
+      normalized.push(value);
+      if (normalized.length >= CHAIN_DOM_EVENT_LIMIT) break;
+    }
+    return normalized;
+  }
+
+  function notifyChainDomEvent(event) {
+    chrome.runtime.sendMessage({
+      action: 'chainDomEvent',
+      eventType: event.type,
+      url: location.href
+    }).catch(() => {});
+  }
+
+  function installChainDomEventListeners(eventTypes) {
+    for (const [eventType, listener] of chainDomEventListeners) {
+      document.removeEventListener(eventType, listener, true);
+    }
+    chainDomEventListeners.clear();
+
+    for (const eventType of normalizeChainDomEventTypes(eventTypes)) {
+      const listener = (event) => notifyChainDomEvent(event);
+      chainDomEventListeners.set(eventType, listener);
+      document.addEventListener(eventType, listener, { capture: true, passive: true });
+    }
+  }
+
+  async function refreshChainDomEventTriggers() {
+    try {
+      const result = await chrome.runtime.sendMessage({ action: 'getChainDomEventTriggers' });
+      installChainDomEventListeners(result?.eventTypes || []);
+    } catch (_) {
+      installChainDomEventListeners([]);
+    }
+  }
+
   // Listen for messages from userscript world (USER_SCRIPT or page context)
   window.addEventListener('message', async (event) => {
     // Security: Only accept messages from same window
@@ -217,6 +263,11 @@
       }, '*');
       handled = true;
     }
+
+    if (message.action === 'chainDomTriggersChanged') {
+      refreshChainDomEventTriggers();
+      handled = true;
+    }
     
     // Always send response if we handled the message
     // This prevents "message channel closed" errors
@@ -229,6 +280,7 @@
   });
   
   // Signal readiness without exposing additional bridge material to page code.
+  refreshChainDomEventTriggers();
   Object.defineProperty(window, '__ScriptVault_BridgeReady__', { value: true, writable: false, configurable: false });
   
   window.postMessage({

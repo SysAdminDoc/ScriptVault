@@ -3,6 +3,8 @@
 // ============================================================================
 
 export const USER_SCRIPT_ALLOWED_EXTRAS = Object.freeze([
+  'chainDomEvent',
+  'getChainDomEventTriggers',
   'netlog_record',
   'reportExecError',
   'reportExecTime',

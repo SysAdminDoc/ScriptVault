@@ -12,8 +12,11 @@ describe('user-script message policy', () => {
     expect(isUserScriptAllowedAction('reportExecError')).toBe(true);
     expect(isUserScriptAllowedAction('reportExecTime')).toBe(true);
     expect(isUserScriptAllowedAction('netlog_record')).toBe(true);
+    expect(isUserScriptAllowedAction('getChainDomEventTriggers')).toBe(true);
+    expect(isUserScriptAllowedAction('chainDomEvent')).toBe(true);
 
     expect(isUserScriptAllowedAction('deleteScript')).toBe(false);
+    expect(isUserScriptAllowedAction('runChainNow')).toBe(false);
     expect(isUserScriptAllowedAction('factoryReset')).toBe(false);
     expect(isUserScriptAllowedAction('setSettings')).toBe(false);
     expect(isUserScriptAllowedAction('')).toBe(false);
@@ -22,6 +25,8 @@ describe('user-script message policy', () => {
 
   it('keeps the explicit extra-action list narrow and reviewable', () => {
     expect([...USER_SCRIPT_ALLOWED_EXTRAS].sort()).toEqual([
+      'chainDomEvent',
+      'getChainDomEventTriggers',
       'netlog_record',
       'reportExecError',
       'reportExecTime',
