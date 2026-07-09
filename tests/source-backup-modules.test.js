@@ -253,6 +253,7 @@ afterEach(() => {
   Reflect.deleteProperty(globalThis, 'SettingsManager');
   Reflect.deleteProperty(globalThis, 'FolderStorage');
   Reflect.deleteProperty(globalThis, 'WorkspaceManager');
+  Reflect.deleteProperty(globalThis, 'BackupsDAO');
 });
 
 describe('source backup scheduler module', () => {
@@ -513,6 +514,38 @@ describe('source backup scheduler module', () => {
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/nested archive entry payload\.zip/);
     expect(stored.autoBackups || []).toHaveLength(0);
+  });
+
+  it('sweeps orphaned IndexedDB backup blobs on init', async () => {
+    const { BackupScheduler } = await loadFreshBackupSchedulerHarness([]);
+    const originalIndexedDB = globalThis.indexedDB;
+    Object.defineProperty(globalThis, 'indexedDB', {
+      value: originalIndexedDB || {},
+      configurable: true,
+    });
+    const list = vi.fn(async () => [
+      { id: 'kept', name: 'kept', createdAt: 2, byteSize: 2 },
+      { id: 'orphan', name: 'orphan', createdAt: 1, byteSize: 1 },
+    ]);
+    const deleteBlob = vi.fn(async () => {});
+    globalThis.BackupsDAO = {
+      list,
+      delete: deleteBlob,
+    };
+    await chrome.storage.local.set({
+      autoBackups: [
+        { id: 'kept', timestamp: 2, version: '1', reason: 'manual', scriptCount: 0, size: 2, sizeFormatted: '2 B' },
+      ],
+    });
+
+    try {
+      await BackupScheduler.init();
+      await vi.waitFor(() => expect(deleteBlob).toHaveBeenCalledWith('orphan'));
+      expect(deleteBlob).not.toHaveBeenCalledWith('kept');
+    } finally {
+      if (originalIndexedDB === undefined) Reflect.deleteProperty(globalThis, 'indexedDB');
+      else Object.defineProperty(globalThis, 'indexedDB', { value: originalIndexedDB, configurable: true });
+    }
   });
 });
 

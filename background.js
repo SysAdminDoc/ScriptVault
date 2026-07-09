@@ -30306,6 +30306,24 @@ const BackupScheduler = (() => {
     } catch {
     }
   }
+  async function _sweepOrphanedBackupBlobs() {
+    const dao = _tryGetBackupsDAO();
+    if (!dao || typeof dao.list !== "function") return 0;
+    try {
+      const [records, backups] = await Promise.all([
+        dao.list(),
+        _getBackupList()
+      ]);
+      const referenced = new Set(backups.map((backup) => backup.id));
+      const orphans = records.filter((record) => record?.id && !referenced.has(record.id));
+      for (const orphan of orphans) {
+        await dao.delete(orphan.id);
+      }
+      return orphans.length;
+    } catch {
+      return 0;
+    }
+  }
   function _tryGetBackupsDAO() {
     if (typeof indexedDB === "undefined") return null;
     const dao = globalThis.BackupsDAO;
@@ -30540,7 +30558,7 @@ const BackupScheduler = (() => {
       _initialized = true;
       await _loadSettings();
       await _registerAlarms();
-      _migrateBackupBlobsToIdb().catch(() => {
+      _migrateBackupBlobsToIdb().then(() => _sweepOrphanedBackupBlobs()).catch(() => {
       });
       chrome.alarms.onAlarm.addListener(async (alarm) => {
         if (alarm.name === ALARM_NAME) {
@@ -30592,7 +30610,12 @@ const BackupScheduler = (() => {
         }
         const backups = await _getBackupList();
         backups.unshift(backup);
-        await _saveBackupList(backups);
+        try {
+          await _saveBackupList(backups);
+        } catch (err) {
+          if (storedInIdb) await _deleteBackupBlob(backupId);
+          throw err;
+        }
         if (settings.warnOnStorageFull) {
           const allBackups = await _getBackupList();
           const totalSize = _estimateBackupSize(allBackups);

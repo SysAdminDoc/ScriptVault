@@ -984,6 +984,25 @@ async function _deleteBackupBlob(id: string): Promise<void> {
   } catch { /* best-effort cleanup */ }
 }
 
+async function _sweepOrphanedBackupBlobs(): Promise<number> {
+  const dao = _tryGetBackupsDAO();
+  if (!dao || typeof dao.list !== 'function') return 0;
+  try {
+    const [records, backups] = await Promise.all([
+      dao.list(),
+      _getBackupList(),
+    ]);
+    const referenced = new Set(backups.map((backup) => backup.id));
+    const orphans = records.filter((record) => record?.id && !referenced.has(record.id));
+    for (const orphan of orphans) {
+      await dao.delete(orphan.id);
+    }
+    return orphans.length;
+  } catch {
+    return 0;
+  }
+}
+
 /** Get BackupsDAO if available (returns null in test environments without IDB). */
 function _tryGetBackupsDAO(): typeof import('../storage/script-db').BackupsDAO | null {
   if (typeof indexedDB === 'undefined') return null;
@@ -1306,7 +1325,9 @@ export const BackupScheduler = {
 
     await _loadSettings();
     await _registerAlarms();
-    _migrateBackupBlobsToIdb().catch(() => { /* best-effort migration */ });
+    _migrateBackupBlobsToIdb()
+      .then(() => _sweepOrphanedBackupBlobs())
+      .catch(() => { /* best-effort migration/sweep */ });
 
     // Listen for backup-related alarms
     chrome.alarms.onAlarm.addListener(async (alarm: chrome.alarms.Alarm) => {
@@ -1366,7 +1387,12 @@ export const BackupScheduler = {
 
       const backups: BackupEntry[] = await _getBackupList();
       backups.unshift(backup); // newest first
-      await _saveBackupList(backups);
+      try {
+        await _saveBackupList(backups);
+      } catch (err) {
+        if (storedInIdb) await _deleteBackupBlob(backupId);
+        throw err;
+      }
 
       // Storage warning check
       if (settings.warnOnStorageFull) {
