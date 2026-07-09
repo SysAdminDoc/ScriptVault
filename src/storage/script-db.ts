@@ -75,6 +75,13 @@ export interface BackupRecord {
   meta?: Record<string, unknown>;
 }
 
+interface StoredScriptRecord extends Omit<Script, 'code'> {
+  code?: string;
+  codeCompressed?: boolean;
+  codeGzip?: ArrayBuffer;
+  codeByteSize?: number;
+}
+
 export interface LocalWorkspaceBindingRecord {
   bindingId: string;
   scriptId: string;
@@ -122,12 +129,109 @@ const PARTITION_SCHEMA_STORES: Record<StoragePartition, StoreName[]> = {
   backups: [Stores.backups, Stores.publicationReceipts],
 };
 
+const SCRIPT_CODE_COMPRESSION_THRESHOLD_BYTES = 64 * 1024;
+const SCRIPT_CODE_ENCODER = new TextEncoder();
+const SCRIPT_CODE_DECODER = new TextDecoder();
+
 function targetStores(target: OpenTarget): Set<StoreName> {
   return new Set(target.bucketed ? PARTITION_SCHEMA_STORES[target.partition] : ALL_SCHEMA_STORES);
 }
 
 function shouldCreateStore(db: IDBDatabase, stores: Set<StoreName>, store: StoreName): boolean {
   return stores.has(store) && !db.objectStoreNames.contains(store);
+}
+
+async function gzipScriptCode(bytes: Uint8Array): Promise<ArrayBuffer> {
+  const stream = new globalThis.ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(bytes);
+      controller.close();
+    },
+  }).pipeThrough(new globalThis.CompressionStream('gzip') as unknown as ReadableWritablePair<Uint8Array, Uint8Array>);
+  return new globalThis.Response(stream).arrayBuffer();
+}
+
+async function gunzipScriptCode(data: ArrayBuffer): Promise<string> {
+  const stream = new globalThis.ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new Uint8Array(data));
+      controller.close();
+    },
+  }).pipeThrough(new globalThis.DecompressionStream('gzip') as unknown as ReadableWritablePair<Uint8Array, Uint8Array>);
+  const bytes = await new globalThis.Response(stream).arrayBuffer();
+  return SCRIPT_CODE_DECODER.decode(bytes);
+}
+
+function coerceArrayBuffer(value: unknown): ArrayBuffer | null {
+  if (value instanceof ArrayBuffer) return value;
+  if (value && typeof value === 'object' && typeof (value as { byteLength?: unknown }).byteLength === 'number') {
+    try {
+      const source = new Uint8Array(value as ArrayBufferLike);
+      const copy = new Uint8Array(source.byteLength);
+      copy.set(source);
+      return copy.buffer;
+    } catch (_) {}
+  }
+  if (ArrayBuffer.isView(value)) {
+    const view = value as ArrayBufferView;
+    const copy = new Uint8Array(view.byteLength);
+    copy.set(new Uint8Array(view.buffer, view.byteOffset, view.byteLength));
+    return copy.buffer;
+  }
+  return null;
+}
+
+async function encodeScriptForStorage(script: Script): Promise<StoredScriptRecord> {
+  const row = { ...script } as StoredScriptRecord;
+  const code = typeof script.code === 'string' ? script.code : '';
+  const raw = SCRIPT_CODE_ENCODER.encode(code);
+
+  delete row.codeCompressed;
+  delete row.codeGzip;
+  delete row.codeByteSize;
+
+  if (
+    raw.byteLength > SCRIPT_CODE_COMPRESSION_THRESHOLD_BYTES
+    && typeof globalThis.CompressionStream === 'function'
+    && typeof globalThis.DecompressionStream === 'function'
+    && typeof globalThis.ReadableStream === 'function'
+    && typeof globalThis.Response === 'function'
+  ) {
+    try {
+      row.codeGzip = await gzipScriptCode(raw);
+      row.codeCompressed = true;
+      row.codeByteSize = raw.byteLength;
+      delete row.code;
+      return row;
+    } catch (_) {
+      // If the browser lacks working stream compression, fall back to the
+      // legacy raw code field so script persistence never depends on gzip.
+    }
+  }
+
+  row.code = code;
+  return row;
+}
+
+async function decodeScriptFromStorage(row: StoredScriptRecord | Script | undefined): Promise<Script | null> {
+  if (!row) return null;
+  const script = { ...row } as StoredScriptRecord & { code: string };
+
+  if (script.codeCompressed) {
+    const data = coerceArrayBuffer(script.codeGzip);
+    if (data) {
+      script.code = await gunzipScriptCode(data);
+    } else {
+      script.code = typeof script.code === 'string' ? script.code : '';
+    }
+  } else {
+    script.code = typeof script.code === 'string' ? script.code : '';
+  }
+
+  delete script.codeCompressed;
+  delete script.codeGzip;
+  delete script.codeByteSize;
+  return script as Script;
 }
 
 function upgradeSchema(
@@ -202,7 +306,7 @@ export const ScriptsDAO = {
     await openScriptDB();
     return withTransaction(Stores.scripts, 'readonly', async (tx) => {
       const row = await reqToPromise(tx.objectStore(Stores.scripts).get(id));
-      return (row as Script | undefined) ?? null;
+      return decodeScriptFromStorage(row as StoredScriptRecord | undefined);
     });
   },
 
@@ -210,14 +314,15 @@ export const ScriptsDAO = {
     await openScriptDB();
     return withTransaction(Stores.scripts, 'readonly', async (tx) => {
       const rows = await reqToPromise(tx.objectStore(Stores.scripts).getAll());
-      return (rows as Script[]) ?? [];
+      return Promise.all(((rows as StoredScriptRecord[]) ?? []).map((row) => decodeScriptFromStorage(row) as Promise<Script>));
     });
   },
 
   async put(script: Script): Promise<void> {
     await openScriptDB();
+    const row = await encodeScriptForStorage(script);
     await withTransaction(Stores.scripts, 'readwrite', async (tx) => {
-      await reqToPromise(tx.objectStore(Stores.scripts).put(script));
+      await reqToPromise(tx.objectStore(Stores.scripts).put(row));
     });
   },
 
@@ -302,9 +407,10 @@ export const ScriptsDAO = {
   async bulkPut(scripts: Script[]): Promise<void> {
     if (scripts.length === 0) return;
     await openScriptDB();
+    const rows = await Promise.all(scripts.map((script) => encodeScriptForStorage(script)));
     await withTransaction(Stores.scripts, 'readwrite', async (tx) => {
       const store = tx.objectStore(Stores.scripts);
-      for (const s of scripts) {
+      for (const s of rows) {
         await reqToPromise(store.put(s));
       }
     });

@@ -1,6 +1,42 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
+import { gzipSync, gunzipSync } from 'node:zlib';
+import { ReadableStream as NodeReadableStream, TransformStream as NodeTransformStream } from 'node:stream/web';
+
+globalThis.ReadableStream = NodeReadableStream;
+globalThis.TransformStream = NodeTransformStream;
+globalThis.CompressionStream = class CompressionStream {
+  constructor(format) {
+    if (format !== 'gzip') throw new Error('Only gzip is supported in tests');
+    const chunks = [];
+    return new TransformStream({
+      transform(chunk, controller) {
+        void controller;
+        chunks.push(Buffer.from(chunk));
+      },
+      flush(controller) {
+        controller.enqueue(new Uint8Array(gzipSync(Buffer.concat(chunks))));
+      },
+    });
+  }
+};
+
+globalThis.DecompressionStream = class DecompressionStream {
+  constructor(format) {
+    if (format !== 'gzip') throw new Error('Only gzip is supported in tests');
+    const chunks = [];
+    return new TransformStream({
+      transform(chunk, controller) {
+        void controller;
+        chunks.push(Buffer.from(chunk));
+      },
+      flush(controller) {
+        controller.enqueue(new Uint8Array(gunzipSync(Buffer.concat(chunks))));
+      },
+    });
+  }
+};
 
 // storage.js is generated as a script-mode runtime artifact, so tests eval it
 // in the same global shape background.js uses rather than importing it as ESM.
@@ -73,6 +109,46 @@ function makeScript(id = 'test1', overrides = {}) {
     updatedAt: 1,
     ...overrides,
   };
+}
+
+function idbRequest(req) {
+  return new Promise((resolvePromise, rejectPromise) => {
+    req.onsuccess = () => resolvePromise(req.result);
+    req.onerror = () => rejectPromise(req.error || new Error('IndexedDB request failed'));
+  });
+}
+
+function idbTransactionDone(tx) {
+  return new Promise((resolvePromise, rejectPromise) => {
+    tx.oncomplete = () => resolvePromise();
+    tx.onerror = () => rejectPromise(tx.error || new Error('IndexedDB transaction failed'));
+    tx.onabort = () => rejectPromise(tx.error || new Error('IndexedDB transaction aborted'));
+  });
+}
+
+async function openRawScriptDb() {
+  return idbRequest(indexedDB.open('scriptvault'));
+}
+
+async function getRawScriptRecord(id) {
+  const db = await openRawScriptDb();
+  try {
+    const tx = db.transaction('scripts', 'readonly');
+    return await idbRequest(tx.objectStore('scripts').get(id));
+  } finally {
+    db.close();
+  }
+}
+
+async function putRawScriptRecord(record) {
+  const db = await openRawScriptDb();
+  try {
+    const tx = db.transaction('scripts', 'readwrite');
+    tx.objectStore('scripts').put(record);
+    await idbTransactionDone(tx);
+  } finally {
+    db.close();
+  }
 }
 
 describe('generated storage artifact', () => {
@@ -304,6 +380,49 @@ describe('ScriptStorage', () => {
       meta: expect.objectContaining({ name: 'Alpha' }),
       settings: expect.objectContaining({ userModified: false }),
     });
+  });
+
+  it('compresses large script bodies in IndexedDB and reads them transparently', async () => {
+    const code = [
+      '// ==UserScript==',
+      '// @name Large Compressible',
+      '// ==/UserScript==',
+      `const payload = "${'x'.repeat(70 * 1024)}";`,
+      'console.log(payload.length);',
+    ].join('\n');
+    const script = makeScript('large-compressed', { code });
+
+    await ScriptStorage.set(script.id, script);
+
+    const raw = await getRawScriptRecord(script.id);
+    expect(raw.codeCompressed).toBe(true);
+    expect(raw.code).toBeUndefined();
+    expect(raw.codeGzip?.byteLength).toBeGreaterThan(0);
+    expect(raw.codeByteSize).toBe(new TextEncoder().encode(code).byteLength);
+
+    await expect(ScriptStorage.get(script.id)).resolves.toMatchObject({ code });
+    ScriptStorage.invalidateCache();
+    await expect(ScriptStorage.get(script.id)).resolves.toMatchObject({ code });
+    expect((await ScriptStorage.getAll()).find((entry) => entry.id === script.id)?.code).toBe(code);
+  });
+
+  it('stores small script bodies raw and reads existing uncompressed rows unchanged', async () => {
+    const small = makeScript('small-raw', { code: 'console.log("small");' });
+    await ScriptStorage.set(small.id, small);
+
+    const rawSmall = await getRawScriptRecord(small.id);
+    expect(rawSmall.code).toBe(small.code);
+    expect(rawSmall.codeCompressed).not.toBe(true);
+    expect(rawSmall.codeGzip).toBeUndefined();
+
+    await ScriptStorage.init();
+    const legacyRaw = makeScript('legacy-raw', {
+      code: 'console.log("legacy raw");\n'.repeat(3000),
+    });
+    await putRawScriptRecord(legacyRaw);
+    ScriptStorage.invalidateCache();
+
+    expect(await ScriptStorage.get(legacyRaw.id)).toEqual(legacyRaw);
   });
 
   it('deletes scripts and their value bags atomically through IndexedDB', async () => {

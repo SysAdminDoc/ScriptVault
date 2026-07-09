@@ -362,11 +362,90 @@ const StorageModule = (() => {
     values: [Stores.values],
     backups: [Stores.backups, Stores.publicationReceipts]
   };
+  var SCRIPT_CODE_COMPRESSION_THRESHOLD_BYTES = 64 * 1024;
+  var SCRIPT_CODE_ENCODER = new TextEncoder();
+  var SCRIPT_CODE_DECODER = new TextDecoder();
   function targetStores(target) {
     return new Set(target.bucketed ? PARTITION_SCHEMA_STORES[target.partition] : ALL_SCHEMA_STORES);
   }
   function shouldCreateStore(db, stores, store) {
     return stores.has(store) && !db.objectStoreNames.contains(store);
+  }
+  async function gzipScriptCode(bytes) {
+    const stream = new globalThis.ReadableStream({
+      start(controller) {
+        controller.enqueue(bytes);
+        controller.close();
+      }
+    }).pipeThrough(new globalThis.CompressionStream("gzip"));
+    return new globalThis.Response(stream).arrayBuffer();
+  }
+  async function gunzipScriptCode(data) {
+    const stream = new globalThis.ReadableStream({
+      start(controller) {
+        controller.enqueue(new Uint8Array(data));
+        controller.close();
+      }
+    }).pipeThrough(new globalThis.DecompressionStream("gzip"));
+    const bytes = await new globalThis.Response(stream).arrayBuffer();
+    return SCRIPT_CODE_DECODER.decode(bytes);
+  }
+  function coerceArrayBuffer(value) {
+    if (value instanceof ArrayBuffer) return value;
+    if (value && typeof value === "object" && typeof value.byteLength === "number") {
+      try {
+        const source = new Uint8Array(value);
+        const copy = new Uint8Array(source.byteLength);
+        copy.set(source);
+        return copy.buffer;
+      } catch (_) {
+      }
+    }
+    if (ArrayBuffer.isView(value)) {
+      const view = value;
+      const copy = new Uint8Array(view.byteLength);
+      copy.set(new Uint8Array(view.buffer, view.byteOffset, view.byteLength));
+      return copy.buffer;
+    }
+    return null;
+  }
+  async function encodeScriptForStorage(script) {
+    const row = { ...script };
+    const code = typeof script.code === "string" ? script.code : "";
+    const raw = SCRIPT_CODE_ENCODER.encode(code);
+    delete row.codeCompressed;
+    delete row.codeGzip;
+    delete row.codeByteSize;
+    if (raw.byteLength > SCRIPT_CODE_COMPRESSION_THRESHOLD_BYTES && typeof globalThis.CompressionStream === "function" && typeof globalThis.DecompressionStream === "function" && typeof globalThis.ReadableStream === "function" && typeof globalThis.Response === "function") {
+      try {
+        row.codeGzip = await gzipScriptCode(raw);
+        row.codeCompressed = true;
+        row.codeByteSize = raw.byteLength;
+        delete row.code;
+        return row;
+      } catch (_) {
+      }
+    }
+    row.code = code;
+    return row;
+  }
+  async function decodeScriptFromStorage(row) {
+    if (!row) return null;
+    const script = { ...row };
+    if (script.codeCompressed) {
+      const data = coerceArrayBuffer(script.codeGzip);
+      if (data) {
+        script.code = await gunzipScriptCode(data);
+      } else {
+        script.code = typeof script.code === "string" ? script.code : "";
+      }
+    } else {
+      script.code = typeof script.code === "string" ? script.code : "";
+    }
+    delete script.codeCompressed;
+    delete script.codeGzip;
+    delete script.codeByteSize;
+    return script;
   }
   function upgradeSchema(db, oldVersion, _newVersion, _tx, target) {
     const stores = targetStores(target);
@@ -418,20 +497,21 @@ const StorageModule = (() => {
       await openScriptDB();
       return withTransaction(Stores.scripts, "readonly", async (tx) => {
         const row = await reqToPromise(tx.objectStore(Stores.scripts).get(id));
-        return row ?? null;
+        return decodeScriptFromStorage(row);
       });
     },
     async getAll() {
       await openScriptDB();
       return withTransaction(Stores.scripts, "readonly", async (tx) => {
         const rows = await reqToPromise(tx.objectStore(Stores.scripts).getAll());
-        return rows ?? [];
+        return Promise.all((rows ?? []).map((row) => decodeScriptFromStorage(row)));
       });
     },
     async put(script) {
       await openScriptDB();
+      const row = await encodeScriptForStorage(script);
       await withTransaction(Stores.scripts, "readwrite", async (tx) => {
-        await reqToPromise(tx.objectStore(Stores.scripts).put(script));
+        await reqToPromise(tx.objectStore(Stores.scripts).put(row));
       });
     },
     async delete(id) {
@@ -510,9 +590,10 @@ const StorageModule = (() => {
     async bulkPut(scripts) {
       if (scripts.length === 0) return;
       await openScriptDB();
+      const rows = await Promise.all(scripts.map((script) => encodeScriptForStorage(script)));
       await withTransaction(Stores.scripts, "readwrite", async (tx) => {
         const store = tx.objectStore(Stores.scripts);
-        for (const s of scripts) {
+        for (const s of rows) {
           await reqToPromise(store.put(s));
         }
       });
