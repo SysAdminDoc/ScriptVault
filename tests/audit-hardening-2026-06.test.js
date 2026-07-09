@@ -5,7 +5,13 @@ import { describe, expect, it, beforeAll, afterAll } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { webcrypto } from 'node:crypto';
-import { fetchRequireScript, requireCache, verifySRI } from '../src/background/resource-loader.ts';
+import {
+  fetchRequireScript,
+  REQUIRE_CACHE_MAX,
+  requireCache,
+  requireCacheSet,
+  verifySRI,
+} from '../src/background/resource-loader.ts';
 import { matchPattern } from '../src/background/url-matcher.ts';
 
 const read = (p) => readFileSync(resolve(process.cwd(), p), 'utf8');
@@ -63,6 +69,23 @@ describe('SRI verification — fail closed', () => {
 });
 
 describe('@require trust-receipt fetch mode', () => {
+  it('caps the in-memory @require cache and evicts the oldest entry', () => {
+    try {
+      requireCache.clear();
+
+      for (let i = 0; i < REQUIRE_CACHE_MAX; i += 1) {
+        requireCacheSet(`https://cdn.example.com/lib-${i}.js`, `code-${i}`);
+      }
+      requireCacheSet('https://cdn.example.com/lib-overflow.js', 'overflow');
+
+      expect(requireCache.size).toBe(REQUIRE_CACHE_MAX);
+      expect(requireCache.has('https://cdn.example.com/lib-0.js')).toBe(false);
+      expect(requireCache.get('https://cdn.example.com/lib-overflow.js')).toBe('overflow');
+    } finally {
+      requireCache.clear();
+    }
+  });
+
   it('bypasses existing caches without storing probe bytes', async () => {
     const originalFetch = globalThis.fetch;
     const originalDebugLog = globalThis.debugLog;

@@ -30,10 +30,19 @@ declare const NpmResolver: {
 // ---------------------------------------------------------------------------
 
 export const requireCache: Map<string, string> = new Map();
+export const REQUIRE_CACHE_MAX = 500;
 export const SRI_REQUIRE_UNPINNED_REQUIRE_ERROR = 'blocked: unpinned @require under SRI Require';
 
 const MAX_REQUIRE_BYTES = 5 * 1024 * 1024;
 const MAX_PROVENANCE_BUNDLE_BYTES = 256 * 1024;
+
+export function requireCacheSet(key: string, value: string): void {
+  if (!requireCache.has(key) && requireCache.size >= REQUIRE_CACHE_MAX) {
+    const oldest = requireCache.keys().next().value;
+    if (oldest !== undefined) requireCache.delete(oldest);
+  }
+  requireCache.set(key, value);
+}
 
 export interface FetchRequireScriptOptions {
   bypassCache?: boolean;
@@ -255,8 +264,8 @@ export async function fetchRequireScript(url: string, options: FetchRequireScrip
           const age = Date.now() - (entry.timestamp ?? 0);
           if (age < 7 * 24 * 60 * 60 * 1000) {
             debugLog('Using persistent cached npm @require:', url);
-            requireCache.set(url, entry.code);
-            if (entry.url) requireCache.set(entry.url, entry.code);
+            requireCacheSet(url, entry.code);
+            if (entry.url) requireCacheSet(entry.url, entry.code);
             return entry.code;
           }
         }
@@ -282,8 +291,8 @@ export async function fetchRequireScript(url: string, options: FetchRequireScrip
       }
 
       if (cacheResult) {
-        requireCache.set(url, resolved.code);
-        requireCache.set(resolved.url, resolved.code);
+        requireCacheSet(url, resolved.code);
+        requireCacheSet(resolved.url, resolved.code);
         try {
           await chrome.storage.local.set({
             [cacheKey]: {
@@ -355,7 +364,7 @@ export async function fetchRequireScript(url: string, options: FetchRequireScrip
           debugLog('Using persistent cached @require:', url);
           // Use fetchUrl (without SRI fragment) as the in-memory cache key so
           // subsequent lookups at line `requireCache.has(fetchUrl)` hit.
-          requireCache.set(fetchUrl, entry.code);
+          requireCacheSet(fetchUrl, entry.code);
           return entry.code;
         }
       }
@@ -385,7 +394,7 @@ export async function fetchRequireScript(url: string, options: FetchRequireScrip
         // Store in both caches unless this is an integrity probe. TOFU receipt
         // checks must not poison the active cache when they reject an update.
         if (cacheResult) {
-          requireCache.set(fetchUrl, code);
+          requireCacheSet(fetchUrl, code);
 
           // Store in persistent cache
           try {
