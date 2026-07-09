@@ -1348,7 +1348,15 @@ function _receiptErrorMessage(error) {
   return error?.message || (typeof error === 'string' ? error : 'Dependency body unavailable');
 }
 
-async function _receiptDependencyProvenance(bundleUrl = '', identity = '', body = '', fetchProvenanceBundle = null) {
+function _receiptUnavailableProvenanceError(bundleUrl = '', identity = '', body = undefined, fetchProvenanceBundle = null) {
+  if (!bundleUrl) return 'Missing @require-provenance declaration';
+  if (!identity) return 'Missing @require-identity declaration';
+  if (typeof body !== 'string') return 'Dependency body unavailable for provenance verification';
+  if (typeof fetchProvenanceBundle !== 'function') return 'Provenance bundle fetcher unavailable';
+  return 'Provenance verification unavailable';
+}
+
+async function _receiptDependencyProvenance(bundleUrl = '', identity = '', body = undefined, fetchProvenanceBundle = null) {
   if (!bundleUrl && !identity) return undefined;
   const base = {
     bundleUrl,
@@ -1358,9 +1366,11 @@ async function _receiptDependencyProvenance(bundleUrl = '', identity = '', body 
       : bundleUrl
         ? 'missing-identity'
         : 'missing-bundle',
-    verification: 'not-yet-implemented'
+    verification: 'verification-unavailable'
   };
-  if (!bundleUrl || !identity || !body || typeof fetchProvenanceBundle !== 'function') return base;
+  if (!bundleUrl || !identity || typeof body !== 'string' || typeof fetchProvenanceBundle !== 'function') {
+    return { ...base, error: _receiptUnavailableProvenanceError(bundleUrl, identity, body, fetchProvenanceBundle) };
+  }
   if (!self.SigstoreBundleVerifier?.verifyMessageSignature && typeof SigstoreBundleVerifier === 'undefined') {
     return { ...base, verification: 'signature-failed', error: 'Sigstore verifier unavailable' };
   }
@@ -1438,7 +1448,7 @@ function _summarizeRequireProvenancePreview(entries) {
       counts.verified += 1;
     } else if (
       entry.status !== 'declared' ||
-      ['signature-failed', 'root-verification-failed', 'bundle-unavailable', 'unsupported-bundle'].includes(entry.verification)
+      ['verification-unavailable', 'signature-failed', 'root-verification-failed', 'bundle-unavailable', 'unsupported-bundle'].includes(entry.verification)
     ) {
       counts.failed += 1;
     } else {
@@ -1469,7 +1479,7 @@ function _getRequireProvenanceFailure(receipt = {}) {
         : provenance.verification === 'unsupported-bundle' ? 'unsupported Sigstore bundle'
         : provenance.verification === 'root-verification-failed' ? 'Fulcio root verification failed'
         : provenance.verification === 'signature-failed' ? 'signature verification failed'
-        : provenance.verification === 'not-yet-implemented' ? 'verification did not run'
+        : provenance.verification === 'verification-unavailable' ? 'verification unavailable'
         : 'verification incomplete');
 
     return {
@@ -2119,7 +2129,7 @@ const UpdateSystem = {
       const provenance = dep?.provenance;
       if (!provenance) return false;
       if (provenance.status && provenance.status !== 'declared') return true;
-      return ['signature-failed', 'root-verification-failed', 'bundle-unavailable', 'unsupported-bundle']
+      return ['verification-unavailable', 'signature-failed', 'root-verification-failed', 'bundle-unavailable', 'unsupported-bundle']
         .includes(provenance.verification || '');
     });
   },
@@ -8185,13 +8195,18 @@ async function handleMessage(message, sender) {
       }
 
       case 'reportExecTime': {
-        const scriptId = data.scriptId;
+        // Use sender.userScriptId as authoritative source when available to prevent
+        // a malicious script from forging data.scriptId to trigger chains for another script.
+        const scriptId = sender.userScriptId || data.scriptId;
         const script = await ScriptStorage.get(scriptId);
         if (script) {
           if (!script.stats) script.stats = { runs: 0, totalTime: 0, avgTime: 0, lastRun: 0, errors: 0 };
           script.stats.runs++;
-          script.stats.totalTime += data.time;
-          script.stats.avgTime = Math.round(script.stats.totalTime / script.stats.runs * 100) / 100;
+          // Guard against NaN/Infinity to prevent permanent stats corruption.
+          if (Number.isFinite(data.time)) {
+            script.stats.totalTime += data.time;
+          }
+          script.stats.avgTime = script.stats.runs > 0 ? Math.round(script.stats.totalTime / script.stats.runs * 100) / 100 : 0;
           script.stats.lastRun = Date.now();
           const _statsUrlMode = (SettingsManager.cache && SettingsManager.cache.statsUrlRetention) || 'full';
           script.stats.lastUrl = _retainStatsUrl(data.url, _statsUrlMode);
@@ -8207,7 +8222,9 @@ async function handleMessage(message, sender) {
       }
 
       case 'reportExecError': {
-        const scriptId = data.scriptId;
+        // Use sender.userScriptId as authoritative source when available to prevent
+        // a malicious script from forging data.scriptId to manipulate another script's error stats.
+        const scriptId = sender.userScriptId || data.scriptId;
         const script = await ScriptStorage.get(scriptId);
         if (script) {
           if (!script.stats) script.stats = { runs: 0, totalTime: 0, avgTime: 0, lastRun: 0, errors: 0 };

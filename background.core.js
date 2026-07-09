@@ -8200,13 +8200,18 @@ async function handleMessage(message, sender) {
       }
 
       case 'reportExecTime': {
-        const scriptId = data.scriptId;
+        // Use sender.userScriptId as authoritative source when available to prevent
+        // a malicious script from forging data.scriptId to trigger chains for another script.
+        const scriptId = sender.userScriptId || data.scriptId;
         const script = await ScriptStorage.get(scriptId);
         if (script) {
           if (!script.stats) script.stats = { runs: 0, totalTime: 0, avgTime: 0, lastRun: 0, errors: 0 };
           script.stats.runs++;
-          script.stats.totalTime += data.time;
-          script.stats.avgTime = Math.round(script.stats.totalTime / script.stats.runs * 100) / 100;
+          // Guard against NaN/Infinity to prevent permanent stats corruption.
+          if (Number.isFinite(data.time)) {
+            script.stats.totalTime += data.time;
+          }
+          script.stats.avgTime = script.stats.runs > 0 ? Math.round(script.stats.totalTime / script.stats.runs * 100) / 100 : 0;
           script.stats.lastRun = Date.now();
           const _statsUrlMode = (SettingsManager.cache && SettingsManager.cache.statsUrlRetention) || 'full';
           script.stats.lastUrl = _retainStatsUrl(data.url, _statsUrlMode);
@@ -8222,7 +8227,9 @@ async function handleMessage(message, sender) {
       }
 
       case 'reportExecError': {
-        const scriptId = data.scriptId;
+        // Use sender.userScriptId as authoritative source when available to prevent
+        // a malicious script from forging data.scriptId to manipulate another script's error stats.
+        const scriptId = sender.userScriptId || data.scriptId;
         const script = await ScriptStorage.get(scriptId);
         if (script) {
           if (!script.stats) script.stats = { runs: 0, totalTime: 0, avgTime: 0, lastRun: 0, errors: 0 };
