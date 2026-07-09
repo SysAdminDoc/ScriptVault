@@ -112,6 +112,29 @@ describe('ScriptScheduler module', () => {
       expect.objectContaining({ action: 'rescheduleScript', scriptId: 'script-1' }),
     );
   });
+
+  it('does not let a close timeout remove a freshly reopened modal', () => {
+    vi.useFakeTimers();
+    document.body.innerHTML = '';
+    try {
+      ScriptScheduler.showScheduleModal('script-1');
+      const first = document.querySelector('.sv-sched-overlay');
+      expect(first).toBeTruthy();
+
+      first.querySelector('#sv-sched-cancel').click();
+      ScriptScheduler.showScheduleModal('script-2');
+
+      const second = document.querySelector('.sv-sched-overlay');
+      expect(second).toBeTruthy();
+      expect(second).not.toBe(first);
+
+      vi.advanceTimersByTime(250);
+      expect(document.querySelector('.sv-sched-overlay')).toBe(second);
+    } finally {
+      vi.useRealTimers();
+      document.body.innerHTML = '';
+    }
+  });
 });
 
 describe('background scheduler enforcement (background.core.js)', () => {

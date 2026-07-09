@@ -1047,14 +1047,17 @@ const ScriptScheduler = (() => {
 
   function closeModal() {
     if (!_modalEl) return;
-    if (_modalEl._keyHandler) {
-      document.removeEventListener('keydown', _modalEl._keyHandler);
+    const closingEl = _modalEl;
+    if (closingEl._keyHandler) {
+      document.removeEventListener('keydown', closingEl._keyHandler);
     }
-    _modalEl.classList.remove('visible');
+    closingEl.classList.remove('visible');
     setTimeout(() => {
-      _modalEl?.remove();
-      _modalEl = null;
-      _activeScriptId = null;
+      closingEl.remove();
+      if (_modalEl === closingEl) {
+        _modalEl = null;
+        _activeScriptId = null;
+      }
     }, 200);
   }
 
