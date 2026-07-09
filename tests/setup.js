@@ -194,6 +194,7 @@ globalThis.chrome = {
   },
   declarativeNetRequest: {
     updateDynamicRules: vi.fn().mockResolvedValue(),
+    getDynamicRules: vi.fn().mockResolvedValue([]),
   },
 };
 

@@ -683,4 +683,61 @@ describe('dashboard surface modules', () => {
 
     CSPReporter.destroy();
   });
+
+  it('csp clear all is reversible from the undo toast', async () => {
+    const CSPReporter = createCSPReporter();
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+
+    await chrome.storage.local.set({ sv_csp_reports: [] });
+    await CSPReporter.init(host);
+    await CSPReporter.recordFailure('https://example.com', 'script-1', 'script-src', {
+      scriptName: 'Alpha Script',
+    });
+    await CSPReporter.recordFailure('https://example.org', 'script-2', 'connect-src', {
+      scriptName: 'Beta Script',
+    });
+
+    host.querySelector('[data-action="clear"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await flushPromises();
+
+    expect((await chrome.storage.local.get('sv_csp_reports')).sv_csp_reports).toEqual([]);
+    expect(document.querySelector('.sv-csp-toast')?.textContent).toContain('2 CSP reports cleared');
+
+    document.querySelector('.sv-csp-toast-action')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await flushPromises();
+
+    const restored = (await chrome.storage.local.get('sv_csp_reports')).sv_csp_reports;
+    expect(restored).toHaveLength(2);
+    expect(restored.map(r => r.hostname)).toEqual(['example.com', 'example.org']);
+
+    CSPReporter.destroy();
+  });
+
+  it('csp bypass apply failure keeps switch and stored state off', async () => {
+    const CSPReporter = createCSPReporter();
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+
+    await chrome.storage.local.set({ sv_csp_reports: [] });
+    chrome.declarativeNetRequest.updateDynamicRules.mockRejectedValueOnce(new Error('DNR unavailable'));
+    await CSPReporter.init(host);
+    await CSPReporter.recordFailure('https://example.com', 'script-1', "script-src 'unsafe-inline'", {
+      scriptName: 'Alpha Script',
+    });
+
+    const disclosure = host.querySelector('.sv-csp-bypass-header');
+    disclosure?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    const toggle = host.querySelector('.sv-csp-bypass-toggle');
+    toggle?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await flushPromises();
+
+    expect(toggle?.getAttribute('aria-checked')).toBe('false');
+    expect(toggle?.getAttribute('aria-label')).toBe('Enable CSP bypass for example.com');
+    expect(host.querySelector('.sv-csp-bypass-state')?.textContent).toBe('Bypass OFF');
+    expect(document.querySelector('.sv-csp-toast')?.textContent).toContain('Could not enable CSP bypass for example.com');
+    expect((await chrome.storage.local.get('sv_csp_bypass')).sv_csp_bypass['example.com'].enabled).toBe(false);
+
+    CSPReporter.destroy();
+  });
 });

@@ -417,6 +417,10 @@ const CSPReporter = (() => {
 .sv-csp-bypass-toggle.on::after {
   transform: translateX(16px);
 }
+.sv-csp-bypass-toggle:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
 .sv-csp-empty-inline {
   color: var(--text-muted, #707070);
   font-size: 0.75rem;
@@ -452,6 +456,24 @@ const CSPReporter = (() => {
   z-index: 10001;
   box-shadow: 0 4px 16px rgba(0,0,0,0.4);
   animation: sv-csp-fadein 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(420px, calc(100vw - 48px));
+}
+.sv-csp-toast-action {
+  border: 1px solid var(--accent-green-dark, #22c55e);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent-green, #22c55e) 16%, transparent);
+  color: var(--accent-green, #22c55e);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  padding: 4px 8px;
+}
+.sv-csp-toast-action:focus-visible {
+  outline: 2px solid var(--accent-green, #22c55e);
+  outline-offset: 2px;
 }
 @keyframes sv-csp-fadein {
   from { opacity: 0; transform: translateY(8px); }
@@ -500,14 +522,30 @@ const CSPReporter = (() => {
     return d.toLocaleDateString();
   }
 
-  function showToast(msg, duration = 2500) {
+  function showToast(msg, options = 2500) {
+    const config = typeof options === 'number' ? { duration: options } : options;
+    const duration = config.duration ?? 2500;
     const existing = document.querySelector('.sv-csp-toast');
     if (existing) existing.remove();
     const el = document.createElement('div');
     el.className = 'sv-csp-toast';
-    el.textContent = msg;
+    const text = document.createElement('span');
+    text.textContent = msg;
+    el.appendChild(text);
+    if (config.actionLabel && typeof config.onAction === 'function') {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'sv-csp-toast-action';
+      button.textContent = config.actionLabel;
+      button.addEventListener('click', () => {
+        clearTimeout(timer);
+        el.remove();
+        config.onAction();
+      });
+      el.appendChild(button);
+    }
     document.body.appendChild(el);
-    setTimeout(() => el.remove(), duration);
+    const timer = setTimeout(() => el.remove(), duration);
   }
 
   function getSeverity(directive) {
@@ -589,6 +627,31 @@ const CSPReporter = (() => {
     }
   }
 
+  async function restoreClearedReports(clearedReports) {
+    const existingIds = new Set(_reports.map(r => r.id));
+    const restored = clearedReports.filter(r => !existingIds.has(r.id));
+    _reports = [...restored, ..._reports].slice(-MAX_ENTRIES);
+    await saveReports();
+    render();
+    showToast(`${restored.length} CSP report${restored.length === 1 ? '' : 's'} restored`);
+  }
+
+  async function clearAllReports() {
+    const clearedReports = _reports.slice();
+    if (clearedReports.length === 0) {
+      showToast('No CSP reports to clear');
+      return;
+    }
+    _reports = [];
+    await saveReports();
+    render();
+    showToast(`${clearedReports.length} CSP report${clearedReports.length === 1 ? '' : 's'} cleared`, {
+      duration: 8000,
+      actionLabel: 'Undo',
+      onAction: () => restoreClearedReports(clearedReports),
+    });
+  }
+
   async function saveBypass() {
     try {
       await chrome.storage.local.set({ [BYPASS_KEY]: _bypassSettings });
@@ -624,12 +687,7 @@ const CSPReporter = (() => {
     });
     toolbar.querySelector('[data-action="export-csv"]').addEventListener('click', () => downloadExport('csv'));
     toolbar.querySelector('[data-action="export-json"]').addEventListener('click', () => downloadExport('json'));
-    toolbar.querySelector('[data-action="clear"]').addEventListener('click', () => {
-      _reports = [];
-      saveReports();
-      render();
-      showToast('All CSP reports cleared');
-    });
+    toolbar.querySelector('[data-action="clear"]').addEventListener('click', () => clearAllReports());
 
     // Summary
     renderSummary();
@@ -827,6 +885,17 @@ const CSPReporter = (() => {
   /*  Bypass Panel                                                       */
   /* ------------------------------------------------------------------ */
 
+  function setBypassRowState(row, host, enabled) {
+    const tog = row.querySelector('.sv-csp-bypass-toggle');
+    const state = row.querySelector('.sv-csp-bypass-state');
+    if (tog) {
+      tog.classList.toggle('on', enabled);
+      tog.setAttribute('aria-checked', String(enabled));
+      tog.setAttribute('aria-label', `${enabled ? 'Disable' : 'Enable'} CSP bypass for ${host}`);
+    }
+    if (state) state.textContent = enabled ? 'Bypass ON' : 'Bypass OFF';
+  }
+
   function renderBypassPanel() {
     const hostnames = [...new Set(_reports.map(r => r.hostname))].sort();
 
@@ -872,24 +941,27 @@ const CSPReporter = (() => {
         `);
         body.appendChild(row);
 
-        row.querySelector('.sv-csp-bypass-toggle').addEventListener('click', () => {
+        row.querySelector('.sv-csp-bypass-toggle').addEventListener('click', async () => {
           const tog = row.querySelector('.sv-csp-bypass-toggle');
           const nowOn = !tog.classList.contains('on');
-          tog.classList.toggle('on', nowOn);
-          tog.setAttribute('aria-checked', String(nowOn));
-          tog.setAttribute('aria-label', `${nowOn ? 'Disable' : 'Enable'} CSP bypass for ${host}`);
-          row.querySelector('.sv-csp-bypass-state').textContent = nowOn ? 'Bypass ON' : 'Bypass OFF';
+          tog.disabled = true;
 
           if (!_bypassSettings[host]) _bypassSettings[host] = { enabled: false, directives: [] };
-          _bypassSettings[host].enabled = nowOn;
-          saveBypass();
-
-          if (nowOn) {
-            applyBypassRule(host);
-            showToast(`CSP bypass enabled for ${host}`);
-          } else {
-            removeBypassRule(host);
-            showToast(`CSP bypass disabled for ${host}`);
+          try {
+            if (nowOn) {
+              await applyBypassRule(host);
+            } else {
+              await removeBypassRule(host);
+            }
+            _bypassSettings[host].enabled = nowOn;
+            await saveBypass();
+            setBypassRowState(row, host, nowOn);
+            showToast(`CSP bypass ${nowOn ? 'enabled' : 'disabled'} for ${host}`);
+          } catch {
+            setBypassRowState(row, host, _bypassSettings[host].enabled === true);
+            showToast(`Could not ${nowOn ? 'enable' : 'disable'} CSP bypass for ${host}`);
+          } finally {
+            tog.disabled = false;
           }
         });
       }
@@ -946,6 +1018,7 @@ const CSPReporter = (() => {
       });
     } catch (e) {
       console.warn('[CSPReporter] Could not apply bypass rule:', e);
+      throw e;
     }
   }
 
@@ -964,6 +1037,7 @@ const CSPReporter = (() => {
       });
     } catch (e) {
       console.warn('[CSPReporter] Could not remove bypass rule:', e);
+      throw e;
     }
   }
 
