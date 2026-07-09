@@ -25,7 +25,8 @@ All notable changes to ScriptVault will be documented in this file.
   count.
 - **Smoke cleanup is harder to wedge.** Dashboard/editor/browser capture smokes
   now share crash-aware cleanup helpers so interrupted launches do not leave
-  browser processes or temp profiles behind.
+  browser processes or temp profiles behind, and the Edge sideload smoke now
+  has a top-level timeout with temporary-profile process cleanup.
 
 ## [v3.17.0] — Trust enforcement, sync data-safety, and backup slimming (2026-07-02)
 

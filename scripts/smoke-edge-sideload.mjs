@@ -23,6 +23,17 @@ const VERSION = MANIFEST.version;
 const EDGE_REPORT_PATH = resolve(ARTIFACT_DIR, `edge-build-${VERSION}.json`);
 const EDGE_SMOKE_PATH = resolve(ARTIFACT_DIR, `edge-smoke-${VERSION}.json`);
 const args = new Set(process.argv.slice(2));
+const DEFAULT_SMOKE_TIMEOUT_MS = 180000;
+const configuredSmokeTimeoutMs = Number.parseInt(
+  process.env.SCRIPT_VAULT_EDGE_SMOKE_TIMEOUT_MS || String(DEFAULT_SMOKE_TIMEOUT_MS),
+  10,
+);
+const SMOKE_TIMEOUT_MS = Number.isFinite(configuredSmokeTimeoutMs) && configuredSmokeTimeoutMs > 0
+  ? configuredSmokeTimeoutMs
+  : DEFAULT_SMOKE_TIMEOUT_MS;
+let activeBrowser = null;
+let activeUserDataDir = '';
+let hardTimeout = null;
 
 function fail(message) {
   throw new Error(`[edge-smoke] ${message}`);
@@ -69,6 +80,47 @@ function findEdgeExecutable() {
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'));
+}
+
+function killEdgeProfileProcesses(profileDir) {
+  if (!profileDir) return;
+  try {
+    if (process.platform === 'win32') {
+      const escapedProfileDir = profileDir.replace(/'/g, "''");
+      execFileSync('powershell.exe', [
+        '-NoProfile',
+        '-Command',
+        `Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'msedge.exe' -and $_.CommandLine -like '*${escapedProfileDir}*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`,
+      ], { stdio: 'ignore' });
+      return;
+    }
+    execFileSync('pkill', ['-f', profileDir], { stdio: 'ignore' });
+  } catch {
+    // Best-effort cleanup only; the normal browser close path already ran or will run.
+  }
+}
+
+async function abortHungSmoke() {
+  console.error(`[edge-smoke] timed out after ${SMOKE_TIMEOUT_MS}ms; cleaning up the temporary Edge profile.`);
+  await closeBrowserWithFallback(activeBrowser, 'Edge smoke timeout');
+  killEdgeProfileProcesses(activeUserDataDir);
+  await removeTempProfileDir(activeUserDataDir, 'Edge smoke timeout');
+  process.exit(1);
+}
+
+function startHardTimeout() {
+  if (Number.isFinite(SMOKE_TIMEOUT_MS) && SMOKE_TIMEOUT_MS > 0) {
+    hardTimeout = setTimeout(() => {
+      abortHungSmoke().catch(error => {
+        console.error(error?.stack || error?.message || error);
+        process.exit(1);
+      });
+    }, SMOKE_TIMEOUT_MS);
+  }
+}
+
+function clearHardTimeout() {
+  if (hardTimeout) clearTimeout(hardTimeout);
 }
 
 function assertEdgePackageReady(report) {
@@ -362,6 +414,7 @@ async function main() {
 
   const executablePath = findEdgeExecutable();
   const userDataDir = await mkdtemp(join(tmpdir(), 'scriptvault-edge-smoke-'));
+  activeUserDataDir = userDataDir;
   const extensionErrors = [];
   const seenTargets = new WeakSet();
   let browser;
@@ -386,6 +439,7 @@ async function main() {
       executablePath,
       headless: args.has('--headed') ? false : true,
       userDataDir,
+      timeout: Math.min(SMOKE_TIMEOUT_MS, 60000),
       pipe: true,
       enableExtensions: [BUILD_DIR],
       args: [
@@ -395,6 +449,7 @@ async function main() {
         '--no-sandbox',
       ],
     });
+    activeBrowser = browser;
 
     browser.on('targetcreated', target => {
       attachTargetLogging(target, extensionErrors, seenTargets).catch(error => {
@@ -444,11 +499,17 @@ async function main() {
     throw error;
   } finally {
     await closeBrowserWithFallback(browser, 'Edge smoke');
+    activeBrowser = null;
+    killEdgeProfileProcesses(userDataDir);
     await removeTempProfileDir(userDataDir, 'Edge smoke');
+    activeUserDataDir = '';
   }
 }
 
+startHardTimeout();
 main().catch(error => {
   console.error(error?.stack || error?.message || error);
   process.exit(1);
+}).finally(() => {
+  clearHardTimeout();
 });

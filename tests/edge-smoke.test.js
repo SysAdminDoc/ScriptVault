@@ -30,6 +30,16 @@ describe('Microsoft Edge sideload smoke wiring', () => {
     expect(edgeSmoke).toContain("error.type !== 'console.error'");
   });
 
+  it('fails boundedly and cleans up the temporary Edge profile on hangs', () => {
+    expect(edgeSmoke).toContain('SCRIPT_VAULT_EDGE_SMOKE_TIMEOUT_MS');
+    expect(edgeSmoke).toContain('DEFAULT_SMOKE_TIMEOUT_MS');
+    expect(edgeSmoke).toContain('abortHungSmoke');
+    expect(edgeSmoke).toContain('killEdgeProfileProcesses');
+    expect(edgeSmoke).toContain('activeUserDataDir');
+    expect(edgeSmoke).toContain('timed out after ${SMOKE_TIMEOUT_MS}ms');
+    expect(edgeSmoke).toContain('timeout: Math.min(SMOKE_TIMEOUT_MS, 60000)');
+  });
+
   it('records Edge smoke evidence in the Edge readiness report and support matrix', () => {
     expect(packageJson.scripts['support:matrix']).toContain('npm run build:edge:check');
     expect(packageJson.scripts['support:matrix:check']).toContain('npm run build:edge:check');
