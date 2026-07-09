@@ -300,16 +300,23 @@ async function cleanup(options: CleanupOptions = {}): Promise<CleanupResult> {
     }
   }
 
-  // 4. Clear old sync tombstones (>30 days)
+  // 4. Clear sync tombstones only after they have aged out and passed a successful sync.
   if (options.tombstones !== false) {
     const syncTombstones = all.syncTombstones as Record<string, number> | undefined;
     if (syncTombstones) {
       const now: number = Date.now();
       const cutoff: number = 30 * 24 * 60 * 60 * 1000;
+      const settings = all.settings as { lastSync?: unknown } | undefined;
+      const lastSync = typeof settings?.lastSync === 'number' && Number.isFinite(settings.lastSync)
+        ? settings.lastSync
+        : 0;
       let pruned: number = 0;
       const nextTombstones = { ...syncTombstones };
       for (const [id, ts] of Object.entries(syncTombstones)) {
-        if (ts !== undefined && now - ts > cutoff) { delete nextTombstones[id]; pruned++; }
+        if (typeof ts === 'number' && Number.isFinite(ts) && now - ts > cutoff && ts < lastSync) {
+          delete nextTombstones[id];
+          pruned++;
+        }
       }
       if (pruned > 0) {
         if (Object.keys(nextTombstones).length === 0) {

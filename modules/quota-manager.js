@@ -248,10 +248,12 @@ const QuotaManager = (() => {
       if (syncTombstones) {
         const now = Date.now();
         const cutoff = 30 * 24 * 60 * 60 * 1e3;
+        const settings = all.settings;
+        const lastSync = typeof settings?.lastSync === "number" && Number.isFinite(settings.lastSync) ? settings.lastSync : 0;
         let pruned = 0;
         const nextTombstones = { ...syncTombstones };
         for (const [id, ts] of Object.entries(syncTombstones)) {
-          if (ts !== void 0 && now - ts > cutoff) {
+          if (typeof ts === "number" && Number.isFinite(ts) && now - ts > cutoff && ts < lastSync) {
             delete nextTombstones[id];
             pruned++;
           }

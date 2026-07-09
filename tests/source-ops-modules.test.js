@@ -74,7 +74,11 @@ describe('source quota manager module', () => {
       sv_csp_reports: Array.from({ length: 120 }, (_, index) => ({ id: index })),
       syncTombstones: {
         old_alpha: now - (40 * 24 * 60 * 60 * 1000),
+        unsynced_gamma: now - (35 * 24 * 60 * 60 * 1000),
         recent_beta: now - (2 * 24 * 60 * 60 * 1000),
+      },
+      settings: {
+        lastSync: now - (36 * 24 * 60 * 60 * 1000),
       },
       npmCache: { lodash: { code: 'module.exports = {};' } },
       analytics: { events: [1, 2, 3] },
@@ -91,7 +95,10 @@ describe('source quota manager module', () => {
     expect(stored.res_cache_old).toBeUndefined();
     expect(stored.errorLog).toHaveLength(200);
     expect(stored.sv_csp_reports).toHaveLength(100);
-    expect(stored.syncTombstones).toEqual({ recent_beta: expect.any(Number) });
+    expect(stored.syncTombstones).toEqual({
+      unsynced_gamma: expect.any(Number),
+      recent_beta: expect.any(Number),
+    });
     expect(stored.npmCache).toBeUndefined();
     expect(stored.analytics).toBeUndefined();
     expect(stored.sv_analytics_daily).toBeUndefined();
