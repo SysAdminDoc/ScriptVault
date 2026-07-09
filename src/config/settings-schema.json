@@ -95,6 +95,7 @@
       "syncCredentialsSessionOnly",
       "syncEncryptionEnabled",
       "syncEncryptionKdfIterations",
+      "syncHoldExecutionUntilFirstSync",
       "syncInterval",
       "syncProvider",
       "tabMode",
@@ -1561,6 +1562,14 @@
       "label": "Keep sync credentials for this browser session only",
       "help": "Stores sync provider credentials in chrome.storage.session instead of persistent settings.",
       "elementId": "settingsSyncCredentialsSessionOnly",
+      "default": false
+    },
+    "syncHoldExecutionUntilFirstSync": {
+      "type": "boolean",
+      "control": "checkbox",
+      "label": "Wait for first sync before running scripts",
+      "help": "When sync is enabled and no successful sync has completed yet, hold userscript registration briefly so a fresh device can receive synced scripts before execution starts.",
+      "elementId": "settingsSyncHoldUntilFirstSync",
       "default": false
     },
     "syncEncryptionEnabled": {

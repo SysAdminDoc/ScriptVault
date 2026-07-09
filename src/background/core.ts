@@ -73,6 +73,9 @@ const LOCAL_ONLY_SCRIPT_SETTING_KEYS = new Set([
 ]);
 
 const SRI_REQUIRE_UNPINNED_REQUIRE_ERROR = 'blocked: unpinned @require under SRI Require';
+const SYNC_FIRST_RUN_REGISTRATION_HOLD_MS = 90 * 1000;
+const SYNC_FIRST_RUN_REGISTRATION_HOLD_STORAGE_KEY = 'syncFirstRunRegistrationHoldStartedAt';
+const SYNC_FIRST_RUN_REGISTRATION_TIMEOUT_NOTIFICATION_ID = 'sync-first-run-registration-timeout';
 
 function cloneScriptSettingValue(value) {
   if (value == null || typeof value !== 'object') return value;
@@ -6912,6 +6915,7 @@ async function handleMessage(message, sender) {
       // Sync
       case 'sync': {
         const result = await CloudSync.sync();
+        await maybeRegisterScriptsAfterSuccessfulSync(result);
         await persistLastSyncResult(result);
         return result;
       }
@@ -7044,6 +7048,7 @@ async function handleMessage(message, sender) {
       
       case 'syncNow': {
         const result = await CloudSync.sync();
+        await maybeRegisterScriptsAfterSuccessfulSync(result);
         await persistLastSyncResult(result);
         return result;
       }
@@ -9293,7 +9298,8 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     if (alarm.name === 'autoUpdate') {
       await UpdateSystem.autoUpdate();
     } else if (alarm.name === 'autoSync') {
-      await CloudSync.sync();
+      const result = await CloudSync.sync();
+      await maybeRegisterScriptsAfterSuccessfulSync(result);
     } else if (alarm.name === SUBSCRIPTION_REFRESH_ALARM) {
       await SubscriptionSystem.refreshSubscriptions();
     }
@@ -11157,6 +11163,73 @@ async function configureUserScriptsWorld(status = null) {
   }
 }
 
+function isFirstSyncRegistrationHoldConfigured(settings = {}) {
+  const provider = settings.syncProvider || 'none';
+  const lastSync = Number(settings.lastSync || 0);
+  return settings.enabled !== false
+    && settings.syncHoldExecutionUntilFirstSync === true
+    && settings.syncEnabled === true
+    && provider !== 'none'
+    && !(Number.isFinite(lastSync) && lastSync > 0);
+}
+
+async function clearFirstSyncRegistrationHoldMarker() {
+  try {
+    await chrome.storage.local.remove(SYNC_FIRST_RUN_REGISTRATION_HOLD_STORAGE_KEY);
+  } catch (_) {}
+}
+
+async function getFirstSyncRegistrationGate(settings = {}) {
+  if (!isFirstSyncRegistrationHoldConfigured(settings)) {
+    await clearFirstSyncRegistrationHoldMarker();
+    return { hold: false, timedOut: false, startedAt: null, elapsedMs: 0 };
+  }
+
+  const now = Date.now();
+  let startedAt = 0;
+  try {
+    const data = await chrome.storage.local.get(SYNC_FIRST_RUN_REGISTRATION_HOLD_STORAGE_KEY);
+    startedAt = Number(data?.[SYNC_FIRST_RUN_REGISTRATION_HOLD_STORAGE_KEY] || 0);
+  } catch (_) {
+    startedAt = 0;
+  }
+  if (!Number.isFinite(startedAt) || startedAt <= 0) {
+    startedAt = now;
+    try {
+      await chrome.storage.local.set({ [SYNC_FIRST_RUN_REGISTRATION_HOLD_STORAGE_KEY]: startedAt });
+    } catch (_) {}
+  }
+
+  const elapsedMs = Math.max(0, now - startedAt);
+  if (elapsedMs >= SYNC_FIRST_RUN_REGISTRATION_HOLD_MS) {
+    await clearFirstSyncRegistrationHoldMarker();
+    return { hold: false, timedOut: true, startedAt, elapsedMs };
+  }
+
+  return { hold: true, timedOut: false, startedAt, elapsedMs };
+}
+
+function notifyFirstSyncRegistrationTimeout() {
+  console.warn('[ScriptVault] First-sync registration hold timed out; registering scripts before first sync.');
+  try {
+    chrome.notifications.create(SYNC_FIRST_RUN_REGISTRATION_TIMEOUT_NOTIFICATION_ID, {
+      type: 'basic',
+      iconUrl: 'images/icon128.png',
+      title: 'ScriptVault sync wait timed out',
+      message: 'Scripts are running before the first sync completed. Run Sync Now when the provider is available.'
+    });
+  } catch (_) {}
+}
+
+async function maybeRegisterScriptsAfterSuccessfulSync(result) {
+  if (!result || result.success !== true) return;
+  await clearFirstSyncRegistrationHoldMarker();
+  const settings = await SettingsManager.get();
+  if (settings.syncHoldExecutionUntilFirstSync === true) {
+    await registerAllScripts(true);
+  }
+}
+
 // Register all enabled scripts with the userScripts API
 async function registerAllScripts(forceReregister = false) {
   try {
@@ -11173,6 +11246,23 @@ async function registerAllScripts(forceReregister = false) {
       return;
     }
 
+    const registrationSettings = await SettingsManager.get();
+    const firstSyncGate = await getFirstSyncRegistrationGate(registrationSettings);
+    if (firstSyncGate.timedOut) {
+      notifyFirstSyncRegistrationTimeout();
+    } else if (firstSyncGate.hold) {
+      await chrome.userScripts.unregister().catch(() => {});
+      recordRegistrationSweep({
+        status: 'sync-first-run-held',
+        mode: 'sync-hold',
+        forceReregister,
+        userScriptsAvailable: true,
+        setupState: availability.setupState
+      });
+      debugLog(`Holding userscript registration until first sync completes (${Math.ceil((SYNC_FIRST_RUN_REGISTRATION_HOLD_MS - firstSyncGate.elapsedMs) / 1000)}s remaining)`);
+      return;
+    }
+
     // On normal SW wake, check if scripts are already registered to avoid
     // the destructive unregister→register cycle that creates a gap where
     // scripts aren't active on page navigations.
@@ -11185,7 +11275,7 @@ async function registerAllScripts(forceReregister = false) {
       try {
         const existing = await chrome.userScripts.getScripts();
         if (existing && existing.length > 0) {
-          const settings = await SettingsManager.get();
+          const settings = registrationSettings;
           if (!settings.enabled) {
             debugLog(`Skipping re-registration: scripts globally disabled`);
             recordRegistrationSweep({
@@ -11300,7 +11390,7 @@ async function registerAllScripts(forceReregister = false) {
     await chrome.userScripts.unregister().catch(() => {});
     
     const scripts = await ScriptStorage.getAll();
-    const settings = await SettingsManager.get();
+    const settings = registrationSettings;
     
     if (!settings.enabled) {
       debugLog('Scripts globally disabled');

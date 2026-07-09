@@ -8181,6 +8181,10 @@
                         <span class="help-icon" title="Stores provider tokens, passwords, endpoint metadata, and the sync passphrase in session storage instead of persistent settings. Reconnect after browser restart." data-i18n-title="settingsSyncCredentialsSessionOnlyHelp">?</span>
                     </div>
                     <div class="setting-row">
+                        <label><input type="checkbox" id="settingsSyncHoldUntilFirstSync"> <span>Wait for first sync before running scripts</span></label>
+                        <span class="help-icon" title="Optional: on a fresh device, hold userscript registration until the first successful sync or a 90 second timeout.">?</span>
+                    </div>
+                    <div class="setting-row">
                         <label><input type="checkbox" id="settingsSyncEncryptionEnabled"> <span data-i18n="settingsSyncEncryptionEnabled">Encrypt sync payloads</span></label>
                         <span class="help-icon" title="Encrypts uploaded sync JSON with AES-256-GCM before it leaves this device. Existing plaintext sync files remain readable." data-i18n-title="settingsSyncEncryptionHelp">?</span>
                     </div>

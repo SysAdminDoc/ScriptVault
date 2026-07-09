@@ -27,6 +27,7 @@
   "syncProvider": "none",
   "syncInterval": 3600000,
   "lastSync": 0,
+  "syncHoldExecutionUntilFirstSync": false,
   "syncCredentialsSessionOnly": false,
   "syncEncryptionEnabled": false,
   "syncEncryptionPassphrase": "",

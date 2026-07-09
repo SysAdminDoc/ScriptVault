@@ -76,6 +76,7 @@ const StorageModule = (() => {
     syncProvider: "none",
     syncInterval: 36e5,
     lastSync: 0,
+    syncHoldExecutionUntilFirstSync: false,
     syncCredentialsSessionOnly: false,
     syncEncryptionEnabled: false,
     syncEncryptionPassphrase: "",

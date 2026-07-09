@@ -60,6 +60,59 @@ function _withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promis
   ]);
 }
 
+const SYNC_FIRST_RUN_REGISTRATION_HOLD_MS = 90 * 1000;
+const SYNC_FIRST_RUN_REGISTRATION_HOLD_STORAGE_KEY = 'syncFirstRunRegistrationHoldStartedAt';
+
+function isFirstSyncRegistrationHoldConfigured(settings: Settings): boolean {
+  const provider = settings.syncProvider || 'none';
+  const lastSync = Number(settings.lastSync || 0);
+  return settings.enabled !== false
+    && settings.syncHoldExecutionUntilFirstSync === true
+    && settings.syncEnabled === true
+    && provider !== 'none'
+    && !(Number.isFinite(lastSync) && lastSync > 0);
+}
+
+async function clearFirstSyncRegistrationHoldMarker(): Promise<void> {
+  try {
+    await chrome.storage.local.remove(SYNC_FIRST_RUN_REGISTRATION_HOLD_STORAGE_KEY);
+  } catch {
+    // Non-fatal; the registration gate re-checks current settings on each call.
+  }
+}
+
+async function getFirstSyncRegistrationGate(settings: Settings): Promise<{ hold: boolean; timedOut: boolean; elapsedMs: number }> {
+  if (!isFirstSyncRegistrationHoldConfigured(settings)) {
+    await clearFirstSyncRegistrationHoldMarker();
+    return { hold: false, timedOut: false, elapsedMs: 0 };
+  }
+
+  const now = Date.now();
+  let startedAt = 0;
+  try {
+    const data = await chrome.storage.local.get(SYNC_FIRST_RUN_REGISTRATION_HOLD_STORAGE_KEY);
+    startedAt = Number(data?.[SYNC_FIRST_RUN_REGISTRATION_HOLD_STORAGE_KEY] || 0);
+  } catch {
+    startedAt = 0;
+  }
+  if (!Number.isFinite(startedAt) || startedAt <= 0) {
+    startedAt = now;
+    try {
+      await chrome.storage.local.set({ [SYNC_FIRST_RUN_REGISTRATION_HOLD_STORAGE_KEY]: startedAt });
+    } catch {
+      // Non-fatal; this wake still holds and a later wake can restart the timer.
+    }
+  }
+
+  const elapsedMs = Math.max(0, now - startedAt);
+  if (elapsedMs >= SYNC_FIRST_RUN_REGISTRATION_HOLD_MS) {
+    await clearFirstSyncRegistrationHoldMarker();
+    return { hold: false, timedOut: true, elapsedMs };
+  }
+
+  return { hold: true, timedOut: false, elapsedMs };
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -132,11 +185,21 @@ export async function registerAllScripts(): Promise<void> {
       return;
     }
 
+    const settings = await SettingsManager.get() as unknown as Settings;
+    const firstSyncGate = await getFirstSyncRegistrationGate(settings);
+    if (firstSyncGate.hold) {
+      await chrome.userScripts.unregister().catch(() => {});
+      debugLog(`Holding userscript registration until first sync completes (${Math.ceil((SYNC_FIRST_RUN_REGISTRATION_HOLD_MS - firstSyncGate.elapsedMs) / 1000)}s remaining)`);
+      return;
+    }
+    if (firstSyncGate.timedOut) {
+      console.warn('[ScriptVault] First-sync registration hold timed out; registering scripts before first sync.');
+    }
+
     // First, unregister all existing scripts
     await chrome.userScripts.unregister().catch(() => {});
 
     const scripts: Script[] = await ScriptStorage.getAll();
-    const settings = await SettingsManager.get() as unknown as Settings;
 
     if (!settings.enabled) {
       debugLog('Scripts globally disabled');

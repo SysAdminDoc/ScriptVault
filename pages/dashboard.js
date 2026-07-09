@@ -1948,6 +1948,7 @@
         elements.settingsSyncType = document.getElementById('settingsSyncType');
         elements.settingsAllowInternalSyncEndpoints = document.getElementById('settingsAllowInternalSyncEndpoints');
         elements.settingsSyncCredentialsSessionOnly = document.getElementById('settingsSyncCredentialsSessionOnly');
+        elements.settingsSyncHoldUntilFirstSync = document.getElementById('settingsSyncHoldUntilFirstSync');
         elements.settingsSyncEncryptionEnabled = document.getElementById('settingsSyncEncryptionEnabled');
         elements.settingsSyncEncryptionPassphrase = document.getElementById('settingsSyncEncryptionPassphrase');
         elements.firefoxSyncNote = document.getElementById('firefoxSyncNote');
@@ -3817,6 +3818,9 @@
         }
         if (elements.settingsSyncCredentialsSessionOnly) {
             elements.settingsSyncCredentialsSessionOnly.checked = s.syncCredentialsSessionOnly === true;
+        }
+        if (elements.settingsSyncHoldUntilFirstSync) {
+            elements.settingsSyncHoldUntilFirstSync.checked = s.syncHoldExecutionUntilFirstSync === true;
         }
         if (elements.settingsSyncEncryptionEnabled) {
             elements.settingsSyncEncryptionEnabled.checked = s.syncEncryptionEnabled === true;
@@ -15513,6 +15517,7 @@
             settingsEnableSync: ['syncEnabled', 'checked'],
             settingsAllowInternalSyncEndpoints: ['allowInternalSyncEndpoints', 'checked'],
             settingsSyncCredentialsSessionOnly: ['syncCredentialsSessionOnly', 'checked'],
+            settingsSyncHoldUntilFirstSync: ['syncHoldExecutionUntilFirstSync', 'checked'],
             settingsSyncEncryptionEnabled: ['syncEncryptionEnabled', 'checked'],
             
             // Editor
@@ -15660,6 +15665,7 @@
                 await saveSettingOrThrow('syncProvider', provider);
                 await saveSettingOrThrow('allowInternalSyncEndpoints', !!elements.settingsAllowInternalSyncEndpoints?.checked);
                 await saveSettingOrThrow('syncCredentialsSessionOnly', !!elements.settingsSyncCredentialsSessionOnly?.checked);
+                await saveSettingOrThrow('syncHoldExecutionUntilFirstSync', !!elements.settingsSyncHoldUntilFirstSync?.checked);
                 await saveSettingOrThrow('syncEncryptionEnabled', !!elements.settingsSyncEncryptionEnabled?.checked);
                 await saveSettingOrThrow('syncEncryptionPassphrase', elements.settingsSyncEncryptionPassphrase?.value || '');
                 if (provider === 'webdav') {

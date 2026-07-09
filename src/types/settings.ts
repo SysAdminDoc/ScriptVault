@@ -39,6 +39,7 @@ export interface Settings {
   syncProvider: SyncProvider;
   syncInterval: number;
   lastSync: number;
+  syncHoldExecutionUntilFirstSync: boolean;
   syncCredentialsSessionOnly: boolean;
   syncEncryptionEnabled: boolean;
   syncEncryptionPassphrase: string;
