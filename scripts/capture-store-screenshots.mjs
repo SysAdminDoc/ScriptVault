@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import { existsSync, mkdirSync } from 'node:fs';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import puppeteer from 'puppeteer-core';
+import { closeBrowserWithFallback, removeTempProfileDir } from './browser-smoke-utils.mjs';
 
 const extensionPath = resolve(process.cwd());
 const screenshotDir = join(extensionPath, 'assets', 'screenshots');
@@ -118,6 +119,6 @@ try {
 
   console.log(`\nAll screenshots saved to assets/screenshots/`);
 } finally {
-  if (browser) await browser.close();
-  await rm(userDataDir, { recursive: true, force: true });
+  await closeBrowserWithFallback(browser, 'Screenshot capture');
+  await removeTempProfileDir(userDataDir, 'Screenshot capture');
 }

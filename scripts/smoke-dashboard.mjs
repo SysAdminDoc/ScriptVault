@@ -1,8 +1,9 @@
 import { existsSync } from 'node:fs';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import puppeteer from 'puppeteer-core';
+import { closeBrowserWithFallback, removeTempProfileDir } from './browser-smoke-utils.mjs';
 
 const extensionPath = resolve(process.cwd());
 
@@ -164,6 +165,6 @@ try {
         pageErrors.slice(0, 5).forEach(error => console.warn(`- ${error}`));
     }
 } finally {
-    if (browser) await browser.close();
-    await rm(userDataDir, { recursive: true, force: true });
+    await closeBrowserWithFallback(browser, 'Dashboard smoke');
+    await removeTempProfileDir(userDataDir, 'Dashboard smoke');
 }

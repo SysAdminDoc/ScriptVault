@@ -9,10 +9,11 @@
 import { execFileSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { existsSync, readFileSync } from 'node:fs';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import puppeteer from 'puppeteer-core';
+import { closeBrowserWithFallback, removeTempProfileDir } from './browser-smoke-utils.mjs';
 
 const ROOT = process.cwd();
 const BUILD_DIR = resolve(ROOT, 'build-edge');
@@ -442,8 +443,8 @@ async function main() {
     await writeEvidence(evidence);
     throw error;
   } finally {
-    if (browser) await browser.close().catch(() => {});
-    await rm(userDataDir, { recursive: true, force: true });
+    await closeBrowserWithFallback(browser, 'Edge smoke');
+    await removeTempProfileDir(userDataDir, 'Edge smoke');
   }
 }
 

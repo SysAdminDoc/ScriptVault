@@ -4,10 +4,11 @@
 // the sticky dashboard header painted over the editor's Save/Close row —
 // selector-presence checks pass in that state; only hit-testing catches it.
 import { existsSync } from 'node:fs';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import puppeteer from 'puppeteer-core';
+import { closeBrowserWithFallback, removeTempProfileDir } from './browser-smoke-utils.mjs';
 
 const extensionPath = resolve(process.cwd());
 
@@ -56,33 +57,6 @@ function findChromeExecutable() {
         );
     }
     return executable;
-}
-
-async function closeBrowserWithFallback(browser) {
-    if (!browser) return;
-    const chromeProcess = browser.process?.();
-    let timer;
-    try {
-        await Promise.race([
-            browser.close(),
-            new Promise((_, reject) => {
-                timer = setTimeout(() => reject(new Error('browser.close timed out after 15s')), 15000);
-            }),
-        ]);
-    } catch (error) {
-        console.warn(`Editor smoke browser close fallback: ${error.message}`);
-        if (chromeProcess && !chromeProcess.killed) chromeProcess.kill('SIGKILL');
-    } finally {
-        if (timer) clearTimeout(timer);
-    }
-}
-
-async function removeUserDataDir(profileDir) {
-    try {
-        await rm(profileDir, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 });
-    } catch (error) {
-        console.warn(`Editor smoke temp profile cleanup skipped: ${error?.message || error}`);
-    }
 }
 
 async function findExtensionId(browser) {
@@ -236,6 +210,6 @@ try {
         pageErrors.slice(0, 5).forEach(error => console.warn(`- ${error}`));
     }
 } finally {
-    await closeBrowserWithFallback(browser);
-    await removeUserDataDir(userDataDir);
+    await closeBrowserWithFallback(browser, 'Editor smoke');
+    await removeTempProfileDir(userDataDir, 'Editor smoke');
 }
