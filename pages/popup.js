@@ -1291,7 +1291,7 @@
                 const scriptId = activeDropdownScriptId;
                 closeScriptDropdown();
                 if (!scriptId) return;
-                const script = pageScripts.find(s => s.id === scriptId);
+                const script = pageScripts.find(s => s.id === scriptId) || allScripts.find(s => s.id === scriptId);
                 const url = (script?.metadata || script?.meta || {}).downloadURL || (script?.metadata || script?.meta || {}).updateURL;
                 if (url) {
                     try {

@@ -432,6 +432,7 @@ let cancelReviewArmed = false;
 let cancelReviewTimer = null;
 let reviewExitGuardActive = false;
 let suppressExitGuard = false;
+let _keydownAbort = null;
 
 function openHelpDashboard() {
   chrome.tabs.create({ url: chrome.runtime.getURL('pages/dashboard.html#tab=help') });
@@ -1997,7 +1998,9 @@ function renderInstallUI(sourceUrl) {
     setTimeout(() => checkRequireProvenance(scriptMeta), 100);
   }
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts — abort any previous listener before re-registering
+  if (_keydownAbort) { _keydownAbort.abort(); }
+  _keydownAbort = new AbortController();
   document.addEventListener('keydown', (e) => {
     const installButton = document.getElementById('btn-install');
     const cancelButton = document.getElementById('btn-cancel');
@@ -2024,7 +2027,7 @@ function renderInstallUI(sourceUrl) {
       e.preventDefault();
       requestCancelReview();
     }
-  });
+  }, { signal: _keydownAbort.signal });
 }
 
 function setupCodePreview() {
@@ -2732,7 +2735,7 @@ function isVerifiedRequireProvenanceEntry(entry) {
 function requireProvenanceNeedsReview(entry) {
   if (!entry) return false;
   if (entry.status && entry.status !== 'declared' && entry.status !== 'not-declared') return true;
-  return ['signature-failed', 'root-verification-failed', 'bundle-unavailable', 'unsupported-bundle']
+  return ['verification-unavailable', 'signature-failed', 'root-verification-failed', 'bundle-unavailable', 'unsupported-bundle']
     .includes(entry.verification || '');
 }
 
@@ -2745,6 +2748,7 @@ function getRequireProvenanceLabel(entry) {
   if (entry.verification === 'signature-failed') return tInstall('installSignatureFailed', 'Signature failed');
   if (entry.verification === 'bundle-unavailable') return tInstall('installBundleUnavailable', 'Bundle unavailable');
   if (entry.verification === 'unsupported-bundle') return tInstall('installUnsupportedBundle', 'Unsupported bundle');
+  if (entry.verification === 'verification-unavailable') return tInstall('installVerificationUnavailable', 'Verification unavailable');
   if (entry.verification === 'signature-verified') return tInstall('installSignatureVerified', 'Signature verified');
   return tInstall('installPendingProvenance', 'Pending provenance');
 }
