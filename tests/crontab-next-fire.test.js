@@ -22,19 +22,33 @@ function extractCrontabExecutionSource(src) {
 function createCronHarness() {
   const alarms = [];
   const debug = [];
+  const storage = {};
   const chrome = {
     alarms: {
       create(name, options) {
         alarms.push({ name, options });
       },
+      async clear(name) {
+        alarms.push({ name, clear: true });
+      },
+    },
+    storage: {
+      local: {
+        async get(key) {
+          return { [key]: storage[key] };
+        },
+        async set(data) {
+          Object.assign(storage, data);
+        },
+      },
     },
   };
   const debugLog = message => debug.push(String(message));
   const _body = `${extractCronSource(backgroundCore)}
-return { parseCronExpression, nextCronFire, scheduleCrontabAlarm };`;
+return { parseCronExpression, nextCronFire, scheduleCrontabAlarm, markCrontabOnceFired };`;
   let helpers;
   try { const vm = require('node:vm'); helpers = vm.compileFunction(_body, ['chrome', 'debugLog'], { filename: resolve(process.cwd(), 'background.core.js') })(chrome, debugLog); } catch { helpers = new Function('chrome', 'debugLog', _body)(chrome, debugLog); }
-  return { ...helpers, alarms, debug };
+  return { ...helpers, alarms, debug, storage };
 }
 
 function createLinter() {
@@ -106,9 +120,9 @@ describe('@crontab next-fire engine', () => {
     });
   });
 
-  it('schedules one-shot alarms at the computed next fire time', () => {
+  it('schedules one-shot alarms at the computed next fire time', async () => {
     const { scheduleCrontabAlarm, alarms } = createCronHarness();
-    const result = scheduleCrontabAlarm(
+    const result = await scheduleCrontabAlarm(
       { id: 'abc', meta: { name: 'Cron Test', crontab: '30 9 * * 1' } },
       localDate(2026, 6, 1, 9, 29, 30)
     );
@@ -118,6 +132,29 @@ describe('@crontab next-fire engine', () => {
       { name: 'crontab_abc', options: { when: result.when } },
     ]);
     expect(alarms[0].options).not.toHaveProperty('periodInMinutes');
+  });
+
+  it('supports once(...) schedules and does not re-arm after the fired marker is set', async () => {
+    const { nextCronFire, scheduleCrontabAlarm, markCrontabOnceFired, alarms, storage } = createCronHarness();
+    const script = { id: 'once-abc', meta: { name: 'Cron Once', crontab: 'once(30 9 * * 1)' } };
+
+    const next = nextCronFire(script.meta.crontab, localDate(2026, 6, 1, 9, 29, 30));
+    expect(next).toMatchObject({ ok: true, once: true });
+    expect(localParts(next.date)).toEqual([2026, 6, 1, 9, 30]);
+
+    const scheduled = await scheduleCrontabAlarm(script, localDate(2026, 6, 1, 9, 29, 30));
+    expect(scheduled).toMatchObject({ ok: true, once: true });
+    expect(alarms).toEqual([
+      { name: 'crontab_once-abc', options: { when: scheduled.when } },
+    ]);
+
+    alarms.length = 0;
+    await markCrontabOnceFired(script, localDate(2026, 6, 1, 9, 30).getTime());
+    expect(storage.sv_crontab_once_fired['once-abc:30 9 * * 1']).toBeTruthy();
+
+    const skipped = await scheduleCrontabAlarm(script, localDate(2026, 6, 1, 9, 31));
+    expect(skipped).toMatchObject({ ok: true, once: true, skipped: true, reason: 'already fired' });
+    expect(alarms).toEqual([{ name: 'crontab_once-abc', clear: true }]);
   });
 
   it('keeps the crontab scheduler free of period fallbacks', () => {
@@ -144,6 +181,14 @@ describe('@crontab next-fire engine', () => {
 
     expect(executionSource).toContain('wantsPageContext');
     expect(executionSource).toContain('MAIN-world fallback blocked');
+  });
+
+  it('marks one-time crontab alarms fired instead of rescheduling them', () => {
+    const executionSource = extractCrontabExecutionSource(backgroundCore);
+
+    expect(executionSource).toContain('if (cronPlan.ok && cronPlan.once)');
+    expect(executionSource).toContain('await markCrontabOnceFired(script)');
+    expect(executionSource).toContain('await scheduleCrontabAlarm(script)');
   });
 
   it('blocks MAIN-world runScriptNow fallback unless the script explicitly requests page context', () => {
@@ -173,6 +218,13 @@ describe('@crontab editor linting', () => {
   it('accepts valid five-field crontab metadata', () => {
     const linter = createLinter();
     const issues = linter.lint(userscriptWithCrontab('30 9 * * 1'));
+
+    expect(issues.filter(issue => issue.ruleId === 'invalid-crontab')).toEqual([]);
+  });
+
+  it('accepts one-time crontab metadata', () => {
+    const linter = createLinter();
+    const issues = linter.lint(userscriptWithCrontab('once(30 9 * * 1)'));
 
     expect(issues.filter(issue => issue.ruleId === 'invalid-crontab')).toEqual([]);
   });

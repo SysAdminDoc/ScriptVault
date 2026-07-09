@@ -9314,6 +9314,27 @@ const CRON_DOW_NAMES = Object.freeze({
   sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6
 });
 const CRON_MAX_SEARCH_MINUTES = 366 * 24 * 60 * 5;
+const CRONTAB_ONCE_FIRED_STORAGE_KEY = 'sv_crontab_once_fired';
+
+function normalizeCrontabExpression(expr) {
+  return String(expr || '').trim().replace(/\s+/g, ' ');
+}
+
+function parseCrontabDirective(expr) {
+  if (!expr || typeof expr !== 'string') return { ok: false, error: 'missing expression' };
+  const normalized = normalizeCrontabExpression(expr);
+  if (!normalized) return { ok: false, error: 'missing expression' };
+  const onceMatch = normalized.match(/^once\(([\s\S]+)\)$/i);
+  if (onceMatch) {
+    const inner = normalizeCrontabExpression(onceMatch[1]);
+    if (!inner) return { ok: false, error: 'missing once() expression' };
+    return { ok: true, once: true, expression: inner };
+  }
+  if (/^once\s*\(/i.test(normalized)) {
+    return { ok: false, error: 'invalid once() expression wrapper' };
+  }
+  return { ok: true, once: false, expression: normalized };
+}
 
 function normalizeCronFieldValue(value, names, allowSevenAsSunday = false) {
   const token = String(value || '').trim().toLowerCase();
@@ -9379,8 +9400,9 @@ function parseCronField(field, min, max, options = {}) {
 }
 
 function parseCronExpression(expr) {
-  if (!expr || typeof expr !== 'string') return { ok: false, error: 'missing expression' };
-  const parts = expr.trim().split(/\s+/);
+  const directive = parseCrontabDirective(expr);
+  if (!directive.ok) return directive;
+  const parts = directive.expression.split(/\s+/);
   if (parts.length !== 5) return { ok: false, error: 'expected 5 fields: minute hour day-of-month month day-of-week' };
   const [minute, hour, dom, month, dow] = parts;
   const parsed = {
@@ -9393,7 +9415,7 @@ function parseCronExpression(expr) {
   for (const [field, result] of Object.entries(parsed)) {
     if (!result.ok) return { ok: false, error: `${field}: ${result.error}` };
   }
-  return { ok: true, schedule: parsed };
+  return { ok: true, schedule: parsed, once: directive.once, expression: directive.expression };
 }
 
 function cronMatchesDate(schedule, date) {
@@ -9423,7 +9445,7 @@ function nextCronFire(expr, from = new Date()) {
   candidate.setMinutes(candidate.getMinutes() + 1);
   for (let i = 0; i < CRON_MAX_SEARCH_MINUTES; i++) {
     if (cronMatchesDate(parsed.schedule, candidate)) {
-      return { ok: true, when: candidate.getTime(), date: new Date(candidate.getTime()) };
+      return { ok: true, when: candidate.getTime(), date: new Date(candidate.getTime()), once: parsed.once, expression: parsed.expression };
     }
     candidate.setMinutes(candidate.getMinutes() + 1);
   }
@@ -9434,12 +9456,71 @@ function getCrontabAlarmName(scriptId) {
   return 'crontab_' + scriptId;
 }
 
-function scheduleCrontabAlarm(script, from = new Date()) {
+function getCrontabOnceMarker(script) {
+  const directive = parseCrontabDirective(script?.meta?.crontab);
+  if (!directive.ok || !directive.once || !script?.id) return '';
+  return `${script.id}:${directive.expression.toLowerCase()}`;
+}
+
+async function getCrontabOnceFiredMap() {
+  if (typeof chrome === 'undefined' || !chrome.storage?.local?.get) return {};
+  try {
+    const data = await chrome.storage.local.get(CRONTAB_ONCE_FIRED_STORAGE_KEY);
+    const map = data?.[CRONTAB_ONCE_FIRED_STORAGE_KEY];
+    return map && typeof map === 'object' && !Array.isArray(map) ? map : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+async function setCrontabOnceFiredMap(map) {
+  if (typeof chrome === 'undefined' || !chrome.storage?.local?.set) return;
+  await chrome.storage.local.set({ [CRONTAB_ONCE_FIRED_STORAGE_KEY]: map });
+}
+
+async function hasCrontabOnceFired(script) {
+  const marker = getCrontabOnceMarker(script);
+  if (!marker) return false;
+  const map = await getCrontabOnceFiredMap();
+  return !!map[marker];
+}
+
+async function markCrontabOnceFired(script, firedAt = Date.now()) {
+  const marker = getCrontabOnceMarker(script);
+  if (!marker) return;
+  const map = await getCrontabOnceFiredMap();
+  map[marker] = {
+    firedAt,
+    expression: parseCrontabDirective(script?.meta?.crontab).expression
+  };
+  await setCrontabOnceFiredMap(map);
+}
+
+async function clearCrontabOnceMarkersForScript(scriptId) {
+  if (!scriptId) return;
+  const map = await getCrontabOnceFiredMap();
+  const prefix = `${scriptId}:`;
+  let changed = false;
+  for (const key of Object.keys(map)) {
+    if (key.startsWith(prefix)) {
+      delete map[key];
+      changed = true;
+    }
+  }
+  if (changed) await setCrontabOnceFiredMap(map);
+}
+
+async function scheduleCrontabAlarm(script, from = new Date()) {
   const alarmName = getCrontabAlarmName(script.id);
   const next = nextCronFire(script.meta?.crontab, from);
   if (!next.ok) {
     debugLog(`Invalid @crontab for ${script.meta?.name || script.id}: ${next.error}`);
     return next;
+  }
+  if (next.once && await hasCrontabOnceFired(script)) {
+    await chrome.alarms.clear(alarmName).catch(() => {});
+    debugLog(`Skipped one-time @crontab already fired: ${script.meta?.name || script.id}`);
+    return { ...next, skipped: true, reason: 'already fired' };
   }
   chrome.alarms.create(alarmName, { when: next.when });
   debugLog(`Registered @crontab: ${script.meta?.name || script.id} next ${next.date.toISOString()}`);
@@ -9483,7 +9564,13 @@ async function handleCrontabAlarm(scriptId) {
     return;
   }
 
-  scheduleCrontabAlarm(script);
+  const cronPlan = parseCronExpression(script.meta.crontab);
+  if (cronPlan.ok && cronPlan.once) {
+    await chrome.alarms.clear(getCrontabAlarmName(scriptId)).catch(() => {});
+    await markCrontabOnceFired(script);
+  } else {
+    await scheduleCrontabAlarm(script);
+  }
 
   const meta = script.meta;
   const hasMatches = (meta.match && meta.match.length > 0) || (meta.include && meta.include.length > 0);
@@ -9537,7 +9624,7 @@ async function setupCrontabAlarms() {
     const alarmName = getCrontabAlarmName(script.id);
     await chrome.alarms.clear(alarmName).catch(() => {});
     if (script.enabled && script.meta?.crontab) {
-      scheduleCrontabAlarm(script);
+      await scheduleCrontabAlarm(script);
     }
   }
 }
@@ -11353,7 +11440,7 @@ async function registerScript(script, { useUpdate = false, throwOnError = false 
       if (chrome.userScripts) {
         try { await chrome.userScripts.unregister({ ids: [script.id] }); } catch (_) {}
       }
-      scheduleCrontabAlarm(script);
+      await scheduleCrontabAlarm(script);
       return;
     }
 
@@ -12707,6 +12794,7 @@ async function reconcileWebRequestRuleMap() {
 async function unregisterScript(scriptId) {
   // Clear @crontab alarm if present
   chrome.alarms.clear(getCrontabAlarmName(scriptId)).catch(() => {});
+  await clearCrontabOnceMarkersForScript(scriptId);
   // Remove any @webRequest declarativeNetRequest rules
   await removeWebRequestRules(scriptId);
   try {

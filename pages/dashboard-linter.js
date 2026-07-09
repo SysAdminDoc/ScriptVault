@@ -402,7 +402,15 @@ const AdvancedLinter = (() => {
 
   function _validateCronExpression(expr) {
     if (!expr || typeof expr !== 'string') return 'missing expression';
-    const parts = expr.trim().split(/\s+/);
+    let expression = expr.trim().replace(/\s+/g, ' ');
+    const onceMatch = expression.match(/^once\(([\s\S]+)\)$/i);
+    if (onceMatch) {
+      expression = (onceMatch[1] || '').trim().replace(/\s+/g, ' ');
+      if (!expression) return 'missing once() expression';
+    } else if (/^once\s*\(/i.test(expression)) {
+      return 'invalid once() expression wrapper';
+    }
+    const parts = expression.split(/\s+/);
     if (parts.length !== 5) return 'expected 5 fields: minute hour day-of-month month day-of-week';
     const checks = [
       ['minute', _validateCronField(parts[0], 0, 59)],
