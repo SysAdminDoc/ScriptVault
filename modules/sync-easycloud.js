@@ -995,7 +995,11 @@ const EasyCloudSync = (() => {
         if (_cachedToken) {
           try {
             await chrome.identity.removeCachedAuthToken({ token: _cachedToken });
-            fetchWithTimeout(`https://accounts.google.com/o/oauth2/revoke?token=${_cachedToken}`, {}, 1e4).catch(() => {
+            fetchWithTimeout(`https://accounts.google.com/o/oauth2/revoke`, {
+              method: "POST",
+              headers: { "Content-Type": "application/x-www-form-urlencoded" },
+              body: `token=${encodeURIComponent(_cachedToken)}`
+            }, 1e4).catch(() => {
             });
           } catch (_) {
           }

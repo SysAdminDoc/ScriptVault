@@ -1279,8 +1279,14 @@ export const EasyCloudSync: EasyCloudSyncAPI = {
       if (_cachedToken) {
         try {
           await chrome.identity.removeCachedAuthToken({ token: _cachedToken });
-          fetchWithTimeout(`https://accounts.google.com/o/oauth2/revoke?token=${_cachedToken}`, {}, 10_000)
-            .catch(() => {});
+          // Revoke via POST body (not URL query) so the token does not leak into
+          // request lines, proxy logs, or history. Mirrors the regular Google
+          // Drive provider's revoke path (sync-providers.ts).
+          fetchWithTimeout(`https://accounts.google.com/o/oauth2/revoke`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `token=${encodeURIComponent(_cachedToken)}`,
+          }, 10_000).catch(() => {});
         } catch (_) { /* best effort */ }
         _cachedToken = null;
       }

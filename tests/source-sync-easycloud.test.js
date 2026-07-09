@@ -1,4 +1,6 @@
 import { webcrypto } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const originalCrypto = globalThis.crypto;
@@ -186,6 +188,18 @@ describe('source easycloud sync module', () => {
 
     expect(chrome.alarms.clear).toHaveBeenCalledWith('easycloud-periodic-sync');
     expect(chrome.alarms.clear).toHaveBeenCalledWith('easycloud-debounce-sync');
+  });
+
+  it('revokes the OAuth token via POST body, never in the revoke URL query', () => {
+    // Mirrors the regular Google Drive provider fix (2026-06-04 audit): the
+    // access token must not appear in the request line / URL where it can leak
+    // into proxy logs or history.
+    const source = readFileSync(resolve(process.cwd(), 'src/modules/sync-easycloud.ts'), 'utf8');
+    const runtime = readFileSync(resolve(process.cwd(), 'modules/sync-easycloud.js'), 'utf8');
+    for (const text of [source, runtime]) {
+      expect(text).toContain("body: `token=${encodeURIComponent(_cachedToken)}`");
+      expect(text).not.toMatch(/oauth2\/revoke\?token=/);
+    }
   });
 
   it('removes tombstoned local scripts and refreshes runtime registration during sync', async () => {
