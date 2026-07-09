@@ -9,6 +9,20 @@ const WhatsNew = (() => {
     : '2.0.0';
 
   const CHANGELOG = {
+    '3.18.0': {
+      title: 'ScriptVault 3.18.0 — Release Hardening Audit',
+      date: '2026-07-09',
+      highlights: [
+        { icon: 'LOCK', title: 'Safer Sync and Public API Boundaries', desc: 'Manual cloud imports and exports now use the same encrypted sync envelopes as scheduled sync, and trusted page / Local MCP messages reach the Public API through a content-script relay with background authorization.' },
+        { icon: 'NET', title: 'Bounded Network Runtime', desc: 'GM_xmlhttpRequest and @require caches now have explicit limits so runaway scripts cannot grow request tables or dependency cache memory without bound.' },
+        { icon: 'SHIP', title: 'Hardened Release Packaging', desc: 'Chrome Web Store publish packaging now uses the same explicit artifact list as local builds, and Firefox smoke tests reject stale package ZIPs instead of silently installing an older build.' },
+      ],
+      improvements: [
+        'Collection deletes now use the dashboard modal confirmation flow',
+        'Command palette, sidepanel launch, DevTools clear, and large diff edge cases were tightened',
+        'Browser smoke cleanup handles crashes and interrupted launches more reliably',
+      ],
+    },
     '3.17.0': {
       title: 'ScriptVault 3.17.0 — Trust Enforcement & Sync Safety',
       date: '2026-07-02',

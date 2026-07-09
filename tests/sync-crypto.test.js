@@ -119,7 +119,7 @@ describe.each(implementations)('sync crypto helper ($label)', ({ api: SyncCrypto
       schema: 'scriptvault-cloud-backup/v1',
       backupId: 'backup_123',
       timestamp: 123,
-      version: '3.17.0',
+      version: '3.18.0',
       scriptCount: 0,
       reason: 'manual',
       size: 0,
@@ -131,7 +131,7 @@ describe.each(implementations)('sync crypto helper ($label)', ({ api: SyncCrypto
       expect.objectContaining({
         schema: 'scriptvault-cloud-backup/v1',
         backupId: 'backup_123',
-        version: '3.17.0',
+        version: '3.18.0',
         scripts: [],
         tombstones: {},
       }),
