@@ -1531,6 +1531,67 @@
         flex-direction: column;
       }
     }
+
+    /* Workbench-aligned review surface */
+    body {
+      background:
+        radial-gradient(circle at 16% 0%, var(--sv-accent-soft), transparent 34rem),
+        radial-gradient(circle at 84% -12%, var(--sv-info-soft), transparent 38rem),
+        var(--bg-primary);
+    }
+
+    .container {
+      border-color: var(--sv-border-strong);
+      background: var(--sv-surface-raised);
+      box-shadow: var(--sv-shadow-lg);
+    }
+
+    .header {
+      min-height: 92px;
+      padding: 18px 24px;
+      border-bottom-color: var(--sv-border-strong);
+      background:
+        linear-gradient(105deg, var(--sv-accent-soft), transparent 42%),
+        var(--sv-surface-raised);
+    }
+
+    .logo {
+      border: 1px solid var(--sv-accent-border);
+      border-radius: 10px;
+      background: var(--sv-accent-soft);
+      box-shadow: 0 10px 24px color-mix(in srgb, var(--sv-accent) 16%, transparent);
+    }
+
+    .header-text h1 {
+      letter-spacing: -0.025em;
+    }
+
+    .content {
+      background: var(--sv-surface-sunken);
+    }
+
+    .surface-card,
+    .card,
+    .section,
+    .decision-hero,
+    .install-terminal {
+      border-color: var(--sv-border-strong);
+      background: var(--sv-surface-raised);
+      box-shadow: var(--sv-shadow-sm);
+    }
+
+    .install-terminal {
+      max-width: 760px;
+      min-height: min(430px, calc(100vh - 230px));
+      margin-inline: auto;
+    }
+
+    .btn-primary {
+      border-color: color-mix(in srgb, var(--sv-accent) 76%, white 8%);
+      background: linear-gradient(180deg, color-mix(in srgb, var(--sv-accent) 86%, white 14%), var(--sv-accent));
+      color: #07130c;
+      box-shadow: 0 10px 24px color-mix(in srgb, var(--sv-accent) 18%, transparent);
+    }
   </style>
 </head>
 <body>

@@ -2311,7 +2311,7 @@
     // are intentionally NOT listed here.
     const DASHBOARD_I18N_TEXT_TARGETS = Object.freeze({
         btnNewScript: { key: 'newScript', fallback: 'New script', legacy: 'New Script' },
-        btnImportScript: { key: 'importScript', fallback: 'Install from URL', legacy: 'Import' },
+        btnImportScript: { key: 'importScript', fallback: 'Import', legacy: 'Install from URL' },
         btnCheckUpdates: { key: 'checkUpdates', fallback: 'Check updates', legacy: 'Check Updates' },
         btnExportAll: { key: 'exportAll', fallback: 'Backup', legacy: 'Export All' },
         btnNewFolder: { key: 'folder', fallback: 'Folder' },

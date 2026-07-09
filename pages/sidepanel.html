@@ -387,6 +387,68 @@
         html[data-panel-position="left"][dir="rtl"] .sp-controls {
             flex-direction: row-reverse;
         }
+
+        /* Workbench-aligned side surface */
+        .sp-header {
+            min-height: 46px;
+            padding: 8px 10px;
+            border-color: var(--sv-border-strong);
+            background:
+                linear-gradient(180deg, var(--sv-overlay-medium), transparent),
+                var(--sv-surface-raised);
+            box-shadow: var(--sv-shadow-sm);
+        }
+
+        .sp-logo {
+            width: 24px;
+            height: 24px;
+            filter: drop-shadow(0 5px 10px rgb(from var(--sv-accent) r g b / 0.2));
+        }
+
+        .sp-title {
+            color: var(--text);
+            font-size: 0.9375rem;
+            letter-spacing: -0.01em;
+        }
+
+        .sp-url-bar,
+        .sp-section,
+        .sp-search-bar,
+        .sp-all-section,
+        .sp-footer {
+            border-color: var(--sv-border-strong);
+            background: var(--sv-surface-raised);
+            box-shadow: var(--sv-shadow-xs);
+        }
+
+        .sp-url-bar {
+            padding-block: 7px;
+        }
+
+        .sp-section-header,
+        .sp-all-header {
+            min-height: 38px;
+        }
+
+        .sp-list,
+        .sp-all-list {
+            background: var(--sv-surface-sunken);
+        }
+
+        .sp-footer {
+            gap: 6px;
+            padding: 6px;
+        }
+
+        .sp-footer-btn {
+            min-height: 38px;
+        }
+
+        .sp-footer-btn.primary {
+            border-color: var(--sv-accent-border);
+            background: var(--sv-accent-soft);
+            color: var(--text);
+        }
     </style>
 </head>
 <body>

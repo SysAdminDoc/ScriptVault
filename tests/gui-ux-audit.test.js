@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 
 const installHtml = readFileSync(resolve(process.cwd(), "pages/install.html"), "utf8");
 const installJs = readFileSync(resolve(process.cwd(), "pages/install.js"), "utf8");
+const popupHtml = readFileSync(resolve(process.cwd(), "pages/popup.html"), "utf8");
 const sidepanelHtml = readFileSync(resolve(process.cwd(), "pages/sidepanel.html"), "utf8");
 const sidepanelJs = readFileSync(resolve(process.cwd(), "pages/sidepanel.js"), "utf8");
 const devtoolsHtml = readFileSync(resolve(process.cwd(), "pages/devtools-panel.html"), "utf8");
@@ -215,6 +216,19 @@ describe("cross-surface UX audit", () => {
     expect(devtoolsHtml).toContain('.exec-table-wrap[aria-busy="true"]::after');
     expect(devtoolsHtml).toContain('id="execTableWrap"');
     expect(devtoolsJs).toContain("$('execTableWrap').setAttribute('aria-busy', String(isBusy));");
+  });
+
+  test("compact and diagnostic surfaces share the workbench hierarchy", () => {
+    expect(popupHtml).toContain('class="header-logo"');
+    expect(popupHtml).toContain('class="header-context">Vault control</span>');
+    expect(popupHtml).toContain('Workbench-aligned compact surface');
+    expect(sidepanelHtml).toContain('Workbench-aligned side surface');
+    expect(sidepanelHtml).toContain('var(--sv-surface-raised)');
+    expect(installHtml).toContain('Workbench-aligned review surface');
+    expect(installHtml).toContain('max-width: 760px');
+    expect(devtoolsHtml).toContain('class="toolbar-logo"');
+    expect(devtoolsHtml).toContain('class="toolbar-subtitle">Diagnostics</span>');
+    expect(devtoolsHtml).toContain('Workbench-aligned diagnostics surface');
   });
 
   test("dashboard keeps the updated column on a real button control", () => {

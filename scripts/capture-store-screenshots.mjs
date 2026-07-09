@@ -64,7 +64,9 @@ const SCREENSHOTS = [
   { name: 'dashboard-dark', page: 'dashboard', theme: 'dark', width: 1280, height: 800 },
   { name: 'dashboard-light', page: 'dashboard', theme: 'light', width: 1280, height: 800 },
   { name: 'popup-dark', page: 'popup', theme: 'dark', width: 400, height: 600 },
+  { name: 'sidepanel-dark', page: 'sidepanel', theme: 'dark', width: 420, height: 800 },
   { name: 'install-dark', page: 'install', theme: 'dark', width: 1280, height: 800 },
+  { name: 'devtools-dark', page: 'devtools', theme: 'dark', width: 1200, height: 720 },
 ];
 
 mkdirSync(screenshotDir, { recursive: true });
@@ -94,9 +96,14 @@ try {
     const page = await browser.newPage();
     await page.setViewport({ width: shot.width, height: shot.height, deviceScaleFactor: 2 });
 
-    const pageFile = shot.page === 'popup' ? 'pages/popup.html'
-      : shot.page === 'install' ? 'pages/install.html'
-      : 'pages/dashboard.html';
+    const pageFiles = {
+      dashboard: 'pages/dashboard.html',
+      popup: 'pages/popup.html',
+      sidepanel: 'pages/sidepanel.html',
+      install: 'pages/install.html',
+      devtools: 'pages/devtools-panel.html',
+    };
+    const pageFile = pageFiles[shot.page];
 
     await page.goto(`chrome-extension://${extensionId}/${pageFile}`, {
       waitUntil: 'domcontentloaded',
@@ -109,7 +116,33 @@ try {
       document.body?.setAttribute('data-theme', theme);
     }, shot.theme);
 
-    await new Promise(r => setTimeout(r, 1000));
+    if (shot.page === 'dashboard') {
+      await page.waitForSelector('.scripts-shell-header', { visible: true, timeout: 15000 });
+      const whatsNewDismiss = await page.waitForSelector('#svWnDismiss', { timeout: 2500 }).catch(() => null);
+      if (whatsNewDismiss) {
+        await whatsNewDismiss.click();
+        await page.waitForFunction(() => !document.querySelector('.sv-wn-overlay'), { timeout: 5000 });
+      }
+    } else {
+      const selectors = {
+        popup: '.header',
+        sidepanel: '.sp-header',
+        install: '.container',
+        devtools: '.toolbar',
+      };
+      await page.waitForSelector(selectors[shot.page], { visible: true, timeout: 15000 });
+    }
+
+    if (shot.page === 'sidepanel') {
+      await page.evaluate(() => {
+        const hostname = document.getElementById('urlHostname');
+        const path = document.getElementById('urlPath');
+        if (hostname) hostname.textContent = 'example.com';
+        if (path) path.textContent = '/projects';
+      });
+    }
+
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 
     const outputPath = join(screenshotDir, `${shot.name}.png`);
     await page.screenshot({ path: outputPath, fullPage: false });

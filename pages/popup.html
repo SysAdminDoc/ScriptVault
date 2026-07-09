@@ -1256,16 +1256,115 @@
             font-size: 0.75rem;
             color: var(--text-secondary, #a0a0a0);
         }
+
+        /* Workbench-aligned compact surface */
+        .header {
+            min-height: 54px;
+            padding: 8px 10px;
+            background:
+                linear-gradient(180deg, var(--sv-overlay-medium), transparent),
+                var(--sv-surface-raised);
+            border-color: var(--sv-border-strong);
+            box-shadow: var(--sv-shadow-sm);
+        }
+
+        .header-logo {
+            width: 30px;
+            height: 30px;
+            margin-inline-end: 9px;
+            border-radius: 8px;
+            filter: drop-shadow(0 6px 12px rgb(from var(--sv-accent) r g b / 0.22));
+        }
+
+        .header-copy {
+            display: grid;
+            flex: 1;
+            min-width: 0;
+            text-align: start;
+        }
+
+        .header-context {
+            color: var(--popup-text-dim);
+            font-size: 0.5625rem;
+            font-weight: 750;
+            letter-spacing: 0.09em;
+            line-height: 1.2;
+            text-transform: uppercase;
+        }
+
+        .header-text {
+            overflow: hidden;
+            margin-top: 2px;
+            color: var(--popup-text);
+            font-size: 0.9375rem;
+            font-weight: 750;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .header-check {
+            width: 20px;
+            height: 20px;
+            margin-inline: auto 8px;
+            padding: 3px;
+            border: 1px solid var(--sv-accent-border);
+            border-radius: 6px;
+            background: var(--sv-accent-soft);
+        }
+
+        .setup-warning,
+        #emptyState,
+        .menu-section,
+        .footer {
+            border-color: var(--sv-border-strong);
+            box-shadow: var(--sv-shadow-xs);
+        }
+
+        .menu-section {
+            overflow: hidden;
+            background: var(--sv-surface-raised);
+        }
+
+        .menu-item {
+            min-height: 46px;
+            padding-block: 9px;
+        }
+
+        .menu-item-icon {
+            border: 1px solid var(--popup-border-subtle);
+            border-radius: 6px;
+            background: var(--sv-overlay-subtle);
+            color: var(--popup-text-muted);
+        }
+
+        .menu-item:hover .menu-item-icon {
+            border-color: var(--sv-accent-border);
+            background: var(--sv-accent-soft);
+            color: var(--popup-accent);
+        }
+
+        .footer-actions {
+            gap: 6px;
+        }
+
+        .footer {
+            min-height: 42px;
+            background: var(--sv-surface-raised);
+        }
     </style>
 </head>
 <body>
     <a class="popup-skip-link" href="#menuSection" data-i18n="skipToMainContent">Skip to actions</a>
     <!-- Header with branding + toggle -->
     <button class="header" id="headerToggle" type="button" title="Toggle all scripts on/off">
+        <img class="header-logo" src="../images/icon32.png" alt="" width="30" height="30">
+        <span class="header-copy">
+            <span class="header-context">Vault control</span>
+            <span class="header-text" data-i18n="appName">ScriptVault</span>
+        </span>
         <svg class="header-check" id="headerCheckIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <polyline points="20 6 9 17 4 12"/>
         </svg>
-        <span class="header-text" data-i18n="appName">ScriptVault</span>
         <span class="header-count" id="headerCount"></span>
     </button>
 

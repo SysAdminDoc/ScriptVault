@@ -224,11 +224,80 @@
         @media (prefers-reduced-motion: reduce) {
             *, *::before, *::after { transition: none !important; animation: none !important; }
         }
+
+        /* Workbench-aligned diagnostics surface */
+        .toolbar {
+            min-height: 46px;
+            padding: 7px 10px;
+            border-bottom-color: var(--sv-border-strong);
+            background:
+                linear-gradient(180deg, var(--sv-overlay-medium), transparent),
+                var(--sv-surface-raised);
+            box-shadow: var(--sv-shadow-sm);
+        }
+
+        .toolbar-logo {
+            width: 24px;
+            height: 24px;
+            border-radius: 6px;
+            filter: drop-shadow(0 5px 10px rgb(from var(--sv-accent) r g b / 0.2));
+        }
+
+        .toolbar-heading {
+            display: grid;
+            min-width: 90px;
+        }
+
+        .toolbar-title {
+            color: var(--text);
+            font-size: 0.8125rem;
+        }
+
+        .toolbar-subtitle {
+            color: var(--text-dim);
+            font-size: 0.5625rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .toolbar-tabs {
+            padding: 3px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--sv-surface-sunken);
+        }
+
+        .filter-input {
+            min-height: 30px;
+            background: var(--sv-surface-sunken);
+            border-color: var(--sv-border-strong);
+        }
+
+        .net-stats {
+            min-height: 34px;
+            align-items: center;
+            padding-inline: 10px;
+            background: var(--sv-surface-raised);
+        }
+
+        .net-table th,
+        .exec-table th {
+            height: 34px;
+            background: var(--sv-surface-raised);
+            border-bottom-color: var(--sv-border-strong);
+        }
+
+        .net-detail {
+            background: var(--sv-surface-raised);
+            box-shadow: -12px 0 30px rgb(0 0 0 / 0.16);
+        }
     </style>
 </head>
 <body>
     <div class="toolbar">
-        <span class="toolbar-title" data-i18n="appName">ScriptVault</span>
+        <img class="toolbar-logo" src="../images/icon32.png" alt="" width="24" height="24">
+        <span class="toolbar-heading"><span class="toolbar-title" data-i18n="appName">ScriptVault</span><span class="toolbar-subtitle">Diagnostics</span></span>
         <div class="toolbar-sep"></div>
         <div class="toolbar-tabs" role="tablist" aria-label="DevTools sections" data-i18n-aria-label="devtoolsSectionsAria">
             <button class="tab-btn active" id="devtoolsTabNetwork" type="button" role="tab" tabindex="0" aria-selected="true" aria-controls="panelNetwork" data-tab="network" data-i18n="devtoolsNetworkTab">Network</button>

@@ -376,6 +376,12 @@ body {
   border-color: var(--sv-border-strong);
 }
 
+.scripts-toolbar-left .search-box input {
+  min-height: 36px;
+  border: 0;
+  background: transparent;
+}
+
 #filterSelect { order: 2; min-height: 38px; }
 #btnNewFolder { order: 3; }
 #btnFindScripts { order: 4; }
