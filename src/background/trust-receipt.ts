@@ -111,10 +111,23 @@ function errorMessage(error: unknown): string {
   return typeof error === 'string' ? error : 'Dependency body unavailable';
 }
 
+function unavailableProvenanceError(
+  bundleUrl: string,
+  identity: string,
+  body: unknown,
+  fetchProvenanceBundle?: (url: string) => Promise<string | null | undefined>,
+): string {
+  if (!bundleUrl) return 'Missing @require-provenance declaration';
+  if (!identity) return 'Missing @require-identity declaration';
+  if (typeof body !== 'string') return 'Dependency body unavailable for provenance verification';
+  if (!fetchProvenanceBundle) return 'Provenance bundle fetcher unavailable';
+  return 'Provenance verification unavailable';
+}
+
 async function buildDependencyProvenance(
   bundleUrl = '',
   identity = '',
-  body = '',
+  body?: string,
   fetchProvenanceBundle?: (url: string) => Promise<string | null | undefined>,
 ): Promise<ScriptTrustReceiptDependency['provenance'] | undefined> {
   if (!bundleUrl && !identity) return undefined;
@@ -126,9 +139,11 @@ async function buildDependencyProvenance(
       : bundleUrl
         ? 'missing-identity'
         : 'missing-bundle',
-    verification: 'not-yet-implemented',
+    verification: 'verification-unavailable',
   };
-  if (!bundleUrl || !identity || !body || !fetchProvenanceBundle) return base;
+  if (!bundleUrl || !identity || typeof body !== 'string' || !fetchProvenanceBundle) {
+    return { ...base, error: unavailableProvenanceError(bundleUrl, identity, body, fetchProvenanceBundle) };
+  }
 
   try {
     const bundle = await fetchProvenanceBundle(bundleUrl);
@@ -167,7 +182,7 @@ async function snapshotDependency(
   identity = '',
   fetchProvenanceBundle?: (url: string) => Promise<string | null | undefined>,
 ): Promise<ScriptTrustReceiptDependency> {
-  const withProvenance = async (dependency: ScriptTrustReceiptDependency, body = ''): Promise<ScriptTrustReceiptDependency> => {
+  const withProvenance = async (dependency: ScriptTrustReceiptDependency, body?: string): Promise<ScriptTrustReceiptDependency> => {
     const provenance = await buildDependencyProvenance(bundleUrl, identity, body, fetchProvenanceBundle);
     return provenance ? { ...dependency, provenance } : dependency;
   };

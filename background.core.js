@@ -1353,7 +1353,15 @@ function _receiptErrorMessage(error) {
   return error?.message || (typeof error === 'string' ? error : 'Dependency body unavailable');
 }
 
-async function _receiptDependencyProvenance(bundleUrl = '', identity = '', body = '', fetchProvenanceBundle = null) {
+function _receiptUnavailableProvenanceError(bundleUrl = '', identity = '', body = undefined, fetchProvenanceBundle = null) {
+  if (!bundleUrl) return 'Missing @require-provenance declaration';
+  if (!identity) return 'Missing @require-identity declaration';
+  if (typeof body !== 'string') return 'Dependency body unavailable for provenance verification';
+  if (typeof fetchProvenanceBundle !== 'function') return 'Provenance bundle fetcher unavailable';
+  return 'Provenance verification unavailable';
+}
+
+async function _receiptDependencyProvenance(bundleUrl = '', identity = '', body = undefined, fetchProvenanceBundle = null) {
   if (!bundleUrl && !identity) return undefined;
   const base = {
     bundleUrl,
@@ -1363,9 +1371,11 @@ async function _receiptDependencyProvenance(bundleUrl = '', identity = '', body 
       : bundleUrl
         ? 'missing-identity'
         : 'missing-bundle',
-    verification: 'not-yet-implemented'
+    verification: 'verification-unavailable'
   };
-  if (!bundleUrl || !identity || !body || typeof fetchProvenanceBundle !== 'function') return base;
+  if (!bundleUrl || !identity || typeof body !== 'string' || typeof fetchProvenanceBundle !== 'function') {
+    return { ...base, error: _receiptUnavailableProvenanceError(bundleUrl, identity, body, fetchProvenanceBundle) };
+  }
   if (!self.SigstoreBundleVerifier?.verifyMessageSignature && typeof SigstoreBundleVerifier === 'undefined') {
     return { ...base, verification: 'signature-failed', error: 'Sigstore verifier unavailable' };
   }
@@ -1443,7 +1453,7 @@ function _summarizeRequireProvenancePreview(entries) {
       counts.verified += 1;
     } else if (
       entry.status !== 'declared' ||
-      ['signature-failed', 'root-verification-failed', 'bundle-unavailable', 'unsupported-bundle'].includes(entry.verification)
+      ['verification-unavailable', 'signature-failed', 'root-verification-failed', 'bundle-unavailable', 'unsupported-bundle'].includes(entry.verification)
     ) {
       counts.failed += 1;
     } else {
@@ -1474,7 +1484,7 @@ function _getRequireProvenanceFailure(receipt = {}) {
         : provenance.verification === 'unsupported-bundle' ? 'unsupported Sigstore bundle'
         : provenance.verification === 'root-verification-failed' ? 'Fulcio root verification failed'
         : provenance.verification === 'signature-failed' ? 'signature verification failed'
-        : provenance.verification === 'not-yet-implemented' ? 'verification did not run'
+        : provenance.verification === 'verification-unavailable' ? 'verification unavailable'
         : 'verification incomplete');
 
     return {
@@ -2124,7 +2134,7 @@ const UpdateSystem = {
       const provenance = dep?.provenance;
       if (!provenance) return false;
       if (provenance.status && provenance.status !== 'declared') return true;
-      return ['signature-failed', 'root-verification-failed', 'bundle-unavailable', 'unsupported-bundle']
+      return ['verification-unavailable', 'signature-failed', 'root-verification-failed', 'bundle-unavailable', 'unsupported-bundle']
         .includes(provenance.verification || '');
     });
   },
