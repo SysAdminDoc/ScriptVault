@@ -429,6 +429,10 @@ describe("dashboard accessibility markup", () => {
     expect(dashboardJs).toContain('Import review');
     expect(dashboardJs).toMatch(/elements\.btnRepairRuntime\?\.\s*addEventListener\('click', async event =>/);
     expect(dashboardJs).toMatch(/elements\.btnSavePublicApiOrigins\?\.\s*addEventListener\('click', async event =>/);
+    expect(dashboardJs).toMatch(/elements\.btnSavePublicApiLocalMcp\?\.\s*addEventListener\('click', async event =>/);
+    expect(dashboardHtml).toContain('id="publicApiLocalMcpEnabled"');
+    expect(dashboardHtml).toContain('id="publicApiLocalMcpOrigins"');
+    expect(dashboardHtml).toContain('id="publicApiLocalMcpToken"');
     expect(dashboardJs).toMatch(/elements\.btnInstallFromUrl\?\.\s*addEventListener\('click', async event =>/);
     expect(dashboardJs).toMatch(/document\.getElementById\('btnBatchInstall'\)\?\.\s*addEventListener\('click', async event =>/);
     expect(dashboardJs).toMatch(/document\.getElementById\('btnExportNetLog'\)\?\.\s*addEventListener\('click', async event =>/);

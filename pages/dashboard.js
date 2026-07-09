@@ -2156,6 +2156,9 @@
         elements.supportSnapshotStatus = document.getElementById('supportSnapshotStatus');
         elements.publicApiTrustedOrigins = document.getElementById('publicApiTrustedOrigins');
         elements.publicApiTrustedExtensionIds = document.getElementById('publicApiTrustedExtensionIds');
+        elements.publicApiLocalMcpEnabled = document.getElementById('publicApiLocalMcpEnabled');
+        elements.publicApiLocalMcpOrigins = document.getElementById('publicApiLocalMcpOrigins');
+        elements.publicApiLocalMcpToken = document.getElementById('publicApiLocalMcpToken');
         elements.publicApiPermissionsSummary = document.getElementById('publicApiPermissionsSummary');
         elements.publicApiTrustStatus = document.getElementById('publicApiTrustStatus');
         elements.publicApiAuditLog = document.getElementById('publicApiAuditLog');
@@ -2169,6 +2172,7 @@
         elements.btnRefreshPublicApiTrust = document.getElementById('btnRefreshPublicApiTrust');
         elements.btnSavePublicApiOrigins = document.getElementById('btnSavePublicApiOrigins');
         elements.btnSavePublicApiExtensionIds = document.getElementById('btnSavePublicApiExtensionIds');
+        elements.btnSavePublicApiLocalMcp = document.getElementById('btnSavePublicApiLocalMcp');
         elements.btnClearPublicApiAudit = document.getElementById('btnClearPublicApiAudit');
         elements.btnRefreshSigningTrust = document.getElementById('btnRefreshSigningTrust');
 
@@ -6110,14 +6114,18 @@
     async function loadPublicApiTrustState(options = {}) {
         const { announce = false } = options;
         try {
-            const [originsResponse, extensionIdsResponse, permissionsResponse, auditResponse] = await Promise.all([
+            const [originsResponse, extensionIdsResponse, localMcpResponse, permissionsResponse, auditResponse] = await Promise.all([
                 chrome.runtime.sendMessage({ action: 'publicApi_getTrustedOrigins' }),
                 chrome.runtime.sendMessage({ action: 'publicApi_getTrustedExtensionIds' }),
+                chrome.runtime.sendMessage({ action: 'publicApi_getLocalMcpBridgeConfig' }),
                 chrome.runtime.sendMessage({ action: 'publicApi_getPermissions' }),
                 chrome.runtime.sendMessage({ action: 'publicApi_getAuditLog', data: { limit: 25 } })
             ]);
             const origins = Array.isArray(originsResponse?.origins) ? originsResponse.origins : [];
             const extensionIds = Array.isArray(extensionIdsResponse?.extensionIds) ? extensionIdsResponse.extensionIds : [];
+            const localMcp = localMcpResponse?.config && typeof localMcpResponse.config === 'object'
+                ? localMcpResponse.config
+                : { enabled: false, origins: [], hasToken: false, tokenHint: '' };
             const permissions = permissionsResponse?.permissions && typeof permissionsResponse.permissions === 'object'
                 ? permissionsResponse.permissions
                 : {};
@@ -6125,6 +6133,7 @@
 
             state.trustCenter.publicApiOrigins = origins;
             state.trustCenter.publicApiExtensionIds = extensionIds;
+            state.trustCenter.publicApiLocalMcp = localMcp;
             state.trustCenter.publicApiPermissions = permissions;
             state.trustCenter.publicApiAudit = entries;
 
@@ -6133,6 +6142,18 @@
             }
             if (elements.publicApiTrustedExtensionIds) {
                 elements.publicApiTrustedExtensionIds.value = extensionIds.join('\n');
+            }
+            if (elements.publicApiLocalMcpEnabled) {
+                elements.publicApiLocalMcpEnabled.checked = localMcp.enabled === true;
+            }
+            if (elements.publicApiLocalMcpOrigins) {
+                elements.publicApiLocalMcpOrigins.value = Array.isArray(localMcp.origins) ? localMcp.origins.join('\n') : '';
+            }
+            if (elements.publicApiLocalMcpToken) {
+                elements.publicApiLocalMcpToken.value = '';
+                elements.publicApiLocalMcpToken.placeholder = localMcp.hasToken
+                    ? `Configured (${localMcp.tokenHint || 'token saved'}) - leave blank to keep`
+                    : 'Required before enabling';
             }
             if (elements.publicApiPermissionsSummary) {
                 elements.publicApiPermissionsSummary.textContent = formatPublicApiPermissionSummary(permissions);
@@ -6145,12 +6166,15 @@
                     ? `${numberFormatter.format(extensionIds.length)} trusted extension${extensionIds.length === 1 ? '' : 's'}`
                     : 'no trusted extensions (all denied)';
                 const auditPart = `${numberFormatter.format(entries.length)} recent audit entr${entries.length === 1 ? 'y' : 'ies'}`;
-                elements.publicApiTrustStatus.textContent = `${originPart} · ${extensionPart} · ${auditPart}`;
+                const localMcpPart = localMcp.enabled
+                    ? `local MCP on (${numberFormatter.format(Array.isArray(localMcp.origins) ? localMcp.origins.length : 0)} origin${Array.isArray(localMcp.origins) && localMcp.origins.length === 1 ? '' : 's'})`
+                    : 'local MCP off';
+                elements.publicApiTrustStatus.textContent = `${originPart} - ${extensionPart} - ${localMcpPart} - ${auditPart}`;
             }
             renderPublicApiAuditLog(entries);
             updateSupportSnapshotSummary();
             if (announce) showToast('Public API trust state refreshed', 'success');
-            return { origins, extensionIds, permissions, entries };
+            return { origins, extensionIds, localMcp, permissions, entries };
         } catch (error) {
             const message = error?.message || 'Failed to load public API trust state';
             if (elements.publicApiPermissionsSummary) elements.publicApiPermissionsSummary.textContent = message;
@@ -16009,6 +16033,31 @@
                     showToast(error?.message || 'Failed to save trusted extension IDs', 'error');
                 }
             }, { busyLabel: 'Saving…', errorMessage: 'Failed to save trusted extension IDs' });
+        });
+        elements.btnSavePublicApiLocalMcp?.addEventListener('click', async event => {
+            await runButtonTask(event.currentTarget, async () => {
+                const origins = String(elements.publicApiLocalMcpOrigins?.value || '')
+                    .split(/\r?\n/)
+                    .map(line => line.trim())
+                    .filter(Boolean);
+                const token = String(elements.publicApiLocalMcpToken?.value || '').trim();
+                const config = {
+                    enabled: !!elements.publicApiLocalMcpEnabled?.checked,
+                    origins
+                };
+                if (token) config.token = token;
+                try {
+                    const response = await chrome.runtime.sendMessage({ action: 'publicApi_setLocalMcpBridgeConfig', data: { config } });
+                    if (response?.error) {
+                        showToast(response.error, 'error');
+                        return;
+                    }
+                    await loadPublicApiTrustState();
+                    showToast(config.enabled ? 'Local MCP bridge saved' : 'Local MCP bridge disabled', 'success');
+                } catch (error) {
+                    showToast(error?.message || 'Failed to save Local MCP bridge', 'error');
+                }
+            }, { busyLabel: 'Saving…', errorMessage: 'Failed to save Local MCP bridge' });
         });
         elements.btnClearPublicApiAudit?.addEventListener('click', async event => {
             await runButtonTask(event.currentTarget, async () => {

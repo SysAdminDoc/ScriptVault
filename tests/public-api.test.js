@@ -819,4 +819,112 @@ describe('PublicAPI', () => {
       expect(result.scripts).toBeDefined();
     });
   });
+
+  describe('Local MCP bridge prototype', () => {
+    const token = 'local-mcp-token-0123456789';
+    const origin = 'http://127.0.0.1:38123';
+    const code = `// ==UserScript==
+// @name Local MCP Demo
+// @namespace scriptvault/tests
+// @version 1.0.0
+// @match https://example.com/*
+// @grant none
+// ==/UserScript==
+console.log('mcp');`;
+
+    it('is disabled by default and refuses non-loopback origins', async () => {
+      await PublicAPI.init();
+
+      const disabled = await PublicAPI.handleLocalMcpMessage(
+        { type: 'scriptvault:mcp:listScripts', token },
+        origin,
+      );
+      expect(disabled.error).toContain('disabled');
+
+      await expect(PublicAPI.setLocalMcpBridgeConfig({
+        enabled: true,
+        origins: ['https://example.com'],
+        token,
+      })).rejects.toThrow(/loopback/i);
+    });
+
+    it('requires an allowed loopback origin and bearer token', async () => {
+      await PublicAPI.init();
+      const config = await PublicAPI.setLocalMcpBridgeConfig({
+        enabled: true,
+        origins: [origin, 'http://localhost:38123'],
+        token,
+      });
+
+      expect(config).toMatchObject({
+        enabled: true,
+        origins: [origin, 'http://localhost:38123'],
+        hasToken: true,
+      });
+      expect(config.tokenHash).toBeUndefined();
+
+      const nonLoopback = await PublicAPI.handleLocalMcpMessage(
+        { type: 'scriptvault:mcp:hello', token },
+        'https://example.com',
+      );
+      expect(nonLoopback.error).toContain('loopback');
+
+      const wrongToken = await PublicAPI.handleLocalMcpMessage(
+        { type: 'scriptvault:mcp:hello', token: 'wrong-token' },
+        origin,
+      );
+      expect(wrongToken.error).toContain('token');
+
+      const hello = await PublicAPI.handleLocalMcpMessage(
+        { type: 'scriptvault:mcp:hello', token, requestId: 'hello-1' },
+        origin,
+      );
+      expect(hello).toMatchObject({
+        type: 'scriptvault:mcp:hello:response',
+        requestId: 'hello-1',
+        ok: true,
+      });
+      expect(hello.capabilities).toContain('writeScript');
+    });
+
+    it('lists, reads, and writes scripts through the authenticated local bridge', async () => {
+      const stored = new Map();
+      const ScriptStorage = {
+        getAll: vi.fn(async () => Array.from(stored.values())),
+        get: vi.fn(async id => stored.get(id) || null),
+        set: vi.fn(async (id, script) => {
+          stored.set(id, script);
+        }),
+      };
+      PublicAPI = createFreshAPI({ ScriptStorage });
+      await PublicAPI.init();
+      await PublicAPI.setLocalMcpBridgeConfig({ enabled: true, origins: [origin], token });
+
+      const write = await PublicAPI.handleLocalMcpMessage(
+        { type: 'scriptvault:mcp:writeScript', token, code },
+        origin,
+      );
+      expect(write).toMatchObject({ ok: true, created: true, reviewRequired: true, enabled: false });
+      expect(ScriptStorage.set).toHaveBeenCalledTimes(1);
+      const scriptId = write.scriptId;
+      const saved = stored.get(scriptId);
+      expect(saved.enabled).toBe(false);
+      expect(saved.meta.name).toBe('Local MCP Demo');
+      expect(saved.settings._importQuarantine.source).toBe('public-api-local-mcp');
+
+      const list = await PublicAPI.handleLocalMcpMessage(
+        { type: 'scriptvault:mcp:listScripts', token },
+        origin,
+      );
+      expect(list.scripts).toEqual([
+        expect.objectContaining({ id: scriptId, name: 'Local MCP Demo', enabled: false }),
+      ]);
+
+      const read = await PublicAPI.handleLocalMcpMessage(
+        { type: 'scriptvault:mcp:readScript', token, scriptId },
+        origin,
+      );
+      expect(read.script).toMatchObject({ id: scriptId, name: 'Local MCP Demo', code });
+    });
+  });
 });

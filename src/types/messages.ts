@@ -1347,6 +1347,30 @@ interface PublicApiClearAuditLog {
   action: 'publicApi_clearAuditLog';
 }
 
+interface PublicApiLocalMcpBridgeConfig {
+  enabled: boolean;
+  origins: string[];
+  hasToken: boolean;
+  tokenHint: string;
+  capabilities: string[];
+}
+
+interface PublicApiGetLocalMcpBridgeConfig {
+  action: 'publicApi_getLocalMcpBridgeConfig';
+}
+
+interface PublicApiSetLocalMcpBridgeConfig {
+  action: 'publicApi_setLocalMcpBridgeConfig';
+  data?: {
+    config?: {
+      enabled?: boolean;
+      origins?: string[];
+      token?: string;
+      clearToken?: boolean;
+    };
+  };
+}
+
 // ─── Workspaces ──────────────────────────────────────────────────────
 
 interface GetWorkspaces {
@@ -1686,6 +1710,7 @@ export type BackgroundMessage =
   | PublicApiGetTrustedOrigins | PublicApiSetTrustedOrigins
   | PublicApiGetTrustedExtensionIds | PublicApiSetTrustedExtensionIds
   | PublicApiGetPermissions | PublicApiGetAuditLog | PublicApiClearAuditLog
+  | PublicApiGetLocalMcpBridgeConfig | PublicApiSetLocalMcpBridgeConfig
   // Workspaces
   | GetWorkspaces | CreateWorkspace | SaveWorkspace
   | ActivateWorkspace | UpdateWorkspace | DeleteWorkspace
@@ -2033,6 +2058,8 @@ export interface ResponseMap {
   publicApi_getPermissions: { permissions: unknown };
   publicApi_getAuditLog: { entries: unknown[] };
   publicApi_clearAuditLog: SuccessOrError;
+  publicApi_getLocalMcpBridgeConfig: { config: PublicApiLocalMcpBridgeConfig };
+  publicApi_setLocalMcpBridgeConfig: SuccessOrError<{ config?: PublicApiLocalMcpBridgeConfig }>;
 
   // ── DevTools / debugger ────────────────────────────────────────────
   attachDebugger: SuccessOrError;

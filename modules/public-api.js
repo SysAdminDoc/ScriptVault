@@ -87,6 +87,7 @@ const PublicAPI = (() => {
   var STORAGE_KEY_WEBHOOKS = "publicapi_webhooks";
   var STORAGE_KEY_ORIGINS = "publicapi_trusted_origins";
   var STORAGE_KEY_TRUSTED_EXTENSIONS = "publicapi_trusted_extension_ids";
+  var STORAGE_KEY_LOCAL_MCP = "publicapi_local_mcp_bridge";
   var MAX_AUDIT_ENTRIES = 500;
   var RATE_LIMIT_WINDOW = 1e3;
   var RATE_LIMIT_MAX = 10;
@@ -95,12 +96,28 @@ const PublicAPI = (() => {
   var MAX_TRUSTED_ORIGIN_LENGTH = 256;
   var MAX_TRUSTED_EXTENSION_IDS = 64;
   var MAX_EXTENSION_ID_LENGTH = 128;
+  var MAX_LOCAL_MCP_ORIGINS = 16;
+  var MAX_LOCAL_MCP_ORIGIN_LENGTH = 128;
+  var MIN_LOCAL_MCP_TOKEN_LENGTH = 16;
   var HANDSHAKE_ACTIONS = /* @__PURE__ */ new Set(["ping", "getVersion", "getAPISchema"]);
+  var LOCAL_MCP_CAPABILITIES = Object.freeze([
+    "hello",
+    "listScripts",
+    "readScript",
+    "writeScript"
+  ]);
+  var DEFAULT_LOCAL_MCP_BRIDGE = Object.freeze({
+    enabled: false,
+    origins: [],
+    tokenHash: "",
+    tokenHint: ""
+  });
   var _permissions = null;
   var _auditLog = [];
   var _webhooks = {};
   var _trustedOrigins = [];
   var _trustedExtensionIds = [];
+  var _localMcpBridge = { ...DEFAULT_LOCAL_MCP_BRIDGE };
   var _initialized = false;
   var _initPromise = null;
   var _rateLimitMap = /* @__PURE__ */ new Map();
@@ -170,6 +187,98 @@ const PublicAPI = (() => {
     } catch {
       return null;
     }
+  }
+  function isLoopbackHostname(hostname) {
+    const host = hostname.trim().toLowerCase().replace(/^\[/, "").replace(/\]$/, "");
+    if (!host) return false;
+    if (host === "localhost" || host.endsWith(".localhost")) return true;
+    if (host === "::1" || host === "0:0:0:0:0:0:0:1") return true;
+    const ipv4 = host.match(/^(\d{1,3})(?:\.(\d{1,3})){3}$/);
+    if (!ipv4) return false;
+    const parts = host.split(".").map((part) => Number.parseInt(part, 10));
+    return parts.length === 4 && parts.every((part) => Number.isInteger(part) && part >= 0 && part <= 255) && parts[0] === 127;
+  }
+  function normalizeLocalMcpOrigin(origin) {
+    if (typeof origin !== "string") throw new Error("Local MCP origin must be a string");
+    const trimmed = origin.trim();
+    if (!trimmed) throw new Error("Local MCP origin cannot be empty");
+    if (trimmed.length > MAX_LOCAL_MCP_ORIGIN_LENGTH) throw new Error("Local MCP origin is too long");
+    let parsed;
+    try {
+      parsed = new URL(trimmed);
+    } catch {
+      throw new Error("Local MCP origin is malformed");
+    }
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      throw new Error("Local MCP origin must use http:// or https://");
+    }
+    if (!isLoopbackHostname(parsed.hostname)) {
+      throw new Error("Local MCP origin must be loopback-only");
+    }
+    return parsed.origin;
+  }
+  function normalizeLocalMcpOrigins(origins) {
+    if (!Array.isArray(origins)) return [];
+    if (origins.length > MAX_LOCAL_MCP_ORIGINS) {
+      throw new Error(`Too many Local MCP origins; maximum is ${MAX_LOCAL_MCP_ORIGINS}`);
+    }
+    const normalized = [];
+    const seen = /* @__PURE__ */ new Set();
+    for (const origin of origins) {
+      const value = normalizeLocalMcpOrigin(origin);
+      if (!seen.has(value)) {
+        seen.add(value);
+        normalized.push(value);
+      }
+    }
+    return normalized;
+  }
+  function normalizeStoredLocalMcpConfig(value) {
+    if (!value || typeof value !== "object") return { ...DEFAULT_LOCAL_MCP_BRIDGE };
+    const raw = value;
+    let origins = [];
+    try {
+      origins = normalizeLocalMcpOrigins(raw.origins);
+    } catch {
+      origins = [];
+    }
+    return {
+      enabled: raw.enabled === true,
+      origins,
+      tokenHash: typeof raw.tokenHash === "string" ? raw.tokenHash : "",
+      tokenHint: typeof raw.tokenHint === "string" ? raw.tokenHint.slice(0, 24) : ""
+    };
+  }
+  function localMcpTokenHint(token) {
+    return token.length <= 8 ? "configured" : `${token.slice(0, 4)}...${token.slice(-4)}`;
+  }
+  function bytesToHex(bytes) {
+    return Array.from(new Uint8Array(bytes)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  }
+  async function hashLocalMcpToken(token) {
+    if (typeof token !== "string" || token.length < MIN_LOCAL_MCP_TOKEN_LENGTH) {
+      throw new Error(`Local MCP token must be at least ${MIN_LOCAL_MCP_TOKEN_LENGTH} characters`);
+    }
+    if (!crypto?.subtle?.digest) throw new Error("Token hashing unavailable");
+    const encoded = new TextEncoder().encode(`ScriptVault Local MCP\0${token}`);
+    return bytesToHex(await crypto.subtle.digest("SHA-256", encoded));
+  }
+  function constantTimeEqual(a, b) {
+    if (!a || !b || a.length !== b.length) return false;
+    let diff = 0;
+    for (let i = 0; i < a.length; i += 1) {
+      diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+    }
+    return diff === 0;
+  }
+  function publicLocalMcpConfig() {
+    return {
+      enabled: _localMcpBridge.enabled,
+      origins: _localMcpBridge.origins.slice(),
+      hasToken: !!_localMcpBridge.tokenHash,
+      tokenHint: _localMcpBridge.tokenHint,
+      capabilities: LOCAL_MCP_CAPABILITIES.slice()
+    };
   }
   function normalizeExtensionId(id) {
     if (typeof id !== "string") throw new Error("Extension ID must be a string");
@@ -439,7 +548,8 @@ const PublicAPI = (() => {
         STORAGE_KEY_AUDIT,
         STORAGE_KEY_WEBHOOKS,
         STORAGE_KEY_ORIGINS,
-        STORAGE_KEY_TRUSTED_EXTENSIONS
+        STORAGE_KEY_TRUSTED_EXTENSIONS,
+        STORAGE_KEY_LOCAL_MCP
       ]);
       _permissions = {
         ...DEFAULT_PERMISSIONS,
@@ -449,12 +559,14 @@ const PublicAPI = (() => {
       _webhooks = result[STORAGE_KEY_WEBHOOKS] ?? {};
       _trustedOrigins = normalizeStoredTrustedOrigins(result[STORAGE_KEY_ORIGINS]);
       _trustedExtensionIds = normalizeStoredTrustedExtensionIds(result[STORAGE_KEY_TRUSTED_EXTENSIONS]);
+      _localMcpBridge = normalizeStoredLocalMcpConfig(result[STORAGE_KEY_LOCAL_MCP]);
     } catch {
       _permissions = { ...DEFAULT_PERMISSIONS };
       _auditLog = [];
       _webhooks = {};
       _trustedOrigins = [];
       _trustedExtensionIds = [];
+      _localMcpBridge = { ...DEFAULT_LOCAL_MCP_BRIDGE };
     }
   }
   async function savePermissions() {
@@ -494,6 +606,44 @@ const PublicAPI = (() => {
     } catch (e) {
       console.warn("[PublicAPI] save trusted extension IDs failed:", e);
     }
+  }
+  async function saveLocalMcpBridgeConfig() {
+    try {
+      await chrome.storage.local.set({ [STORAGE_KEY_LOCAL_MCP]: _localMcpBridge });
+    } catch (e) {
+      console.warn("[PublicAPI] save Local MCP bridge config failed:", e);
+    }
+  }
+  async function configureLocalMcpBridge(config) {
+    if (!_permissions) await loadState();
+    const next = {
+      enabled: _localMcpBridge.enabled,
+      origins: _localMcpBridge.origins.slice(),
+      tokenHash: _localMcpBridge.tokenHash,
+      tokenHint: _localMcpBridge.tokenHint
+    };
+    if (typeof config.enabled === "boolean") next.enabled = config.enabled;
+    if (Object.prototype.hasOwnProperty.call(config, "origins")) {
+      next.origins = normalizeLocalMcpOrigins(config.origins);
+    }
+    if (config.clearToken) {
+      next.tokenHash = "";
+      next.tokenHint = "";
+    }
+    if (typeof config.token === "string" && config.token.trim()) {
+      const token = config.token.trim();
+      next.tokenHash = await hashLocalMcpToken(token);
+      next.tokenHint = localMcpTokenHint(token);
+    }
+    if (next.enabled && next.origins.length === 0) {
+      throw new Error("Local MCP bridge requires at least one loopback origin");
+    }
+    if (next.enabled && !next.tokenHash) {
+      throw new Error("Local MCP bridge requires a bearer token");
+    }
+    _localMcpBridge = next;
+    await saveLocalMcpBridgeConfig();
+    return publicLocalMcpConfig();
   }
   function audit(action, sender, details, result) {
     const entry = {
@@ -998,6 +1148,165 @@ const PublicAPI = (() => {
     }
     return meta;
   }
+  function mcpResponseType(type) {
+    return `${type}:response`;
+  }
+  function mcpEnvelope(msg, payload) {
+    return {
+      type: mcpResponseType(msg.type),
+      requestId: typeof msg.requestId === "string" ? msg.requestId : null,
+      ...payload
+    };
+  }
+  function summarizeMcpScript(script) {
+    const meta = script.meta && typeof script.meta === "object" ? script.meta : {};
+    const id = typeof script.id === "string" ? script.id : "";
+    return {
+      id,
+      name: typeof meta.name === "string" ? meta.name : typeof script.name === "string" ? script.name : id,
+      version: typeof meta.version === "string" ? meta.version : typeof script.version === "string" ? script.version : "1.0",
+      enabled: script.enabled !== false,
+      matches: asStringArray(meta.match ?? script.matches ?? script.match),
+      updatedAt: asNumber(script.updatedAt) ?? null
+    };
+  }
+  async function authorizeLocalMcpMessage(msg, origin) {
+    let normalizedOrigin;
+    try {
+      normalizedOrigin = normalizeLocalMcpOrigin(origin);
+    } catch (e) {
+      return { ok: false, error: e.message || "Local MCP origin must be loopback-only", result: "mcp_non_loopback" };
+    }
+    if (!_localMcpBridge.enabled) {
+      return { ok: false, error: "Local MCP bridge is disabled", result: "mcp_disabled" };
+    }
+    if (!_localMcpBridge.origins.includes(normalizedOrigin)) {
+      return { ok: false, error: "Local MCP origin is not allowed", result: "mcp_origin_denied" };
+    }
+    if (!_localMcpBridge.tokenHash) {
+      return { ok: false, error: "Local MCP bridge token is not configured", result: "mcp_token_missing" };
+    }
+    if (typeof msg.token !== "string") {
+      return { ok: false, error: "Local MCP bearer token is required", result: "mcp_token_denied" };
+    }
+    try {
+      const tokenHash = await hashLocalMcpToken(msg.token);
+      if (!constantTimeEqual(tokenHash, _localMcpBridge.tokenHash)) {
+        return { ok: false, error: "Local MCP bearer token rejected", result: "mcp_token_denied" };
+      }
+    } catch {
+      return { ok: false, error: "Local MCP bearer token rejected", result: "mcp_token_denied" };
+    }
+    return { ok: true, origin: normalizedOrigin };
+  }
+  var LOCAL_MCP_HANDLERS = {
+    "scriptvault:mcp:hello": async (_data, origin) => ({
+      ok: true,
+      name: "ScriptVault Local MCP bridge",
+      version: await getExtensionVersion(),
+      origin,
+      capabilities: LOCAL_MCP_CAPABILITIES.slice()
+    }),
+    "scriptvault:mcp:listScripts": async (_data, _origin) => {
+      const scripts = await ScriptStorage.getAll();
+      return {
+        ok: true,
+        scripts: scripts.map((script) => summarizeMcpScript(script))
+      };
+    },
+    "scriptvault:mcp:readScript": async (data, _origin) => {
+      const scriptId = typeof data.scriptId === "string" ? data.scriptId : "";
+      if (!scriptId) return { error: "Missing scriptId parameter" };
+      const script = await ScriptStorage.get(scriptId);
+      if (!script) return { error: "Script not found", scriptId };
+      return {
+        ok: true,
+        script: {
+          ...summarizeMcpScript(script),
+          code: typeof script.code === "string" ? script.code : "",
+          meta: script.meta && typeof script.meta === "object" ? script.meta : {}
+        }
+      };
+    },
+    "scriptvault:mcp:writeScript": async (data, origin) => {
+      const code = data.code;
+      if (!code || typeof code !== "string") return { error: "Missing or invalid code parameter" };
+      if (code.length > MAX_CODE_SIZE) return { error: "Script code exceeds maximum allowed size (5 MB)" };
+      if (!code.includes("==UserScript==")) return { error: "Not a valid userscript (missing ==UserScript== header)" };
+      const requestedId = typeof data.scriptId === "string" && data.scriptId.trim() ? data.scriptId.trim() : "";
+      const existing = requestedId ? await ScriptStorage.get(requestedId) : null;
+      if (requestedId && !existing) return { error: "Script not found", scriptId: requestedId };
+      const allScripts = await ScriptStorage.getAll();
+      const scriptId = requestedId || generateExternalScriptId();
+      const meta = parseUserscriptMeta(code);
+      const existingMeta = existing?.meta && typeof existing.meta === "object" ? existing.meta : {};
+      const matches = selectInstallMatches(meta, asStringArray(existingMeta.match));
+      const installedBy = `local-mcp:${origin}`;
+      const position = requestedId ? Math.max(0, allScripts.findIndex((script) => script.id === scriptId)) : allScripts.length;
+      const enabled = existing ? typeof data.enabled === "boolean" ? data.enabled : existing.enabled !== false : false;
+      const now = Date.now();
+      const newScript = {
+        id: scriptId,
+        name: meta.name ?? (typeof existingMeta.name === "string" ? existingMeta.name : scriptId),
+        version: meta.version ?? (typeof existingMeta.version === "string" ? existingMeta.version : "1.0"),
+        description: meta.description ?? (typeof existingMeta.description === "string" ? existingMeta.description : ""),
+        matches,
+        code,
+        enabled,
+        installedAt: asNumber(existing?.createdAt) ?? now,
+        installedBy,
+        runAt: meta.runAt ?? (typeof existingMeta["run-at"] === "string" ? String(existingMeta["run-at"]).replace(/-/g, "_") : "document_idle"),
+        settings: existing ? existing.settings && typeof existing.settings === "object" ? existing.settings : {} : createExternalInstallReviewSettings("public-api-local-mcp", installedBy),
+        updatedAt: now
+      };
+      await ScriptStorage.set(scriptId, createNestedStoredScript(
+        newScript,
+        meta,
+        installedBy,
+        position,
+        existing ? existing : null
+      ));
+      await refreshRuntimeAfterMutation(newScript, meta);
+      void fireWebhook(existing ? "script.updated" : "script.installed", {
+        scriptId,
+        name: newScript.name,
+        version: newScript.version,
+        source: "public-api-local-mcp"
+      });
+      return {
+        ok: true,
+        scriptId,
+        name: newScript.name,
+        enabled,
+        created: !existing,
+        reviewRequired: !existing
+      };
+    }
+  };
+  async function dispatchLocalMcpMessage(msg, rawOrigin) {
+    const handler = LOCAL_MCP_HANDLERS[msg.type];
+    if (!handler) return mcpEnvelope(msg, { error: `Unknown Local MCP action: ${msg.type}` });
+    const auth = await authorizeLocalMcpMessage(msg, rawOrigin);
+    const sender = { origin: rawOrigin };
+    if (!auth.ok) {
+      audit(msg.type, sender, null, auth.result);
+      return mcpEnvelope(msg, { error: auth.error });
+    }
+    const senderId = `mcp:${auth.origin}`;
+    if (!checkRateLimit(senderId)) {
+      audit(msg.type, { origin: auth.origin }, null, "rate_limited");
+      return mcpEnvelope(msg, { error: "Rate limited. Max 10 requests per second." });
+    }
+    try {
+      const result = await handler(msg, auth.origin);
+      audit(msg.type, { origin: auth.origin }, { requestId: msg.requestId ?? null }, result?.error ? "error" : "ok");
+      return mcpEnvelope(msg, result);
+    } catch (e) {
+      audit(msg.type, { origin: auth.origin }, { requestId: msg.requestId ?? null }, "exception");
+      console.warn("[PublicAPI] Local MCP handler exception:", msg.type, e);
+      return mcpEnvelope(msg, { error: "Internal error" });
+    }
+  }
   var WEB_HANDLERS = {
     "scriptvault:getScripts": async (_data, _origin) => {
       const scripts = await getScripts();
@@ -1173,14 +1482,36 @@ const PublicAPI = (() => {
   }
   function dispatchWebMessage(event) {
     const origin = normalizeIncomingOrigin(event.origin);
+    let localMcpOrigin = null;
+    try {
+      localMcpOrigin = normalizeLocalMcpOrigin(event.origin);
+    } catch {
+      localMcpOrigin = null;
+    }
     if (_trustedOrigins.length === 0 || !origin || !_trustedOrigins.includes(origin)) {
-      return;
+      if (!localMcpOrigin) return;
     }
     const data = event.data;
     if (!data || typeof data !== "object" || !("type" in data)) return;
     const msg = data;
     if (typeof msg.type !== "string") return;
     if (!msg.type.startsWith("scriptvault:")) return;
+    if (msg.type.startsWith("scriptvault:mcp:")) {
+      void dispatchLocalMcpMessage(msg, event.origin).then((response) => {
+        if (response && event.source) {
+          try {
+            event.source.postMessage(response, event.origin);
+          } catch {
+          }
+        }
+      }).catch((e) => {
+        console.warn("[PublicAPI] Local MCP web handler error:", e);
+      });
+      return;
+    }
+    if (!origin || _trustedOrigins.length === 0 || !_trustedOrigins.includes(origin)) {
+      return;
+    }
     const senderId = `web:${origin}`;
     if (!checkRateLimit(senderId)) {
       return;
@@ -1253,6 +1584,13 @@ const PublicAPI = (() => {
       dispatchWebMessage(event);
     },
     /**
+     * Handle a Local MCP bridge message manually (tests/local helper adapters).
+     */
+    async handleLocalMcpMessage(message, origin) {
+      if (!_initialized) await this.init();
+      return dispatchLocalMcpMessage(message, origin);
+    },
+    /**
      * Return the full API schema.
      */
     getAPISchema() {
@@ -1305,6 +1643,18 @@ const PublicAPI = (() => {
      */
     getTrustedExtensionIds() {
       return _trustedExtensionIds.slice();
+    },
+    /**
+     * Configure the off-by-default Local MCP bridge prototype.
+     */
+    async setLocalMcpBridgeConfig(config) {
+      return configureLocalMcpBridge(config);
+    },
+    /**
+     * Return Local MCP bridge status without exposing token material.
+     */
+    getLocalMcpBridgeConfig() {
+      return publicLocalMcpConfig();
     },
     /**
      * Configure a webhook for an event type.

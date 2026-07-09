@@ -7719,6 +7719,14 @@ async function handleMessage(message, sender) {
         await PublicAPI.setTrustedExtensionIds(Array.isArray(data.extensionIds) ? data.extensionIds : []);
         return { success: true, extensionIds: PublicAPI.getTrustedExtensionIds() };
 
+      case 'publicApi_getLocalMcpBridgeConfig':
+        if (typeof PublicAPI === 'undefined') return { config: { enabled: false, origins: [], hasToken: false, tokenHint: '', capabilities: [] } };
+        return { config: PublicAPI.getLocalMcpBridgeConfig() };
+
+      case 'publicApi_setLocalMcpBridgeConfig':
+        if (typeof PublicAPI === 'undefined') return { error: 'Public API controls unavailable' };
+        return { success: true, config: await PublicAPI.setLocalMcpBridgeConfig(data.config && typeof data.config === 'object' ? data.config : {}) };
+
       case 'publicApi_getPermissions':
         if (typeof PublicAPI === 'undefined') return { permissions: {} };
         return { permissions: PublicAPI.getPermissions() };
