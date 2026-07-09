@@ -3348,6 +3348,67 @@
             flex-shrink: 0;
         }
 
+        .editor-script-tabs {
+            display: flex;
+            flex: 1 1 260px;
+            min-width: 180px;
+            max-width: min(460px, 42vw);
+            gap: 4px;
+            padding: 1px;
+            overflow-x: auto;
+            scrollbar-width: thin;
+        }
+
+        .editor-script-tabs[hidden],
+        .editor-script-tabs:empty {
+            display: none;
+        }
+
+        .editor-script-tab {
+            display: inline-flex;
+            align-items: center;
+            min-width: 96px;
+            max-width: 180px;
+            min-height: 30px;
+            padding: 0 10px;
+            border: 1px solid rgba(148, 163, 184, 0.16);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.03);
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .editor-script-tab:hover {
+            color: var(--text-primary);
+            border-color: rgba(148, 163, 184, 0.28);
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        .editor-script-tab.active {
+            color: var(--accent-primary);
+            border-color: rgba(34, 197, 94, 0.38);
+            background: rgba(34, 197, 94, 0.1);
+        }
+
+        .editor-script-tab.unsaved::before {
+            content: "";
+            flex: 0 0 6px;
+            width: 6px;
+            height: 6px;
+            margin-inline-end: 6px;
+            border-radius: 6px;
+            background: var(--accent-yellow);
+        }
+
+        .editor-script-tab-name {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
         .editor-tab {
             padding: 6px 12px;
             background: transparent;
@@ -9661,6 +9722,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
             <button type="button" class="editor-tab" id="editorTabStorage" role="tab" aria-selected="false" aria-controls="storagePanel" tabindex="-1" data-panel="storage"><span data-i18n="editorTabStorage">Storage</span></button>
             <button type="button" class="editor-tab" id="editorTabInfo" role="tab" aria-selected="false" aria-controls="infoPanel" tabindex="-1" data-panel="info"><span data-i18n="editorTabInfo">Info</span></button>
         </div>
+        <div class="editor-script-tabs" id="editorScriptTabsGroup" role="group" aria-label="Open script editors" data-i18n-aria-label="openScriptEditors" hidden></div>
         <div class="editor-toolbar" id="editorToolbar">
             <button type="button" class="toolbar-btn" id="tbtnUndo" title="Undo (Ctrl+Z)" data-i18n-title="toolbarUndoTitle">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 0118 0 9 9 0 01-9 9 9 9 0 01-7.5-4"/></svg>

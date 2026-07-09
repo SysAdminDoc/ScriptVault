@@ -3,6 +3,8 @@ import { expect, test } from '@playwright/test';
 import { launchScriptVault, openExtensionPage, sendRuntimeMessage, userscript } from './helpers/extension-fixture.js';
 
 const SCRIPT_ID = 'script_e2e_monaco_adapter_dashboard';
+const SWITCH_A_ID = 'script_e2e_editor_switch_a';
+const SWITCH_B_ID = 'script_e2e_editor_switch_b';
 
 async function markWhatsNewSeen(page) {
   await page.evaluate(() => chrome.storage.local.set({
@@ -71,6 +73,52 @@ test('dashboard saves and reloads script edits through the Monaco adapter', asyn
     await openEditorForScript(page, SCRIPT_ID);
     await waitForMonacoAdapter(page);
     await expect.poll(() => currentEditorValue(page), { timeout: 10_000 }).toContain('saved through Monaco adapter');
+  } finally {
+    await app.close();
+  }
+});
+
+test('editor overlay exposes open script tabs for switching', async () => {
+  const app = await launchScriptVault();
+  try {
+    const page = await openExtensionPage(app);
+    await markWhatsNewSeen(page);
+
+    const firstCode = userscript({
+      name: 'E2E Switch First',
+      body: 'console.log("first editor tab");',
+    });
+    const secondCode = userscript({
+      name: 'E2E Switch Second',
+      body: 'console.log("second editor tab");',
+    });
+    await expect(sendRuntimeMessage(page, {
+      action: 'saveScript',
+      data: { id: SWITCH_A_ID, code: firstCode, enabled: false },
+    })).resolves.toMatchObject({ success: true, scriptId: SWITCH_A_ID });
+    await expect(sendRuntimeMessage(page, {
+      action: 'saveScript',
+      data: { id: SWITCH_B_ID, code: secondCode, enabled: false },
+    })).resolves.toMatchObject({ success: true, scriptId: SWITCH_B_ID });
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await dismissSetupWarning(page);
+    await openEditorForScript(page, SWITCH_A_ID);
+    await waitForMonacoAdapter(page);
+    await expect(page.locator('#editorTitle')).toHaveText('E2E Switch First');
+
+    await page.evaluate((scriptId) => {
+      document.querySelector(`.action-icon[data-action="edit"][data-id="${scriptId}"]`)?.click();
+    }, SWITCH_B_ID);
+    await expect(page.locator('#editorTitle')).toHaveText('E2E Switch Second');
+    const mirroredTabs = page.locator('#editorScriptTabsGroup .editor-script-tab');
+    await expect(mirroredTabs).toHaveCount(2);
+    await expect(page.locator(`#editorScriptTabsGroup .editor-script-tab[data-script-id="${SWITCH_B_ID}"]`)).toHaveAttribute('aria-current', 'true');
+
+    await page.locator(`#editorScriptTabsGroup .editor-script-tab[data-script-id="${SWITCH_A_ID}"]`).click();
+    await expect(page.locator('#editorTitle')).toHaveText('E2E Switch First');
+    await expect(page.locator(`#editorScriptTabsGroup .editor-script-tab[data-script-id="${SWITCH_A_ID}"]`)).toHaveAttribute('aria-current', 'true');
+    await expect.poll(() => currentEditorValue(page), { timeout: 10_000 }).toContain('first editor tab');
   } finally {
     await app.close();
   }

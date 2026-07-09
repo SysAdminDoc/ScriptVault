@@ -1281,6 +1281,47 @@
         }
     }
 
+    function getEditorScriptTabElement(scriptId) {
+        if (!scriptId || !elements.editorScriptTabsGroup) return null;
+        return elements.editorScriptTabsGroup.querySelector(`.editor-script-tab[data-script-id="${escapeSelectorValue(scriptId)}"]`);
+    }
+
+    function getOpenScriptTabIds() {
+        const ids = getOpenScriptTabs()
+            .map(tab => tab.dataset.scriptId)
+            .filter(Boolean);
+        for (const scriptId of Object.keys(state.openTabs)) {
+            if (!ids.includes(scriptId)) ids.push(scriptId);
+        }
+        return ids;
+    }
+
+    function renderEditorScriptTabs() {
+        const tabGroup = elements.editorScriptTabsGroup;
+        if (!tabGroup) return;
+
+        const scriptIds = getOpenScriptTabIds().filter(scriptId => state.openTabs[scriptId]);
+        tabGroup.hidden = scriptIds.length === 0;
+        if (scriptIds.length === 0) {
+            safeSetHtml(tabGroup, '');
+            return;
+        }
+
+        const html = scriptIds.map(scriptId => {
+            const script = state.scripts.find(s => s.id === scriptId) || null;
+            const headerTab = getScriptTabElement(scriptId);
+            const name = script?.metadata?.name || headerTab?.dataset.scriptName || 'Untitled script';
+            const isActive = state.currentScriptId === scriptId;
+            const isDirty = !!state.openTabs[scriptId]?.unsaved;
+            const label = [
+                isActive ? `Editing ${name}` : `Switch to ${name}`,
+                isDirty ? 'Unsaved changes.' : 'Saved changes.'
+            ].join(' ');
+            return `<button type="button" class="editor-script-tab${isActive ? ' active' : ''}${isDirty ? ' unsaved' : ''}" data-script-id="${escapeHtml(scriptId)}" title="${escapeHtml(name)}" aria-label="${escapeHtml(label)}"${isActive ? ' aria-current="true"' : ''}><span class="editor-script-tab-name">${escapeHtml(name)}</span></button>`;
+        }).join('');
+        safeSetHtml(tabGroup, html);
+    }
+
     function getCommandPaletteItems(overlay = document.getElementById('commandPalette')) {
         return Array.from(overlay?.querySelectorAll('.cmd-item') || []);
     }
@@ -1721,6 +1762,7 @@
         elements.editorLocalWorkspaceStatus = document.getElementById('editorLocalWorkspaceStatus');
         elements.editorTextarea = document.getElementById('editorTextarea');
         elements.editorTabs = document.querySelectorAll('.editor-tab');
+        elements.editorScriptTabsGroup = document.getElementById('editorScriptTabsGroup');
         elements.editorPanels = {
             code: document.getElementById('codePanel'),
             info: document.getElementById('infoPanel'),
@@ -9808,6 +9850,7 @@
             isActive: state.currentScriptId === scriptId
         });
         tabBar.appendChild(tab);
+        renderEditorScriptTabs();
 
         tab.addEventListener('click', (e) => {
             if (e.target.closest('.tab-close')) {
@@ -9962,6 +10005,7 @@
     function removeOpenScriptTab(scriptId) {
         getScriptTabElement(scriptId)?.remove();
         delete state.openTabs[scriptId];
+        renderEditorScriptTabs();
     }
 
     function recoverEditorAfterMissingScript(options = {}) {
@@ -10010,6 +10054,7 @@
             tab.classList.toggle('unsaved', !!isDirty);
             syncScriptTabAccessibility(tab, { isDirty });
         }
+        renderEditorScriptTabs();
     }
 
     function patchOpenTabStatus(scriptId, patch = {}, script = null) {
@@ -11189,6 +11234,7 @@
             tab.classList.add('active');
             syncScriptTabAccessibility(tab, { isActive: true });
         }
+        renderEditorScriptTabs();
 
         // Load editor content
         if (state.editor) {
@@ -11231,6 +11277,7 @@
             if (tab) tab.remove();
 
             delete state.openTabs[scriptId];
+            renderEditorScriptTabs();
 
             // Auto-delete new scripts that were never modified
             const script = state.scripts.find(s => s.id === scriptId);
@@ -11267,6 +11314,11 @@
 
             if (focusFallbackScriptId) {
                 setTimeout(() => {
+                    const editorFallbackTab = getEditorScriptTabElement(focusFallbackScriptId);
+                    if (editorFallbackTab instanceof HTMLElement && !editorFallbackTab.hidden) {
+                        editorFallbackTab.focus();
+                        return;
+                    }
                     const fallbackTab = getScriptTabElement(focusFallbackScriptId);
                     if (fallbackTab instanceof HTMLElement) {
                         fallbackTab.focus();
@@ -11969,6 +12021,7 @@
             if (state.openTabs[scriptId]) {
                 delete state.openTabs[scriptId];
                 getScriptTabElement(scriptId)?.remove();
+                renderEditorScriptTabs();
             }
             if (scriptId === state.currentScriptId) {
                 state.currentScriptId = null;
@@ -14777,6 +14830,12 @@
         });
 
         // Editor
+        elements.editorScriptTabsGroup?.addEventListener('click', event => {
+            const button = event.target.closest?.('.editor-script-tab[data-script-id]');
+            const scriptId = button?.dataset?.scriptId;
+            if (!scriptId || scriptId === state.currentScriptId) return;
+            activateScriptTab(scriptId);
+        });
         elements.btnEditorSave?.addEventListener('click', saveCurrentScript);
         elements.tbtnBindLocalFile?.addEventListener('click', bindCurrentScriptToLocalFile);
         elements.tbtnRefreshLocalFile?.addEventListener('click', event => {

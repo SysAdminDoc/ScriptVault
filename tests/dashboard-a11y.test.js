@@ -222,10 +222,18 @@ describe("dashboard accessibility markup", () => {
   test("script tab strip exposes a labeled group container", () => {
     const doc = parseDashboard();
     const scriptTabsGroup = doc.getElementById("scriptTabsGroup");
+    const editorScriptTabsGroup = doc.getElementById("editorScriptTabsGroup");
 
     expect(scriptTabsGroup).not.toBeNull();
     expect(scriptTabsGroup?.getAttribute("role")).toBe("group");
     expect(scriptTabsGroup?.getAttribute("aria-label")).toBe("Open script editors");
+    expect(editorScriptTabsGroup).not.toBeNull();
+    expect(editorScriptTabsGroup?.getAttribute("role")).toBe("group");
+    expect(editorScriptTabsGroup?.getAttribute("aria-label")).toBe("Open script editors");
+    expect(editorScriptTabsGroup?.hasAttribute("hidden")).toBe(true);
+    expect(dashboardJs).toContain("function renderEditorScriptTabs()");
+    expect(dashboardJs).toContain("elements.editorScriptTabsGroup?.addEventListener('click'");
+    expect(dashboardJs).toContain("activateScriptTab(scriptId);");
   });
 
   test("editor tabs expose a complete tab-to-panel relationship", () => {
