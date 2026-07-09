@@ -851,6 +851,20 @@ const StorageModule = (() => {
       await withTransaction(Stores.backups, "readwrite", async (tx) => {
         await reqToPromise(tx.objectStore(Stores.backups).delete(id));
       });
+    },
+    // Erase every stored backup blob and publication receipt. Used by factory
+    // reset so that full restorable script code / GM values do not survive an
+    // explicit wipe in the backups partition.
+    async clear() {
+      await openBackupsDB();
+      await withTransaction(
+        [Stores.backups, Stores.publicationReceipts],
+        "readwrite",
+        async (tx) => {
+          await reqToPromise(tx.objectStore(Stores.backups).clear());
+          await reqToPromise(tx.objectStore(Stores.publicationReceipts).clear());
+        }
+      );
     }
   };
 
