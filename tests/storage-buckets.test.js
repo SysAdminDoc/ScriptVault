@@ -193,4 +193,27 @@ describe('storage bucket partitioning', () => {
     deleteAllSpy.mockRestore();
     warnSpy.mockRestore();
   });
+
+  it('clears script rows before best-effort cross-bucket value cleanup', async () => {
+    installStorageBucketsMock();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const clearValuesSpy = vi
+      .spyOn(ValuesDAO, 'clear')
+      .mockRejectedValueOnce(new Error('values bucket unavailable'));
+
+    await ScriptStorage.set('alpha', makeScript('alpha', { code: 'saved code' }));
+    await ScriptValues.setAll('alpha', { token: 'recoverable-orphan' });
+
+    await expect(ScriptStorage.clear()).resolves.toBeUndefined();
+
+    expect(await ScriptStorage.getAll()).toEqual([]);
+    expect(await ScriptValues.get('alpha', 'token', null)).toBe('recoverable-orphan');
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[ScriptVault] Removed scripts but could not clean up orphaned GM values:',
+      expect.any(Error),
+    );
+
+    clearValuesSpy.mockRestore();
+    warnSpy.mockRestore();
+  });
 });

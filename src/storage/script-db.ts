@@ -371,7 +371,6 @@ export const ScriptsDAO = {
   async clear(): Promise<void> {
     await openScriptDB();
     if (await isStorageBucketPartitioningActive()) {
-      await ValuesDAO.clear();
       await withTransaction(
         [Stores.scripts, Stores.stats, Stores.localWorkspaceBindings] as StoreName[],
         'readwrite',
@@ -381,6 +380,11 @@ export const ScriptsDAO = {
           await reqToPromise(tx.objectStore(Stores.localWorkspaceBindings).clear());
         },
       );
+      try {
+        await ValuesDAO.clear();
+      } catch (e) {
+        console.warn('[ScriptVault] Removed scripts but could not clean up orphaned GM values:', e);
+      }
       return;
     }
     await withTransaction(
