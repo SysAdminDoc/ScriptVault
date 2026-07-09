@@ -704,9 +704,23 @@ async function applyRemoteValueBundlesWhenLocalEmpty(selection, currentScripts =
   return result;
 }
 
+async function markSyncEncryptionEstablished(settings) {
+  if (settings?.syncEncryptionEnabled && !settings?.syncEncryptionEstablished) {
+    try { await SettingsManager.set('syncEncryptionEstablished', true); } catch (_) { /* best effort */ }
+  }
+}
+
 async function readSyncEnvelopeFromRemote(remoteEnvelope, settings) {
   if (typeof SyncCrypto !== 'undefined' && typeof SyncCrypto.decryptSyncEnvelope === 'function') {
-    return await SyncCrypto.decryptSyncEnvelope(remoteEnvelope, settings);
+    const decrypted = await SyncCrypto.decryptSyncEnvelope(remoteEnvelope, settings);
+    if (
+      remoteEnvelope &&
+      typeof SyncCrypto.isEncryptedSyncEnvelope === 'function' &&
+      SyncCrypto.isEncryptedSyncEnvelope(remoteEnvelope)
+    ) {
+      await markSyncEncryptionEstablished(settings);
+    }
+    return decrypted;
   }
   return remoteEnvelope || null;
 }
@@ -7096,7 +7110,8 @@ async function handleMessage(message, sender) {
             includeSettingsCredentials
           });
           const settings = await getEffectiveSyncSettings(await SettingsManager.get());
-          await provider.upload(exportData, settings);
+          const uploadData = await prepareSyncEnvelopeForRemoteUpload(exportData, settings);
+          await provider.upload(uploadData, settings);
           return {
             success: true,
             exported: exportData.scripts?.length || 0,
@@ -7119,7 +7134,9 @@ async function handleMessage(message, sender) {
           const settings = await getEffectiveSyncSettings(await SettingsManager.get());
           const remoteData = await provider.download(settings);
           if (!remoteData) return { success: false, error: 'No backup found on ' + providerName };
-          const result = await importScripts(remoteData, {
+          const importData = await readSyncEnvelopeFromRemote(remoteData, settings);
+          if (!importData) return { success: false, error: 'No backup found on ' + providerName };
+          const result = await importScripts(importData, {
             overwrite: true,
             importSettings: data?.importSettings === true,
             importStorage: data?.importStorage !== false,

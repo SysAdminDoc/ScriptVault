@@ -217,6 +217,21 @@ describe('source hardening parity guards', () => {
     expect(easyCloud).toContain('SyncCrypto.prepareSyncEnvelopeForUpload');
   });
 
+  it('keeps manual cloud import/export on the encrypted sync envelope helpers', () => {
+    const core = source('src/background/core.ts');
+    const cloudExportCase = core.slice(core.indexOf("case 'cloudExport':"), core.indexOf("case 'cloudImport':"));
+    const cloudImportCase = core.slice(core.indexOf("case 'cloudImport':"), core.indexOf("case 'cloudStatus':"));
+
+    expect(core).toContain('async function markSyncEncryptionEstablished');
+    expect(core).toContain('SyncCrypto.isEncryptedSyncEnvelope(remoteEnvelope)');
+    expect(cloudExportCase).toContain('const uploadData = await prepareSyncEnvelopeForRemoteUpload(exportData, settings);');
+    expect(cloudExportCase).toContain('await provider.upload(uploadData, settings);');
+    expect(cloudExportCase).not.toContain('await provider.upload(exportData, settings);');
+    expect(cloudImportCase).toContain('const importData = await readSyncEnvelopeFromRemote(remoteData, settings);');
+    expect(cloudImportCase).toContain('const result = await importScripts(importData, {');
+    expect(cloudImportCase).not.toContain('const result = await importScripts(remoteData, {');
+  });
+
   it('keeps downloaded GM value bundles behind the non-writing opt-in apply gate', () => {
     const cloudSync = source('src/background/cloud-sync.ts');
 
