@@ -11,7 +11,8 @@ function extractFunction(source, name) {
   const asyncMarker = source.indexOf(`async function ${name}`);
   const start = asyncMarker >= 0 && (marker < 0 || asyncMarker < marker) ? asyncMarker : marker;
   if (start < 0) throw new Error(`Function ${name} not found`);
-  const brace = source.indexOf('{', start);
+  const parameterClose = source.indexOf(') {', start);
+  const brace = parameterClose >= 0 ? parameterClose + 2 : source.indexOf('{', start);
   let depth = 0;
   for (let i = brace; i < source.length; i += 1) {
     if (source[i] === '{') depth += 1;
@@ -81,6 +82,7 @@ describe('dashboard local workspace binding', () => {
 
   it('feature-detects File System Access and stores bindings in the local IDB store', () => {
     expect(dashboardJs).toContain("typeof window.showOpenFilePicker === 'function'");
+    expect(dashboardJs).toContain("typeof window.FileSystemObserver === 'function'");
     expect(dashboardJs).toContain("typeof indexedDB !== 'undefined'");
     expect(dashboardJs).toContain("const LOCAL_WORKSPACE_DB_NAME = 'scriptvault'");
     expect(dashboardJs).toContain('const LOCAL_WORKSPACE_DB_VERSION = 3');
@@ -120,11 +122,12 @@ describe('dashboard local workspace binding', () => {
   });
 
   it('requests permission only from refresh and reviews changed files before saveScript', () => {
-    const refreshFn = extractFunction(dashboardJs, 'refreshCurrentScriptFromLocalFile');
+    const refreshFn = extractFunction(dashboardJs, 'refreshScriptFromLocalFile');
     const saveFn = extractFunction(dashboardJs, 'saveLocalWorkspaceRefresh');
 
     expect(refreshFn).not.toContain('showOpenFilePicker');
-    expect(refreshFn).toContain("requestLocalWorkspacePermission(bindingRecord.handle, 'read')");
+    expect(refreshFn).toContain('options.skipPermissionPrompt');
+    expect(refreshFn).toContain('requestLocalWorkspacePermission(bindingRecord.handle');
     expect(refreshFn).toContain('confirmLocalWorkspaceRefreshApply');
     expect(refreshFn).toContain('if (currentCode === fileRead.text)');
     expect(refreshFn.indexOf('if (currentCode === fileRead.text)')).toBeLessThan(refreshFn.indexOf('saveLocalWorkspaceRefresh'));
@@ -141,6 +144,28 @@ describe('dashboard local workspace binding', () => {
     expect(refreshFn).toContain("lastErrorKind: 'permission-denied'");
     expect(refreshFn).toContain('classifyLocalWorkspaceApplyError(error)');
     expect(refreshFn).toContain('formatLocalWorkspaceErrorToast(errorKind');
+  });
+
+  it('wires FileSystemObserver hot-reload through the existing review gate', () => {
+    const supportFn = extractFunction(dashboardJs, 'isLocalWorkspaceObserverSupported');
+    const ensureFn = extractFunction(dashboardJs, 'ensureLocalWorkspaceObserverForBinding');
+    const scheduleFn = extractFunction(dashboardJs, 'scheduleLocalWorkspaceObservedRefresh');
+    const runFn = extractFunction(dashboardJs, 'runLocalWorkspaceObservedRefresh');
+    const unbindFn = extractFunction(dashboardJs, 'unbindCurrentScriptLocalFile');
+    const controlsFn = extractFunction(dashboardJs, 'refreshLocalWorkspaceControls');
+
+    expect(supportFn).toContain("typeof window.FileSystemObserver === 'function'");
+    expect(ensureFn).toContain('new window.FileSystemObserver');
+    expect(ensureFn).toContain('await observer.observe(bindingRecord.handle)');
+    expect(ensureFn).toContain("queryLocalWorkspacePermission(bindingRecord.handle, 'read')");
+    expect(ensureFn).not.toContain('requestLocalWorkspacePermission');
+    expect(scheduleFn).toContain('LOCAL_WORKSPACE_OBSERVER_DEBOUNCE_MS');
+    expect(scheduleFn).toContain('shouldRefreshForLocalWorkspaceRecords(records)');
+    expect(runFn).toContain('refreshScriptFromLocalFile(slot.scriptId');
+    expect(runFn).toContain("source: 'observer'");
+    expect(runFn).toContain('skipPermissionPrompt: true');
+    expect(unbindFn).toContain('disconnectLocalWorkspaceObserver(binding.bindingId)');
+    expect(controlsFn).toContain('localWorkspaceFileObservers.has(binding.bindingId)');
   });
 
   it('guards local refresh against oversized files and parse failures', () => {

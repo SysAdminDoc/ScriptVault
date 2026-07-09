@@ -292,6 +292,7 @@
     const PUBLICATION_RECEIPTS_STORE = 'publicationReceipts';
     const MAX_PUBLICATION_RECEIPTS_PER_SCRIPT = 10;
     const LOCAL_WORKSPACE_MAX_SCRIPT_BYTES = 5 * 1024 * 1024;
+    const LOCAL_WORKSPACE_OBSERVER_DEBOUNCE_MS = 750;
     const SETTINGS_SECTION_GROUPS = {
         general: 'core',
         appearance: 'workspace',
@@ -10049,6 +10050,7 @@
     }
 
     function removeOpenScriptTab(scriptId) {
+        disconnectLocalWorkspaceObserversForScript(scriptId);
         getScriptTabElement(scriptId)?.remove();
         delete state.openTabs[scriptId];
         renderEditorScriptTabs();
@@ -10123,6 +10125,7 @@
     }
 
     let localWorkspaceDbPromise = null;
+    const localWorkspaceFileObservers = new Map();
 
     function isLocalWorkspaceHandleStorageSupported() {
         return typeof indexedDB !== 'undefined';
@@ -10130,6 +10133,10 @@
 
     function isLocalWorkspaceFileAccessSupported() {
         return typeof window.showOpenFilePicker === 'function' && isLocalWorkspaceHandleStorageSupported();
+    }
+
+    function isLocalWorkspaceObserverSupported() {
+        return isLocalWorkspaceFileAccessSupported() && typeof window.FileSystemObserver === 'function';
     }
 
     function isLocalSyncFolderAccessSupported() {
@@ -10580,6 +10587,126 @@
         };
     }
 
+    function disconnectLocalWorkspaceObserver(bindingId) {
+        const slot = bindingId ? localWorkspaceFileObservers.get(bindingId) : null;
+        if (!slot) return;
+        if (slot.timerId) clearTimeout(slot.timerId);
+        try { slot.observer?.disconnect?.(); } catch {}
+        localWorkspaceFileObservers.delete(bindingId);
+    }
+
+    function disconnectLocalWorkspaceObserversForScript(scriptId) {
+        for (const [bindingId, slot] of localWorkspaceFileObservers.entries()) {
+            if (slot.scriptId === scriptId) disconnectLocalWorkspaceObserver(bindingId);
+        }
+    }
+
+    function shouldRefreshForLocalWorkspaceRecords(records) {
+        if (!Array.isArray(records) || records.length === 0) return true;
+        return records.some(record => {
+            const type = String(record?.type || '').toLowerCase();
+            return type === 'modified'
+                || type === 'unknown'
+                || type === 'moved'
+                || type === 'appeared'
+                || type === 'disappeared';
+        });
+    }
+
+    async function runLocalWorkspaceObservedRefresh(bindingId) {
+        const slot = localWorkspaceFileObservers.get(bindingId);
+        if (!slot) return;
+        if (slot.refreshing) {
+            slot.queued = true;
+            return;
+        }
+        slot.refreshing = true;
+        try {
+            await refreshScriptFromLocalFile(slot.scriptId, {
+                source: 'observer',
+                bindingId,
+                quietUnchanged: true,
+                skipPermissionPrompt: true
+            });
+        } finally {
+            slot.refreshing = false;
+            if (slot.queued) {
+                slot.queued = false;
+                scheduleLocalWorkspaceObservedRefresh(bindingId);
+            }
+        }
+    }
+
+    function scheduleLocalWorkspaceObservedRefresh(bindingId, records = []) {
+        const slot = localWorkspaceFileObservers.get(bindingId);
+        if (!slot || !shouldRefreshForLocalWorkspaceRecords(records)) return;
+        if (slot.timerId) clearTimeout(slot.timerId);
+        slot.timerId = setTimeout(() => {
+            slot.timerId = null;
+            void runLocalWorkspaceObservedRefresh(bindingId).catch(error => {
+                console.warn('[ScriptVault] Local file observer refresh failed:', error);
+            });
+        }, LOCAL_WORKSPACE_OBSERVER_DEBOUNCE_MS);
+    }
+
+    function handleLocalWorkspaceObserverRecords(bindingId, records) {
+        const slot = localWorkspaceFileObservers.get(bindingId);
+        if (!slot) return;
+        const types = Array.isArray(records) ? records.map(record => String(record?.type || '').toLowerCase()) : [];
+        if (types.includes('errored')) {
+            disconnectLocalWorkspaceObserver(bindingId);
+            showToast('Local file watcher stopped. Use Refresh File or rebind the file.', 'warning');
+            return;
+        }
+        scheduleLocalWorkspaceObservedRefresh(bindingId, records);
+    }
+
+    async function ensureLocalWorkspaceObserverForBinding(scriptId, binding) {
+        if (!scriptId || !binding?.bindingId) return false;
+        if (!isLocalWorkspaceObserverSupported()) {
+            disconnectLocalWorkspaceObserver(binding.bindingId);
+            return false;
+        }
+
+        const existing = localWorkspaceFileObservers.get(binding.bindingId);
+        if (existing?.scriptId === scriptId) return true;
+        disconnectLocalWorkspaceObserver(binding.bindingId);
+
+        let bindingRecord;
+        try {
+            bindingRecord = await getDashboardLocalWorkspaceBindingRecord(binding.bindingId);
+        } catch (error) {
+            console.warn('[ScriptVault] Failed to load local file watcher binding:', error);
+            return false;
+        }
+        if (!bindingRecord?.handle) return false;
+
+        const permissionState = await queryLocalWorkspacePermission(bindingRecord.handle, 'read');
+        if (permissionState !== 'granted') return false;
+
+        let observer;
+        try {
+            observer = new window.FileSystemObserver((records) => {
+                handleLocalWorkspaceObserverRecords(binding.bindingId, records);
+            });
+            localWorkspaceFileObservers.set(binding.bindingId, {
+                observer,
+                bindingId: binding.bindingId,
+                scriptId,
+                timerId: null,
+                refreshing: false,
+                queued: false
+            });
+            await observer.observe(bindingRecord.handle);
+            if (scriptId === state.currentScriptId) refreshLocalWorkspaceControls();
+            return true;
+        } catch (error) {
+            disconnectLocalWorkspaceObserver(binding.bindingId);
+            console.warn('[ScriptVault] Failed to start local file watcher:', error);
+            return false;
+        }
+    }
+
     function createLocalWorkspaceBindingId(scriptId) {
         const safeScriptId = String(scriptId || 'script').replace(/[^a-z0-9_-]/gi, '_').slice(0, 80);
         return `local-workspace-${safeScriptId}-${Date.now().toString(36)}`;
@@ -10657,7 +10784,12 @@
         const size = typeof binding.lastKnownSize === 'number' ? `, ${formatBytes(binding.lastKnownSize)}` : '';
         const modified = binding.lastKnownModified ? `, modified ${formatTime(binding.lastKnownModified)}` : '';
         const refreshStatus = formatLocalWorkspaceRefreshStatus(binding);
-        const label = `Local: ${binding.displayName} (${permission}; ${refreshStatus}${size}${modified})`;
+        const observerStatus = binding.bindingId && localWorkspaceFileObservers.has(binding.bindingId)
+            ? ', auto-refresh on'
+            : isLocalWorkspaceObserverSupported()
+                ? ', manual refresh until permission is granted'
+                : '';
+        const label = `Local: ${binding.displayName} (${permission}; ${refreshStatus}${observerStatus}${size}${modified})`;
         elements.editorLocalWorkspaceStatus.hidden = false;
         elements.editorLocalWorkspaceStatus.textContent = label;
         elements.editorLocalWorkspaceStatus.title = label;
@@ -10666,6 +10798,7 @@
     async function refreshLocalWorkspaceBindingForScript(scriptId) {
         if (!scriptId || !state.openTabs[scriptId]) return null;
         if (!isLocalWorkspaceFileAccessSupported()) {
+            disconnectLocalWorkspaceObserversForScript(scriptId);
             patchOpenTabStatus(scriptId, { localWorkspaceBinding: null }, state.scripts.find(s => s.id === scriptId) || null);
             if (scriptId === state.currentScriptId) refreshLocalWorkspaceControls();
             return null;
@@ -10674,10 +10807,16 @@
         try {
             const [binding = null] = await getDashboardLocalWorkspaceBindingsByScript(scriptId);
             patchOpenTabStatus(scriptId, { localWorkspaceBinding: binding }, state.scripts.find(s => s.id === scriptId) || null);
+            if (binding) {
+                void ensureLocalWorkspaceObserverForBinding(scriptId, binding);
+            } else {
+                disconnectLocalWorkspaceObserversForScript(scriptId);
+            }
             if (scriptId === state.currentScriptId) refreshLocalWorkspaceControls();
             return binding;
         } catch (error) {
             console.warn('[ScriptVault] Failed to load local workspace binding:', error);
+            disconnectLocalWorkspaceObserversForScript(scriptId);
             patchOpenTabStatus(scriptId, {
                 localWorkspaceBinding: {
                     bindingId: '',
@@ -10739,6 +10878,7 @@
                 queryLocalWorkspacePermission(handle),
                 readLocalWorkspaceFileMetadata(handle)
             ]);
+            if (existing?.bindingId) disconnectLocalWorkspaceObserver(existing.bindingId);
             await deleteDashboardLocalWorkspaceBindingsForScript(script.id);
             const summary = await putDashboardLocalWorkspaceBinding({
                 bindingId: existing?.bindingId || createLocalWorkspaceBindingId(script.id),
@@ -10755,6 +10895,7 @@
                 lastStatusKind: 'bound'
             });
             patchOpenTabStatus(script.id, { localWorkspaceBinding: summary }, script);
+            void ensureLocalWorkspaceObserverForBinding(script.id, summary);
             updateEditorHeader(script);
             showToast(`Bound local file: ${summary.displayName}`, 'success');
         } catch (error) {
@@ -10844,7 +10985,7 @@
         };
     }
 
-    function confirmLocalWorkspaceRefreshApply(script, binding, localCode, fileMeta) {
+    function confirmLocalWorkspaceRefreshApply(script, binding, localCode, fileMeta, currentCodeOverride = null) {
         return new Promise(resolve => {
             let settled = false;
             const finish = result => {
@@ -10854,7 +10995,9 @@
                 closeModalShell();
                 resolve(result);
             };
-            const currentCode = state.editor?.getValue?.() ?? script.code ?? '';
+            const currentCode = typeof currentCodeOverride === 'string'
+                ? currentCodeOverride
+                : state.editor?.getValue?.() ?? script.code ?? '';
             const diff = buildLocalWorkspaceDiffPreview(
                 currentCode,
                 localCode,
@@ -10886,6 +11029,7 @@
         });
         if (script?.id) {
             patchOpenTabStatus(script.id, { localWorkspaceBinding: summary }, script);
+            void ensureLocalWorkspaceObserverForBinding(script.id, summary);
             refreshLocalWorkspaceControls(script);
         }
         return summary;
@@ -10932,12 +11076,16 @@
         showToast('Local file applied', 'success');
     }
 
-    async function refreshCurrentScriptFromLocalFile() {
-        const script = getCurrentScript();
-        const bindingSummary = script?.id ? ensureOpenTabStatus(script.id, script)?.localWorkspaceBinding : null;
+    async function refreshScriptFromLocalFile(scriptId, options = {}) {
+        const script = state.scripts.find(s => s.id === scriptId) || (scriptId === state.currentScriptId ? getCurrentScript() : null);
+        const tabData = script?.id ? ensureOpenTabStatus(script.id, script) : null;
+        const bindingSummary = tabData?.localWorkspaceBinding || null;
         if (!script || !bindingSummary?.bindingId) {
-            showToast('Bind a local file first', 'warning');
-            return;
+            if (options.source !== 'observer') showToast('Bind a local file first', 'warning');
+            return false;
+        }
+        if (options.bindingId && options.bindingId !== bindingSummary.bindingId) {
+            return false;
         }
 
         const bindingRecord = await getDashboardLocalWorkspaceBindingRecord(bindingSummary.bindingId);
@@ -10951,14 +11099,16 @@
                 }
             }, script);
             refreshLocalWorkspaceControls(script);
-            showToast('Local file handle is missing. Bind the file again.', 'warning');
-            return;
+            if (options.source !== 'observer') showToast('Local file handle is missing. Bind the file again.', 'warning');
+            return false;
         }
 
         const initialPermission = await queryLocalWorkspacePermission(bindingRecord.handle, 'read');
         const permissionState = initialPermission === 'granted'
             ? initialPermission
-            : await requestLocalWorkspacePermission(bindingRecord.handle, 'read');
+            : options.skipPermissionPrompt
+                ? initialPermission
+                : await requestLocalWorkspacePermission(bindingRecord.handle, 'read');
         if (permissionState !== 'granted') {
             await updateLocalWorkspaceBindingAfterRefresh(bindingRecord, {
                 permissionState,
@@ -10966,8 +11116,8 @@
                 lastErrorKind: 'permission-denied',
                 lastStatusKind: ''
             }, script);
-            showToast('Local file permission was not granted', 'warning');
-            return;
+            if (options.source !== 'observer') showToast('Local file permission was not granted', 'warning');
+            return false;
         }
 
         let fileRead;
@@ -10982,10 +11132,12 @@
                 lastStatusKind: ''
             }, script);
             showToast(formatLocalWorkspaceErrorToast(errorKind), 'error');
-            return;
+            return false;
         }
 
-        const currentCode = state.editor?.getValue?.() ?? script.code ?? '';
+        const currentCode = script.id === state.currentScriptId
+            ? state.editor?.getValue?.() ?? tabData?.code ?? script.code ?? ''
+            : tabData?.code ?? script.code ?? '';
         if (currentCode === fileRead.text) {
             await updateLocalWorkspaceBindingAfterRefresh(bindingRecord, {
                 displayName: fileRead.displayName,
@@ -10996,14 +11148,14 @@
                 lastErrorKind: '',
                 lastStatusKind: 'unchanged'
             }, script);
-            showToast('Local file unchanged', 'info');
-            return;
+            if (!options.quietUnchanged) showToast('Local file unchanged', 'info');
+            return true;
         }
 
         const reviewed = await confirmLocalWorkspaceRefreshApply(script, {
             ...bindingSummary,
             permissionState
-        }, fileRead.text, fileRead);
+        }, fileRead.text, fileRead, currentCode);
         if (!reviewed) {
             await updateLocalWorkspaceBindingAfterRefresh(bindingRecord, {
                 displayName: fileRead.displayName,
@@ -11015,7 +11167,7 @@
                 lastStatusKind: 'review-cancelled'
             }, script);
             showToast('Local file refresh cancelled', 'info');
-            return;
+            return false;
         }
 
         try {
@@ -11023,6 +11175,7 @@
                 ...bindingSummary,
                 permissionState
             }, fileRead.text, fileRead);
+            return true;
         } catch (error) {
             markScriptSaveFailed(script.id, error?.message || 'Failed to apply local file');
             const errorKind = classifyLocalWorkspaceApplyError(error);
@@ -11036,7 +11189,13 @@
                 lastStatusKind: ''
             }, script);
             showToast(formatLocalWorkspaceErrorToast(errorKind, error?.message || 'Failed to apply local file'), 'error');
+            return false;
         }
+    }
+
+    async function refreshCurrentScriptFromLocalFile() {
+        const script = getCurrentScript();
+        return refreshScriptFromLocalFile(script?.id, { source: 'manual' });
     }
 
     async function unbindCurrentScriptLocalFile() {
@@ -11047,6 +11206,7 @@
             return;
         }
         await deleteDashboardLocalWorkspaceBinding(binding.bindingId);
+        disconnectLocalWorkspaceObserver(binding.bindingId);
         patchOpenTabStatus(script.id, { localWorkspaceBinding: null }, script);
         refreshLocalWorkspaceControls(script);
         showToast('Local file unbound', 'success');
@@ -11318,6 +11478,7 @@
         const { focusFallbackScriptId = null } = options;
         const tabData = state.openTabs[scriptId];
         const doClose = () => {
+            disconnectLocalWorkspaceObserversForScript(scriptId);
             // Remove tab element
             const tab = getScriptTabElement(scriptId);
             if (tab) tab.remove();
