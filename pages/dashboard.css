@@ -2578,8 +2578,44 @@ thead {
   --sv-text: #111827;
   --sv-text-soft: #475569;
   --sv-text-muted: #64748b;
+  --sv-accent: #16a34a;
+  --sv-accent-2: #0284c7;
   --sv-shadow: 0 22px 54px rgba(15, 23, 42, 0.12);
   --sv-shadow-soft: 0 12px 26px rgba(15, 23, 42, 0.08);
+}
+
+[data-theme="catppuccin"] {
+  --sv-app-bg: #11111b;
+  --sv-surface: #1e1e2e;
+  --sv-surface-2: #252536;
+  --sv-surface-3: #2a2a3c;
+  --sv-border: rgba(166, 173, 200, 0.14);
+  --sv-border-strong: rgba(166, 173, 200, 0.24);
+  --sv-text: #cdd6f4;
+  --sv-text-soft: #a6adc8;
+  --sv-text-muted: #585b70;
+  --sv-accent: #a6e3a1;
+  --sv-accent-2: #89b4fa;
+  --sv-warning: #f9e2af;
+  --sv-danger: #f38ba8;
+  --sv-shadow: 0 24px 70px rgba(0, 0, 0, 0.4);
+  --sv-shadow-soft: 0 14px 34px rgba(0, 0, 0, 0.24);
+}
+
+[data-theme="oled"] {
+  --sv-app-bg: #000000;
+  --sv-surface: #0a0a0a;
+  --sv-surface-2: #111111;
+  --sv-surface-3: #1a1a1a;
+  --sv-border: rgba(148, 163, 184, 0.1);
+  --sv-border-strong: rgba(148, 163, 184, 0.2);
+  --sv-text: #e0e0e0;
+  --sv-text-soft: #999;
+  --sv-text-muted: #666;
+  --sv-accent: #22c55e;
+  --sv-accent-2: #38bdf8;
+  --sv-shadow: 0 24px 70px rgba(0, 0, 0, 0.5);
+  --sv-shadow-soft: 0 14px 34px rgba(0, 0, 0, 0.3);
 }
 
 .sv-workbench-shell {
@@ -2590,8 +2626,8 @@ thead {
   min-height: 100%;
   padding: 16px;
   background:
-    linear-gradient(180deg, rgba(69, 200, 255, 0.08), transparent 220px),
-    linear-gradient(135deg, rgba(53, 208, 127, 0.08), transparent 320px),
+    linear-gradient(180deg, color-mix(in srgb, var(--sv-accent-2) 8%, transparent), transparent 220px),
+    linear-gradient(135deg, color-mix(in srgb, var(--sv-accent) 8%, transparent), transparent 320px),
     var(--sv-app-bg);
 }
 
@@ -2674,9 +2710,9 @@ thead {
 .sv-rail-item.active {
   color: var(--sv-text);
   background:
-    linear-gradient(90deg, rgba(53, 208, 127, 0.12), rgba(69, 200, 255, 0.06)),
+    linear-gradient(90deg, color-mix(in srgb, var(--sv-accent) 12%, transparent), color-mix(in srgb, var(--sv-accent-2) 6%, transparent)),
     rgba(255, 255, 255, 0.035);
-  border-color: rgba(53, 208, 127, 0.24);
+  border-color: color-mix(in srgb, var(--sv-accent) 24%, transparent);
 }
 
 .sv-rail-icon {
@@ -2693,7 +2729,7 @@ thead {
 }
 
 .sv-rail-item.active .sv-rail-icon {
-  background: rgba(53, 208, 127, 0.16);
+  background: color-mix(in srgb, var(--sv-accent) 16%, transparent);
   color: var(--sv-accent);
 }
 
@@ -2724,8 +2760,8 @@ thead {
   margin-top: auto;
   justify-content: flex-start;
   color: var(--sv-text-soft);
-  border-color: rgba(53, 208, 127, 0.2);
-  background: rgba(53, 208, 127, 0.08);
+  border-color: color-mix(in srgb, var(--sv-accent) 20%, transparent);
+  background: color-mix(in srgb, var(--sv-accent) 8%, transparent);
   font-weight: 650;
 }
 
@@ -2734,7 +2770,7 @@ thead {
   height: 8px;
   border-radius: 50%;
   background: var(--sv-accent);
-  box-shadow: 0 0 0 4px rgba(53, 208, 127, 0.13);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--sv-accent) 13%, transparent);
 }
 
 .sv-workbench-main {
@@ -2779,9 +2815,9 @@ thead {
 .scripts-shell-kicker {
   display: inline-flex;
   padding: 5px 10px;
-  border: 1px solid rgba(69, 200, 255, 0.22);
+  border: 1px solid color-mix(in srgb, var(--sv-accent-2) 22%, transparent);
   border-radius: 8px;
-  background: rgba(69, 200, 255, 0.1);
+  background: color-mix(in srgb, var(--sv-accent-2) 10%, transparent);
   color: var(--sv-accent-2);
   font-size: 0.6875rem;
   font-weight: 800;
@@ -2856,7 +2892,7 @@ thead {
 .scripts-table th {
   background: var(--sv-surface-2);
   color: var(--sv-text-muted);
-  border-bottom-color: rgba(69, 200, 255, 0.22);
+  border-bottom-color: color-mix(in srgb, var(--sv-accent-2) 22%, transparent);
 }
 
 .scripts-table tbody tr:nth-child(even) {
@@ -2865,14 +2901,14 @@ thead {
 
 .scripts-table tbody tr:hover {
   background:
-    linear-gradient(90deg, rgba(53, 208, 127, 0.13), rgba(69, 200, 255, 0.045) 45%, transparent 82%),
+    linear-gradient(90deg, color-mix(in srgb, var(--sv-accent) 13%, transparent), color-mix(in srgb, var(--sv-accent-2) 4.5%, transparent) 45%, transparent 82%),
     var(--sv-surface-2);
 }
 
 .scripts-table tbody tr.selected,
 .scripts-table tbody tr.row-selected {
   background:
-    linear-gradient(90deg, rgba(53, 208, 127, 0.18), rgba(69, 200, 255, 0.08) 46%, transparent 86%),
+    linear-gradient(90deg, color-mix(in srgb, var(--sv-accent) 18%, transparent), color-mix(in srgb, var(--sv-accent-2) 8%, transparent) 46%, transparent 86%),
     var(--sv-surface-2);
   box-shadow: inset 3px 0 0 var(--sv-accent);
 }
@@ -3086,8 +3122,8 @@ thead {
   min-height: 100vh;
   padding: 0;
   background:
-    linear-gradient(180deg, rgba(69, 200, 255, 0.055), transparent 220px),
-    linear-gradient(135deg, rgba(53, 208, 127, 0.055), transparent 360px),
+    linear-gradient(180deg, color-mix(in srgb, var(--sv-accent-2) 5.5%, transparent), transparent 220px),
+    linear-gradient(135deg, color-mix(in srgb, var(--sv-accent) 5.5%, transparent), transparent 360px),
     var(--sv-app-bg);
 }
 
@@ -3151,7 +3187,7 @@ thead {
 
 .sv-status-dot.good {
   background: var(--sv-accent);
-  box-shadow: 0 0 0 4px rgba(53, 208, 127, 0.12);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--sv-accent) 12%, transparent);
 }
 
 .sv-rail-storage {
@@ -3307,9 +3343,9 @@ thead {
 
 .scripts-table tbody tr.row-selected,
 .scripts-table tbody tr.selected {
-  outline: 1px solid rgba(69, 200, 255, 0.8);
+  outline: 1px solid color-mix(in srgb, var(--sv-accent-2) 80%, transparent);
   outline-offset: -1px;
-  box-shadow: inset 0 0 0 1px rgba(69, 200, 255, 0.2);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sv-accent-2) 20%, transparent);
 }
 
 .scripts-update-queue {

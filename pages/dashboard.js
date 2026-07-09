@@ -3259,7 +3259,7 @@
     function provenanceNeedsReview(provenance) {
         if (!provenance) return false;
         if (provenance.status && provenance.status !== 'declared') return true;
-        return ['signature-failed', 'root-verification-failed', 'bundle-unavailable', 'unsupported-bundle']
+        return ['verification-unavailable', 'signature-failed', 'root-verification-failed', 'bundle-unavailable', 'unsupported-bundle']
             .includes(provenance.verification || '');
     }
 
@@ -3281,6 +3281,7 @@
         if (provenance.verification === 'signature-failed') return 'Signature failed';
         if (provenance.verification === 'bundle-unavailable') return 'Bundle unavailable';
         if (provenance.verification === 'unsupported-bundle') return 'Unsupported bundle';
+        if (provenance.verification === 'verification-unavailable') return 'Verification unavailable';
         if (provenance.status === 'missing-identity') return 'Missing identity';
         if (provenance.status === 'missing-bundle') return 'Missing bundle';
         return 'Declared';
@@ -5338,11 +5339,12 @@
         };
         
         try {
-            await chrome.runtime.sendMessage({ action: 'setScriptSettings', scriptId: state.currentScriptId, settings });
-            
+            const res = await chrome.runtime.sendMessage({ action: 'setScriptSettings', scriptId: state.currentScriptId, settings });
+            if (res?.error) throw new Error(res.error);
+
             // Update local state
             if (script) script.settings = settings;
-            
+
             showToast('Settings saved', 'success');
         } catch (e) {
             showToast('Failed to save settings', 'error');
@@ -5373,11 +5375,12 @@
         };
         
         try {
-            await chrome.runtime.sendMessage({ action: 'setScriptSettings', scriptId: state.currentScriptId, settings: defaults });
-            
+            const res = await chrome.runtime.sendMessage({ action: 'setScriptSettings', scriptId: state.currentScriptId, settings: defaults });
+            if (res?.error) throw new Error(res.error);
+
             const script = state.scripts.find(s => s.id === state.currentScriptId);
             if (script) script.settings = defaults;
-            
+
             loadScriptSettings(script);
             showToast('Settings reset', 'success');
         } catch (e) {
