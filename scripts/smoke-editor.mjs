@@ -196,6 +196,13 @@ try {
     for (const [name, result] of Object.entries(geometry.hits)) {
         if (result !== 'ok') failures.push(`${name} control not clickable: ${result}`);
     }
+    const workerErrors = pageErrors.filter(error =>
+        error.includes("Failed to construct 'Worker'") ||
+        error.includes('lib/monaco-esm/workers/')
+    );
+    if (workerErrors.length > 0) {
+        failures.push(`Monaco worker errors observed: ${workerErrors.slice(0, 2).join(' | ')}`);
+    }
 
     await page.screenshot({ path: join(extensionPath, 'smoke-editor.png') });
 

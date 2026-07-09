@@ -59,7 +59,14 @@ function createFakeMonaco() {
   };
 }
 
-function createHarness({ moduleFails = false, stylesheetFails = false, typeDefinitions = 'declare const GM_info: unknown;' } = {}) {
+function createHarness({
+  blobClass = Blob,
+  moduleFails = false,
+  stylesheetFails = false,
+  typeDefinitions = 'declare const GM_info: unknown;',
+  urlClass = URL,
+  workerClass = class Worker {},
+} = {}) {
   const messages = [];
   const appendedLinks = [];
   const loading = { style: {}, innerHTML: '' };
@@ -67,6 +74,7 @@ function createHarness({ moduleFails = false, stylesheetFails = false, typeDefin
   const { monaco, editorInstance } = createFakeMonaco();
   const windowObject = {};
   const document = {
+    baseURI: 'https://scriptvault.local/pages/editor-sandbox.html',
     head: {
       appendChild(element) {
         if (element.rel === 'stylesheet') {
@@ -89,13 +97,14 @@ function createHarness({ moduleFails = false, stylesheetFails = false, typeDefin
   };
 
   const context = {
+    Blob: blobClass,
     console,
     document,
     Error,
     Event,
     Promise,
     queueMicrotask,
-    location: { origin: 'https://scriptvault.local' },
+    location: { href: 'https://scriptvault.local/pages/editor-sandbox.html', origin: 'https://scriptvault.local' },
     fetch: vi.fn(async (url) => ({
       ok: true,
       url,
@@ -106,6 +115,8 @@ function createHarness({ moduleFails = false, stylesheetFails = false, typeDefin
         messages.push(message);
       },
     },
+    URL: urlClass,
+    Worker: workerClass,
     window: windowObject,
   };
   windowObject.__importModule = vi.fn(async (specifier) => {
@@ -148,6 +159,45 @@ describe('Monaco ESM sandbox loader', () => {
     expect(harness.monaco.typescript.javascriptDefaults.addExtraLib).toHaveBeenCalledWith(
       'declare function GM_getValue(name: string): unknown;',
       'file:///scriptvault/lib/scriptvault.d.ts',
+    );
+  });
+
+  it('creates sandbox-origin blob bootstraps for Monaco language workers', async () => {
+    const createdBlobs = [];
+    class CapturedBlob {
+      constructor(parts, options) {
+        this.parts = parts;
+        this.options = options;
+        createdBlobs.push(this);
+      }
+    }
+    const createObjectURL = vi.fn((blob) => `blob:scriptvault-worker-${createdBlobs.indexOf(blob)}`);
+    const revokeObjectURL = vi.fn();
+    class URLWithBlobSupport extends URL {}
+    URLWithBlobSupport.createObjectURL = createObjectURL;
+    URLWithBlobSupport.revokeObjectURL = revokeObjectURL;
+    const Worker = vi.fn(function Worker(url, options) {
+      this.url = url;
+      this.options = options;
+    });
+    const harness = createHarness({
+      blobClass: CapturedBlob,
+      urlClass: URLWithBlobSupport,
+      workerClass: Worker,
+    });
+
+    await runSandbox(harness.context);
+    const worker = harness.windowObject.MonacoEnvironment.getWorker('', 'typescript');
+
+    expect(worker.url).toBe('blob:scriptvault-worker-0');
+    expect(worker.options).toMatchObject({ name: 'ScriptVault Monaco typescript worker' });
+    expect(createdBlobs).toHaveLength(1);
+    expect(createdBlobs[0].options).toEqual({ type: 'text/javascript' });
+    expect(createdBlobs[0].parts.join('\n')).toContain(
+      'importScripts("https://scriptvault.local/lib/monaco-esm/workers/ts.worker.js");',
+    );
+    expect(createdBlobs[0].parts.join('\n')).toContain(
+      'self.MonacoEnvironment = { baseUrl: "https://scriptvault.local/lib/monaco-esm/" };',
     );
   });
 

@@ -63,11 +63,68 @@
   // Keep the editor fully self-contained so installs and edits remain reliable offline.
   const LOCAL_ESM_ENTRY = '../lib/monaco-esm/editor.js';
   const LOCAL_ESM_CSS = '../lib/monaco-esm/editor.css';
+  const DEFAULT_WORKER_FILE = 'editor.worker.js';
+  const MONACO_WORKER_FILES = Object.freeze({
+    default: DEFAULT_WORKER_FILE,
+    editorWorkerService: DEFAULT_WORKER_FILE,
+    json: 'json.worker.js',
+    css: 'css.worker.js',
+    scss: 'css.worker.js',
+    less: 'css.worker.js',
+    html: 'html.worker.js',
+    handlebars: 'html.worker.js',
+    razor: 'html.worker.js',
+    typescript: 'ts.worker.js',
+    javascript: 'ts.worker.js'
+  });
+  const workerBootstrapUrls = new Map();
+
+  setupMonacoSandboxWorkers();
 
   loadMonacoEsm().catch(() => {
     loading.innerHTML = '<div><strong>Editor Bundle Missing</strong><small>Rebuild the local Monaco assets with:<br>node esbuild.config.mjs --monaco-esm-only</small></div>';
     parent.postMessage({ type: 'monaco-load-error', reason: 'missing-bundle' }, '*');
   });
+
+  function setupMonacoSandboxWorkers() {
+    window.MonacoEnvironment = {
+      ...(window.MonacoEnvironment || {}),
+      getWorker(_moduleId, label) {
+        return new Worker(getWorkerBootstrapUrl(label), { name: `ScriptVault Monaco ${label || 'editor'} worker` });
+      },
+      getWorkerUrl(_moduleId, label) {
+        return getWorkerBootstrapUrl(label);
+      }
+    };
+    window.addEventListener('pagehide', revokeWorkerBootstrapUrls, { once: true });
+  }
+
+  function resolveLocalAsset(path) {
+    return new URL(path, document.baseURI || location.href).toString();
+  }
+
+  function workerFileForLabel(label) {
+    return MONACO_WORKER_FILES[label] || MONACO_WORKER_FILES.default;
+  }
+
+  function getWorkerBootstrapUrl(label) {
+    const workerUrl = resolveLocalAsset(`../lib/monaco-esm/workers/${workerFileForLabel(label)}`);
+    let bootstrapUrl = workerBootstrapUrls.get(workerUrl);
+    if (!bootstrapUrl) {
+      const source = [
+        `self.MonacoEnvironment = { baseUrl: ${JSON.stringify(resolveLocalAsset('../lib/monaco-esm/'))} };`,
+        `importScripts(${JSON.stringify(workerUrl)});`
+      ].join('\n');
+      bootstrapUrl = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
+      workerBootstrapUrls.set(workerUrl, bootstrapUrl);
+    }
+    return bootstrapUrl;
+  }
+
+  function revokeWorkerBootstrapUrls() {
+    for (const url of workerBootstrapUrls.values()) URL.revokeObjectURL(url);
+    workerBootstrapUrls.clear();
+  }
 
   async function loadMonacoEsm() {
     await loadStylesheet(LOCAL_ESM_CSS);
