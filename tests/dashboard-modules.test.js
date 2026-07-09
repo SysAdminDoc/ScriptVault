@@ -577,6 +577,64 @@ describe('dashboard surface modules', () => {
     CollectionManager.destroy();
   });
 
+  it('collections persist built-in install links across reloads', async () => {
+    const CollectionManager = createCollectionManager();
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+
+    await chrome.storage.local.set({
+      sv_collections: [],
+      sv_builtin_collection_installs: {},
+    });
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ code_url: 'https://greasyfork.org/scripts/480483/code.user.js' }),
+    });
+    chrome.runtime.sendMessage.mockResolvedValueOnce({
+      success: true,
+      scriptId: 'installed-privacy-1',
+      script: {
+        id: 'installed-privacy-1',
+        enabled: true,
+        code: '// installed',
+        meta: { name: 'Google Analytics Blocker' },
+      },
+    });
+
+    await CollectionManager.init(host, { scripts: [], onToggle: vi.fn() });
+    const builtInCard = host.querySelector('[data-id="__builtin_privacy"]');
+    builtInCard?.querySelector('.sv-coll-card-header')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    builtInCard?.querySelector('[data-install-idx="0"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await flushPromises();
+
+    const stored = (await chrome.storage.local.get('sv_builtin_collection_installs')).sv_builtin_collection_installs;
+    expect(stored.__builtin_privacy['gf:480483']).toEqual({
+      id: 'installed-privacy-1',
+      enabled: true,
+    });
+
+    CollectionManager.destroy();
+    host.remove();
+
+    const ReloadedCollectionManager = createCollectionManager();
+    const reloadedHost = document.createElement('div');
+    document.body.appendChild(reloadedHost);
+    await ReloadedCollectionManager.init(reloadedHost, { scripts: [], onToggle: vi.fn() });
+    const reloadedCard = reloadedHost.querySelector('[data-id="__builtin_privacy"]');
+    reloadedCard?.querySelector('.sv-coll-card-header')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    expect(reloadedCard?.querySelector('[data-install-idx="0"]')).toBeNull();
+    expect(reloadedCard?.querySelector('.sv-coll-script-toggle')?.getAttribute('data-toggle-id')).toBe('installed-privacy-1');
+
+    ReloadedCollectionManager.destroy();
+    if (originalFetch) {
+      globalThis.fetch = originalFetch;
+    } else {
+      Reflect.deleteProperty(globalThis, 'fetch');
+    }
+  });
+
   it('collections preserve notes for script ids with selector characters', async () => {
     const CollectionManager = createCollectionManager();
     const host = document.createElement('div');

@@ -10,6 +10,7 @@ const CollectionManager = (() => {
   /* ------------------------------------------------------------------ */
 
   const STORAGE_KEY = 'sv_collections';
+  const BUILT_IN_INSTALLS_KEY = 'sv_builtin_collection_installs';
   const STYLE_ID = 'sv-collections-styles';
 
   const BUILT_IN_COLLECTIONS = [
@@ -78,6 +79,7 @@ const CollectionManager = (() => {
   let _container = null;
   let _styleEl = null;
   let _collections = [];    // user-created collections
+  let _builtInInstallLinks = {};
   let _scripts = [];        // reference to installed scripts
   let _getScripts = null;   // callback to fetch current scripts
   let _onInstall = null;    // callback to install a script
@@ -663,10 +665,13 @@ const CollectionManager = (() => {
 
   async function loadCollections() {
     try {
-      const data = await chrome.storage.local.get(STORAGE_KEY);
+      const data = await chrome.storage.local.get([STORAGE_KEY, BUILT_IN_INSTALLS_KEY]);
       _collections = data[STORAGE_KEY] || [];
+      _builtInInstallLinks = normalizeBuiltInInstallLinks(data[BUILT_IN_INSTALLS_KEY]);
+      applyBuiltInInstallLinks();
     } catch {
       _collections = [];
+      _builtInInstallLinks = {};
     }
   }
 
@@ -676,6 +681,61 @@ const CollectionManager = (() => {
     } catch (e) {
       console.error('[CollectionManager] save error:', e);
     }
+  }
+
+  function normalizeBuiltInInstallLinks(value) {
+    if (!value || typeof value !== 'object') return {};
+    const normalized = {};
+    for (const [collectionId, scripts] of Object.entries(value)) {
+      if (!scripts || typeof scripts !== 'object') continue;
+      normalized[collectionId] = {};
+      for (const [scriptKey, link] of Object.entries(scripts)) {
+        if (link && typeof link === 'object' && link.id) {
+          normalized[collectionId][scriptKey] = {
+            id: String(link.id),
+            enabled: link.enabled !== false,
+          };
+        }
+      }
+    }
+    return normalized;
+  }
+
+  function getBuiltInScriptKey(script) {
+    if (script.greasyForkId) return `gf:${script.greasyForkId}`;
+    if (script.installUrl || script.url) return `url:${script.installUrl || script.url}`;
+    return `name:${script.name || ''}`;
+  }
+
+  function applyBuiltInInstallLinks() {
+    for (const coll of BUILT_IN_COLLECTIONS) {
+      const links = _builtInInstallLinks[coll.id] || {};
+      for (const script of coll.scripts || []) {
+        const link = links[getBuiltInScriptKey(script)];
+        if (link?.id) {
+          markLocalInstalled(script, link.id, { enabled: link.enabled, code: '' });
+        }
+      }
+    }
+  }
+
+  async function saveBuiltInInstallLinks() {
+    try {
+      await chrome.storage.local.set({ [BUILT_IN_INSTALLS_KEY]: _builtInInstallLinks });
+    } catch (e) {
+      console.error('[CollectionManager] save built-in install link error:', e);
+    }
+  }
+
+  async function saveBuiltInInstallLink(coll, script, scriptId, resultScript) {
+    if (!coll?.builtIn || !scriptId) return;
+    const scriptKey = getBuiltInScriptKey(script);
+    if (!_builtInInstallLinks[coll.id]) _builtInInstallLinks[coll.id] = {};
+    _builtInInstallLinks[coll.id][scriptKey] = {
+      id: scriptId,
+      enabled: resultScript?.enabled !== false,
+    };
+    await saveBuiltInInstallLinks();
   }
 
   function getInstalledScripts() {
@@ -759,7 +819,10 @@ const CollectionManager = (() => {
         throw new Error(result.error || 'Install failed');
       }
       const resolvedId = result?.scriptId || result?.script?.id || script.scriptId;
-      if (resolvedId) markLocalInstalled(script, resolvedId, result?.script);
+      if (resolvedId) {
+        markLocalInstalled(script, resolvedId, result?.script);
+        await saveBuiltInInstallLink(coll, script, resolvedId, result?.script);
+      }
       return { scriptId: resolvedId, script: result?.script || null };
     }
 
@@ -775,7 +838,9 @@ const CollectionManager = (() => {
     const resolvedId = result?.scriptId || result?.script?.id || null;
     if (resolvedId) {
       markLocalInstalled(script, resolvedId, result.script);
-      if (!coll?.builtIn) {
+      if (coll?.builtIn) {
+        await saveBuiltInInstallLink(coll, script, resolvedId, result.script);
+      } else {
         await saveCollections();
       }
     }
