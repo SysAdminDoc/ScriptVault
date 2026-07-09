@@ -130,7 +130,7 @@ describe('script trust receipts', () => {
     });
   });
 
-  it('records declared @require provenance metadata without treating it as verified yet', async () => {
+  it('records declared @require provenance metadata as unavailable until verifier inputs exist', async () => {
     const receipt = await createScriptTrustReceipt({
       operation: 'install',
       code: '// ==UserScript==\n// @name Receipt Demo\n// ==/UserScript==\nconsole.log("new");',
@@ -147,8 +147,27 @@ describe('script trust receipts', () => {
         bundleUrl: 'https://cdn.example.com/lib.js.bundle',
         identity: 'https://github.com/exampleuser (issuer: https://github.com/login/oauth)',
         status: 'declared',
-        verification: 'not-yet-implemented',
+        verification: 'verification-unavailable',
+        error: 'Provenance bundle fetcher unavailable',
       },
+    });
+  });
+
+  it('records unavailable provenance when the dependency body cannot be inspected', async () => {
+    const receipt = await createScriptTrustReceipt({
+      operation: 'install',
+      code: '// ==UserScript==\n// @name Receipt Demo\n// ==/UserScript==\nconsole.log("new");',
+      meta: makeMeta({
+        requireProvenance: ['https://cdn.example.com/lib.js.bundle'],
+        requireIdentity: ['https://github.com/exampleuser (issuer: https://github.com/login/oauth)'],
+      }),
+      fetchProvenanceBundle: vi.fn(async () => 'unused bundle'),
+    });
+
+    expect(receipt.dependencies.require[0].provenance).toMatchObject({
+      status: 'declared',
+      verification: 'verification-unavailable',
+      error: 'Dependency body unavailable for provenance verification',
     });
   });
 

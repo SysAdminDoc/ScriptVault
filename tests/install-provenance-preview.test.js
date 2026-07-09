@@ -4,6 +4,9 @@ import { resolve } from 'node:path';
 
 describe('install @require provenance preview wiring', () => {
   const installPage = readFileSync(resolve(process.cwd(), 'pages/install.js'), 'utf8');
+  const dashboardPage = readFileSync(resolve(process.cwd(), 'pages/dashboard.js'), 'utf8');
+  const receiptSource = readFileSync(resolve(process.cwd(), 'src/background/trust-receipt.ts'), 'utf8');
+  const scriptTypes = readFileSync(resolve(process.cwd(), 'src/types/script.ts'), 'utf8');
   const backgroundCore = readFileSync(resolve(process.cwd(), 'src/background/core.ts'), 'utf8');
 
   it('renders an install-dialog provenance badge and per-require labels', () => {
@@ -57,5 +60,17 @@ describe('install @require provenance preview wiring', () => {
     expect(backgroundCore).toContain('@require provenance verification failed for');
     expect(backgroundCore).toMatch(/const provenanceFailure = _getRequireProvenanceFailure\(trustReceipt\);[\s\S]*return \{ error: provenanceFailure\.message \};/);
     expect(backgroundCore).toMatch(/throw new Error\(provenanceFailure\.message\);/);
+  });
+
+  it('surfaces unavailable provenance verification as an explicit review state', () => {
+    expect(receiptSource).toContain("verification: 'verification-unavailable'");
+    expect(receiptSource).toContain('Dependency body unavailable for provenance verification');
+    expect(scriptTypes).toContain("'verification-unavailable'");
+    expect(backgroundCore).toContain("'verification-unavailable'");
+    expect(installPage).toContain('Verification unavailable');
+    expect(dashboardPage).toContain('Verification unavailable');
+    expect(backgroundCore).not.toContain('not-yet-implemented');
+    expect(receiptSource).not.toContain('not-yet-implemented');
+    expect(scriptTypes).not.toContain('not-yet-implemented');
   });
 });

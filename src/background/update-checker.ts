@@ -468,7 +468,7 @@ export const UpdateSystem = {
       const provenance = dep.provenance;
       if (!provenance) return false;
       if (provenance.status && provenance.status !== 'declared') return true;
-      return ['signature-failed', 'root-verification-failed', 'bundle-unavailable', 'unsupported-bundle']
+      return ['verification-unavailable', 'signature-failed', 'root-verification-failed', 'bundle-unavailable', 'unsupported-bundle']
         .includes(provenance.verification || '');
     });
   },
