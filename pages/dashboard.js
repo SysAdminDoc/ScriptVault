@@ -2524,7 +2524,7 @@
         }[type];
         if (heatmapType && typeof ActivityHeatmap !== 'undefined' && typeof ActivityHeatmap._recordActivity === 'function') {
             try {
-                ActivityHeatmap._recordActivity(heatmapType, event.scriptId || null, new Date(event.timestamp));
+                ActivityHeatmap._recordActivity(heatmapType, event.scriptId || null, new Date(event.timestamp), { scriptName: event.scriptName });
                 ActivityHeatmap.refresh?.().catch?.(() => {});
             } catch {
                 // Heatmap is optional/lazy.

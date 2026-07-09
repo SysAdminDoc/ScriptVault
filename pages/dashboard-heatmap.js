@@ -209,6 +209,7 @@ const ActivityHeatmap = (() => {
             installs: val.installs || 0,
             errors: val.errors || 0,
             scripts: new Set(val.scripts || []),
+            scriptNames: sanitizeScriptNames(val.scriptNames),
           };
         }
       }
@@ -228,6 +229,7 @@ const ActivityHeatmap = (() => {
           installs: val.installs,
           errors: val.errors,
           scripts: [...val.scripts],
+          scriptNames: val.scriptNames || {},
         };
       }
       chrome.storage.local.set({ [STORAGE_KEY]: serializable });
@@ -238,12 +240,13 @@ const ActivityHeatmap = (() => {
 
   function _ensureDay(dateKey) {
     if (!_data[dateKey]) {
-      _data[dateKey] = { executions: 0, edits: 0, installs: 0, errors: 0, scripts: new Set() };
+      _data[dateKey] = { executions: 0, edits: 0, installs: 0, errors: 0, scripts: new Set(), scriptNames: {} };
     }
+    if (!_data[dateKey].scriptNames) _data[dateKey].scriptNames = {};
     return _data[dateKey];
   }
 
-  function _recordActivity(type, scriptId, date) {
+  function _recordActivity(type, scriptId, date, details = {}) {
     const key = _dateKey(date || new Date());
     const day = _ensureDay(key);
     switch (type) {
@@ -252,13 +255,30 @@ const ActivityHeatmap = (() => {
       case ACTIVITY_TYPES.INSTALL: day.installs++; break;
       case ACTIVITY_TYPES.ERROR: day.errors++; break;
     }
-    if (scriptId) day.scripts.add(scriptId);
+    if (scriptId) {
+      day.scripts.add(scriptId);
+      if (details.scriptName) day.scriptNames[scriptId] = String(details.scriptName);
+    }
     _saveData();
+  }
+
+  function sanitizeScriptNames(value) {
+    if (!value || typeof value !== 'object') return {};
+    const names = {};
+    for (const [scriptId, name] of Object.entries(value)) {
+      if (name) names[scriptId] = String(name);
+    }
+    return names;
+  }
+
+  function _activityTotal(dayData) {
+    if (!dayData) return 0;
+    return dayData.executions + dayData.edits * 3 + dayData.installs * 2 + dayData.errors;
   }
 
   function _getActivityLevel(dayData) {
     if (!dayData) return 0;
-    const total = dayData.executions + dayData.edits * 3 + dayData.installs * 2 + dayData.errors;
+    const total = _activityTotal(dayData);
     if (total === 0) return 0;
     if (total <= 2) return 1;
     if (total <= 5) return 2;
@@ -429,6 +449,14 @@ const ActivityHeatmap = (() => {
     if (_tooltip) _tooltip.style.display = 'none';
   }
 
+  function _getScriptLabel(scriptId) {
+    for (const day of Object.values(_data)) {
+      const name = day.scriptNames?.[scriptId];
+      if (name) return name === scriptId ? scriptId : `${name} (${scriptId})`;
+    }
+    return scriptId;
+  }
+
   /* ------------------------------------------------------------------ */
   /*  Stats                                                              */
   /* ------------------------------------------------------------------ */
@@ -453,7 +481,7 @@ const ActivityHeatmap = (() => {
     for (let i = 0; i < dates.length; i++) {
       const key = _dateKey(dates[i]);
       const d = _getFilteredDayData(key);
-      const total = d ? (d.executions + d.edits + d.installs) : 0;
+      const total = _activityTotal(d);
       if (total > 0) {
         activeDays++;
         currentStreak++;
@@ -539,7 +567,7 @@ const ActivityHeatmap = (() => {
     for (const sid of [...scriptIds].sort()) {
       const opt = document.createElement('option');
       opt.value = sid;
-      opt.textContent = sid;
+      opt.textContent = _getScriptLabel(sid);
       select.appendChild(opt);
     }
     select.value = _filteredScript || '';
@@ -596,9 +624,13 @@ const ActivityHeatmap = (() => {
     _renderStats(statsContainer);
 
     // Tooltip
-    _tooltip = document.createElement('div');
-    _tooltip.className = 'sv-heatmap-tooltip';
-    document.body.appendChild(_tooltip);
+    if (!_tooltip || !_tooltip.isConnected) {
+      _tooltip = document.createElement('div');
+      _tooltip.className = 'sv-heatmap-tooltip';
+      document.body.appendChild(_tooltip);
+    } else {
+      _hideTooltip();
+    }
 
     _container.appendChild(root);
     _drawHeatmap();
