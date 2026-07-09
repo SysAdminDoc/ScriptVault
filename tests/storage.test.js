@@ -318,6 +318,26 @@ describe('ScriptStorage', () => {
     expect(legacy._v2LegacyTombstone.valuesMigrated).toBe(2);
   });
 
+  it('does not clobber v3 GM values when a v3 migration is retried', async () => {
+    const alpha = makeScript('alpha', { code: 'const a = "legacy";' });
+    await chrome.storage.local.set({
+      userscripts: { alpha },
+      values_alpha: { count: 7, nested: { ok: true } },
+    });
+
+    expect(await ScriptValues.get('alpha', 'count', 0)).toBe(7);
+    await ScriptValues.set('alpha', 'count', 42);
+    await ScriptValues.set('alpha', 'v3Only', 'fresh');
+    await chrome.storage.local.set({ _storageSchema: 0 });
+    resetRuntimeCaches();
+
+    expect(await ScriptValues.get('alpha', 'count', 0)).toBe(42);
+    expect(await ScriptValues.get('alpha', 'nested', null)).toEqual({ ok: true });
+    expect(await ScriptValues.get('alpha', 'v3Only', null)).toBe('fresh');
+    const retry = await chrome.storage.local.get('_v2LegacyTombstone');
+    expect(retry._v2LegacyTombstone.valuesMigrated).toBe(0);
+  });
+
   it('stores, retrieves, searches, duplicates, and reorders scripts', async () => {
     const alpha = makeScript('alpha', { meta: { name: 'Alpha', namespace: 'tests', version: '1.0' } });
     const beta = makeScript('beta', {

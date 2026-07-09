@@ -129,8 +129,16 @@ async function migrateLegacyToIDB(): Promise<MigrationCounts> {
     if (!bag || typeof bag !== 'object') continue;
     const entries = Object.entries(bag as Record<string, unknown>);
     if (entries.length === 0) continue;
-    await ValuesDAO.setAll(scriptId, bag as Record<string, unknown>);
-    values += entries.length;
+    const existingValues = await ValuesDAO.getAll(scriptId);
+    const freshValues: Record<string, unknown> = {};
+    for (const [key, value] of entries) {
+      if (Object.prototype.hasOwnProperty.call(existingValues, key)) continue;
+      freshValues[key] = value;
+    }
+    const freshCount = Object.keys(freshValues).length;
+    if (freshCount === 0) continue;
+    await ValuesDAO.setAll(scriptId, freshValues);
+    values += freshCount;
   }
 
   return { scripts, values };

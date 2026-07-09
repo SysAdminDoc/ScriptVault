@@ -921,8 +921,16 @@ const StorageModule = (() => {
       if (!bag || typeof bag !== "object") continue;
       const entries = Object.entries(bag);
       if (entries.length === 0) continue;
-      await ValuesDAO.setAll(scriptId, bag);
-      values += entries.length;
+      const existingValues = await ValuesDAO.getAll(scriptId);
+      const freshValues = {};
+      for (const [key, value] of entries) {
+        if (Object.prototype.hasOwnProperty.call(existingValues, key)) continue;
+        freshValues[key] = value;
+      }
+      const freshCount = Object.keys(freshValues).length;
+      if (freshCount === 0) continue;
+      await ValuesDAO.setAll(scriptId, freshValues);
+      values += freshCount;
     }
     return { scripts, values };
   }
