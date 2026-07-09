@@ -155,16 +155,23 @@ describe('dashboard surface modules', () => {
     const updateButton = card?.querySelector('.cv-meta-button');
     const toggle = card?.querySelector('input[data-toggle-id="script-1"]');
     const menuButton = card?.querySelector('.cv-menu-btn');
+    const menu = card?.querySelector('.cv-menu');
     const statePill = card?.querySelector('.cv-state-pill');
     const badges = Array.from(card?.querySelectorAll('.cv-badge') || []);
     const selectButton = card?.querySelector('.cv-select-btn');
 
     expect(menuButton?.getAttribute('type')).toBe('button');
     expect(menuButton?.getAttribute('aria-controls')).toBeTruthy();
+    expect(menu?.getAttribute('role')).toBe('menu');
     expect(menuButtons.every((button) => button.getAttribute('type') === 'button')).toBe(true);
+    expect(menuButtons.every((button) => button.getAttribute('role') === 'menuitem')).toBe(true);
+    expect(menuButtons.every((button) => button.getAttribute('aria-label')?.includes('Alpha Script'))).toBe(true);
     expect(menuButtons.map((button) => button.textContent?.trim())).toContain('Check for Updates');
     expect(openSurface?.tagName).toBe('BUTTON');
     expect(openSurface?.getAttribute('data-open-id')).toBe('script-1');
+    expect(openSurface?.getAttribute('aria-label')).toBe('Open Alpha Script in the editor');
+    expect(updateButton?.getAttribute('aria-label')).toContain('Check for updates for Alpha Script');
+    expect(selectButton?.getAttribute('aria-label')).toBe('Unselect Alpha Script');
     expect(statePill?.textContent).toBe('Enabled');
     expect(badges.some((badge) => badge.textContent?.includes('Greasy Fork'))).toBe(true);
     expect(badges.some((badge) => badge.textContent?.includes('Pinned'))).toBe(true);
@@ -203,6 +210,11 @@ describe('dashboard surface modules', () => {
     expect(onToggle).toHaveBeenCalledWith('script-1', false, expect.objectContaining({ control: toggle }));
 
     menuButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(document.activeElement).toBe(menuButtons[0]);
+    menu?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    expect(document.activeElement).toBe(menuButtons[1]);
+    menu?.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+    expect(document.activeElement).toBe(menuButtons[menuButtons.length - 1]);
     card?.querySelector('[data-action="export"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     card?.querySelector('[data-action="delete"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 

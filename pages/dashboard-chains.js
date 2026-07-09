@@ -347,6 +347,29 @@ const ScriptChains = (() => {
   align-items: center;
   flex-shrink: 0;
 }
+.sv-chain-step .step-move-controls {
+  display: inline-flex;
+  gap: 3px;
+}
+.sv-chain-step .step-move {
+  min-width: 26px;
+  padding: 3px 6px;
+  border: 1px solid var(--border-color, #404040);
+  border-radius: 4px;
+  background: var(--bg-input, #333333);
+  color: var(--text-secondary, #a0a0a0);
+  cursor: pointer;
+  font-size: 0.6875rem;
+}
+.sv-chain-step .step-move:hover:not(:disabled),
+.sv-chain-step .step-move:focus-visible {
+  color: var(--text-primary, #e0e0e0);
+  border-color: var(--accent-blue, #60a5fa);
+}
+.sv-chain-step .step-move:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
 .sv-chain-step .step-controls select {
   padding: 4px 6px;
   background: var(--bg-input, #333333);
@@ -767,6 +790,7 @@ const ScriptChains = (() => {
     addBtn.type = 'button';
     addBtn.className = 'sv-chains-btn primary';
     addBtn.textContent = '+ New Chain';
+    addBtn.setAttribute('aria-label', 'Create new script chain');
     addBtn.addEventListener('click', () => _openEditor(null));
     header.appendChild(addBtn);
     panel.appendChild(header);
@@ -775,6 +799,8 @@ const ScriptChains = (() => {
     const listEl = document.createElement('div');
     listEl.className = 'sv-chains-list';
     listEl.id = 'sv-chains-list';
+    listEl.setAttribute('role', 'list');
+    listEl.setAttribute('aria-label', 'Script chains');
     panel.appendChild(listEl);
 
     _containerEl.appendChild(panel);
@@ -808,6 +834,8 @@ const ScriptChains = (() => {
       const card = document.createElement('div');
       card.className = 'sv-chain-card';
       card.dataset.chainId = chain.id;
+      card.setAttribute('role', 'listitem');
+      card.setAttribute('aria-label', `${chain.name || 'Unnamed'} script chain`);
 
       const triggerInfo = TRIGGER_TYPES[chain.trigger?.type] || TRIGGER_TYPES.manual;
 
@@ -823,6 +851,8 @@ const ScriptChains = (() => {
       `);
 
       const actions = card.querySelector('.chain-actions');
+      actions?.setAttribute('role', 'group');
+      actions?.setAttribute('aria-label', `Actions for ${chain.name || 'Unnamed'} chain`);
       const isRunning = _runningChains.has(chain.id);
 
       // Run button
@@ -831,6 +861,7 @@ const ScriptChains = (() => {
       runBtn.className = 'sv-chains-btn';
       runBtn.textContent = isRunning ? 'Running…' : 'Run';
       runBtn.disabled = isRunning;
+      runBtn.setAttribute('aria-label', `Run ${chain.name || 'Unnamed'} chain`);
       if (isRunning) {
         runBtn.setAttribute('aria-busy', 'true');
       }
@@ -845,6 +876,7 @@ const ScriptChains = (() => {
       editBtn.type = 'button';
       editBtn.className = 'sv-chains-btn';
       editBtn.textContent = 'Edit';
+      editBtn.setAttribute('aria-label', `Edit ${chain.name || 'Unnamed'} chain`);
       editBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         _openEditor(chain.id);
@@ -857,6 +889,7 @@ const ScriptChains = (() => {
         delBtn.type = 'button';
         delBtn.className = 'sv-chains-btn danger';
         delBtn.textContent = 'Delete';
+        delBtn.setAttribute('aria-label', `Delete ${chain.name || 'Unnamed'} chain`);
         delBtn.addEventListener('click', async (e) => {
           e.stopPropagation();
           const confirmed = typeof window.ScriptVaultDashboardUI?.confirm === 'function'
@@ -896,11 +929,11 @@ const ScriptChains = (() => {
         </div>
         <div class="sv-chain-editor-body">
           <div class="sv-chain-field">
-            <label>Chain Name</label>
+            <label for="sv-chain-name">Chain Name</label>
             <input type="text" id="sv-chain-name" value="${_esc(chain.name)}" placeholder="My Automation Chain" />
           </div>
           <div class="sv-chain-field">
-            <label>Trigger</label>
+            <label for="sv-chain-trigger-type">Trigger</label>
             <select id="sv-chain-trigger-type">
               ${Object.entries(TRIGGER_TYPES)
                 .filter(([, v]) => v.supported)
@@ -912,7 +945,7 @@ const ScriptChains = (() => {
             <div id="sv-chain-trigger-value-row"></div>
           </div>
           <div class="sv-chain-field">
-            <label>Error Handling</label>
+            <label for="sv-chain-error-mode">Error Handling</label>
             <select id="sv-chain-error-mode">
               ${Object.entries(ERROR_MODES).map(([k, v]) =>
                 `<option value="${k}" ${chain.errorMode === k ? 'selected' : ''}>${v}</option>`
@@ -920,13 +953,13 @@ const ScriptChains = (() => {
             </select>
           </div>
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-            <label style="color:var(--text-secondary,#a0a0a0);font-size:0.75rem;">Pipeline Steps</label>
-            <button type="button" class="sv-chains-btn" id="sv-chain-add-step">+ Add Step</button>
+            <label id="sv-chain-steps-label" style="color:var(--text-secondary,#a0a0a0);font-size:0.75rem;">Pipeline Steps</label>
+            <button type="button" class="sv-chains-btn" id="sv-chain-add-step" aria-label="Add pipeline step">+ Add Step</button>
           </div>
-          <div class="sv-chain-pipeline" id="sv-chain-pipeline"></div>
+          <div class="sv-chain-pipeline" id="sv-chain-pipeline" role="list" aria-labelledby="sv-chain-steps-label"></div>
           <div>
-            <label style="color:var(--text-secondary,#a0a0a0);font-size:0.75rem;">Execution Log</label>
-            <div class="sv-chain-log" id="sv-chain-log" data-chain-log="true" data-chain-id="${_esc(chainId || '')}"></div>
+            <label id="sv-chain-log-label" style="color:var(--text-secondary,#a0a0a0);font-size:0.75rem;">Execution Log</label>
+            <div class="sv-chain-log" id="sv-chain-log" role="log" aria-labelledby="sv-chain-log-label" data-chain-log="true" data-chain-id="${_esc(chainId || '')}"></div>
           </div>
         </div>
         <div class="sv-chain-editor-footer">
@@ -1087,6 +1120,8 @@ const ScriptChains = (() => {
       if (idx > 0) {
         const arrow = document.createElement('div');
         arrow.className = 'sv-chain-arrow';
+        arrow.setAttribute('role', 'presentation');
+        arrow.setAttribute('aria-hidden', 'true');
         const condClass = step.condition || 'always';
         _safeSetHtml(arrow, `&#8595; <span class="condition-badge ${condClass}">${CONDITION_TYPES[condClass] || 'Always'}</span>`);
         containerEl.appendChild(arrow);
@@ -1096,11 +1131,15 @@ const ScriptChains = (() => {
       stepEl.className = 'sv-chain-step';
       stepEl.draggable = true;
       stepEl.dataset.index = idx;
+      stepEl.setAttribute('role', 'listitem');
+      stepEl.setAttribute('aria-label', `Step ${idx + 1} of ${steps.length}: ${step.label || 'Select script'}`);
+      stepEl.setAttribute('aria-grabbed', 'false');
 
       // Step number
       const numEl = document.createElement('div');
       numEl.className = 'step-num';
       numEl.textContent = idx + 1;
+      numEl.setAttribute('aria-hidden', 'true');
       stepEl.appendChild(numEl);
 
       // Script selector
@@ -1108,6 +1147,7 @@ const ScriptChains = (() => {
       bodyEl.className = 'step-body';
       const scriptSelect = document.createElement('select');
       scriptSelect.className = 'step-script-select';
+      scriptSelect.setAttribute('aria-label', `Script for step ${idx + 1}`);
       _safeSetHtml(scriptSelect, `<option value="">-- Select Script --</option>`);
       for (const s of _availableScripts) {
         const opt = document.createElement('option');
@@ -1126,10 +1166,46 @@ const ScriptChains = (() => {
       // Controls: condition, delay, remove
       const ctrlEl = document.createElement('div');
       ctrlEl.className = 'step-controls';
+      ctrlEl.setAttribute('role', 'group');
+      ctrlEl.setAttribute('aria-label', `Controls for step ${idx + 1}`);
+
+      const moveGroup = document.createElement('div');
+      moveGroup.className = 'step-move-controls';
+      moveGroup.setAttribute('role', 'group');
+      moveGroup.setAttribute('aria-label', `Move step ${idx + 1}`);
+      const moveStep = (toIdx, focusSelector) => {
+        if (toIdx < 0 || toIdx >= steps.length || toIdx === idx) return;
+        const [moved] = steps.splice(idx, 1);
+        steps.splice(toIdx, 0, moved);
+        _renderPipeline(containerEl, steps);
+        requestAnimationFrame(() => {
+          containerEl.querySelector(`.sv-chain-step[data-index="${toIdx}"] ${focusSelector}`)?.focus();
+        });
+      };
+      const moveUpBtn = document.createElement('button');
+      moveUpBtn.type = 'button';
+      moveUpBtn.className = 'step-move';
+      moveUpBtn.dataset.stepMove = 'up';
+      moveUpBtn.textContent = '↑';
+      moveUpBtn.disabled = idx === 0;
+      moveUpBtn.setAttribute('aria-label', `Move step ${idx + 1} up`);
+      moveUpBtn.addEventListener('click', () => moveStep(idx - 1, '[data-step-move="up"]'));
+      moveGroup.appendChild(moveUpBtn);
+      const moveDownBtn = document.createElement('button');
+      moveDownBtn.type = 'button';
+      moveDownBtn.className = 'step-move';
+      moveDownBtn.dataset.stepMove = 'down';
+      moveDownBtn.textContent = '↓';
+      moveDownBtn.disabled = idx === steps.length - 1;
+      moveDownBtn.setAttribute('aria-label', `Move step ${idx + 1} down`);
+      moveDownBtn.addEventListener('click', () => moveStep(idx + 1, '[data-step-move="down"]'));
+      moveGroup.appendChild(moveDownBtn);
+      ctrlEl.appendChild(moveGroup);
 
       if (idx > 0) {
         const condSelect = document.createElement('select');
         condSelect.className = 'step-condition-select';
+        condSelect.setAttribute('aria-label', `Condition before step ${idx + 1}`);
         for (const [k, v] of Object.entries(CONDITION_TYPES)) {
           const opt = document.createElement('option');
           opt.value = k;
@@ -1160,6 +1236,7 @@ const ScriptChains = (() => {
       delayInput.value = step.delay || 0;
       delayInput.title = 'Delay (ms)';
       delayInput.placeholder = 'ms';
+      delayInput.setAttribute('aria-label', `Delay for step ${idx + 1} in milliseconds`);
       const syncDelay = (updateField) => {
         step.delay = Math.min(Math.max(parseInt(delayInput.value, 10) || 0, 0), MAX_DELAY);
         if (updateField) delayInput.value = String(step.delay);
@@ -1173,6 +1250,7 @@ const ScriptChains = (() => {
       removeBtn.className = 'step-remove';
       _safeSetHtml(removeBtn, '&times;');
       removeBtn.title = 'Remove step';
+      removeBtn.setAttribute('aria-label', `Remove step ${idx + 1}`);
       removeBtn.addEventListener('click', () => {
         steps.splice(idx, 1);
         _renderPipeline(containerEl, steps);
@@ -1185,12 +1263,14 @@ const ScriptChains = (() => {
       stepEl.addEventListener('dragstart', (e) => {
         _dragState = { index: idx, steps, containerEl };
         stepEl.classList.add('dragging');
+        stepEl.setAttribute('aria-grabbed', 'true');
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', String(idx));
       });
 
       stepEl.addEventListener('dragend', () => {
         stepEl.classList.remove('dragging');
+        stepEl.setAttribute('aria-grabbed', 'false');
         _dragState = null;
         containerEl.querySelectorAll('.sv-chain-step').forEach(el => el.classList.remove('drag-over'));
       });

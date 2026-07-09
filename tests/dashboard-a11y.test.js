@@ -3,6 +3,8 @@ import { resolve } from "node:path";
 
 const dashboardHtml = readFileSync(resolve(process.cwd(), "pages/dashboard.html"), "utf8");
 const dashboardJs = readFileSync(resolve(process.cwd(), "pages/dashboard.js"), "utf8");
+const cardViewJs = readFileSync(resolve(process.cwd(), "pages/dashboard-cardview.js"), "utf8");
+const chainsJs = readFileSync(resolve(process.cwd(), "pages/dashboard-chains.js"), "utf8");
 const viewSettingsController = readFileSync(resolve(process.cwd(), "pages/dashboard-viewsettings.js"), "utf8");
 
 function parseDashboard() {
@@ -955,5 +957,32 @@ describe("script reorder controls", () => {
     expect(dashboardJs).toContain("const previousScripts = state.scripts.slice();");
     expect(dashboardJs).toContain("return applyVisibleScriptOrder(nextVisibleIds);");
     expect(dashboardJs).toContain("state.sortColumn = 'order';");
+  });
+});
+
+describe("dynamic dashboard module accessibility", () => {
+  test("card-view script controls expose menu roles, names, and keyboard navigation", () => {
+    expect(cardViewJs).toContain('class="cv-meta-button"');
+    expect(cardViewJs).toContain('class="cv-select-btn"');
+    expect(cardViewJs).toContain('role="menu"');
+    expect(cardViewJs).toContain('role="menuitem"');
+    expect(cardViewJs).toContain('aria-label="Check ${escapeHtml(name)} for updates"');
+    expect(cardViewJs).toContain("e.key === 'ArrowDown'");
+    expect(cardViewJs).toContain("e.key === 'ArrowUp'");
+    expect(cardViewJs).toContain("e.key === 'Home'");
+    expect(cardViewJs).toContain("e.key === 'End'");
+  });
+
+  test("chain cards and pipeline steps expose list roles, labels, and keyboard move buttons", () => {
+    expect(chainsJs).toContain("listEl.setAttribute('role', 'list')");
+    expect(chainsJs).toContain("card.setAttribute('role', 'listitem')");
+    expect(chainsJs).toContain("actions?.setAttribute('role', 'group')");
+    expect(chainsJs).toContain("stepEl.setAttribute('role', 'listitem')");
+    expect(chainsJs).toContain("arrow.setAttribute('role', 'presentation')");
+    expect(chainsJs).toContain("scriptSelect.setAttribute('aria-label', `Script for step ${idx + 1}`)");
+    expect(chainsJs).toContain("delayInput.setAttribute('aria-label', `Delay for step ${idx + 1} in milliseconds`)");
+    expect(chainsJs).toContain("removeBtn.setAttribute('aria-label', `Remove step ${idx + 1}`)");
+    expect(chainsJs).toContain("moveUpBtn.dataset.stepMove = 'up'");
+    expect(chainsJs).toContain("moveDownBtn.dataset.stepMove = 'down'");
   });
 });

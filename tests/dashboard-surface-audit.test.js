@@ -158,7 +158,18 @@ describe('dashboard audit surfaces', () => {
     const chainId = await ScriptChains.createChain('Deploy', [{ scriptId: 'alpha' }]);
 
     const runButton = container.querySelector(`[data-chain-id="${chainId}"] .sv-chains-btn`);
+    const chainCard = container.querySelector(`[data-chain-id="${chainId}"]`);
+    const chainActions = chainCard?.querySelector('.chain-actions');
+    const addChainButton = container.querySelector('.sv-chains-header .sv-chains-btn.primary');
+
+    expect(container.querySelector('#sv-chains-list')?.getAttribute('role')).toBe('list');
+    expect(chainCard?.getAttribute('role')).toBe('listitem');
+    expect(chainCard?.getAttribute('aria-label')).toBe('Deploy script chain');
+    expect(chainActions?.getAttribute('role')).toBe('group');
+    expect(chainActions?.getAttribute('aria-label')).toBe('Actions for Deploy chain');
+    expect(addChainButton?.getAttribute('aria-label')).toBe('Create new script chain');
     expect(runButton?.getAttribute('type')).toBe('button');
+    expect(runButton?.getAttribute('aria-label')).toBe('Run Deploy chain');
 
     runButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await Promise.resolve();
@@ -190,8 +201,15 @@ describe('dashboard audit surfaces', () => {
     expect(closeButton?.getAttribute('type')).toBe('button');
     expect(closeButton?.getAttribute('aria-label')).toBe('Close chain editor');
     expect(addStepButton?.getAttribute('type')).toBe('button');
+    expect(addStepButton?.getAttribute('aria-label')).toBe('Add pipeline step');
     expect(cancelButton?.getAttribute('type')).toBe('button');
     expect(saveButton?.getAttribute('type')).toBe('button');
+    expect(document.querySelector('#sv-chain-name')?.closest('.sv-chain-field')?.querySelector('label')?.getAttribute('for')).toBe('sv-chain-name');
+    expect(document.querySelector('#sv-chain-trigger-type')?.closest('.sv-chain-field')?.querySelector('label')?.getAttribute('for')).toBe('sv-chain-trigger-type');
+    expect(document.querySelector('#sv-chain-error-mode')?.closest('.sv-chain-field')?.querySelector('label')?.getAttribute('for')).toBe('sv-chain-error-mode');
+    expect(document.querySelector('#sv-chain-pipeline')?.getAttribute('role')).toBe('list');
+    expect(document.querySelector('#sv-chain-pipeline')?.getAttribute('aria-labelledby')).toBe('sv-chain-steps-label');
+    expect(document.querySelector('#sv-chain-log')?.getAttribute('role')).toBe('log');
 
     ScriptChains.destroy();
   });
@@ -256,6 +274,8 @@ describe('dashboard audit surfaces', () => {
       scripts: Array.from(document.querySelectorAll('.step-script-select')),
       delays: Array.from(document.querySelectorAll('.step-delay-input')),
       removes: Array.from(document.querySelectorAll('.step-remove')),
+      moveUp: Array.from(document.querySelectorAll('[data-step-move="up"]')),
+      moveDown: Array.from(document.querySelectorAll('[data-step-move="down"]')),
     });
     const setSelect = (select, value) => {
       select.value = value;
@@ -267,6 +287,13 @@ describe('dashboard audit surfaces', () => {
     };
 
     let view = controls();
+    expect(view.rows[0].getAttribute('role')).toBe('listitem');
+    expect(view.rows[0].getAttribute('aria-label')).toContain('Step 1 of 2');
+    expect(view.scripts[0].getAttribute('aria-label')).toBe('Script for step 1');
+    expect(view.delays[0].getAttribute('aria-label')).toBe('Delay for step 1 in milliseconds');
+    expect(view.removes[0].getAttribute('aria-label')).toBe('Remove step 1');
+    expect(view.moveDown[0].getAttribute('aria-label')).toBe('Move step 1 down');
+    expect(view.moveDown[0].disabled).toBe(false);
     setSelect(view.scripts[0], 'beta');
     setDelay(view.delays[0], '777');
 
@@ -290,6 +317,16 @@ describe('dashboard audit surfaces', () => {
     Object.defineProperty(drop, 'dataTransfer', { value: dataTransfer });
     view.rows[1].dispatchEvent(drop);
 
+    view = controls();
+    expect(view.scripts.map((select) => select.value)).toEqual(['alpha', 'beta']);
+    expect(view.delays.map((input) => input.value)).toEqual(['333', '777']);
+
+    view.moveUp[1].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    view = controls();
+    expect(view.scripts.map((select) => select.value)).toEqual(['beta', 'alpha']);
+    expect(view.delays.map((input) => input.value)).toEqual(['777', '333']);
+
+    view.moveDown[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
     view = controls();
     expect(view.scripts.map((select) => select.value)).toEqual(['alpha', 'beta']);
     expect(view.delays.map((input) => input.value)).toEqual(['333', '777']);

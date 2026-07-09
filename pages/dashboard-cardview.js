@@ -966,11 +966,11 @@ const CardView = (() => {
         </div>
         <button type="button" class="cv-menu-btn" data-menu-id="${scriptIdAttr}" title="Actions" aria-label="Script actions for ${escapeHtml(name)}" aria-haspopup="menu" aria-controls="${cardMenuId}" aria-expanded="false">\u22EF</button>
         <div class="cv-menu cv-hidden" id="${cardMenuId}" data-menu-for="${scriptIdAttr}" role="menu" aria-label="Actions for ${escapeHtml(name)}">
-          <button type="button" class="cv-menu-item" data-action="edit" data-id="${scriptIdAttr}">Edit</button>
-          <button type="button" class="cv-menu-item" data-action="toggle" data-id="${scriptIdAttr}">${enabled ? 'Disable' : 'Enable'}</button>
-          <button type="button" class="cv-menu-item" data-action="update" data-id="${scriptIdAttr}">Check for Updates</button>
-          <button type="button" class="cv-menu-item" data-action="export" data-id="${scriptIdAttr}">Export</button>
-          <button type="button" class="cv-menu-item danger" data-action="delete" data-id="${scriptIdAttr}">Delete</button>
+          <button type="button" class="cv-menu-item" role="menuitem" data-action="edit" data-id="${scriptIdAttr}" aria-label="Edit ${escapeHtml(name)}">Edit</button>
+          <button type="button" class="cv-menu-item" role="menuitem" data-action="toggle" data-id="${scriptIdAttr}" aria-label="${enabled ? 'Disable' : 'Enable'} ${escapeHtml(name)}">${enabled ? 'Disable' : 'Enable'}</button>
+          <button type="button" class="cv-menu-item" role="menuitem" data-action="update" data-id="${scriptIdAttr}" aria-label="Check ${escapeHtml(name)} for updates">Check for Updates</button>
+          <button type="button" class="cv-menu-item" role="menuitem" data-action="export" data-id="${scriptIdAttr}" aria-label="Export ${escapeHtml(name)}">Export</button>
+          <button type="button" class="cv-menu-item danger" role="menuitem" data-action="delete" data-id="${scriptIdAttr}" aria-label="Delete ${escapeHtml(name)}">Delete</button>
         </div>
       </div>
     `);
@@ -1024,6 +1024,23 @@ const CardView = (() => {
         e.preventDefault();
         closeAllMenus();
         menuBtn?.focus();
+        return;
+      }
+      const items = Array.from(menu.querySelectorAll('.cv-menu-item'));
+      if (items.length === 0) return;
+      const activeIndex = Math.max(items.indexOf(document.activeElement), 0);
+      if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        items[(activeIndex + 1) % items.length]?.focus();
+      } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+        e.preventDefault();
+        items[(activeIndex - 1 + items.length) % items.length]?.focus();
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        items[0]?.focus();
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        items[items.length - 1]?.focus();
       }
     });
 
