@@ -64,6 +64,41 @@ describe('QuotaManager runtime module', () => {
     expect(breakdown.other.count).toBe(1);
   });
 
+  it('measures usage origin-wide (IndexedDB-inclusive) rather than chrome.storage.local only', async () => {
+    // Post-v3, scripts/values/backups live in IndexedDB. The origin-wide estimate
+    // usage must drive getUsage so the percentage matches the origin-wide quota
+    // and autoCleanup's level gate can actually fire.
+    Object.defineProperty(globalThis.navigator, 'storage', {
+      configurable: true,
+      value: {
+        estimate: vi.fn().mockResolvedValue({ usage: 9_600_000, quota: 10_000_000 }),
+      },
+    });
+    // chrome.storage.local only sees a tiny slice; it must NOT be the numerator.
+    chrome.storage.local.getBytesInUse.mockResolvedValue(1234);
+
+    const usage = await QuotaManager.getUsage();
+
+    expect(usage.bytesUsed).toBe(9_600_000);
+    expect(usage.quota).toBe(10_000_000);
+    expect(usage.level).toBe('critical');
+  });
+
+  it('falls back to chrome.storage.local usage when estimate lacks a usage figure', async () => {
+    Object.defineProperty(globalThis.navigator, 'storage', {
+      configurable: true,
+      value: {
+        estimate: vi.fn().mockResolvedValue({ quota: 10_000_000 }),
+      },
+    });
+    chrome.storage.local.getBytesInUse.mockResolvedValue(500);
+
+    const usage = await QuotaManager.getUsage();
+
+    expect(usage.bytesUsed).toBe(500);
+    expect(usage.level).toBe('ok');
+  });
+
   it('cleans expired cache, analytics, performance history, and npm cache with exact actions', async () => {
     const now = Date.now();
     await chrome.storage.local.set({

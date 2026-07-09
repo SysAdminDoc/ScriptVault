@@ -108,7 +108,25 @@ async function _getQuotaLimit(): Promise<number> {
  */
 async function getUsage(): Promise<UsageInfo> {
   const quotaLimit: number = await _getQuotaLimit();
-  const bytesUsed: number = await chrome.storage.local.getBytesInUse(undefined);
+  // Since v3, scripts, GM values, and backup blobs live in IndexedDB, so
+  // chrome.storage.local.getBytesInUse() only sees settings/folder-index/caches
+  // and severely under-reports real usage. The quota above is origin-wide
+  // (navigator.storage.estimate), so measure usage the same way — otherwise the
+  // percentage is computed against the wrong backend and autoCleanup's level
+  // gate never fires. Fall back to chrome.storage.local when estimate is absent.
+  let bytesUsed: number;
+  if (typeof navigator !== 'undefined' && navigator.storage?.estimate) {
+    try {
+      const est: StorageEstimate = await navigator.storage.estimate();
+      bytesUsed = typeof est.usage === 'number'
+        ? est.usage
+        : await chrome.storage.local.getBytesInUse(undefined);
+    } catch (_) {
+      bytesUsed = await chrome.storage.local.getBytesInUse(undefined);
+    }
+  } else {
+    bytesUsed = await chrome.storage.local.getBytesInUse(undefined);
+  }
   const percentage: number = quotaLimit > 0 ? bytesUsed / quotaLimit : 0;
   const level: UsageLevel = percentage >= CRITICAL_THRESHOLD ? 'critical'
     : percentage >= WARNING_THRESHOLD ? 'warning'

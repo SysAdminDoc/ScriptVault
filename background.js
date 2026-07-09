@@ -20920,6 +20920,20 @@ const StorageModule = (() => {
       await withTransaction(Stores.backups, "readwrite", async (tx) => {
         await reqToPromise(tx.objectStore(Stores.backups).delete(id));
       });
+    },
+    // Erase every stored backup blob and publication receipt. Used by factory
+    // reset so that full restorable script code / GM values do not survive an
+    // explicit wipe in the backups partition.
+    async clear() {
+      await openBackupsDB();
+      await withTransaction(
+        [Stores.backups, Stores.publicationReceipts],
+        "readwrite",
+        async (tx) => {
+          await reqToPromise(tx.objectStore(Stores.backups).clear());
+          await reqToPromise(tx.objectStore(Stores.publicationReceipts).clear());
+        }
+      );
     }
   };
 
@@ -23788,7 +23802,8 @@ const GMNetworkHandler = (() => {
       }
       case "GM_xmlhttpRequest_abort": {
         const request = XhrManager.get(data.requestId);
-        if (request && !request.aborted) {
+        if (!request || request.scriptId !== ownedScriptId) return { success: false };
+        if (!request.aborted) {
           request.aborted = true;
           if (request.controller) {
             request.controller.abort();
@@ -34308,7 +34323,17 @@ const QuotaManager = (() => {
   }
   async function getUsage() {
     const quotaLimit = await _getQuotaLimit();
-    const bytesUsed = await chrome.storage.local.getBytesInUse(void 0);
+    let bytesUsed;
+    if (typeof navigator !== "undefined" && navigator.storage?.estimate) {
+      try {
+        const est = await navigator.storage.estimate();
+        bytesUsed = typeof est.usage === "number" ? est.usage : await chrome.storage.local.getBytesInUse(void 0);
+      } catch (_) {
+        bytesUsed = await chrome.storage.local.getBytesInUse(void 0);
+      }
+    } else {
+      bytesUsed = await chrome.storage.local.getBytesInUse(void 0);
+    }
     const percentage = quotaLimit > 0 ? bytesUsed / quotaLimit : 0;
     const level = percentage >= CRITICAL_THRESHOLD ? "critical" : percentage >= WARNING_THRESHOLD ? "warning" : "ok";
     return { bytesUsed, quota: quotaLimit, percentage, level };
@@ -45902,12 +45927,18 @@ async function handleMessage(message, sender) {
           await unregisterScript(s.id);
         }
         await ScriptStorage.clear();
+        // Erase backup blobs + publication receipts too — ScriptStorage.clear()
+        // only touches the scripts partition, so without this a factory reset
+        // leaves fully-restorable script code / GM values in the backups store.
+        if (typeof BackupsDAO !== 'undefined' && BackupsDAO.clear) {
+          await BackupsDAO.clear().catch(() => {});
+        }
         await SettingsManager.reset();
         // Clear ghost state that would otherwise survive the reset
         await chrome.storage.local.remove([
           'syncTombstones', 'trash', 'pendingUpdates', 'scriptFolders',
           'cspReports', 'gistSettings', 'lastSyncResult', 'gmValueSyncRetryHistory', 'gmValueSyncRetryResolution', 'gmValueSyncRetryResolutionHistory', 'liveReloadScripts',
-          'restoreReceipts'
+          'restoreReceipts', 'autoBackups'
         ]).catch(() => {});
         // Clear all alarms (crontab, autoUpdate, autoSync, backup, etc.)
         await chrome.alarms.clearAll().catch(() => {});

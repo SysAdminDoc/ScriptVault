@@ -71,7 +71,17 @@ const QuotaManager = (() => {
   }
   async function getUsage() {
     const quotaLimit = await _getQuotaLimit();
-    const bytesUsed = await chrome.storage.local.getBytesInUse(void 0);
+    let bytesUsed;
+    if (typeof navigator !== "undefined" && navigator.storage?.estimate) {
+      try {
+        const est = await navigator.storage.estimate();
+        bytesUsed = typeof est.usage === "number" ? est.usage : await chrome.storage.local.getBytesInUse(void 0);
+      } catch (_) {
+        bytesUsed = await chrome.storage.local.getBytesInUse(void 0);
+      }
+    } else {
+      bytesUsed = await chrome.storage.local.getBytesInUse(void 0);
+    }
     const percentage = quotaLimit > 0 ? bytesUsed / quotaLimit : 0;
     const level = percentage >= CRITICAL_THRESHOLD ? "critical" : percentage >= WARNING_THRESHOLD ? "warning" : "ok";
     return { bytesUsed, quota: quotaLimit, percentage, level };
