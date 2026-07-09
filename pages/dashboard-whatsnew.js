@@ -4,6 +4,8 @@
 const WhatsNew = (() => {
   'use strict';
 
+  function escapeHtml(str) { return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+
   const CURRENT_VERSION = (typeof chrome !== 'undefined' && chrome.runtime?.getManifest)
     ? chrome.runtime.getManifest().version
     : '2.0.0';
@@ -302,23 +304,23 @@ const WhatsNew = (() => {
 
       const highlightsHtml = entry.highlights.map(h => `
         <div class="sv-wn-card">
-          <div class="sv-wn-card-icon">${h.icon}</div>
+          <div class="sv-wn-card-icon">${escapeHtml(h.icon)}</div>
           <div>
-            <div class="sv-wn-card-title">${h.title}</div>
-            <div class="sv-wn-card-desc">${h.desc}</div>
+            <div class="sv-wn-card-title">${escapeHtml(h.title)}</div>
+            <div class="sv-wn-card-desc">${escapeHtml(h.desc)}</div>
           </div>
         </div>
       `).join('');
 
-      const improvementsHtml = entry.improvements.map(i => `<li>${i}</li>`).join('');
+      const improvementsHtml = entry.improvements.map(i => `<li>${escapeHtml(i)}</li>`).join('');
 
       _safeSetHtml(overlay, `
         <div class="sv-wn-modal" role="dialog" aria-modal="true" aria-labelledby="svWnTitle" aria-describedby="svWnSummary" tabindex="-1">
           <div class="sv-wn-header">
-            <h2 id="svWnTitle">${entry.title}</h2>
+            <h2 id="svWnTitle">${escapeHtml(entry.title)}</h2>
             <div class="sv-wn-meta">
-              <span class="sv-wn-version">v${CURRENT_VERSION}</span>
-              <span class="sv-wn-date">${entry.date}</span>
+              <span class="sv-wn-version">v${escapeHtml(CURRENT_VERSION)}</span>
+              <span class="sv-wn-date">${escapeHtml(entry.date)}</span>
             </div>
             <p class="sv-wn-summary" id="svWnSummary">This release focuses on safer persistence, clearer script review, and runtime compatibility work that reduces surprise during everyday script management.</p>
           </div>

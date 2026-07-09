@@ -894,7 +894,7 @@ const ScriptScheduler = (() => {
       const rect = slider.getBoundingClientRect();
       let pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
       let mins = Math.round(pct * 1440 / 15) * 15; // Snap to 15-min increments
-      mins = Math.max(0, Math.min(1440, mins));
+      mins = Math.max(0, Math.min(1425, mins));
 
       const timeStr = minutesToTime(mins);
       if (dragging === 'start') {
