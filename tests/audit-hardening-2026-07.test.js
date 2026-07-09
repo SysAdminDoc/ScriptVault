@@ -836,7 +836,7 @@ describe('Editor adapter/sandbox correctness (2026-07-02 audit)', () => {
   it('setValue does not arm the change latch on a no-op (would swallow next keystroke)', () => {
     const src = read('pages/editor-sandbox.html');
     const fn = src.slice(src.indexOf('function setValue'), src.indexOf('function applyOptions'));
-    const noOpGuard = fn.indexOf('if (editor.getValue() === value)');
+    const noOpGuard = fn.indexOf('if (activeModel.getValue() === value)');
     const latchArm = fn.indexOf('ignoreNextChange = true;');
     expect(noOpGuard).toBeGreaterThanOrEqual(0);
     expect(latchArm).toBeGreaterThan(noOpGuard);

@@ -56,6 +56,7 @@
   let ignoreNextChange = false;
   let currentScriptId = null;
   let monacoApi = null;
+  const scriptModels = new Map();
 
   // ── Load Monaco from local bundle ────────────────────────────────────────
   // Monaco is bundled locally in lib/monaco-esm/ at build time.
@@ -447,6 +448,9 @@
           editor.executeEdits('snippet', [{ range: sel, text: msg.text || '', forceMoveMarkers: true }]);
         }
         break;
+      case 'replace-range':
+        replaceRange(msg.text || '', msg.from, msg.to);
+        break;
       case 'action':
         if (editor && msg.id) {
           const act = editor.getAction(msg.id);
@@ -470,28 +474,65 @@
     }
   });
 
+  function getScriptModel(scriptId, initialValue) {
+    if (!monacoApi || !scriptId) return null;
+    let model = scriptModels.get(scriptId);
+    if (!model || model.isDisposed?.()) {
+      model = monacoApi.editor.createModel(initialValue || '', 'javascript');
+      scriptModels.set(scriptId, model);
+    }
+    return model;
+  }
+
   function setValue(value, scriptId) {
     if (!editor) return;
     const nextScriptId = scriptId || null;
     const sameScript = nextScriptId !== null && currentScriptId === nextScriptId;
     // Preserve cursor position only on same-script reload.
     const pos = sameScript ? editor.getPosition() : null;
+    const model = getScriptModel(nextScriptId, value);
+    if (model && editor.getModel() !== model) {
+      editor.setModel(model);
+    }
+    const activeModel = model || editor.getModel();
+    if (!activeModel) return;
     // Only arm the change-suppression latch when the content is actually
     // changing. Monaco fires onDidChangeModelContent only on a real change, so
     // arming it for a no-op setValue (e.g. re-activating a same-content tab)
     // would leave the latch set and swallow the user's next real keystroke.
-    if (editor.getValue() === value) {
+    if (activeModel.getValue() === value) {
       currentScriptId = nextScriptId;
       if (!sameScript) editor.setPosition({ lineNumber: 1, column: 1 });
       editor.focus();
       return;
     }
     ignoreNextChange = true;
-    editor.setValue(value);
+    activeModel.setValue(value);
     currentScriptId = nextScriptId;
     if (sameScript && pos) editor.setPosition(pos);
     else editor.setPosition({ lineNumber: 1, column: 1 });
     editor.focus();
+  }
+
+  function toMonacoPosition(pos) {
+    return {
+      lineNumber: Math.max(1, Math.floor((pos?.line || 0) + 1)),
+      column: Math.max(1, Math.floor((pos?.ch || 0) + 1))
+    };
+  }
+
+  function replaceRange(text, from, to) {
+    if (!editor || !monacoApi) return;
+    const start = toMonacoPosition(from);
+    const end = toMonacoPosition(to || from);
+    editor.focus();
+    editor.pushUndoStop();
+    editor.executeEdits('adapter.replaceRange', [{
+      range: new monacoApi.Range(start.lineNumber, start.column, end.lineNumber, end.column),
+      text: text || '',
+      forceMoveMarkers: true
+    }]);
+    editor.pushUndoStop();
   }
 
   function applyOptions(opts) {

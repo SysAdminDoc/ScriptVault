@@ -343,7 +343,11 @@
         }
         const newVal = lines.join('\n');
         _value = newVal;
-        this.setValue(newVal);
+        if (_useFallback) {
+          if (fallbackTextarea) fallbackTextarea.value = newVal;
+        } else {
+          sendToFrame({ type: 'replace-range', text, from, to });
+        }
       }
     },
     listSelections() {
@@ -352,14 +356,9 @@
     },
     operation(fn) { if (fn) fn(); },
 
-    // No-op CodeMirror methods not applicable to Monaco
+    // Per-tab Monaco undo is preserved by sandbox-owned models keyed by script id.
+    // The CodeMirror history methods remain present for dashboard compatibility.
     clearHistory() {},
-    // Per-tab undo history is not round-tripped through the sandbox yet, so
-    // expose explicit no-op stubs instead of leaving these methods absent —
-    // that made activateScriptTab's getHistory()/setHistory() calls throw and
-    // get silently swallowed by their try/catch. Returning null means "no saved
-    // history", so the caller clears the stack cleanly. See ROADMAP (per-tab
-    // Monaco undo via per-model view-state).
     getHistory() { return null; },
     setHistory() {},
     setCursor(line = 0, ch = 0) {

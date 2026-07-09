@@ -58,6 +58,25 @@ function findChromeExecutable() {
     return executable;
 }
 
+async function closeBrowserWithFallback(browser) {
+    if (!browser) return;
+    const chromeProcess = browser.process?.();
+    let timer;
+    try {
+        await Promise.race([
+            browser.close(),
+            new Promise((_, reject) => {
+                timer = setTimeout(() => reject(new Error('browser.close timed out after 15s')), 15000);
+            }),
+        ]);
+    } catch (error) {
+        console.warn(`Editor smoke browser close fallback: ${error.message}`);
+        if (chromeProcess && !chromeProcess.killed) chromeProcess.kill('SIGKILL');
+    } finally {
+        if (timer) clearTimeout(timer);
+    }
+}
+
 async function findExtensionId(browser) {
     const isScriptVaultTarget = target => {
         const url = target.url();
@@ -195,6 +214,6 @@ try {
         pageErrors.slice(0, 5).forEach(error => console.warn(`- ${error}`));
     }
 } finally {
-    if (browser) await browser.close();
+    await closeBrowserWithFallback(browser);
     await rm(userDataDir, { recursive: true, force: true });
 }
