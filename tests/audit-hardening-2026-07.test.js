@@ -819,8 +819,27 @@ describe('Extension pages have no CSP-blocked inline scripts (2026-07 regression
 describe('Editor adapter/sandbox correctness (2026-07-02 audit)', () => {
   it('setValue does not arm the change latch on a no-op (would swallow next keystroke)', () => {
     const src = read('pages/editor-sandbox.html');
-    // Guard must precede arming the latch.
-    expect(src).toMatch(/if \(editor\.getValue\(\) === value\) \{\s*editor\.focus\(\);\s*return;\s*\}\s*ignoreNextChange = true;/);
+    const fn = src.slice(src.indexOf('function setValue'), src.indexOf('function applyOptions'));
+    const noOpGuard = fn.indexOf('if (editor.getValue() === value)');
+    const latchArm = fn.indexOf('ignoreNextChange = true;');
+    expect(noOpGuard).toBeGreaterThanOrEqual(0);
+    expect(latchArm).toBeGreaterThan(noOpGuard);
+  });
+  it('sandbox Escape close command yields to Monaco transient widgets', () => {
+    const src = read('pages/editor-sandbox.html');
+    expect(src).toContain("const CLOSE_EDITOR_ESCAPE_CONTEXT = '!findWidgetVisible && !suggestWidgetVisible && !renameInputVisible';");
+    expect(src).toMatch(/editor\.addCommand\(monaco\.KeyCode\.Escape,[\s\S]*CLOSE_EDITOR_ESCAPE_CONTEXT\);/);
+  });
+  it('sandbox restores cursor position only for the same script id', () => {
+    const src = read('pages/editor-sandbox.html');
+    const fn = src.slice(src.indexOf('function setValue'), src.indexOf('function applyOptions'));
+    expect(src).toContain('let currentScriptId = null;');
+    expect(src).toContain('let pendingScriptId = null;');
+    expect(src).toContain('setValue(pendingValue, pendingScriptId);');
+    expect(fn).toContain('const sameScript = nextScriptId !== null && currentScriptId === nextScriptId;');
+    expect(fn).toContain('const pos = sameScript ? editor.getPosition() : null;');
+    expect(fn).toContain('if (sameScript && pos) editor.setPosition(pos);');
+    expect(fn).toContain('else editor.setPosition({ lineNumber: 1, column: 1 });');
   });
   it('monaco adapter caches the real cursor position instead of a frozen stub', () => {
     const src = read('pages/monaco-adapter.js');

@@ -50,9 +50,11 @@
   let editor = null;
   let isReady = false;
   let pendingValue = null;
+  let pendingScriptId = null;
   let pendingOptions = null;
   let currentTheme = 'vs-dark';
   let ignoreNextChange = false;
+  let currentScriptId = null;
   let monacoApi = null;
 
   // ── Load Monaco from local bundle ────────────────────────────────────────
@@ -157,9 +159,10 @@
       editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
         parent.postMessage({ type: 'save' }, '*'); // sandbox cannot know parent origin
       });
+      const CLOSE_EDITOR_ESCAPE_CONTEXT = '!findWidgetVisible && !suggestWidgetVisible && !renameInputVisible';
       editor.addCommand(monaco.KeyCode.Escape, () => {
         parent.postMessage({ type: 'close' }, '*');
-      });
+      }, CLOSE_EDITOR_ESCAPE_CONTEXT);
       editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Slash, () => {
         editor.getAction('editor.action.commentLine')?.run();
       });
@@ -367,7 +370,11 @@
 
       // Apply any pending operations
       if (pendingOptions) { applyOptions(pendingOptions); pendingOptions = null; }
-      if (pendingValue !== null) { setValue(pendingValue); pendingValue = null; }
+      if (pendingValue !== null) {
+        setValue(pendingValue, pendingScriptId);
+        pendingValue = null;
+        pendingScriptId = null;
+      }
 
       // Signal ready to parent
       parent.postMessage({ type: 'ready' }, '*');
@@ -393,7 +400,10 @@
     switch (msg.type) {
       case 'set-value':
         if (isReady) setValue(msg.value || '', msg.scriptId);
-        else pendingValue = msg.value || '';
+        else {
+          pendingValue = msg.value || '';
+          pendingScriptId = msg.scriptId || null;
+        }
         break;
       case 'get-value':
         if (editor) e.source.postMessage({ type: 'value', value: editor.getValue(), requestId: msg.requestId }, e.origin || location.origin);
@@ -462,19 +472,25 @@
 
   function setValue(value, scriptId) {
     if (!editor) return;
-    // Preserve cursor position on same-script reload
-    const pos = editor.getPosition();
+    const nextScriptId = scriptId || null;
+    const sameScript = nextScriptId !== null && currentScriptId === nextScriptId;
+    // Preserve cursor position only on same-script reload.
+    const pos = sameScript ? editor.getPosition() : null;
     // Only arm the change-suppression latch when the content is actually
     // changing. Monaco fires onDidChangeModelContent only on a real change, so
     // arming it for a no-op setValue (e.g. re-activating a same-content tab)
     // would leave the latch set and swallow the user's next real keystroke.
     if (editor.getValue() === value) {
+      currentScriptId = nextScriptId;
+      if (!sameScript) editor.setPosition({ lineNumber: 1, column: 1 });
       editor.focus();
       return;
     }
     ignoreNextChange = true;
     editor.setValue(value);
-    if (pos) editor.setPosition(pos);
+    currentScriptId = nextScriptId;
+    if (sameScript && pos) editor.setPosition(pos);
+    else editor.setPosition({ lineNumber: 1, column: 1 });
     editor.focus();
   }
 
