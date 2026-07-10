@@ -276,7 +276,7 @@ const ProfileManager = (() => {
   padding: 8px 12px;
   background: var(--bg-input, #333333);
   border: 1px solid var(--border-color, #404040);
-  border-radius: 6px;
+  border-radius: 50%;
   color: var(--text-primary, #e0e0e0);
   font-size: 0.8125rem;
   outline: none;
@@ -304,7 +304,7 @@ const ProfileManager = (() => {
   appearance: none;
   width: 28px;
   height: 28px;
-  border-radius: 50%;
+  border-radius: 6px;
   border: 2px solid transparent;
   background: transparent;
   cursor: pointer;

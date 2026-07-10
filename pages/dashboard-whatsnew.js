@@ -11,6 +11,21 @@ const WhatsNew = (() => {
     : '2.0.0';
 
   const CHANGELOG = {
+    '3.19.1': {
+      title: 'ScriptVault 3.19.1 — Premium Workbench Parity',
+      date: '2026-07-09',
+      highlights: [
+        { icon: 'FLOW', title: 'A Real Workbench Navigation Model', desc: 'The visible navigation rail is now the keyboard-accessible dashboard tablist, compact layouts keep the main workflow close, and workspace health reports the local and sync state honestly.' },
+        { icon: 'STATE', title: 'Polished States on Every Surface', desc: 'Updates, Settings, Utilities, Trash, Help, popup, side panel, install review, DevTools, and the editor now share deliberate loading, empty, selected, disabled, saved, and recovery states.' },
+        { icon: 'SAFE', title: 'Reliable Settings and Editor Recovery', desc: 'Same-setting autosaves are serialized and roll back cleanly on failure, while a visible basic editor preserves editing and saving when the full Monaco surface cannot load.' },
+      ],
+      improvements: [
+        'Theme bootstrap is cached before paint so compact surfaces no longer flash or capture a mixed palette.',
+        'Popup global controls announce whether they enable or disable scripts, and the side panel removes duplicate empty library chrome.',
+        'DevTools wraps its command surface on narrow panes and keeps request detail usable as an overlay.',
+        'Rendered screenshot coverage now spans every dashboard destination and all four supported themes.',
+      ],
+    },
     '3.19.0': {
       title: 'ScriptVault 3.19.0 â€” Professional Workbench',
       date: '2026-07-09',

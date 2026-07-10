@@ -405,6 +405,9 @@
     const dashboardTelemetryConsoleSeen = new Map();
     const dashboardTelemetryErrorsSeen = new Set();
     const dashboardTelemetryGistSyncing = new Set();
+    const settingsSaveQueues = new Map();
+    let settingsSavePendingCount = 0;
+    let settingsSaveLastState = { kind: 'saved', message: 'Saved' };
     const PROGRESS_BACKGROUND_SELECTORS = ['.skip-link', '.tm-header', '#viewSettingsBar', '#setupWarning', '#mainContent', '#editorOverlay', '#findScriptsOverlay', '#modal', '#commandPalette'];
     const EDITOR_BACKGROUND_SELECTORS = ['.skip-link', '.tm-header', '#viewSettingsBar', '#setupWarning', '#mainContent'];
     const FIND_SCRIPTS_BACKGROUND_SELECTORS = ['.skip-link', '.tm-header', '#mainContent'];
@@ -1204,7 +1207,17 @@
             const isActive = button.dataset.workbenchTab === activeTab && !button.classList.contains('sv-rail-subitem');
             button.classList.toggle('active', isActive);
             button.setAttribute('aria-pressed', String(isActive));
+            if (button.getAttribute('role') === 'tab') {
+                button.setAttribute('aria-selected', String(isActive));
+                button.tabIndex = isActive ? 0 : -1;
+            }
         });
+    }
+
+    function getActiveWorkbenchTab(tabName) {
+        return Array.from(elements.workbenchNavButtons || []).find(button =>
+            button.dataset.workbenchTab === tabName && !button.classList.contains('sv-rail-subitem')
+        ) || null;
     }
 
     function setDashboardSection(name, { focusControl = false } = {}) {
@@ -1219,8 +1232,8 @@
             elements.btnHelpTab?.classList.add('active');
             elements.btnHelpTab?.setAttribute('aria-expanded', 'true');
             elements.btnHelpTab?.setAttribute('aria-pressed', 'true');
-            if (focusControl) elements.btnHelpTab?.focus();
             syncWorkbenchNavigation(nextTab);
+            if (focusControl) getActiveWorkbenchTab(nextTab)?.focus();
             return true;
         }
 
@@ -1233,8 +1246,8 @@
         tab.tabIndex = 0;
         panel.classList.add('active');
         panel.hidden = false;
-        if (focusControl) tab.focus();
         syncWorkbenchNavigation(nextTab);
+        if (focusControl) getActiveWorkbenchTab(nextTab)?.focus();
         return true;
     }
 
@@ -1743,6 +1756,8 @@
         elements.svRailStorageBar = document.getElementById('svRailStorageBar');
         elements.svRailStoragePct = document.getElementById('svRailStoragePct');
         elements.svCommandHealthDetail = document.getElementById('svCommandHealthDetail');
+        elements.svCommandHealthTitle = document.getElementById('svCommandHealthTitle');
+        elements.svCommandHealthMark = document.getElementById('svCommandHealthMark');
         elements.svFooterScriptStatus = document.getElementById('svFooterScriptStatus');
         elements.svFooterUpdateStatus = document.getElementById('svFooterUpdateStatus');
         elements.svFooterEngineStatus = document.getElementById('svFooterEngineStatus');
@@ -2092,6 +2107,7 @@
         elements.settingsModeSummary = document.getElementById('settingsModeSummary');
         elements.settingsVisibleSummary = document.getElementById('settingsVisibleSummary');
         elements.settingsAdvancedSummary = document.getElementById('settingsAdvancedSummary');
+        elements.settingsSaveStatus = document.getElementById('settingsSaveStatus');
         elements.settingsFilterStatus = document.getElementById('settingsFilterStatus');
         elements.settingsEmptyState = document.getElementById('settingsEmptyState');
         elements.settingsFilterButtons = document.querySelectorAll('#settingsCategoryFilters .settings-filter');
@@ -2328,7 +2344,8 @@
 
     function tDashboard(key, fallback = key, placeholders = {}) {
         const i18n = getDashboardI18n();
-        return i18n?.getMessage ? i18n.getMessage(key, placeholders) : fallback;
+        const translated = i18n?.getMessage ? i18n.getMessage(key, placeholders) : '';
+        return translated && translated !== key ? translated : fallback;
     }
 
     function getSettingsFilterLabel(filter) {
@@ -3440,7 +3457,7 @@
             const safeCount = numberFormatter.format(counts.safe);
             const reviewCount = numberFormatter.format(counts.review);
             elements.pendingUpdatesSummary.textContent = counts.queued === 0
-                ? tDashboard('noQueuedUpdates', 'No queued updates.')
+                ? tDashboard('noQueuedUpdates', 'No updates are waiting for review.')
                 : tDashboard(
                     'queuedUpdatesSummary',
                     `${safeCount} safe, ${reviewCount} requiring review.`,
@@ -3456,7 +3473,17 @@
         renderScriptsUpdateQueue(counts);
         if (!elements.pendingUpdatesList) return;
         if (counts.queued === 0) {
-            safeSetHtml(elements.pendingUpdatesList, `<div class="pending-updates-empty">${escapeHtml(tDashboard('noQueuedUpdates', 'No queued updates.'))}</div>`);
+            safeSetHtml(elements.pendingUpdatesList, `
+                <div class="pending-updates-empty" role="status" aria-live="polite">
+                    <span class="pending-updates-empty-mark" aria-hidden="true">OK</span>
+                    <strong>${escapeHtml(tDashboard('updatesCurrentTitle', 'Your scripts are up to date'))}</strong>
+                    <span>${escapeHtml(tDashboard('updatesCurrentDescription', 'Nothing is waiting for review. Check again whenever you want to refresh remote sources.'))}</span>
+                    <button type="button" class="toolbar-btn" data-empty-check-updates>${escapeHtml(tDashboard('checkNow', 'Check now'))}</button>
+                </div>
+            `);
+            elements.pendingUpdatesList.querySelector('[data-empty-check-updates]')?.addEventListener('click', () => {
+                elements.btnRefreshPendingUpdates?.click();
+            });
             return;
         }
 
@@ -4516,11 +4543,30 @@
         }
     }
 
-    async function saveSetting(key, value, options = {}) {
+    function setSettingsSaveState(kind, message) {
+        if (!elements.settingsSaveStatus) return;
+        const summary = elements.settingsSaveStatus.closest('.settings-save-summary');
+        if (summary) summary.dataset.state = kind;
+        elements.settingsSaveStatus.textContent = message;
+    }
+
+    function restoreSettingsInputValue(input, value) {
+        if (!input) return;
+        if (input instanceof HTMLInputElement && (input.type === 'checkbox' || input.type === 'radio')) {
+            input.checked = Boolean(value);
+            return;
+        }
+        if ('value' in input) {
+            input.value = Array.isArray(value) ? value.join('\n') : String(value ?? '');
+        }
+    }
+
+    async function saveSettingNow(key, value, options = {}) {
         const input = options.input || getSettingsInputForKey(key);
         const validation = validateSettingsValue(key, value);
         if (!validation.ok) {
             setSettingsFieldError(input, validation.error);
+            settingsSaveLastState = { kind: 'invalid', message: 'Needs attention' };
             if (!options.quiet) showToast(validation.error, 'error');
             return false;
         }
@@ -4529,7 +4575,8 @@
         const previousValue = state.settings[key];
         try {
             state.settings[key] = value;
-            await chrome.runtime.sendMessage({ action: 'setSettings', settings: { [key]: value } });
+            const response = await chrome.runtime.sendMessage({ action: 'setSettings', settings: { [key]: value } });
+            if (response?.error) throw new Error(response.error);
             // Live-apply editor settings
             if (state.editor) {
                 switch (key) {
@@ -4555,15 +4602,38 @@
             if (key === 'syncEnabled' || key === 'syncProvider') {
                 loadSyncProviderStatus();
             }
-            // Theme switches are their own visible feedback — no success toast.
-            const themeKeys = key === 'layout' || key === 'editorTheme';
-            if (!options.quiet && !themeKeys) showToast('Setting saved', 'success');
+            // The persistent autosave summary is the confirmation; avoid a toast on every change.
+            settingsSaveLastState = {
+                kind: 'saved',
+                message: key === 'layout' || key === 'editorTheme' ? 'Theme applied' : 'Saved'
+            };
             return true;
         } catch (e) {
             state.settings[key] = previousValue;
-            if (!options.quiet) showToast('Failed to save', 'error');
+            restoreSettingsInputValue(input, previousValue);
+            settingsSaveLastState = { kind: 'error', message: 'Save failed' };
+            if (!options.quiet) showToast('Couldn’t save this setting. Your previous value is still active.', 'error');
             return false;
         }
+    }
+
+    function saveSetting(key, value, options = {}) {
+        settingsSavePendingCount += 1;
+        setSettingsSaveState('saving', 'Saving…');
+
+        const previous = settingsSaveQueues.get(key) || Promise.resolve();
+        const queued = previous.catch(() => {}).then(() => saveSettingNow(key, value, options));
+        settingsSaveQueues.set(key, queued);
+
+        return queued.finally(() => {
+            if (settingsSaveQueues.get(key) === queued) settingsSaveQueues.delete(key);
+            settingsSavePendingCount = Math.max(0, settingsSavePendingCount - 1);
+            if (settingsSavePendingCount > 0) {
+                setSettingsSaveState('saving', 'Saving…');
+            } else {
+                setSettingsSaveState(settingsSaveLastState.kind, settingsSaveLastState.message);
+            }
+        });
     }
 
     async function saveSettingOrThrow(key, value) {
@@ -13546,9 +13616,22 @@
             elements.svFooterScriptStatus.textContent = `${formattedTotal} scripts - ${formattedActive} enabled - ${numberFormatter.format(total - active)} disabled`;
         }
         if (elements.svCommandHealthDetail) {
-            elements.svCommandHealthDetail.textContent = state.settings?.lastSync
+            const provider = normalizeSyncProvider(state.settings);
+            const configured = normalizeSyncEnabled(state.settings) && provider !== 'none';
+            const hasSynced = configured && Boolean(state.settings?.lastSync);
+            if (elements.svCommandHealthTitle) {
+                elements.svCommandHealthTitle.textContent = hasSynced
+                    ? 'Sync ready'
+                    : configured ? 'Sync configured' : 'Local vault ready';
+            }
+            if (elements.svCommandHealthMark) {
+                elements.svCommandHealthMark.textContent = hasSynced ? 'OK' : configured ? 'SYNC' : 'L';
+            }
+            elements.svCommandHealthDetail.textContent = hasSynced
                 ? `Last synced ${formatSyncTimestamp(state.settings.lastSync)}`
-                : 'Local vault ready';
+                : configured ? 'Run Sync to create the first snapshot' : 'Sync not configured';
+            elements.svCommandHealthDetail.closest('.scripts-shell-health')
+                ?.setAttribute('data-tone', configured ? 'good' : 'neutral');
         }
         updateHelpOverview();
         try {
@@ -14804,9 +14887,40 @@
 
         Array.from(elements.workbenchNavButtons || []).forEach(button => {
             button.addEventListener('click', async () => {
-                await switchTab(button.dataset.workbenchTab, { focusControl: true });
+                const tabName = button.dataset.workbenchTab;
+                const filter = button.dataset.workbenchFilter;
+                await switchTab(tabName, { focusControl: !filter });
+                if (filter) {
+                    const selector = tabName === 'utilities'
+                        ? `[data-utilities-filter="${filter}"]`
+                        : `[data-settings-filter="${filter}"]`;
+                    const filterButton = document.querySelector(selector);
+                    filterButton?.click();
+                    filterButton?.focus();
+                    Array.from(elements.workbenchNavButtons || [])
+                        .filter(item => item.classList.contains('sv-rail-subitem'))
+                        .forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+                }
             });
         });
+
+        Array.from(elements.workbenchNavButtons || [])
+            .filter(button => button.getAttribute('role') === 'tab')
+            .forEach(button => {
+                button.addEventListener('keydown', async event => {
+                    const tabs = Array.from(elements.workbenchNavButtons || [])
+                        .filter(item => item.getAttribute('role') === 'tab');
+                    const index = tabs.indexOf(button);
+                    let nextIndex = -1;
+                    if (event.key === 'ArrowDown' || event.key === 'ArrowRight') nextIndex = (index + 1) % tabs.length;
+                    else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') nextIndex = (index - 1 + tabs.length) % tabs.length;
+                    else if (event.key === 'Home') nextIndex = 0;
+                    else if (event.key === 'End') nextIndex = tabs.length - 1;
+                    else return;
+                    event.preventDefault();
+                    await switchTab(tabs[nextIndex]?.dataset.workbenchTab, { focusControl: true });
+                });
+            });
 
         elements.dashboardTabs.forEach(tab => {
             tab.addEventListener('keydown', async (event) => {

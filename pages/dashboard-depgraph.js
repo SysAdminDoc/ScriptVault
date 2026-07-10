@@ -129,7 +129,7 @@ const DependencyGraph = (() => {
     left: 8px;
     background: var(--bg-header);
     border: 1px solid var(--border-color);
-    border-radius: 6px;
+    border-radius: 50%;
     padding: 8px 12px;
     display: flex;
     gap: 14px;
@@ -234,7 +234,7 @@ const DependencyGraph = (() => {
 .dg-overlap-dot {
     width: 8px;
     height: 8px;
-    border-radius: 50%;
+    border-radius: 6px;
     flex-shrink: 0;
 }
 .dg-btn-open {

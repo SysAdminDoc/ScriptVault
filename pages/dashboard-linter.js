@@ -76,7 +76,7 @@ const AdvancedLinter = (() => {
 .sv-lint-btn {
   padding: 5px 12px;
   border: 1px solid var(--border-color, #404040);
-  border-radius: 6px;
+  border-radius: 50%;
   background: var(--bg-input, #333);
   color: var(--text-primary, #e0e0e0);
   font-size: 0.75rem;
@@ -126,7 +126,7 @@ const AdvancedLinter = (() => {
   flex-shrink: 0;
   width: 8px;
   height: 8px;
-  border-radius: 50%;
+  border-radius: 6px;
   margin-top: 5px;
 }
 .sv-lint-severity-error { background: var(--accent-red, #f87171); }

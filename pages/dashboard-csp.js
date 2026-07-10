@@ -123,7 +123,7 @@ const CSPReporter = (() => {
 .sv-csp-search {
   padding: 6px 10px;
   border: 1px solid var(--border-color, #404040);
-  border-radius: 6px;
+  border-radius: 50%;
   background: var(--bg-input, #333);
   color: var(--text-primary, #e0e0e0);
   font-size: 0.75rem;
@@ -410,7 +410,7 @@ const CSPReporter = (() => {
   left: 2px;
   width: 16px;
   height: 16px;
-  border-radius: 50%;
+  border-radius: 6px;
   background: #fff;
   transition: transform 0.2s;
 }

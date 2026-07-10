@@ -126,7 +126,7 @@ const Gamification = (() => {
 .sv-gam-profile-badge {
   width: 64px;
   height: 64px;
-  border-radius: 50%;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;

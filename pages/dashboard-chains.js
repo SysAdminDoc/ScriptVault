@@ -318,7 +318,7 @@ const ScriptChains = (() => {
 .sv-chain-step .step-num {
   width: 24px;
   height: 24px;
-  border-radius: 50%;
+  border-radius: 6px;
   background: var(--accent-green-dark, #22c55e);
   color: #fff;
   display: flex;

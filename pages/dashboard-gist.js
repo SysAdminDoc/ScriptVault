@@ -612,7 +612,7 @@ const GistIntegration = (() => {
     padding: 8px 12px;
     background: var(--bg-input, #333333);
     border: 1px solid var(--border-color, #404040);
-    border-radius: 6px;
+    border-radius: 50%;
     color: var(--text-primary, #e0e0e0);
     font-size: 0.8125rem;
     outline: none;
@@ -627,7 +627,7 @@ const GistIntegration = (() => {
 .gi-btn {
     padding: 8px 16px;
     border: none;
-    border-radius: 6px;
+    border-radius: 50%;
     font-size: 0.75rem;
     font-weight: 500;
     cursor: pointer;
@@ -783,7 +783,7 @@ const GistIntegration = (() => {
     position: absolute;
     width: 16px;
     height: 16px;
-    border-radius: 50%;
+    border-radius: 6px;
     background: #fff;
     top: 2px;
     left: 2px;
@@ -923,7 +923,7 @@ const GistIntegration = (() => {
     height: 16px;
     border: 2px solid var(--border-color, #404040);
     border-top-color: var(--accent-green, #4ade80);
-    border-radius: 50%;
+    border-radius: 6px;
     animation: gi-spin 0.6s linear infinite;
     margin-inline-end: 6px;
     vertical-align: middle;

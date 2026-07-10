@@ -1408,7 +1408,7 @@
             width: 16px;
             height: 16px;
             border: 1px solid var(--text-muted);
-            border-radius: 50%;
+            border-radius: 6px;
             font-size: 0.625rem;
             color: var(--text-muted);
             cursor: help;
@@ -7507,66 +7507,65 @@
                 <img src="../images/icon48.png" alt="" width="34" height="34">
                 <div>
                     <strong data-i18n="appName">ScriptVault</strong>
-                    <span id="svRailVersion">v3.19.0</span>
+                    <span id="svRailVersion">v3.19.1</span>
                 </div>
             </div>
-            <nav class="sv-rail-nav" aria-label="Dashboard sections">
-                <button type="button" class="sv-rail-item active" data-workbench-tab="scripts" aria-pressed="true">
+            <nav class="sv-rail-nav" aria-label="Dashboard sections" role="tablist" aria-orientation="vertical">
+                <button type="button" class="sv-rail-item active" id="workbenchTabScripts" data-workbench-tab="scripts" role="tab" aria-controls="scriptsPanel" aria-selected="true" aria-pressed="true" tabindex="0">
                     <span class="sv-rail-icon" aria-hidden="true">#</span>
                     <span>Scripts</span>
                     <span class="sv-rail-count" id="svRailScriptsCount">0</span>
                 </button>
-                <button type="button" class="sv-rail-item" data-workbench-tab="updates" aria-pressed="false">
+                <button type="button" class="sv-rail-item" id="workbenchTabUpdates" data-workbench-tab="updates" role="tab" aria-controls="updatesPanel" aria-selected="false" aria-pressed="false" tabindex="-1">
                     <span class="sv-rail-icon" aria-hidden="true">U</span>
                     <span data-i18n="tabUpdates">Updates</span>
                     <span class="sv-rail-count warning" id="svRailUpdatesCount" hidden>0</span>
                 </button>
-                <button type="button" class="sv-rail-item" data-workbench-tab="utilities" aria-pressed="false">
-                    <span class="sv-rail-icon" aria-hidden="true">C</span>
-                    <span>Collections</span>
-                    <span class="sv-rail-count" id="svRailCollectionsCount">0</span>
-                </button>
-                <button type="button" class="sv-rail-item" data-workbench-tab="help" aria-pressed="false">
-                    <span class="sv-rail-icon" aria-hidden="true">H</span>
-                    <span>History</span>
-                </button>
-                <button type="button" class="sv-rail-item" data-workbench-tab="settings" aria-pressed="false">
+                <button type="button" class="sv-rail-item" id="workbenchTabSettings" data-workbench-tab="settings" role="tab" aria-controls="settingsPanel" aria-selected="false" aria-pressed="false" tabindex="-1">
                     <span class="sv-rail-icon" aria-hidden="true">S</span>
                     <span data-i18n="tabSettings">Settings</span>
                 </button>
-                <button type="button" class="sv-rail-item" data-workbench-tab="utilities" aria-pressed="false">
+                <button type="button" class="sv-rail-item" id="workbenchTabUtilities" data-workbench-tab="utilities" role="tab" aria-controls="utilitiesPanel" aria-selected="false" aria-pressed="false" tabindex="-1">
                     <span class="sv-rail-icon" aria-hidden="true">W</span>
                     <span data-i18n="tabUtilities">Utilities</span>
+                </button>
+                <button type="button" class="sv-rail-item" id="workbenchTabTrash" data-workbench-tab="trash" role="tab" aria-controls="trashPanel" aria-selected="false" aria-pressed="false" tabindex="-1">
+                    <span class="sv-rail-icon" aria-hidden="true">T</span>
+                    <span data-i18n="tabTrash">Trash</span>
+                </button>
+                <button type="button" class="sv-rail-item" id="workbenchTabHelp" data-workbench-tab="help" role="tab" aria-controls="helpPanel" aria-selected="false" aria-pressed="false" tabindex="-1">
+                    <span class="sv-rail-icon" aria-hidden="true">?</span>
+                    <span data-i18n="tabHelp">Help</span>
                 </button>
             </nav>
             <div class="sv-rail-section" aria-label="System tools">
                 <span class="sv-rail-section-title">System</span>
-                <button type="button" class="sv-rail-item sv-rail-subitem" data-workbench-tab="utilities" aria-pressed="false">
+                <button type="button" class="sv-rail-item sv-rail-subitem" data-workbench-tab="utilities" data-workbench-filter="backup" aria-pressed="false">
                     <span class="sv-rail-icon" aria-hidden="true">R</span>
                     <span>Sync &amp; Backup</span>
                     <span class="sv-status-dot good" aria-hidden="true"></span>
                 </button>
-                <button type="button" class="sv-rail-item sv-rail-subitem" data-workbench-tab="utilities" aria-pressed="false">
+                <button type="button" class="sv-rail-item sv-rail-subitem" data-workbench-tab="utilities" data-workbench-filter="import" aria-pressed="false">
                     <span class="sv-rail-icon" aria-hidden="true">I</span>
                     <span>Import / Export</span>
                 </button>
-                <button type="button" class="sv-rail-item sv-rail-subitem" data-workbench-tab="utilities" aria-pressed="false">
+                <button type="button" class="sv-rail-item sv-rail-subitem" data-workbench-tab="utilities" data-workbench-filter="diagnostics" aria-pressed="false">
                     <span class="sv-rail-icon" aria-hidden="true">L</span>
                     <span>Logs</span>
                 </button>
             </div>
             <div class="sv-rail-section" aria-label="Trust tools">
                 <span class="sv-rail-section-title">Trust</span>
-                <button type="button" class="sv-rail-item sv-rail-subitem" data-workbench-tab="settings" aria-pressed="false">
+                <button type="button" class="sv-rail-item sv-rail-subitem" data-workbench-tab="settings" data-workbench-filter="security" aria-pressed="false">
                     <span class="sv-rail-icon" aria-hidden="true">T</span>
                     <span>Trusted Sources</span>
                     <span class="sv-status-dot good" aria-hidden="true"></span>
                 </button>
-                <button type="button" class="sv-rail-item sv-rail-subitem" data-workbench-tab="settings" aria-pressed="false">
+                <button type="button" class="sv-rail-item sv-rail-subitem" data-workbench-tab="settings" data-workbench-filter="security" aria-pressed="false">
                     <span class="sv-rail-icon" aria-hidden="true">P</span>
                     <span>Permissions</span>
                 </button>
-                <button type="button" class="sv-rail-item sv-rail-subitem" data-workbench-tab="settings" aria-pressed="false">
+                <button type="button" class="sv-rail-item sv-rail-subitem" data-workbench-tab="settings" data-workbench-filter="security" aria-pressed="false">
                     <span class="sv-rail-icon" aria-hidden="true">D</span>
                     <span>Domain Access</span>
                 </button>
@@ -7578,12 +7577,12 @@
             </div>
             <div class="sv-rail-footer">
                 <span class="sv-sync-dot" aria-hidden="true"></span>
-                <span>ScriptVault Pro</span>
+                <span>Local-first vault</span>
             </div>
         </aside>
         <main class="tm-content sv-workbench-main" role="main" id="mainContent" tabindex="-1">
         <!-- Scripts Panel -->
-        <div id="scriptsPanel" class="tm-panel active" role="tabpanel" aria-labelledby="dashboardTabScripts">
+        <div id="scriptsPanel" class="tm-panel active" role="tabpanel" aria-labelledby="workbenchTabScripts">
             <div class="scripts-shell-header">
                 <div class="scripts-shell-copy">
                     <span class="scripts-shell-kicker" data-i18n="scriptsWorkspaceKicker">Workspace</span>
@@ -7619,8 +7618,8 @@
                     <div class="scripts-shell-stat-copy"><strong id="workspaceUpdatesStat">0</strong><span data-i18n="tabUpdates">Updates</span></div>
                 </div>
                 <div class="scripts-shell-health" id="svCommandHealth" role="status" aria-live="polite">
-                    <span class="scripts-shell-stat-mark" aria-hidden="true">OK</span>
-                    <div class="scripts-shell-health-copy"><strong>Sync healthy</strong><small id="svCommandHealthDetail">Local vault ready</small></div>
+                    <span class="scripts-shell-stat-mark" id="svCommandHealthMark" aria-hidden="true">L</span>
+                    <div class="scripts-shell-health-copy"><strong id="svCommandHealthTitle">Local vault ready</strong><small id="svCommandHealthDetail">Sync not configured</small></div>
                 </div>
             </div>
             <!-- Combined Toolbar -->
@@ -7654,7 +7653,7 @@
                             <option value="disable" data-i18n="disabled">Disable</option>
                             <option value="export" data-i18n="exportAction">Export</option>
                             <option value="update" data-i18n="checkUpdates">Check for Updates</option>
-                            <option value="reset" data-i18n="factoryReset">Factory Reset</option>
+                            <option value="reset">Reset Script Settings</option>
                             <option value="delete" data-i18n="delete">Delete</option>
                         </select>
                         <button type="button" class="btn bulk-btn" id="btnBulkApply" data-i18n="apply" disabled>Apply</button>
@@ -7840,7 +7839,7 @@
         </div>
 
         <!-- Updates Panel -->
-        <div id="updatesPanel" class="tm-panel" role="tabpanel" aria-labelledby="dashboardTabUpdates" hidden>
+        <div id="updatesPanel" class="tm-panel" role="tabpanel" aria-labelledby="workbenchTabUpdates" hidden>
             <div class="updates-shell">
                 <div class="updates-hero">
                     <div>
@@ -7874,7 +7873,7 @@
 
         <!-- Settings Panel -->
         <!-- Settings Panel - Comprehensive Tampermonkey-style -->
-        <div id="settingsPanel" class="tm-panel" role="tabpanel" aria-labelledby="dashboardTabSettings" hidden>
+        <div id="settingsPanel" class="tm-panel" role="tabpanel" aria-labelledby="workbenchTabSettings" hidden>
             <div class="settings-shell">
             <div class="settings-hero">
                 <div class="settings-hero-copy">
@@ -7894,6 +7893,10 @@
                     <div class="settings-summary">
                         <span class="settings-summary-label" data-i18n="settingsAdvanced">Advanced</span>
                         <strong id="settingsAdvancedSummary" data-i18n="settingsAdvancedInitial">0 shown</strong>
+                    </div>
+                    <div class="settings-summary settings-save-summary" data-state="saved">
+                        <span class="settings-summary-label">Autosave</span>
+                        <strong id="settingsSaveStatus" role="status" aria-live="polite" aria-atomic="true">Saved</strong>
                     </div>
                 </div>
             </div>
@@ -8765,7 +8768,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
             </div>
         </div>
         <!-- Utilities Panel -->
-        <div id="utilitiesPanel" class="tm-panel" role="tabpanel" aria-labelledby="dashboardTabUtilities" hidden>
+        <div id="utilitiesPanel" class="tm-panel" role="tabpanel" aria-labelledby="workbenchTabUtilities" hidden>
             <div class="utilities-shell">
             <div class="utilities-hero">
                 <div class="utilities-hero-copy">
@@ -8973,7 +8976,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                             <button type="button" class="btn" id="btnRefreshBackups" data-i18n="refresh">Refresh</button>
                         </div>
                     </div>
-                    <div class="utilities-toolbar" style="padding:0;margin-top:12px">
+                    <div class="backup-browser-toolbar">
                         <label class="utilities-search" for="backupBrowserQuickFilter">
                             <span class="utilities-search-icon">⌕</span>
                             <input type="search" class="utilities-search-input" id="backupBrowserQuickFilter" name="backup_browser_search" placeholder="Search manual, scheduled, vault snapshot..." data-i18n-placeholder="backupBrowserSearchPlaceholder" autocomplete="off" spellcheck="false">
@@ -9326,7 +9329,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
         </div>
 
         <!-- Trash Panel -->
-        <div id="trashPanel" class="tm-panel" role="tabpanel" aria-labelledby="dashboardTabTrash" hidden>
+        <div id="trashPanel" class="tm-panel" role="tabpanel" aria-labelledby="workbenchTabTrash" hidden>
             <div class="trash-shell">
                 <div class="trash-hero">
                     <div class="trash-hero-copy">
@@ -9382,7 +9385,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
         </div>
 
         <!-- Help Panel -->
-        <div id="helpPanel" class="tm-panel" role="region" aria-labelledby="btnHelpTab" hidden>
+        <div id="helpPanel" class="tm-panel" role="tabpanel" aria-labelledby="workbenchTabHelp" hidden>
             <div class="help-shell">
                 <div class="help-hero">
                     <div class="help-hero-copy">
@@ -9742,7 +9745,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
             <button type="button" class="editor-tab" id="editorTabInfo" role="tab" aria-selected="false" aria-controls="infoPanel" tabindex="-1" data-panel="info"><span data-i18n="editorTabInfo">Info</span></button>
         </div>
         <div class="editor-script-tabs" id="editorScriptTabsGroup" role="group" aria-label="Open script editors" data-i18n-aria-label="openScriptEditors" hidden></div>
-        <div class="editor-toolbar" id="editorToolbar">
+        <div class="editor-toolbar" id="editorToolbar" role="toolbar" aria-label="Editor tools">
             <button type="button" class="toolbar-btn" id="tbtnUndo" title="Undo (Ctrl+Z)" data-i18n-title="toolbarUndoTitle">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 0118 0 9 9 0 01-9 9 9 9 0 01-7.5-4"/></svg>
                 <span data-i18n="shortcutUndo">Undo</span>
@@ -9847,6 +9850,13 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
             <div class="editor-main">
                 <div id="codePanel" class="editor-panel active" role="tabpanel" aria-labelledby="editorTabCode">
                     <div class="code-editor-wrapper" id="editorWrapper">
+                        <div class="editor-fallback-notice" id="editorFallbackNotice" role="status" aria-live="polite" hidden>
+                            <span class="editor-fallback-copy">
+                                <strong>Basic editor active</strong>
+                                <span>The full editor could not load. Editing and saving remain available.</span>
+                            </span>
+                            <button class="btn" id="btnRetryEditor" type="button">Retry full editor</button>
+                        </div>
                         <!-- Monaco editor runs in a sandboxed iframe to allow eval (required by Monaco's tokenizer) -->
                         <iframe id="monacoFrame"
                                 src="editor-sandbox.html"
@@ -9854,7 +9864,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                                 style="width:100%;height:100%;border:none;display:block;"
                                 title="Monaco Editor" data-i18n-title="monacoEditorTitle"></iframe>
                         <!-- Fallback textarea shown while Monaco loads or if iframe fails -->
-                        <textarea id="editorTextarea" style="display:none;width:100%;height:100%;background:var(--bg-input);color:var(--text-primary);font-family:monospace;font-size:0.8125rem;border:1px solid var(--panel-border-soft,rgba(127,127,127,0.24));resize:none;padding:8px;box-sizing:border-box;"></textarea>
+                        <textarea id="editorTextarea" aria-label="Basic script editor" style="display:none;width:100%;height:100%;background:var(--bg-input);color:var(--text-primary);font-family:monospace;font-size:0.8125rem;border:1px solid var(--panel-border-soft,rgba(127,127,127,0.24));resize:none;padding:12px;box-sizing:border-box;"></textarea>
                     </div>
                 </div>
                 <div id="infoPanel" class="editor-panel" role="tabpanel" aria-labelledby="editorTabInfo" hidden>

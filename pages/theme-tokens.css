@@ -10,7 +10,7 @@
   --sv-border-subtle: #1b251e;
   --sv-text: #f0f5f2;
   --sv-text-muted: #a3afa8;
-  --sv-text-dim: #6f7d75;
+  --sv-text-dim: #87958d;
   --sv-accent: #35d07f;
   --sv-accent-dim: #173d29;
   --sv-danger: #ef4444;
@@ -19,8 +19,15 @@
   --sv-badge-bg: #172019;
   --sv-scrollbar: #324038;
   --sv-scrollbar-hover: #45564c;
+  --sv-text-on-accent: #06130b;
+  --sv-success-text: #4ade80;
+  --sv-backdrop: rgb(0 0 0 / 0.68);
+  --sv-radius-0: 0;
+  --sv-radius-sm: 4px;
   --sv-radius-panel: 8px;
   --sv-radius-control: 6px;
+  --sv-radius-card: 10px;
+  --sv-radius-dialog: 12px;
   --sv-focus-ring: 0 0 0 2px rgb(from var(--sv-accent) r g b / 0.72), 0 0 0 4px rgb(from var(--sv-accent) r g b / 0.16);
   /* Timing badge tokens */
   --timing-fast-bg: #14532d;
@@ -43,7 +50,7 @@
   --sv-border-subtle: #e3ebe6;
   --sv-text: #17231c;
   --sv-text-muted: #58675e;
-  --sv-text-dim: #839087;
+  --sv-text-dim: #66756c;
   --sv-accent: #16a34a;
   --sv-accent-dim: #dcfce7;
   --sv-danger: #dc2626;
@@ -52,6 +59,9 @@
   --sv-badge-bg: #edf3ef;
   --sv-scrollbar: #bcc9c0;
   --sv-scrollbar-hover: #9eaea3;
+  --sv-text-on-accent: #052e16;
+  --sv-success-text: #137a3b;
+  --sv-backdrop: rgb(15 23 42 / 0.42);
   --sv-focus-ring: 0 0 0 2px rgb(from var(--sv-accent) r g b / 0.68), 0 0 0 4px rgb(from var(--sv-accent) r g b / 0.16);
   /* Timing badge tokens — light backgrounds with legible dark text */
   --timing-fast-bg: #dcfce7;
@@ -74,7 +84,7 @@
   --sv-border-subtle: #313244;
   --sv-text: #cdd6f4;
   --sv-text-muted: #a6adc8;
-  --sv-text-dim: #585b70;
+  --sv-text-dim: #9399b2;
   --sv-accent: #a6e3a1;
   --sv-accent-dim: #40523f;
   --sv-danger: #f38ba8;
@@ -83,6 +93,9 @@
   --sv-badge-bg: #313244;
   --sv-scrollbar: #45475a;
   --sv-scrollbar-hover: #585b70;
+  --sv-text-on-accent: #152115;
+  --sv-success-text: #a6e3a1;
+  --sv-backdrop: rgb(10 10 20 / 0.72);
   --sv-focus-ring: 0 0 0 2px rgb(from var(--sv-accent) r g b / 0.72), 0 0 0 4px rgb(from var(--sv-accent) r g b / 0.16);
   /* Timing badge tokens — Catppuccin Mocha palette */
   --timing-fast-bg: #1e3a2f;
@@ -104,8 +117,8 @@
   --sv-border: #1a1a1a;
   --sv-border-subtle: #111;
   --sv-text: #e0e0e0;
-  --sv-text-muted: #777;
-  --sv-text-dim: #444;
+  --sv-text-muted: #949494;
+  --sv-text-dim: #858585;
   --sv-accent: #22c55e;
   --sv-accent-dim: #14532d;
   --sv-danger: #ef4444;
@@ -114,6 +127,9 @@
   --sv-badge-bg: #1a1a1a;
   --sv-scrollbar: #333;
   --sv-scrollbar-hover: #444;
+  --sv-text-on-accent: #04160a;
+  --sv-success-text: #4ade80;
+  --sv-backdrop: rgb(0 0 0 / 0.82);
   --sv-focus-ring: 0 0 0 2px rgb(from var(--sv-accent) r g b / 0.72), 0 0 0 4px rgb(from var(--sv-accent) r g b / 0.16);
   /* Timing badge tokens — pure black backgrounds for OLED */
   --timing-fast-bg: #0a2010;
@@ -151,6 +167,8 @@
   --sv-shadow-lg: 0 30px 84px rgb(0 0 0 / 0.36);
   --sv-transition-fast: 140ms ease;
   --sv-transition-base: 180ms ease;
+  --sv-control-height: 38px;
+  --sv-disabled-opacity: 0.48;
 }
 
 [data-theme="light"] {
@@ -171,4 +189,30 @@
   --sv-shadow-sm: 0 8px 22px rgb(0 0 0 / 0.68);
   --sv-shadow-md: 0 18px 48px rgb(0 0 0 / 0.72);
   --sv-shadow-lg: 0 30px 84px rgb(0 0 0 / 0.78);
+}
+
+:where(a[href], button, input, select, textarea, summary, [role="button"], [role="tab"]):focus-visible {
+  outline: 2px solid var(--sv-accent) !important;
+  outline-offset: 2px !important;
+}
+
+:where(button, input, select, textarea, [role="button"]):disabled,
+:where(button, input, select, textarea, [role="button"])[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: var(--sv-disabled-opacity);
+}
+
+:where(button, [role="button"]):not(:disabled):not([aria-disabled="true"]):active {
+  transform: translateY(1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

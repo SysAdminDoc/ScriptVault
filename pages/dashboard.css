@@ -1306,7 +1306,7 @@ input[type="checkbox"] {
   justify-content: center;
   width: 16px;
   height: 16px;
-  border-radius: 50%;
+  border-radius: 6px;
   background: var(--bg-input);
   color: var(--text-muted);
   font-size: 0.625rem;

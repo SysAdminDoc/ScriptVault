@@ -18,15 +18,55 @@ body {
   background: var(--sv-app-bg);
 }
 
+.sv-workbench-main .tm-panel[hidden] {
+    display: none !important;
+}
+
+.code-editor-wrapper {
+    display: flex;
+    flex-direction: column;
+}
+
+.code-editor-wrapper > #monacoFrame,
+.code-editor-wrapper > #editorTextarea {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.editor-fallback-notice {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px 12px;
+    border-bottom: 1px solid color-mix(in srgb, var(--sv-warning) 36%, var(--sv-border));
+    background: color-mix(in srgb, var(--sv-warning) 9%, var(--sv-surface-raised));
+    color: var(--sv-text);
+    flex: 0 0 auto;
+}
+
+.editor-fallback-notice[hidden] {
+    display: none;
+}
+
+.editor-fallback-copy {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+
+.editor-fallback-copy strong {
+    color: var(--sv-warning);
+    font-size: 0.75rem;
+}
+
+.editor-fallback-copy span {
+    color: var(--sv-text-muted);
+    font-size: 0.6875rem;
+}
+
 .tm-header {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  opacity: 0;
-  pointer-events: none;
-  border: 0;
-  box-shadow: none;
+  display: none;
 }
 
 .setup-warning-banner {
@@ -242,14 +282,14 @@ body {
   min-width: 132px;
   border-color: color-mix(in srgb, var(--sv-accent) 78%, white 8%);
   background: linear-gradient(180deg, color-mix(in srgb, var(--sv-accent) 88%, white 12%), var(--sv-accent));
-  color: #07130c;
+  color: var(--sv-text-on-accent);
   box-shadow: 0 10px 26px color-mix(in srgb, var(--sv-accent) 18%, transparent);
 }
 
 .scripts-shell-actions .toolbar-btn.primary:hover {
   border-color: var(--sv-accent);
   background: linear-gradient(180deg, color-mix(in srgb, var(--sv-accent) 80%, white 20%), color-mix(in srgb, var(--sv-accent) 90%, black));
-  color: #061109;
+  color: var(--sv-text-on-accent);
 }
 
 .scripts-shell-stats {
@@ -345,6 +385,12 @@ body {
 
 .scripts-shell-health .sv-status-dot {
   display: none;
+}
+
+.scripts-shell-health[data-tone="neutral"] .scripts-shell-stat-mark {
+  border-color: var(--sv-border-strong);
+  background: var(--sv-overlay-medium);
+  color: var(--sv-text-muted);
 }
 
 .scripts-toolbar {
@@ -498,6 +544,347 @@ body {
   background: var(--sv-accent-soft);
 }
 
+/* Deep workbench surfaces: every reachable dashboard page gets the same
+   hierarchy and component contract as the Scripts workspace. */
+#updatesPanel,
+#settingsPanel,
+#utilitiesPanel,
+#trashPanel,
+#helpPanel {
+  padding: 0;
+}
+
+.updates-shell,
+.settings-shell,
+.utilities-shell,
+.trash-shell,
+.help-shell {
+  display: grid;
+  gap: 14px;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
+.updates-hero,
+.settings-hero,
+.utilities-hero,
+.trash-hero,
+.help-hero {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 22px;
+  min-height: 112px;
+  margin: 0;
+  padding: 18px 20px;
+  overflow: hidden;
+  border: 1px solid var(--sv-border);
+  border-radius: var(--sv-radius-card);
+  background:
+    linear-gradient(135deg, var(--sv-accent-soft), transparent 62%),
+    linear-gradient(180deg, var(--sv-overlay-subtle), transparent),
+    var(--sv-surface);
+  box-shadow: var(--sv-shadow-sm);
+  isolation: isolate;
+}
+
+.utilities-hero {
+  background:
+    linear-gradient(135deg, var(--sv-info-soft), transparent 62%),
+    linear-gradient(180deg, var(--sv-overlay-subtle), transparent),
+    var(--sv-surface);
+}
+
+.trash-hero {
+  background:
+    linear-gradient(135deg, var(--sv-warning-soft), transparent 62%),
+    linear-gradient(180deg, var(--sv-overlay-subtle), transparent),
+    var(--sv-surface);
+}
+
+.settings-hero-copy h2,
+.utilities-hero-copy h2,
+.trash-hero-copy h2,
+.help-hero-copy h2,
+.updates-hero h2 {
+  margin: 4px 0 0;
+  color: var(--sv-text);
+  font-size: clamp(1.65rem, 2.1vw, 2.1rem);
+  font-weight: 760;
+  letter-spacing: -0.035em;
+  line-height: 1.08;
+}
+
+.settings-hero-copy p,
+.utilities-hero-copy p,
+.trash-hero-copy p,
+.help-hero-copy p {
+  max-width: 62rem;
+  margin: 7px 0 0;
+  color: var(--sv-text-soft);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.settings-eyebrow,
+.utilities-eyebrow,
+.trash-eyebrow,
+.help-eyebrow {
+  color: var(--sv-accent);
+  font-size: 0.6875rem;
+  font-weight: 760;
+  letter-spacing: 0.085em;
+  text-transform: uppercase;
+}
+
+.settings-overview,
+.utilities-overview,
+.trash-overview,
+.help-overview {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(92px, 1fr);
+  gap: 7px;
+}
+
+.settings-summary,
+.utilities-summary,
+.trash-summary,
+.help-summary,
+.updates-summary-item {
+  min-width: 92px;
+  padding: 10px 12px;
+  border: 1px solid var(--sv-border);
+  border-radius: var(--sv-radius-panel);
+  background: var(--sv-surface-sunken);
+  box-shadow: inset 0 1px 0 var(--sv-overlay-subtle);
+}
+
+.settings-summary-label,
+.utilities-summary-label,
+.trash-summary-label,
+.help-summary-label,
+.updates-summary-item span {
+  color: var(--sv-text-dim);
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.settings-summary strong,
+.utilities-summary strong,
+.trash-summary strong,
+.help-summary strong,
+.updates-summary-item strong {
+  display: block;
+  margin-top: 3px;
+  color: var(--sv-text);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-save-summary[data-state="saving"] strong { color: var(--sv-info); }
+.settings-save-summary[data-state="saved"] strong { color: var(--sv-success-text); }
+.settings-save-summary[data-state="error"] strong,
+.settings-save-summary[data-state="invalid"] strong { color: var(--sv-danger); }
+
+.settings-shell > .settings-toolbar,
+.utilities-shell > .utilities-toolbar,
+.trash-shell > .trash-toolbar,
+.help-shell > .help-toolbar {
+  position: sticky;
+  top: 8px;
+  z-index: 18;
+  gap: 10px;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid var(--sv-border);
+  border-radius: var(--sv-radius-card);
+  background: var(--sv-surface);
+  box-shadow: var(--sv-shadow-sm);
+}
+
+.settings-search,
+.utilities-search,
+.trash-search,
+.help-search {
+  min-height: var(--sv-control-height);
+  border: 1px solid var(--sv-border-strong);
+  border-radius: var(--sv-radius-control);
+  background: var(--sv-surface-sunken);
+}
+
+.settings-filter-row,
+.utilities-filter-row,
+.trash-filter-row,
+.help-filter-row {
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid var(--sv-border);
+  border-radius: var(--sv-radius-panel);
+  background: var(--sv-surface-sunken);
+}
+
+.settings-filter,
+.utilities-filter,
+.trash-filter,
+.help-filter {
+  min-height: 34px;
+  border-radius: var(--sv-radius-control);
+}
+
+.settings-filter.active,
+.utilities-filter.active,
+.trash-filter.active,
+.help-filter.active {
+  border-color: var(--sv-accent-border);
+  background: var(--sv-accent);
+  color: var(--sv-text-on-accent);
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--sv-accent) 16%, transparent);
+}
+
+.settings-filter-status,
+.utilities-filter-status,
+.trash-filter-status,
+.help-filter-status {
+  margin: -3px 2px 0;
+  color: var(--sv-text-dim);
+  font-size: 0.75rem;
+}
+
+#settingsPanel .settings-section,
+#utilitiesPanel .settings-section,
+#trashPanel .trash-surface,
+#helpPanel .help-section,
+.pending-updates-list {
+  overflow: hidden;
+  border: 1px solid var(--sv-border);
+  border-radius: var(--sv-radius-card);
+  background: var(--sv-surface);
+  box-shadow: var(--sv-shadow-sm);
+}
+
+#settingsPanel .settings-section,
+#utilitiesPanel .settings-section {
+  grid-template-columns: minmax(170px, 220px) minmax(0, 1fr);
+}
+
+#settingsPanel .section-label,
+#utilitiesPanel .section-label {
+  display: flex;
+  align-items: flex-start;
+  min-height: 100%;
+  padding: 20px;
+  border-inline-end: 1px solid var(--sv-border);
+  background: var(--sv-surface-sunken);
+  color: var(--sv-text-muted);
+  font-size: 0.75rem;
+  font-weight: 760;
+  letter-spacing: 0.055em;
+}
+
+#settingsPanel .section-content,
+#utilitiesPanel .section-content {
+  padding: 16px 20px;
+  background: transparent;
+}
+
+#settingsPanel .setting-row,
+#utilitiesPanel .setting-row {
+  min-height: 42px;
+  border-bottom-color: var(--sv-border-subtle);
+}
+
+#settingsPanel :is(.input-field, .select-field, .textarea-field),
+#utilitiesPanel :is(.input-field, .select-field, .textarea-field) {
+  min-height: var(--sv-control-height);
+  border-color: var(--sv-border-strong);
+  border-radius: var(--sv-radius-control);
+  background: var(--sv-surface-sunken);
+  color: var(--sv-text);
+}
+
+.backup-browser-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0;
+  margin-top: 12px;
+}
+
+.backup-browser-toolbar .utilities-search {
+  flex: 1 1 320px;
+}
+
+.updates-summary-grid {
+  gap: 10px;
+  margin: 0;
+}
+
+.updates-summary-item {
+  min-height: 78px;
+  padding: 14px 16px;
+}
+
+.updates-summary-item strong {
+  margin-top: 6px;
+  font-size: 1.35rem;
+}
+
+.updates-summary-text {
+  margin: 0;
+  padding-inline: 2px;
+  color: var(--sv-text-soft);
+}
+
+.pending-updates-empty {
+  display: grid;
+  place-items: center;
+  min-height: 210px;
+  padding: 28px;
+  border: 0;
+  color: var(--sv-text-muted);
+  text-align: center;
+}
+
+.pending-updates-empty-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 34px;
+  border: 1px solid var(--sv-accent-border);
+  border-radius: var(--sv-radius-panel);
+  background: var(--sv-accent-soft);
+  color: var(--sv-accent);
+  font-size: 0.6875rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.pending-updates-empty strong {
+  margin-top: 10px;
+  color: var(--sv-text);
+  font-size: 1rem;
+}
+
+.pending-updates-empty > span:not(.pending-updates-empty-mark) {
+  max-width: 38rem;
+  margin-top: 6px;
+  color: var(--sv-text-soft);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.pending-updates-empty .toolbar-btn {
+  min-height: 36px;
+  margin-top: 14px;
+}
+
 .sv-workbench-statusbar {
   left: 244px;
   min-height: 38px;
@@ -550,6 +937,22 @@ body {
   .sv-workbench-statusbar {
     left: 204px;
   }
+
+  .settings-hero,
+  .utilities-hero,
+  .trash-hero,
+  .help-hero,
+  .updates-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-overview,
+  .utilities-overview,
+  .trash-overview,
+  .help-overview {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 48rem) {
@@ -558,12 +961,52 @@ body {
   }
 
   .sv-nav-rail {
-    position: static;
+    position: sticky;
+    top: 0;
+    z-index: 80;
+    display: block;
     min-height: auto;
     max-height: none;
-    padding-bottom: 14px;
+    padding: 9px 10px;
     border-inline-end: 0;
     border-bottom: 1px solid var(--sv-border);
+  }
+
+  .sv-rail-brand {
+    grid-template-columns: 30px minmax(0, 1fr);
+    padding: 0 3px 8px;
+  }
+
+  .sv-rail-brand img {
+    width: 30px;
+    height: 30px;
+  }
+
+  .sv-rail-brand span,
+  .sv-rail-section,
+  .sv-rail-storage,
+  .sv-rail-footer {
+    display: none;
+  }
+
+  .sv-rail-nav {
+    display: flex;
+    gap: 5px;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+  }
+
+  .sv-rail-nav .sv-rail-item {
+    flex: 0 0 auto;
+    grid-template-columns: 26px auto auto;
+    min-height: 38px;
+    padding: 4px 8px;
+  }
+
+  .sv-rail-nav .sv-rail-icon {
+    width: 26px;
+    height: 26px;
   }
 
   .sv-workbench-main {
@@ -600,6 +1043,19 @@ body {
   .sv-workbench-statusbar {
     left: 0;
     padding-inline: 12px;
+  }
+
+  #settingsPanel .settings-section,
+  #utilitiesPanel .settings-section {
+    grid-template-columns: 1fr;
+  }
+
+  #settingsPanel .section-label,
+  #utilitiesPanel .section-label {
+    min-height: auto;
+    padding: 12px 14px;
+    border-inline-end: 0;
+    border-bottom: 1px solid var(--sv-border);
   }
 }
 

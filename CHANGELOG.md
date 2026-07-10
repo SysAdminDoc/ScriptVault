@@ -2,6 +2,27 @@
 
 All notable changes to ScriptVault will be documented in this file.
 
+## [v3.19.1] — Premium workbench parity pass (2026-07-09)
+
+- **Brought the shipped dashboard closer to the new premium concept.** The
+  visible navigation rail is now the real keyboard tablist, workspace metrics
+  report honest local/sync state, secondary destinations route to focused
+  controls, and compact layouts preserve the primary workflow.
+- **Deepened every dashboard destination.** Updates, Settings, Utilities,
+  Trash, and Help now share the same deliberate hero, surface, state, and
+  recovery hierarchy as the Scripts workbench.
+- **Hardened settings autosave.** Writes for the same setting are serialized,
+  failures restore the previous control value, and the persistent save summary
+  communicates progress without repetitive success toasts.
+- **Finished compact-surface states.** Popup controls have state-specific
+  accessible names, the side panel collapses empty library chrome, install
+  review announces loading, DevTools adapts to narrow panes, and a recoverable
+  basic editor state replaces silent Monaco failures.
+- **Expanded rendered evidence.** The four-theme screenshot matrix now covers
+  every dashboard destination plus editor, popup, side panel, install review,
+  and DevTools, with cached-theme bootstrap and final-paint waits preventing
+  mixed-theme captures.
+
 ## [v3.19.0] â€” Professional workbench redesign (2026-07-09)
 
 - **Recomposed the Scripts workspace around the primary workflow.** A clear

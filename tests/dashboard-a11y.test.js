@@ -101,8 +101,8 @@ describe("dashboard accessibility markup", () => {
     const doc = parseDashboard();
     const skipLink = doc.querySelector(".skip-link");
     const mainContent = doc.getElementById("mainContent");
-    const tablist = doc.querySelector('.tm-tablist[role="tablist"][aria-label="Dashboard sections"]');
-    const tabs = Array.from(doc.querySelectorAll('.tm-tablist .tm-tab[role="tab"]'));
+    const tablist = doc.querySelector('.sv-rail-nav[role="tablist"][aria-label="Dashboard sections"]');
+    const tabs = Array.from(doc.querySelectorAll('.sv-rail-nav .sv-rail-item[role="tab"]'));
     const selectedTabs = tabs.filter((tab) => tab.getAttribute("aria-selected") === "true");
     const helpButton = doc.getElementById("btnHelpTab");
     const helpPanel = doc.getElementById("helpPanel");
@@ -111,15 +111,16 @@ describe("dashboard accessibility markup", () => {
     expect(mainContent?.getAttribute("tabindex")).toBe("-1");
 
     expect(tablist).not.toBeNull();
-    expect(tabs.map((tab) => tab.dataset.tab)).toEqual([
+    expect(tabs.map((tab) => tab.dataset.workbenchTab)).toEqual([
       "scripts",
       "updates",
       "settings",
       "utilities",
       "trash",
+      "help",
     ]);
     expect(selectedTabs).toHaveLength(1);
-    expect(selectedTabs[0]?.dataset.tab).toBe("scripts");
+    expect(selectedTabs[0]?.dataset.workbenchTab).toBe("scripts");
 
     tabs.forEach((tab) => {
       expect(tab.getAttribute("aria-controls")).toBeTruthy();
@@ -144,8 +145,8 @@ describe("dashboard accessibility markup", () => {
     expect(helpButton?.getAttribute("aria-expanded")).toBe("false");
     expect(helpButton?.getAttribute("aria-pressed")).toBe("false");
     expect(helpPanel).not.toBeNull();
-    expect(helpPanel?.getAttribute("role")).toBe("region");
-    expect(helpPanel?.getAttribute("aria-labelledby")).toBe("btnHelpTab");
+    expect(helpPanel?.getAttribute("role")).toBe("tabpanel");
+    expect(helpPanel?.getAttribute("aria-labelledby")).toBe("workbenchTabHelp");
     expect(helpPanel?.hasAttribute("hidden")).toBe(true);
   });
 

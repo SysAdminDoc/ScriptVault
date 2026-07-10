@@ -269,7 +269,7 @@ const ThemeEditor = (() => {
   padding: 5px 12px;
   font-size: 0.6875rem;
   font-weight: 500;
-  border-radius: 6px;
+  border-radius: 50%;
   border: 1px solid var(--border-color, #444);
   background: var(--bg-button, #333);
   color: var(--text-secondary, #a0a0a0);
@@ -509,7 +509,7 @@ const ThemeEditor = (() => {
   left: 16px;
   width: 14px;
   height: 14px;
-  border-radius: 50%;
+  border-radius: 6px;
 }
 
 /* Footer */
@@ -581,7 +581,7 @@ const ThemeEditor = (() => {
   border: none;
   background: var(--accent-error, #ef4444);
   color: #fff;
-  border-radius: 50%;
+  border-radius: 6px;
   font-size: 0.625rem;
   line-height: 1;
   cursor: pointer;

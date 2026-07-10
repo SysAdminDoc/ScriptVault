@@ -238,7 +238,7 @@ const DiffTool = (() => {
 .sv-diff-nav-btn {
   width: 32px;
   height: 32px;
-  border-radius: 50%;
+  border-radius: 6px;
   border: 1px solid var(--border-color, #404040);
   background: var(--bg-input, #333);
   color: var(--text-primary, #e0e0e0);
