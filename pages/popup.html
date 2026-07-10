@@ -190,7 +190,7 @@
             background: var(--accent-blue, #4f8cff);
             color: #fff;
             /* Per project rule: backdrop radius stays in 4–12 range. */
-            border-radius: 6px;
+            border-radius: 50%;
         }
         .context-menu-scripts-list {
             display: flex;
@@ -1229,7 +1229,7 @@
             flex: 0 0 auto;
             width: 8px;
             height: 8px;
-            border-radius: 50%;
+            border-radius: 6px;
             margin-top: 5px;
             background: var(--text-muted, #888);
         }
@@ -1359,7 +1359,7 @@
     <button class="header" id="headerToggle" type="button" title="Toggle all scripts on/off">
         <img class="header-logo" src="../images/icon32.png" alt="" width="30" height="30">
         <span class="header-copy">
-            <span class="header-context">Vault control</span>
+            <span class="header-context" id="headerContext">Scripts enabled</span>
             <span class="header-text" data-i18n="appName">ScriptVault</span>
         </span>
         <svg class="header-check" id="headerCheckIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -1492,7 +1492,7 @@
                     <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
                 </svg>
             </div>
-            <span class="footer-text" data-i18n="dashboardSections">Dashboard</span>
+            <span class="footer-text" data-i18n="cmdOpenDashboard">Open dashboard</span>
         </button>
     </div>
 

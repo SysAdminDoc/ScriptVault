@@ -11,6 +11,12 @@
 
   const frame = document.getElementById('monacoFrame');
   const fallbackTextarea = document.getElementById('editorTextarea');
+  const fallbackNotice = document.getElementById('editorFallbackNotice');
+  const retryButton = document.getElementById('btnRetryEditor');
+  const monacoOnlyControls = [
+    'tbtnUndo', 'tbtnRedo', 'tbtnSearch', 'tbtnReplace',
+    'tbtnFoldAll', 'tbtnUnfoldAll', 'tbtnComment', 'tbtnWordWrap'
+  ];
 
   let _value = '';
   let _isReady = false;
@@ -69,9 +75,17 @@
 
     switch (msg.type) {
       case 'ready':
+        if (_useFallback && fallbackTextarea) {
+          _value = fallbackTextarea.value || _value;
+        }
+        _useFallback = false;
         _isReady = true;
+        if (frame) frame.style.display = '';
+        if (fallbackTextarea) fallbackTextarea.style.display = 'none';
+        setFallbackPresentation(false);
         _pendingReady.forEach(fn => fn());
         _pendingReady = [];
+        sendToFrame({ type: 'set-value', value: _value, scriptId: _lastScriptId });
         // After ready, prime the find widget with saved history.
         primeEditorFindHistory();
         break;
@@ -126,6 +140,24 @@
     });
   }
 
+  function setFallbackPresentation(active) {
+    if (fallbackNotice) fallbackNotice.hidden = !active;
+    monacoOnlyControls.forEach((id) => {
+      const control = document.getElementById(id);
+      if (!control) return;
+      if (active) {
+        if (!control.dataset.fullEditorTitle) control.dataset.fullEditorTitle = control.title || '';
+        control.disabled = true;
+        control.setAttribute('aria-disabled', 'true');
+        control.title = 'Unavailable while the basic editor is active';
+      } else {
+        control.disabled = false;
+        control.removeAttribute('aria-disabled');
+        if (control.dataset.fullEditorTitle) control.title = control.dataset.fullEditorTitle;
+      }
+    });
+  }
+
   function activateFallback(reason = 'load-failed') {
     if (_useFallback) return;
     _useFallback = true;
@@ -137,8 +169,21 @@
       fallbackTextarea.dataset.editorFallback = reason;
       bindFallbackTextarea();
     }
+    setFallbackPresentation(true);
     console.warn(`[ScriptVault] Monaco failed to load (${reason}), using textarea fallback`);
   }
+
+  retryButton?.addEventListener('click', () => {
+    if (!frame) return;
+    _value = fallbackTextarea?.value || _value;
+    _useFallback = false;
+    _isReady = false;
+    fallbackNotice.hidden = true;
+    if (fallbackTextarea) fallbackTextarea.style.display = 'none';
+    frame.style.display = '';
+    frame.src = `editor-sandbox.html?retry=${Date.now()}`;
+    setTimeout(() => { if (!_isReady) activateFallback('retry-timeout'); }, 15000);
+  });
 
   function sendToFrame(msg) {
     if (_useFallback || !frame?.contentWindow) return;

@@ -292,6 +292,80 @@
             background: var(--sv-surface-raised);
             box-shadow: -12px 0 30px rgb(0 0 0 / 0.16);
         }
+
+        @media (max-width: 56.25rem) {
+            .toolbar {
+                flex-wrap: wrap;
+                align-content: center;
+                gap: 6px;
+                padding: 8px;
+            }
+
+            .toolbar .spacer {
+                display: none;
+            }
+
+            .filter-input {
+                order: 10;
+                flex: 1 1 260px;
+                width: auto;
+            }
+
+            .toolbar-status {
+                order: 11;
+                flex: 1 1 160px;
+                max-width: none;
+            }
+
+            .toolbar-btn {
+                order: 12;
+            }
+        }
+
+        @media (max-width: 38.75rem) {
+            .toolbar-heading,
+            .toolbar-sep {
+                display: none;
+            }
+
+            .toolbar-tabs {
+                flex: 1 1 auto;
+                justify-content: stretch;
+            }
+
+            .tab-btn {
+                flex: 1 1 0;
+            }
+
+            .filter-input,
+            .toolbar-status {
+                flex-basis: 100%;
+            }
+
+            .toolbar-status:empty {
+                display: none;
+            }
+
+            .net-split {
+                position: relative;
+            }
+
+            .net-detail.open {
+                position: absolute;
+                inset: 0 0 0 auto;
+                z-index: 8;
+                width: min(92vw, 360px);
+            }
+
+            .net-table th:nth-child(3),
+            .net-table td:nth-child(3),
+            .net-table th:nth-child(6),
+            .net-table td:nth-child(6),
+            .exec-table th:nth-child(4),
+            .exec-table td:nth-child(4) {
+                display: none;
+            }
+        }
     </style>
 </head>
 <body>

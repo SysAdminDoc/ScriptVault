@@ -660,6 +660,7 @@ async function init() {
       // can't reach storage. Render guidance and bail.
       const content = document.getElementById('content');
       if (content) {
+        content.setAttribute('aria-busy', 'false');
         const extId = (typeof chrome?.runtime?.id === 'string') ? chrome.runtime.id : '';
         const detailsHref = extId ? `chrome://extensions/?id=${encodeURIComponent(extId)}` : 'chrome://extensions/';
         safeSetHtml(content, `
@@ -1324,6 +1325,7 @@ function renderInstallUI(sourceUrl) {
     showInstallError('Install page is missing required UI. Please reload.');
     return;
   }
+  content.setAttribute('aria-busy', 'false');
   const presentation = getInstallPresentation();
   setReviewExitGuard(true);
   safeSetHtml(badge, presentation.badgeHtml);
@@ -2339,6 +2341,7 @@ function showError(title, message) {
   setReviewExitGuard(false);
   const content = document.getElementById('content');
   if (!content) return;
+  content.setAttribute('aria-busy', 'false');
   safeSetHtml(content, `
     <div class="error install-terminal" role="alert" aria-live="assertive" aria-atomic="true" aria-labelledby="installTerminalTitle" aria-describedby="installTerminalMessage">
       <div class="install-state-mark is-error error-icon" aria-hidden="true">!</div>
@@ -2361,6 +2364,7 @@ function showSuccess(name, action, scriptId) {
   setReviewExitGuard(false);
   const content = document.getElementById('content');
   if (!content) return;
+  content.setAttribute('aria-busy', 'false');
   const titleMap = {
     installed: tInstall('installSuccessTitleInstalled', 'Script Installed'),
     updated: tInstall('installSuccessTitleUpdated', 'Script Updated'),

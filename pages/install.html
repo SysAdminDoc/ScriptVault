@@ -1611,9 +1611,9 @@
       </div>
     </div>
     
-    <div class="content" id="content">
-      <div class="loading">
-        <div class="loading-spinner"></div>
+    <div class="content" id="content" aria-busy="true">
+      <div class="loading" role="status" aria-live="polite" aria-atomic="true">
+        <div class="loading-spinner" aria-hidden="true"></div>
         <div class="loading-text" data-i18n="installLoadingScriptInformation">Loading script information…</div>
       </div>
     </div>

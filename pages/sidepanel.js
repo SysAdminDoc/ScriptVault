@@ -518,6 +518,7 @@
       allScripts = Array.isArray(rawAll) ? rawAll : Array.from(rawAll ?? []);
       pageScripts = Array.isArray(matchedRes) ? matchedRes : Array.from(matchedRes ?? []);
       hostPermissionStatus = hostStatus || null;
+      syncLibraryControls();
       renderPageScripts();
       renderAllScripts();
       renderHostAccessPanel();
@@ -527,10 +528,23 @@
       if (isContextInvalidated(e)) { showContextInvalidatedBanner(); return; }
       const list = $('pageScriptList');
       if (list) {
+        list.dataset.empty = 'true';
         list.replaceChildren();
         const err = document.createElement('div');
         err.className = 'sp-empty';
-        err.textContent = tSidepanel('sideUnableToReachBackground', 'Unable to reach the background service. Refresh the panel to reconnect.');
+        err.setAttribute('role', 'alert');
+        const title = document.createElement('div');
+        title.className = 'sp-empty-title';
+        title.textContent = tSidepanel('sideBackgroundUnavailableTitle', 'Background service unavailable');
+        const detail = document.createElement('div');
+        detail.className = 'sp-empty-detail';
+        detail.textContent = tSidepanel('sideUnableToReachBackground', 'Refresh the panel to reconnect.');
+        const retry = document.createElement('button');
+        retry.type = 'button';
+        retry.className = 'sp-empty-link';
+        retry.textContent = tSidepanel('refresh', 'Refresh');
+        retry.addEventListener('click', () => refresh());
+        err.append(title, detail, retry);
         list.appendChild(err);
       }
     } finally {
@@ -558,6 +572,16 @@
   }
 
   // ── Render page scripts ──────────────────────────────────────────────────
+  function syncLibraryControls() {
+    const hasScripts = allScripts.length > 0;
+    const searchBar = document.querySelector('.sp-search-bar');
+    const searchMeta = document.querySelector('.sp-search-meta');
+    const allSection = $('allSection');
+    if (searchBar) searchBar.hidden = !hasScripts;
+    if (searchMeta) searchMeta.hidden = !hasScripts;
+    if (allSection) allSection.hidden = !hasScripts;
+  }
+
   function renderPageScripts() {
     const list = $('pageScriptList');
     if (!list) return;
@@ -566,6 +590,7 @@
     if (pageCountEl) pageCountEl.textContent = numberFormatter.format(pageScripts.length);
 
     if (!currentPageCanRunScripts) {
+      list.dataset.empty = 'true';
       list.replaceChildren();
       const empty = document.createElement('div');
       empty.className = 'sp-empty';
@@ -589,6 +614,7 @@
     }
 
     if (!pageScripts.length) {
+      list.dataset.empty = 'true';
       const url = currentTab?.url || '';
       let hostname = '';
       try { hostname = new URL(url).hostname; } catch {}
@@ -625,6 +651,7 @@
       return;
     }
 
+    list.dataset.empty = 'false';
     const fragment = document.createDocumentFragment();
     for (const script of pageScripts) {
       fragment.appendChild(buildScriptItem(script, true));

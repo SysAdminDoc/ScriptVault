@@ -825,9 +825,18 @@
     // Update enabled state UI
     function updateEnabledState() {
         const enabled = settings.enabled !== false;
+        const enabledCount = pageScripts.filter(s => s.enabled !== false).length;
 
         if (elements.headerToggle) {
             elements.headerToggle.setAttribute('aria-pressed', String(enabled));
+            elements.headerToggle.setAttribute(
+                'aria-label',
+                enabled
+                    ? `Disable all scripts — ${numberFormatter.format(enabledCount)} enabled on this page`
+                    : 'Enable all scripts'
+            );
+            const context = elements.headerToggle.querySelector('.header-context');
+            if (context) context.textContent = enabled ? 'Scripts enabled' : 'Scripts paused';
         }
         if (elements.headerCheckIcon) {
             elements.headerCheckIcon.classList.toggle('disabled', !enabled);
@@ -835,7 +844,6 @@
 
         // Update script count badge
         if (elements.headerCount) {
-            const enabledCount = pageScripts.filter(s => s.enabled !== false).length;
             elements.headerCount.textContent = enabledCount > 0 ? enabledCount : '';
             elements.headerCount.classList.toggle('disabled', !enabled);
         }
