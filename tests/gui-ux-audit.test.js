@@ -8,7 +8,11 @@ const sidepanelHtml = readFileSync(resolve(process.cwd(), "pages/sidepanel.html"
 const sidepanelJs = readFileSync(resolve(process.cwd(), "pages/sidepanel.js"), "utf8");
 const devtoolsHtml = readFileSync(resolve(process.cwd(), "pages/devtools-panel.html"), "utf8");
 const devtoolsJs = readFileSync(resolve(process.cwd(), "pages/devtools-panel.js"), "utf8");
+const dashboardHtml = readFileSync(resolve(process.cwd(), "pages/dashboard.html"), "utf8");
 const dashboardJs = readFileSync(resolve(process.cwd(), "pages/dashboard.js"), "utf8");
+const dashboardWorkbenchCss = readFileSync(resolve(process.cwd(), "pages/dashboard-workbench.css"), "utf8");
+const themeTokensCss = readFileSync(resolve(process.cwd(), "pages/theme-tokens.css"), "utf8");
+const pageDirJs = readFileSync(resolve(process.cwd(), "pages/page-dir.js"), "utf8");
 
 function parseHtml(source) {
   return new DOMParser().parseFromString(source, "text/html");
@@ -37,6 +41,89 @@ describe("cross-surface UX audit", () => {
     }
 
     expect(offenders).toEqual([]);
+  });
+
+  test("shared controls enforce the finite radius, focus, disabled, and reduced-motion contracts", () => {
+    const forbiddenPillRadius = /border-radius:\s*(?:100%|999(?:9)?px)/;
+    const offenders = pageUiFiles()
+      .filter((file) => forbiddenPillRadius.test(readFileSync(file, "utf8")));
+
+    expect(offenders).toEqual([]);
+    expect(dashboardHtml).toContain(".sv-status-dot {\n            width: 9px;\n            height: 9px;\n            border-radius: 50%");
+    expect(sidepanelHtml).toContain(".sp-toggle-slider::before");
+    expect(sidepanelHtml).toContain("border-radius: 50%");
+    expect(themeTokensCss).toContain("--sv-radius-sm: 4px");
+    expect(themeTokensCss).toContain("--sv-radius-control: 6px");
+    expect(themeTokensCss).toContain("--sv-radius-card: 10px");
+    expect(themeTokensCss).toContain("--sv-radius-dialog: 12px");
+    expect(themeTokensCss).toContain('[role="tab"]):focus-visible');
+    expect(themeTokensCss).toContain("outline: 2px solid var(--sv-accent) !important");
+    expect(themeTokensCss).toContain("cursor: not-allowed");
+    expect(themeTokensCss).toContain("@media (prefers-reduced-motion: reduce)");
+  });
+
+  test("dashboard navigation and deep panels expose honest destinations and page hierarchy", () => {
+    const doc = parseHtml(dashboardHtml);
+    const primaryItems = Array.from(doc.querySelectorAll(".sv-rail-nav > .sv-rail-item"));
+
+    expect(primaryItems.map((item) => item.dataset.workbenchTab)).toEqual([
+      "scripts", "updates", "settings", "utilities", "trash", "help",
+    ]);
+    expect(primaryItems.map((item) => item.textContent?.replace(/\s+/g, " ").trim())).not.toContain("Collections 0");
+    expect(primaryItems.map((item) => item.textContent?.replace(/\s+/g, " ").trim())).not.toContain("History");
+    expect(primaryItems.every((item) => item.getAttribute("role") === "tab")).toBe(true);
+    expect(primaryItems.every((item) => item.hasAttribute("aria-controls"))).toBe(true);
+    expect(dashboardHtml).not.toContain("ScriptVault Pro");
+    expect(dashboardWorkbenchCss).toContain(".tm-header {\n  display: none;");
+    expect(dashboardWorkbenchCss).toContain(".settings-hero,");
+    expect(dashboardWorkbenchCss).toContain("display: grid !important");
+    expect(dashboardWorkbenchCss).toContain("#settingsPanel .settings-section");
+    expect(dashboardWorkbenchCss).toContain("#utilitiesPanel .settings-section");
+    expect(dashboardWorkbenchCss).toContain(".utilities-shell > .utilities-toolbar");
+    expect(dashboardWorkbenchCss).toContain("#trashPanel .trash-surface");
+    expect(dashboardJs).toContain("getActiveWorkbenchTab(nextTab)?.focus()");
+    expect(dashboardJs).toContain("button.getAttribute('role') === 'tab'");
+  });
+
+  test("settings autosave and update empty states communicate progress and recovery", () => {
+    const doc = parseHtml(dashboardHtml);
+    const saveStatus = doc.getElementById("settingsSaveStatus");
+    const resetOption = doc.querySelector('#bulkActionSelect option[value="reset"]');
+
+    expect(saveStatus?.getAttribute("role")).toBe("status");
+    expect(saveStatus?.getAttribute("aria-live")).toBe("polite");
+    expect(resetOption?.textContent).toContain("Reset Script Settings");
+    expect(dashboardJs).toContain("function setSettingsSaveState(kind, message)");
+    expect(dashboardJs).toContain("const settingsSaveQueues = new Map()");
+    expect(dashboardJs).toContain("previous.catch(() => {}).then(() => saveSettingNow(key, value, options))");
+    expect(dashboardJs).toContain("restoreSettingsInputValue(input, previousValue)");
+    expect(dashboardJs).toContain("translated && translated !== key ? translated : fallback");
+    expect(dashboardJs).toContain("setSettingsSaveState('saving', 'Saving…')");
+    expect(dashboardJs).toContain("if (response?.error) throw new Error(response.error)");
+    expect(dashboardJs).toContain("Couldn’t save this setting. Your previous value is still active.");
+    expect(dashboardJs).not.toContain("showToast('Setting saved', 'success')");
+    expect(dashboardJs).toContain("Your scripts are up to date");
+    expect(dashboardJs).toContain("data-empty-check-updates");
+    expect(dashboardJs).toContain("'Sync not configured'");
+    expect(dashboardHtml).toContain('id="svCommandHealthTitle">Local vault ready');
+  });
+
+  test("shared pre-paint theme cache prevents non-dark startup flashes", () => {
+    expect(pageDirJs).toContain("const PAGE_THEMES = new Set(['dark', 'light', 'catppuccin', 'oled'])");
+    expect(pageDirJs).toContain("localStorage.getItem('sv_theme')");
+    expect(pageDirJs).toContain("new MutationObserver");
+    expect(themeTokensCss).toContain("--sv-text-dim: #9399b2");
+    expect(themeTokensCss).toContain("--sv-text-dim: #858585");
+  });
+
+  test("screenshot evidence pins every theme after app initialization and covers the editor", () => {
+    const screenshotHarness = readFileSync(resolve(process.cwd(), "scripts/capture-store-screenshots.mjs"), "utf8");
+
+    expect(screenshotHarness).toContain("...THEMES.flatMap(theme => ['updates', 'utilities', 'trash', 'help']");
+    expect(screenshotHarness).toContain("dashboard-editor-${theme}");
+    expect(screenshotHarness).toContain("shot.variant === 'editor'");
+    expect(screenshotHarness).toContain("document.documentElement.dataset.theme === theme");
+    expect(screenshotHarness).toContain("setTimeout(resolve, 320)");
   });
 
   test("install flow keeps expandable rule disclosures and live review status", () => {
@@ -220,7 +307,7 @@ describe("cross-surface UX audit", () => {
 
   test("compact and diagnostic surfaces share the workbench hierarchy", () => {
     expect(popupHtml).toContain('class="header-logo"');
-    expect(popupHtml).toContain('class="header-context">Vault control</span>');
+    expect(popupHtml).toContain('class="header-context" id="headerContext">Scripts enabled</span>');
     expect(popupHtml).toContain('Workbench-aligned compact surface');
     expect(sidepanelHtml).toContain('Workbench-aligned side surface');
     expect(sidepanelHtml).toContain('var(--sv-surface-raised)');

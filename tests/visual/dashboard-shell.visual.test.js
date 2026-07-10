@@ -5,20 +5,17 @@ import "../../pages/dashboard.css";
 import "../../pages/dashboard-workbench.css";
 
 const rows = [
-  ["YouTube Enhancer", "Enhance YouTube with ad block, theme...", "3.2.1", "youtube.com", "2h ago", "Greasy Fork", true],
-  ["Reddit UI Tweaks", "Improve Reddit browsing experience", "2.7.4", "reddit.com", "1d ago", "Greasy Fork", true],
-  ["GitHub Dark Mode", "Dark mode for GitHub", "1.5.0", "github.com", "3d ago", "OpenUserJS", true],
-  ["Google Search Cleaner", "Remove clutter from Google search", "1.3.6", "google.com", "5d ago", "Greasy Fork", true],
-  ["Twitter/X Video Downloader", "Download videos from X", "0.9.8", "x.com", "1w ago", "Greasy Fork", false],
-  ["Netflix Subtitle Tweaks", "Better subtitle styling on Netflix", "1.1.2", "netflix.com", "1w ago", "User Script Zone", true],
-  ["Copy as Markdown", "Copy selection as Markdown", "2.0.3", "*", "2w ago", "Greasy Fork", true],
-  ["Old Forum Fix", "Restore old forum layouts", "0.7.1", "forum.example.com", "2w ago", "User Script Zone", false],
+  ["Clean Reader", "Remove distractions and improve article typography", "4.8.2", "news.example", "12m ago", "Signed", true],
+  ["GitHub Workflow Kit", "Streamline reviews, diffs, and repository navigation", "3.6.1", "github.com", "1h ago", "Signed", true],
+  ["Video Focus Mode", "Hide clutter and keep playback controls intentional", "2.4.0", "video.example", "3h ago", "Reviewed", true],
+  ["Research Notes", "Capture citations and page context to a local notebook", "1.9.3", "*", "Yesterday", "Local", true],
+  ["Legacy Layout Fix", "Restore a compact layout on an internal application", "0.8.7", "app.example", "4d ago", "Local", false],
 ];
 
 function renderRows() {
   return rows.map(([name, description, version, site, updated, source, enabled], index) => `
-    <tr class="${name === "Reddit UI Tweaks" ? "selected row-selected" : ""}">
-      <td class="center"><input type="checkbox" ${name === "Reddit UI Tweaks" ? "checked" : ""} aria-label="Select ${name}"></td>
+    <tr class="${name === "GitHub Workflow Kit" ? "selected row-selected" : ""}">
+      <td class="center"><input type="checkbox" ${name === "GitHub Workflow Kit" ? "checked" : ""} aria-label="Select ${name}"></td>
       <td class="center">${index + 1}</td>
       <td class="center">${enabled ? '<span class="sv-status-dot good"></span>' : '<span class="sv-status-dot"></span>'}</td>
       <td>
@@ -53,21 +50,21 @@ function renderDashboardShell(theme = "dark") {
         <aside class="sv-nav-rail" aria-label="ScriptVault workspace">
           <div class="sv-rail-brand">
             <div class="script-icon-placeholder" aria-hidden="true">SV</div>
-            <div><strong>ScriptVault</strong><span>v3.19.0</span></div>
+            <div><strong>ScriptVault</strong><span>v3.19.1</span></div>
           </div>
           <nav class="sv-rail-nav" aria-label="Dashboard sections">
-            <button class="sv-rail-item active" type="button"><span class="sv-rail-icon">#</span><span>Scripts</span><span class="sv-rail-count">128</span></button>
-            <button class="sv-rail-item" type="button"><span class="sv-rail-icon">U</span><span>Updates</span><span class="sv-rail-count warning">3</span></button>
-            <button class="sv-rail-item" type="button"><span class="sv-rail-icon">C</span><span>Collections</span><span class="sv-rail-count">12</span></button>
-            <button class="sv-rail-item" type="button"><span class="sv-rail-icon">H</span><span>History</span></button>
+            <button class="sv-rail-item active" type="button"><span class="sv-rail-icon">#</span><span>Scripts</span><span class="sv-rail-count">12</span></button>
+            <button class="sv-rail-item" type="button"><span class="sv-rail-icon">U</span><span>Updates</span><span class="sv-rail-count warning">2</span></button>
             <button class="sv-rail-item" type="button"><span class="sv-rail-icon">S</span><span>Settings</span></button>
             <button class="sv-rail-item" type="button"><span class="sv-rail-icon">W</span><span>Utilities</span></button>
+            <button class="sv-rail-item" type="button"><span class="sv-rail-icon">T</span><span>Trash</span></button>
+            <button class="sv-rail-item" type="button"><span class="sv-rail-icon">?</span><span>Help</span></button>
           </nav>
           <div class="sv-rail-section">
             <span class="sv-rail-section-title">System</span>
-            <button class="sv-rail-item sv-rail-subitem" type="button"><span class="sv-rail-icon">R</span><span>Sync &amp; Backup</span><span class="sv-status-dot good"></span></button>
+            <button class="sv-rail-item sv-rail-subitem" type="button"><span class="sv-rail-icon">R</span><span>Backup &amp; Restore</span></button>
             <button class="sv-rail-item sv-rail-subitem" type="button"><span class="sv-rail-icon">I</span><span>Import / Export</span></button>
-            <button class="sv-rail-item sv-rail-subitem" type="button"><span class="sv-rail-icon">L</span><span>Logs</span></button>
+            <button class="sv-rail-item sv-rail-subitem" type="button"><span class="sv-rail-icon">D</span><span>Diagnostics</span></button>
           </div>
           <div class="sv-rail-section">
             <span class="sv-rail-section-title">Trust</span>
@@ -80,7 +77,7 @@ function renderDashboardShell(theme = "dark") {
             <div class="sv-rail-storage-track"><span style="width:24%"></span></div>
             <small>24%</small>
           </div>
-          <div class="sv-rail-footer"><span class="sv-sync-dot"></span><span>ScriptVault Pro</span></div>
+          <div class="sv-rail-footer"><span class="sv-sync-dot"></span><span>Local-first vault</span></div>
         </aside>
         <section class="tm-content sv-workbench-main">
           <div id="scriptsPanel" class="tm-panel active">
@@ -93,10 +90,10 @@ function renderDashboardShell(theme = "dark") {
               </div>
             </div>
             <div class="scripts-shell-stats" aria-label="Workspace stats">
-              <div class="scripts-shell-stat"><span class="scripts-shell-stat-mark">S</span><div class="scripts-shell-stat-copy"><strong>128</strong><span>Scripts</span></div></div>
-              <div class="scripts-shell-stat" data-tone="good"><span class="scripts-shell-stat-mark">ON</span><div class="scripts-shell-stat-copy"><strong>98</strong><span>Enabled</span></div></div>
-              <div class="scripts-shell-stat" data-tone="info"><span class="scripts-shell-stat-mark">UP</span><div class="scripts-shell-stat-copy"><strong>18</strong><span>Updates</span></div></div>
-              <div class="scripts-shell-health" id="svCommandHealth"><span class="scripts-shell-stat-mark">OK</span><div class="scripts-shell-health-copy"><strong>Sync healthy</strong><small>Last synced 1m ago</small></div></div>
+              <div class="scripts-shell-stat"><span class="scripts-shell-stat-mark">S</span><div class="scripts-shell-stat-copy"><strong>12</strong><span>Scripts</span></div></div>
+              <div class="scripts-shell-stat" data-tone="good"><span class="scripts-shell-stat-mark">ON</span><div class="scripts-shell-stat-copy"><strong>9</strong><span>Enabled</span></div></div>
+              <div class="scripts-shell-stat" data-tone="info"><span class="scripts-shell-stat-mark">UP</span><div class="scripts-shell-stat-copy"><strong>2</strong><span>Updates</span></div></div>
+              <div class="scripts-shell-health" id="svCommandHealth"><span class="scripts-shell-stat-mark">LV</span><div class="scripts-shell-health-copy"><strong>Local vault</strong><small>Sync is not configured</small></div></div>
             </div>
             <div class="scripts-toolbar" role="toolbar" aria-label="Script controls">
               <div class="scripts-toolbar-left toolbar-section">
@@ -106,7 +103,7 @@ function renderDashboardShell(theme = "dark") {
                 <button class="toolbar-btn" id="btnFindScripts" type="button">Find</button>
                 <div class="toolbar-divider"></div>
                 <select id="filterSelect" class="select-field bulk-select" aria-label="Filter scripts"><option>All scripts</option></select>
-                <span class="script-counter" id="scriptCounter">1-10 of 128</span>
+                <span class="script-counter" id="scriptCounter">1-5 of 12</span>
                 <div class="bulk-action-cluster"><label class="bulk-toggle"><input type="checkbox"> <span>Select Shown</span></label><select class="select-field"><option>Choose Action</option></select><button class="btn">Apply</button></div>
                 <label class="search-box" aria-label="Search scripts">
                   <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><path d="M21 21 16.65 16.65"></path></svg>
@@ -127,14 +124,13 @@ function renderDashboardShell(theme = "dark") {
                 <section class="scripts-update-queue">
                   <div class="scripts-update-queue-header"><div><strong>Update Queue</strong><span class="sv-rail-count warning">3</span></div><div class="scripts-update-queue-actions"><button class="toolbar-btn">Review all</button><button class="toolbar-btn">Update all</button></div></div>
                   <div class="scripts-update-queue-list">
-                    <article class="scripts-update-queue-row review-required"><div><strong>Old Forum Fix</strong><span>0.7.1 -> 0.8.0</span></div><a>Changelog</a><span class="pending-update-status review">Requires review</span><button class="toolbar-btn">Review update</button><button class="toolbar-btn">Ignore</button></article>
-                    <article class="scripts-update-queue-row review-required"><div><strong>Reddit UI Tweaks</strong><span>2.7.4 -> 2.8.0</span></div><a>Changelog</a><span class="pending-update-status review">Requires review</span><button class="toolbar-btn">Review update</button><button class="toolbar-btn">Ignore</button></article>
-                    <article class="scripts-update-queue-row review-required"><div><strong>Netflix Subtitle Tweaks</strong><span>1.1.2 -> 1.2.0</span></div><a>Changelog</a><span class="pending-update-status review">Requires review</span><button class="toolbar-btn">Review update</button><button class="toolbar-btn">Ignore</button></article>
+                    <article class="scripts-update-queue-row review-required"><div><strong>Legacy Layout Fix</strong><span>0.8.7 -> 0.9.0</span></div><a>Changelog</a><span class="pending-update-status review">Requires review</span><button class="toolbar-btn">Review update</button><button class="toolbar-btn">Ignore</button></article>
+                    <article class="scripts-update-queue-row review-required"><div><strong>GitHub Workflow Kit</strong><span>3.6.1 -> 3.7.0</span></div><a>Changelog</a><span class="pending-update-status review">Requires review</span><button class="toolbar-btn">Review update</button><button class="toolbar-btn">Ignore</button></article>
                   </div>
                 </section>
               </section>
               <aside class="script-inspector-panel" aria-label="Selected script inspector">
-                <div class="script-inspector-header"><span class="script-inspector-eyebrow">Selected Script</span><strong>Reddit UI Tweaks</strong><span>Improve Reddit browsing experience with cleaner UI and quality of life tweaks.</span></div>
+                <div class="script-inspector-header"><span class="script-inspector-eyebrow">Selected Script</span><strong>GitHub Workflow Kit</strong><span>Streamline reviews, diffs, and repository navigation with a focused local workflow.</span></div>
                 <div class="script-inspector-actions">
                   <button class="btn btn-primary script-inspector-action-tile" type="button"><span>&lt;/&gt;</span>Edit</button>
                   <button class="btn script-inspector-action-tile" type="button"><span>*</span>Config</button>
@@ -143,13 +139,13 @@ function renderDashboardShell(theme = "dark") {
                 </div>
                 <div class="script-inspector-tabs"><button class="active">Overview</button><button>Access</button><button>Grants</button><button>History</button></div>
                 <div class="script-inspector-score" data-tone="good"><div><span>Trust Score</span><strong>96%</strong></div><small>No review flags</small></div>
-                <div class="script-inspector-section"><h3>Overview</h3><dl class="script-inspector-meta"><div><dt>Status</dt><dd>Enabled</dd></div><div><dt>Version</dt><dd>2.7.4</dd></div><div><dt>Author</dt><dd>not-an-aardvark</dd></div><div><dt>Source</dt><dd>Greasy Fork</dd></div><div><dt>License</dt><dd>MIT</dd></div><div><dt>Runs at</dt><dd>document-end</dd></div><div><dt>Updated</dt><dd>1 day ago</dd></div><div><dt>Installed</dt><dd>14 days ago</dd></div><div><dt>Size</dt><dd>42 KB</dd></div></dl></div>
+                <div class="script-inspector-section"><h3>Overview</h3><dl class="script-inspector-meta"><div><dt>Status</dt><dd>Enabled</dd></div><div><dt>Version</dt><dd>3.6.1</dd></div><div><dt>Author</dt><dd>Local workspace</dd></div><div><dt>Source</dt><dd>Signed</dd></div><div><dt>License</dt><dd>MIT</dd></div><div><dt>Runs at</dt><dd>document-end</dd></div><div><dt>Updated</dt><dd>1 hour ago</dd></div><div><dt>Installed</dt><dd>28 days ago</dd></div><div><dt>Size</dt><dd>42 KB</dd></div></dl></div>
                 <div class="script-inspector-section"><h3>Trust &amp; Security</h3><div class="script-inspector-checks"><div class="script-inspector-check good"><span>Code signature</span><strong>Valid</strong></div><div class="script-inspector-check good"><span>Known vulnerabilities</span><strong>Clear</strong></div><div class="script-inspector-check good"><span>Permissions</span><strong>5 granted</strong></div></div></div>
                 <div class="script-inspector-section"><h3>Domain Access</h3><div class="script-inspector-domain-access"><div class="script-inspector-domain-row"><span>reddit.com</span><strong>Allow</strong></div><div class="script-inspector-domain-row"><span>old.reddit.com</span><strong>Allow</strong></div><div class="script-inspector-domain-row"><span>*.redd.it</span><strong>Allow</strong></div></div></div>
               </aside>
             </div>
           </div>
-          <footer class="sv-workbench-statusbar"><span>128 scripts - 98 enabled - 30 disabled</span><span>18 with updates</span><span><span class="sv-status-dot good"></span> Engine: Violentmonkey 2.18.0</span></footer>
+          <footer class="sv-workbench-statusbar"><span>12 scripts - 9 enabled - 3 disabled</span><span>2 with updates</span><span><span class="sv-status-dot good"></span> Engine: chrome.userScripts</span></footer>
         </section>
       </div>
     </main>

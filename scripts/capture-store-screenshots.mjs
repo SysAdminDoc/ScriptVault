@@ -60,13 +60,23 @@ async function findExtensionId(browser) {
   return id;
 }
 
+const THEMES = ['dark', 'light', 'catppuccin', 'oled'];
 const SCREENSHOTS = [
-  { name: 'dashboard-dark', page: 'dashboard', theme: 'dark', width: 1280, height: 800 },
-  { name: 'dashboard-light', page: 'dashboard', theme: 'light', width: 1280, height: 800 },
-  { name: 'popup-dark', page: 'popup', theme: 'dark', width: 400, height: 600 },
-  { name: 'sidepanel-dark', page: 'sidepanel', theme: 'dark', width: 420, height: 800 },
-  { name: 'install-dark', page: 'install', theme: 'dark', width: 1280, height: 800 },
-  { name: 'devtools-dark', page: 'devtools', theme: 'dark', width: 1200, height: 720 },
+  ...THEMES.map(theme => ({ name: `dashboard-${theme}`, page: 'dashboard', variant: 'scripts', theme, width: 1280, height: 800 })),
+  ...THEMES.map(theme => ({ name: `dashboard-settings-${theme}`, page: 'dashboard', variant: 'settings', theme, width: 1280, height: 800 })),
+  ...THEMES.flatMap(theme => ['updates', 'utilities', 'trash', 'help'].map(variant => ({
+    name: `dashboard-${variant}-${theme}`,
+    page: 'dashboard',
+    variant,
+    theme,
+    width: 1280,
+    height: 800,
+  }))),
+  ...THEMES.map(theme => ({ name: `dashboard-editor-${theme}`, page: 'dashboard', variant: 'editor', theme, width: 1280, height: 800 })),
+  ...THEMES.map(theme => ({ name: `popup-${theme}`, page: 'popup', theme, width: 400, height: 600 })),
+  ...THEMES.map(theme => ({ name: `sidepanel-${theme}`, page: 'sidepanel', theme, width: 420, height: 800 })),
+  ...THEMES.map(theme => ({ name: `install-${theme}`, page: 'install', theme, width: 1280, height: 800 })),
+  ...THEMES.map(theme => ({ name: `devtools-${theme}`, page: 'devtools', theme, width: 1200, height: 720 })),
 ];
 
 mkdirSync(screenshotDir, { recursive: true });
@@ -95,6 +105,9 @@ try {
   for (const shot of SCREENSHOTS) {
     const page = await browser.newPage();
     await page.setViewport({ width: shot.width, height: shot.height, deviceScaleFactor: 2 });
+    await page.evaluateOnNewDocument((theme) => {
+      localStorage.setItem('sv_theme', theme);
+    }, shot.theme);
 
     const pageFiles = {
       dashboard: 'pages/dashboard.html',
@@ -123,6 +136,14 @@ try {
         await whatsNewDismiss.click();
         await page.waitForFunction(() => !document.querySelector('.sv-wn-overlay'), { timeout: 5000 });
       }
+      if (shot.variant === 'editor') {
+        await page.click('#btnNewScript');
+        await page.waitForSelector('.editor-overlay.active', { visible: true, timeout: 15000 });
+      } else if (shot.variant && shot.variant !== 'scripts') {
+        await page.click(`.sv-rail-item[data-workbench-tab="${shot.variant}"]:not(.sv-rail-subitem)`);
+        const panelSelector = `#${shot.variant}Panel`;
+        await page.waitForSelector(panelSelector, { visible: true, timeout: 10000 });
+      }
     } else {
       const selectors = {
         popup: '.header',
@@ -142,7 +163,23 @@ try {
       });
     }
 
-    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    // App initialization and view transitions can reapply the saved/default
+    // theme after DOMContentLoaded. Pin the requested theme only after the
+    // target surface is ready, then wait for the transition snapshot to clear.
+    await page.evaluate(async (theme) => {
+      localStorage.setItem('sv_theme', theme);
+      document.documentElement.setAttribute('data-theme', theme);
+      document.body?.setAttribute('data-theme', theme);
+      await new Promise(resolve => setTimeout(resolve, 320));
+      document.documentElement.setAttribute('data-theme', theme);
+      document.body?.setAttribute('data-theme', theme);
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    }, shot.theme);
+    await page.waitForFunction(
+      theme => document.documentElement.dataset.theme === theme,
+      { timeout: 5000 },
+      shot.theme,
+    );
 
     const outputPath = join(screenshotDir, `${shot.name}.png`);
     await page.screenshot({ path: outputPath, fullPage: false });
