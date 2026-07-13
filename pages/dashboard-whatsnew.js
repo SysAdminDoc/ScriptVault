@@ -11,6 +11,18 @@ const WhatsNew = (() => {
     : '2.0.0';
 
   const CHANGELOG = {
+    '3.19.2': {
+      title: 'ScriptVault 3.19.2 — Scripts Run On Install Again',
+      date: '2026-07-13',
+      highlights: [
+        { icon: 'FLOW', title: 'Broad Host Access Restored', desc: 'On Chromium builds ScriptVault once again requests full site access at install, so your userscripts run everywhere immediately instead of stalling on a "Site Access Needed" prompt.' },
+        { icon: 'SAFE', title: 'Scoped Host Permissions Now Opt-In', desc: 'The per-site scoped host permission model is still available, but it is turned off by default. Enable "Use scoped host permissions" in Settings if you prefer granting access one origin at a time.' },
+      ],
+      improvements: [
+        'Fixes broad all-site scripts that were being unregistered until manually approved per script.',
+        'Firefox behavior is unchanged — it always shipped with broad host access.',
+      ],
+    },
     '3.19.1': {
       title: 'ScriptVault 3.19.1 — Premium Workbench Parity',
       date: '2026-07-09',

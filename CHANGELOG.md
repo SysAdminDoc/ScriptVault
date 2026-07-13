@@ -2,6 +2,21 @@
 
 All notable changes to ScriptVault will be documented in this file.
 
+## [v3.19.2] — Restore broad install-time host access (2026-07-13)
+
+- **Userscripts run on install again (Chromium).** Reverted the Chrome/Edge
+  manifest from `optional_host_permissions` back to
+  `host_permissions: ["<all_urls>"]`, so the extension is granted full site
+  access at install instead of surfacing "Site Access Needed" per origin. This
+  matches the Firefox build, which always shipped broad host access.
+- **Scoped host permissions are now opt-in.** The `scopedHostPermissions`
+  setting (and its internal registration gate) defaults to `false`. The scoped
+  per-site model is preserved for anyone who wants it — enable "Use scoped host
+  permissions" in Settings — but it no longer blocks broad all-site scripts
+  from registering by default.
+- Fixes broad-match scripts (`@match *://*/*`, `@match <all_urls>`) being
+  unregistered until manually approved per script.
+
 ## [v3.19.1] — Premium workbench parity pass (2026-07-09)
 
 - **Brought the shipped dashboard closer to the new premium concept.** The

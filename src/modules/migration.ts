@@ -4,7 +4,7 @@
 
 import type { ScriptSettings, ScriptStats, ScriptMeta } from '../types/index';
 
-const CURRENT_VERSION = '2.3.0';
+const CURRENT_VERSION = '3.19.2';
 const MIGRATION_KEY = 'sv_lastMigratedVersion';
 
 /** Notification preferences stored in chrome.storage.local. */
@@ -196,6 +196,29 @@ async function migrateToV2(): Promise<void> {
 }
 
 /**
+ * v3.19.2 migration.
+ *
+ * v3.18.x/3.19.0 shipped `scopedHostPermissions` defaulted on. It requested
+ * browser access per declared host and refused to register broad all-site
+ * scripts without explicit per-script opt-in, which stranded existing scripts
+ * behind a "Site Access Needed" prompt after the manifest was scoped to
+ * `optional_host_permissions`. v3.19.2 restores broad install-time host access
+ * and flips the default off. Existing installs persisted `true`, which would
+ * still override the new default, so reset the stored value once here so the
+ * default (off) takes effect. Users can re-enable it in Settings.
+ */
+async function migrateScopedHostPermissionsOptIn(): Promise<void> {
+  const data: { settings?: unknown } = await chrome.storage.local.get('settings');
+  const settings = data.settings;
+  if (!settings || typeof settings !== 'object') return;
+  const record = settings as Record<string, unknown>;
+  if (record.scopedHostPermissions !== true) return;
+  delete record.scopedHostPermissions;
+  await chrome.storage.local.set({ settings: record });
+  console.log('[Migration] Reset scopedHostPermissions to the v3.19.2 default (off)');
+}
+
+/**
  * Check if migration is needed and run it.
  * Called on service worker startup.
  */
@@ -211,6 +234,9 @@ async function run(): Promise<void> {
     // Run migrations in order
     if (compareVersions(lastVersion, '2.0.0') < 0) {
       await migrateToV2();
+    }
+    if (compareVersions(lastVersion, '3.19.2') < 0) {
+      await migrateScopedHostPermissionsOptIn();
     }
 
     // Mark migration complete

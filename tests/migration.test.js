@@ -40,18 +40,33 @@ describe('Migration runtime module', () => {
     });
     expect(stored.notificationPrefs.quietStart).toBeUndefined();
     expect(stored.notificationPrefs.quietEnd).toBeUndefined();
-    expect(stored.sv_lastMigratedVersion).toBe('2.3.0');
+    expect(stored.sv_lastMigratedVersion).toBe('3.19.2');
   });
 
   it('does not downgrade an already-current migration stamp', async () => {
     const Migration = createFreshMigration();
-    await chrome.storage.local.set({ sv_lastMigratedVersion: '2.3.0' });
+    await chrome.storage.local.set({ sv_lastMigratedVersion: '3.19.2' });
     chrome.storage.local.set.mockClear();
 
     await Migration.run();
 
     expect(chrome.storage.local.set).not.toHaveBeenCalled();
-    expect((await chrome.storage.local.get('sv_lastMigratedVersion')).sv_lastMigratedVersion).toBe('2.3.0');
+    expect((await chrome.storage.local.get('sv_lastMigratedVersion')).sv_lastMigratedVersion).toBe('3.19.2');
+  });
+
+  it('resets a persisted scopedHostPermissions opt-in to the v3.19.2 default', async () => {
+    const Migration = createFreshMigration();
+    await chrome.storage.local.set({
+      sv_lastMigratedVersion: '2.3.0',
+      settings: { enabled: true, scopedHostPermissions: true },
+    });
+
+    await Migration.run();
+
+    const stored = await chrome.storage.local.get(['settings', 'sv_lastMigratedVersion']);
+    expect(stored.settings.scopedHostPermissions).toBeUndefined();
+    expect(stored.settings.enabled).toBe(true);
+    expect(stored.sv_lastMigratedVersion).toBe('3.19.2');
   });
 
   it('normalizes legacy script records while preserving script ids', async () => {

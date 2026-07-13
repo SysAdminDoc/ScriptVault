@@ -32,7 +32,7 @@ const Migration = (() => {
     default: () => migration_default
   });
   module.exports = __toCommonJS(migration_exports);
-  var CURRENT_VERSION = "2.3.0";
+  var CURRENT_VERSION = "3.19.2";
   var MIGRATION_KEY = "sv_lastMigratedVersion";
   function compareVersions(v1, v2) {
     const p1 = v1.split(".").map(Number);
@@ -135,6 +135,16 @@ const Migration = (() => {
     }
     console.log("[Migration] v2.0 migration complete");
   }
+  async function migrateScopedHostPermissionsOptIn() {
+    const data = await chrome.storage.local.get("settings");
+    const settings = data.settings;
+    if (!settings || typeof settings !== "object") return;
+    const record = settings;
+    if (record.scopedHostPermissions !== true) return;
+    delete record.scopedHostPermissions;
+    await chrome.storage.local.set({ settings: record });
+    console.log("[Migration] Reset scopedHostPermissions to the v3.19.2 default (off)");
+  }
   async function run() {
     try {
       const data = await chrome.storage.local.get(MIGRATION_KEY);
@@ -143,6 +153,9 @@ const Migration = (() => {
       console.log(`[Migration] Migrating from ${lastVersion} to ${CURRENT_VERSION}`);
       if (compareVersions(lastVersion, "2.0.0") < 0) {
         await migrateToV2();
+      }
+      if (compareVersions(lastVersion, "3.19.2") < 0) {
+        await migrateScopedHostPermissionsOptIn();
       }
       await chrome.storage.local.set({ [MIGRATION_KEY]: CURRENT_VERSION });
       console.log("[Migration] Complete");

@@ -73,12 +73,12 @@ describe('runtime host permission recovery wiring', () => {
 });
 
 describe('optional host permission shipping gate', () => {
-  it('ships Chrome with optional HTTP(S) host grants and leaves Firefox on required all_urls fallback', () => {
+  it('ships Chrome and Firefox with broad install-time host access', () => {
     const chromeManifest = json('manifest.json');
     const firefoxManifest = json('manifest-firefox.json');
 
-    expect(chromeManifest.host_permissions || []).not.toContain('<all_urls>');
-    expect(chromeManifest.optional_host_permissions).toEqual(expect.arrayContaining(['http://*/*', 'https://*/*']));
+    expect(chromeManifest.host_permissions).toContain('<all_urls>');
+    expect(chromeManifest.optional_host_permissions).toBeUndefined();
     expect(firefoxManifest.host_permissions).toContain('<all_urls>');
     expect(chromeManifest.content_scripts[0].matches).toContain('<all_urls>');
   });

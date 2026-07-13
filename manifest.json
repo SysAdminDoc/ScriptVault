@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "__MSG_extName__",
-  "version": "3.19.1",
+  "version": "3.19.2",
   "description": "__MSG_extDescription__",
   "default_locale": "en",
   "minimum_chrome_version": "130",
@@ -34,9 +34,8 @@
     "cookies",
     "downloads"
   ],
-  "optional_host_permissions": [
-    "http://*/*",
-    "https://*/*"
+  "host_permissions": [
+    "<all_urls>"
   ],
   "storage": {
     "managed_schema": "managed-storage-schema.json"

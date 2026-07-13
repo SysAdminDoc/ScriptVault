@@ -210,7 +210,7 @@
       "label": "Use scoped host permissions",
       "help": "Requests browser access only for a script's declared run, update, dependency, and connect hosts. Broad all-site scripts require per-script approval.",
       "elementId": "settingsScopedHostPermissions",
-      "default": true
+      "default": false
     },
     "onDeviceAiEnabled": {
       "type": "boolean",
