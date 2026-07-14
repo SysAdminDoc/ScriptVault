@@ -19,6 +19,12 @@ export default defineConfig({
         height: 720,
       },
       screenshotFailures: true,
+      trace: {
+        mode: "retain-on-failure",
+        tracesDir: "test-results/visual-traces",
+        screenshots: true,
+        snapshots: true,
+      },
       instances: [
         {
           browser: "chromium",

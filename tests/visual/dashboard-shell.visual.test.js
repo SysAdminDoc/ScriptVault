@@ -203,11 +203,42 @@ function renderDashboardShell(theme = "dark") {
 describe("dashboard visual shell", () => {
   it.each(["dark", "light", "catppuccin", "oled"])("matches the pinned %s list-view baseline", async (theme) => {
     await page.viewport(1600, 980);
-    renderDashboardShell(theme);
+    await page.mark("dashboard load", () => renderDashboardShell(theme));
+    await page.mark(`theme switch: ${theme}`, () => {
+      document.documentElement.dataset.theme = theme;
+    });
 
     const shell = page.getByTestId("dashboard-shell");
-    await expect.element(shell).toBeVisible();
+    await page.mark("assertion: dashboard shell visible", () => expect.element(shell).toBeVisible());
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    await expect.element(shell).toMatchScreenshot(`dashboard-list-shell-${theme}`);
+    await page.mark("assertion: dashboard screenshot", () => (
+      expect.element(shell).toMatchScreenshot(`dashboard-list-shell-${theme}`)
+    ));
+  });
+
+  it("records modal and popover landmarks for failure traces", async () => {
+    await page.viewport(1200, 800);
+    await page.mark("dashboard load", () => renderDashboardShell("dark"));
+    await page.mark("theme switch: light", () => {
+      document.documentElement.dataset.theme = "light";
+    });
+    await page.mark("modal open: script review", () => {
+      document.body.insertAdjacentHTML("beforeend", `
+        <dialog open aria-label="Script review" data-testid="trace-modal">
+          <h2>Review script changes</h2>
+          <button type="button">Approve update</button>
+        </dialog>
+      `);
+    });
+    await page.mark("popover open: review help", () => {
+      document.body.insertAdjacentHTML("beforeend", `
+        <aside role="tooltip" data-testid="trace-popover">Review permissions before approving.</aside>
+      `);
+    });
+
+    await page.mark("assertion: overlays visible", async () => {
+      await expect.element(page.getByTestId("trace-modal")).toBeVisible();
+      await expect.element(page.getByTestId("trace-popover")).toBeVisible();
+    });
   });
 });
