@@ -5,8 +5,36 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ScriptVault Monaco Editor</title>
 <style>
+  :root, [data-theme="dark"] {
+    --editor-shell-bg: #111713;
+    --editor-shell-text: #f0f5f2;
+    --editor-shell-muted: #a3afa8;
+    --editor-shell-accent: #35d07f;
+    color-scheme: dark;
+  }
+  [data-theme="light"] {
+    --editor-shell-bg: #ffffff;
+    --editor-shell-text: #17231c;
+    --editor-shell-muted: #58675e;
+    --editor-shell-accent: #16a34a;
+    color-scheme: light;
+  }
+  [data-theme="catppuccin"] {
+    --editor-shell-bg: #1e1e2e;
+    --editor-shell-text: #cdd6f4;
+    --editor-shell-muted: #a6adc8;
+    --editor-shell-accent: #a6e3a1;
+    color-scheme: dark;
+  }
+  [data-theme="oled"] {
+    --editor-shell-bg: #000000;
+    --editor-shell-text: #e0e0e0;
+    --editor-shell-muted: #949494;
+    --editor-shell-accent: #22c55e;
+    color-scheme: dark;
+  }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { width: 100%; height: 100%; overflow: hidden; background: #1e1e1e; color-scheme: dark; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: var(--editor-shell-bg); }
   #container { width: 100%; height: 100%; }
   #loading {
     position: absolute;
@@ -14,27 +42,27 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #a0a0a0;
+    color: var(--editor-shell-muted);
     font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
     font-size: 0.8125rem;
     background:
-      radial-gradient(circle at top right, rgba(34, 197, 94, 0.12), transparent 32%),
-      linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 24%),
-      #1e1e1e;
+      radial-gradient(circle at top right, color-mix(in srgb, var(--editor-shell-accent) 12%, transparent), transparent 32%),
+      linear-gradient(180deg, color-mix(in srgb, var(--editor-shell-text) 3%, transparent), transparent 24%),
+      var(--editor-shell-bg);
     z-index: 10;
     text-align: center;
     padding: 24px;
   }
   #loading strong {
     display: block;
-    color: #e0e0e0;
+    color: var(--editor-shell-text);
     font-size: 0.9375rem;
     margin-bottom: 8px;
     letter-spacing: -0.02em;
   }
   #loading small {
     display: block;
-    color: #7a7a7a;
+    color: var(--editor-shell-muted);
     line-height: 1.5;
   }
 </style>
@@ -52,7 +80,7 @@
   let pendingValue = null;
   let pendingScriptId = null;
   let pendingOptions = null;
-  let currentTheme = 'vs-dark';
+  let currentTheme = 'sv-dark';
   let ignoreNextChange = false;
   let currentScriptId = null;
   let monacoApi = null;
@@ -188,7 +216,7 @@
       editor = monaco.editor.create(document.getElementById('container'), {
         value: '',
         language: 'javascript',
-        theme: currentTheme,
+        theme: 'vs-dark',
         fontSize: 13,
         fontFamily: "'Cascadia Code', 'Fira Code', Consolas, 'Courier New', monospace",
         fontLigatures: true,
@@ -380,6 +408,63 @@
         }
       });
 
+      monaco.editor.defineTheme('sv-monokai', {
+        base: 'vs-dark',
+        inherit: true,
+        rules: [
+          { token: 'comment', foreground: '75715e', fontStyle: 'italic' },
+          { token: 'keyword', foreground: 'f92672' },
+          { token: 'string', foreground: 'e6db74' },
+          { token: 'number', foreground: 'ae81ff' }
+        ],
+        colors: {
+          'editor.background': '#272822',
+          'editor.foreground': '#f8f8f2',
+          'editorLineNumber.foreground': '#75715e',
+          'editor.lineHighlightBackground': '#32332d',
+          'editor.selectionBackground': '#49483e',
+          'editorGutter.background': '#272822'
+        }
+      });
+
+      monaco.editor.defineTheme('sv-material-darker', {
+        base: 'vs-dark',
+        inherit: true,
+        rules: [
+          { token: 'comment', foreground: '676e7b', fontStyle: 'italic' },
+          { token: 'keyword', foreground: 'c792ea' },
+          { token: 'string', foreground: 'c3e88d' },
+          { token: 'number', foreground: 'f78c6c' }
+        ],
+        colors: {
+          'editor.background': '#212121',
+          'editor.foreground': '#eeffff',
+          'editorLineNumber.foreground': '#4b5263',
+          'editor.lineHighlightBackground': '#292929',
+          'editor.selectionBackground': '#3f515d',
+          'editorGutter.background': '#212121'
+        }
+      });
+
+      monaco.editor.defineTheme('sv-ayu-dark', {
+        base: 'vs-dark',
+        inherit: true,
+        rules: [
+          { token: 'comment', foreground: '5c6773', fontStyle: 'italic' },
+          { token: 'keyword', foreground: 'ff8f40' },
+          { token: 'string', foreground: 'aad94c' },
+          { token: 'number', foreground: 'd2a6ff' }
+        ],
+        colors: {
+          'editor.background': '#0b0e14',
+          'editor.foreground': '#bfbdb6',
+          'editorLineNumber.foreground': '#3d424d',
+          'editor.lineHighlightBackground': '#11151c',
+          'editor.selectionBackground': '#1b3a4b',
+          'editorGutter.background': '#0b0e14'
+        }
+      });
+
       monaco.editor.defineTheme('sv-solarized-dark', {
         base: 'vs-dark',
         inherit: true,
@@ -422,6 +507,8 @@
           'editorCursor.foreground': '#d97757'
         }
       });
+
+      monaco.editor.setTheme(currentTheme);
 
       isReady = true;
       loading.style.display = 'none';
@@ -467,6 +554,7 @@
         if (editor) e.source.postMessage({ type: 'value', value: editor.getValue(), requestId: msg.requestId }, e.origin || location.origin);
         break;
       case 'set-theme':
+        applyDocumentTheme(msg.theme);
         currentTheme = mapTheme(msg.theme);
         if (editor && monacoApi) monacoApi.editor.setTheme(currentTheme);
         break;
@@ -620,7 +708,22 @@
     if (opts.lineNumbers != null) updates.lineNumbers = opts.lineNumbers ? 'on' : 'off';
     if (opts.minimap != null) updates.minimap = { enabled: opts.minimap };
     if (Object.keys(updates).length) editor.updateOptions(updates);
-    if (opts.theme && monacoApi) { currentTheme = mapTheme(opts.theme); monacoApi.editor.setTheme(currentTheme); }
+    if (opts.theme && monacoApi) {
+      applyDocumentTheme(opts.theme);
+      currentTheme = mapTheme(opts.theme);
+      monacoApi.editor.setTheme(currentTheme);
+    }
+  }
+
+  function applyDocumentTheme(theme) {
+    const shellTheme = theme === 'light' || theme === 'solarized-light'
+      ? 'light'
+      : theme === 'catppuccin'
+        ? 'catppuccin'
+        : theme === 'oled'
+          ? 'oled'
+          : 'dark';
+    document.documentElement.dataset.theme = shellTheme;
   }
 
   function mapTheme(theme) {
@@ -628,7 +731,8 @@
       dark: 'sv-dark', light: 'sv-light', catppuccin: 'sv-catppuccin', oled: 'sv-oled',
       nord: 'sv-nord', dracula: 'sv-dracula', gruvbox: 'sv-gruvbox',
       'solarized-dark': 'sv-solarized-dark', 'solarized-light': 'sv-light',
-      monokai: 'sv-gruvbox', claude: 'sv-claude', default: 'sv-dark'
+      monokai: 'sv-monokai', 'material-darker': 'sv-material-darker', 'ayu-dark': 'sv-ayu-dark',
+      claude: 'sv-claude', default: 'sv-dark'
     };
     return map[theme] || 'sv-dark';
   }

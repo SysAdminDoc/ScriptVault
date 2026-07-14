@@ -27,13 +27,24 @@
   let _useFallback = false;
   let _lastScriptId = null;
   let _fallbackInputBound = false;
+  let _resolvedTheme = resolveEditorTheme('default');
   const _optionState = {
-    theme: 'monaco',
+    theme: 'default',
     lineWrapping: false,
     indentWithTabs: false,
     indentUnit: 4,
     tabSize: 4
   };
+
+  function resolveEditorTheme(theme) {
+    if (theme && theme !== 'default') return theme;
+    const interfaceTheme = document.documentElement.dataset.theme;
+    return ['dark', 'light', 'catppuccin', 'oled'].includes(interfaceTheme) ? interfaceTheme : 'dark';
+  }
+
+  function sendCurrentTheme() {
+    sendToFrame({ type: 'set-theme', theme: _resolvedTheme });
+  }
 
   // Editor find-widget search history. Persisted to chrome.storage.local
   // under `editorFindHistory` as a FIFO list (newest first), capped at 20.
@@ -85,6 +96,7 @@
         setFallbackPresentation(false);
         _pendingReady.forEach(fn => fn());
         _pendingReady = [];
+        sendCurrentTheme();
         sendToFrame({ type: 'set-value', value: _value, scriptId: _lastScriptId });
         // After ready, prime the find widget with saved history.
         primeEditorFindHistory();
@@ -127,6 +139,7 @@
   // Fallback if Monaco iframe fails to load
   if (frame) {
     frame.addEventListener('error', () => { activateFallback('frame-error'); });
+    frame.addEventListener('load', sendCurrentTheme);
     // If not ready within 15 seconds, activate fallback
     setTimeout(() => { if (!_isReady) activateFallback('timeout'); }, 15000);
   }
@@ -336,7 +349,8 @@
     // Expose for theme changes
     setTheme(theme) {
       _optionState.theme = theme;
-      sendToFrame({ type: 'set-theme', theme });
+      _resolvedTheme = resolveEditorTheme(theme);
+      sendCurrentTheme();
     },
 
     // applyEditorSettings: called from dashboard initEditor
@@ -350,18 +364,20 @@
         insertSpaces: (s.indentWith || 'spaces') === 'spaces',
         wordWrap: s.wordWrap !== undefined ? s.wordWrap : (s.editorWordWrap !== false),
         fontSize: fontPx,
-        theme: s.editorTheme || 'dark',
+        theme: resolveEditorTheme(s.editorTheme),
         lineNumbers: true,
         minimap: s.editorMinimap !== false
       };
-      _optionState.theme = opts.theme;
+      _optionState.theme = s.editorTheme || 'default';
+      _resolvedTheme = opts.theme;
       _optionState.lineWrapping = !!opts.wordWrap;
       _optionState.indentWithTabs = !opts.insertSpaces;
       _optionState.indentUnit = opts.tabSize;
       _optionState.tabSize = opts.tabSize;
+      sendCurrentTheme();
       whenReady(() => {
         sendToFrame({ type: 'set-options', options: opts });
-        sendToFrame({ type: 'set-theme', theme: s.editorTheme || 'dark' });
+        sendCurrentTheme();
       });
     },
 

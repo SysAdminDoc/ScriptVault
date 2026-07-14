@@ -13,6 +13,8 @@ const dashboardJs = readFileSync(resolve(process.cwd(), "pages/dashboard.js"), "
 const dashboardWorkbenchCss = readFileSync(resolve(process.cwd(), "pages/dashboard-workbench.css"), "utf8");
 const themeTokensCss = readFileSync(resolve(process.cwd(), "pages/theme-tokens.css"), "utf8");
 const pageDirJs = readFileSync(resolve(process.cwd(), "pages/page-dir.js"), "utf8");
+const monacoAdapterJs = readFileSync(resolve(process.cwd(), "pages/monaco-adapter.js"), "utf8");
+const editorSandboxHtml = readFileSync(resolve(process.cwd(), "pages/editor-sandbox.html"), "utf8");
 
 function parseHtml(source) {
   return new DOMParser().parseFromString(source, "text/html");
@@ -117,12 +119,30 @@ describe("cross-surface UX audit", () => {
     expect(themeTokensCss).toContain("--sv-text-dim: #858585");
   });
 
+  test("editor loading, defaults, and named presets honor the active theme", () => {
+    const defaults = JSON.parse(readFileSync(resolve(process.cwd(), "src/config/settings-defaults.json"), "utf8"));
+    const dashboardDoc = parseHtml(dashboardHtml);
+
+    expect(defaults.editorTheme).toBe("default");
+    expect(dashboardDoc.querySelector('#settingsEditorTheme option[value="default"]')?.textContent).toBe("Follow interface theme");
+    expect(monacoAdapterJs).toContain("function resolveEditorTheme(theme)");
+    expect(monacoAdapterJs).toContain("frame.addEventListener('load', sendCurrentTheme)");
+    expect(dashboardJs).toContain("state.editor.setOption('theme', layout)");
+    expect(editorSandboxHtml).toContain('data-theme="light"');
+    expect(editorSandboxHtml).toContain("function applyDocumentTheme(theme)");
+    expect(editorSandboxHtml).toContain("monaco.editor.defineTheme('sv-monokai'");
+    expect(editorSandboxHtml).toContain("monaco.editor.defineTheme('sv-material-darker'");
+    expect(editorSandboxHtml).toContain("monaco.editor.defineTheme('sv-ayu-dark'");
+    expect(editorSandboxHtml).not.toContain("monokai: 'sv-gruvbox'");
+  });
+
   test("screenshot evidence pins every theme after app initialization and covers the editor", () => {
     const screenshotHarness = readFileSync(resolve(process.cwd(), "scripts/capture-store-screenshots.mjs"), "utf8");
 
     expect(screenshotHarness).toContain("...THEMES.flatMap(theme => ['updates', 'utilities', 'trash', 'help']");
     expect(screenshotHarness).toContain("dashboard-editor-${theme}");
     expect(screenshotHarness).toContain("shot.variant === 'editor'");
+    expect(screenshotHarness).toContain("window._monacoEditorAdapter?.setTheme(theme)");
     expect(screenshotHarness).toContain("document.documentElement.dataset.theme === theme");
     expect(screenshotHarness).toContain("setTimeout(resolve, 320)");
   });
@@ -317,6 +337,10 @@ describe("cross-surface UX audit", () => {
     expect(devtoolsHtml).toContain('class="toolbar-logo"');
     expect(devtoolsHtml).toContain('class="toolbar-subtitle">Diagnostics</span>');
     expect(devtoolsHtml).toContain('Workbench-aligned diagnostics surface');
+    expect(popupHtml).toContain('data-i18n="sideOpenDashboard">Open Dashboard</span>');
+    expect(sidepanelHtml).toContain('data-i18n="sideOpenDashboard">Open Dashboard</span>');
+    expect(popupHtml).not.toContain('data-i18n="cmdOpenDashboard"');
+    expect(sidepanelHtml).not.toContain('data-i18n="cmdOpenDashboard"');
   });
 
   test("dashboard keeps the updated column on a real button control", () => {

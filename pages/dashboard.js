@@ -4589,7 +4589,7 @@
                     case 'lintOnType': if (!state.editor?.isMonaco) { state.editor.setOption('lint', value ? { getAnnotations: window.lintUserscript, delay: 300, tooltips: true, highlightLines: true } : false); } break;
                 }
             }
-            if (key === 'layout') document.documentElement.setAttribute('data-theme', resolveTheme(value));
+            if (key === 'layout') applyTheme();
             if (key === 'keyMapping') applyKeyMapping(value);
             if (key === 'configMode') applyConfigMode();
             if (key === 'customCss') applySettingsToUI();
@@ -5462,21 +5462,12 @@
         }
     }
 
-    // Map dashboard themes to sensible editor theme defaults
-    const DASHBOARD_TO_EDITOR_THEME = {
-        dark: 'material-darker',
-        light: 'default',
-        catppuccin: 'dracula',
-        oled: 'monokai'
-    };
-
     function applyTheme() {
         const layout = resolveTheme(state.settings.layout);
         document.documentElement.setAttribute('data-theme', layout);
-        // Auto-sync editor theme if user hasn't explicitly chosen one
+        // Keep the editor aligned with the interface unless the user chose a preset.
         if (state.editor && (!state.settings.editorTheme || state.settings.editorTheme === 'default')) {
-            const mapped = DASHBOARD_TO_EDITOR_THEME[layout] || 'material-darker';
-            state.editor.setOption('theme', mapped);
+            state.editor.setOption('theme', layout);
         }
         applyActiveCustomThemeVars();
     }

@@ -787,14 +787,14 @@
       "label": "Theme",
       "help": "Controls theme.",
       "elementId": "settingsEditorTheme",
-      "default": "material-darker",
+      "default": "default",
       "validation": {
         "kind": "select-option"
       },
       "options": [
         {
           "value": "default",
-          "label": "Default"
+          "label": "Follow interface theme"
         },
         {
           "value": "monokai",

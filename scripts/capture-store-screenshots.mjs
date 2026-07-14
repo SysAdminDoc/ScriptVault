@@ -139,6 +139,14 @@ try {
       if (shot.variant === 'editor') {
         await page.click('#btnNewScript');
         await page.waitForSelector('.editor-overlay.active', { visible: true, timeout: 15000 });
+        await page.evaluate(theme => window._monacoEditorAdapter?.setTheme(theme), shot.theme);
+        const editorFrame = await (await page.$('#monacoFrame'))?.contentFrame();
+        if (!editorFrame) throw new Error('Monaco editor frame did not become available');
+        await editorFrame.waitForFunction(
+          theme => document.documentElement.dataset.theme === theme,
+          { timeout: 10000 },
+          shot.theme,
+        );
       } else if (shot.variant && shot.variant !== 'scripts') {
         await page.click(`.sv-rail-item[data-workbench-tab="${shot.variant}"]:not(.sv-rail-subitem)`);
         const panelSelector = `#${shot.variant}Panel`;

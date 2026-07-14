@@ -56,7 +56,7 @@ const StorageModule = (() => {
     notifyOnInstall: true,
     notifyOnUpdate: true,
     notifyOnError: false,
-    editorTheme: "material-darker",
+    editorTheme: "default",
     editorFontSize: 13,
     editorTabSize: 2,
     editorLineWrapping: false,

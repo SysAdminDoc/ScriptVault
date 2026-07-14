@@ -909,6 +909,7 @@ type TranslationKeys = {
   syncSaveProviderSettings: string;
   settingsEnableEnhancedEditor: string;
   settingsEditorThemeLabel: string;
+  settingsEditorThemeFollowInterface: string;
   optionDefault: string;
   settingsEditorFontSizeLabel: string;
   settingsKeyMappingLabel: string;
@@ -2640,6 +2641,7 @@ const translations: TranslationMap = {
     syncSaveProviderSettings: 'Save Provider Settings',
     settingsEnableEnhancedEditor: 'Enable enhanced editor',
     settingsEditorThemeLabel: 'Theme:',
+    settingsEditorThemeFollowInterface: 'Follow interface theme',
     optionDefault: 'Default',
     settingsEditorFontSizeLabel: 'Font Size:',
     settingsKeyMappingLabel: 'Key Mapping:',
@@ -3667,6 +3669,7 @@ const translations: TranslationMap = {
     syncSaveProviderSettings: 'Save Provider Settings',
     settingsEnableEnhancedEditor: 'Enable enhanced editor',
     settingsEditorThemeLabel: 'Theme:',
+    settingsEditorThemeFollowInterface: 'Follow interface theme',
     optionDefault: 'Default',
     settingsEditorFontSizeLabel: 'Font Size:',
     settingsKeyMappingLabel: 'Key Mapping:',
@@ -5342,6 +5345,7 @@ const translations: TranslationMap = {
     syncSaveProviderSettings: 'Save Provider Settings',
     settingsEnableEnhancedEditor: 'Enable enhanced editor',
     settingsEditorThemeLabel: 'Theme:',
+    settingsEditorThemeFollowInterface: 'Follow interface theme',
     optionDefault: 'Default',
     settingsEditorFontSizeLabel: 'Font Size:',
     settingsKeyMappingLabel: 'Key Mapping:',
@@ -7020,6 +7024,7 @@ const translations: TranslationMap = {
     syncSaveProviderSettings: 'Save Provider Settings',
     settingsEnableEnhancedEditor: 'Enable enhanced editor',
     settingsEditorThemeLabel: 'Theme:',
+    settingsEditorThemeFollowInterface: 'Follow interface theme',
     optionDefault: 'Default',
     settingsEditorFontSizeLabel: 'Font Size:',
     settingsKeyMappingLabel: 'Key Mapping:',
@@ -8698,6 +8703,7 @@ const translations: TranslationMap = {
     syncSaveProviderSettings: 'Save Provider Settings',
     settingsEnableEnhancedEditor: 'Enable enhanced editor',
     settingsEditorThemeLabel: 'Theme:',
+    settingsEditorThemeFollowInterface: 'Follow interface theme',
     optionDefault: 'Default',
     settingsEditorFontSizeLabel: 'Font Size:',
     settingsKeyMappingLabel: 'Key Mapping:',
@@ -10376,6 +10382,7 @@ const translations: TranslationMap = {
     syncSaveProviderSettings: 'Save Provider Settings',
     settingsEnableEnhancedEditor: 'Enable enhanced editor',
     settingsEditorThemeLabel: 'Theme:',
+    settingsEditorThemeFollowInterface: 'Follow interface theme',
     optionDefault: 'Default',
     settingsEditorFontSizeLabel: 'Font Size:',
     settingsKeyMappingLabel: 'Key Mapping:',
@@ -12054,6 +12061,7 @@ const translations: TranslationMap = {
     syncSaveProviderSettings: 'Save Provider Settings',
     settingsEnableEnhancedEditor: 'Enable enhanced editor',
     settingsEditorThemeLabel: 'Theme:',
+    settingsEditorThemeFollowInterface: 'Follow interface theme',
     optionDefault: 'Default',
     settingsEditorFontSizeLabel: 'Font Size:',
     settingsKeyMappingLabel: 'Key Mapping:',
@@ -13732,6 +13740,7 @@ const translations: TranslationMap = {
     syncSaveProviderSettings: 'Save Provider Settings',
     settingsEnableEnhancedEditor: 'Enable enhanced editor',
     settingsEditorThemeLabel: 'Theme:',
+    settingsEditorThemeFollowInterface: 'Follow interface theme',
     optionDefault: 'Default',
     settingsEditorFontSizeLabel: 'Font Size:',
     settingsKeyMappingLabel: 'Key Mapping:',
@@ -16074,6 +16083,7 @@ const translations: TranslationMap = {
     syncSaveProviderSettings: 'Save Provider Settings',
     settingsEnableEnhancedEditor: 'Enable enhanced editor',
     settingsEditorThemeLabel: 'Theme:',
+    settingsEditorThemeFollowInterface: 'Follow interface theme',
     optionDefault: 'Default',
     settingsEditorFontSizeLabel: 'Font Size:',
     settingsKeyMappingLabel: 'Key Mapping:',
