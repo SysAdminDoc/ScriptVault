@@ -5,7 +5,14 @@
 import type { Script, Settings } from '../types/index';
 import { generateId } from '../shared/utils';
 import settingsDefaultsData from '../config/settings-defaults.json';
-import { BackupsDAO, LocalWorkspaceBindingsDAO, ScriptsDAO, ValuesDAO } from '../storage/script-db';
+import {
+  BackupsDAO,
+  LocalWorkspaceBindingsDAO,
+  ScriptsDAO,
+  ValuesDAO,
+  type StatsUrlRetentionMode,
+  type StatsUrlRewriteResult,
+} from '../storage/script-db';
 import { ensureV3Migration } from '../storage/migration-v3';
 
 // ============================================================================
@@ -123,6 +130,38 @@ let _scriptsInitPromise: Promise<void> | null = null;
 // Pending init promise for FolderStorage
 let _foldersInitPromise: Promise<void> | null = null;
 
+const STATS_URL_RETENTION_MIGRATION_KEY = '_statsUrlRetentionOriginDefaultV1';
+const STATS_URL_RETENTION_PENDING_KEY = '_statsUrlRetentionRewritePending';
+
+function isStatsUrlRetentionMode(value: unknown): value is StatsUrlRetentionMode {
+  return value === 'origin' || value === 'none';
+}
+
+function statsUrlRetentionRank(value: Settings['statsUrlRetention']): number {
+  return value === 'none' ? 2 : value === 'origin' ? 1 : 0;
+}
+
+function applyStatsUrlRewritesToCache(changed: StatsUrlRewriteResult[]): void {
+  if (!ScriptStorage.cache || changed.length === 0) return;
+  for (const rewrite of changed) {
+    const script = ScriptStorage.cache[rewrite.id];
+    if (!script?.stats) continue;
+    if (rewrite.lastUrl) script.stats.lastUrl = rewrite.lastUrl;
+    else delete script.stats.lastUrl;
+  }
+}
+
+async function finishStatsUrlRewrite(mode: StatsUrlRetentionMode): Promise<void> {
+  const changed = await ScriptsDAO.rewriteStatsUrls(mode);
+  applyStatsUrlRewritesToCache(changed);
+  try {
+    await chrome.storage.local.remove(STATS_URL_RETENTION_PENDING_KEY);
+  } catch (error) {
+    // A stale marker only causes an idempotent retry on the next cold start.
+    console.warn('[ScriptVault] Could not clear URL-retention rewrite marker:', error);
+  }
+}
+
 function cloneDefaultSettings(): Settings {
   if (typeof structuredClone === 'function') {
     return structuredClone(settingsDefaultsData) as Settings;
@@ -189,8 +228,31 @@ export const SettingsManager = {
     if (this.cache !== null) return;
     if (!_settingsInitPromise) {
       _settingsInitPromise = (async () => {
-        const data = await chrome.storage.local.get('settings');
-        this.cache = { ...cloneDefaultSettings(), ...(data['settings'] as Partial<Settings> | undefined) };
+        const data = await chrome.storage.local.get([
+          'settings',
+          STATS_URL_RETENTION_MIGRATION_KEY,
+          STATS_URL_RETENTION_PENDING_KEY,
+        ]);
+        let settings = { ...cloneDefaultSettings(), ...(data['settings'] as Partial<Settings> | undefined) };
+        const pendingMode = data[STATS_URL_RETENTION_PENDING_KEY];
+        const needsDefaultMigration = data[STATS_URL_RETENTION_MIGRATION_KEY] !== true;
+        const rewriteMode = isStatsUrlRetentionMode(pendingMode)
+          ? pendingMode
+          : needsDefaultMigration
+            ? (settings.statsUrlRetention === 'none' ? 'none' : 'origin')
+            : null;
+
+        if (rewriteMode) {
+          settings = { ...settings, statsUrlRetention: rewriteMode };
+          await chrome.storage.local.set({
+            settings: cloneSettingsState(settings),
+            [STATS_URL_RETENTION_PENDING_KEY]: rewriteMode,
+          });
+          await finishStatsUrlRewrite(rewriteMode);
+          await chrome.storage.local.set({ [STATS_URL_RETENTION_MIGRATION_KEY]: true });
+        }
+
+        this.cache = settings;
         console.log('[ScriptVault] Settings loaded');
       })();
     }
@@ -217,13 +279,27 @@ export const SettingsManager = {
         rawNext = { ...this.cache!, [key]: value };
       }
       const next = cloneSettingsState(rawNext);
+      const retentionMode = next.statsUrlRetention;
+      const mustRewriteStatsUrls = isStatsUrlRetentionMode(retentionMode)
+        && statsUrlRetentionRank(retentionMode) > statsUrlRetentionRank(previous.statsUrlRetention);
+      let settingsPersisted = false;
       try {
-        await chrome.storage.local.set({ settings: cloneSettingsState(next) });
+        await chrome.storage.local.set(mustRewriteStatsUrls
+          ? {
+              settings: cloneSettingsState(next),
+              [STATS_URL_RETENTION_PENDING_KEY]: retentionMode,
+            }
+          : { settings: cloneSettingsState(next) });
+        settingsPersisted = true;
+        this.cache = next;
+        if (mustRewriteStatsUrls) await finishStatsUrlRewrite(retentionMode);
       } catch (e) {
-        this.cache = previous;
+        // Once the stricter setting is durable, keep enforcing it even if IDB
+        // is temporarily unavailable. The pending marker retries the atomic
+        // rewrite on the next cold start.
+        if (!settingsPersisted) this.cache = previous;
         throw e;
       }
-      this.cache = next;
       return cloneSettingsState(this.cache!);
     };
     const result = _settingsWriteChain.then(run, run);
@@ -240,15 +316,28 @@ export const SettingsManager = {
       const previousCache = cloneSettingsState(this.cache!);
       const nextDefaults = cloneDefaultSettings();
       const nextCache = cloneDefaultSettings();
+      const retentionMode = nextCache.statsUrlRetention;
+      const mustRewriteStatsUrls = isStatsUrlRetentionMode(retentionMode)
+        && statsUrlRetentionRank(retentionMode) > statsUrlRetentionRank(previousCache.statsUrlRetention);
+      let settingsPersisted = false;
       try {
-        await chrome.storage.local.set({ settings: cloneSettingsState(nextCache) });
+        await chrome.storage.local.set(mustRewriteStatsUrls
+          ? {
+              settings: cloneSettingsState(nextCache),
+              [STATS_URL_RETENTION_PENDING_KEY]: retentionMode,
+            }
+          : { settings: cloneSettingsState(nextCache) });
+        settingsPersisted = true;
+        this.defaults = nextDefaults;
+        this.cache = nextCache;
+        if (mustRewriteStatsUrls) await finishStatsUrlRewrite(retentionMode);
       } catch (e) {
-        this.defaults = previousDefaults;
-        this.cache = previousCache;
+        if (!settingsPersisted) {
+          this.defaults = previousDefaults;
+          this.cache = previousCache;
+        }
         throw e;
       }
-      this.defaults = nextDefaults;
-      this.cache = nextCache;
       return cloneSettingsState(this.cache);
     };
     const result = _settingsWriteChain.then(run, run);

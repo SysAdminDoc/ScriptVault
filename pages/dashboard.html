@@ -8572,12 +8572,12 @@
                     <div class="setting-row">
                         <span class="label-text" data-i18n="settingsStatsUrlRetentionLabel">Execution stats URL retention:</span>
                         <select class="select-field" id="settingsStatsUrlRetention" aria-describedby="settingsStatsUrlRetentionError">
-                            <option value="full" selected data-i18n="statsUrlRetentionFull">Full URL</option>
-                            <option value="origin" data-i18n="statsUrlRetentionOrigin">Origin only</option>
+                            <option value="full" data-i18n="statsUrlRetentionFull">Full URL</option>
+                            <option value="origin" selected data-i18n="statsUrlRetentionOrigin">Origin only</option>
                             <option value="none" data-i18n="statsUrlRetentionNone">Do not store</option>
                         </select>
                         <span class="setting-error" id="settingsStatsUrlRetentionError" hidden></span>
-                        <span class="help-icon" title="How much of the last execution URL to keep in per-script stats" data-i18n-title="settingsStatsUrlRetentionHelp">?</span>
+                        <span class="help-icon" title="Origin only is the default. Choosing Origin only or Do not store irreversibly scrubs previously stored URL detail." data-i18n-title="settingsStatsUrlRetentionHelp">?</span>
                     </div>
                     <div class="setting-row">
                         <span class="label-text" data-i18n="settingsAllowHttpHeadersLabel">Allow HTTP headers to be modified by scripts:</span>

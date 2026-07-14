@@ -82,6 +82,23 @@ interface StoredScriptRecord extends Omit<Script, 'code'> {
   codeByteSize?: number;
 }
 
+export type StatsUrlRetentionMode = 'origin' | 'none';
+
+export interface StatsUrlRewriteResult {
+  id: string;
+  lastUrl?: string;
+}
+
+function retainStatsUrl(url: unknown, mode: StatsUrlRetentionMode): string | undefined {
+  if (mode === 'none' || typeof url !== 'string' || !url) return undefined;
+  try {
+    const origin = new URL(url).origin;
+    return origin === 'null' ? undefined : origin;
+  } catch (_) {
+    return undefined;
+  }
+}
+
 export interface LocalWorkspaceBindingRecord {
   bindingId: string;
   scriptId: string;
@@ -327,6 +344,34 @@ export const ScriptsDAO = {
     const row = await encodeScriptForStorage(script);
     await withTransaction(Stores.scripts, 'readwrite', async (tx) => {
       await reqToPromise(tx.objectStore(Stores.scripts).put(row));
+    });
+  },
+
+  /**
+   * Irreversibly reduce every persisted execution URL in one IDB transaction.
+   * Returning only the minimized values lets ScriptStorage update its mirror
+   * without re-reading (or accidentally retaining) the original full URLs.
+   */
+  async rewriteStatsUrls(mode: StatsUrlRetentionMode): Promise<StatsUrlRewriteResult[]> {
+    await openScriptDB();
+    return withTransaction(Stores.scripts, 'readwrite', async (tx) => {
+      const store = tx.objectStore(Stores.scripts);
+      const rows = (await reqToPromise(store.getAll()) as StoredScriptRecord[]) ?? [];
+      const changed: StatsUrlRewriteResult[] = [];
+
+      for (const row of rows) {
+        if (!row.stats || !Object.prototype.hasOwnProperty.call(row.stats, 'lastUrl')) continue;
+        const lastUrl = retainStatsUrl(row.stats.lastUrl, mode);
+        if (lastUrl === row.stats.lastUrl) continue;
+
+        row.stats = { ...row.stats };
+        if (lastUrl) row.stats.lastUrl = lastUrl;
+        else delete row.stats.lastUrl;
+        await reqToPromise(store.put(row));
+        changed.push(lastUrl ? { id: row.id, lastUrl } : { id: row.id });
+      }
+
+      return changed;
     });
   },
 

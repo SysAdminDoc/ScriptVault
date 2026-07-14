@@ -1196,9 +1196,9 @@
       "type": "string",
       "control": "select",
       "label": "Execution stats URL retention",
-      "help": "Controls how much of the last execution URL is kept in per-script stats.",
+      "help": "Controls how much of the last execution URL is kept in per-script stats. Origin only is the privacy-preserving default; stricter choices irreversibly scrub stored URLs.",
       "elementId": "settingsStatsUrlRetention",
-      "default": "full",
+      "default": "origin",
       "validation": {
         "kind": "select-option"
       },

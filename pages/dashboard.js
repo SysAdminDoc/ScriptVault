@@ -3986,7 +3986,7 @@
         if (elements.settingsContentScriptAPI) elements.settingsContentScriptAPI.value = s.contentScriptAPI || 'userscripts';
         if (elements.settingsSandboxMode) elements.settingsSandboxMode.value = s.sandboxMode || 'default';
         if (elements.settingsModifyCSP) elements.settingsModifyCSP.value = s.modifyCSP || 'auto';
-        if (elements.settingsStatsUrlRetention) elements.settingsStatsUrlRetention.value = s.statsUrlRetention || 'full';
+        if (elements.settingsStatsUrlRetention) elements.settingsStatsUrlRetention.value = s.statsUrlRetention || 'origin';
         if (elements.settingsAllowHttpHeaders) elements.settingsAllowHttpHeaders.value = s.allowHttpHeaders || 'yes';
         if (elements.settingsDefaultTabTypes) elements.settingsDefaultTabTypes.value = s.defaultTabTypes || 'all';
         if (elements.settingsAllowLocalFiles) elements.settingsAllowLocalFiles.value = s.allowLocalFiles || 'all';
@@ -13676,12 +13676,12 @@
     }
 
     // Apply the execution-stats URL retention setting to a stored lastUrl when
-    // rendering or exporting. Mirrors the write-time enforcement in the service
-    // worker so existing full URLs are scrubbed at display/export time too.
+    // rendering or exporting. This is defense in depth; changing to a stricter
+    // mode also irreversibly rewrites the persisted IndexedDB records.
     function retainStatsUrl(url, mode) {
         if (!url) return '';
         if (mode === 'none') return '';
-        if (mode === 'origin') {
+        if (mode !== 'full') {
             try { return new URL(url).origin; } catch (_) { return ''; }
         }
         return url;

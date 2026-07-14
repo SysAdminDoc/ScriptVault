@@ -5963,7 +5963,7 @@ const executionTelemetryHandler = ExecutionTelemetry.createExecutionTelemetryHan
   scheduleStatsSave: () => _debouncedStatsSave(),
   triggerAfterScript: (scriptId, context) => triggerChainsForAfterScript(scriptId, context),
   addNetworkLog: entry => NetworkLog.add(entry),
-  getStatsUrlRetention: () => (SettingsManager.cache && SettingsManager.cache.statsUrlRetention) || 'full',
+  getStatsUrlRetention: () => (SettingsManager.cache && SettingsManager.cache.statsUrlRetention) || 'origin',
   retainStatsUrl: (url, mode) => _retainStatsUrl(url, mode),
   onTriggerError: error => console.error('[ScriptVault] After-script chain trigger error:', error)
 });
@@ -9325,13 +9325,13 @@ function escapeOmnibox(s) {
 const STATS_SAVE_ALARM = 'statsSave';
 
 // Apply the user's execution-stats URL retention setting before a lastUrl is
-// stored. 'full' keeps the whole URL (default, prior behavior), 'origin' keeps
+// stored. 'full' keeps the whole URL when explicitly selected, 'origin' keeps
 // only the scheme+host, and 'none' stores nothing. This keeps potentially
 // sensitive browsing history out of local stats in a zero-telemetry product.
 function _retainStatsUrl(url, mode) {
   if (!url || typeof url !== 'string') return '';
   if (mode === 'none') return '';
-  if (mode === 'origin') {
+  if (mode !== 'full') {
     try { return new URL(url).origin; } catch (_) { return ''; }
   }
   return url;

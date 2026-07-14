@@ -182,6 +182,72 @@ describe('SettingsManager', () => {
     expect(settings.allowInternalSyncEndpoints).toBe(false);
     expect(settings.allowHighPrivilegeScriptApis).toBe(false);
     expect(settings.modifyCSP).toBe('auto');
+    expect(settings.statsUrlRetention).toBe('origin');
+  });
+
+  it('migrates legacy full URLs to origins in IndexedDB and cache', async () => {
+    await ScriptStorage.set('alpha', makeScript('alpha', {
+      stats: { runs: 1, totalTime: 2, avgTime: 2, lastRun: 3, errors: 0, lastUrl: 'https://example.test/private?q=secret#token' },
+    }));
+    await chrome.storage.local.set({ settings: { statsUrlRetention: 'full' } });
+
+    const settings = await SettingsManager.get();
+
+    expect(settings.statsUrlRetention).toBe('origin');
+    expect((await getRawScriptRecord('alpha')).stats.lastUrl).toBe('https://example.test');
+    expect((await ScriptStorage.get('alpha')).stats.lastUrl).toBe('https://example.test');
+    const migrationState = await chrome.storage.local.get([
+      '_statsUrlRetentionOriginDefaultV1',
+      '_statsUrlRetentionRewritePending',
+    ]);
+    expect(migrationState._statsUrlRetentionOriginDefaultV1).toBe(true);
+    expect(migrationState._statsUrlRetentionRewritePending).toBeUndefined();
+  });
+
+  it('irreversibly deletes stored URLs when retention moves to none', async () => {
+    await SettingsManager.get();
+    await SettingsManager.set('statsUrlRetention', 'full');
+    await ScriptStorage.set('alpha', makeScript('alpha', {
+      stats: { runs: 1, totalTime: 2, avgTime: 2, lastRun: 3, errors: 0, lastUrl: 'https://example.test/private?q=secret' },
+    }));
+
+    await SettingsManager.set('statsUrlRetention', 'none');
+
+    expect((await getRawScriptRecord('alpha')).stats).not.toHaveProperty('lastUrl');
+    expect((await ScriptStorage.get('alpha')).stats).not.toHaveProperty('lastUrl');
+    ScriptStorage.invalidateCache();
+    expect((await ScriptStorage.get('alpha')).stats).not.toHaveProperty('lastUrl');
+  });
+
+  it('aborts every URL rewrite on IDB failure and retries from its durable marker', async () => {
+    await SettingsManager.get();
+    await SettingsManager.set('statsUrlRetention', 'full');
+    for (const id of ['alpha', 'beta']) {
+      await ScriptStorage.set(id, makeScript(id, {
+        stats: { runs: 1, totalTime: 2, avgTime: 2, lastRun: 3, errors: 0, lastUrl: `https://${id}.test/private?secret=1` },
+      }));
+    }
+
+    const originalPut = IDBObjectStore.prototype.put;
+    let rewritePuts = 0;
+    const putSpy = vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(function (...args) {
+      rewritePuts += 1;
+      if (rewritePuts === 2) throw new Error('simulated rewrite failure');
+      return originalPut.apply(this, args);
+    });
+    await expect(SettingsManager.set('statsUrlRetention', 'none')).rejects.toThrow('simulated rewrite failure');
+    putSpy.mockRestore();
+
+    expect((await getRawScriptRecord('alpha')).stats.lastUrl).toContain('/private');
+    expect((await getRawScriptRecord('beta')).stats.lastUrl).toContain('/private');
+    expect((await chrome.storage.local.get('settings')).settings.statsUrlRetention).toBe('none');
+    expect((await chrome.storage.local.get('_statsUrlRetentionRewritePending'))._statsUrlRetentionRewritePending).toBe('none');
+
+    SettingsManager.cache = null;
+    await SettingsManager.get();
+    expect((await getRawScriptRecord('alpha')).stats).not.toHaveProperty('lastUrl');
+    expect((await getRawScriptRecord('beta')).stats).not.toHaveProperty('lastUrl');
+    expect((await chrome.storage.local.get('_statsUrlRetentionRewritePending'))._statsUrlRetentionRewritePending).toBeUndefined();
   });
 
   it('merges stored settings with defaults', async () => {

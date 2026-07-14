@@ -253,7 +253,9 @@ const ExecutionTelemetry = (() => {
         stats.totalTime += duration;
         stats.avgTime = stats.runs > 0 ? Math.round(stats.totalTime / stats.runs * 100) / 100 : 0;
         stats.lastRun = now();
-        stats.lastUrl = dependencies.retainStatsUrl(eventUrl, dependencies.getStatsUrlRetention());
+        const retainedUrl = dependencies.retainStatsUrl(eventUrl, dependencies.getStatsUrlRetention());
+        if (retainedUrl) stats.lastUrl = retainedUrl;
+        else delete stats.lastUrl;
         setSenderContext(stats, sender);
         dependencies.recordDiagnostic(sender, { type: "run", scriptId, duration, url: eventUrl });
         dependencies.scheduleStatsSave();

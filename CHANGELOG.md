@@ -4,6 +4,10 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Made execution URL retention privacy-preserving and irreversible.** New
+  installs retain origins by default; existing full URLs migrate to origins;
+  stricter settings atomically rewrite IndexedDB records, delete URLs in None
+  mode, and resume interrupted scrubs from a durable cold-start marker.
 - **Quarantined every vendor backup by default.** Tampermonkey/ScriptCat,
   Violentmonkey, and Greasemonkey imports now share one bounded trust pipeline,
   preserve archive-disabled state, retain local settings on overwrite, record

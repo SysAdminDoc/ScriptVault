@@ -247,7 +247,7 @@ const SCRIPTVAULT_SETTINGS_DEFAULTS = {
   "scopedHostPermissions": false,
   "onDeviceAiEnabled": false,
   "modifyCSP": "auto",
-  "statsUrlRetention": "full",
+  "statsUrlRetention": "origin",
   "blacklist": [],
   "badgeInfo": "running",
   "badgeErrorStates": true,
@@ -5896,7 +5896,7 @@ const I18n = (() => {
       statsUrlRetentionFull: "Full URL",
       statsUrlRetentionOrigin: "Origin only",
       statsUrlRetentionNone: "Do not store",
-      settingsStatsUrlRetentionHelp: "How much of the last execution URL to keep in per-script stats",
+      settingsStatsUrlRetentionHelp: "Origin only is the default. Choosing Origin only or Do not store irreversibly scrubs previously stored URL detail.",
       settingsAllowHttpHeadersLabel: "Allow HTTP headers to be modified by scripts:",
       settingsDefaultTabTypesLabel: "Default tab types to run scripts in:",
       tabTypesAll: "All tabs",
@@ -6928,7 +6928,7 @@ const I18n = (() => {
       statsUrlRetentionFull: "Full URL",
       statsUrlRetentionOrigin: "Origin only",
       statsUrlRetentionNone: "Do not store",
-      settingsStatsUrlRetentionHelp: "How much of the last execution URL to keep in per-script stats",
+      settingsStatsUrlRetentionHelp: "Origin only is the default. Choosing Origin only or Do not store irreversibly scrubs previously stored URL detail.",
       settingsAllowHttpHeadersLabel: "Allow HTTP headers to be modified by scripts:",
       settingsDefaultTabTypesLabel: "Default tab types to run scripts in:",
       tabTypesAll: "All tabs",
@@ -8613,7 +8613,7 @@ const I18n = (() => {
       statsUrlRetentionFull: "Full URL",
       statsUrlRetentionOrigin: "Origin only",
       statsUrlRetentionNone: "Do not store",
-      settingsStatsUrlRetentionHelp: "How much of the last execution URL to keep in per-script stats",
+      settingsStatsUrlRetentionHelp: "Origin only is the default. Choosing Origin only or Do not store irreversibly scrubs previously stored URL detail.",
       settingsAllowHttpHeadersLabel: "Allow HTTP headers to be modified by scripts:",
       settingsDefaultTabTypesLabel: "Default tab types to run scripts in:",
       tabTypesAll: "All tabs",
@@ -10301,7 +10301,7 @@ const I18n = (() => {
       statsUrlRetentionFull: "Full URL",
       statsUrlRetentionOrigin: "Origin only",
       statsUrlRetentionNone: "Do not store",
-      settingsStatsUrlRetentionHelp: "How much of the last execution URL to keep in per-script stats",
+      settingsStatsUrlRetentionHelp: "Origin only is the default. Choosing Origin only or Do not store irreversibly scrubs previously stored URL detail.",
       settingsAllowHttpHeadersLabel: "Allow HTTP headers to be modified by scripts:",
       settingsDefaultTabTypesLabel: "Default tab types to run scripts in:",
       tabTypesAll: "All tabs",
@@ -11989,7 +11989,7 @@ const I18n = (() => {
       statsUrlRetentionFull: "Full URL",
       statsUrlRetentionOrigin: "Origin only",
       statsUrlRetentionNone: "Do not store",
-      settingsStatsUrlRetentionHelp: "How much of the last execution URL to keep in per-script stats",
+      settingsStatsUrlRetentionHelp: "Origin only is the default. Choosing Origin only or Do not store irreversibly scrubs previously stored URL detail.",
       settingsAllowHttpHeadersLabel: "Allow HTTP headers to be modified by scripts:",
       settingsDefaultTabTypesLabel: "Default tab types to run scripts in:",
       tabTypesAll: "All tabs",
@@ -13677,7 +13677,7 @@ const I18n = (() => {
       statsUrlRetentionFull: "Full URL",
       statsUrlRetentionOrigin: "Origin only",
       statsUrlRetentionNone: "Do not store",
-      settingsStatsUrlRetentionHelp: "How much of the last execution URL to keep in per-script stats",
+      settingsStatsUrlRetentionHelp: "Origin only is the default. Choosing Origin only or Do not store irreversibly scrubs previously stored URL detail.",
       settingsAllowHttpHeadersLabel: "Allow HTTP headers to be modified by scripts:",
       settingsDefaultTabTypesLabel: "Default tab types to run scripts in:",
       tabTypesAll: "All tabs",
@@ -15365,7 +15365,7 @@ const I18n = (() => {
       statsUrlRetentionFull: "Full URL",
       statsUrlRetentionOrigin: "Origin only",
       statsUrlRetentionNone: "Do not store",
-      settingsStatsUrlRetentionHelp: "How much of the last execution URL to keep in per-script stats",
+      settingsStatsUrlRetentionHelp: "Origin only is the default. Choosing Origin only or Do not store irreversibly scrubs previously stored URL detail.",
       settingsAllowHttpHeadersLabel: "Allow HTTP headers to be modified by scripts:",
       settingsDefaultTabTypesLabel: "Default tab types to run scripts in:",
       tabTypesAll: "All tabs",
@@ -17053,7 +17053,7 @@ const I18n = (() => {
       statsUrlRetentionFull: "Full URL",
       statsUrlRetentionOrigin: "Origin only",
       statsUrlRetentionNone: "Do not store",
-      settingsStatsUrlRetentionHelp: "How much of the last execution URL to keep in per-script stats",
+      settingsStatsUrlRetentionHelp: "Origin only is the default. Choosing Origin only or Do not store irreversibly scrubs previously stored URL detail.",
       settingsAllowHttpHeadersLabel: "Allow HTTP headers to be modified by scripts:",
       settingsDefaultTabTypesLabel: "Default tab types to run scripts in:",
       tabTypesAll: "All tabs",
@@ -19405,7 +19405,7 @@ const I18n = (() => {
       statsUrlRetentionFull: "Full URL",
       statsUrlRetentionOrigin: "Origin only",
       statsUrlRetentionNone: "Do not store",
-      settingsStatsUrlRetentionHelp: "How much of the last execution URL to keep in per-script stats",
+      settingsStatsUrlRetentionHelp: "Origin only is the default. Choosing Origin only or Do not store irreversibly scrubs previously stored URL detail.",
       settingsAllowHttpHeadersLabel: "Allow HTTP headers to be modified by scripts:",
       settingsDefaultTabTypesLabel: "Default tab types to run scripts in:",
       tabTypesAll: "All tabs",
@@ -20371,7 +20371,7 @@ const StorageModule = (() => {
     scopedHostPermissions: false,
     onDeviceAiEnabled: false,
     modifyCSP: "auto",
-    statsUrlRetention: "full",
+    statsUrlRetention: "origin",
     blacklist: [],
     badgeInfo: "running",
     badgeErrorStates: true,
@@ -20602,6 +20602,15 @@ const StorageModule = (() => {
   }
 
   // src/storage/script-db.ts
+  function retainStatsUrl(url, mode) {
+    if (mode === "none" || typeof url !== "string" || !url) return void 0;
+    try {
+      const origin = new URL(url).origin;
+      return origin === "null" ? void 0 : origin;
+    } catch (_) {
+      return void 0;
+    }
+  }
   function setRecordKey(record, key, value) {
     Object.defineProperty(record, String(key), {
       value,
@@ -20766,6 +20775,30 @@ const StorageModule = (() => {
       const row = await encodeScriptForStorage(script);
       await withTransaction(Stores.scripts, "readwrite", async (tx) => {
         await reqToPromise(tx.objectStore(Stores.scripts).put(row));
+      });
+    },
+    /**
+     * Irreversibly reduce every persisted execution URL in one IDB transaction.
+     * Returning only the minimized values lets ScriptStorage update its mirror
+     * without re-reading (or accidentally retaining) the original full URLs.
+     */
+    async rewriteStatsUrls(mode) {
+      await openScriptDB();
+      return withTransaction(Stores.scripts, "readwrite", async (tx) => {
+        const store = tx.objectStore(Stores.scripts);
+        const rows = await reqToPromise(store.getAll()) ?? [];
+        const changed = [];
+        for (const row of rows) {
+          if (!row.stats || !Object.prototype.hasOwnProperty.call(row.stats, "lastUrl")) continue;
+          const lastUrl = retainStatsUrl(row.stats.lastUrl, mode);
+          if (lastUrl === row.stats.lastUrl) continue;
+          row.stats = { ...row.stats };
+          if (lastUrl) row.stats.lastUrl = lastUrl;
+          else delete row.stats.lastUrl;
+          await reqToPromise(store.put(row));
+          changed.push(lastUrl ? { id: row.id, lastUrl } : { id: row.id });
+        }
+        return changed;
       });
     },
     async delete(id) {
@@ -21252,6 +21285,32 @@ const StorageModule = (() => {
   var _settingsWriteChain = Promise.resolve();
   var _scriptsInitPromise = null;
   var _foldersInitPromise = null;
+  var STATS_URL_RETENTION_MIGRATION_KEY = "_statsUrlRetentionOriginDefaultV1";
+  var STATS_URL_RETENTION_PENDING_KEY = "_statsUrlRetentionRewritePending";
+  function isStatsUrlRetentionMode(value) {
+    return value === "origin" || value === "none";
+  }
+  function statsUrlRetentionRank(value) {
+    return value === "none" ? 2 : value === "origin" ? 1 : 0;
+  }
+  function applyStatsUrlRewritesToCache(changed) {
+    if (!ScriptStorage.cache || changed.length === 0) return;
+    for (const rewrite of changed) {
+      const script = ScriptStorage.cache[rewrite.id];
+      if (!script?.stats) continue;
+      if (rewrite.lastUrl) script.stats.lastUrl = rewrite.lastUrl;
+      else delete script.stats.lastUrl;
+    }
+  }
+  async function finishStatsUrlRewrite(mode) {
+    const changed = await ScriptsDAO.rewriteStatsUrls(mode);
+    applyStatsUrlRewritesToCache(changed);
+    try {
+      await chrome.storage.local.remove(STATS_URL_RETENTION_PENDING_KEY);
+    } catch (error) {
+      console.warn("[ScriptVault] Could not clear URL-retention rewrite marker:", error);
+    }
+  }
   function cloneDefaultSettings() {
     if (typeof structuredClone === "function") {
       return structuredClone(settings_defaults_default);
@@ -21306,8 +21365,25 @@ const StorageModule = (() => {
       if (this.cache !== null) return;
       if (!_settingsInitPromise) {
         _settingsInitPromise = (async () => {
-          const data = await chrome.storage.local.get("settings");
-          this.cache = { ...cloneDefaultSettings(), ...data["settings"] };
+          const data = await chrome.storage.local.get([
+            "settings",
+            STATS_URL_RETENTION_MIGRATION_KEY,
+            STATS_URL_RETENTION_PENDING_KEY
+          ]);
+          let settings = { ...cloneDefaultSettings(), ...data["settings"] };
+          const pendingMode = data[STATS_URL_RETENTION_PENDING_KEY];
+          const needsDefaultMigration = data[STATS_URL_RETENTION_MIGRATION_KEY] !== true;
+          const rewriteMode = isStatsUrlRetentionMode(pendingMode) ? pendingMode : needsDefaultMigration ? settings.statsUrlRetention === "none" ? "none" : "origin" : null;
+          if (rewriteMode) {
+            settings = { ...settings, statsUrlRetention: rewriteMode };
+            await chrome.storage.local.set({
+              settings: cloneSettingsState(settings),
+              [STATS_URL_RETENTION_PENDING_KEY]: rewriteMode
+            });
+            await finishStatsUrlRewrite(rewriteMode);
+            await chrome.storage.local.set({ [STATS_URL_RETENTION_MIGRATION_KEY]: true });
+          }
+          this.cache = settings;
           console.log("[ScriptVault] Settings loaded");
         })();
       }
@@ -21329,13 +21405,21 @@ const StorageModule = (() => {
           rawNext = { ...this.cache, [key]: value };
         }
         const next = cloneSettingsState(rawNext);
+        const retentionMode = next.statsUrlRetention;
+        const mustRewriteStatsUrls = isStatsUrlRetentionMode(retentionMode) && statsUrlRetentionRank(retentionMode) > statsUrlRetentionRank(previous.statsUrlRetention);
+        let settingsPersisted = false;
         try {
-          await chrome.storage.local.set({ settings: cloneSettingsState(next) });
+          await chrome.storage.local.set(mustRewriteStatsUrls ? {
+            settings: cloneSettingsState(next),
+            [STATS_URL_RETENTION_PENDING_KEY]: retentionMode
+          } : { settings: cloneSettingsState(next) });
+          settingsPersisted = true;
+          this.cache = next;
+          if (mustRewriteStatsUrls) await finishStatsUrlRewrite(retentionMode);
         } catch (e) {
-          this.cache = previous;
+          if (!settingsPersisted) this.cache = previous;
           throw e;
         }
-        this.cache = next;
         return cloneSettingsState(this.cache);
       };
       const result = _settingsWriteChain.then(run, run);
@@ -21349,15 +21433,25 @@ const StorageModule = (() => {
         const previousCache = cloneSettingsState(this.cache);
         const nextDefaults = cloneDefaultSettings();
         const nextCache = cloneDefaultSettings();
+        const retentionMode = nextCache.statsUrlRetention;
+        const mustRewriteStatsUrls = isStatsUrlRetentionMode(retentionMode) && statsUrlRetentionRank(retentionMode) > statsUrlRetentionRank(previousCache.statsUrlRetention);
+        let settingsPersisted = false;
         try {
-          await chrome.storage.local.set({ settings: cloneSettingsState(nextCache) });
+          await chrome.storage.local.set(mustRewriteStatsUrls ? {
+            settings: cloneSettingsState(nextCache),
+            [STATS_URL_RETENTION_PENDING_KEY]: retentionMode
+          } : { settings: cloneSettingsState(nextCache) });
+          settingsPersisted = true;
+          this.defaults = nextDefaults;
+          this.cache = nextCache;
+          if (mustRewriteStatsUrls) await finishStatsUrlRewrite(retentionMode);
         } catch (e) {
-          this.defaults = previousDefaults;
-          this.cache = previousCache;
+          if (!settingsPersisted) {
+            this.defaults = previousDefaults;
+            this.cache = previousCache;
+          }
           throw e;
         }
-        this.defaults = nextDefaults;
-        this.cache = nextCache;
         return cloneSettingsState(this.cache);
       };
       const result = _settingsWriteChain.then(run, run);
@@ -22778,7 +22872,9 @@ const ExecutionTelemetry = (() => {
         stats.totalTime += duration;
         stats.avgTime = stats.runs > 0 ? Math.round(stats.totalTime / stats.runs * 100) / 100 : 0;
         stats.lastRun = now();
-        stats.lastUrl = dependencies.retainStatsUrl(eventUrl, dependencies.getStatsUrlRetention());
+        const retainedUrl = dependencies.retainStatsUrl(eventUrl, dependencies.getStatsUrlRetention());
+        if (retainedUrl) stats.lastUrl = retainedUrl;
+        else delete stats.lastUrl;
         setSenderContext(stats, sender);
         dependencies.recordDiagnostic(sender, { type: "run", scriptId, duration, url: eventUrl });
         dependencies.scheduleStatsSave();
@@ -44761,7 +44857,7 @@ const executionTelemetryHandler = ExecutionTelemetry.createExecutionTelemetryHan
   scheduleStatsSave: () => _debouncedStatsSave(),
   triggerAfterScript: (scriptId, context) => triggerChainsForAfterScript(scriptId, context),
   addNetworkLog: entry => NetworkLog.add(entry),
-  getStatsUrlRetention: () => (SettingsManager.cache && SettingsManager.cache.statsUrlRetention) || 'full',
+  getStatsUrlRetention: () => (SettingsManager.cache && SettingsManager.cache.statsUrlRetention) || 'origin',
   retainStatsUrl: (url, mode) => _retainStatsUrl(url, mode),
   onTriggerError: error => console.error('[ScriptVault] After-script chain trigger error:', error)
 });
@@ -48123,13 +48219,13 @@ function escapeOmnibox(s) {
 const STATS_SAVE_ALARM = 'statsSave';
 
 // Apply the user's execution-stats URL retention setting before a lastUrl is
-// stored. 'full' keeps the whole URL (default, prior behavior), 'origin' keeps
+// stored. 'full' keeps the whole URL when explicitly selected, 'origin' keeps
 // only the scheme+host, and 'none' stores nothing. This keeps potentially
 // sensitive browsing history out of local stats in a zero-telemetry product.
 function _retainStatsUrl(url, mode) {
   if (!url || typeof url !== 'string') return '';
   if (mode === 'none') return '';
-  if (mode === 'origin') {
+  if (mode !== 'full') {
     try { return new URL(url).origin; } catch (_) { return ''; }
   }
   return url;

@@ -77,7 +77,7 @@
   "scopedHostPermissions": false,
   "onDeviceAiEnabled": false,
   "modifyCSP": "auto",
-  "statsUrlRetention": "full",
+  "statsUrlRetention": "origin",
   "blacklist": [],
   "badgeInfo": "running",
   "badgeErrorStates": true,
