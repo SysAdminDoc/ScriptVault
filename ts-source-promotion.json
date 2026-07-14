@@ -148,6 +148,14 @@
       "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for backup and restore action dispatch."
     },
     {
+      "runtime": "modules/organization-action-handler.js",
+      "sources": [
+        "src/background/organization-action-handler.ts"
+      ],
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for profile, collection, workspace, and folder action dispatch."
+    },
+    {
       "runtime": "modules/gm-audio-handler.js",
       "sources": [
         "src/background/gm-audio-handler.ts"

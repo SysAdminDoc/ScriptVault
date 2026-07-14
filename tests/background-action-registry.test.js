@@ -23,6 +23,10 @@ import {
   BACKUP_BACKGROUND_ACTIONS,
   createBackupActionHandlers,
 } from '../src/background/backup-action-handler.ts';
+import {
+  ORGANIZATION_BACKGROUND_ACTIONS,
+  createOrganizationActionHandlers,
+} from '../src/background/organization-action-handler.ts';
 
 describe('typed background action registry', () => {
   it('normalizes flat and nested runtime messages before dispatch', async () => {
@@ -204,5 +208,27 @@ describe('typed background action registry', () => {
     expect(registry.registeredActions()).toEqual(BACKUP_BACKGROUND_ACTIONS);
     expect(dependencies.create).toHaveBeenCalledWith('manual');
     expect(dependencies.rollback).toHaveBeenCalledWith('receipt-1', {});
+  });
+
+  it('routes profiles, collections, workspaces, and folders by typed IDs', async () => {
+    const dependencies = Object.fromEntries([
+      'getProfiles', 'switchProfile', 'saveProfile', 'deleteProfile',
+      'getCollections', 'saveCollection', 'deleteCollection', 'getWorkspaces',
+      'createWorkspace', 'saveWorkspace', 'activateWorkspace', 'updateWorkspace',
+      'deleteWorkspace', 'getFolders', 'createFolder', 'updateFolder',
+      'deleteFolder', 'addScriptToFolder', 'removeScriptFromFolder',
+      'moveScriptToFolder',
+    ].map(name => [name, vi.fn(async () => ({ success: true }))]));
+    const registry = createBackgroundActionRegistry(
+      createOrganizationActionHandlers(dependencies),
+    );
+
+    await registry.dispatch({
+      action: 'moveScriptToFolder',
+      data: { scriptId: 'script-1', fromFolderId: 'old', toFolderId: 'new' },
+    }, {});
+
+    expect(registry.registeredActions()).toEqual(ORGANIZATION_BACKGROUND_ACTIONS);
+    expect(dependencies.moveScriptToFolder).toHaveBeenCalledWith('script-1', 'old', 'new');
   });
 });

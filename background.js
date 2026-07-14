@@ -23490,6 +23490,105 @@ if (typeof self !== 'undefined') {
 }
 
 // ============================================================================
+// Generated from src/background/organization-action-handler.ts; do not edit by hand.
+// Run `node scripts/generate-ts-runtime-modules.mjs` or `npm run build:bg`.
+// ============================================================================
+
+const OrganizationActionHandler = (() => {
+  const module = { exports: {} };
+  const exports = module.exports;
+  "use strict";
+  var __defProp = Object.defineProperty;
+  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, { get: all[name], enumerable: true });
+  };
+  var __copyProps = (to, from, except, desc) => {
+    if (from && typeof from === "object" || typeof from === "function") {
+      for (let key of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(to, key) && key !== except)
+          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+    }
+    return to;
+  };
+  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+  // src/background/organization-action-handler.ts
+  var organization_action_handler_exports = {};
+  __export(organization_action_handler_exports, {
+    ORGANIZATION_BACKGROUND_ACTIONS: () => ORGANIZATION_BACKGROUND_ACTIONS,
+    OrganizationActionHandler: () => OrganizationActionHandler,
+    createOrganizationActionHandlers: () => createOrganizationActionHandlers,
+    default: () => organization_action_handler_default
+  });
+  module.exports = __toCommonJS(organization_action_handler_exports);
+  var ORGANIZATION_BACKGROUND_ACTIONS = [
+    "getProfiles",
+    "switchProfile",
+    "saveProfile",
+    "deleteProfile",
+    "getCollections",
+    "saveCollection",
+    "deleteCollection",
+    "getWorkspaces",
+    "createWorkspace",
+    "saveWorkspace",
+    "activateWorkspace",
+    "updateWorkspace",
+    "deleteWorkspace",
+    "getFolders",
+    "createFolder",
+    "updateFolder",
+    "deleteFolder",
+    "addScriptToFolder",
+    "removeScriptFromFolder",
+    "moveScriptToFolder"
+  ];
+  function createOrganizationActionHandlers(dependencies) {
+    const handlers = {
+      getProfiles: () => dependencies.getProfiles(),
+      switchProfile: ({ message }) => dependencies.switchProfile(message.profileId),
+      saveProfile: ({ message }) => dependencies.saveProfile(message.profile),
+      deleteProfile: ({ message }) => dependencies.deleteProfile(message.profileId),
+      getCollections: () => dependencies.getCollections(),
+      saveCollection: ({ message }) => dependencies.saveCollection(message.collection),
+      deleteCollection: ({ message }) => dependencies.deleteCollection(message.collectionId),
+      getWorkspaces: () => dependencies.getWorkspaces(),
+      createWorkspace: ({ message }) => dependencies.createWorkspace(message.name),
+      saveWorkspace: ({ message }) => dependencies.saveWorkspace(message.id),
+      activateWorkspace: ({ message }) => dependencies.activateWorkspace(message.id),
+      updateWorkspace: ({ message }) => dependencies.updateWorkspace(message.id, message.updates),
+      deleteWorkspace: ({ message }) => dependencies.deleteWorkspace(message.id),
+      getFolders: () => dependencies.getFolders(),
+      createFolder: ({ message }) => dependencies.createFolder(message.name, message.color),
+      updateFolder: ({ message }) => dependencies.updateFolder(message.id, message.updates),
+      deleteFolder: ({ message }) => dependencies.deleteFolder(message.id),
+      addScriptToFolder: ({ message }) => dependencies.addScriptToFolder(message.folderId, message.scriptId),
+      removeScriptFromFolder: ({ message }) => dependencies.removeScriptFromFolder(message.folderId, message.scriptId),
+      moveScriptToFolder: ({ message }) => dependencies.moveScriptToFolder(
+        message.scriptId,
+        message.fromFolderId,
+        message.toFolderId
+      )
+    };
+    return Object.freeze(handlers);
+  }
+  var OrganizationActionHandler = Object.freeze({
+    ORGANIZATION_BACKGROUND_ACTIONS,
+    createOrganizationActionHandlers
+  });
+  var organization_action_handler_default = OrganizationActionHandler;
+  return module.exports.default || module.exports.OrganizationActionHandler || module.exports;
+})();
+
+if (typeof self !== 'undefined') {
+  self.OrganizationActionHandler = OrganizationActionHandler;
+}
+
+// ============================================================================
 // Generated from src/background/message-router.ts; do not edit by hand.
 // Run `node scripts/generate-ts-runtime-modules.mjs` or `npm run build:bg`.
 // ============================================================================
@@ -45578,6 +45677,61 @@ async function getCloudSyncStatus(providerName) {
   }
 }
 
+async function switchScriptProfile(profileId) {
+  const { profiles = [] } = await chrome.storage.local.get('profiles');
+  const profile = profiles.find(candidate => candidate.id === profileId);
+  if (!profile) return { error: 'Profile not found' };
+  const scripts = await ScriptStorage.getAll();
+  const updates = [];
+  for (const script of scripts) {
+    const profileEnabled = profile.scriptStates?.[script.id] ?? script.enabled;
+    const enabled = script.settings?._importQuarantine ? false : profileEnabled;
+    if (script.enabled !== enabled) {
+      updates.push(ScriptStorage.set(script.id, { ...script, enabled }));
+    }
+  }
+  if (updates.length) await Promise.all(updates);
+  await chrome.storage.local.set({ activeProfileId: profileId });
+  await registerAllScripts(true);
+  await updateBadge();
+  return { success: true };
+}
+
+async function saveScriptProfile(profile) {
+  const { profiles = [] } = await chrome.storage.local.get('profiles');
+  const index = profiles.findIndex(candidate => candidate.id === profile.id);
+  if (index >= 0) profiles[index] = profile;
+  else profiles.push(profile);
+  await chrome.storage.local.set({ profiles });
+  return { success: true };
+}
+
+async function deleteScriptProfile(profileId) {
+  const profileData = await chrome.storage.local.get(['profiles', 'activeProfileId']);
+  const profiles = (profileData.profiles || []).filter(profile => profile.id !== profileId);
+  const updates = { profiles };
+  if (profileData.activeProfileId === profileId) updates.activeProfileId = null;
+  await chrome.storage.local.set(updates);
+  return { success: true };
+}
+
+async function saveScriptCollection(collection) {
+  const { scriptCollections = [] } = await chrome.storage.local.get('scriptCollections');
+  const index = scriptCollections.findIndex(candidate => candidate.id === collection.id);
+  if (index >= 0) scriptCollections[index] = collection;
+  else scriptCollections.push(collection);
+  await chrome.storage.local.set({ scriptCollections });
+  return { success: true };
+}
+
+async function deleteScriptCollection(collectionId) {
+  const { scriptCollections = [] } = await chrome.storage.local.get('scriptCollections');
+  await chrome.storage.local.set({
+    scriptCollections: scriptCollections.filter(collection => collection.id !== collectionId)
+  });
+  return { success: true };
+}
+
 // ============================================================================
 // Message Handlers
 // ============================================================================
@@ -45703,6 +45857,64 @@ backgroundActionRegistry.registerHandlers(BackupActionHandler.createBackupAction
     if (typeof BackupScheduler === 'undefined') return { error: 'BackupScheduler not available' };
     const savedSettings = await BackupScheduler.setSettings(settings);
     return { success: true, settings: savedSettings };
+  }
+}));
+backgroundActionRegistry.registerHandlers(OrganizationActionHandler.createOrganizationActionHandlers({
+  getProfiles: async () => {
+    const profileData = await chrome.storage.local.get(['profiles', 'activeProfileId']);
+    return { profiles: profileData.profiles || [], activeProfileId: profileData.activeProfileId || null };
+  },
+  switchProfile: profileId => switchScriptProfile(profileId),
+  saveProfile: profile => saveScriptProfile(profile),
+  deleteProfile: profileId => deleteScriptProfile(profileId),
+  getCollections: async () => {
+    const { scriptCollections = [] } = await chrome.storage.local.get('scriptCollections');
+    return { collections: scriptCollections };
+  },
+  saveCollection: collection => saveScriptCollection(collection),
+  deleteCollection: collectionId => deleteScriptCollection(collectionId),
+  getWorkspaces: () => WorkspaceManager.getAll(),
+  createWorkspace: async name => {
+    const workspace = await WorkspaceManager.create(name);
+    return { success: true, workspace };
+  },
+  saveWorkspace: async id => {
+    const workspace = await WorkspaceManager.save(id);
+    return workspace ? { success: true, workspace } : { error: 'Workspace not found' };
+  },
+  activateWorkspace: id => WorkspaceManager.activate(id),
+  updateWorkspace: async (id, updates) => {
+    const workspace = await WorkspaceManager.update(id, updates);
+    return workspace ? { success: true, workspace } : { error: 'Workspace not found' };
+  },
+  deleteWorkspace: async id => {
+    const workspace = await WorkspaceManager.delete(id);
+    return workspace ? { success: true, workspace } : { error: 'Workspace not found' };
+  },
+  getFolders: async () => ({ folders: await FolderStorage.getAll() }),
+  createFolder: async (name, color) => ({
+    success: true,
+    folder: await FolderStorage.create(name, color)
+  }),
+  updateFolder: async (id, updates) => ({
+    success: true,
+    folder: await FolderStorage.update(id, updates)
+  }),
+  deleteFolder: async id => {
+    await FolderStorage.delete(id);
+    return { success: true };
+  },
+  addScriptToFolder: async (folderId, scriptId) => {
+    await FolderStorage.addScript(folderId, scriptId);
+    return { success: true };
+  },
+  removeScriptFromFolder: async (folderId, scriptId) => {
+    await FolderStorage.removeScript(folderId, scriptId);
+    return { success: true };
+  },
+  moveScriptToFolder: async (scriptId, fromFolderId, toFolderId) => {
+    await FolderStorage.moveScript(scriptId, fromFolderId, toFolderId);
+    return { success: true };
   }
 }));
 backgroundActionRegistry.registerHandlers(MessageRouter.createBackgroundDomainHandlers(
@@ -46922,71 +47134,6 @@ async function handleMessage(message, sender) {
       }
 
       // v2.0: Script Analytics
-      // v2.0: Profiles
-      case 'getProfiles': {
-        const pData = await chrome.storage.local.get(['profiles', 'activeProfileId']);
-        return { profiles: pData.profiles || [], activeProfileId: pData.activeProfileId || null };
-      }
-      case 'switchProfile': {
-        const pData2 = await chrome.storage.local.get('profiles');
-        const profiles = pData2.profiles || [];
-        const profile = profiles.find(p => p.id === data.profileId);
-        if (!profile) return { error: 'Profile not found' };
-        // Apply script states from profile (parallel writes)
-        const scripts = await ScriptStorage.getAll();
-        const updates = [];
-        for (const script of scripts) {
-          const profileEnabled = profile.scriptStates?.[script.id] ?? script.enabled;
-          const newEnabled = script.settings?._importQuarantine ? false : profileEnabled;
-          if (script.enabled !== newEnabled) {
-            updates.push(ScriptStorage.set(script.id, { ...script, enabled: newEnabled }));
-          }
-        }
-        if (updates.length) await Promise.all(updates);
-        await chrome.storage.local.set({ activeProfileId: data.profileId });
-        await registerAllScripts(true);
-        await updateBadge();
-        return { success: true };
-      }
-      case 'saveProfile': {
-        const pData3 = await chrome.storage.local.get('profiles');
-        const profiles3 = pData3.profiles || [];
-        const idx = profiles3.findIndex(p => p.id === data.profile.id);
-        if (idx >= 0) profiles3[idx] = data.profile;
-        else profiles3.push(data.profile);
-        await chrome.storage.local.set({ profiles: profiles3 });
-        return { success: true };
-      }
-      case 'deleteProfile': {
-        const pData4 = await chrome.storage.local.get(['profiles', 'activeProfileId']);
-        const profiles4 = (pData4.profiles || []).filter(p => p.id !== data.profileId);
-        const updates = { profiles: profiles4 };
-        if (pData4.activeProfileId === data.profileId) updates.activeProfileId = null;
-        await chrome.storage.local.set(updates);
-        return { success: true };
-      }
-
-      // v2.0: Collections
-      case 'getCollections': {
-        const cData = await chrome.storage.local.get('scriptCollections');
-        return { collections: cData.scriptCollections || [] };
-      }
-      case 'saveCollection': {
-        const cData2 = await chrome.storage.local.get('scriptCollections');
-        const collections = cData2.scriptCollections || [];
-        const cidx = collections.findIndex(c => c.id === data.collection.id);
-        if (cidx >= 0) collections[cidx] = data.collection;
-        else collections.push(data.collection);
-        await chrome.storage.local.set({ scriptCollections: collections });
-        return { success: true };
-      }
-      case 'deleteCollection': {
-        const cData3 = await chrome.storage.local.get('scriptCollections');
-        const collections3 = (cData3.scriptCollections || []).filter(c => c.id !== data.collectionId);
-        await chrome.storage.local.set({ scriptCollections: collections3 });
-        return { success: true };
-      }
-
       // v2.0: CSP Reports
       case 'reportCSPFailure': {
         const cspData = await chrome.storage.local.get('cspReports');
@@ -47014,34 +47161,6 @@ async function handleMessage(message, sender) {
 
       case 'exportZip':
         return await exportToZip(data?.options || {});
-
-      // Folders
-      // Workspaces
-      case 'getWorkspaces':
-        return await WorkspaceManager.getAll();
-
-      case 'createWorkspace':
-        return { workspace: await WorkspaceManager.create(data.name) };
-
-      case 'saveWorkspace': {
-        const workspace = await WorkspaceManager.save(data.id);
-        return workspace
-          ? { success: true, workspace }
-          : { error: 'Workspace not found' };
-      }
-
-      case 'activateWorkspace':
-        return await WorkspaceManager.activate(data.id);
-
-      case 'updateWorkspace':
-        return { workspace: await WorkspaceManager.update(data.id, data.updates) };
-
-      case 'deleteWorkspace': {
-        const workspace = await WorkspaceManager.delete(data.id);
-        return workspace
-          ? { success: true, workspace }
-          : { error: 'Workspace not found' };
-      }
 
       // Network Log — returns flat array (limit optional) + stats
       case 'getNetworkLog': {
@@ -47179,31 +47298,6 @@ async function handleMessage(message, sender) {
 
       case 'signing_generateNewKeypair':
         return ScriptSigning.generateAndStoreKeypair();
-
-      case 'getFolders':
-        return { folders: await FolderStorage.getAll() };
-
-      case 'createFolder':
-        return { folder: await FolderStorage.create(data.name, data.color) };
-
-      case 'updateFolder':
-        return { folder: await FolderStorage.update(data.id, data.updates) };
-
-      case 'deleteFolder':
-        await FolderStorage.delete(data.id);
-        return { success: true };
-
-      case 'addScriptToFolder':
-        await FolderStorage.addScript(data.folderId, data.scriptId);
-        return { success: true };
-
-      case 'removeScriptFromFolder':
-        await FolderStorage.removeScript(data.folderId, data.scriptId);
-        return { success: true };
-
-      case 'moveScriptToFolder':
-        await FolderStorage.moveScript(data.scriptId, data.fromFolderId, data.toFolderId);
-        return { success: true };
 
       case 'installFromUrl':
         return await installFromUrl(data.url);

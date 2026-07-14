@@ -4,6 +4,9 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Typed organizational action dispatch.** Profiles, collections, workspaces,
+  and folders now use one generated contract, and workspace/folder mutation
+  responses consistently include the documented success discriminant.
 - **Typed the backup and recovery boundary.** Backup creation, inspection,
   restore receipts, rollback, and settings now share one generated contract;
   successful restore and rollback paths still re-register scripts and badges.

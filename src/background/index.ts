@@ -107,6 +107,15 @@ export type {
   BackupBackgroundAction,
 } from './backup-action-handler';
 export {
+  ORGANIZATION_BACKGROUND_ACTIONS,
+  OrganizationActionHandler,
+  createOrganizationActionHandlers,
+} from './organization-action-handler';
+export type {
+  OrganizationActionDependencies,
+  OrganizationBackgroundAction,
+} from './organization-action-handler';
+export {
   GM_AUDIO_ACTIONS,
   GMAudioHandler,
   handleGMAudioMessage,
