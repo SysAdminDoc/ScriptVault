@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 const code = readFileSync(resolve(process.cwd(), 'modules/quota-manager.js'), 'utf8');
 const _body = code + '\nreturn QuotaManager;';
 let _compiledFn;
-try { const vm = require('node:vm'); _compiledFn = vm.compileFunction(_body, ['chrome', 'console', 'navigator'], { filename: resolve(process.cwd(), 'modules/quota-manager.js') }); } catch { _compiledFn = new Function('chrome', 'console', 'navigator', _body); }
+try { const vm = require('node:vm'); _compiledFn = vm.compileFunction(_body, ['chrome', 'console', 'navigator', 'ScriptStorage', 'ScriptValues', 'BackupsDAO'], { filename: resolve(process.cwd(), 'modules/quota-manager.js') }); } catch { _compiledFn = new Function('chrome', 'console', 'navigator', 'ScriptStorage', 'ScriptValues', 'BackupsDAO', _body); }
 const originalNavigatorStorageDescriptor = Object.getOwnPropertyDescriptor(globalThis.navigator, 'storage');
 
 function makeStoredScript(id, name) {
@@ -22,7 +22,14 @@ function makeStoredScript(id, name) {
 }
 
 function createFreshQuotaManager() {
-  return _compiledFn(globalThis.chrome, console, globalThis.navigator);
+  return _compiledFn(
+    globalThis.chrome,
+    console,
+    globalThis.navigator,
+    globalThis.ScriptStorage,
+    globalThis.ScriptValues,
+    globalThis.BackupsDAO,
+  );
 }
 
 let QuotaManager;
@@ -31,6 +38,12 @@ beforeEach(() => {
   globalThis.__resetStorageMock();
   chrome.storage.local.getBytesInUse.mockResolvedValue(0);
   chrome.permissions.getAll.mockResolvedValue({ permissions: [] });
+  globalThis.ScriptStorage = { getAll: vi.fn().mockResolvedValue([]) };
+  globalThis.ScriptValues = { getAll: vi.fn().mockResolvedValue({}) };
+  globalThis.BackupsDAO = {
+    list: vi.fn().mockResolvedValue([]),
+    get: vi.fn().mockResolvedValue(null),
+  };
   QuotaManager = createFreshQuotaManager();
   vi.clearAllMocks();
 });
@@ -41,16 +54,33 @@ afterEach(() => {
   } else {
     Reflect.deleteProperty(globalThis.navigator, 'storage');
   }
+  Reflect.deleteProperty(globalThis, 'ScriptStorage');
+  Reflect.deleteProperty(globalThis, 'ScriptValues');
+  Reflect.deleteProperty(globalThis, 'BackupsDAO');
 });
 
 describe('QuotaManager runtime module', () => {
-  it('counts scripts from the userscripts object-map store in breakdowns', async () => {
+  it('counts scripts, GM values, and backup blobs from their IndexedDB-backed stores', async () => {
+    const scripts = [
+      makeStoredScript('script_alpha', 'Alpha'),
+      makeStoredScript('script_beta', 'Beta'),
+    ];
+    globalThis.ScriptStorage.getAll.mockResolvedValue(scripts);
+    globalThis.ScriptValues.getAll.mockImplementation(async (scriptId) => (
+      scriptId === 'script_alpha' ? { draft: true, theme: 'dark' } : { count: 4 }
+    ));
+    globalThis.BackupsDAO.list.mockResolvedValue([{ id: 'backup-1', createdAt: 1 }]);
+    globalThis.BackupsDAO.get.mockResolvedValue({
+      id: 'backup-1',
+      createdAt: 1,
+      data: new Uint8Array(256).buffer,
+    });
     await chrome.storage.local.set({
       userscripts: {
-        script_alpha: makeStoredScript('script_alpha', 'Alpha'),
-        script_beta: makeStoredScript('script_beta', 'Beta'),
+        stale_legacy: makeStoredScript('stale_legacy', 'Stale'),
       },
       values_script_alpha: { draft: true },
+      autoBackups: [{ id: 'stale-backup' }],
       settings: { enabled: true },
       miscKey: 'other',
     });
@@ -59,7 +89,10 @@ describe('QuotaManager runtime module', () => {
 
     expect(breakdown.scripts.count).toBe(2);
     expect(breakdown.scripts.bytes).toBeGreaterThan(0);
-    expect(breakdown.scriptValues.count).toBe(1);
+    expect(breakdown.scriptValues.count).toBe(3);
+    expect(breakdown.scriptValues.bytes).toBeGreaterThan(0);
+    expect(breakdown.backups.count).toBe(1);
+    expect(breakdown.backups.bytes).toBeGreaterThanOrEqual(256);
     expect(breakdown.settings.count).toBe(1);
     expect(breakdown.other.count).toBe(1);
   });

@@ -40,16 +40,37 @@ afterEach(() => {
     Reflect.deleteProperty(globalThis.navigator, 'storage');
   }
   Reflect.deleteProperty(globalThis, 'ScriptStorage');
+  Reflect.deleteProperty(globalThis, 'ScriptValues');
+  Reflect.deleteProperty(globalThis, 'BackupsDAO');
 });
 
 describe('source quota manager module', () => {
-  it('counts scripts from the real userscripts object-map store in breakdowns', async () => {
+  it('counts scripts, GM values, and backups from the real IndexedDB-backed stores', async () => {
+    globalThis.ScriptStorage = {
+      getAll: vi.fn().mockResolvedValue([
+        makeStoredScript('script_alpha', 'Alpha'),
+        makeStoredScript('script_beta', 'Beta'),
+      ]),
+    };
+    globalThis.ScriptValues = {
+      getAll: vi.fn().mockImplementation(async (scriptId) => (
+        scriptId === 'script_alpha' ? { draft: true, theme: 'dark' } : { count: 4 }
+      )),
+    };
+    globalThis.BackupsDAO = {
+      list: vi.fn().mockResolvedValue([{ id: 'backup-1', createdAt: 1 }]),
+      get: vi.fn().mockResolvedValue({
+        id: 'backup-1',
+        createdAt: 1,
+        data: new Uint8Array(128).buffer,
+      }),
+    };
     await chrome.storage.local.set({
       userscripts: {
-        script_alpha: makeStoredScript('script_alpha', 'Alpha'),
-        script_beta: makeStoredScript('script_beta', 'Beta'),
+        stale_legacy: makeStoredScript('stale_legacy', 'Stale'),
       },
       values_script_alpha: { draft: true },
+      autoBackups: [{ id: 'stale-backup' }],
       settings: { enabled: true },
       miscKey: 'other',
     });
@@ -59,7 +80,10 @@ describe('source quota manager module', () => {
 
     expect(breakdown.scripts.count).toBe(2);
     expect(breakdown.scripts.bytes).toBeGreaterThan(0);
-    expect(breakdown.scriptValues.count).toBe(1);
+    expect(breakdown.scriptValues.count).toBe(3);
+    expect(breakdown.scriptValues.bytes).toBeGreaterThan(0);
+    expect(breakdown.backups.count).toBe(1);
+    expect(breakdown.backups.bytes).toBeGreaterThanOrEqual(128);
     expect(breakdown.settings.count).toBe(1);
     expect(breakdown.other.count).toBe(1);
   });

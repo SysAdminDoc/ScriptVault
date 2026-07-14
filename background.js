@@ -34320,6 +34320,59 @@ const QuotaManager = (() => {
     if (value && typeof value === "object") return Object.keys(value).length;
     return 0;
   }
+  function measureBinaryBytes(value) {
+    if (value instanceof ArrayBuffer) return value.byteLength;
+    if (ArrayBuffer.isView(value)) return value.byteLength;
+    if (Object.prototype.toString.call(value) === "[object ArrayBuffer]") {
+      const byteLength = value.byteLength;
+      return typeof byteLength === "number" && Number.isFinite(byteLength) ? byteLength : 0;
+    }
+    if (typeof Blob !== "undefined" && value instanceof Blob) return value.size;
+    return 0;
+  }
+  async function readIndexedDbBreakdown(categories) {
+    let scripts = [];
+    let scriptsRead = false;
+    let scriptValuesRead = false;
+    let backupsRead = false;
+    if (typeof ScriptStorage !== "undefined" && typeof ScriptStorage?.getAll === "function") {
+      try {
+        scripts = await ScriptStorage.getAll();
+        categories.scripts.count = scripts.length;
+        categories.scripts.bytes = scripts.reduce((total, script) => total + measureStoredBytes(script), 0);
+        scriptsRead = true;
+      } catch (_) {
+      }
+    }
+    if (scriptsRead && typeof ScriptValues !== "undefined" && typeof ScriptValues?.getAll === "function") {
+      try {
+        const valueBags = await Promise.all(scripts.map((script) => ScriptValues.getAll(script.id)));
+        for (const values of valueBags) {
+          categories.scriptValues.count += Object.keys(values || {}).length;
+          categories.scriptValues.bytes += measureStoredBytes(values || {});
+        }
+        scriptValuesRead = true;
+      } catch (_) {
+        categories.scriptValues = { count: 0, bytes: 0 };
+      }
+    }
+    if (typeof BackupsDAO !== "undefined" && typeof BackupsDAO?.list === "function" && typeof BackupsDAO?.get === "function") {
+      try {
+        const backupList = await BackupsDAO.list();
+        const backups = await Promise.all(backupList.map((entry) => BackupsDAO.get(entry.id)));
+        for (const backup of backups) {
+          if (!backup) continue;
+          const { data, ...metadata } = backup;
+          categories.backups.count++;
+          categories.backups.bytes += measureStoredBytes(metadata) + measureBinaryBytes(data);
+        }
+        backupsRead = true;
+      } catch (_) {
+        categories.backups = { count: 0, bytes: 0 };
+      }
+    }
+    return { scripts: scriptsRead, scriptValues: scriptValuesRead, backups: backupsRead };
+  }
   async function _getQuotaLimit() {
     if (_resolvedQuota !== null) return _resolvedQuota;
     if (typeof navigator !== "undefined" && navigator.storage?.estimate) {
@@ -34439,15 +34492,16 @@ const QuotaManager = (() => {
       settings: { count: 0, bytes: 0 },
       other: { count: 0, bytes: 0 }
     };
+    const indexedDb = await readIndexedDbBreakdown(categories);
     for (const [key, value] of Object.entries(all)) {
       const size = measureStoredBytes(value);
-      if (key === "userscripts") {
+      if (!indexedDb.scripts && key === "userscripts") {
         categories.scripts.count += countStoredScripts(value);
         categories.scripts.bytes += size;
-      } else if (key.startsWith("script_")) {
+      } else if (!indexedDb.scripts && key.startsWith("script_")) {
         categories.scripts.count++;
         categories.scripts.bytes += size;
-      } else if (key.startsWith("values_") || key.startsWith("SV_GM_")) {
+      } else if (!indexedDb.scriptValues && (key.startsWith("values_") || key.startsWith("SV_GM_"))) {
         categories.scriptValues.count++;
         categories.scriptValues.bytes += size;
       } else if (key.startsWith("require_cache_")) {
@@ -34456,7 +34510,7 @@ const QuotaManager = (() => {
       } else if (key.startsWith("res_cache_")) {
         categories.resourceCache.count++;
         categories.resourceCache.bytes += size;
-      } else if (key.startsWith("autoBackup") || key === "autoBackups") {
+      } else if (!indexedDb.backups && (key.startsWith("autoBackup") || key === "autoBackups")) {
         categories.backups.count++;
         categories.backups.bytes += size;
       } else if (key.startsWith("sv_analytics") || key === "analytics" || key === "perfHistory") {
@@ -34465,6 +34519,7 @@ const QuotaManager = (() => {
       } else if (key === "settings" || key.startsWith("sv_") || key.startsWith("notification") || key.startsWith("gamification")) {
         categories.settings.count++;
         categories.settings.bytes += size;
+      } else if (indexedDb.scripts && (key === "userscripts" || key.startsWith("script_")) || indexedDb.scriptValues && (key.startsWith("values_") || key.startsWith("SV_GM_")) || indexedDb.backups && (key.startsWith("autoBackup") || key === "autoBackups")) {
       } else {
         categories.other.count++;
         categories.other.bytes += size;
