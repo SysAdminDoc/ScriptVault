@@ -55,11 +55,13 @@ describe('InternalHostGuard hardening (2026-06-04)', () => {
 // ── Content bridge sanitization ──────────────────────────────────────────────
 
 describe('content.js bridge telemetry sanitization (2026-06-04)', () => {
-  it('content bridge filters data to scalar fields only', () => {
+  it('content bridge maps page messages to bounded untrusted schemas', () => {
     const src = fs.readFileSync(path.join(ROOT, 'content.js'), 'utf8');
-    expect(src).toContain('safeData[k] = v.slice(0, 2048)');
-    expect(src).toContain("typeof v === 'number'");
-    expect(src).toContain("typeof v === 'boolean'");
+    expect(src).toContain('function normalizeBridgeTelemetry(action, value)');
+    expect(src).toContain("action: 'recordBridgeTelemetry'");
+    expect(src).toContain('BRIDGE_RATE_LIMIT = 60');
+    expect(src).not.toContain('scriptId: data.scriptId');
+    expect(src).not.toContain('scriptName: data.scriptName');
   });
 });
 

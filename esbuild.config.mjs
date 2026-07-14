@@ -107,6 +107,7 @@ async function buildBackground() {
     readFile("modules/internal-host-guard.js"),
     readFile("modules/user-script-message-policy.js"),
     readFile("modules/execution-diagnostics.js"),
+    readFile("modules/execution-telemetry.js"),
     readFile("modules/local-libraries.js"),
     readFile("modules/message-router.js"),
     readFile("modules/gm-audio-handler.js"),

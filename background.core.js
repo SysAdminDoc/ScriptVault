@@ -5791,6 +5791,16 @@ async function importFromZip(zipData, options = {}) {
 // same-tab navigation so DevTools and status surfaces do not imply that stale
 // frame activity belongs to the page currently visible in the tab.
 const executionDiagnosticsStore = ExecutionDiagnostics.createExecutionDiagnosticsStore();
+const executionTelemetryHandler = ExecutionTelemetry.createExecutionTelemetryHandler({
+  getScript: scriptId => ScriptStorage.get(scriptId),
+  recordDiagnostic: (sender, event) => executionDiagnosticsStore.record(sender, event),
+  scheduleStatsSave: () => _debouncedStatsSave(),
+  triggerAfterScript: (scriptId, context) => triggerChainsForAfterScript(scriptId, context),
+  addNetworkLog: entry => NetworkLog.add(entry),
+  getStatsUrlRetention: () => (SettingsManager.cache && SettingsManager.cache.statsUrlRetention) || 'full',
+  retainStatsUrl: (url, mode) => _retainStatsUrl(url, mode),
+  onTriggerError: error => console.error('[ScriptVault] After-script chain trigger error:', error)
+});
 
 // USER_SCRIPT world message listener (for GM_* APIs)
 // This is SEPARATE from onMessage and required for messaging: true to work
@@ -7718,22 +7728,14 @@ async function handleMessage(message, sender) {
         NetworkLog.clear(data?.scriptId);
         return { success: true };
 
-      // Record a network request from the in-page proxy (fetch/XHR/WebSocket/sendBeacon)
+      // Page-visible postMessage telemetry is deliberately untrusted and can
+      // never update script state, claim script attribution, or trigger chains.
+      case 'recordBridgeTelemetry':
+        return await executionTelemetryHandler.handleBridgeTelemetry(data, sender);
+
+      // Direct wrapper telemetry is authenticated by UserScriptMessagePolicy.
       case 'netlog_record':
-        NetworkLog.add({
-          method: data.method || 'GET',
-          url: data.url || '',
-          status: data.status,
-          statusText: data.statusText,
-          duration: data.duration,
-          responseSize: data.responseSize,
-          responseHeaders: data.responseHeaders,
-          scriptId: data.scriptId,
-          scriptName: data.scriptName,
-          error: data.error,
-          type: data.type || 'fetch'
-        });
-        return { ok: true };
+        return await executionTelemetryHandler.handleTrustedTelemetry(action, data, sender);
 
       // Static Analysis — routes through offscreen document for AST analysis
       case 'analyzeScript': {
@@ -8262,66 +8264,9 @@ async function handleMessage(message, sender) {
         return { success: true };
       }
 
-      case 'reportExecTime': {
-        // Use sender.userScriptId as authoritative source when available to prevent
-        // a malicious script from forging data.scriptId to trigger chains for another script.
-        const scriptId = sender.userScriptId || data.scriptId;
-        const script = await ScriptStorage.get(scriptId);
-        if (script) {
-          if (!script.stats) script.stats = { runs: 0, totalTime: 0, avgTime: 0, lastRun: 0, errors: 0 };
-          script.stats.runs++;
-          // Guard against NaN/Infinity to prevent permanent stats corruption.
-          if (Number.isFinite(data.time)) {
-            script.stats.totalTime += data.time;
-          }
-          script.stats.avgTime = script.stats.runs > 0 ? Math.round(script.stats.totalTime / script.stats.runs * 100) / 100 : 0;
-          script.stats.lastRun = Date.now();
-          if (typeof sender?.tab?.id === 'number') script.stats.lastTabId = sender.tab.id;
-          if (typeof sender?.documentId === 'string') script.stats.lastDocumentId = sender.documentId;
-          if (typeof sender?.frameId === 'number') script.stats.lastFrameId = sender.frameId;
-          const _statsUrlMode = (SettingsManager.cache && SettingsManager.cache.statsUrlRetention) || 'full';
-          script.stats.lastUrl = _retainStatsUrl(data.url, _statsUrlMode);
-          executionDiagnosticsStore.record(sender, {
-            type: 'run',
-            scriptId,
-            duration: data.time,
-            url: data.url || sender?.tab?.url || ''
-          });
-          // Update cache only (debounced save to avoid excessive storage writes)
-          _debouncedStatsSave();
-          triggerChainsForAfterScript(scriptId, {
-            reason: 'afterScript',
-            tabId: typeof sender?.tab?.id === 'number' ? sender.tab.id : undefined,
-            url: data.url || sender?.tab?.url || ''
-          }).catch(e => console.error('[ScriptVault] After-script chain trigger error:', e));
-        }
-        return { success: true };
-      }
-
-      case 'reportExecError': {
-        // Use sender.userScriptId as authoritative source when available to prevent
-        // a malicious script from forging data.scriptId to manipulate another script's error stats.
-        const scriptId = sender.userScriptId || data.scriptId;
-        const script = await ScriptStorage.get(scriptId);
-        if (script) {
-          if (!script.stats) script.stats = { runs: 0, totalTime: 0, avgTime: 0, lastRun: 0, errors: 0 };
-          script.stats.errors++;
-          script.stats.lastError = data.error;
-          script.stats.lastErrorTime = Date.now();
-          if (typeof sender?.tab?.id === 'number') script.stats.lastTabId = sender.tab.id;
-          if (typeof sender?.documentId === 'string') script.stats.lastDocumentId = sender.documentId;
-          if (typeof sender?.frameId === 'number') script.stats.lastFrameId = sender.frameId;
-          executionDiagnosticsStore.record(sender, {
-            type: 'error',
-            scriptId,
-            error: data.error,
-            url: data.url || sender?.tab?.url || ''
-          });
-          // Update cache only (debounced save to avoid excessive storage writes)
-          _debouncedStatsSave();
-        }
-        return { success: true };
-      }
+      case 'reportExecTime':
+      case 'reportExecError':
+        return await executionTelemetryHandler.handleTrustedTelemetry(action, data, sender);
 
       // GM_audio API - Tab mute control (Tampermonkey-compatible)
       case 'GM_audio_setMute':
@@ -15608,17 +15553,20 @@ ${libraryExports}
   (async function __scriptMonkeyRunner() {
     await _waitForCache();
     const __startTime = performance.now();
+    const __completionId = (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function')
+      ? globalThis.crypto.randomUUID()
+      : (Date.now().toString(36) + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2));
     try {
 `;
 
   const apiClose = `
     } catch (e) {
       // Report error to background for profiling
-      sendToBackground('reportExecError', { scriptId, error: (e?.message || String(e)).slice(0, 200), url: location.href }).catch(() => {});
+      sendToBackground('reportExecError', { scriptId, completionId: __completionId, error: (e?.message || String(e)).slice(0, 200), url: location.href }).catch(() => {});
     } finally {
       // Report execution time to background for profiling
       const __elapsed = Math.round((performance.now() - __startTime) * 100) / 100;
-      sendToBackground('reportExecTime', { scriptId, time: __elapsed, url: location.href }).catch(() => {});
+      sendToBackground('reportExecTime', { scriptId, completionId: __completionId, time: __elapsed, url: location.href }).catch(() => {});
     }
   })();
 })();

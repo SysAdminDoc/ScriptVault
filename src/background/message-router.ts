@@ -168,6 +168,7 @@ export const BACKGROUND_MESSAGE_ACTIONS = [
   'publicApi_setTrustedOrigins',
   'queueHostAccessRequest',
   'queueUpdates',
+  'recordBridgeTelemetry',
   'refreshSubscription',
   'refreshSubscriptions',
   'registerMenuCommand',

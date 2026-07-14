@@ -5,6 +5,8 @@ import { resolve } from 'node:path';
 const ROOT = process.cwd();
 const coreTs = readFileSync(resolve(ROOT, 'src/background/core.ts'), 'utf8');
 const backgroundCoreJs = readFileSync(resolve(ROOT, 'background.core.js'), 'utf8');
+const executionTelemetryTs = readFileSync(resolve(ROOT, 'src/background/execution-telemetry.ts'), 'utf8');
+const executionTelemetryJs = readFileSync(resolve(ROOT, 'modules/execution-telemetry.js'), 'utf8');
 const dashboardJs = readFileSync(resolve(ROOT, 'pages/dashboard.js'), 'utf8');
 const settingsDefaults = JSON.parse(readFileSync(resolve(ROOT, 'src/config/settings-defaults.json'), 'utf8'));
 const settingsSchema = JSON.parse(readFileSync(resolve(ROOT, 'src/config/settings-schema.json'), 'utf8'));
@@ -60,7 +62,9 @@ describe('execution-stats URL retention wiring', () => {
   it('enforces retention at the stats write site in source and generated runtime', () => {
     for (const [label, src] of [['core.ts', coreTs], ['background.core.js', backgroundCoreJs]]) {
       expect(src, `${label} reads the retention setting`).toContain('SettingsManager.cache.statsUrlRetention');
-      expect(src, `${label} applies retention before storing lastUrl`).toContain('script.stats.lastUrl = _retainStatsUrl(data.url, _statsUrlMode);');
+    }
+    for (const [label, src] of [['execution-telemetry.ts', executionTelemetryTs], ['execution-telemetry.js', executionTelemetryJs]]) {
+      expect(src, `${label} applies retention before storing lastUrl`).toContain('stats.lastUrl = dependencies.retainStatsUrl(eventUrl, dependencies.getStatsUrlRetention())');
     }
   });
 

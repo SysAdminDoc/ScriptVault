@@ -6,12 +6,18 @@ export const USER_SCRIPT_ALLOWED_EXTRAS = Object.freeze([
   'chainDomEvent',
   'getChainDomEventTriggers',
   'netlog_record',
+  'recordBridgeTelemetry',
   'reportDocumentReady',
   'reportExecError',
   'reportExecTime',
 ] as const);
 
 const USER_SCRIPT_ALLOWED_EXTRA_SET = new Set<string>(USER_SCRIPT_ALLOWED_EXTRAS);
+const USER_SCRIPT_AUTHENTICATED_EXTRA_SET = new Set<string>([
+  'netlog_record',
+  'reportExecError',
+  'reportExecTime',
+]);
 
 interface RuntimeMessageSender {
   id?: string;
@@ -32,7 +38,7 @@ interface UserScriptRuntimeMessage {
 
 const SCRIPT_AUTH_SECRET_KEY = '_scriptMessageAuthSecretV1';
 const SCRIPT_AUTH_REGISTRATION_KEY = '_scriptMessageAuthRegistrationVersion';
-const SCRIPT_AUTH_REGISTRATION_VERSION = 1;
+const SCRIPT_AUTH_REGISTRATION_VERSION = 2;
 let scriptAuthSecretPromise: Promise<string> | null = null;
 
 function bytesToHex(bytes: Uint8Array): string {
@@ -102,7 +108,9 @@ export async function authenticateUserScriptSender(
 ): Promise<RuntimeMessageSender> {
   if (sender?.userScriptId) return sender;
   const action = message?.action;
-  if (typeof action !== 'string' || (!action.startsWith('GM_') && !action.startsWith('GM.'))) {
+  const requiresAuthentication = typeof action === 'string'
+    && (action.startsWith('GM_') || action.startsWith('GM.') || USER_SCRIPT_AUTHENTICATED_EXTRA_SET.has(action));
+  if (!requiresAuthentication) {
     return sender;
   }
 

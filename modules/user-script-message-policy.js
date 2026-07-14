@@ -43,14 +43,20 @@ const UserScriptMessagePolicy = (() => {
     "chainDomEvent",
     "getChainDomEventTriggers",
     "netlog_record",
+    "recordBridgeTelemetry",
     "reportDocumentReady",
     "reportExecError",
     "reportExecTime"
   ]);
   var USER_SCRIPT_ALLOWED_EXTRA_SET = new Set(USER_SCRIPT_ALLOWED_EXTRAS);
+  var USER_SCRIPT_AUTHENTICATED_EXTRA_SET = /* @__PURE__ */ new Set([
+    "netlog_record",
+    "reportExecError",
+    "reportExecTime"
+  ]);
   var SCRIPT_AUTH_SECRET_KEY = "_scriptMessageAuthSecretV1";
   var SCRIPT_AUTH_REGISTRATION_KEY = "_scriptMessageAuthRegistrationVersion";
-  var SCRIPT_AUTH_REGISTRATION_VERSION = 1;
+  var SCRIPT_AUTH_REGISTRATION_VERSION = 2;
   var scriptAuthSecretPromise = null;
   function bytesToHex(bytes) {
     return [...bytes].map((value) => value.toString(16).padStart(2, "0")).join("");
@@ -110,7 +116,8 @@ const UserScriptMessagePolicy = (() => {
   async function authenticateUserScriptSender(message, sender) {
     if (sender?.userScriptId) return sender;
     const action = message?.action;
-    if (typeof action !== "string" || !action.startsWith("GM_") && !action.startsWith("GM.")) {
+    const requiresAuthentication = typeof action === "string" && (action.startsWith("GM_") || action.startsWith("GM.") || USER_SCRIPT_AUTHENTICATED_EXTRA_SET.has(action));
+    if (!requiresAuthentication) {
       return sender;
     }
     const data = message?.data && typeof message.data === "object" ? message.data : message;

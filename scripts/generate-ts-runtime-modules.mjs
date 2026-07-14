@@ -172,6 +172,13 @@ export const TS_RUNTIME_MODULES = [
     selfExportName: 'ExecutionDiagnostics',
   },
   {
+    id: 'execution-telemetry',
+    source: 'src/background/execution-telemetry.ts',
+    output: 'modules/execution-telemetry.js',
+    exportName: 'ExecutionTelemetry',
+    selfExportName: 'ExecutionTelemetry',
+  },
+  {
     id: 'find-script-sources',
     source: 'src/background/find-script-sources.ts',
     output: 'modules/find-script-sources.js',

@@ -239,8 +239,8 @@ describe('content script bridge security boundary', () => {
       result: { ok: true },
     });
     expect(chromeMock.runtime.sendMessage).toHaveBeenCalledWith({
-      action: 'reportExecTime',
-      data: { scriptId: 'script_alpha', time: 12 },
+      action: 'recordBridgeTelemetry',
+      data: { kind: 'execution-time', duration: 12 },
     });
   });
 

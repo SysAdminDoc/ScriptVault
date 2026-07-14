@@ -92,6 +92,14 @@
       "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for the user-script message allowlist."
     },
     {
+      "runtime": "modules/execution-telemetry.js",
+      "sources": [
+        "src/background/execution-telemetry.ts"
+      ],
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for the authenticated execution telemetry trust boundary."
+    },
+    {
       "runtime": "modules/message-router.js",
       "sources": [
         "src/background/message-router.ts"

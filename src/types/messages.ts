@@ -1236,6 +1236,7 @@ interface ResetScriptStats {
 interface ReportExecTime {
   action: 'reportExecTime';
   scriptId: string;
+  completionId: string;
   time: number;
   url?: string;
 }
@@ -1243,6 +1244,7 @@ interface ReportExecTime {
 interface ReportExecError {
   action: 'reportExecError';
   scriptId: string;
+  completionId: string;
   error: string;
   url?: string;
 }
@@ -1277,6 +1279,19 @@ interface NetlogRecord {
   scriptId?: string;
   scriptName?: string;
   error?: string;
+  type?: string;
+}
+
+interface RecordBridgeTelemetry {
+  action: 'recordBridgeTelemetry';
+  kind: 'execution-error' | 'execution-time' | 'network';
+  error?: string;
+  duration?: number;
+  method?: string;
+  url?: string;
+  status?: number;
+  statusText?: string;
+  responseSize?: number;
   type?: string;
 }
 
@@ -1729,7 +1744,7 @@ export type BackgroundMessage =
   // Stats
   | GetScriptStatsMsg | GetExecutionDiagnostics | ResetScriptStats | ReportDocumentReady | ReportExecTime | ReportExecError
   // Network log
-  | GetNetworkLog | GetNetworkLogStats | ClearNetworkLog | NetlogRecord
+  | GetNetworkLog | GetNetworkLogStats | ClearNetworkLog | NetlogRecord | RecordBridgeTelemetry
   // Analysis
   | AnalyzeScript | GetOnDeviceAIStatus | RunOnDeviceAI
   // Signing
@@ -2213,6 +2228,7 @@ export interface ResponseMap {
   npmResolve: SuccessOrError<{ url: string; version?: string; integrity?: string }>;
   npmResolveAll: SuccessOrError<{ results: unknown[] }>;
   prefetchResources: SuccessOrError;
+  recordBridgeTelemetry: SuccessOrError<{ trusted: false }>;
   registerMenuCommand: SuccessOrError<{ commandId: string }>;
   renameScriptValue: SuccessOrError;
   reportCSPFailure: SuccessOrError;

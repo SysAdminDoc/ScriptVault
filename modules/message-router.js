@@ -201,6 +201,7 @@ const MessageRouter = (() => {
     "publicApi_setTrustedOrigins",
     "queueHostAccessRequest",
     "queueUpdates",
+    "recordBridgeTelemetry",
     "refreshSubscription",
     "refreshSubscriptions",
     "registerMenuCommand",

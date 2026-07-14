@@ -18,6 +18,7 @@ describe('user-script message policy', () => {
     expect(isUserScriptAllowedAction('reportExecTime')).toBe(true);
     expect(isUserScriptAllowedAction('reportDocumentReady')).toBe(true);
     expect(isUserScriptAllowedAction('netlog_record')).toBe(true);
+    expect(isUserScriptAllowedAction('recordBridgeTelemetry')).toBe(true);
     expect(isUserScriptAllowedAction('getChainDomEventTriggers')).toBe(true);
     expect(isUserScriptAllowedAction('chainDomEvent')).toBe(true);
 
@@ -34,6 +35,7 @@ describe('user-script message policy', () => {
       'chainDomEvent',
       'getChainDomEventTriggers',
       'netlog_record',
+      'recordBridgeTelemetry',
       'reportDocumentReady',
       'reportExecError',
       'reportExecTime',
@@ -114,6 +116,19 @@ describe('user-script message policy', () => {
       await expect(authenticateUserScriptSender({
         action: 'reportExecTime',
         data: { scriptId: 'script-1' },
+      }, { tab: { id: 7 } })).rejects.toThrow('could not be authenticated');
+
+      await expect(authenticateUserScriptSender({
+        action: 'reportExecTime',
+        data: { scriptId: 'script-1', scriptAuthToken: token },
+      }, { tab: { id: 7 } })).resolves.toMatchObject({
+        tab: { id: 7 },
+        userScriptId: 'script-1',
+      });
+
+      await expect(authenticateUserScriptSender({
+        action: 'recordBridgeTelemetry',
+        data: { kind: 'execution-time', duration: 12 },
       }, { tab: { id: 7 } })).resolves.toEqual({ tab: { id: 7 } });
 
       expect(await isScriptAuthRegistrationCurrent()).toBe(false);

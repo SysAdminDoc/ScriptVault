@@ -39,6 +39,59 @@
     return ALLOWED_BRIDGE_ACTIONS.has(action);
   }
 
+  const BRIDGE_RATE_WINDOW_MS = 10000;
+  const BRIDGE_RATE_LIMIT = 60;
+  let bridgeRateWindowStartedAt = Date.now();
+  let bridgeRateCount = 0;
+
+  function consumeBridgeRateLimit() {
+    const now = Date.now();
+    if (now - bridgeRateWindowStartedAt >= BRIDGE_RATE_WINDOW_MS) {
+      bridgeRateWindowStartedAt = now;
+      bridgeRateCount = 0;
+    }
+    if (bridgeRateCount >= BRIDGE_RATE_LIMIT) return false;
+    bridgeRateCount += 1;
+    return true;
+  }
+
+  function boundedNumber(value, minimum, maximum, integer = false) {
+    const number = Number(value);
+    if (!Number.isFinite(number) || number < minimum || number > maximum) return undefined;
+    if (integer && !Number.isInteger(number)) return undefined;
+    return number;
+  }
+
+  function normalizeBridgeTelemetry(action, value) {
+    const data = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    if (action === 'reportExecError') {
+      const error = typeof data.error === 'string' ? data.error.slice(0, 500) : '';
+      return error ? { kind: 'execution-error', error } : null;
+    }
+    if (action === 'reportExecTime') {
+      const duration = boundedNumber(data.time, 0, 86400000);
+      return duration === undefined ? null : { kind: 'execution-time', duration };
+    }
+    if (action !== 'netlog_record') return null;
+    const url = typeof data.url === 'string' ? data.url.slice(0, 4096) : '';
+    if (!url) return null;
+    const telemetry = {
+      kind: 'network',
+      url,
+      method: typeof data.method === 'string' ? data.method.slice(0, 16).toUpperCase() : 'GET',
+      type: typeof data.type === 'string' ? data.type.slice(0, 32) : 'fetch'
+    };
+    const status = boundedNumber(data.status, 0, 999, true);
+    const duration = boundedNumber(data.duration, 0, 86400000);
+    const responseSize = boundedNumber(data.responseSize, 0, 1073741824, true);
+    if (status !== undefined) telemetry.status = status;
+    if (duration !== undefined) telemetry.duration = duration;
+    if (responseSize !== undefined) telemetry.responseSize = responseSize;
+    if (typeof data.statusText === 'string') telemetry.statusText = data.statusText.slice(0, 256);
+    if (typeof data.error === 'string') telemetry.error = data.error.slice(0, 500);
+    return telemetry;
+  }
+
   function redactBridgeEventData(data) {
     if (!data || typeof data !== 'object') return data;
     const safe = { ...data };
@@ -141,20 +194,11 @@
     }
 
     try {
-      // Sanitize telemetry data: only forward expected scalar/object fields,
-      // truncate strings to prevent oversized payloads from page scripts.
-      let safeData = msg.data;
-      if (safeData && typeof safeData === 'object') {
-        const raw = safeData;
-        safeData = {};
-        for (const k of Object.keys(raw)) {
-          const v = raw[k];
-          if (typeof v === 'string') safeData[k] = v.slice(0, 2048);
-          else if (typeof v === 'number' || typeof v === 'boolean') safeData[k] = v;
-        }
-      }
+      const safeData = normalizeBridgeTelemetry(action, msg.data);
+      if (!safeData) throw new Error('Invalid page telemetry payload');
+      if (!consumeBridgeRateLimit()) throw new Error('Page telemetry rate limit exceeded');
       const result = await chrome.runtime.sendMessage({
-        action: action,
+        action: 'recordBridgeTelemetry',
         data: safeData
       });
       

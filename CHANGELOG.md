@@ -4,6 +4,10 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Separated untrusted page telemetry from execution completion.** Public
+  bridge events are now schema- and rate-bounded diagnostics with no script
+  attribution, while stats, network attribution, and `afterScript` chains
+  require authenticated userscript identity and idempotent completion IDs.
 - **Closed privileged catalog-fetch gaps.** Script previews and install
   dependency probes now run through background actions with internal-host and
   redirect checks, strict timeouts, bounded response reads, and limited probe

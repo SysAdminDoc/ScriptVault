@@ -2602,17 +2602,20 @@ ${libraryExports}
   (async function __scriptMonkeyRunner() {
     await _waitForCache();
     const __startTime = performance.now();
+    const __completionId = (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function')
+      ? globalThis.crypto.randomUUID()
+      : (Date.now().toString(36) + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2));
     try {
 `;
 
   const apiClose: string = `
     } catch (e) {
       // Report error to background for profiling
-      sendToBackground('reportExecError', { scriptId, error: (e?.message || String(e)).slice(0, 200), url: location.href }).catch(() => {});
+      sendToBackground('reportExecError', { scriptId, completionId: __completionId, error: (e?.message || String(e)).slice(0, 200), url: location.href }).catch(() => {});
     } finally {
       // Report execution time to background for profiling
       const __elapsed = Math.round((performance.now() - __startTime) * 100) / 100;
-      sendToBackground('reportExecTime', { scriptId, time: __elapsed, url: location.href }).catch(() => {});
+      sendToBackground('reportExecTime', { scriptId, completionId: __completionId, time: __elapsed, url: location.href }).catch(() => {});
     }
   })();
 })();

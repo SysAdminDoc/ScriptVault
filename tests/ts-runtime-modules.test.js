@@ -149,6 +149,13 @@ describe('TS runtime module generator', () => {
         selfExportName: 'ExecutionDiagnostics',
       }),
       expect.objectContaining({
+        id: 'execution-telemetry',
+        source: 'src/background/execution-telemetry.ts',
+        output: 'modules/execution-telemetry.js',
+        exportName: 'ExecutionTelemetry',
+        selfExportName: 'ExecutionTelemetry',
+      }),
+      expect.objectContaining({
         id: 'find-script-sources',
         source: 'src/background/find-script-sources.ts',
         output: 'modules/find-script-sources.js',
@@ -371,6 +378,16 @@ describe('TS runtime module generator', () => {
     expect(text).toContain('const ExecutionDiagnostics = (() => {');
     expect(text).toContain('self.ExecutionDiagnostics = ExecutionDiagnostics;');
     expect(text).toContain('createExecutionDiagnosticsStore');
+  });
+
+  it('generates the authenticated execution telemetry boundary before the raw core bridge', async () => {
+    const definition = TS_RUNTIME_MODULES.find((entry) => entry.id === 'execution-telemetry');
+    const text = await buildTsRuntimeModuleText(definition, { rootDir: ROOT });
+
+    expect(text).toContain('Generated from src/background/execution-telemetry.ts');
+    expect(text).toContain('const ExecutionTelemetry = (() => {');
+    expect(text).toContain('self.ExecutionTelemetry = ExecutionTelemetry;');
+    expect(text).toContain('createExecutionTelemetryHandler');
   });
 
   it('generates the reviewed Find Scripts source registry', async () => {
