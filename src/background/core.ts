@@ -1255,6 +1255,17 @@ function _clearLocalSaveCoalescingForScript(scriptId) {
   }
 }
 
+function _sweepExpiredLocalSaveCoalescing(now = Date.now()) {
+  const sweepAt = Number(now);
+  const effectiveNow = Number.isFinite(sweepAt) ? sweepAt : Date.now();
+  for (const [key, state] of _localSaveReceiptCoalescing.entries()) {
+    const expiresAt = Number(state?.expiresAt);
+    if (!Number.isFinite(expiresAt) || expiresAt <= effectiveNow) {
+      _localSaveReceiptCoalescing.delete(key);
+    }
+  }
+}
+
 function _getScriptOperationLocks() {
   if (!self._toggleLocks) self._toggleLocks = new Map();
   return self._toggleLocks;
@@ -6332,6 +6343,7 @@ async function handleMessage(message, sender) {
         let historyEntry = null;
         let rollbackIndex = -1;
         const now = Date.now();
+        _sweepExpiredLocalSaveCoalescing(now);
         const coalesceStorageKey = _localSaveCoalesceKey(id, receiptOptions?.coalesceKey);
         const coalesceWindowMs = _localSaveCoalesceWindowMs(receiptOptions?.coalesceWindowMs);
         const canCoalesceLocalSave = !!previousScript

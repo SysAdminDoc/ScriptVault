@@ -5,6 +5,14 @@ function read(path) {
   return readFileSync(path, 'utf8');
 }
 
+function loadCoalescingHelpers() {
+  const core = read('src/background/core.ts');
+  const start = core.indexOf('const _localSaveReceiptCoalescing = new Map()');
+  const end = core.indexOf('function _getScriptOperationLocks()', start);
+  if (start < 0 || end < 0) throw new Error('Local-save coalescing helpers not found');
+  return new Function(`${core.slice(start, end)}; return { map: _localSaveReceiptCoalescing, sweep: _sweepExpiredLocalSaveCoalescing };`)();
+}
+
 describe('local save trust receipt wiring', () => {
   it('marks dashboard editor saves as local trust receipts', () => {
     const dashboard = read('pages/dashboard.js');
@@ -53,9 +61,22 @@ describe('local save trust receipt wiring', () => {
     expect(core).toContain('versionHistory[coalesceState.rollbackIndex]');
     expect(core).toContain('historyEntry && previousScript && !coalescedHistoryEntry');
     expect(core).toContain('_clearLocalSaveCoalescingForScript(id)');
+    expect(core).toContain('_sweepExpiredLocalSaveCoalescing(now)');
     expect(core).toContain('await reregisterScript(script)');
 
     expect(scriptTypes).not.toContain('coalesceKey');
     expect(scriptTypes).not.toContain('localSaveSessionId');
+  });
+
+  it('sweeps expired and malformed coalescing entries while retaining active sessions', () => {
+    const { map, sweep } = loadCoalescingHelpers();
+    map.set('expired', { scriptId: 'alpha', expiresAt: 999 });
+    map.set('boundary', { scriptId: 'bravo', expiresAt: 1000 });
+    map.set('active', { scriptId: 'charlie', expiresAt: 1001 });
+    map.set('malformed', { scriptId: 'delta', expiresAt: 'not-a-time' });
+
+    sweep(1000);
+
+    expect([...map.keys()]).toEqual(['active']);
   });
 });
