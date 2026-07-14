@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createBackgroundActionRegistry } from '../src/background/message-router.ts';
+import {
+  createBackgroundActionRegistry,
+  createBackgroundDomainHandlers,
+} from '../src/background/message-router.ts';
 import {
   IMPORT_BACKGROUND_ACTIONS,
   createImportActionHandlers,
@@ -44,6 +47,28 @@ describe('typed background action registry', () => {
       handled: false,
       action: 'deleteEverything',
     });
+  });
+
+  it('adapts an exhaustive domain action list into registry handlers', async () => {
+    const handle = vi.fn(async ({ action, message }) => ({ action, value: message.value }));
+    const handlers = createBackgroundDomainHandlers(
+      ['GM_getValue', 'GM_setValue'],
+      handle,
+    );
+    const registry = createBackgroundActionRegistry(handlers);
+
+    await expect(registry.dispatch({
+      action: 'GM_setValue',
+      data: { scriptId: 'script-1', key: 'theme', value: 'dark' },
+    }, { userScriptId: 'script-1' })).resolves.toMatchObject({
+      handled: true,
+      action: 'GM_setValue',
+      response: { action: 'GM_setValue', value: 'dark' },
+    });
+    expect(() => createBackgroundDomainHandlers(
+      ['GM_getValue', 'GM_getValue'],
+      handle,
+    )).toThrow('Background domain declares duplicate action: GM_getValue');
   });
 
   it('routes import trust actions to one dependency surface', async () => {

@@ -116,9 +116,11 @@ describe('source hardening parity guards', () => {
     expect(core).toContain('const isScriptHostScopeAllowed = ConnectPolicy.isScriptHostScopeAllowed;');
     expect(connectPolicy).toContain('export function isScriptHostScopeAllowed(script: ScriptLike | null | undefined, requestUrl: string)');
     expect(connectPolicy).toContain('Connection to ${hostname} blocked by script host scope');
-    expect(core).toContain('return await GMNetworkHandler.handleGMNetworkMessage(action, data, sender);');
+    expect(core).toContain('GMNetworkHandler.GM_NETWORK_ACTIONS');
+    expect(core).toContain('GMNetworkHandler.handleGMNetworkMessage(action, message, sender)');
     expect(networkHandler).toContain("GM_download URL rejected");
-    expect(core).toContain('return await GMCookieHandler.handleGMCookieMessage(action, data, sender);');
+    expect(core).toContain('GMCookieHandler.GM_COOKIE_ACTIONS');
+    expect(core).toContain('GMCookieHandler.handleGMCookieMessage(action, message, sender)');
     expect(cookieHandler).toContain("const policy = evaluateScriptHostScopePolicy(script, url, 'Cookie access', settings);");
     expect(cookieHandler).toContain('const cookieTargetUrl = resolveCookiePolicyTarget(data, sender);');
     expect(core).toContain('_validateWebRequestRulesForScript(script, rules, settings)');

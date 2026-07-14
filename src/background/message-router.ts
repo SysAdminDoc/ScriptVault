@@ -325,6 +325,26 @@ export function resolveBackgroundAction(action: unknown): BackgroundActionResolu
   return { known: true, action, origin: getBackgroundActionOrigin(action) };
 }
 
+export function createBackgroundDomainHandlers<
+  const Actions extends readonly BackgroundAction[],
+>(
+  actions: Actions,
+  handle: (
+    context: BackgroundActionContext<Actions[number]>,
+  ) => unknown | Promise<unknown>,
+): Pick<BackgroundActionHandlers, Actions[number]> {
+  const handlers: Partial<Record<BackgroundAction, BackgroundActionHandler<BackgroundAction>>> = {};
+  for (const action of actions) {
+    if (handlers[action]) {
+      throw new Error(`Background domain declares duplicate action: ${action}`);
+    }
+    handlers[action] = context => handle(
+      context as BackgroundActionContext<Actions[number]>,
+    ) as never;
+  }
+  return Object.freeze(handlers) as Pick<BackgroundActionHandlers, Actions[number]>;
+}
+
 function normalizeBackgroundMessage(
   message: Record<string, unknown>,
   action: BackgroundAction,
@@ -381,6 +401,7 @@ export function createBackgroundActionRegistry(initialHandlers: BackgroundAction
 export const MessageRouter = Object.freeze({
   BACKGROUND_MESSAGE_ACTIONS,
   createBackgroundActionRegistry,
+  createBackgroundDomainHandlers,
   getBackgroundActionOrigin,
   isKnownBackgroundAction,
   resolveBackgroundAction,

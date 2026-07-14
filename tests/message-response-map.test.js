@@ -10,6 +10,29 @@ import {
 } from "../src/background/message-router.ts";
 import { IMPORT_BACKGROUND_ACTIONS } from "../src/background/import-action-handler.ts";
 import { EXECUTION_TELEMETRY_ACTIONS } from "../src/background/telemetry-action-handler.ts";
+import { GM_AUDIO_ACTIONS } from "../src/background/gm-audio-handler.ts";
+import { GM_COOKIE_ACTIONS } from "../src/background/gm-cookie-handler.ts";
+import { GM_MENU_ACTIONS } from "../src/background/gm-menu-handler.ts";
+import { GM_NETWORK_ACTIONS } from "../src/background/gm-network-handler.ts";
+import { GM_NOTIFICATION_ACTIONS } from "../src/background/gm-notification-handler.ts";
+import { GM_RESOURCE_ACTIONS } from "../src/background/gm-resource-handler.ts";
+import { GM_TABS_ACTIONS } from "../src/background/gm-tabs-handler.ts";
+import { GM_VALUES_ACTIONS } from "../src/background/gm-values-handler.ts";
+import { GM_WEBREQUEST_ACTIONS } from "../src/background/gm-webrequest-handler.ts";
+
+const ROUTED_BACKGROUND_ACTIONS = [
+  ...IMPORT_BACKGROUND_ACTIONS,
+  ...EXECUTION_TELEMETRY_ACTIONS,
+  ...GM_AUDIO_ACTIONS,
+  ...GM_COOKIE_ACTIONS,
+  ...GM_MENU_ACTIONS,
+  ...GM_NETWORK_ACTIONS,
+  ...GM_NOTIFICATION_ACTIONS,
+  ...GM_RESOURCE_ACTIONS,
+  ...GM_TABS_ACTIONS,
+  ...GM_VALUES_ACTIONS,
+  ...GM_WEBREQUEST_ACTIONS,
+];
 
 const source = readFileSync(resolve(process.cwd(), "src/types/messages.ts"), "utf8");
 const coreSource = readFileSync(resolve(process.cwd(), "src/background/core.ts"), "utf8");
@@ -66,8 +89,7 @@ function extractHandleMessageActions() {
 function allLiveBackgroundActions() {
   return [...new Set([
     ...extractHandleMessageActions(),
-    ...IMPORT_BACKGROUND_ACTIONS,
-    ...EXECUTION_TELEMETRY_ACTIONS,
+    ...ROUTED_BACKGROUND_ACTIONS,
   ])].sort();
 }
 
@@ -90,7 +112,7 @@ describe("message response map coverage", () => {
 
   it("gives every routed action one live implementation", () => {
     const legacy = new Set(extractHandleMessageActions());
-    const routed = [...IMPORT_BACKGROUND_ACTIONS, ...EXECUTION_TELEMETRY_ACTIONS];
+    const routed = ROUTED_BACKGROUND_ACTIONS;
     expect(routed.filter(action => legacy.has(action))).toEqual([]);
     expect(new Set(routed).size).toBe(routed.length);
   });

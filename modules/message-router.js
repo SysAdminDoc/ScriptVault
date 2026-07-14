@@ -31,6 +31,7 @@ const MessageRouter = (() => {
     BACKGROUND_MESSAGE_ACTIONS: () => BACKGROUND_MESSAGE_ACTIONS,
     MessageRouter: () => MessageRouter,
     createBackgroundActionRegistry: () => createBackgroundActionRegistry,
+    createBackgroundDomainHandlers: () => createBackgroundDomainHandlers,
     default: () => message_router_default,
     getBackgroundActionOrigin: () => getBackgroundActionOrigin,
     isKnownBackgroundAction: () => isKnownBackgroundAction,
@@ -294,6 +295,18 @@ const MessageRouter = (() => {
     }
     return { known: true, action, origin: getBackgroundActionOrigin(action) };
   }
+  function createBackgroundDomainHandlers(actions, handle) {
+    const handlers = {};
+    for (const action of actions) {
+      if (handlers[action]) {
+        throw new Error(`Background domain declares duplicate action: ${action}`);
+      }
+      handlers[action] = (context) => handle(
+        context
+      );
+    }
+    return Object.freeze(handlers);
+  }
   function normalizeBackgroundMessage(message, action) {
     const nested = message.data;
     if (nested && typeof nested === "object" && !Array.isArray(nested)) {
@@ -340,6 +353,7 @@ const MessageRouter = (() => {
   var MessageRouter = Object.freeze({
     BACKGROUND_MESSAGE_ACTIONS,
     createBackgroundActionRegistry,
+    createBackgroundDomainHandlers,
     getBackgroundActionOrigin,
     isKnownBackgroundAction,
     resolveBackgroundAction

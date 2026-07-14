@@ -207,8 +207,9 @@ GM_webSocket({
     const bridge = readFileSync(resolve(process.cwd(), 'content.js'), 'utf8');
     const wrapper = readFileSync(resolve(process.cwd(), 'src/background/wrapper-builder.ts'), 'utf8');
 
-    expect(core).toContain("case 'GM_webSocket':");
-    expect(core).toContain('return await GMNetworkHandler.handleGMNetworkMessage(action, data, sender);');
+    expect(core).toContain('GMNetworkHandler.GM_NETWORK_ACTIONS');
+    expect(core).toContain('GMNetworkHandler.handleGMNetworkMessage(action, message, sender)');
+    expect(networkHandler).toContain("'GM_webSocket'");
     expect(networkHandler).toContain("scriptHasGrant(wsScript, ['GM_webSocket', 'GM.webSocket'])");
     expect(networkHandler).toContain('const connectPolicy = evaluateConnectPolicy(wsScript, wsUrl);');
     expect(networkHandler).toContain("const wsPreCheck = InternalHostGuard.classifyFetchUrl(wsUrl, ['ws:', 'wss:']);");

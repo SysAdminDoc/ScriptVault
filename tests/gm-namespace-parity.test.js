@@ -48,8 +48,10 @@ describe('GM namespace parity', () => {
     }
 
     const core = readSource('src/background/core.ts');
+    const networkHandler = readSource('src/background/gm-network-handler.ts');
     expect(core).not.toContain("case 'GM_fetch'");
-    expect(core).toContain("case 'GM_xmlhttpRequest'");
+    expect(core).toContain('GMNetworkHandler.GM_NETWORK_ACTIONS');
+    expect(networkHandler).toContain("'GM_xmlhttpRequest'");
 
     const readme = readSource('README.md');
     expect(readme).toContain('`GM.fetch`');

@@ -6011,6 +6011,42 @@ backgroundActionRegistry.registerHandlers(TelemetryActionHandler.createTelemetry
   handleBridgeTelemetry: (data, sender) => executionTelemetryHandler.handleBridgeTelemetry(data, sender),
   handleTrustedTelemetry: (action, data, sender) => executionTelemetryHandler.handleTrustedTelemetry(action, data, sender)
 }));
+backgroundActionRegistry.registerHandlers(MessageRouter.createBackgroundDomainHandlers(
+  GMValuesHandler.GM_VALUES_ACTIONS,
+  ({ action, message, sender }) => GMValuesHandler.handleGMValuesMessage(action, message, sender)
+));
+backgroundActionRegistry.registerHandlers(MessageRouter.createBackgroundDomainHandlers(
+  GMAudioHandler.GM_AUDIO_ACTIONS,
+  ({ action, message, sender }) => GMAudioHandler.handleGMAudioMessage(action, message, sender)
+));
+backgroundActionRegistry.registerHandlers(MessageRouter.createBackgroundDomainHandlers(
+  GMMenuHandler.GM_MENU_ACTIONS,
+  ({ action, message, sender }) => GMMenuHandler.handleGMMenuMessage(action, message, sender)
+));
+backgroundActionRegistry.registerHandlers(MessageRouter.createBackgroundDomainHandlers(
+  GMTabsHandler.GM_TABS_ACTIONS,
+  ({ action, message, sender }) => GMTabsHandler.handleGMTabsMessage(action, message, sender)
+));
+backgroundActionRegistry.registerHandlers(MessageRouter.createBackgroundDomainHandlers(
+  GMNotificationHandler.GM_NOTIFICATION_ACTIONS,
+  ({ action, message, sender }) => GMNotificationHandler.handleGMNotificationMessage(action, message, sender)
+));
+backgroundActionRegistry.registerHandlers(MessageRouter.createBackgroundDomainHandlers(
+  GMResourceHandler.GM_RESOURCE_ACTIONS,
+  ({ action, message, sender }) => GMResourceHandler.handleGMResourceMessage(action, message, sender)
+));
+backgroundActionRegistry.registerHandlers(MessageRouter.createBackgroundDomainHandlers(
+  GMWebRequestHandler.GM_WEBREQUEST_ACTIONS,
+  ({ action, message, sender }) => GMWebRequestHandler.handleGMWebRequestMessage(action, message, sender)
+));
+backgroundActionRegistry.registerHandlers(MessageRouter.createBackgroundDomainHandlers(
+  GMCookieHandler.GM_COOKIE_ACTIONS,
+  ({ action, message, sender }) => GMCookieHandler.handleGMCookieMessage(action, message, sender)
+));
+backgroundActionRegistry.registerHandlers(MessageRouter.createBackgroundDomainHandlers(
+  GMNetworkHandler.GM_NETWORK_ACTIONS,
+  ({ action, message, sender }) => GMNetworkHandler.handleGMNetworkMessage(action, message, sender)
+));
 
 // USER_SCRIPT world message listener (for GM_* APIs)
 // This is SEPARATE from onMessage and required for messaging: true to work
@@ -6970,29 +7006,6 @@ async function handleMessage(message, sender) {
         await ScriptStorage.reorder(data.orderedIds);
         return { success: true };
         
-      // Script Values
-      case 'GM_getValue':
-      case 'GM_setValue':
-      case 'GM_deleteValue':
-      case 'deleteScriptValue':
-      case 'GM_listValues':
-      case 'GM_getValues':
-      case 'GM_setValues':
-      case 'GM_deleteValues':
-      case 'getScriptStorage':
-      case 'getScriptValues':
-      case 'setScriptStorage':
-      case 'getStorageSize':
-        if (typeof GMValuesHandler === 'undefined') return { error: 'GMValuesHandler not available' };
-        return await GMValuesHandler.handleGMValuesMessage(action, data, sender);
-        
-      // Tab Storage
-      case 'GM_getTab':
-      case 'GM_saveTab':
-      case 'GM_getTabs':
-        if (typeof GMTabsHandler === 'undefined') return { error: 'GMTabsHandler not available' };
-        return await GMTabsHandler.handleGMTabsMessage(action, data, sender);
-        
       // Settings
       case 'prefetchResources': {
         await ResourceCache.prefetchResources(data.resources);
@@ -7922,48 +7935,6 @@ async function handleMessage(message, sender) {
       case 'fetchResource':
         return await ResourceCache.fetchResource(data.url);
 
-      // GM resources and GM_loadScript dynamic library loading
-      case 'GM_getResourceText':
-      case 'GM_getResourceURL':
-      case 'GM_loadScript':
-        if (typeof GMResourceHandler === 'undefined') return { error: 'GMResourceHandler not available' };
-        return await GMResourceHandler.handleGMResourceMessage(action, data, sender);
-
-      // GM network APIs: XHR, WebSocket, and download handling live in the promoted TypeScript module.
-      case 'GM_xmlhttpRequest':
-      case 'GM_xmlhttpRequest_abort':
-      case 'GM_xmlhttpRequest_result':
-      case 'GM_webSocket':
-      case 'GM_webSocket_send':
-      case 'GM_webSocket_close':
-      case 'GM_webSocket_takeEvent':
-      case 'GM_download':
-        if (typeof GMNetworkHandler === 'undefined') return { error: 'GMNetworkHandler not available' };
-        return await GMNetworkHandler.handleGMNetworkMessage(action, data, sender);
-      // Notifications (with callbacks: onclick, ondone, timeout, tag)
-      case 'GM_notification': {
-        if (typeof GMNotificationHandler === 'undefined') return { error: 'GMNotificationHandler not available' };
-        return await GMNotificationHandler.handleGMNotificationMessage(action, data, sender);
-      }
-
-      // Phase 11.11 — Update an existing notification by id (tag).
-      // Skips fields the caller didn't specify so partial updates don't blank
-      // out the title/message. Mirrors chrome.notifications.update() behaviour.
-      case 'GM_updateNotification':
-
-      // Phase 11.11 — Programmatically close a notification by id (tag).
-      case 'GM_closeNotification':
-        if (typeof GMNotificationHandler === 'undefined') return { error: 'GMNotificationHandler not available' };
-        return await GMNotificationHandler.handleGMNotificationMessage(action, data, sender);
-      
-      // Open tab (with close tracking for onclose callback)
-      // Focus tab / close opened tab
-      case 'GM_openInTab':
-      case 'GM_focusTab':
-      case 'GM_closeTab':
-        if (typeof GMTabsHandler === 'undefined') return { error: 'GMTabsHandler not available' };
-        return await GMTabsHandler.handleGMTabsMessage(action, data, sender);
-
       // Get scripts for URL
       case 'getScriptsForUrl': {
         const settings = await SettingsManager.get();
@@ -8215,34 +8186,6 @@ async function handleMessage(message, sender) {
           scriptMetaStr: null
         };
         
-      // GM menu commands and dashboard menu-command execution
-      case 'registerMenuCommand':
-      case 'GM_registerMenuCommand':
-      case 'unregisterMenuCommand':
-      case 'GM_unregisterMenuCommand':
-      case 'getMenuCommands':
-      case 'executeMenuCommand':
-        if (typeof GMMenuHandler === 'undefined') return { error: 'GMMenuHandler not available' };
-        return await GMMenuHandler.handleGMMenuMessage(action, data, sender);
-      
-      // GM_cookie API
-      // chrome.cookies.* only accepts http(s) URLs. Front-validate so blob:/
-      // data:/javascript:/chrome-extension: URLs from a malicious script return
-      // a clear error instead of leaking the raw Chrome error (and to make sure
-      // we never pass an attacker-controlled URL into a future Chrome API that
-      // is more permissive about schemes).
-      case 'GM_cookie_list':
-      case 'GM_cookie_set':
-      case 'GM_cookie_delete':
-        if (typeof GMCookieHandler === 'undefined') return { error: 'GMCookieHandler not available' };
-        return await GMCookieHandler.handleGMCookieMessage(action, data, sender);
-
-      // GM_webRequest — runtime rule update from script
-      case 'GM_webRequest': {
-        if (typeof GMWebRequestHandler === 'undefined') return { error: 'GMWebRequestHandler not available' };
-        return await GMWebRequestHandler.handleGMWebRequestMessage(action, data, sender);
-      }
-
       // Execution profiling - get stats for dashboard
       case 'getScriptStats': {
         const scriptId = data.scriptId;
@@ -8280,14 +8223,6 @@ async function handleMessage(message, sender) {
         });
         return { success: true };
       }
-
-      // GM_audio API - Tab mute control (Tampermonkey-compatible)
-      case 'GM_audio_setMute':
-      case 'GM_audio_getState':
-      case 'GM_audio_watchState':
-      case 'GM_audio_unwatchState':
-        if (typeof GMAudioHandler === 'undefined') return { error: 'GMAudioHandler not available' };
-        return await GMAudioHandler.handleGMAudioMessage(action, data, sender);
 
       // ── v2.0 Module Handlers ──────────────────────────────────────────────
 

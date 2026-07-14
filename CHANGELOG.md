@@ -4,10 +4,11 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
-- **Introduced typed background action dispatch.** Import trust and execution
-  telemetry actions now route through generated typed domain-handler
-  registries with duplicate and unknown registrations rejected; the remaining
-  legacy domains stay on the audited fallback while migration continues.
+- **Introduced typed background action dispatch.** Import trust, execution
+  telemetry, and all promoted GM API domains now route through generated typed
+  domain-handler registries with duplicate and unknown registrations rejected;
+  the remaining legacy domains stay on the audited fallback while migration
+  continues.
 - **Made the service-worker rehydration smoke test the real MV3 lifecycle.**
   The headless release gate now terminates only the extension worker through
   Chromium's debugging protocol instead of unloading the entire extension.
