@@ -28,6 +28,29 @@ function extractFunction(source, name) {
 }
 
 describe('first-sync registration gate', () => {
+  it('keeps quarantined scripts out of every registration sweep', () => {
+    for (const source of [backgroundCore, registrationTs]) {
+      const functionSource = extractFunction(source, 'isScriptEligibleForRegistration')
+        .replace(/^export\s+/, '')
+        .replace(/: Script \| null \| undefined/g, '')
+        .replace(/: boolean/g, '');
+      const isEligible = new Function(`${functionSource}; return isScriptEligibleForRegistration;`)();
+      expect(isEligible({ enabled: true, settings: {} })).toBe(true);
+      expect(isEligible({ enabled: false, settings: {} })).toBe(false);
+      expect(isEligible({
+        enabled: true,
+        settings: { _importQuarantine: { source: 'test' } },
+      })).toBe(false);
+    }
+
+    const runNow = backgroundCore.slice(
+      backgroundCore.indexOf("case 'runScriptNow':"),
+      backgroundCore.indexOf("case 'rescheduleChains':"),
+    );
+    expect(runNow).toContain('script.settings?._importQuarantine');
+    expect(runNow).toContain('Review and enable this quarantined import before running it');
+  });
+
   it('defines an opt-in setting with dashboard load/save bindings', () => {
     expect(settingsDefaults.syncHoldExecutionUntilFirstSync).toBe(false);
     expect(settingsTypes).toContain('syncHoldExecutionUntilFirstSync: boolean;');

@@ -833,11 +833,17 @@ interface ImportBackup {
   action: 'importTampermonkeyBackup' | 'importViolentmonkeyBackup' | 'importGreasemonkeyBackup';
   text: string;
   overwrite?: boolean;
+  trustImportedScripts?: boolean;
+  sourceLabel?: string;
 }
 interface ImportBackupResponse {
   imported: number;
   skipped: number;
   errors: unknown[];
+  quarantinedScripts?: number;
+  preservedDisabledScripts?: number;
+  trustedEnabledScripts?: number;
+  error?: string;
 }
 
 interface ExportZip {

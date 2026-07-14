@@ -46,16 +46,11 @@ console.log('disabled');`,
 
 describe('Violentmonkey backup import', () => {
   it('reads vmScript.code, vmScript.props.name, and vmScript.config.enabled from the runtime handler', () => {
-    const handlerStart = backgroundCore.indexOf("case 'importViolentmonkeyBackup':");
-    expect(handlerStart).toBeGreaterThan(-1);
-    const handlerEnd = backgroundCore.indexOf("case '", handlerStart + 40);
-    const handler = backgroundCore.slice(handlerStart, handlerEnd);
-
-    expect(handler).toContain('vmData.scripts');
-    expect(handler).toContain('vmScript.code');
-    expect(handler).toContain('vmScript.config?.enabled');
-    expect(handler).toContain('vmScript.props?.name');
-    expect(handler).toContain('vmScript.custom?.code');
+    expect(backgroundCore).toContain("importVendorBackup('violentmonkey', data.text, data)");
+    expect(backgroundCore).toContain('Array.isArray(parsed?.scripts)');
+    expect(backgroundCore).toContain('script?.code || script?.custom?.code');
+    expect(backgroundCore).toContain('script?.config?.enabled !== false');
+    expect(backgroundCore).toContain('script?.props?.name');
   });
 
   it('fixture has the expected VM export shape', () => {
@@ -79,19 +74,11 @@ describe('Violentmonkey backup import', () => {
   });
 
   it('runtime handler skips scripts with empty code', () => {
-    const handlerStart = backgroundCore.indexOf("case 'importViolentmonkeyBackup':");
-    const handlerEnd = backgroundCore.indexOf("case '", handlerStart + 40);
-    const handler = backgroundCore.slice(handlerStart, handlerEnd);
-
-    expect(handler).toContain("if (!code) { results.skipped++; continue; }");
+    expect(backgroundCore).toMatch(/if \(!code\) \{\s*results\.skipped\+\+;\s*continue;/);
   });
 
   it('runtime handler registers scripts and updates badge after import', () => {
-    const handlerStart = backgroundCore.indexOf("case 'importViolentmonkeyBackup':");
-    const handlerEnd = backgroundCore.indexOf("case '", handlerStart + 40);
-    const handler = backgroundCore.slice(handlerStart, handlerEnd);
-
-    expect(handler).toContain('registerAllScripts(true)');
-    expect(handler).toContain('updateBadge()');
+    expect(backgroundCore).toContain('await registerAllScripts(true);');
+    expect(backgroundCore).toContain('await updateBadge();');
   });
 });

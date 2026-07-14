@@ -5172,10 +5172,17 @@ function finiteBackupNumber(value) {
 function applyImportedScriptTrust(settings, archiveEnabled, options = {}) {
   const nextSettings = settings && typeof settings === 'object' ? { ...settings } : {};
   delete nextSettings._importQuarantine;
+  delete nextSettings._importTrust;
   if (archiveEnabled === false) {
     return { enabled: false, settings: nextSettings, disposition: 'preserved-disabled' };
   }
   if (options.trustImportedScripts === true) {
+    nextSettings._importTrust = {
+      source: options.source || 'import',
+      sourceLabel: options.sourceLabel || '',
+      reviewedAt: Date.now(),
+      archiveEnabled: true
+    };
     return { enabled: true, settings: nextSettings, disposition: 'trusted-enabled' };
   }
   nextSettings._importQuarantine = {
@@ -5185,6 +5192,24 @@ function applyImportedScriptTrust(settings, archiveEnabled, options = {}) {
     archiveEnabled: true
   };
   return { enabled: false, settings: nextSettings, disposition: 'quarantined' };
+}
+
+function recordImportedScriptTrustReview(settings) {
+  if (!settings?._importQuarantine) return settings || {};
+  const quarantine = settings._importQuarantine;
+  const nextSettings = { ...settings };
+  delete nextSettings._importQuarantine;
+  nextSettings._importTrust = {
+    source: quarantine.source || 'import',
+    sourceLabel: quarantine.sourceLabel || '',
+    reviewedAt: Date.now(),
+    archiveEnabled: quarantine.archiveEnabled !== false
+  };
+  return nextSettings;
+}
+
+function isScriptEligibleForRegistration(script) {
+  return !!script && script.enabled !== false && !script.settings?._importQuarantine;
 }
 
 function countImportTrustDisposition(results, disposition) {
@@ -5517,7 +5542,7 @@ async function importFromZip(zipData, options = {}) {
   };
   const recordReceipt = options.recordReceipt !== false;
   const sourceLabel = typeof options.sourceLabel === 'string' && options.sourceLabel.trim()
-    ? options.sourceLabel.trim()
+    ? options.sourceLabel.trim().slice(0, 512)
     : 'ZIP import (overwrite)';
   const trustImportedScripts = options.trustImportedScripts === true;
   // Pre-import snapshot for replaced scripts so the import is reversible.
@@ -5779,6 +5804,152 @@ async function importFromZip(zipData, options = {}) {
     console.error('[ScriptVault] importFromZip error:', e);
     return { ...results, error: e.message };
   }
+}
+
+function splitVendorUserscriptText(text) {
+  return String(text || '')
+    .split(/\n\s*\n(?=\/\/\s*==UserScript==)/)
+    .map(part => part.trim())
+    .filter(part => part.includes('==UserScript==') && part.includes('==/UserScript=='))
+    .map(code => ({ code, archiveEnabled: true, sourceName: '' }));
+}
+
+function parseVendorBackupCandidates(vendor, text) {
+  if (vendor === 'tampermonkey') return splitVendorUserscriptText(text);
+  if (vendor === 'violentmonkey') {
+    try {
+      const parsed = JSON.parse(text);
+      if (Array.isArray(parsed?.scripts)) {
+        return parsed.scripts.map(script => ({
+          code: script?.code || script?.custom?.code || '',
+          archiveEnabled: script?.config?.enabled !== false,
+          sourceName: script?.props?.name || ''
+        }));
+      }
+    } catch (_) { /* Text exports use the shared userscript-block parser. */ }
+    return splitVendorUserscriptText(text);
+  }
+  if (vendor === 'greasemonkey') {
+    const parsed = JSON.parse(text);
+    const scripts = Array.isArray(parsed) ? parsed : parsed?.scripts;
+    if (!Array.isArray(scripts)) throw new Error('Backup does not contain a scripts array');
+    return scripts.map(script => ({
+      code: script?.source || script?.code || script?.content || '',
+      archiveEnabled: script?.enabled !== false,
+      sourceName: script?.name || ''
+    }));
+  }
+  throw new Error('Unsupported vendor backup type');
+}
+
+async function importVendorBackup(vendor, text, options = {}) {
+  const labels = {
+    tampermonkey: 'Tampermonkey backup',
+    violentmonkey: 'Violentmonkey backup',
+    greasemonkey: 'Greasemonkey backup'
+  };
+  const results = {
+    imported: 0,
+    skipped: 0,
+    errors: [],
+    quarantinedScripts: 0,
+    preservedDisabledScripts: 0,
+    trustedEnabledScripts: 0
+  };
+  const sourceLabel = typeof options.sourceLabel === 'string' && options.sourceLabel.trim()
+    ? options.sourceLabel.trim()
+    : labels[vendor] || 'Vendor backup';
+  if (typeof text !== 'string' || !text.trim()) return { ...results, error: 'Backup file is empty' };
+  const totalBytes = utf8ByteLength(text);
+  if (totalBytes > ARCHIVE_MAX_TOTAL_UNCOMPRESSED_BYTES) {
+    return { ...results, error: `Backup exceeds ${formatArchiveBytes(ARCHIVE_MAX_TOTAL_UNCOMPRESSED_BYTES)}.` };
+  }
+
+  let candidates;
+  try {
+    candidates = parseVendorBackupCandidates(vendor, text);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ...results, error: `Invalid ${sourceLabel} format: ${message}` };
+  }
+  if (candidates.length > ARCHIVE_MAX_ENTRIES) {
+    return { ...results, error: `Backup has too many scripts (${candidates.length}). Maximum is ${ARCHIVE_MAX_ENTRIES}.` };
+  }
+  if (candidates.length === 0) {
+    return { ...results, error: 'No valid userscripts found in backup file' };
+  }
+
+  const existingScripts = await ScriptStorage.getAll();
+  const byIdentity = new Map(existingScripts.map(script => [
+    `${script.meta?.name || ''}\u0000${script.meta?.namespace || ''}`,
+    script
+  ]));
+  let nextPosition = existingScripts.length;
+
+  for (const candidate of candidates) {
+    const code = typeof candidate.code === 'string' ? candidate.code : '';
+    const sourceName = typeof candidate.sourceName === 'string' && candidate.sourceName
+      ? candidate.sourceName
+      : '<unknown>';
+    if (!code) {
+      results.skipped++;
+      continue;
+    }
+    const codeBytes = utf8ByteLength(code);
+    if (codeBytes > ARCHIVE_MAX_SCRIPT_BYTES) {
+      results.errors.push({
+        name: sourceName,
+        error: `Script is too large (${formatArchiveBytes(codeBytes)}). Maximum is ${formatArchiveBytes(ARCHIVE_MAX_SCRIPT_BYTES)}.`
+      });
+      continue;
+    }
+    try {
+      const parsed = parseUserscript(code);
+      if (parsed.error) {
+        results.errors.push({ name: sourceName, error: parsed.error });
+        continue;
+      }
+      const identity = `${parsed.meta.name || ''}\u0000${parsed.meta.namespace || ''}`;
+      const existing = byIdentity.get(identity);
+      if (existing && !options.overwrite) {
+        results.skipped++;
+        continue;
+      }
+      const id = existing?.id || generateId();
+      const trustState = applyImportedScriptTrust(existing?.settings, candidate.archiveEnabled !== false, {
+        trustImportedScripts: options.trustImportedScripts === true,
+        source: `import-${vendor}`,
+        sourceLabel
+      });
+      countImportTrustDisposition(results, trustState.disposition);
+      const now = Date.now();
+      const importedScript = {
+        id,
+        code,
+        meta: parsed.meta,
+        enabled: trustState.enabled,
+        settings: trustState.settings,
+        position: existing?.position ?? nextPosition++,
+        createdAt: existing?.createdAt || now,
+        updatedAt: now
+      };
+      await ensurePersistentStorageForScriptWrite(existing ? `${vendor}-import-update` : `${vendor}-import`, code);
+      await ScriptStorage.set(id, importedScript);
+      byIdentity.set(identity, importedScript);
+      results.imported++;
+    } catch (error) {
+      results.errors.push({
+        name: sourceName,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
+
+  // Imported records have their final trust state before registration runs.
+  // Quarantined and archive-disabled scripts therefore cannot become live.
+  await registerAllScripts(true);
+  await updateBadge();
+  return results;
 }
 
 // ============================================================================
@@ -6696,8 +6867,7 @@ async function handleMessage(message, sender) {
 
           script.enabled = data.enabled !== undefined ? !!data.enabled : !script.enabled;
           if (script.enabled && script.settings?._importQuarantine) {
-            script.settings = { ...script.settings };
-            delete script.settings._importQuarantine;
+            script.settings = recordImportedScriptTrustReview(script.settings);
           }
           script.updatedAt = Date.now();
           await ScriptStorage.set(scriptId, script);
@@ -7288,6 +7458,9 @@ async function handleMessage(message, sender) {
 
           if ('enabled' in settingsUpdate) {
             script.enabled = !!settingsUpdate.enabled;
+            if (script.enabled && script.settings?._importQuarantine) {
+              script.settings = recordImportedScriptTrustReview(script.settings);
+            }
           }
 
           await ScriptStorage.set(data.scriptId, script);
@@ -7334,49 +7507,7 @@ async function handleMessage(message, sender) {
         return await importScripts(data.data, data.options);
 
       case 'importTampermonkeyBackup': {
-        // Parse Tampermonkey .txt backup format
-        // Format: multiple scripts separated by blank lines, each with ==UserScript== blocks
-        const text = data.text || '';
-        const scriptBlocks = [];
-        // Split on double newlines that precede ==UserScript== headers
-        const parts = text.split(/\n\s*\n(?=\/\/\s*==UserScript==)/);
-        for (const part of parts) {
-          const trimmed = part.trim();
-          if (trimmed.includes('==UserScript==') && trimmed.includes('==/UserScript==')) {
-            scriptBlocks.push(trimmed);
-          }
-        }
-        if (scriptBlocks.length === 0) {
-          return { error: 'No valid userscripts found in backup file' };
-        }
-        const results = { imported: 0, skipped: 0, errors: [] };
-        const allExisting = await ScriptStorage.getAll();
-        let nextPosition = allExisting.length;
-        for (const code of scriptBlocks) {
-          try {
-            const parsed = parseUserscript(code);
-            if (parsed.error) { results.errors.push({ error: parsed.error }); continue; }
-            const existing = allExisting.find(s =>
-              s.meta.name === parsed.meta.name && s.meta.namespace === parsed.meta.namespace
-            );
-            if (existing && !data.overwrite) { results.skipped++; continue; }
-            const id = existing?.id || generateId();
-            await ensurePersistentStorageForScriptWrite(existing ? 'tampermonkey-import-update' : 'tampermonkey-import', code);
-            await ScriptStorage.set(id, {
-              id, code, meta: parsed.meta,
-              enabled: true,
-              position: existing?.position ?? nextPosition++,
-              createdAt: existing?.createdAt || Date.now(),
-              updatedAt: Date.now()
-            });
-            results.imported++;
-          } catch (e) {
-            results.errors.push({ error: e.message });
-          }
-        }
-        await registerAllScripts(true);
-        await updateBadge();
-        return results;
+        return await importVendorBackup('tampermonkey', data.text, data);
       }
 
       // v2.0: Storage Quota
@@ -7490,7 +7621,8 @@ async function handleMessage(message, sender) {
         const scripts = await ScriptStorage.getAll();
         const updates = [];
         for (const script of scripts) {
-          const newEnabled = profile.scriptStates?.[script.id] ?? script.enabled;
+          const profileEnabled = profile.scriptStates?.[script.id] ?? script.enabled;
+          const newEnabled = script.settings?._importQuarantine ? false : profileEnabled;
           if (script.enabled !== newEnabled) {
             updates.push(ScriptStorage.set(script.id, { ...script, enabled: newEnabled }));
           }
@@ -7567,118 +7699,12 @@ async function handleMessage(message, sender) {
 
       // v2.0: Violentmonkey backup import
       case 'importViolentmonkeyBackup': {
-        // VM exports as ZIP containing individual .user.js files + a violentmonkey JSON
-        // Or as individual .user.js files pasted as text
-        const text = data.text || '';
-        const results = { imported: 0, skipped: 0, errors: [] };
-
-        // Try JSON format first (VM settings export)
-        try {
-          const vmData = JSON.parse(text);
-          if (vmData.scripts && Array.isArray(vmData.scripts)) {
-            const allExistingVM = await ScriptStorage.getAll();
-            let nextPosVM = allExistingVM.length;
-            for (const vmScript of vmData.scripts) {
-              try {
-                const code = vmScript.code || vmScript.custom?.code || '';
-                if (!code) { results.skipped++; continue; }
-                const parsed = parseUserscript(code);
-                if (parsed.error) { results.errors.push({ name: vmScript.props?.name, error: parsed.error }); continue; }
-                const existing = allExistingVM.find(s =>
-                  s.meta.name === parsed.meta.name && s.meta.namespace === parsed.meta.namespace
-                );
-                if (existing && !data.overwrite) { results.skipped++; continue; }
-                const id = existing?.id || generateId();
-                await ScriptStorage.set(id, {
-                  id, code, meta: parsed.meta,
-                  enabled: vmScript.config?.enabled !== false,
-                  position: existing?.position ?? nextPosVM++,
-                  createdAt: existing?.createdAt || Date.now(),
-                  updatedAt: Date.now()
-                });
-                results.imported++;
-              } catch (e) {
-                results.errors.push({ error: e.message });
-              }
-            }
-            await registerAllScripts(true);
-            await updateBadge();
-            return results;
-          }
-        } catch { /* Not JSON — try text format */ }
-
-        // Fallback: same as Tampermonkey text format
-        const allExistingVMFB = await ScriptStorage.getAll();
-        let nextPosVMFB = allExistingVMFB.length;
-        const parts = text.split(/\n\s*\n(?=\/\/\s*==UserScript==)/);
-        for (const part of parts) {
-          const trimmed = part.trim();
-          if (trimmed.includes('==UserScript==') && trimmed.includes('==/UserScript==')) {
-            try {
-              const parsed = parseUserscript(trimmed);
-              if (parsed.error) { results.errors.push({ error: parsed.error }); continue; }
-              const existing = allExistingVMFB.find(s =>
-                s.meta.name === parsed.meta.name && s.meta.namespace === parsed.meta.namespace
-              );
-              if (existing && !data.overwrite) { results.skipped++; continue; }
-              const id = existing?.id || generateId();
-              await ScriptStorage.set(id, {
-                id, code: trimmed, meta: parsed.meta,
-                enabled: true,
-                position: existing?.position ?? nextPosVMFB++,
-                createdAt: existing?.createdAt || Date.now(),
-                updatedAt: Date.now()
-              });
-              results.imported++;
-            } catch (e) {
-              results.errors.push({ error: e.message });
-            }
-          }
-        }
-        await registerAllScripts(true);
-        await updateBadge();
-        return results;
+        return await importVendorBackup('violentmonkey', data.text, data);
       }
 
       // v2.0: Greasemonkey backup import (GM4 JSON format)
       case 'importGreasemonkeyBackup': {
-        const text = data.text || '';
-        const results = { imported: 0, skipped: 0, errors: [] };
-        try {
-          const gmData = JSON.parse(text);
-          // GM4 exports as array of script objects
-          const scripts = Array.isArray(gmData) ? gmData : (gmData.scripts || []);
-          const allExistingGM = await ScriptStorage.getAll();
-          let nextPosGM = allExistingGM.length;
-          for (const gmScript of scripts) {
-            try {
-              const code = gmScript.source || gmScript.code || gmScript.content || '';
-              if (!code) { results.skipped++; continue; }
-              const parsed = parseUserscript(code);
-              if (parsed.error) { results.errors.push({ name: gmScript.name, error: parsed.error }); continue; }
-              const existing = allExistingGM.find(s =>
-                s.meta.name === parsed.meta.name && s.meta.namespace === parsed.meta.namespace
-              );
-              if (existing && !data.overwrite) { results.skipped++; continue; }
-              const id = existing?.id || generateId();
-              await ScriptStorage.set(id, {
-                id, code, meta: parsed.meta,
-                enabled: gmScript.enabled !== false,
-                position: existing?.position ?? nextPosGM++,
-                createdAt: existing?.createdAt || Date.now(),
-                updatedAt: Date.now()
-              });
-              results.imported++;
-            } catch (e) {
-              results.errors.push({ error: e.message });
-            }
-          }
-        } catch (e) {
-          return { error: 'Invalid Greasemonkey backup format: ' + e.message };
-        }
-        await registerAllScripts(true);
-        await updateBadge();
-        return results;
+        return await importVendorBackup('greasemonkey', data.text, data);
       }
 
       case 'exportZip':
@@ -8060,6 +8086,9 @@ async function handleMessage(message, sender) {
         try {
           const script = await ScriptStorage.get(scriptId);
           if (!script) return { success: false, error: 'Script not found' };
+          if (script.settings?._importQuarantine) {
+            return { success: false, error: 'Review and enable this quarantined import before running it' };
+          }
 
           // Resolve the target tab — caller usually passes an explicit id;
           // fall back to the active tab so the popup's "Run on current tab"
@@ -11544,7 +11573,7 @@ async function registerAllScripts(forceReregister = false) {
             return;
           }
           const scripts = await ScriptStorage.getAll();
-          const enabledScripts = scripts.filter(s => s.enabled !== false);
+          const enabledScripts = scripts.filter(isScriptEligibleForRegistration);
           const registeredIds = new Set(existing.map(s => s.id));
           const enabledIds = new Set(enabledScripts.map(s => s.id));
           const missing = enabledScripts.filter(s => !registeredIds.has(s.id));
@@ -11659,7 +11688,7 @@ async function registerAllScripts(forceReregister = false) {
       return;
     }
     
-    const enabledScripts = scripts.filter(s => s.enabled !== false);
+    const enabledScripts = scripts.filter(isScriptEligibleForRegistration);
 
     // Sort by combined @priority + @weight (higher = first), then position.
     // @priority is the legacy ScriptVault directive; @weight is the Userscripts
@@ -11748,7 +11777,7 @@ function _supportsUserScriptsUpdate() {
  */
 async function reregisterScript(script) {
   if (!chrome.userScripts || !script) return;
-  if (script.enabled === false) {
+  if (!isScriptEligibleForRegistration(script)) {
     await unregisterScript(script.id);
     return;
   }
@@ -11774,6 +11803,10 @@ async function reregisterScript(script) {
 // Register a single script
 async function registerScript(script, { useUpdate = false, throwOnError = false } = {}) {
   try {
+    if (!isScriptEligibleForRegistration(script)) {
+      await unregisterScript(script?.id);
+      return;
+    }
     const meta = script.meta;
     const settings = script.settings || {};
 

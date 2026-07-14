@@ -28,9 +28,10 @@ declare const fflate: {
 };
 
 // Functions defined in background.core.js but not yet migrated
-declare function registerAllScripts(): Promise<void>;
+declare function registerAllScripts(force?: boolean): Promise<void>;
 declare function generateId(): string;
 declare function updateBadge(): Promise<void>;
+declare function ensurePersistentStorageForScriptWrite(reason: string, code?: string): Promise<void>;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -515,10 +516,17 @@ function applyImportedScriptTrust(
 ): { enabled: boolean; settings: Record<string, unknown>; disposition: string } {
   const nextSettings = settings && typeof settings === 'object' ? { ...settings } : {};
   delete nextSettings._importQuarantine;
+  delete nextSettings._importTrust;
   if (archiveEnabled === false) {
     return { enabled: false, settings: nextSettings, disposition: 'preserved-disabled' };
   }
   if (options.trustImportedScripts === true) {
+    nextSettings._importTrust = {
+      source: options.source || 'import',
+      sourceLabel: options.sourceLabel || '',
+      reviewedAt: Date.now(),
+      archiveEnabled: true,
+    };
     return { enabled: true, settings: nextSettings, disposition: 'trusted-enabled' };
   }
   nextSettings._importQuarantine = {
@@ -735,7 +743,7 @@ export async function importFromZip(
   };
   const trustImportedScripts = options.trustImportedScripts === true;
   const sourceLabel = typeof options.sourceLabel === 'string' && options.sourceLabel.trim()
-    ? options.sourceLabel.trim()
+    ? options.sourceLabel.trim().slice(0, 512)
     : 'ZIP import';
 
   try {
@@ -930,4 +938,153 @@ export async function importFromZip(
     console.error('[ScriptVault] importFromZip error:', e);
     return { ...results, error: message };
   }
+}
+
+type VendorBackupType = 'tampermonkey' | 'violentmonkey' | 'greasemonkey';
+
+interface VendorBackupCandidate {
+  code: string;
+  archiveEnabled: boolean;
+  sourceName: string;
+}
+
+function splitVendorUserscriptText(text: string): VendorBackupCandidate[] {
+  return String(text || '')
+    .split(/\n\s*\n(?=\/\/\s*==UserScript==)/)
+    .map(part => part.trim())
+    .filter(part => part.includes('==UserScript==') && part.includes('==/UserScript=='))
+    .map(code => ({ code, archiveEnabled: true, sourceName: '' }));
+}
+
+function parseVendorBackupCandidates(vendor: VendorBackupType, text: string): VendorBackupCandidate[] {
+  if (vendor === 'tampermonkey') return splitVendorUserscriptText(text);
+  if (vendor === 'violentmonkey') {
+    try {
+      const parsed = JSON.parse(text) as { scripts?: Array<Record<string, any>> };
+      if (Array.isArray(parsed?.scripts)) {
+        return parsed.scripts.map(script => ({
+          code: script?.code || script?.custom?.code || '',
+          archiveEnabled: script?.config?.enabled !== false,
+          sourceName: script?.props?.name || '',
+        }));
+      }
+    } catch { /* Text exports use the shared userscript-block parser. */ }
+    return splitVendorUserscriptText(text);
+  }
+  const parsed = JSON.parse(text) as Array<Record<string, any>> | { scripts?: Array<Record<string, any>> };
+  const scripts = Array.isArray(parsed) ? parsed : parsed?.scripts;
+  if (!Array.isArray(scripts)) throw new Error('Backup does not contain a scripts array');
+  return scripts.map(script => ({
+    code: script?.source || script?.code || script?.content || '',
+    archiveEnabled: script?.enabled !== false,
+    sourceName: script?.name || '',
+  }));
+}
+
+export async function importVendorBackup(
+  vendor: VendorBackupType,
+  text: string,
+  options: ImportOptions = {},
+): Promise<ImportResults> {
+  const labels: Record<VendorBackupType, string> = {
+    tampermonkey: 'Tampermonkey backup',
+    violentmonkey: 'Violentmonkey backup',
+    greasemonkey: 'Greasemonkey backup',
+  };
+  const results: ImportResults = {
+    imported: 0,
+    skipped: 0,
+    errors: [],
+    quarantinedScripts: 0,
+    preservedDisabledScripts: 0,
+    trustedEnabledScripts: 0,
+  };
+  const sourceLabel = typeof options.sourceLabel === 'string' && options.sourceLabel.trim()
+    ? options.sourceLabel.trim()
+    : labels[vendor];
+  if (typeof text !== 'string' || !text.trim()) return { ...results, error: 'Backup file is empty' };
+  const totalBytes = utf8ByteLength(text);
+  if (totalBytes > ARCHIVE_MAX_TOTAL_UNCOMPRESSED_BYTES) {
+    return { ...results, error: `Backup exceeds ${formatArchiveBytes(ARCHIVE_MAX_TOTAL_UNCOMPRESSED_BYTES)}.` };
+  }
+
+  let candidates: VendorBackupCandidate[];
+  try {
+    candidates = parseVendorBackupCandidates(vendor, text);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ...results, error: `Invalid ${sourceLabel} format: ${message}` };
+  }
+  if (candidates.length > ARCHIVE_MAX_ENTRIES) {
+    return { ...results, error: `Backup has too many scripts (${candidates.length}). Maximum is ${ARCHIVE_MAX_ENTRIES}.` };
+  }
+  if (candidates.length === 0) return { ...results, error: 'No valid userscripts found in backup file' };
+
+  const existingScripts = await ScriptStorage.getAll();
+  const byIdentity = new Map(existingScripts.map(script => [
+    `${script.meta?.name || ''}\u0000${script.meta?.namespace || ''}`,
+    script,
+  ]));
+  let nextPosition = existingScripts.length;
+
+  for (const candidate of candidates) {
+    const code = typeof candidate.code === 'string' ? candidate.code : '';
+    const sourceName = candidate.sourceName || '<unknown>';
+    if (!code) {
+      results.skipped++;
+      continue;
+    }
+    const codeBytes = utf8ByteLength(code);
+    if (codeBytes > ARCHIVE_MAX_SCRIPT_BYTES) {
+      results.errors.push({
+        name: sourceName,
+        error: `Script is too large (${formatArchiveBytes(codeBytes)}). Maximum is ${formatArchiveBytes(ARCHIVE_MAX_SCRIPT_BYTES)}.`,
+      });
+      continue;
+    }
+    try {
+      const parsed = parseUserscript(code);
+      if (parsed.error || !parsed.meta) {
+        results.errors.push({ name: sourceName, error: parsed.error || 'Parse failed' });
+        continue;
+      }
+      const identity = `${parsed.meta.name || ''}\u0000${parsed.meta.namespace || ''}`;
+      const existing = byIdentity.get(identity);
+      if (existing && !options.overwrite) {
+        results.skipped++;
+        continue;
+      }
+      const id = existing?.id || generateId();
+      const trustState = applyImportedScriptTrust(existing?.settings as Record<string, unknown> | undefined, candidate.archiveEnabled, {
+        trustImportedScripts: options.trustImportedScripts === true,
+        source: `import-${vendor}`,
+        sourceLabel,
+      });
+      countImportTrustDisposition(results, trustState.disposition);
+      const now = Date.now();
+      const importedScript: Script = {
+        id,
+        code,
+        meta: parsed.meta,
+        enabled: trustState.enabled,
+        settings: trustState.settings,
+        position: existing?.position ?? nextPosition++,
+        createdAt: existing?.createdAt || now,
+        updatedAt: now,
+      };
+      await ensurePersistentStorageForScriptWrite(existing ? `${vendor}-import-update` : `${vendor}-import`, code);
+      await ScriptStorage.set(id, importedScript);
+      byIdentity.set(identity, importedScript);
+      results.imported++;
+    } catch (error: unknown) {
+      results.errors.push({
+        name: sourceName,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  await registerAllScripts(true);
+  await updateBadge();
+  return results;
 }

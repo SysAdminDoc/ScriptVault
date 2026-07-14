@@ -20,6 +20,6 @@ describe('storage persistence prompt wiring', () => {
     expect(background).toContain("ensurePersistentStorageForScriptWrite(existing ? 'script-save' : 'script-create'");
     expect(background).toContain("ensurePersistentStorageForScriptWrite('script-import'");
     expect(background).toContain("ensurePersistentStorageForScriptWrite('zip-import'");
-    expect(background).toContain("ensurePersistentStorageForScriptWrite(existing ? 'tampermonkey-import-update'");
+    expect(background).toContain('ensurePersistentStorageForScriptWrite(existing ? `${vendor}-import-update` : `${vendor}-import`, code)');
   });
 });

@@ -146,6 +146,12 @@ export interface ScriptSettings {
     importedAt: number;
     archiveEnabled: boolean;
   };
+  _importTrust?: {
+    source: string;
+    sourceLabel: string;
+    reviewedAt: number;
+    archiveEnabled: boolean;
+  };
   managed?: boolean;
   managedOriginKey?: string;
   managedAppliedAt?: number;

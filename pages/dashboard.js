@@ -16923,14 +16923,25 @@
                     showToast('Not a valid Tampermonkey backup file', 'error');
                     return;
                 }
+                if (!await showConfirmModal(
+                    'Import Tampermonkey Backup?',
+                    'Enabled scripts in this backup will be imported disabled and quarantined until you review and enable them. Scripts already disabled in the backup will stay disabled.',
+                    { confirmLabel: 'Import and Quarantine' }
+                )) return;
                 showProgress('Importing Tampermonkey backup…');
                 updateProgress(0, 1, 'Parsing scripts…');
                 try {
-                    const res = await chrome.runtime.sendMessage({ action: 'importTampermonkeyBackup', text, overwrite: true });
+                    const res = await chrome.runtime.sendMessage({
+                        action: 'importTampermonkeyBackup',
+                        text,
+                        overwrite: true,
+                        trustImportedScripts: false,
+                        sourceLabel: `Tampermonkey backup: ${file.name}`
+                    });
                     if (res?.error) {
                         showToast(res.error, 'error');
                     } else {
-                        showToast(`Imported ${res?.imported || 0} scripts${res?.skipped ? `, ${res.skipped} skipped` : ''}${res?.errors?.length ? `, ${res.errors.length} errors` : ''}`, 'success');
+                        showToast(`Imported ${res?.imported || 0} scripts${res?.quarantinedScripts ? `, ${res.quarantinedScripts} quarantined` : ''}${res?.preservedDisabledScripts ? `, ${res.preservedDisabledScripts} kept disabled` : ''}${res?.skipped ? `, ${res.skipped} skipped` : ''}${res?.errors?.length ? `, ${res.errors.length} errors` : ''}`, 'success');
                         await loadScripts();
                         updateStats();
                     }

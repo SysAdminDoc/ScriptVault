@@ -36,9 +36,7 @@ describe('ScriptCat TM-shaped backup import', () => {
     const handlerEnd = backgroundCore.indexOf("case '", handlerStart + 40);
     const handler = backgroundCore.slice(handlerStart, handlerEnd);
 
-    expect(handler).toContain('==UserScript==');
-    expect(handler).toContain('registerAllScripts(true)');
-    expect(handler).toContain('updateBadge()');
+    expect(handler).toContain("importVendorBackup('tampermonkey', data.text, data)");
   });
 
   it('fixture has valid multi-script TM-shaped export structure', () => {
@@ -58,10 +56,6 @@ describe('ScriptCat TM-shaped backup import', () => {
   });
 
   it('TM handler splits multi-script backups on double-newline boundaries', () => {
-    const handlerStart = backgroundCore.indexOf("case 'importTampermonkeyBackup':");
-    const handlerEnd = backgroundCore.indexOf("case '", handlerStart + 40);
-    const handler = backgroundCore.slice(handlerStart, handlerEnd);
-
-    expect(handler).toContain("split(/\\n\\s*\\n(?=\\/\\/\\s*==UserScript==)/)");
+    expect(backgroundCore).toContain("split(/\\n\\s*\\n(?=\\/\\/\\s*==UserScript==)/)");
   });
 });

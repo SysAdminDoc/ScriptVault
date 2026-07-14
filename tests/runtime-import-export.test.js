@@ -190,7 +190,7 @@ function createRuntimeHarness(existingScripts = [], storedValuesByScript = {}, s
   const updateBadge = vi.fn().mockResolvedValue();
   const generateId = vi.fn(() => `generated_script_${generatedIdCounter++}`);
 
-  const _body = `${extractRuntimeImportExportCode()}; return { exportAllScripts, exportToZip, importFromZip, importScripts };`;
+  const _body = `${extractRuntimeImportExportCode()}; return { exportAllScripts, exportToZip, importFromZip, importScripts, importVendorBackup, recordImportedScriptTrustReview };`;
   let fn;
   try { const vm = require('node:vm'); fn = vm.compileFunction(_body, ['fflate', 'ScriptStorage', 'ScriptValues', 'SettingsManager', 'registerAllScripts', 'updateBadge', 'generateId', 'chrome', 'LocalLibraries'], { filename: resolve(process.cwd(), 'background.core.js') }); } catch { fn = new Function('fflate', 'ScriptStorage', 'ScriptValues', 'SettingsManager', 'registerAllScripts', 'updateBadge', 'generateId', 'chrome', 'LocalLibraries', _body); }
 
@@ -211,12 +211,159 @@ function createRuntimeHarness(existingScripts = [], storedValuesByScript = {}, s
     ScriptStorage,
     ScriptValues,
     SettingsManager,
+    registerAllScripts,
+    updateBadge,
     chrome,
     chromeStorage,
     scriptCache,
     valueCache,
   };
 }
+
+describe('vendor backup import trust boundary', () => {
+  it('quarantines enabled Tampermonkey text imports before registration', async () => {
+    const harness = createRuntimeHarness();
+
+    const result = await harness.importVendorBackup('tampermonkey', userscriptText('TM Import'), {
+      overwrite: true,
+      sourceLabel: 'TM fixture',
+    });
+
+    expect(result).toMatchObject({
+      imported: 1,
+      quarantinedScripts: 1,
+      preservedDisabledScripts: 0,
+      trustedEnabledScripts: 0,
+    });
+    const imported = Array.from(harness.scriptCache.values())[0];
+    expect(imported).toMatchObject({
+      enabled: false,
+      settings: {
+        _importQuarantine: {
+          source: 'import-tampermonkey',
+          sourceLabel: 'TM fixture',
+          archiveEnabled: true,
+        },
+      },
+    });
+    expect(harness.registerAllScripts).toHaveBeenCalledTimes(1);
+    expect(harness.ScriptStorage.set.mock.invocationCallOrder[0])
+      .toBeLessThan(harness.registerAllScripts.mock.invocationCallOrder[0]);
+  });
+
+  it('preserves disabled VM scripts and quarantines enabled VM scripts', async () => {
+    const harness = createRuntimeHarness();
+    const enabledCode = userscriptText('VM Enabled');
+    const disabledCode = userscriptText('VM Disabled').replace(
+      'scriptvault/bounded',
+      'scriptvault/disabled',
+    );
+
+    const result = await harness.importVendorBackup('violentmonkey', JSON.stringify({
+      scripts: [
+        { props: { name: 'VM Enabled' }, config: { enabled: true }, code: enabledCode },
+        { props: { name: 'VM Disabled' }, config: { enabled: false }, code: disabledCode },
+      ],
+    }));
+
+    expect(result).toMatchObject({
+      imported: 2,
+      quarantinedScripts: 1,
+      preservedDisabledScripts: 1,
+      trustedEnabledScripts: 0,
+    });
+    const scripts = Array.from(harness.scriptCache.values());
+    expect(scripts.find(script => script.meta.name === 'VM Enabled')).toMatchObject({
+      enabled: false,
+      settings: { _importQuarantine: expect.any(Object) },
+    });
+    expect(scripts.find(script => script.meta.name === 'VM Disabled')).toMatchObject({
+      enabled: false,
+      settings: {},
+    });
+  });
+
+  it('records an explicit reviewed trust decision for vendor imports', async () => {
+    const harness = createRuntimeHarness();
+
+    const result = await harness.importVendorBackup('greasemonkey', JSON.stringify([{
+      name: 'GM Trusted',
+      enabled: true,
+      source: userscriptText('GM Trusted'),
+    }]), {
+      trustImportedScripts: true,
+      sourceLabel: 'Reviewed GM fixture',
+    });
+
+    expect(result).toMatchObject({
+      imported: 1,
+      quarantinedScripts: 0,
+      preservedDisabledScripts: 0,
+      trustedEnabledScripts: 1,
+    });
+    const imported = Array.from(harness.scriptCache.values())[0];
+    expect(imported).toMatchObject({
+      enabled: true,
+      settings: {
+        _importTrust: {
+          source: 'import-greasemonkey',
+          sourceLabel: 'Reviewed GM fixture',
+          archiveEnabled: true,
+          reviewedAt: expect.any(Number),
+        },
+      },
+    });
+    expect(imported.settings).not.toHaveProperty('_importQuarantine');
+  });
+
+  it('turns a manual enable review into a durable trust record', () => {
+    const harness = createRuntimeHarness();
+    const reviewed = harness.recordImportedScriptTrustReview({
+      notes: 'keep',
+      _importQuarantine: {
+        source: 'import-tampermonkey',
+        sourceLabel: 'TM fixture',
+        importedAt: 1,
+        archiveEnabled: true,
+      },
+    });
+
+    expect(reviewed).toMatchObject({
+      notes: 'keep',
+      _importTrust: {
+        source: 'import-tampermonkey',
+        sourceLabel: 'TM fixture',
+        reviewedAt: expect.any(Number),
+        archiveEnabled: true,
+      },
+    });
+    expect(reviewed).not.toHaveProperty('_importQuarantine');
+  });
+
+  it('preserves existing settings while quarantining overwritten vendor code', async () => {
+    const existing = makeScript('script_existing', 'Existing Script');
+    existing.enabled = true;
+    existing.settings = { notes: 'keep me', pinned: true };
+    const harness = createRuntimeHarness([existing]);
+    const replacement = userscriptText('Existing Script').replace(
+      'scriptvault/bounded',
+      'scriptvault/script_existing',
+    );
+
+    const result = await harness.importVendorBackup('tampermonkey', replacement, { overwrite: true });
+
+    expect(result).toMatchObject({ imported: 1, quarantinedScripts: 1 });
+    expect(harness.scriptCache.get('script_existing')).toMatchObject({
+      id: 'script_existing',
+      enabled: false,
+      settings: {
+        notes: 'keep me',
+        pinned: true,
+        _importQuarantine: expect.any(Object),
+      },
+    });
+  });
+});
 
 describe('runtime import/export archive identity', () => {
   it('redacts credential-bearing settings from JSON exports unless explicitly included', async () => {

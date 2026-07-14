@@ -181,6 +181,10 @@ async function ensureScopedHostPermissions(script: Script, settings: Settings): 
 // Public API
 // ---------------------------------------------------------------------------
 
+export function isScriptEligibleForRegistration(script: Script | null | undefined): boolean {
+  return !!script && script.enabled !== false && !script.settings?._importQuarantine;
+}
+
 export async function registerAllScripts(): Promise<void> {
   try {
     if (!chrome.userScripts) {
@@ -209,7 +213,7 @@ export async function registerAllScripts(): Promise<void> {
       return;
     }
 
-    const enabledScripts: Script[] = scripts.filter(s => s.enabled !== false);
+    const enabledScripts: Script[] = scripts.filter(isScriptEligibleForRegistration);
 
     // Sort by @priority (higher = first), then position
     enabledScripts.sort((a: Script, b: Script) => {
@@ -285,7 +289,7 @@ export function supportsUserScriptsUpdate(): boolean {
  */
 export async function reregisterScript(script: Script): Promise<void> {
   if (!chrome.userScripts || !script) return;
-  if (script.enabled === false) {
+  if (!isScriptEligibleForRegistration(script)) {
     await unregisterScript(script.id);
     return;
   }
@@ -308,6 +312,10 @@ export async function registerScript(
 ): Promise<void> {
   try {
     if (!chrome.userScripts) return;
+    if (!isScriptEligibleForRegistration(script)) {
+      await unregisterScript(script?.id);
+      return;
+    }
 
     const meta: ScriptMeta = script.meta;
     const settings: ScriptSettings = script.settings || {};

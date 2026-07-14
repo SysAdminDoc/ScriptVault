@@ -4,6 +4,10 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Quarantined every vendor backup by default.** Tampermonkey/ScriptCat,
+  Violentmonkey, and Greasemonkey imports now share one bounded trust pipeline,
+  preserve archive-disabled state, retain local settings on overwrite, record
+  reviewed trust decisions, and cannot register or run while quarantined.
 - **Separated untrusted page telemetry from execution completion.** Public
   bridge events are now schema- and rate-bounded diagnostics with no script
   attribution, while stats, network attribution, and `afterScript` chains
