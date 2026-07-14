@@ -89,8 +89,10 @@ export async function handleGMValuesMessage(
   // when the message came directly from a user script. sender.userScriptId is
   // set by Chrome for onUserScriptMessage and cannot be spoofed by page/script
   // code; it overrides any data.scriptId a malicious script might pass to reach
-  // another script's stored values. Falls back to data.scriptId for the
-  // content-bridge path (older Chrome) where the bridge supplies the ID.
+  // another script's stored values. On older Chrome and Firefox, the central
+  // user-script message policy verifies the wrapper's per-install HMAC token
+  // and supplies the authenticated script ID on sender before this handler.
+  // The data fallback remains for trusted extension-surface storage aliases.
   const ownedScriptId = sender.userScriptId || data.scriptId;
 
   switch (action) {

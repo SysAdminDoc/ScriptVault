@@ -30,9 +30,13 @@ const UserScriptMessagePolicy = (() => {
   __export(user_script_message_policy_exports, {
     USER_SCRIPT_ALLOWED_EXTRAS: () => USER_SCRIPT_ALLOWED_EXTRAS,
     UserScriptMessagePolicy: () => UserScriptMessagePolicy,
+    authenticateUserScriptSender: () => authenticateUserScriptSender,
     default: () => user_script_message_policy_default,
+    getScriptAuthToken: () => getScriptAuthToken,
     isExtensionSurfaceSender: () => isExtensionSurfaceSender,
-    isUserScriptAllowedAction: () => isUserScriptAllowedAction
+    isScriptAuthRegistrationCurrent: () => isScriptAuthRegistrationCurrent,
+    isUserScriptAllowedAction: () => isUserScriptAllowedAction,
+    markScriptAuthRegistrationCurrent: () => markScriptAuthRegistrationCurrent
   });
   module.exports = __toCommonJS(user_script_message_policy_exports);
   var USER_SCRIPT_ALLOWED_EXTRAS = Object.freeze([
@@ -43,6 +47,92 @@ const UserScriptMessagePolicy = (() => {
     "reportExecTime"
   ]);
   var USER_SCRIPT_ALLOWED_EXTRA_SET = new Set(USER_SCRIPT_ALLOWED_EXTRAS);
+  var SCRIPT_AUTH_SECRET_KEY = "_scriptMessageAuthSecretV1";
+  var SCRIPT_AUTH_REGISTRATION_KEY = "_scriptMessageAuthRegistrationVersion";
+  var SCRIPT_AUTH_REGISTRATION_VERSION = 1;
+  var scriptAuthSecretPromise = null;
+  function bytesToHex(bytes) {
+    return [...bytes].map((value) => value.toString(16).padStart(2, "0")).join("");
+  }
+  function hexToBytes(value) {
+    const bytes = new Uint8Array(value.length / 2);
+    for (let index = 0; index < bytes.length; index++) {
+      bytes[index] = Number.parseInt(value.slice(index * 2, index * 2 + 2), 16);
+    }
+    return bytes;
+  }
+  async function getScriptAuthSecret() {
+    if (!scriptAuthSecretPromise) {
+      scriptAuthSecretPromise = (async () => {
+        const stored = await chrome.storage.local.get(SCRIPT_AUTH_SECRET_KEY);
+        const existing = stored?.[SCRIPT_AUTH_SECRET_KEY];
+        if (typeof existing === "string" && /^[a-f0-9]{64}$/u.test(existing)) return existing;
+        const secretBytes = new Uint8Array(32);
+        globalThis.crypto.getRandomValues(secretBytes);
+        const secret = bytesToHex(secretBytes);
+        await chrome.storage.local.set({ [SCRIPT_AUTH_SECRET_KEY]: secret });
+        return secret;
+      })().catch((error) => {
+        scriptAuthSecretPromise = null;
+        throw error;
+      });
+    }
+    return await scriptAuthSecretPromise;
+  }
+  async function getScriptAuthToken(scriptId) {
+    if (typeof scriptId !== "string" || !scriptId) {
+      throw new Error("A script id is required for authenticated GM messaging");
+    }
+    const secret = await getScriptAuthSecret();
+    const key = await globalThis.crypto.subtle.importKey(
+      "raw",
+      hexToBytes(secret).buffer,
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"]
+    );
+    const signature = await globalThis.crypto.subtle.sign(
+      "HMAC",
+      key,
+      new TextEncoder().encode(scriptId)
+    );
+    return bytesToHex(new Uint8Array(signature));
+  }
+  function constantTimeEqual(left, right) {
+    if (left.length !== right.length) return false;
+    let difference = 0;
+    for (let index = 0; index < left.length; index++) {
+      difference |= left.charCodeAt(index) ^ right.charCodeAt(index);
+    }
+    return difference === 0;
+  }
+  async function authenticateUserScriptSender(message, sender) {
+    if (sender?.userScriptId) return sender;
+    const action = message?.action;
+    if (typeof action !== "string" || !action.startsWith("GM_") && !action.startsWith("GM.")) {
+      return sender;
+    }
+    const data = message?.data && typeof message.data === "object" ? message.data : message;
+    const scriptId = typeof data.scriptId === "string" ? data.scriptId : "";
+    const suppliedToken = typeof data.scriptAuthToken === "string" ? data.scriptAuthToken : "";
+    if (!scriptId || !suppliedToken) {
+      throw new Error("GM request could not be authenticated for this script");
+    }
+    const expectedToken = await getScriptAuthToken(scriptId);
+    if (!constantTimeEqual(suppliedToken, expectedToken)) {
+      throw new Error("GM request could not be authenticated for this script");
+    }
+    return { ...sender, userScriptId: scriptId };
+  }
+  async function isScriptAuthRegistrationCurrent() {
+    const stored = await chrome.storage.local.get(SCRIPT_AUTH_REGISTRATION_KEY);
+    return stored?.[SCRIPT_AUTH_REGISTRATION_KEY] === SCRIPT_AUTH_REGISTRATION_VERSION;
+  }
+  async function markScriptAuthRegistrationCurrent() {
+    await chrome.storage.local.set({
+      [SCRIPT_AUTH_REGISTRATION_KEY]: SCRIPT_AUTH_REGISTRATION_VERSION
+    });
+  }
   function isUserScriptAllowedAction(action) {
     if (typeof action !== "string") return false;
     if (action.startsWith("GM_") || action.startsWith("GM.")) return true;
@@ -59,8 +149,12 @@ const UserScriptMessagePolicy = (() => {
   }
   var UserScriptMessagePolicy = Object.freeze({
     USER_SCRIPT_ALLOWED_EXTRAS,
+    authenticateUserScriptSender,
+    getScriptAuthToken,
     isExtensionSurfaceSender,
-    isUserScriptAllowedAction
+    isScriptAuthRegistrationCurrent,
+    isUserScriptAllowedAction,
+    markScriptAuthRegistrationCurrent
   });
   var user_script_message_policy_default = UserScriptMessagePolicy;
   return module.exports.default || module.exports.UserScriptMessagePolicy || module.exports;

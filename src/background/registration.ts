@@ -22,6 +22,7 @@ import {
 } from './url-matcher';
 import { applyWebRequestRules, removeWebRequestRules } from './dnr-rules';
 import { deriveOptionalHostPermissionPlan } from './host-permission-patterns';
+import { getScriptAuthToken } from './user-script-message-policy';
 
 // ---------------------------------------------------------------------------
 // External functions defined in background.core.js but not yet migrated
@@ -34,6 +35,8 @@ declare function buildWrappedScript(
   preloadedStorage: Record<string, unknown>,
   regexIncludes: string[],
   regexExcludes: string[],
+  scheduleGuard?: string,
+  scriptAuthToken?: string,
 ): string;
 
 // debugWarn is not exported from storage.ts — declare it locally
@@ -585,7 +588,16 @@ export async function registerScript(
     if (injectIntoPage) {
       debugLog(`Note: @inject-into page / @sandbox raw not fully supported in MV3, running in USER_SCRIPT world: ${meta.name}`);
     }
-    const wrappedCode: string = buildWrappedScript(script, requireScripts, storedValues, regexIncludes, regexExcludes);
+    const scriptAuthToken = await getScriptAuthToken(script.id);
+    const wrappedCode: string = buildWrappedScript(
+      script,
+      requireScripts,
+      storedValues,
+      regexIncludes,
+      regexExcludes,
+      '',
+      scriptAuthToken,
+    );
 
     // Per-script frame-mode override (settings.frameMode): 'top' forces top
     // frame only, 'all' forces all frames, and any other value (including

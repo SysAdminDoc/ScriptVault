@@ -110,9 +110,9 @@ function loadConnectPolicyHelpers() {
   try { const vm = require('node:vm'); return vm.compileFunction(_body, [], { filename: resolve(process.cwd(), 'modules/connect-policy.js') })(); } catch { return new Function(_body)(); }
 }
 
-function loadUserScriptMessagePolicy() {
+function loadUserScriptMessagePolicy(chromeMock = globalThis.chrome) {
   const _body = `${userScriptMessagePolicyCode}\nreturn UserScriptMessagePolicy;`;
-  try { const vm = require('node:vm'); return vm.compileFunction(_body, [], { filename: resolve(process.cwd(), 'modules/user-script-message-policy.js') })(); } catch { return new Function(_body)(); }
+  try { const vm = require('node:vm'); return vm.compileFunction(_body, ['chrome'], { filename: resolve(process.cwd(), 'modules/user-script-message-policy.js') })(chromeMock); } catch { return new Function('chrome', _body)(chromeMock); }
 }
 
 // Pull the user-script messaging gate (constants + helpers + onMessage/onUserScriptMessage
@@ -138,11 +138,18 @@ function loadUserScriptMessagingGate({ hasUserScriptMessage = true } = {}) {
 
   const onMessageListeners = [];
   const onUserScriptListeners = [];
+  const localStorage = {};
   const chromeMock = {
     runtime: {
       id: 'gate-extension-id',
       onMessage: {
         addListener: (fn) => onMessageListeners.push(fn),
+      },
+    },
+    storage: {
+      local: {
+        get: async key => ({ [key]: localStorage[key] }),
+        set: async entries => Object.assign(localStorage, entries),
       },
     },
   };
@@ -161,7 +168,7 @@ function loadUserScriptMessagingGate({ hasUserScriptMessage = true } = {}) {
     return { handled: true, action: message?.action };
   };
   const debugLog = () => {};
-  const UserScriptMessagePolicy = loadUserScriptMessagePolicy();
+  const UserScriptMessagePolicy = loadUserScriptMessagePolicy(chromeMock);
   const ConnectPolicy = loadConnectPolicyHelpers();
 
   const _factoryBody = `${sliceCode}\nreturn { isExtensionSurfaceSender, isUserScriptAllowedAction, USER_SCRIPT_MESSAGING_AVAILABLE };`;
@@ -176,6 +183,7 @@ function loadUserScriptMessagingGate({ hasUserScriptMessage = true } = {}) {
     onUserScriptListeners,
     handleMessageCalls,
     helpers: exports,
+    userScriptMessagePolicy: UserScriptMessagePolicy,
   };
 }
 
@@ -278,6 +286,8 @@ describe('content script bridge security boundary', () => {
       expect(source).toContain('function canUsePostMessageBridge(action)');
       expect(source).toContain('ScriptVault requires Chrome userScripts messaging for GM API calls.');
       expect(source).toContain("sendToBackground('GM_loadScript', { scriptId, url, timeout: options.timeout })");
+      expect(source).toContain('if (scriptAuthToken) authenticatedData.scriptAuthToken = scriptAuthToken');
+      expect(source).toContain('chrome.runtime.sendMessage({ action, data: authenticatedData })');
     }
   });
 
@@ -457,15 +467,16 @@ describe('runtime.onMessage user-script gate (Chrome <131 / Firefox fallback)', 
   });
 
   it('allows GM_* actions from tab-origin senders (user-script fallback path)', async () => {
-    const { onMessageListeners, handleMessageCalls } = loadUserScriptMessagingGate({ hasUserScriptMessage: false });
+    const { onMessageListeners, handleMessageCalls, userScriptMessagePolicy } = loadUserScriptMessagingGate({ hasUserScriptMessage: false });
     const tabSender = {
       id: 'gate-extension-id',
       url: 'https://example.com/page',
       tab: { id: 7 },
     };
+    const scriptAuthToken = await userScriptMessagePolicy.getScriptAuthToken('s');
     const response = await invokeListener(
       onMessageListeners[0],
-      { action: 'GM_setValue', data: { scriptId: 's', key: 'k', value: 1 } },
+      { action: 'GM_setValue', data: { scriptId: 's', scriptAuthToken, key: 'k', value: 1 } },
       tabSender
     );
     expect(response).toEqual({ handled: true, action: 'GM_setValue' });
@@ -541,7 +552,7 @@ describe('runtime.onMessage user-script gate (Chrome <131 / Firefox fallback)', 
     expect(helpers.USER_SCRIPT_MESSAGING_AVAILABLE).toBe(true);
     expect(onUserScriptListeners).toHaveLength(1);
 
-    const userScriptSender = { id: 'gate-extension-id', url: 'https://example.com/page' };
+    const userScriptSender = { id: 'gate-extension-id', url: 'https://example.com/page', userScriptId: 'script-1' };
     const blocked = await invokeListener(
       onUserScriptListeners[0],
       { action: 'factoryReset' },

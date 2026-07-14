@@ -25,6 +25,7 @@ export interface RequireScript {
  * @param preloadedStorage Pre-loaded GM storage key/value pairs.
  * @param regexIncludes    Regex @include patterns (e.g. `/pattern/flags`).
  * @param regexExcludes    Regex @exclude patterns.
+ * @param scriptAuthToken  Per-install capability for browsers without authenticated sender IDs.
  * @returns The generated JavaScript source as a string.
  */
 export function buildWrappedScript(
@@ -34,6 +35,7 @@ export function buildWrappedScript(
   regexIncludes: string[] = [],
   regexExcludes: string[] = [],
   scheduleGuard = '',
+  scriptAuthToken = '',
 ): string {
   const meta = script.meta;
   const grants: string[] = meta.grant.length > 0 ? meta.grant : ['none'];
@@ -221,6 +223,7 @@ ${req.code}
   ${regexGuardBlock}
   ${topOriginGuard}
   const scriptId = ${JSON.stringify(script.id)};
+  const scriptAuthToken = ${JSON.stringify(scriptAuthToken)};
   const meta = ${JSON.stringify(meta)};
   const grants = ${JSON.stringify(grants)};
   const grantSet = new Set(grants);
@@ -616,7 +619,9 @@ ${req.code}
     // Try direct messaging first (available when userScripts world has messaging: true)
     if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
       try {
-        return await chrome.runtime.sendMessage({ action, data });
+        const authenticatedData = data && typeof data === 'object' ? { ...data } : {};
+        if (scriptAuthToken) authenticatedData.scriptAuthToken = scriptAuthToken;
+        return await chrome.runtime.sendMessage({ action, data: authenticatedData });
       } catch (e) {
         // Extension context invalidated or messaging not available, fall through to bridge
       }

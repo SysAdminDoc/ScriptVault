@@ -21992,9 +21992,13 @@ const UserScriptMessagePolicy = (() => {
   __export(user_script_message_policy_exports, {
     USER_SCRIPT_ALLOWED_EXTRAS: () => USER_SCRIPT_ALLOWED_EXTRAS,
     UserScriptMessagePolicy: () => UserScriptMessagePolicy,
+    authenticateUserScriptSender: () => authenticateUserScriptSender,
     default: () => user_script_message_policy_default,
+    getScriptAuthToken: () => getScriptAuthToken,
     isExtensionSurfaceSender: () => isExtensionSurfaceSender,
-    isUserScriptAllowedAction: () => isUserScriptAllowedAction
+    isScriptAuthRegistrationCurrent: () => isScriptAuthRegistrationCurrent,
+    isUserScriptAllowedAction: () => isUserScriptAllowedAction,
+    markScriptAuthRegistrationCurrent: () => markScriptAuthRegistrationCurrent
   });
   module.exports = __toCommonJS(user_script_message_policy_exports);
   var USER_SCRIPT_ALLOWED_EXTRAS = Object.freeze([
@@ -22005,6 +22009,92 @@ const UserScriptMessagePolicy = (() => {
     "reportExecTime"
   ]);
   var USER_SCRIPT_ALLOWED_EXTRA_SET = new Set(USER_SCRIPT_ALLOWED_EXTRAS);
+  var SCRIPT_AUTH_SECRET_KEY = "_scriptMessageAuthSecretV1";
+  var SCRIPT_AUTH_REGISTRATION_KEY = "_scriptMessageAuthRegistrationVersion";
+  var SCRIPT_AUTH_REGISTRATION_VERSION = 1;
+  var scriptAuthSecretPromise = null;
+  function bytesToHex(bytes) {
+    return [...bytes].map((value) => value.toString(16).padStart(2, "0")).join("");
+  }
+  function hexToBytes(value) {
+    const bytes = new Uint8Array(value.length / 2);
+    for (let index = 0; index < bytes.length; index++) {
+      bytes[index] = Number.parseInt(value.slice(index * 2, index * 2 + 2), 16);
+    }
+    return bytes;
+  }
+  async function getScriptAuthSecret() {
+    if (!scriptAuthSecretPromise) {
+      scriptAuthSecretPromise = (async () => {
+        const stored = await chrome.storage.local.get(SCRIPT_AUTH_SECRET_KEY);
+        const existing = stored?.[SCRIPT_AUTH_SECRET_KEY];
+        if (typeof existing === "string" && /^[a-f0-9]{64}$/u.test(existing)) return existing;
+        const secretBytes = new Uint8Array(32);
+        globalThis.crypto.getRandomValues(secretBytes);
+        const secret = bytesToHex(secretBytes);
+        await chrome.storage.local.set({ [SCRIPT_AUTH_SECRET_KEY]: secret });
+        return secret;
+      })().catch((error) => {
+        scriptAuthSecretPromise = null;
+        throw error;
+      });
+    }
+    return await scriptAuthSecretPromise;
+  }
+  async function getScriptAuthToken(scriptId) {
+    if (typeof scriptId !== "string" || !scriptId) {
+      throw new Error("A script id is required for authenticated GM messaging");
+    }
+    const secret = await getScriptAuthSecret();
+    const key = await globalThis.crypto.subtle.importKey(
+      "raw",
+      hexToBytes(secret).buffer,
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"]
+    );
+    const signature = await globalThis.crypto.subtle.sign(
+      "HMAC",
+      key,
+      new TextEncoder().encode(scriptId)
+    );
+    return bytesToHex(new Uint8Array(signature));
+  }
+  function constantTimeEqual(left, right) {
+    if (left.length !== right.length) return false;
+    let difference = 0;
+    for (let index = 0; index < left.length; index++) {
+      difference |= left.charCodeAt(index) ^ right.charCodeAt(index);
+    }
+    return difference === 0;
+  }
+  async function authenticateUserScriptSender(message, sender) {
+    if (sender?.userScriptId) return sender;
+    const action = message?.action;
+    if (typeof action !== "string" || !action.startsWith("GM_") && !action.startsWith("GM.")) {
+      return sender;
+    }
+    const data = message?.data && typeof message.data === "object" ? message.data : message;
+    const scriptId = typeof data.scriptId === "string" ? data.scriptId : "";
+    const suppliedToken = typeof data.scriptAuthToken === "string" ? data.scriptAuthToken : "";
+    if (!scriptId || !suppliedToken) {
+      throw new Error("GM request could not be authenticated for this script");
+    }
+    const expectedToken = await getScriptAuthToken(scriptId);
+    if (!constantTimeEqual(suppliedToken, expectedToken)) {
+      throw new Error("GM request could not be authenticated for this script");
+    }
+    return { ...sender, userScriptId: scriptId };
+  }
+  async function isScriptAuthRegistrationCurrent() {
+    const stored = await chrome.storage.local.get(SCRIPT_AUTH_REGISTRATION_KEY);
+    return stored?.[SCRIPT_AUTH_REGISTRATION_KEY] === SCRIPT_AUTH_REGISTRATION_VERSION;
+  }
+  async function markScriptAuthRegistrationCurrent() {
+    await chrome.storage.local.set({
+      [SCRIPT_AUTH_REGISTRATION_KEY]: SCRIPT_AUTH_REGISTRATION_VERSION
+    });
+  }
   function isUserScriptAllowedAction(action) {
     if (typeof action !== "string") return false;
     if (action.startsWith("GM_") || action.startsWith("GM.")) return true;
@@ -22021,8 +22111,12 @@ const UserScriptMessagePolicy = (() => {
   }
   var UserScriptMessagePolicy = Object.freeze({
     USER_SCRIPT_ALLOWED_EXTRAS,
+    authenticateUserScriptSender,
+    getScriptAuthToken,
     isExtensionSurfaceSender,
-    isUserScriptAllowedAction
+    isScriptAuthRegistrationCurrent,
+    isUserScriptAllowedAction,
+    markScriptAuthRegistrationCurrent
   });
   var user_script_message_policy_default = UserScriptMessagePolicy;
   return module.exports.default || module.exports.UserScriptMessagePolicy || module.exports;
@@ -43381,13 +43475,18 @@ function isExtensionSurfaceSender(sender) {
 // onUserScriptMessage), the same allowlist still applies. Extension surfaces
 // (popup, dashboard, install page) keep full access.
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (!isExtensionSurfaceSender(sender)) {
+  const extensionSurfaceSender = isExtensionSurfaceSender(sender);
+  if (!extensionSurfaceSender) {
     if (!message || !isUserScriptAllowedAction(message.action)) {
       sendResponse({ error: 'Action not permitted from non-extension context' });
       return false;
     }
   }
-  handleMessage(message, sender)
+  const authenticatedSender = extensionSurfaceSender
+    ? Promise.resolve(sender)
+    : UserScriptMessagePolicy.authenticateUserScriptSender(message, sender);
+  authenticatedSender
+    .then(verifiedSender => handleMessage(message, verifiedSender))
     .then(sendResponse)
     .catch(e => {
       console.error('[ScriptVault] Unhandled message error:', e);
@@ -43804,7 +43903,8 @@ if (chrome.runtime.onUserScriptMessage) {
       sendResponse({ error: 'Action not permitted from user script' });
       return false;
     }
-    handleMessage(message, sender)
+    UserScriptMessagePolicy.authenticateUserScriptSender(message, sender)
+      .then(verifiedSender => handleMessage(message, verifiedSender))
       .then(sendResponse)
       .catch(e => {
         console.error('[ScriptVault] Unhandled user script message error:', e);
@@ -45625,7 +45725,8 @@ async function handleMessage(message, sender) {
           let storedValues = {};
           try { storedValues = await ScriptValues.getAll(script.id) || {}; } catch (_e) {}
 
-          const wrappedCode = buildWrappedScript(script, requireScripts, storedValues, [], []);
+          const scriptAuthToken = await UserScriptMessagePolicy.getScriptAuthToken(script.id);
+          const wrappedCode = buildWrappedScript(script, requireScripts, storedValues, [], [], '', scriptAuthToken);
 
           // Phase 39.28 — Chrome 149+ makes injectImmediately: true reliable
           // for document-start one-shots. Pass it when the script declares
@@ -46681,7 +46782,8 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
               } catch (e) {}
             }
             const storedValues = await ScriptValues.getAll(script.id) || {};
-            const wrappedCode = buildWrappedScript(script, requireScripts, storedValues, [], []);
+            const scriptAuthToken = await UserScriptMessagePolicy.getScriptAuthToken(script.id);
+            const wrappedCode = buildWrappedScript(script, requireScripts, storedValues, [], [], '', scriptAuthToken);
             // Execute in the USER_SCRIPT world like every other injection
             // path (page-load registration, @crontab, runScriptNow). The
             // MAIN-world fallback stays gated behind an explicit
@@ -47272,7 +47374,8 @@ async function handleCrontabAlarm(scriptId) {
   for (const exc of (meta.exclude || [])) {
     if (/^\/.*\/$|^\/.*\/[gimsuy]+$/.test(exc)) regexExcludes.push(exc);
   }
-  const wrappedCode = buildWrappedScript(script, requireScripts, storedValues, regexIncludes, regexExcludes);
+  const scriptAuthToken = await UserScriptMessagePolicy.getScriptAuthToken(script.id);
+  const wrappedCode = buildWrappedScript(script, requireScripts, storedValues, regexIncludes, regexExcludes, '', scriptAuthToken);
   const crontabInjectInto = meta['inject-into'] || 'auto';
   const crontabSandbox = meta.sandbox || '';
   const crontabWantsPage = (crontabInjectInto === 'page' || crontabSandbox === 'raw');
@@ -47375,7 +47478,8 @@ async function handleScheduleAlarm(scriptId) {
     const regexExcludes = [];
     for (const inc of (meta.include || [])) { if (/^\/.*\/$|^\/.*\/[gimsuy]+$/.test(inc)) regexIncludes.push(inc); }
     for (const exc of (meta.exclude || [])) { if (/^\/.*\/$|^\/.*\/[gimsuy]+$/.test(exc)) regexExcludes.push(exc); }
-    const wrappedCode = buildWrappedScript(script, requireScripts, storedValues, regexIncludes, regexExcludes);
+    const scriptAuthToken = await UserScriptMessagePolicy.getScriptAuthToken(script.id);
+    const wrappedCode = buildWrappedScript(script, requireScripts, storedValues, regexIncludes, regexExcludes, '', scriptAuthToken);
     const injectInto = meta['inject-into'] || 'auto';
     const wantsPage = (injectInto === 'page' || (meta.sandbox || '') === 'raw');
     const tabs = await chrome.tabs.query({ status: 'complete' });
@@ -48927,6 +49031,11 @@ async function registerAllScripts(forceReregister = false) {
       return;
     }
 
+    if (!forceReregister && !await UserScriptMessagePolicy.isScriptAuthRegistrationCurrent()) {
+      forceReregister = true;
+      debugLog('Refreshing userscript registrations for authenticated GM messaging');
+    }
+
     // On normal SW wake, check if scripts are already registered to avoid
     // the destructive unregister→register cycle that creates a gap where
     // scripts aren't active on page navigations.
@@ -49107,6 +49216,7 @@ async function registerAllScripts(forceReregister = false) {
     if (failures.length > 0) {
       console.warn(`[ScriptVault] ${failures.length} script(s) failed to register:`, failures.map(r => r.reason?.message || r.reason));
     }
+    await UserScriptMessagePolicy.markScriptAuthRegistrationCurrent();
     recordRegistrationSweep({
       status: failures.length > 0 ? 'partial' : 'registered',
       mode: forceReregister ? 'force' : 'full',
@@ -49502,7 +49612,8 @@ async function registerScript(script, { useUpdate = false, throwOnError = false 
     const scheduleGuard = (scriptSchedule && SCHEDULE_GUARD_TYPES.has(scriptSchedule.type))
       ? buildScheduleGuardFn(scriptSchedule)
       : '';
-    const wrappedCode = buildWrappedScript(script, requireScripts, storedValues, regexIncludes, regexExcludes, scheduleGuard);
+    const scriptAuthToken = await UserScriptMessagePolicy.getScriptAuthToken(script.id);
+    const wrappedCode = buildWrappedScript(script, requireScripts, storedValues, regexIncludes, regexExcludes, scheduleGuard, scriptAuthToken);
 
     // Per-script frame-mode override (settings.frameMode): 'top' forces top
     // frame only, 'all' forces all frames, and any other value (including
@@ -50571,7 +50682,7 @@ async function unregisterScript(scriptId) {
 }
 
 // Build wrapped script code with GM API
-function buildWrappedScript(script, requireScripts = [], preloadedStorage = {}, regexIncludes = [], regexExcludes = [], scheduleGuard = '') {
+function buildWrappedScript(script, requireScripts = [], preloadedStorage = {}, regexIncludes = [], regexExcludes = [], scheduleGuard = '', scriptAuthToken = '') {
   const meta = script.meta;
   const grants = meta.grant || ['none'];
   const scriptConfigValues = typeof ScriptConfig !== 'undefined' && ScriptConfig.normalizeValues
@@ -50739,6 +50850,7 @@ ${req.code}
 `;
   })()}
   const scriptId = ${JSON.stringify(script.id)};
+  const scriptAuthToken = ${JSON.stringify(scriptAuthToken)};
   const meta = ${JSON.stringify(meta)};
   const grants = ${JSON.stringify(grants)};
   const grantSet = new Set(grants);
@@ -51049,7 +51161,9 @@ ${req.code}
     // Try direct messaging first (available when userScripts world has messaging: true)
     if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
       try {
-        return await chrome.runtime.sendMessage({ action, data });
+        const authenticatedData = data && typeof data === 'object' ? { ...data } : {};
+        if (scriptAuthToken) authenticatedData.scriptAuthToken = scriptAuthToken;
+        return await chrome.runtime.sendMessage({ action, data: authenticatedData });
       } catch (e) {
         // Extension context invalidated or messaging not available, fall through to bridge
       }
