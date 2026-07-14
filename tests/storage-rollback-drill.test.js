@@ -1,9 +1,9 @@
 // Release rollback and storage backward-compatibility drill.
 //
 // This test is intentionally command-shaped: `npm run release:rollback-drill`
-// seeds the previous public chrome.storage.local shape, upgrades through the
-// current v3 migration path, then verifies both current IDB reads and a
-// simulated rollback reader can still recover the legacy snapshot.
+// seeds both the actual previous-public v3 contract and the historical v2
+// chrome.storage.local shape. It proves current migrations, prior-version
+// reads/writes after store rollback, and current-version recovery afterward.
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -18,10 +18,11 @@ import {
   __testing as migrationTesting,
 } from '../src/storage/migration-v3.ts';
 
-const PREVIOUS_PUBLIC_BASELINE = '2.3.4';
+const PREVIOUS_PUBLIC_BASELINE = '3.19.1';
+const LEGACY_V2_BASELINE = '2.3.4';
 const CURRENT_VERSION = JSON.parse(readFileSync(resolve(__dirname, '../manifest.json'), 'utf8')).version;
 
-function makeLegacyScript(id, name, version = PREVIOUS_PUBLIC_BASELINE) {
+function makeLegacyScript(id, name, version = LEGACY_V2_BASELINE) {
   return {
     id,
     enabled: true,
@@ -48,7 +49,7 @@ function makeLegacyScript(id, name, version = PREVIOUS_PUBLIC_BASELINE) {
   };
 }
 
-async function seedPreviousPublicStorage() {
+async function seedHistoricalV2Storage() {
   const alpha = makeLegacyScript('alpha', 'Rollback Alpha');
   const beta = makeLegacyScript('beta', 'Rollback Beta', '2.3.0');
   const legacy = {
@@ -67,7 +68,7 @@ async function seedPreviousPublicStorage() {
       },
     ],
     sv_releaseDrill: {
-      previousPublicBaseline: PREVIOUS_PUBLIC_BASELINE,
+      previousPublicBaseline: LEGACY_V2_BASELINE,
       currentVersion: CURRENT_VERSION,
     },
   };
@@ -102,8 +103,64 @@ beforeEach(() => {
 });
 
 describe(`release rollback storage drill (${PREVIOUS_PUBLIC_BASELINE} -> ${CURRENT_VERSION})`, () => {
-  it('upgrades legacy storage to current IDB while preserving rollback-readable legacy keys', async () => {
-    const legacy = await seedPreviousPublicStorage();
+  it('migrates the previous public v3 state, accepts rollback writes, and recovers them on return to current', async () => {
+    const alpha = makeLegacyScript('alpha', 'Rollback Alpha', PREVIOUS_PUBLIC_BASELINE);
+    const beta = makeLegacyScript('beta', 'Rollback Beta', PREVIOUS_PUBLIC_BASELINE);
+    alpha.stats.lastUrl = 'https://example.com/private/account?token=secret';
+    beta.stats.lastUrl = 'https://example.com/other/path#private';
+    await ScriptsDAO.bulkPut([alpha, beta]);
+    await ValuesDAO.set('alpha', 'counter', 7);
+    await ValuesDAO.set('beta', 'mode', 'safe');
+    await chrome.storage.local.set({
+      _storageSchema: migrationTesting.SCHEMA_TARGET,
+      settings: { theme: 'oled', autoUpdate: false, statsUrlRetention: 'full' },
+      scriptFolders: [{
+        id: 'folder_release',
+        name: 'Release Drill',
+        color: '#60a5fa',
+        collapsed: false,
+        scriptIds: ['alpha', 'beta'],
+        createdAt: 1710000000000,
+      }],
+      sv_releaseDrill: { previousPublicBaseline: PREVIOUS_PUBLIC_BASELINE, currentVersion: CURRENT_VERSION },
+    });
+
+    // Current startup applies its one-time privacy/storage migration.
+    expect((await SettingsManager.get()).statsUrlRetention).toBe('origin');
+    expect((await ScriptStorage.get('alpha')).stats.lastUrl).toBe('https://example.com');
+    expect((await ScriptsDAO.get('beta')).stats.lastUrl).toBe('https://example.com');
+
+    // The store rolls back to the previous public package. Model its stable v3
+    // DAO contract reading and writing user state after rollback.
+    const rollbackAlpha = await ScriptsDAO.get('alpha');
+    expect(rollbackAlpha.meta.version).toBe(PREVIOUS_PUBLIC_BASELINE);
+    rollbackAlpha.enabled = false;
+    rollbackAlpha.settings = { ...rollbackAlpha.settings, runInFrames: true };
+    rollbackAlpha.stats.runs += 1;
+    rollbackAlpha.stats.lastUrl = 'https://example.com';
+    await ScriptsDAO.put(rollbackAlpha);
+    await ValuesDAO.set('alpha', 'counter', 8);
+    const rollbackSettings = (await chrome.storage.local.get('settings')).settings;
+    await chrome.storage.local.set({ settings: { ...rollbackSettings, theme: 'light' } });
+
+    // When a fixed current build returns, cold caches must recover every write
+    // made by the rolled-back package without replaying or losing migration.
+    ScriptStorage.invalidateCache();
+    SettingsManager.cache = null;
+    ScriptValues.cache = Object.create(null);
+    ScriptValues._initPromises?.clear?.();
+    expect(await ScriptStorage.get('alpha')).toMatchObject({
+      enabled: false,
+      settings: { runInFrames: true },
+      stats: { runs: 3, lastUrl: 'https://example.com' },
+    });
+    expect(await ScriptValues.get('alpha', 'counter', 0)).toBe(8);
+    expect(await SettingsManager.get('theme')).toBe('light');
+    expect(await SettingsManager.get('statsUrlRetention')).toBe('origin');
+  });
+
+  it('upgrades historical v2 storage to current IDB while preserving rollback-readable legacy keys', async () => {
+    const legacy = await seedHistoricalV2Storage();
 
     const migration = await ensureV3Migration();
     expect(migration).toEqual({
@@ -132,14 +189,14 @@ describe(`release rollback storage drill (${PREVIOUS_PUBLIC_BASELINE} -> ${CURRE
     expect(rollbackSnapshot.settings).toEqual(legacy.settings);
     expect(rollbackSnapshot.scriptFolders).toEqual(legacy.scriptFolders);
     expect(rollbackSnapshot.sv_releaseDrill).toEqual({
-      previousPublicBaseline: PREVIOUS_PUBLIC_BASELINE,
+      previousPublicBaseline: LEGACY_V2_BASELINE,
       currentVersion: CURRENT_VERSION,
     });
   });
 
   it('keeps legacy rollback data for the safety window, then wipes only after TTL', async () => {
     const migratedAt = Date.UTC(2026, 4, 24, 9, 30, 0);
-    await seedPreviousPublicStorage();
+    await seedHistoricalV2Storage();
 
     const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(migratedAt);
     await ensureV3Migration();

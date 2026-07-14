@@ -4,6 +4,10 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Operationalized Chrome and AMO rollback.** Store status now runs a real
+  previous-public/current/rollback recovery drill and reports per-channel
+  readiness, rollout and pending-submission consequences; the incident
+  playbook chooses store rollback versus a reviewed roll-forward explicitly.
 - **Made release userscript smokes fail closed.** The shared headless fixture
   now enables Chromium's shadow-DOM Allow User Scripts control, labels
   capability and release reports separately, and turns missing execution/OPFS

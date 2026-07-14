@@ -3,6 +3,7 @@ import {
   buildCwsFetchStatusUrl,
   extractReadmeCwsItemId,
   runChecks,
+  summarizeCwsRollbackReadiness,
   summarizeFirefoxLint,
 } from '../scripts/check-store-status.mjs';
 
@@ -31,6 +32,8 @@ describe('release store status check', () => {
 
     expect(result.failures).toEqual([]);
     expect(result.cws).toMatchObject({ status: 'skipped', itemId: CWS_ID });
+    expect(result.cws.rollback).toMatchObject({ ready: null, status: 'live-status-required' });
+    expect(result.firefox.rollback).toMatchObject({ ready: false, status: 'not-ready' });
     expect(result.warnings.join('\n')).toContain('CWS fetchStatus live check skipped');
   });
 
@@ -73,7 +76,38 @@ describe('release store status check', () => {
       publishedVersion: '3.11.0',
       takenDown: false,
       warned: false,
+      rollback: { ready: null, status: 'confirmation-required' },
     });
+  });
+
+  it('reports partial-rollout and pending-submission consequences for a confirmed safe package', () => {
+    const rollback = summarizeCwsRollbackReadiness({
+      publishedItemRevisionStatus: {
+        distributionChannels: [{ crxVersion: '3.20.0', deployPercentage: 25 }],
+      },
+      submittedItemRevisionStatus: {
+        state: 'PENDING_REVIEW',
+        distributionChannels: [{ crxVersion: '3.20.1', deployPercentage: 100 }],
+      },
+      takenDown: false,
+    }, {
+      previousVersion: '3.19.1',
+      storageCompatible: true,
+    });
+
+    expect(rollback).toMatchObject({
+      ready: true,
+      status: 'ready',
+      publishedVersion: '3.20.0',
+      previousVersion: '3.19.1',
+      deployPercentage: 25,
+      partialRollout: true,
+      pendingSubmission: true,
+      submittedVersion: '3.20.1',
+      blockers: [],
+    });
+    expect(rollback.consequences.join('\n')).toContain('last version that reached 100%');
+    expect(rollback.consequences.join('\n')).toContain('discards the submitted/staged revision');
   });
 
   it('fails when CWS reports a taken-down item', async () => {
@@ -96,6 +130,7 @@ describe('release store status check', () => {
     });
 
     expect(result.failures).toContain('CWS item is marked takenDown');
+    expect(result.cws.rollback).toMatchObject({ ready: false, status: 'not-ready' });
   });
 
   it('summarizes Firefox web-ext lint reports', () => {
