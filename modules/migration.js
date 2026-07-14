@@ -32,7 +32,7 @@ const Migration = (() => {
     default: () => migration_default
   });
   module.exports = __toCommonJS(migration_exports);
-  var CURRENT_VERSION = "3.19.2";
+  var CURRENT_VERSION = "3.20.0";
   var MIGRATION_KEY = "sv_lastMigratedVersion";
   function compareVersions(v1, v2) {
     const p1 = v1.split(".").map(Number);

@@ -644,7 +644,11 @@ describe('dashboard surface modules', () => {
     deleteButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await flushPromises();
 
-    expect(confirmMock).toHaveBeenCalledWith('Delete Collection', 'Delete collection "Delete Me"?');
+    expect(confirmMock).toHaveBeenCalledWith(
+      'Delete Collection?',
+      'Delete collection "Delete Me"? Scripts in the collection will stay in your vault.',
+      { confirmLabel: 'Delete Collection', tone: 'danger' },
+    );
     expect(CollectionManager.getCollections().some((entry) => entry.id === collection.id)).toBe(false);
 
     CollectionManager.destroy();

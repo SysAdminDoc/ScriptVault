@@ -11,6 +11,21 @@ const WhatsNew = (() => {
     : '2.0.0';
 
   const CHANGELOG = {
+    '3.20.0': {
+      title: 'ScriptVault 3.20.0 — Premium Interaction Polish',
+      date: '2026-07-14',
+      highlights: [
+        { icon: 'VIEW', title: 'One Intentional Interface System', desc: 'Every dashboard destination, compact surface, editor state, dialog, and injected tool now shares a disciplined corner, contrast, focus, elevation, and motion system across all four themes.' },
+        { icon: 'EDIT', title: 'Editor Themes That Stay in Sync', desc: 'The editor follows dark, light, Catppuccin, or OLED from its loading shell through Monaco startup, and keeps pace when you change the interface theme.' },
+        { icon: 'SAFE', title: 'Clearer, Safer Decisions', desc: 'Consequential confirmations name the action they will take, communicate severity consistently, and place initial keyboard focus on Cancel for destructive choices.' },
+      ],
+      improvements: [
+        'Trust navigation now opens, focuses, and highlights the exact control you requested.',
+        'Popup and side-panel dashboard actions use readable labels instead of raw localization keys.',
+        'Semantic colors are contrast-gated and visible focus treatment is consistent across surfaces.',
+        'Rendered release coverage now includes 48 views across all supported themes and confirmation states.',
+      ],
+    },
     '3.19.2': {
       title: 'ScriptVault 3.19.2 — Scripts Run On Install Again',
       date: '2026-07-13',

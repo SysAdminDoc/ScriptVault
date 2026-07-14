@@ -2,6 +2,30 @@
 
 All notable changes to ScriptVault will be documented in this file.
 
+## [v3.20.0] — Premium interaction and theme polish (2026-07-14)
+
+- **Unified the product around one deliberate visual system.** Every shipped
+  surface and injected module now uses the same finite radius scale, semantic
+  foreground tokens, focus treatment, elevation, and motion rules. Automated
+  checks prevent pill geometry, out-of-scale corners, raw white foregrounds,
+  and below-AA semantic color pairs from returning.
+- **Made the editor truly theme-aware.** The default editor follows the active
+  dark, light, Catppuccin, or OLED interface theme from its loading shell
+  through Monaco startup, while named editor themes keep their intended
+  palettes. Theme changes are propagated into an already-open editor.
+- **Improved workbench orientation and recovery.** Trust rail destinations now
+  open the exact setting or diagnostic control, focus it, and highlight it;
+  DevTools releases its theme listener cleanly; compact surfaces no longer
+  expose raw localization keys.
+- **Clarified consequential decisions.** Confirmation dialogs use specific
+  action labels and severity treatment across delete, reset, rollback, restore,
+  import, disconnect, trust, workspace, profile, template, chain, and
+  collection flows. Destructive dialogs put initial keyboard focus on Cancel.
+- **Expanded rendered release evidence.** The DPI-aware screenshot matrix now
+  captures 48 dashboard, editor, compact, install, DevTools, and confirmation
+  views across all four themes. Live smoke coverage verifies deep-link routing,
+  dialog labels, safe focus, Escape recovery, and full-screen editor controls.
+
 ## [v3.19.2] — Restore broad install-time host access (2026-07-13)
 
 - **Userscripts run on install again (Chromium).** Reverted the Chrome/Edge
