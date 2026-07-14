@@ -124,6 +124,14 @@
       "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for execution telemetry action dispatch."
     },
     {
+      "runtime": "modules/update-action-handler.js",
+      "sources": [
+        "src/background/update-action-handler.ts"
+      ],
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for update and subscription action dispatch."
+    },
+    {
       "runtime": "modules/gm-audio-handler.js",
       "sources": [
         "src/background/gm-audio-handler.ts"

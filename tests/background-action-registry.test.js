@@ -11,6 +11,10 @@ import {
   EXECUTION_TELEMETRY_ACTIONS,
   createTelemetryActionHandlers,
 } from '../src/background/telemetry-action-handler.ts';
+import {
+  UPDATE_BACKGROUND_ACTIONS,
+  createUpdateActionHandlers,
+} from '../src/background/update-action-handler.ts';
 
 describe('typed background action registry', () => {
   it('normalizes flat and nested runtime messages before dispatch', async () => {
@@ -120,5 +124,32 @@ describe('typed background action registry', () => {
       expect.objectContaining({ scriptId: 'spoofed', time: 12 }),
       sender,
     );
+  });
+
+  it('routes update and subscription actions with normalized defaults', async () => {
+    const dependencies = Object.fromEntries([
+      'checkUpdates', 'queueUpdates', 'getPendingUpdates', 'clearPendingUpdates',
+      'applyPendingUpdate', 'applySafePendingUpdates', 'getRecentUpdates',
+      'clearRecentUpdates', 'forceUpdate', 'applyUpdate', 'getVersionHistory',
+      'rollbackScript', 'getSubscriptions', 'addSubscription',
+      'refreshSubscription', 'refreshSubscriptions', 'removeSubscription',
+    ].map(name => [name, vi.fn(async () => ({ success: true }))]));
+    dependencies.getRecentUpdates = vi.fn(() => []);
+    dependencies.clearRecentUpdates = vi.fn();
+    const registry = createBackgroundActionRegistry(createUpdateActionHandlers(dependencies));
+
+    await registry.dispatch({ action: 'queueUpdates', scriptId: 'script-1' }, {});
+    await registry.dispatch({
+      action: 'refreshSubscription',
+      data: { subscriptionId: 'subscription-1' },
+    }, {});
+
+    expect(registry.registeredActions()).toEqual(UPDATE_BACKGROUND_ACTIONS);
+    expect(dependencies.queueUpdates).toHaveBeenCalledWith(
+      'script-1',
+      undefined,
+      'manual-check',
+    );
+    expect(dependencies.refreshSubscription).toHaveBeenCalledWith('subscription-1');
   });
 });

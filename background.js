@@ -23213,6 +23213,110 @@ if (typeof self !== 'undefined') {
 }
 
 // ============================================================================
+// Generated from src/background/update-action-handler.ts; do not edit by hand.
+// Run `node scripts/generate-ts-runtime-modules.mjs` or `npm run build:bg`.
+// ============================================================================
+
+const UpdateActionHandler = (() => {
+  const module = { exports: {} };
+  const exports = module.exports;
+  "use strict";
+  var __defProp = Object.defineProperty;
+  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, { get: all[name], enumerable: true });
+  };
+  var __copyProps = (to, from, except, desc) => {
+    if (from && typeof from === "object" || typeof from === "function") {
+      for (let key of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(to, key) && key !== except)
+          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+    }
+    return to;
+  };
+  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+  // src/background/update-action-handler.ts
+  var update_action_handler_exports = {};
+  __export(update_action_handler_exports, {
+    UPDATE_BACKGROUND_ACTIONS: () => UPDATE_BACKGROUND_ACTIONS,
+    UpdateActionHandler: () => UpdateActionHandler,
+    createUpdateActionHandlers: () => createUpdateActionHandlers,
+    default: () => update_action_handler_default
+  });
+  module.exports = __toCommonJS(update_action_handler_exports);
+  var UPDATE_BACKGROUND_ACTIONS = [
+    "checkUpdates",
+    "queueUpdates",
+    "getPendingUpdates",
+    "clearPendingUpdates",
+    "applyPendingUpdate",
+    "applySafePendingUpdates",
+    "getRecentUpdates",
+    "clearRecentUpdates",
+    "forceUpdate",
+    "applyUpdate",
+    "getVersionHistory",
+    "rollbackScript",
+    "getSubscriptions",
+    "addSubscription",
+    "refreshSubscription",
+    "refreshSubscriptions",
+    "removeSubscription"
+  ];
+  function createUpdateActionHandlers(dependencies) {
+    const handlers = {
+      checkUpdates: ({ message }) => dependencies.checkUpdates(message.scriptId),
+      queueUpdates: ({ message }) => dependencies.queueUpdates(
+        message.scriptId,
+        message.updates,
+        message.source || "manual-check"
+      ),
+      getPendingUpdates: () => dependencies.getPendingUpdates(),
+      clearPendingUpdates: ({ message }) => dependencies.clearPendingUpdates(message.scriptId),
+      applyPendingUpdate: ({ message }) => dependencies.applyPendingUpdate(message.scriptId, message.force === true),
+      applySafePendingUpdates: ({ message }) => dependencies.applySafePendingUpdates(message.scriptIds),
+      getRecentUpdates: () => dependencies.getRecentUpdates(),
+      clearRecentUpdates: () => {
+        dependencies.clearRecentUpdates();
+        return { success: true };
+      },
+      forceUpdate: ({ message }) => dependencies.forceUpdate(message.scriptId),
+      applyUpdate: ({ message }) => dependencies.applyUpdate(
+        message.scriptId,
+        message.code,
+        message.sourceUrl || ""
+      ),
+      getVersionHistory: ({ message }) => dependencies.getVersionHistory(message.scriptId),
+      rollbackScript: ({ message }) => dependencies.rollbackScript(message.scriptId, message.index),
+      getSubscriptions: () => dependencies.getSubscriptions(),
+      addSubscription: ({ message }) => dependencies.addSubscription(message.url || "", message.name || ""),
+      refreshSubscription: ({ message }) => dependencies.refreshSubscription(
+        message.subscriptionId || message.id || message.url || ""
+      ),
+      refreshSubscriptions: () => dependencies.refreshSubscriptions(),
+      removeSubscription: ({ message }) => dependencies.removeSubscription(
+        message.subscriptionId || message.id || message.url || ""
+      )
+    };
+    return Object.freeze(handlers);
+  }
+  var UpdateActionHandler = Object.freeze({
+    UPDATE_BACKGROUND_ACTIONS,
+    createUpdateActionHandlers
+  });
+  var update_action_handler_default = UpdateActionHandler;
+  return module.exports.default || module.exports.UpdateActionHandler || module.exports;
+})();
+
+if (typeof self !== 'undefined') {
+  self.UpdateActionHandler = UpdateActionHandler;
+}
+
+// ============================================================================
 // Generated from src/background/message-router.ts; do not edit by hand.
 // Run `node scripts/generate-ts-runtime-modules.mjs` or `npm run build:bg`.
 // ============================================================================
@@ -45089,6 +45193,65 @@ async function importSingleScript(code) {
   return { success: true, script: { ...script, metadata: script.meta } };
 }
 
+async function forceUpdateScript(scriptId) {
+  const script = await ScriptStorage.get(scriptId);
+  if (!script) return { error: 'Script not found' };
+  const downloadUrl = script.meta.downloadURL || script.meta.updateURL;
+  if (!downloadUrl) return { error: 'No download URL configured' };
+  try {
+    const { response, code: newCode } = await UpdateSystem.fetchUpdateCandidate(downloadUrl, {
+      cache: 'no-store',
+      headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+    });
+    if (!response.ok) return { error: `HTTP ${response.status}` };
+    const parsed = parseUserscript(newCode);
+    if (parsed.error) return parsed;
+    return await UpdateSystem.applyUpdate(scriptId, newCode, { force: true, sourceUrl: downloadUrl });
+  } catch (error) {
+    return { error: error?.message || String(error) };
+  }
+}
+
+async function getScriptVersionHistory(scriptId) {
+  const script = await ScriptStorage.get(scriptId);
+  return { history: script?.versionHistory || [] };
+}
+
+async function rollbackScriptVersion(scriptId, index) {
+  return await _runExclusiveScriptOperation(scriptId, async () => {
+    const script = await ScriptStorage.get(scriptId);
+    if (!script) return { error: 'Script not found' };
+    if (!script.versionHistory || script.versionHistory.length === 0) {
+      return { error: 'No version history available' };
+    }
+    const targetIndex = index !== undefined ? index : script.versionHistory.length - 1;
+    const target = script.versionHistory[targetIndex];
+    if (!target) return { error: 'Version not found' };
+
+    const parsed = parseUserscript(target.code);
+    if (parsed.error) return parsed;
+
+    script.versionHistory.push({
+      version: script.meta.version,
+      code: script.code,
+      updatedAt: script.updatedAt || Date.now()
+    });
+    script.versionHistory.splice(targetIndex, 1);
+    if (script.versionHistory.length > 5) {
+      script.versionHistory = script.versionHistory.slice(-5);
+    }
+
+    script.code = target.code;
+    script.meta = parsed.meta;
+    script.updatedAt = Date.now();
+
+    await ScriptStorage.set(scriptId, script);
+    await reregisterScript(script);
+    notifyEasyCloudScriptSaved(scriptId);
+    return { success: true, script: { ...script, metadata: script.meta } };
+  });
+}
+
 // ============================================================================
 // Message Handlers
 // ============================================================================
@@ -45119,6 +45282,30 @@ backgroundActionRegistry.registerHandlers(ImportActionHandler.createImportAction
 backgroundActionRegistry.registerHandlers(TelemetryActionHandler.createTelemetryActionHandlers({
   handleBridgeTelemetry: (data, sender) => executionTelemetryHandler.handleBridgeTelemetry(data, sender),
   handleTrustedTelemetry: (action, data, sender) => executionTelemetryHandler.handleTrustedTelemetry(action, data, sender)
+}));
+backgroundActionRegistry.registerHandlers(UpdateActionHandler.createUpdateActionHandlers({
+  checkUpdates: scriptId => UpdateSystem.checkForUpdates(scriptId),
+  queueUpdates: async (scriptId, updates, source) => {
+    const candidates = Array.isArray(updates)
+      ? updates
+      : await UpdateSystem.checkForUpdates(scriptId || null);
+    return await UpdateSystem.queueUpdates(candidates, { source });
+  },
+  getPendingUpdates: () => UpdateSystem.getPendingUpdates(),
+  clearPendingUpdates: scriptId => UpdateSystem.clearPendingUpdates(scriptId || null),
+  applyPendingUpdate: (scriptId, force) => UpdateSystem.applyPendingUpdate(scriptId, { force }),
+  applySafePendingUpdates: scriptIds => UpdateSystem.applySafePendingUpdates(scriptIds || null),
+  getRecentUpdates: () => UpdateSystem.getRecentUpdates(),
+  clearRecentUpdates: () => UpdateSystem.clearRecentUpdates(),
+  forceUpdate: scriptId => forceUpdateScript(scriptId),
+  applyUpdate: (scriptId, code, sourceUrl) => UpdateSystem.applyUpdate(scriptId, code, { sourceUrl }),
+  getVersionHistory: scriptId => getScriptVersionHistory(scriptId),
+  rollbackScript: (scriptId, index) => rollbackScriptVersion(scriptId, index),
+  getSubscriptions: () => SubscriptionSystem.list(),
+  addSubscription: (url, name) => SubscriptionSystem.addSubscription(url, name),
+  refreshSubscription: id => SubscriptionSystem.refreshSubscription(id),
+  refreshSubscriptions: () => SubscriptionSystem.refreshSubscriptions(),
+  removeSubscription: id => SubscriptionSystem.removeSubscription(id)
 }));
 backgroundActionRegistry.registerHandlers(MessageRouter.createBackgroundDomainHandlers(
   GMValuesHandler.GM_VALUES_ACTIONS,
@@ -46211,117 +46398,6 @@ async function handleMessage(message, sender) {
       case 'resetSettings':
         return await SettingsManager.reset();
         
-      // Updates
-      case 'checkUpdates':
-        return await UpdateSystem.checkForUpdates(data?.scriptId);
-
-      case 'queueUpdates': {
-        const updates = Array.isArray(data?.updates)
-          ? data.updates
-          : await UpdateSystem.checkForUpdates(data?.scriptId || null);
-        return await UpdateSystem.queueUpdates(updates, { source: data?.source || 'manual-check' });
-      }
-
-      case 'getPendingUpdates':
-        return await UpdateSystem.getPendingUpdates();
-
-      case 'clearPendingUpdates':
-        return await UpdateSystem.clearPendingUpdates(data?.scriptId || null);
-
-      case 'applyPendingUpdate':
-        return await UpdateSystem.applyPendingUpdate(data.scriptId, { force: data?.force === true });
-
-      case 'applySafePendingUpdates':
-        return await UpdateSystem.applySafePendingUpdates(data?.scriptIds || null);
-
-      case 'getSubscriptions':
-        return await SubscriptionSystem.list();
-
-      case 'addSubscription':
-        return await SubscriptionSystem.addSubscription(data?.url || '', data?.name || '');
-
-      case 'refreshSubscription':
-        return await SubscriptionSystem.refreshSubscription(data?.subscriptionId || data?.id || data?.url || '');
-
-      case 'refreshSubscriptions':
-        return await SubscriptionSystem.refreshSubscriptions();
-
-      case 'removeSubscription':
-        return await SubscriptionSystem.removeSubscription(data?.subscriptionId || data?.id || data?.url || '');
-
-      // Phase 12.10 — recently-applied updates for the in-app dashboard banner.
-      case 'getRecentUpdates':
-        return UpdateSystem.getRecentUpdates();
-
-      case 'clearRecentUpdates':
-        UpdateSystem.clearRecentUpdates();
-        return { success: true };
-
-      case 'forceUpdate': {
-        // Force re-download bypassing HTTP cache
-        const scriptId = data.scriptId;
-        const script = await ScriptStorage.get(scriptId);
-        if (!script) return { error: 'Script not found' };
-        const downloadUrl = script.meta.downloadURL || script.meta.updateURL;
-        if (!downloadUrl) return { error: 'No download URL configured' };
-        try {
-          const { response, code: newCode } = await UpdateSystem.fetchUpdateCandidate(downloadUrl, {
-            cache: 'no-store',
-            headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
-          });
-          if (!response.ok) return { error: `HTTP ${response.status}` };
-          const parsed = parseUserscript(newCode);
-          if (parsed.error) return parsed;
-          // Apply as update (force=true bypasses userModified guard)
-          return await UpdateSystem.applyUpdate(scriptId, newCode, { force: true, sourceUrl: downloadUrl });
-        } catch (e) {
-          return { error: e.message };
-        }
-      }
-
-      case 'applyUpdate':
-        return await UpdateSystem.applyUpdate(data.scriptId, data.code, { sourceUrl: data.sourceUrl || '' });
-
-      case 'getVersionHistory': {
-        const script = await ScriptStorage.get(data.scriptId);
-        return { history: script?.versionHistory || [] };
-      }
-
-      case 'rollbackScript': {
-        return await _runExclusiveScriptOperation(data.scriptId, async () => {
-          const script = await ScriptStorage.get(data.scriptId);
-          if (!script) return { error: 'Script not found' };
-          if (!script.versionHistory || script.versionHistory.length === 0) {
-            return { error: 'No version history available' };
-          }
-          const targetIdx = data.index !== undefined ? data.index : script.versionHistory.length - 1;
-          const target = script.versionHistory[targetIdx];
-          if (!target) return { error: 'Version not found' };
-
-          const parsed = parseUserscript(target.code);
-          if (parsed.error) return parsed;
-
-          script.versionHistory.push({
-            version: script.meta.version,
-            code: script.code,
-            updatedAt: script.updatedAt || Date.now()
-          });
-          script.versionHistory.splice(targetIdx, 1);
-          if (script.versionHistory.length > 5) {
-            script.versionHistory = script.versionHistory.slice(-5);
-          }
-
-          script.code = target.code;
-          script.meta = parsed.meta;
-          script.updatedAt = Date.now();
-
-          await ScriptStorage.set(data.scriptId, script);
-          await reregisterScript(script);
-          notifyEasyCloudScriptSaved(data.scriptId);
-          return { success: true, script: { ...script, metadata: script.meta } };
-        });
-      }
-
       // Sync
       case 'sync': {
         const result = await CloudSync.sync();

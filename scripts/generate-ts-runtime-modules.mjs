@@ -207,6 +207,13 @@ export const TS_RUNTIME_MODULES = [
     selfExportName: 'TelemetryActionHandler',
   },
   {
+    id: 'update-action-handler',
+    source: 'src/background/update-action-handler.ts',
+    output: 'modules/update-action-handler.js',
+    exportName: 'UpdateActionHandler',
+    selfExportName: 'UpdateActionHandler',
+  },
+  {
     id: 'message-router',
     source: 'src/background/message-router.ts',
     output: 'modules/message-router.js',

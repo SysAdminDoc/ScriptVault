@@ -5975,6 +5975,65 @@ async function importSingleScript(code) {
   return { success: true, script: { ...script, metadata: script.meta } };
 }
 
+async function forceUpdateScript(scriptId) {
+  const script = await ScriptStorage.get(scriptId);
+  if (!script) return { error: 'Script not found' };
+  const downloadUrl = script.meta.downloadURL || script.meta.updateURL;
+  if (!downloadUrl) return { error: 'No download URL configured' };
+  try {
+    const { response, code: newCode } = await UpdateSystem.fetchUpdateCandidate(downloadUrl, {
+      cache: 'no-store',
+      headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+    });
+    if (!response.ok) return { error: `HTTP ${response.status}` };
+    const parsed = parseUserscript(newCode);
+    if (parsed.error) return parsed;
+    return await UpdateSystem.applyUpdate(scriptId, newCode, { force: true, sourceUrl: downloadUrl });
+  } catch (error) {
+    return { error: error?.message || String(error) };
+  }
+}
+
+async function getScriptVersionHistory(scriptId) {
+  const script = await ScriptStorage.get(scriptId);
+  return { history: script?.versionHistory || [] };
+}
+
+async function rollbackScriptVersion(scriptId, index) {
+  return await _runExclusiveScriptOperation(scriptId, async () => {
+    const script = await ScriptStorage.get(scriptId);
+    if (!script) return { error: 'Script not found' };
+    if (!script.versionHistory || script.versionHistory.length === 0) {
+      return { error: 'No version history available' };
+    }
+    const targetIndex = index !== undefined ? index : script.versionHistory.length - 1;
+    const target = script.versionHistory[targetIndex];
+    if (!target) return { error: 'Version not found' };
+
+    const parsed = parseUserscript(target.code);
+    if (parsed.error) return parsed;
+
+    script.versionHistory.push({
+      version: script.meta.version,
+      code: script.code,
+      updatedAt: script.updatedAt || Date.now()
+    });
+    script.versionHistory.splice(targetIndex, 1);
+    if (script.versionHistory.length > 5) {
+      script.versionHistory = script.versionHistory.slice(-5);
+    }
+
+    script.code = target.code;
+    script.meta = parsed.meta;
+    script.updatedAt = Date.now();
+
+    await ScriptStorage.set(scriptId, script);
+    await reregisterScript(script);
+    notifyEasyCloudScriptSaved(scriptId);
+    return { success: true, script: { ...script, metadata: script.meta } };
+  });
+}
+
 // ============================================================================
 // Message Handlers
 // ============================================================================
@@ -6005,6 +6064,30 @@ backgroundActionRegistry.registerHandlers(ImportActionHandler.createImportAction
 backgroundActionRegistry.registerHandlers(TelemetryActionHandler.createTelemetryActionHandlers({
   handleBridgeTelemetry: (data, sender) => executionTelemetryHandler.handleBridgeTelemetry(data, sender),
   handleTrustedTelemetry: (action, data, sender) => executionTelemetryHandler.handleTrustedTelemetry(action, data, sender)
+}));
+backgroundActionRegistry.registerHandlers(UpdateActionHandler.createUpdateActionHandlers({
+  checkUpdates: scriptId => UpdateSystem.checkForUpdates(scriptId),
+  queueUpdates: async (scriptId, updates, source) => {
+    const candidates = Array.isArray(updates)
+      ? updates
+      : await UpdateSystem.checkForUpdates(scriptId || null);
+    return await UpdateSystem.queueUpdates(candidates, { source });
+  },
+  getPendingUpdates: () => UpdateSystem.getPendingUpdates(),
+  clearPendingUpdates: scriptId => UpdateSystem.clearPendingUpdates(scriptId || null),
+  applyPendingUpdate: (scriptId, force) => UpdateSystem.applyPendingUpdate(scriptId, { force }),
+  applySafePendingUpdates: scriptIds => UpdateSystem.applySafePendingUpdates(scriptIds || null),
+  getRecentUpdates: () => UpdateSystem.getRecentUpdates(),
+  clearRecentUpdates: () => UpdateSystem.clearRecentUpdates(),
+  forceUpdate: scriptId => forceUpdateScript(scriptId),
+  applyUpdate: (scriptId, code, sourceUrl) => UpdateSystem.applyUpdate(scriptId, code, { sourceUrl }),
+  getVersionHistory: scriptId => getScriptVersionHistory(scriptId),
+  rollbackScript: (scriptId, index) => rollbackScriptVersion(scriptId, index),
+  getSubscriptions: () => SubscriptionSystem.list(),
+  addSubscription: (url, name) => SubscriptionSystem.addSubscription(url, name),
+  refreshSubscription: id => SubscriptionSystem.refreshSubscription(id),
+  refreshSubscriptions: () => SubscriptionSystem.refreshSubscriptions(),
+  removeSubscription: id => SubscriptionSystem.removeSubscription(id)
 }));
 backgroundActionRegistry.registerHandlers(MessageRouter.createBackgroundDomainHandlers(
   GMValuesHandler.GM_VALUES_ACTIONS,
@@ -7097,117 +7180,6 @@ async function handleMessage(message, sender) {
       case 'resetSettings':
         return await SettingsManager.reset();
         
-      // Updates
-      case 'checkUpdates':
-        return await UpdateSystem.checkForUpdates(data?.scriptId);
-
-      case 'queueUpdates': {
-        const updates = Array.isArray(data?.updates)
-          ? data.updates
-          : await UpdateSystem.checkForUpdates(data?.scriptId || null);
-        return await UpdateSystem.queueUpdates(updates, { source: data?.source || 'manual-check' });
-      }
-
-      case 'getPendingUpdates':
-        return await UpdateSystem.getPendingUpdates();
-
-      case 'clearPendingUpdates':
-        return await UpdateSystem.clearPendingUpdates(data?.scriptId || null);
-
-      case 'applyPendingUpdate':
-        return await UpdateSystem.applyPendingUpdate(data.scriptId, { force: data?.force === true });
-
-      case 'applySafePendingUpdates':
-        return await UpdateSystem.applySafePendingUpdates(data?.scriptIds || null);
-
-      case 'getSubscriptions':
-        return await SubscriptionSystem.list();
-
-      case 'addSubscription':
-        return await SubscriptionSystem.addSubscription(data?.url || '', data?.name || '');
-
-      case 'refreshSubscription':
-        return await SubscriptionSystem.refreshSubscription(data?.subscriptionId || data?.id || data?.url || '');
-
-      case 'refreshSubscriptions':
-        return await SubscriptionSystem.refreshSubscriptions();
-
-      case 'removeSubscription':
-        return await SubscriptionSystem.removeSubscription(data?.subscriptionId || data?.id || data?.url || '');
-
-      // Phase 12.10 — recently-applied updates for the in-app dashboard banner.
-      case 'getRecentUpdates':
-        return UpdateSystem.getRecentUpdates();
-
-      case 'clearRecentUpdates':
-        UpdateSystem.clearRecentUpdates();
-        return { success: true };
-
-      case 'forceUpdate': {
-        // Force re-download bypassing HTTP cache
-        const scriptId = data.scriptId;
-        const script = await ScriptStorage.get(scriptId);
-        if (!script) return { error: 'Script not found' };
-        const downloadUrl = script.meta.downloadURL || script.meta.updateURL;
-        if (!downloadUrl) return { error: 'No download URL configured' };
-        try {
-          const { response, code: newCode } = await UpdateSystem.fetchUpdateCandidate(downloadUrl, {
-            cache: 'no-store',
-            headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
-          });
-          if (!response.ok) return { error: `HTTP ${response.status}` };
-          const parsed = parseUserscript(newCode);
-          if (parsed.error) return parsed;
-          // Apply as update (force=true bypasses userModified guard)
-          return await UpdateSystem.applyUpdate(scriptId, newCode, { force: true, sourceUrl: downloadUrl });
-        } catch (e) {
-          return { error: e.message };
-        }
-      }
-
-      case 'applyUpdate':
-        return await UpdateSystem.applyUpdate(data.scriptId, data.code, { sourceUrl: data.sourceUrl || '' });
-
-      case 'getVersionHistory': {
-        const script = await ScriptStorage.get(data.scriptId);
-        return { history: script?.versionHistory || [] };
-      }
-
-      case 'rollbackScript': {
-        return await _runExclusiveScriptOperation(data.scriptId, async () => {
-          const script = await ScriptStorage.get(data.scriptId);
-          if (!script) return { error: 'Script not found' };
-          if (!script.versionHistory || script.versionHistory.length === 0) {
-            return { error: 'No version history available' };
-          }
-          const targetIdx = data.index !== undefined ? data.index : script.versionHistory.length - 1;
-          const target = script.versionHistory[targetIdx];
-          if (!target) return { error: 'Version not found' };
-
-          const parsed = parseUserscript(target.code);
-          if (parsed.error) return parsed;
-
-          script.versionHistory.push({
-            version: script.meta.version,
-            code: script.code,
-            updatedAt: script.updatedAt || Date.now()
-          });
-          script.versionHistory.splice(targetIdx, 1);
-          if (script.versionHistory.length > 5) {
-            script.versionHistory = script.versionHistory.slice(-5);
-          }
-
-          script.code = target.code;
-          script.meta = parsed.meta;
-          script.updatedAt = Date.now();
-
-          await ScriptStorage.set(data.scriptId, script);
-          await reregisterScript(script);
-          notifyEasyCloudScriptSaved(data.scriptId);
-          return { success: true, script: { ...script, metadata: script.meta } };
-        });
-      }
-
       // Sync
       case 'sync': {
         const result = await CloudSync.sync();

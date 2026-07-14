@@ -78,6 +78,15 @@ export type {
   TelemetryActionDependencies,
 } from './telemetry-action-handler';
 export {
+  UPDATE_BACKGROUND_ACTIONS,
+  UpdateActionHandler,
+  createUpdateActionHandlers,
+} from './update-action-handler';
+export type {
+  UpdateActionDependencies,
+  UpdateBackgroundAction,
+} from './update-action-handler';
+export {
   GM_AUDIO_ACTIONS,
   GMAudioHandler,
   handleGMAudioMessage,
