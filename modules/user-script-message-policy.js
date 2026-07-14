@@ -43,6 +43,7 @@ const UserScriptMessagePolicy = (() => {
     "chainDomEvent",
     "getChainDomEventTriggers",
     "netlog_record",
+    "reportDocumentReady",
     "reportExecError",
     "reportExecTime"
   ]);

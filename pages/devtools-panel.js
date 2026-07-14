@@ -29,7 +29,8 @@
 
   function tDevtools(key, fallback = key, placeholders = {}) {
     const i18n = getDevtoolsI18n();
-    return i18n?.getMessage ? i18n.getMessage(key, placeholders) : fallback;
+    const message = i18n?.getMessage ? i18n.getMessage(key, placeholders) : '';
+    return message && message !== key ? message : fallback;
   }
 
   function requestLabel(count) {
@@ -68,6 +69,7 @@
 
   let netLog = [];
   let scripts = [];
+  let executionDiagnostics = { documents: [], summary: {} };
   let filterText = '';
   let selectedRow = null;
   let focusedRow = null;
@@ -315,9 +317,11 @@
     const quiet = options.quiet === true;
     setRefreshBusy(true, { quiet });
     try {
-      const [logResult, scriptsResult] = await Promise.allSettled([
+      const inspectedTabId = Number(chrome.devtools?.inspectedWindow?.tabId);
+      const [logResult, scriptsResult, diagnosticsResult] = await Promise.allSettled([
         chrome.runtime.sendMessage({ action: 'getNetworkLog', limit: 200 }),
-        chrome.runtime.sendMessage({ action: 'getScripts' })
+        chrome.runtime.sendMessage({ action: 'getScripts' }),
+        chrome.runtime.sendMessage({ action: 'getExecutionDiagnostics', tabId: inspectedTabId })
       ]);
       const failures = [];
       if (logResult.status === 'fulfilled') netLog = logResult.value || [];
@@ -327,6 +331,11 @@
         scripts = val?.scripts || Object.values(val || {});
       } else {
         failures.push(tDevtools('devtoolsScriptStatsLabel', 'script stats'));
+      }
+      if (diagnosticsResult.status === 'fulfilled') {
+        executionDiagnostics = diagnosticsResult.value || { documents: [], summary: {} };
+      } else {
+        failures.push(tDevtools('devtoolsDocumentDiagnosticsLabel', 'document diagnostics'));
       }
       renderNetwork();
       renderExecution();
@@ -605,6 +614,34 @@
   }
 
   // ── Execution rendering ───────────────────────────────────────────────────
+  function getScriptDocumentStatus(scriptId) {
+    const documents = Array.isArray(executionDiagnostics?.documents) ? executionDiagnostics.documents : [];
+    const matching = documents.filter(document => Array.isArray(document.scriptIds) && document.scriptIds.includes(scriptId));
+    const current = matching.find(document => document.isCurrent);
+    const staleCount = matching.filter(document => document.stale).length;
+    if (current) {
+      const frame = current.frameId === 0
+        ? tDevtools('devtoolsTopFrame', 'Top frame')
+        : tDevtools('devtoolsFrameNumber', 'Frame {frame}', { frame: String(current.frameId) });
+      const shortId = current.documentId ? String(current.documentId).slice(0, 8) : tDevtools('devtoolsLegacyDocument', 'legacy');
+      return {
+        label: `${frame} · ${shortId}${staleCount ? ` +${staleCount} earlier` : ''}`,
+        title: staleCount
+          ? tDevtools('devtoolsCurrentAndEarlierActivity', 'Activity exists in the current document and {count} earlier document groups.', { count: String(staleCount) })
+          : tDevtools('devtoolsCurrentDocumentActivity', 'Activity belongs to the current document.'),
+        stale: false
+      };
+    }
+    if (staleCount) {
+      return {
+        label: staleCount === 1 ? tDevtools('devtoolsEarlierDocument', 'Earlier document') : tDevtools('devtoolsEarlierDocuments', '{count} earlier documents', { count: String(staleCount) }),
+        title: tDevtools('devtoolsEarlierDocumentActivity', 'This activity belongs to a document that was replaced by navigation.'),
+        stale: true
+      };
+    }
+    return { label: tDevtools('devtoolsDocumentUnavailable', 'Not available'), title: '', stale: true };
+  }
+
   function renderExecution() {
     const tbody = $('execTableBody');
     tbody.replaceChildren();
@@ -636,7 +673,7 @@
       const detail = filterText && executionScripts.length
         ? tDevtools('devtoolsNoScriptsMatchExecutionDetail', 'No scripts match "{query}". Reset the filter to return to execution stats.', { query: filterText })
         : tDevtools('devtoolsNoExecutionDataDetail', 'Scripts will appear here after they run.');
-      safeSetHtml(tr, `<td colspan="6" class="table-empty-cell">${tableEmptyMarkup(title, detail, 'RUN')}</td>`);
+      safeSetHtml(tr, `<td colspan="7" class="table-empty-cell">${tableEmptyMarkup(title, detail, 'RUN')}</td>`);
       tbody.appendChild(tr);
       return;
     }
@@ -646,6 +683,7 @@
       const avg = st.avgTime != null ? st.avgTime : (st.totalTime / st.runs);
       const barPct = Math.round((st.totalTime / maxTotal) * 100);
       const barClass = avg < 50 ? 'fast' : avg < 200 ? 'med' : 'slow';
+      const documentStatus = getScriptDocumentStatus(script.id);
       const tr = document.createElement('tr');
       safeSetHtml(tr, `
         <td title="${escapeHtml(script.meta?.name || script.id)}">${escapeHtml((script.meta?.name || script.id).slice(0, 30))}</td>
@@ -653,6 +691,7 @@
         <td class="${durationClass(avg)}">${formatDuration(avg)}</td>
         <td>${formatDuration(st.totalTime)}</td>
         <td class="${st.errors > 0 ? 'status-err' : ''}">${st.errors || 0}</td>
+        <td class="exec-document ${documentStatus.stale ? 'stale' : ''}" title="${escapeHtml(documentStatus.title)}">${escapeHtml(documentStatus.label)}</td>
         <td>
           <div class="exec-bar-wrap"><div class="exec-bar ${barClass}" style="width:${barPct}%"></div></div>
         </td>
@@ -737,12 +776,13 @@
   function exportTrace() {
     const version = chrome.runtime?.getManifest?.()?.version || 'unknown';
     const executionEntries = scripts.filter(s => s.stats && s.stats.runs > 0);
-    if (!netLog.length && !executionEntries.length) {
+    const documentEntries = Array.isArray(executionDiagnostics?.documents) ? executionDiagnostics.documents : [];
+    if (!netLog.length && !executionEntries.length && !documentEntries.length) {
       setToolbarStatus(tDevtools('devtoolsNoTraceExport', 'No network or execution data to export yet.'), 'error');
       return;
     }
     const trace = {
-      version: '1.0',
+      version: '1.1',
       generator: { name: 'ScriptVault', version },
       exportedAt: new Date().toISOString(),
       network: netLog.map(e => ({
@@ -764,12 +804,18 @@
         avgTime: s.stats.avgTime != null ? s.stats.avgTime : (s.stats.totalTime / s.stats.runs),
         totalTime: s.stats.totalTime || 0,
         errors: s.stats.errors || 0,
+        lastTabId: s.stats.lastTabId ?? null,
+        lastDocumentId: s.stats.lastDocumentId || null,
+        lastFrameId: s.stats.lastFrameId ?? null,
       })),
+      documents: documentEntries,
       summary: {
         totalRequests: netLog.length,
         totalErrors: netLog.filter(e => e.error || (e.status && e.status >= 400)).length,
         totalBytes: netLog.reduce((s, e) => s + (e.responseSize || 0), 0),
         scriptsWithStats: executionEntries.length,
+        currentDocumentEvents: executionDiagnostics?.summary?.currentEvents || 0,
+        staleDocumentEvents: executionDiagnostics?.summary?.staleEvents || 0,
       },
     };
     const blob = new Blob([JSON.stringify(trace, null, 2)], { type: 'application/json' });

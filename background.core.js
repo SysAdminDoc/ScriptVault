@@ -5762,6 +5762,13 @@ async function importFromZip(zipData, options = {}) {
 // Message Handlers
 // ============================================================================
 
+// Browser document/frame ids are intentionally kept in memory only. They are
+// diagnostic context for the current service-worker lifetime, not durable user
+// data. The bounded store keeps earlier-document events distinct after a
+// same-tab navigation so DevTools and status surfaces do not imply that stale
+// frame activity belongs to the page currently visible in the tab.
+const executionDiagnosticsStore = ExecutionDiagnostics.createExecutionDiagnosticsStore();
+
 // USER_SCRIPT world message listener (for GM_* APIs)
 // This is SEPARATE from onMessage and required for messaging: true to work
 //
@@ -7991,7 +7998,8 @@ async function handleMessage(message, sender) {
           };
         }).sort((a, b) => a.name.localeCompare(b.name));
 
-        return { url, userScriptsAvailable, globallyEnabled, urlBlocked, scripts };
+        const executionDiagnostics = executionDiagnosticsStore.snapshot(Number(data.tabId));
+        return { url, userScriptsAvailable, globallyEnabled, urlBlocked, executionDiagnostics, scripts };
       }
 
       // Update badge for specific tab
@@ -8196,6 +8204,10 @@ async function handleMessage(message, sender) {
         return { allStats };
       }
 
+      case 'getExecutionDiagnostics': {
+        return executionDiagnosticsStore.snapshot(Number(data.tabId));
+      }
+
       case 'resetScriptStats': {
         const scriptId = data.scriptId;
         const script = await ScriptStorage.get(scriptId);
@@ -8203,6 +8215,14 @@ async function handleMessage(message, sender) {
           script.stats = { runs: 0, totalTime: 0, avgTime: 0, lastRun: 0, errors: 0 };
           await ScriptStorage.set(scriptId, script);
         }
+        return { success: true };
+      }
+
+      case 'reportDocumentReady': {
+        executionDiagnosticsStore.record(sender, {
+          type: 'document-ready',
+          url: data.url || sender?.tab?.url || ''
+        });
         return { success: true };
       }
 
@@ -8220,8 +8240,17 @@ async function handleMessage(message, sender) {
           }
           script.stats.avgTime = script.stats.runs > 0 ? Math.round(script.stats.totalTime / script.stats.runs * 100) / 100 : 0;
           script.stats.lastRun = Date.now();
+          if (typeof sender?.tab?.id === 'number') script.stats.lastTabId = sender.tab.id;
+          if (typeof sender?.documentId === 'string') script.stats.lastDocumentId = sender.documentId;
+          if (typeof sender?.frameId === 'number') script.stats.lastFrameId = sender.frameId;
           const _statsUrlMode = (SettingsManager.cache && SettingsManager.cache.statsUrlRetention) || 'full';
           script.stats.lastUrl = _retainStatsUrl(data.url, _statsUrlMode);
+          executionDiagnosticsStore.record(sender, {
+            type: 'run',
+            scriptId,
+            duration: data.time,
+            url: data.url || sender?.tab?.url || ''
+          });
           // Update cache only (debounced save to avoid excessive storage writes)
           _debouncedStatsSave();
           triggerChainsForAfterScript(scriptId, {
@@ -8243,6 +8272,15 @@ async function handleMessage(message, sender) {
           script.stats.errors++;
           script.stats.lastError = data.error;
           script.stats.lastErrorTime = Date.now();
+          if (typeof sender?.tab?.id === 'number') script.stats.lastTabId = sender.tab.id;
+          if (typeof sender?.documentId === 'string') script.stats.lastDocumentId = sender.documentId;
+          if (typeof sender?.frameId === 'number') script.stats.lastFrameId = sender.frameId;
+          executionDiagnosticsStore.record(sender, {
+            type: 'error',
+            scriptId,
+            error: data.error,
+            url: data.url || sender?.tab?.url || ''
+          });
           // Update cache only (debounced save to avoid excessive storage writes)
           _debouncedStatsSave();
         }
@@ -10272,6 +10310,7 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
     SessionState.persistAudioWatchedTabs();
   }
   closeGMWebSocketsForTab(tabId);
+  executionDiagnosticsStore.clear(tabId);
 });
 
 // GM_notification onclick/ondone: fire callbacks on notification interaction
@@ -15386,7 +15425,7 @@ ${libraryExports}
   const apiClose = `
     } catch (e) {
       // Report error to background for profiling
-      sendToBackground('reportExecError', { scriptId, error: (e?.message || String(e)).slice(0, 200) }).catch(() => {});
+      sendToBackground('reportExecError', { scriptId, error: (e?.message || String(e)).slice(0, 200), url: location.href }).catch(() => {});
     } finally {
       // Report execution time to background for profiling
       const __elapsed = Math.round((performance.now() - __startTime) * 100) / 100;

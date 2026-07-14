@@ -142,6 +142,13 @@ describe('TS runtime module generator', () => {
         exportName: 'UserScriptMessagePolicy',
       }),
       expect.objectContaining({
+        id: 'execution-diagnostics',
+        source: 'src/background/execution-diagnostics.ts',
+        output: 'modules/execution-diagnostics.js',
+        exportName: 'ExecutionDiagnostics',
+        selfExportName: 'ExecutionDiagnostics',
+      }),
+      expect.objectContaining({
         id: 'message-router',
         source: 'src/background/message-router.ts',
         output: 'modules/message-router.js',
@@ -340,6 +347,16 @@ describe('TS runtime module generator', () => {
     expect(text).toContain('const MessageRouter = (() => {');
     expect(text).toContain('self.MessageRouter = MessageRouter;');
     expect(text).toContain('BACKGROUND_MESSAGE_ACTIONS');
+  });
+
+  it('generates the bounded execution diagnostics store before the raw core bridge', async () => {
+    const definition = TS_RUNTIME_MODULES.find((entry) => entry.id === 'execution-diagnostics');
+    const text = await buildTsRuntimeModuleText(definition, { rootDir: ROOT });
+
+    expect(text).toContain('Generated from src/background/execution-diagnostics.ts');
+    expect(text).toContain('const ExecutionDiagnostics = (() => {');
+    expect(text).toContain('self.ExecutionDiagnostics = ExecutionDiagnostics;');
+    expect(text).toContain('createExecutionDiagnosticsStore');
   });
 
   it('generates the extracted GM audio handler before the raw core bridge', async () => {

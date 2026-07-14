@@ -165,6 +165,9 @@ export interface ScriptStats {
   errors: number;
   lastError?: string;
   lastErrorTime?: number;
+  lastTabId?: number;
+  lastDocumentId?: string;
+  lastFrameId?: number;
 }
 
 /** A previous version stored for rollback */

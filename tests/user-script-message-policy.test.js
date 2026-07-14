@@ -16,6 +16,7 @@ describe('user-script message policy', () => {
     expect(isUserScriptAllowedAction('GM.getValue')).toBe(true);
     expect(isUserScriptAllowedAction('reportExecError')).toBe(true);
     expect(isUserScriptAllowedAction('reportExecTime')).toBe(true);
+    expect(isUserScriptAllowedAction('reportDocumentReady')).toBe(true);
     expect(isUserScriptAllowedAction('netlog_record')).toBe(true);
     expect(isUserScriptAllowedAction('getChainDomEventTriggers')).toBe(true);
     expect(isUserScriptAllowedAction('chainDomEvent')).toBe(true);
@@ -33,6 +34,7 @@ describe('user-script message policy', () => {
       'chainDomEvent',
       'getChainDomEventTriggers',
       'netlog_record',
+      'reportDocumentReady',
       'reportExecError',
       'reportExecTime',
     ]);

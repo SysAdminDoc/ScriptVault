@@ -64,6 +64,8 @@
         .sp-status { display: none; padding: 7px 9px; border: 1px solid rgb(from var(--sv-accent) r g b / 0.24); border-radius: var(--radius-panel); background: rgb(from var(--sv-accent) r g b / 0.1); color: var(--text); font-size: 0.6875rem; flex-shrink: 0; }
         .sp-status.show { display: block; }
         .sp-status.error { border-color: rgba(239,68,68,0.34); background: rgba(239,68,68,0.1); }
+        .sp-document-status { padding: 5px 8px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--sv-overlay-faint); color: var(--text-muted); font-size: 0.625rem; line-height: 1.35; flex-shrink: 0; }
+        .sp-document-status[hidden] { display: none; }
         .sp-context-banner { appearance: none; width: 100%; flex-shrink: 0; padding: 8px 10px; border: 1px solid rgba(239,68,68,0.36); border-radius: var(--radius-panel); background: linear-gradient(180deg, rgba(239,68,68,0.14), rgba(239,68,68,0.06)), var(--bg-raised); color: var(--text); font: inherit; font-size: 0.6875rem; font-weight: 700; line-height: 1.35; text-align: center; cursor: pointer; transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease, transform 0.15s ease; }
         .sp-context-banner:hover { border-color: var(--danger); background: linear-gradient(180deg, rgba(239,68,68,0.18), rgba(239,68,68,0.08)), var(--bg-raised); transform: translateY(-1px); }
         .sp-host-access { display: none; padding: 8px 9px; border: 1px solid rgba(245,158,11,0.36); border-radius: var(--radius-panel); background: rgba(245,158,11,0.12); color: var(--text); font-size: 0.6875rem; flex-shrink: 0; gap: 7px; }
@@ -492,6 +494,7 @@
     </div>
 
     <div class="sp-status" id="statusMessage" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+    <div class="sp-document-status" id="documentActivity" role="status" aria-live="polite" aria-atomic="true" hidden></div>
     <div class="sp-host-access" id="hostAccessPanel" role="status" aria-live="polite" aria-atomic="true" hidden>
         <div class="sp-host-access-message" id="hostAccessMessage"></div>
         <button class="sp-host-access-btn" id="btnGrantHostAccess" type="button" data-i18n="sideGrantSiteAccess">Grant Site Access</button>

@@ -165,6 +165,13 @@ export const TS_RUNTIME_MODULES = [
     exportName: 'UserScriptMessagePolicy',
   },
   {
+    id: 'execution-diagnostics',
+    source: 'src/background/execution-diagnostics.ts',
+    output: 'modules/execution-diagnostics.js',
+    exportName: 'ExecutionDiagnostics',
+    selfExportName: 'ExecutionDiagnostics',
+  },
+  {
     id: 'message-router',
     source: 'src/background/message-router.ts',
     output: 'modules/message-router.js',

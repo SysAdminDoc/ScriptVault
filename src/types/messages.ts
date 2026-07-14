@@ -200,6 +200,17 @@ interface RescheduleScript {
 interface DiagnoseScripts {
   action: 'diagnoseScripts';
   url?: string;
+  tabId?: number;
+}
+
+interface GetExecutionDiagnostics {
+  action: 'getExecutionDiagnostics';
+  tabId: number;
+}
+
+interface ReportDocumentReady {
+  action: 'reportDocumentReady';
+  url?: string;
 }
 
 interface PermanentlyDelete {
@@ -1223,6 +1234,7 @@ interface ReportExecError {
   action: 'reportExecError';
   scriptId: string;
   error: string;
+  url?: string;
 }
 
 // ─── Network Log ─────────────────────────────────────────────────────
@@ -1704,7 +1716,7 @@ export type BackgroundMessage =
   // Resources
   | FetchResource | GMGetResourceText | GMGetResourceURL | GMLoadScript
   // Stats
-  | GetScriptStatsMsg | ResetScriptStats | ReportExecTime | ReportExecError
+  | GetScriptStatsMsg | GetExecutionDiagnostics | ResetScriptStats | ReportDocumentReady | ReportExecTime | ReportExecError
   // Network log
   | GetNetworkLog | GetNetworkLogStats | ClearNetworkLog | NetlogRecord
   // Analysis
@@ -2035,7 +2047,9 @@ export interface ResponseMap {
   getNetworkLog: { entries: unknown[] };
   clearNetworkLog: SuccessResponse;
   getScriptStats: unknown;
+  getExecutionDiagnostics: import('../background/execution-diagnostics').ExecutionDiagnosticsSnapshot;
   resetScriptStats: SuccessResponse;
+  reportDocumentReady: SuccessResponse;
   getScriptConsole: { entries: unknown[] };
   clearScriptConsole: SuccessResponse;
 
@@ -2162,6 +2176,7 @@ export interface ResponseMap {
     userScriptsAvailable: boolean;
     globallyEnabled: boolean;
     urlBlocked: boolean;
+    executionDiagnostics: import('../background/execution-diagnostics').ExecutionDiagnosticsSnapshot;
     scripts: Array<{
       id: string;
       name: string;

@@ -131,6 +131,7 @@ const MessageRouter = (() => {
     "getCollections",
     "getErrorLog",
     "getErrorLogGrouped",
+    "getExecutionDiagnostics",
     "getExtensionInfo",
     "getExtensionStatus",
     "getFolders",
@@ -207,6 +208,7 @@ const MessageRouter = (() => {
     "reorderScripts",
     "repairRuntimeState",
     "reportCSPFailure",
+    "reportDocumentReady",
     "reportExecError",
     "reportExecTime",
     "rescheduleChains",
@@ -266,6 +268,7 @@ const MessageRouter = (() => {
     "logError",
     "netlog_record",
     "reportCSPFailure",
+    "reportDocumentReady",
     "reportExecError",
     "reportExecTime",
     "scriptConsoleCapture"

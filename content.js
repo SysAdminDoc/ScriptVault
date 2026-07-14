@@ -306,6 +306,12 @@
   });
   
   // Signal readiness without exposing additional bridge material to page code.
+  try {
+    Promise.resolve(chrome.runtime.sendMessage({
+      action: 'reportDocumentReady',
+      url: location.href
+    })).catch(() => {});
+  } catch (_) { /* extension context may have restarted */ }
   refreshChainDomEventTriggers();
   Object.defineProperty(window, '__ScriptVault_BridgeReady__', { value: true, writable: false, configurable: false });
   

@@ -2603,7 +2603,7 @@ ${libraryExports}
   const apiClose: string = `
     } catch (e) {
       // Report error to background for profiling
-      sendToBackground('reportExecError', { scriptId, error: (e?.message || String(e)).slice(0, 200) }).catch(() => {});
+      sendToBackground('reportExecError', { scriptId, error: (e?.message || String(e)).slice(0, 200), url: location.href }).catch(() => {});
     } finally {
       // Report execution time to background for profiling
       const __elapsed = Math.round((performance.now() - __startTime) * 100) / 100;

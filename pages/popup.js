@@ -722,7 +722,7 @@
         btn?.setAttribute('aria-expanded', 'true');
         safeSetHtml(panel, `<div class="diagnose-summary">${escapeHtml(tPopup('popupCheckingThisPage', 'Checking this page...'))}</div>`);
         try {
-            const res = await chrome.runtime.sendMessage({ action: 'diagnoseScripts', url: currentUrl });
+            const res = await chrome.runtime.sendMessage({ action: 'diagnoseScripts', url: currentUrl, tabId: currentTab?.id });
             renderDiagnostics(res);
         } catch (e) {
             safeSetHtml(panel, `<div class="diagnose-summary">${escapeHtml(tPopup('popupCouldNotReachBackground', 'Could not reach the background service.'))}</div>`);
@@ -751,6 +751,15 @@
                 ? 'All matching scripts are running on this page.'
                 : `${running} of ${scripts.length} script${scripts.length === 1 ? '' : 's'} running here.`
         )}</div>`;
+        const documentSummary = res?.executionDiagnostics?.summary || {};
+        const currentEvents = Number(documentSummary.currentEvents || 0);
+        const staleEvents = Number(documentSummary.staleEvents || 0);
+        if (currentEvents || staleEvents) {
+            const activityText = staleEvents
+                ? `${currentEvents} current-document event${currentEvents === 1 ? '' : 's'}; ${staleEvents} earlier-document event${staleEvents === 1 ? '' : 's'} kept separate.`
+                : `${currentEvents} event${currentEvents === 1 ? '' : 's'} recorded for the current document.`;
+            html += `<div class="diagnose-summary">${escapeHtml(activityText)}</div>`;
+        }
         for (const s of sorted) {
             const status = String(s.status || '').replace(/[^a-z-]/gi, '');
             html += `

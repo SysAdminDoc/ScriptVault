@@ -11,11 +11,13 @@ describe('DevTools trace export', () => {
   });
 
   it('produces a trace with version, generator, network, execution, and summary fields', () => {
-    expect(panelJs).toContain("version: '1.0'");
+    expect(panelJs).toContain("version: '1.1'");
     expect(panelJs).toContain('generator:');
     expect(panelJs).toContain('network:');
     expect(panelJs).toContain('execution:');
     expect(panelJs).toContain('summary:');
+    expect(panelJs).toContain('documents: documentEntries');
+    expect(panelJs).toContain('lastDocumentId:');
   });
 
   it('exports trace as JSON download with date-stamped filename', () => {

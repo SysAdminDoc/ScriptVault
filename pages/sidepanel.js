@@ -16,7 +16,8 @@
 
   function tSidepanel(key, fallback = key, placeholders = {}) {
     const i18n = getSidepanelI18n();
-    return i18n?.getMessage ? i18n.getMessage(key, placeholders) : fallback;
+    const message = i18n?.getMessage ? i18n.getMessage(key, placeholders) : '';
+    return message && message !== key ? message : fallback;
   }
 
   function applySidepanelI18n() {
@@ -38,6 +39,7 @@
   let searchRenderTimer = null;
   let currentPageCanRunScripts = false;
   let hostPermissionStatus = null;
+  let executionDiagnostics = { documents: [], summary: {} };
   let _refreshGeneration = 0;
   const pendingScriptActions = new Set();
   const SEARCH_RENDER_DEBOUNCE_MS = 90;
@@ -501,13 +503,16 @@
       updateUrlBar();
       const currentUrl = currentTab?.url || '';
       currentPageCanRunScripts = canMatchScriptsForUrl(currentUrl);
-      const [allRes, matchedRes, hostStatus] = await Promise.all([
+      const [allRes, matchedRes, hostStatus, documentStatus] = await Promise.all([
         chrome.runtime.sendMessage({ action: 'getScripts' }),
         currentPageCanRunScripts
           ? chrome.runtime.sendMessage({ action: 'getScriptsForUrl', url: currentUrl })
           : Promise.resolve([]),
         currentPageCanRunScripts
           ? chrome.runtime.sendMessage({ action: 'getHostPermissionStatus', url: currentUrl }).catch(() => null)
+          : Promise.resolve(null),
+        Number.isInteger(currentTab?.id)
+          ? chrome.runtime.sendMessage({ action: 'getExecutionDiagnostics', tabId: currentTab.id }).catch(() => null)
           : Promise.resolve(null)
       ]);
       // Phase 39.23 — VM #2516 cross-realm array guard. Coerce through
@@ -518,7 +523,9 @@
       allScripts = Array.isArray(rawAll) ? rawAll : Array.from(rawAll ?? []);
       pageScripts = Array.isArray(matchedRes) ? matchedRes : Array.from(matchedRes ?? []);
       hostPermissionStatus = hostStatus || null;
+      executionDiagnostics = documentStatus || { documents: [], summary: {} };
       syncLibraryControls();
+      renderDocumentActivity();
       renderPageScripts();
       renderAllScripts();
       renderHostAccessPanel();
@@ -569,6 +576,42 @@
     if (urlHostname) urlHostname.textContent = hostname || '(no page)';
     if (urlPath) urlPath.textContent = hostname ? path : '';
     if (urlBar) urlBar.title = url;
+  }
+
+  function renderDocumentActivity() {
+    const status = $('documentActivity');
+    if (!status) return;
+    const summary = executionDiagnostics?.summary || {};
+    const currentEvents = Number(summary.currentEvents || 0);
+    const staleEvents = Number(summary.staleEvents || 0);
+    const hasCurrentDocument = !!executionDiagnostics?.currentDocumentIdentity;
+    status.hidden = !hasCurrentDocument && !staleEvents;
+    if (status.hidden) {
+      status.textContent = '';
+      return;
+    }
+    status.textContent = staleEvents
+      ? tSidepanel('sideDocumentActivityWithHistory', '{current} current-document events · {stale} earlier-document events kept separate', {
+          current: numberFormatter.format(currentEvents),
+          stale: numberFormatter.format(staleEvents)
+        })
+      : currentEvents
+        ? tSidepanel('sideCurrentDocumentActivity', '{count} events in the current document', { count: numberFormatter.format(currentEvents) })
+        : tSidepanel('sideCurrentDocumentReady', 'Current document ready · waiting for script activity');
+  }
+
+  function getScriptDocumentActivity(scriptId) {
+    const documents = Array.isArray(executionDiagnostics?.documents) ? executionDiagnostics.documents : [];
+    const matching = documents.filter(document => Array.isArray(document.scriptIds) && document.scriptIds.includes(scriptId));
+    if (matching.some(document => document.isCurrent)) {
+      return matching.some(document => document.stale)
+        ? tSidepanel('sideRanCurrentAndEarlierDocument', 'Ran in this document; earlier activity retained')
+        : tSidepanel('sideRanCurrentDocument', 'Ran in this document');
+    }
+    if (matching.some(document => document.stale)) {
+      return tSidepanel('sideRanEarlierDocument', 'Last activity was in an earlier document');
+    }
+    return '';
   }
 
   // ── Render page scripts ──────────────────────────────────────────────────
@@ -763,7 +806,8 @@
     const hasError = stats.errors > 0;
     const avgMs = stats.avgTime;
     const errorLabel = tSidepanel(stats.errors === 1 ? 'errorSingular' : 'errorPlural', stats.errors === 1 ? 'error' : 'errors');
-    const detailText = isPageScript
+    const documentActivity = isPageScript ? getScriptDocumentActivity(script.id) : '';
+    let detailText = isPageScript
       ? (hasError
           ? tSidepanel('sideScriptErrorsRecorded', '{count} {errors} recorded', {
               count: numberFormatter.format(stats.errors),
@@ -773,6 +817,7 @@
             ? tSidepanel('sideAvailableOnThisPage', 'Available on this page')
             : tSidepanel('sidePausedForThisPage', 'Paused for this page'))
       : (meta.description || '');
+    if (documentActivity) detailText = [detailText, documentActivity].filter(Boolean).join(' · ');
     const averageLabel = avgMs != null && enabled
       ? (avgMs < 1000
           ? tSidepanel('sideAverageExecutionMs', 'average {ms} milliseconds', { ms: avgMs.toFixed(0) })

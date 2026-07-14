@@ -139,6 +139,8 @@
         .exec-bar.fast { background: var(--accent); }
         .exec-bar.med { background: var(--warning); }
         .exec-bar.slow { background: var(--danger); }
+        .exec-document { max-width: 170px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .exec-document.stale { color: var(--text-muted); font-style: italic; }
 
         /* ── Console panel ─────────────────────────────────────────────── */
         .console-wrap { flex: 1; overflow-y: auto; padding: 4px 0; }
@@ -432,6 +434,7 @@
                         <th style="width:80px" data-i18n="devtoolsAvgTimeHeader">Avg Time</th>
                         <th style="width:80px" data-i18n="devtoolsTotalTimeHeader">Total Time</th>
                         <th style="width:60px" data-i18n="devtoolsErrorsLabel">Errors</th>
+                        <th style="width:150px">Document / Frame</th>
                         <th style="width:100px" data-i18n="devtoolsRelativeLoadHeader">Relative Load</th>
                     </tr>
                 </thead>
