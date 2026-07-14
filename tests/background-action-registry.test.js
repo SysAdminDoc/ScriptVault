@@ -15,6 +15,10 @@ import {
   UPDATE_BACKGROUND_ACTIONS,
   createUpdateActionHandlers,
 } from '../src/background/update-action-handler.ts';
+import {
+  SYNC_BACKGROUND_ACTIONS,
+  createSyncActionHandlers,
+} from '../src/background/sync-action-handler.ts';
 
 describe('typed background action registry', () => {
   it('normalizes flat and nested runtime messages before dispatch', async () => {
@@ -151,5 +155,34 @@ describe('typed background action registry', () => {
       'manual-check',
     );
     expect(dependencies.refreshSubscription).toHaveBeenCalledWith('subscription-1');
+  });
+
+  it('routes sync aliases and keeps credential import/export opt-in', async () => {
+    const dependencies = Object.fromEntries([
+      'sync', 'test', 'getLastResult', 'health', 'preview', 'connect',
+      'disconnect', 'status', 'export', 'import', 'cloudStatus',
+    ].map(name => [name, vi.fn(async () => ({ success: true }))]));
+    const registry = createBackgroundActionRegistry(createSyncActionHandlers(dependencies));
+
+    await registry.dispatch({ action: 'syncNow' }, {});
+    await registry.dispatch({ action: 'cloudExport', provider: 'webdav' }, {});
+    await registry.dispatch({
+      action: 'cloudImport',
+      data: { provider: 'webdav', importSettings: true, trustImportedScripts: true },
+    }, {});
+
+    expect(registry.registeredActions()).toEqual(SYNC_BACKGROUND_ACTIONS);
+    expect(dependencies.sync).toHaveBeenCalledTimes(1);
+    expect(dependencies.export).toHaveBeenCalledWith('webdav', {
+      includeSettings: true,
+      includeStorage: true,
+      includeSettingsCredentials: false,
+    });
+    expect(dependencies.import).toHaveBeenCalledWith('webdav', {
+      importSettings: true,
+      importStorage: true,
+      importSettingsCredentials: false,
+      trustImportedScripts: true,
+    });
   });
 });

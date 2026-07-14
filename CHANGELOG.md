@@ -4,6 +4,10 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Typed cloud-sync dispatch without weakening import trust.** Manual sync,
+  provider lifecycle, dry-run, health, and remote import/export actions now
+  share a generated contract that keeps credentials and imported-script trust
+  explicitly opt-in.
 - **Typed update and subscription dispatch end to end.** Pending-update,
   forced-update, rollback, version-history, and subscription messages now use
   one generated action/response contract instead of duplicated switch cases.

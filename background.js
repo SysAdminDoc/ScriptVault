@@ -23317,6 +23317,96 @@ if (typeof self !== 'undefined') {
 }
 
 // ============================================================================
+// Generated from src/background/sync-action-handler.ts; do not edit by hand.
+// Run `node scripts/generate-ts-runtime-modules.mjs` or `npm run build:bg`.
+// ============================================================================
+
+const SyncActionHandler = (() => {
+  const module = { exports: {} };
+  const exports = module.exports;
+  "use strict";
+  var __defProp = Object.defineProperty;
+  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, { get: all[name], enumerable: true });
+  };
+  var __copyProps = (to, from, except, desc) => {
+    if (from && typeof from === "object" || typeof from === "function") {
+      for (let key of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(to, key) && key !== except)
+          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+    }
+    return to;
+  };
+  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+  // src/background/sync-action-handler.ts
+  var sync_action_handler_exports = {};
+  __export(sync_action_handler_exports, {
+    SYNC_BACKGROUND_ACTIONS: () => SYNC_BACKGROUND_ACTIONS,
+    SyncActionHandler: () => SyncActionHandler,
+    createSyncActionHandlers: () => createSyncActionHandlers,
+    default: () => sync_action_handler_default
+  });
+  module.exports = __toCommonJS(sync_action_handler_exports);
+  var SYNC_BACKGROUND_ACTIONS = [
+    "sync",
+    "syncNow",
+    "testSync",
+    "getLastSyncResult",
+    "syncProviderHealth",
+    "syncDryRunPreview",
+    "connectSyncProvider",
+    "disconnectSyncProvider",
+    "revokeSyncProvider",
+    "getSyncProviderStatus",
+    "cloudExport",
+    "cloudImport",
+    "cloudStatus"
+  ];
+  function createSyncActionHandlers(dependencies) {
+    const handlers = {
+      sync: () => dependencies.sync(),
+      syncNow: () => dependencies.sync(),
+      testSync: ({ message }) => dependencies.test(message.provider),
+      getLastSyncResult: () => dependencies.getLastResult(),
+      syncProviderHealth: ({ message }) => dependencies.health(message.provider),
+      syncDryRunPreview: ({ message }) => dependencies.preview(message.provider),
+      connectSyncProvider: ({ message }) => dependencies.connect(message.provider),
+      disconnectSyncProvider: ({ message }) => dependencies.disconnect(message.provider),
+      revokeSyncProvider: ({ message }) => dependencies.disconnect(message.provider),
+      getSyncProviderStatus: ({ message }) => dependencies.status(message.provider),
+      cloudExport: ({ message }) => dependencies.export(message.provider, {
+        includeSettings: message.includeSettings !== false,
+        includeStorage: message.includeStorage !== false,
+        includeSettingsCredentials: message.includeSettingsCredentials === true
+      }),
+      cloudImport: ({ message }) => dependencies.import(message.provider, {
+        importSettings: message.importSettings === true,
+        importStorage: message.importStorage !== false,
+        importSettingsCredentials: message.importSettingsCredentials === true,
+        trustImportedScripts: message.trustImportedScripts === true
+      }),
+      cloudStatus: ({ message }) => dependencies.cloudStatus(message.provider)
+    };
+    return Object.freeze(handlers);
+  }
+  var SyncActionHandler = Object.freeze({
+    SYNC_BACKGROUND_ACTIONS,
+    createSyncActionHandlers
+  });
+  var sync_action_handler_default = SyncActionHandler;
+  return module.exports.default || module.exports.SyncActionHandler || module.exports;
+})();
+
+if (typeof self !== 'undefined') {
+  self.SyncActionHandler = SyncActionHandler;
+}
+
+// ============================================================================
 // Generated from src/background/message-router.ts; do not edit by hand.
 // Run `node scripts/generate-ts-runtime-modules.mjs` or `npm run build:bg`.
 // ============================================================================
@@ -45252,6 +45342,159 @@ async function rollbackScriptVersion(scriptId, index) {
   });
 }
 
+async function runCloudSyncAction() {
+  const result = await CloudSync.sync();
+  await maybeRegisterScriptsAfterSuccessfulSync(result);
+  await persistLastSyncResult(result);
+  return result;
+}
+
+async function testCloudSyncProvider(providerOverride) {
+  const settings = await getEffectiveSyncSettings(await SettingsManager.get());
+  const providerName = providerOverride || settings.syncProvider;
+  const provider = CloudSync.providers[providerName];
+  if (!provider) return { ok: false, error: `Unknown provider: ${providerName}` };
+  try {
+    const raw = await provider.test(settings);
+    if (typeof raw === 'boolean') return { ok: raw };
+    if (raw && typeof raw === 'object') {
+      const ok = raw.success === true || raw.ok === true;
+      const error = raw.error || raw.message || null;
+      const hint = !ok ? (
+        error?.toLowerCase().includes('401') ? 'Authentication failed — re-connect the account.' :
+        error?.toLowerCase().includes('403') ? 'Server rejected the credentials — check the user has write access.' :
+        error?.toLowerCase().includes('404') ? 'Endpoint not found — verify the URL.' :
+        error?.toLowerCase().includes('network') ? 'Network error — check connectivity and CORS.' :
+        null
+      ) : null;
+      return hint ? { ok, error, hint } : { ok, error };
+    }
+    return { ok: false, error: 'Provider returned no status' };
+  } catch (error) {
+    return { ok: false, error: error?.message || String(error) };
+  }
+}
+
+async function connectCloudSyncProvider(providerName) {
+  const provider = CloudSyncProviders[providerName];
+  if (!provider) return { success: false, error: 'Unknown provider' };
+
+  try {
+    const settings = await getEffectiveSyncSettings(await SettingsManager.get());
+    const result = await provider.connect(settings);
+    if (result.success) {
+      const updates = {};
+      if (providerName === 'googledrive') {
+        updates.googleDriveConnected = true;
+        updates.googleDriveUser = result.user;
+      } else if (providerName === 'dropbox') {
+        updates.dropboxToken = result.token;
+        updates.dropboxRefreshToken = result.refreshToken || '';
+        if (result.user) updates.dropboxUser = result.user;
+        const status = await provider.getStatus({ dropboxToken: result.token });
+        if (status.user) updates.dropboxUser = status.user;
+      }
+      updates.syncProvider = providerName;
+      await persistSyncSettingsUpdate(updates, settings);
+    }
+    return result;
+  } catch (error) {
+    return { success: false, error: error?.message || String(error) };
+  }
+}
+
+async function disconnectCloudSyncProvider(providerName) {
+  const provider = CloudSyncProviders[providerName];
+  if (!provider) return { success: false, error: 'Unknown provider' };
+
+  try {
+    const settings = await getEffectiveSyncSettings(await SettingsManager.get());
+    await provider.disconnect(settings);
+    const updates = { syncProvider: 'none' };
+    if (providerName === 'googledrive') {
+      updates.googleDriveConnected = false;
+      updates.googleDriveUser = null;
+    } else if (providerName === 'dropbox') {
+      updates.dropboxToken = '';
+      updates.dropboxRefreshToken = '';
+      updates.dropboxUser = null;
+    } else if (providerName === 'onedrive') {
+      updates.onedriveToken = '';
+      updates.onedriveRefreshToken = '';
+      updates.onedriveConnected = false;
+      updates.onedriveUser = null;
+    } else if (providerName === 'webdav') {
+      updates.webdavUrl = '';
+      updates.webdavUsername = '';
+      updates.webdavPassword = '';
+    }
+    updates.syncEnabled = false;
+    await persistSyncSettingsUpdate(updates, settings);
+    await clearSyncSessionCredentials();
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error?.message || String(error) };
+  }
+}
+
+async function getCloudSyncProviderStatus(providerName) {
+  const provider = CloudSyncProviders[providerName];
+  if (!provider) return { connected: false };
+  const settings = await getEffectiveSyncSettings(await SettingsManager.get());
+  return provider.getStatus ? await provider.getStatus(settings) : { connected: false };
+}
+
+async function exportCloudSyncBackup(providerName, options) {
+  const provider = CloudSyncProviders[providerName];
+  if (!provider) return { success: false, error: 'Unknown provider: ' + providerName };
+  try {
+    const exportData = await exportAllScripts(options);
+    const settings = await getEffectiveSyncSettings(await SettingsManager.get());
+    const uploadData = await prepareSyncEnvelopeForRemoteUpload(exportData, settings);
+    await provider.upload(uploadData, settings);
+    return {
+      success: true,
+      exported: exportData.scripts?.length || 0,
+      settingsIncluded: options.includeSettings,
+      settingsCredentialsIncluded: exportData.settingsCredentialsIncluded === true,
+      redactedSettingsCredentialKeys: exportData.redactedSettingsCredentialKeys || [],
+      storageIncluded: options.includeStorage
+    };
+  } catch (error) {
+    return { success: false, error: error?.message || String(error) };
+  }
+}
+
+async function importCloudSyncBackup(providerName, options) {
+  const provider = CloudSyncProviders[providerName];
+  if (!provider) return { success: false, error: 'Unknown provider: ' + providerName };
+  try {
+    const settings = await getEffectiveSyncSettings(await SettingsManager.get());
+    const remoteData = await provider.download(settings);
+    if (!remoteData) return { success: false, error: 'No backup found on ' + providerName };
+    const importData = await readSyncEnvelopeFromRemote(remoteData, settings);
+    if (!importData) return { success: false, error: 'No backup found on ' + providerName };
+    const result = await importScripts(importData, {
+      overwrite: true,
+      ...options
+    });
+    return { success: !result.error, ...result };
+  } catch (error) {
+    return { success: false, error: error?.message || String(error) };
+  }
+}
+
+async function getCloudSyncStatus(providerName) {
+  const provider = CloudSyncProviders[providerName];
+  if (!provider) return { connected: false };
+  try {
+    const settings = await getEffectiveSyncSettings(await SettingsManager.get());
+    return provider.getStatus ? await provider.getStatus(settings) : { connected: false };
+  } catch (error) {
+    return { connected: false, error: error?.message || String(error) };
+  }
+}
+
 // ============================================================================
 // Message Handlers
 // ============================================================================
@@ -45306,6 +45549,22 @@ backgroundActionRegistry.registerHandlers(UpdateActionHandler.createUpdateAction
   refreshSubscription: id => SubscriptionSystem.refreshSubscription(id),
   refreshSubscriptions: () => SubscriptionSystem.refreshSubscriptions(),
   removeSubscription: id => SubscriptionSystem.removeSubscription(id)
+}));
+backgroundActionRegistry.registerHandlers(SyncActionHandler.createSyncActionHandlers({
+  sync: () => runCloudSyncAction(),
+  test: provider => testCloudSyncProvider(provider),
+  getLastResult: async () => (await chrome.storage.local.get('lastSyncResult'))?.lastSyncResult || null,
+  health: async provider => {
+    const settings = await getEffectiveSyncSettings(await SettingsManager.get());
+    return await buildSyncProviderHealth(provider || settings.syncProvider);
+  },
+  preview: provider => CloudSync.preview(provider),
+  connect: provider => connectCloudSyncProvider(provider),
+  disconnect: provider => disconnectCloudSyncProvider(provider),
+  status: provider => getCloudSyncProviderStatus(provider),
+  export: (provider, options) => exportCloudSyncBackup(provider, options),
+  import: (provider, options) => importCloudSyncBackup(provider, options),
+  cloudStatus: provider => getCloudSyncStatus(provider)
 }));
 backgroundActionRegistry.registerHandlers(MessageRouter.createBackgroundDomainHandlers(
   GMValuesHandler.GM_VALUES_ACTIONS,
@@ -46398,215 +46657,6 @@ async function handleMessage(message, sender) {
       case 'resetSettings':
         return await SettingsManager.reset();
         
-      // Sync
-      case 'sync': {
-        const result = await CloudSync.sync();
-        await maybeRegisterScriptsAfterSuccessfulSync(result);
-        await persistLastSyncResult(result);
-        return result;
-      }
-
-      case 'testSync': {
-        // Phase 39.26 — VM #2486: explicit Test Connection with structured
-        // status. Accept an optional `data.provider` override so the dashboard
-        // can test a provider not currently selected (e.g. "verify the new
-        // WebDAV URL before saving").
-        const settings = await getEffectiveSyncSettings(await SettingsManager.get());
-        const providerName = data?.provider || settings.syncProvider;
-        const provider = CloudSync.providers[providerName];
-        if (!provider) {
-          return { ok: false, error: `Unknown provider: ${providerName}` };
-        }
-        try {
-          const raw = await provider.test(settings);
-          // Providers vary in return shape — normalize to { ok, error?, hint? }.
-          if (typeof raw === 'boolean') return { ok: raw };
-          if (raw && typeof raw === 'object') {
-            const ok = raw.success === true || raw.ok === true;
-            const error = raw.error || raw.message || null;
-            const hint = !ok ? (
-              error?.toLowerCase().includes('401') ? 'Authentication failed — re-connect the account.' :
-              error?.toLowerCase().includes('403') ? 'Server rejected the credentials — check the user has write access.' :
-              error?.toLowerCase().includes('404') ? 'Endpoint not found — verify the URL.' :
-              error?.toLowerCase().includes('network') ? 'Network error — check connectivity and CORS.' :
-              null
-            ) : null;
-            return hint ? { ok, error, hint } : { ok, error };
-          }
-          return { ok: false, error: 'Provider returned no status' };
-        } catch (e) {
-          return { ok: false, error: e?.message || String(e) };
-        }
-      }
-
-      case 'getLastSyncResult':
-        return (await chrome.storage.local.get('lastSyncResult'))?.lastSyncResult || null;
-
-      case 'syncProviderHealth': {
-        const settings = await getEffectiveSyncSettings(await SettingsManager.get());
-        return await buildSyncProviderHealth(data?.provider || settings.syncProvider);
-      }
-
-      case 'syncDryRunPreview': {
-        return await CloudSync.preview(data?.provider);
-      }
-      
-      // Cloud Sync Provider Management
-      case 'connectSyncProvider': {
-        const providerName = data.provider;
-        const provider = CloudSyncProviders[providerName];
-        if (!provider) return { success: false, error: 'Unknown provider' };
-        
-        try {
-          const settings = await getEffectiveSyncSettings(await SettingsManager.get());
-          const result = await provider.connect(settings);
-          
-          if (result.success) {
-            const updates = {};
-            if (providerName === 'googledrive') {
-              updates.googleDriveConnected = true;
-              updates.googleDriveUser = result.user;
-            } else if (providerName === 'dropbox') {
-              updates.dropboxToken = result.token;
-              updates.dropboxRefreshToken = result.refreshToken || '';
-              if (result.user) updates.dropboxUser = result.user;
-              // Fetch user info after connecting
-              const status = await provider.getStatus({ dropboxToken: result.token });
-              if (status.user) updates.dropboxUser = status.user;
-            }
-            updates.syncProvider = providerName;
-            await persistSyncSettingsUpdate(updates, settings);
-          }
-          return result;
-        } catch (e) {
-          return { success: false, error: e.message };
-        }
-      }
-      
-      case 'disconnectSyncProvider':
-      case 'revokeSyncProvider': {
-        const providerName = data.provider;
-        const provider = CloudSyncProviders[providerName];
-        if (!provider) return { success: false, error: 'Unknown provider' };
-        
-        try {
-          const settings = await getEffectiveSyncSettings(await SettingsManager.get());
-          await provider.disconnect(settings);
-          
-          const updates = { syncProvider: 'none' };
-          if (providerName === 'googledrive') {
-            updates.googleDriveConnected = false;
-            updates.googleDriveUser = null;
-          } else if (providerName === 'dropbox') {
-            updates.dropboxToken = '';
-            updates.dropboxRefreshToken = '';
-            updates.dropboxUser = null;
-          } else if (providerName === 'onedrive') {
-            updates.onedriveToken = '';
-            updates.onedriveRefreshToken = '';
-            updates.onedriveConnected = false;
-            updates.onedriveUser = null;
-          } else if (providerName === 'webdav') {
-            updates.webdavUrl = '';
-            updates.webdavUsername = '';
-            updates.webdavPassword = '';
-          }
-          updates.syncEnabled = false;
-          await persistSyncSettingsUpdate(updates, settings);
-          await clearSyncSessionCredentials();
-          return { success: true };
-        } catch (e) {
-          return { success: false, error: e.message };
-        }
-      }
-      
-      case 'getSyncProviderStatus': {
-        const providerName = data.provider;
-        const provider = CloudSyncProviders[providerName];
-        if (!provider) return { connected: false };
-        
-        const settings = await getEffectiveSyncSettings(await SettingsManager.get());
-        if (provider.getStatus) {
-          return await provider.getStatus(settings);
-        }
-        return { connected: false };
-      }
-      
-      case 'syncNow': {
-        const result = await CloudSync.sync();
-        await maybeRegisterScriptsAfterSuccessfulSync(result);
-        await persistLastSyncResult(result);
-        return result;
-      }
-
-      case 'cloudExport': {
-        const providerName = data.provider;
-        const provider = CloudSyncProviders[providerName];
-        if (!provider) return { success: false, error: 'Unknown provider: ' + providerName };
-
-        try {
-          const includeSettings = data?.includeSettings !== false;
-          const includeStorage = data?.includeStorage !== false;
-          const includeSettingsCredentials = data?.includeSettingsCredentials === true;
-          const exportData = await exportAllScripts({
-            includeSettings,
-            includeStorage,
-            includeSettingsCredentials
-          });
-          const settings = await getEffectiveSyncSettings(await SettingsManager.get());
-          const uploadData = await prepareSyncEnvelopeForRemoteUpload(exportData, settings);
-          await provider.upload(uploadData, settings);
-          return {
-            success: true,
-            exported: exportData.scripts?.length || 0,
-            settingsIncluded: includeSettings,
-            settingsCredentialsIncluded: exportData.settingsCredentialsIncluded === true,
-            redactedSettingsCredentialKeys: exportData.redactedSettingsCredentialKeys || [],
-            storageIncluded: includeStorage
-          };
-        } catch (e) {
-          return { success: false, error: e.message };
-        }
-      }
-
-      case 'cloudImport': {
-        const providerName = data.provider;
-        const provider = CloudSyncProviders[providerName];
-        if (!provider) return { success: false, error: 'Unknown provider: ' + providerName };
-
-        try {
-          const settings = await getEffectiveSyncSettings(await SettingsManager.get());
-          const remoteData = await provider.download(settings);
-          if (!remoteData) return { success: false, error: 'No backup found on ' + providerName };
-          const importData = await readSyncEnvelopeFromRemote(remoteData, settings);
-          if (!importData) return { success: false, error: 'No backup found on ' + providerName };
-          const result = await importScripts(importData, {
-            overwrite: true,
-            importSettings: data?.importSettings === true,
-            importStorage: data?.importStorage !== false,
-            importSettingsCredentials: data?.importSettingsCredentials === true,
-            trustImportedScripts: data?.trustImportedScripts === true
-          });
-          return { success: !result.error, ...result };
-        } catch (e) {
-          return { success: false, error: e.message };
-        }
-      }
-
-      case 'cloudStatus': {
-        const providerName = data.provider;
-        const provider = CloudSyncProviders[providerName];
-        if (!provider) return { connected: false };
-
-        try {
-          const settings = await getEffectiveSyncSettings(await SettingsManager.get());
-          if (provider.getStatus) return await provider.getStatus(settings);
-          return { connected: false };
-        } catch (e) {
-          return { connected: false, error: e.message };
-        }
-      }
-
       // Values Editor - Get all scripts' values
       case 'getAllScriptsValues': {
         const scripts = await ScriptStorage.getAll();

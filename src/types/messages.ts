@@ -737,6 +737,7 @@ interface SyncNow {
 
 interface TestSync {
   action: 'testSync';
+  provider?: string;
 }
 
 interface ConnectSyncProvider {
@@ -787,6 +788,7 @@ interface CloudImport {
   importSettings?: boolean;
   importStorage?: boolean;
   importSettingsCredentials?: boolean;
+  trustImportedScripts?: boolean;
 }
 
 interface CloudStatus {

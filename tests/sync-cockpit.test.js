@@ -196,8 +196,9 @@ describe('sync safety cockpit wiring', () => {
 
   it('routes provider health and dry-run actions through background without writes', () => {
     expect(backgroundCore).toContain('async function buildSyncProviderHealth');
-    expect(backgroundCore).toContain("case 'syncProviderHealth'");
-    expect(backgroundCore).toContain("case 'syncDryRunPreview'");
+    expect(backgroundCore).toContain('SyncActionHandler.createSyncActionHandlers');
+    expect(backgroundCore).toContain('return await buildSyncProviderHealth(provider || settings.syncProvider)');
+    expect(backgroundCore).toContain('preview: provider => CloudSync.preview(provider)');
     expect(cloudSyncRuntime).toContain('previewData(local, remote, options = {})');
     expect(cloudSyncRuntime).toContain('dryRun: true');
     expect(cloudSyncRuntime).toContain('noWrites: true');

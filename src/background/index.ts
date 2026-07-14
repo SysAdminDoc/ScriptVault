@@ -87,6 +87,17 @@ export type {
   UpdateBackgroundAction,
 } from './update-action-handler';
 export {
+  SYNC_BACKGROUND_ACTIONS,
+  SyncActionHandler,
+  createSyncActionHandlers,
+} from './sync-action-handler';
+export type {
+  CloudExportOptions,
+  CloudImportOptions,
+  SyncActionDependencies,
+  SyncBackgroundAction,
+} from './sync-action-handler';
+export {
   GM_AUDIO_ACTIONS,
   GMAudioHandler,
   handleGMAudioMessage,

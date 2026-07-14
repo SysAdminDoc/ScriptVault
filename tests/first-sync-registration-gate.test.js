@@ -93,16 +93,15 @@ describe('first-sync registration gate', () => {
   });
 
   it('releases the gate after successful sync results', () => {
-    const syncCase = backgroundCore.slice(backgroundCore.indexOf("case 'sync':"), backgroundCore.indexOf("case 'testSync':"));
-    const syncNowCase = backgroundCore.slice(backgroundCore.indexOf("case 'syncNow':"), backgroundCore.indexOf("case 'cloudExport':"));
+    const syncAction = extractFunction(backgroundCore, 'runCloudSyncAction');
     const alarmBlock = backgroundCore.slice(backgroundCore.indexOf("alarm.name === 'autoSync'"), backgroundCore.indexOf("alarm.name === SUBSCRIPTION_REFRESH_ALARM"));
     const releaseFn = extractFunction(backgroundCore, 'maybeRegisterScriptsAfterSuccessfulSync');
 
     expect(releaseFn).toContain('result.success !== true');
     expect(releaseFn).toContain('await clearFirstSyncRegistrationHoldMarker()');
     expect(releaseFn).toContain('await registerAllScripts(true)');
-    expect(syncCase).toContain('await maybeRegisterScriptsAfterSuccessfulSync(result)');
-    expect(syncNowCase).toContain('await maybeRegisterScriptsAfterSuccessfulSync(result)');
+    expect(syncAction).toContain('await maybeRegisterScriptsAfterSuccessfulSync(result)');
+    expect(backgroundCore).toContain('sync: () => runCloudSyncAction()');
     expect(alarmBlock).toContain('await maybeRegisterScriptsAfterSuccessfulSync(result)');
   });
 });
