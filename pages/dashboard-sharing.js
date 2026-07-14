@@ -102,7 +102,7 @@ const ScriptSharing = (() => {
 }
 .ss-modal-body::-webkit-scrollbar-thumb {
     background: var(--border-color, #404040);
-    border-radius: 3px;
+    border-radius: var(--sv-radius-sm);
 }
 .ss-script-info {
     margin-bottom: 16px;
@@ -195,7 +195,7 @@ const ScriptSharing = (() => {
 }
 .ss-input-group button {
     background: var(--accent-green-dark, #22c55e);
-    color: #fff;
+    color: var(--sv-text-on-accent);
     border: none;
     border-radius: 4px;
     padding: 8px 14px;
@@ -258,7 +258,7 @@ const ScriptSharing = (() => {
     margin-top: 10px;
     padding: 10px;
     background: var(--accent-green-dark, #22c55e);
-    color: #fff;
+    color: var(--sv-text-on-accent);
     border: none;
     border-radius: 4px;
     font-size: 0.8125rem;
@@ -325,7 +325,7 @@ const ScriptSharing = (() => {
     left: 50%;
     transform: translateX(-50%);
     background: var(--accent-green-dark, #22c55e);
-    color: #fff;
+    color: var(--sv-text-on-accent);
     padding: 8px 20px;
     border-radius: 6px;
     font-size: 0.8125rem;

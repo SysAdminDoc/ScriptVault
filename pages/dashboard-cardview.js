@@ -240,7 +240,7 @@ const CardView = (() => {
   justify-content: center;
   font-size: 0.9375rem;
   font-weight: 700;
-  color: #fff;
+  color: var(--sv-text-on-accent);
   box-shadow: 0 12px 18px rgba(0,0,0,0.18);
 }
 
@@ -525,7 +525,7 @@ const CardView = (() => {
   height: 16px;
   left: 2px;
   bottom: 2px;
-  background: #fff;
+  background: var(--sv-control-thumb);
   border-radius: var(--sv-radius-control);
   transition: transform 200ms;
 }
@@ -687,7 +687,7 @@ const CardView = (() => {
 
   function nameToColor(name) {
     const hue = hashStr(name || 'Script') % 360;
-    return `hsl(${hue}, 55%, 45%)`;
+    return `hsl(${hue}, 54%, 66%)`;
   }
 
   function truncate(str, max) {

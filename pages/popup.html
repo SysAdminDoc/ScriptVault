@@ -136,7 +136,7 @@
 
         .header-count {
             background: linear-gradient(135deg, var(--popup-accent), rgb(from var(--sv-info) r g b / 0.92));
-            color: #fff;
+            color: var(--sv-text-on-accent);
             font-size: 0.625rem;
             font-weight: 600;
             font-variant-numeric: tabular-nums;
@@ -188,7 +188,7 @@
             font-size: 0.625rem;
             font-weight: 700;
             background: var(--accent-blue, #4f8cff);
-            color: #fff;
+            color: var(--sv-text-on-info);
             /* Per project rule: backdrop radius stays in 4–12 range. */
             border-radius: var(--sv-radius-control);
         }
@@ -364,7 +364,7 @@
             width: 20px;
             height: 20px;
             margin-inline-end: 6px;
-            border-radius: 7px;
+            border-radius: var(--sv-radius-panel);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -753,7 +753,7 @@
 
         ::-webkit-scrollbar-thumb {
             background: var(--popup-scrollbar);
-            border-radius: 3px;
+            border-radius: var(--sv-radius-sm);
         }
 
         ::-webkit-scrollbar-thumb:hover {

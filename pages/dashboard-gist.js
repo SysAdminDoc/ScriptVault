@@ -640,7 +640,7 @@ const GistIntegration = (() => {
 }
 .gi-btn-primary {
     background: var(--accent-green-dark, #22c55e);
-    color: #fff;
+    color: var(--sv-text-on-accent);
 }
 .gi-btn-primary:hover:not(:disabled) {
     background: var(--accent-green, #4ade80);
@@ -656,7 +656,7 @@ const GistIntegration = (() => {
 }
 .gi-btn-danger {
     background: var(--accent-red, #f87171);
-    color: #fff;
+    color: var(--sv-text-on-danger);
 }
 .gi-btn-danger:hover:not(:disabled) {
     opacity: 0.85;
@@ -784,7 +784,7 @@ const GistIntegration = (() => {
     width: 16px;
     height: 16px;
     border-radius: 6px;
-    background: #fff;
+    background: var(--sv-control-thumb);
     top: 2px;
     left: 2px;
     transition: transform 0.2s;
@@ -799,14 +799,13 @@ const GistIntegration = (() => {
     padding: 10px 18px;
     border-radius: 8px;
     font-size: 0.8125rem;
-    color: #fff;
     z-index: 10001;
     animation: gi-toast-in 0.25s ease, gi-toast-out 0.25s ease 2.5s forwards;
     pointer-events: none;
 }
-.gi-toast-success { background: var(--accent-green-dark, #22c55e); }
-.gi-toast-error { background: var(--accent-red, #f87171); }
-.gi-toast-info { background: var(--accent-blue, #60a5fa); }
+.gi-toast-success { background: var(--accent-green-dark, #22c55e); color: var(--sv-text-on-accent); }
+.gi-toast-error { background: var(--accent-red, #f87171); color: var(--sv-text-on-danger); }
+.gi-toast-info { background: var(--accent-blue, #60a5fa); color: var(--sv-text-on-info); }
 @keyframes gi-toast-in {
     from { opacity: 0; transform: translateY(10px); }
     to { opacity: 1; transform: translateY(0); }

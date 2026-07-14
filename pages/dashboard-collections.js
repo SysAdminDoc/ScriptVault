@@ -259,7 +259,7 @@ const CollectionManager = (() => {
   height: 18px;
   padding: 0;
   border: none;
-  border-radius: 9px;
+  border-radius: var(--sv-radius-control);
   background: var(--toggle-off, #555);
   cursor: pointer;
   transition: background 0.2s;
@@ -277,7 +277,7 @@ const CollectionManager = (() => {
   width: 14px;
   height: 14px;
   border-radius: var(--sv-radius-sm);
-  background: #fff;
+  background: var(--sv-control-thumb);
   transition: transform 0.2s;
 }
 .sv-coll-script-toggle.on::after {

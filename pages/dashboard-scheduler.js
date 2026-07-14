@@ -154,7 +154,7 @@ const ScriptScheduler = (() => {
   position: absolute;
   inset: 0;
   background: var(--toggle-off, #555);
-  border-radius: 11px;
+  border-radius: var(--sv-radius-panel);
   cursor: pointer;
   transition: background 0.2s;
 }
@@ -367,7 +367,7 @@ const ScriptScheduler = (() => {
 }
 .sv-sched-btn-danger:hover {
   background: var(--accent-error, #ef4444);
-  color: #fff;
+  color: var(--sv-text-on-danger);
 }
 
 /* Schedule indicator in script rows */

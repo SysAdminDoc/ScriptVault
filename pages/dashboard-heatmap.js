@@ -143,7 +143,7 @@ const ActivityHeatmap = (() => {
 .sv-heatmap-legend-cell {
   width: 12px;
   height: 12px;
-  border-radius: 2px;
+  border-radius: var(--sv-radius-sm);
 }
 .sv-heatmap-stats {
   display: grid;

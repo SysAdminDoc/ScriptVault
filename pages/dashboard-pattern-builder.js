@@ -57,17 +57,17 @@ const PatternBuilder = (() => {
     .pb-btn{background:var(--bg-input,#333);border:1px solid var(--border-color,#404040);border-radius:4px;color:var(--text-primary,#e0e0e0);padding:6px 14px;font-size:0.75rem;cursor:pointer;transition:background .15s,border-color .15s;white-space:nowrap}
     .pb-btn:hover{background:var(--bg-row-hover,#333);border-color:var(--accent-green,#4ade80)}
     .pb-btn:focus-visible,.pb-toggle:focus-visible,.pb-preset-chip:focus-visible,.pb-remove-btn:focus-visible{outline:2px solid var(--accent-green,#4ade80);outline-offset:2px}
-    .pb-btn-primary{background:var(--accent-green-dark,#22c55e);border-color:var(--accent-green-dark,#22c55e);color:#fff;font-weight:600}
+    .pb-btn-primary{background:var(--accent-green-dark,#22c55e);border-color:var(--accent-green-dark,#22c55e);color:var(--sv-text-on-accent);font-weight:600}
     .pb-btn-primary:hover{background:var(--accent-green,#4ade80)}
     .pb-toggle{position:relative;width:36px;height:20px;border:none;border-radius:10px;background:var(--toggle-off,#555);cursor:pointer;transition:background .2s,box-shadow .2s;flex-shrink:0}
     .pb-toggle.active{background:var(--toggle-on,#22c55e)}
-    .pb-toggle::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:var(--sv-radius-control);background:#fff;transition:transform .2s}
+    .pb-toggle::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:var(--sv-radius-control);background:var(--sv-control-thumb);transition:transform .2s}
     .pb-toggle.active::after{transform:translateX(16px)}
     .pb-preview{background:var(--bg-body,#1a1a1a);border:1px solid var(--border-color,#404040);border-radius:6px;padding:12px 14px;font-family:'Cascadia Code','Fira Code',monospace;font-size:0.8125rem;word-break:break-all;color:var(--accent-blue,#60a5fa);line-height:1.6;min-height:36px;user-select:all}
     .pb-warning{margin-top:8px;color:var(--accent-yellow,#facc15);font-size:0.75rem;line-height:1.5}
     .pb-segment{display:inline-flex;align-items:center;background:var(--bg-input,#333);border:1px solid var(--border-color,#404040);border-radius:4px;padding:4px 8px;font-size:0.75rem;gap:6px;cursor:default}
     .pb-segment .seg-sep{color:var(--text-muted,#707070);font-weight:700}
-    .pb-segment select,.pb-segment input{background:transparent;border:1px solid transparent;color:var(--text-primary,#e0e0e0);font-size:0.75rem;padding:0;min-width:40px;font-family:inherit;border-radius:3px}
+    .pb-segment select,.pb-segment input{background:transparent;border:1px solid transparent;color:var(--text-primary,#e0e0e0);font-size:0.75rem;padding:0;min-width:40px;font-family:inherit;border-radius:4px}
     .pb-test-row{display:flex;align-items:center;gap:8px;margin-top:4px}
     .pb-test-badge{width:14px;height:14px;border-radius:var(--sv-radius-sm);flex-shrink:0}
     .pb-test-badge.match{background:var(--accent-green,#4ade80)}
@@ -79,8 +79,8 @@ const PatternBuilder = (() => {
     .pb-actions{display:flex;gap:8px;justify-content:flex-end}
     .pb-path-segments{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
     .pb-path-seg{display:inline-flex;align-items:center;gap:4px;background:var(--bg-input,#333);border:1px solid var(--border-color,#404040);border-radius:4px;padding:3px 6px;font-size:0.75rem}
-    .pb-path-seg input{background:transparent;border:1px solid transparent;color:var(--text-primary);font-size:0.75rem;width:80px;font-family:inherit;border-radius:3px}
-    .pb-path-seg select{background:transparent;border:1px solid transparent;color:var(--text-primary);font-size:0.75rem;cursor:pointer;font-family:inherit;border-radius:3px}
+    .pb-path-seg input{background:transparent;border:1px solid transparent;color:var(--text-primary);font-size:0.75rem;width:80px;font-family:inherit;border-radius:4px}
+    .pb-path-seg select{background:transparent;border:1px solid transparent;color:var(--text-primary);font-size:0.75rem;cursor:pointer;font-family:inherit;border-radius:4px}
     .pb-remove-btn{padding:0;border:none;background:none;color:var(--accent-red,#f87171);cursor:pointer;font-size:0.875rem;line-height:1}
     .pb-slash{color:var(--text-muted,#707070);font-weight:700;font-size:0.875rem}
   `;

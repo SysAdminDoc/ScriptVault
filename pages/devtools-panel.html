@@ -102,7 +102,7 @@
         .net-table tr.selected td { background: var(--bg-hover); outline: 1px solid var(--accent); }
         .net-table tr:focus-visible td { background: var(--bg-hover); outline: 1px solid var(--accent); }
 
-        .method-badge { font-size: 0.625rem; font-weight: 700; padding: 1px 4px; border-radius: 2px; }
+        .method-badge { font-size: 0.625rem; font-weight: 700; padding: 1px 4px; border-radius: var(--sv-radius-sm); }
         .method-GET { color: var(--method-get); }
         .method-POST { color: var(--method-post); }
         .method-PUT { color: var(--method-put); }
@@ -134,8 +134,8 @@
         .exec-table th { position: sticky; top: 0; background: var(--bg-raised); color: var(--text-muted); font-weight: 700; text-align: start; padding: 5px 8px; border-bottom: 1px solid var(--border); text-transform: uppercase; letter-spacing: 0.05em; }
         .exec-table td { padding: 4px 8px; border-bottom: 1px solid var(--border); }
         .exec-table tr:hover td { background: var(--bg-hover); }
-        .exec-bar-wrap { width: 80px; height: 6px; background: var(--bg-row); border-radius: 3px; overflow: hidden; }
-        .exec-bar { height: 100%; border-radius: 3px; }
+        .exec-bar-wrap { width: 80px; height: 6px; background: var(--bg-row); border-radius: var(--sv-radius-sm); overflow: hidden; }
+        .exec-bar { height: 100%; border-radius: var(--sv-radius-sm); }
         .exec-bar.fast { background: var(--accent); }
         .exec-bar.med { background: var(--warning); }
         .exec-bar.slow { background: var(--danger); }
@@ -146,7 +146,7 @@
         .console-entry:hover { background: var(--bg-hover); }
         .console-ts { color: var(--text-dim); flex-shrink: 0; font-size: 0.625rem; padding-top: 1px; }
         .console-script { color: var(--accent); flex-shrink: 0; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .console-level { flex-shrink: 0; font-size: 0.625rem; font-weight: 700; padding: 1px 4px; border-radius: 2px; }
+        .console-level { flex-shrink: 0; font-size: 0.625rem; font-weight: 700; padding: 1px 4px; border-radius: var(--sv-radius-sm); }
         .console-level.log { color: var(--text-muted); }
         .console-level.warn { color: var(--warning); background: var(--warning-bg); }
         .console-level.error { color: var(--danger); background: var(--danger-bg); }

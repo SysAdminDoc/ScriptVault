@@ -312,7 +312,7 @@ const ProfileManager = (() => {
   padding: 0;
 }
 .sv-profile-color-swatch:hover { transform: scale(1.15); }
-.sv-profile-color-swatch.selected { border-color: #fff; }
+.sv-profile-color-swatch.selected { border-color: var(--sv-text-inverse); }
 .sv-profile-emoji-option {
   appearance: none;
   width: 32px;

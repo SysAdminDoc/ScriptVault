@@ -152,7 +152,7 @@ const CSPReporter = (() => {
 .sv-csp-btn.primary {
   background: var(--accent-green-dark, #22c55e);
   border-color: var(--accent-green-dark, #22c55e);
-  color: #fff;
+  color: var(--sv-text-on-accent);
 }
 .sv-csp-btn.primary:hover {
   background: var(--accent-green, #4ade80);
@@ -258,7 +258,7 @@ const CSPReporter = (() => {
   font-size: 0.6875rem;
   background: rgba(255,255,255,0.06);
   padding: 2px 6px;
-  border-radius: 3px;
+  border-radius: var(--sv-radius-sm);
 }
 
 /* Expandable suggestion row */
@@ -411,7 +411,7 @@ const CSPReporter = (() => {
   width: 16px;
   height: 16px;
   border-radius: 6px;
-  background: #fff;
+  background: var(--sv-control-thumb);
   transition: transform 0.2s;
 }
 .sv-csp-bypass-toggle.on::after {

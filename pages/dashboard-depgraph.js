@@ -120,7 +120,7 @@ const DependencyGraph = (() => {
 }
 .dg-toolbar button.dg-active {
     background: var(--accent-green-dark);
-    color: #fff;
+    color: var(--sv-text-on-accent);
     border-color: var(--accent-green);
 }
 .dg-legend {
@@ -179,7 +179,7 @@ const DependencyGraph = (() => {
     cursor: pointer;
     font-size: 1rem;
     padding: 2px 6px;
-    border-radius: 3px;
+    border-radius: var(--sv-radius-sm);
 }
 .dg-sidebar-header button:hover {
     color: var(--text-primary);
@@ -195,7 +195,7 @@ const DependencyGraph = (() => {
 }
 .dg-sidebar-body::-webkit-scrollbar-thumb {
     background: var(--border-color);
-    border-radius: 3px;
+    border-radius: var(--sv-radius-sm);
 }
 .dg-detail-section {
     margin-bottom: 14px;
@@ -243,7 +243,7 @@ const DependencyGraph = (() => {
     padding: 8px;
     margin-top: 8px;
     background: var(--accent-green-dark);
-    color: #fff;
+    color: var(--sv-text-on-accent);
     border: none;
     border-radius: 4px;
     font-size: 0.75rem;
@@ -258,7 +258,7 @@ const DependencyGraph = (() => {
 .dg-conflict-badge {
     display: inline-block;
     background: var(--accent-red);
-    color: #fff;
+    color: var(--sv-text-on-danger);
     font-size: 0.625rem;
     font-weight: 700;
     padding: 1px 6px;

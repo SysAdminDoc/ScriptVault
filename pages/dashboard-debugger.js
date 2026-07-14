@@ -36,12 +36,12 @@ const ScriptDebugger = (() => {
     .dbg-tab:hover{color:var(--text-primary,#e0e0e0)}
     .dbg-tab.active{color:var(--accent-green,#4ade80);border-bottom-color:var(--accent-green,#4ade80)}
     .dbg-tab:focus-visible,.dbg-btn:focus-visible,.dbg-toggle:focus-visible,.dbg-log-obj:focus-visible,.dbg-json-toggle:focus-visible,.dbg-error-line-link:focus-visible{outline:2px solid var(--accent-green,#4ade80);outline-offset:2px}
-    .dbg-tab .badge{display:inline-block;background:var(--accent-red,#f87171);color:#fff;font-size:0.625rem;border-radius:8px;padding:1px 6px;margin-inline-start:4px;vertical-align:middle}
+    .dbg-tab .badge{display:inline-block;background:var(--accent-red,#f87171);color:var(--sv-text-on-danger);font-size:0.625rem;border-radius:8px;padding:1px 6px;margin-inline-start:4px;vertical-align:middle}
     .dbg-panel{flex:1;overflow:auto;padding:10px}
     .dbg-toolbar{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
     .dbg-btn{background:var(--bg-input,#333);border:1px solid var(--border-color,#404040);border-radius:4px;color:var(--text-primary,#e0e0e0);padding:4px 12px;font-size:0.6875rem;cursor:pointer;transition:background .15s,border-color .15s}
     .dbg-btn:hover{border-color:var(--accent-green,#4ade80)}
-    .dbg-btn.active{background:var(--accent-green-dark,#22c55e);border-color:var(--accent-green-dark,#22c55e);color:#fff}
+    .dbg-btn.active{background:var(--accent-green-dark,#22c55e);border-color:var(--accent-green-dark,#22c55e);color:var(--sv-text-on-accent)}
     .dbg-btn-danger{color:var(--accent-red,#f87171)}
     .dbg-btn-danger:hover{border-color:var(--accent-red,#f87171)}
     .dbg-input,.dbg-select{background:var(--bg-input,#333);border:1px solid var(--border-color,#404040);border-radius:4px;color:var(--text-primary,#e0e0e0);padding:5px 10px;font-size:0.75rem;transition:border-color .2s,box-shadow .2s}
@@ -50,7 +50,7 @@ const ScriptDebugger = (() => {
 
     /* Console */
     .dbg-console{display:flex;flex-direction:column;gap:2px;font-family:'Cascadia Code','Fira Code',monospace;font-size:0.75rem}
-    .dbg-log-entry{display:flex;gap:8px;padding:4px 8px;border-radius:3px;align-items:flex-start;border-inline-start:3px solid transparent}
+    .dbg-log-entry{display:flex;gap:8px;padding:4px 8px;border-radius:4px;align-items:flex-start;border-inline-start:3px solid transparent}
     .dbg-log-entry.log{border-inline-start-color:var(--text-muted,#707070);background:transparent}
     .dbg-log-entry.warn{border-inline-start-color:var(--accent-yellow,#fbbf24);background:rgba(251,191,36,0.05)}
     .dbg-log-entry.error{border-inline-start-color:var(--accent-red,#f87171);background:rgba(248,113,113,0.05)}
@@ -67,13 +67,13 @@ const ScriptDebugger = (() => {
     .dbg-empty{color:var(--text-muted,#707070);font-size:0.75rem;text-align:center;padding:24px}
 
     /* Live Reload */
-    .dbg-live-badge{display:inline-flex;align-items:center;gap:4px;background:var(--accent-green-dark,#22c55e);color:#fff;font-size:0.625rem;font-weight:600;border-radius:10px;padding:2px 10px;animation:dbg-pulse 2s infinite}
+    .dbg-live-badge{display:inline-flex;align-items:center;gap:4px;background:var(--accent-green-dark,#22c55e);color:var(--sv-text-on-accent);font-size:0.625rem;font-weight:600;border-radius:10px;padding:2px 10px;animation:dbg-pulse 2s infinite}
     @keyframes dbg-pulse{0%,100%{opacity:1}50%{opacity:.6}}
     .dbg-live-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border-color,#404040)}
     .dbg-live-name{flex:1;font-size:0.8125rem}
     .dbg-toggle{position:relative;width:36px;height:20px;border:none;border-radius:10px;background:var(--toggle-off,#555);cursor:pointer;transition:background .2s,box-shadow .2s;flex-shrink:0}
     .dbg-toggle.active{background:var(--toggle-on,#22c55e)}
-    .dbg-toggle::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:var(--sv-radius-control);background:#fff;transition:transform .2s}
+    .dbg-toggle::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:var(--sv-radius-control);background:var(--sv-control-thumb);transition:transform .2s}
     .dbg-toggle.active::after{transform:translateX(16px)}
 
     /* Variable Inspector */
@@ -82,11 +82,11 @@ const ScriptDebugger = (() => {
     .dbg-var-table td{padding:6px 8px;border-bottom:1px solid var(--border-color,#404040);vertical-align:top}
     .dbg-var-key{color:var(--accent-blue,#60a5fa);font-family:'Cascadia Code','Fira Code',monospace}
     .dbg-var-val{color:var(--text-primary,#e0e0e0);font-family:'Cascadia Code','Fira Code',monospace;cursor:pointer;word-break:break-word}
-    .dbg-var-val:hover{background:var(--bg-row-hover,#333);border-radius:3px}
+    .dbg-var-val:hover{background:var(--bg-row-hover,#333);border-radius:4px}
     .dbg-var-actions{display:flex;gap:4px}
     .dbg-var-delete{color:var(--accent-red,#f87171);cursor:pointer;font-size:0.875rem}
     .dbg-var-delete:hover{color:#ff4444}
-    .dbg-var-edit-input{background:var(--bg-input,#333);border:1px solid var(--accent-green,#4ade80);border-radius:3px;color:var(--text-primary);padding:2px 6px;font-size:0.75rem;font-family:'Cascadia Code','Fira Code',monospace;width:100%}
+    .dbg-var-edit-input{background:var(--bg-input,#333);border:1px solid var(--accent-green,#4ade80);border-radius:4px;color:var(--text-primary);padding:2px 6px;font-size:0.75rem;font-family:'Cascadia Code','Fira Code',monospace;width:100%}
     .dbg-json-tree{padding-inline-start:16px}
     .dbg-json-key{color:var(--accent-blue,#60a5fa)}
     .dbg-json-string{color:var(--accent-green,#4ade80)}

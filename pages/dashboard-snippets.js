@@ -867,7 +867,7 @@ $CURSOR$`
 .snip-btn-add {
     padding: 6px 14px;
     background: var(--accent-green-dark, #22c55e);
-    color: #fff;
+    color: var(--sv-text-on-accent);
     border: none;
     border-radius: 6px;
     cursor: pointer;
@@ -904,7 +904,7 @@ $CURSOR$`
 .snip-cat-btn.active {
     background: var(--accent-green-dark, #22c55e);
     border-color: var(--accent-green-dark, #22c55e);
-    color: #fff;
+    color: var(--sv-text-on-accent);
 }
 .snip-grid {
     display: grid;
@@ -980,7 +980,7 @@ $CURSOR$`
 .snip-action-btn {
     padding: 5px 14px;
     border: 1px solid var(--border-color, #404040);
-    border-radius: 5px;
+    border-radius: var(--sv-radius-control);
     background: var(--bg-input, #333);
     color: var(--text-primary, #e0e0e0);
     cursor: pointer;
@@ -993,7 +993,7 @@ $CURSOR$`
 .snip-action-btn.primary {
     background: var(--accent-green-dark, #22c55e);
     border-color: var(--accent-green-dark, #22c55e);
-    color: #fff;
+    color: var(--sv-text-on-accent);
 }
 .snip-action-btn.danger {
     border-color: var(--accent-red, #f87171);
@@ -1001,7 +1001,7 @@ $CURSOR$`
 }
 .snip-action-btn.danger:hover {
     background: var(--accent-red, #f87171);
-    color: #fff;
+    color: var(--sv-text-on-danger);
 }
 .snip-empty {
     text-align: center;

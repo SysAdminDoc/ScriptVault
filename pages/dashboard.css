@@ -219,7 +219,7 @@ a:hover {
   bottom: -1px;
   height: 2px;
   background: var(--accent-green);
-  border-radius: 2px 2px 0 0;
+  border-radius: 4px 4px 0 0;
   pointer-events: none;
 }
 
@@ -327,7 +327,7 @@ a:hover {
 .toolbar-btn-primary {
   background: var(--accent-green-dark);
   border-color: var(--accent-green-dark);
-  color: #fff;
+  color: var(--sv-text-on-accent);
 }
 
 .toolbar-btn-primary:hover {
@@ -337,7 +337,7 @@ a:hover {
 .btn-danger {
   background: var(--accent-red);
   border-color: var(--accent-red);
-  color: #fff;
+  color: var(--sv-text-on-danger);
 }
 
 .btn-danger:hover {
@@ -588,7 +588,7 @@ input[type="checkbox"] {
 .script-tag {
   display: inline-block;
   padding: 1px 6px;
-  border-radius: 3px;
+  border-radius: var(--sv-radius-sm);
   font-size: 0.625rem;
   background: rgba(96, 165, 250, 0.15);
   color: var(--accent-blue);
@@ -600,7 +600,7 @@ input[type="checkbox"] {
 .exec-stat {
   display: inline-block;
   padding: 2px 6px;
-  border-radius: 3px;
+  border-radius: var(--sv-radius-sm);
   font-size: 0.6875rem;
   font-variant-numeric: tabular-nums;
   cursor: default;
@@ -650,7 +650,7 @@ input[type="checkbox"] {
   align-items: center;
   gap: 3px;
   padding: 1px 6px;
-  border-radius: 3px;
+  border-radius: var(--sv-radius-sm);
   font-size: 0.625rem;
   background: rgba(251, 191, 36, 0.15);
   color: var(--accent-yellow);
@@ -680,7 +680,7 @@ input[type="checkbox"] {
 .site-icon {
   width: 18px;
   height: 18px;
-  border-radius: 3px;
+  border-radius: var(--sv-radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -708,7 +708,7 @@ input[type="checkbox"] {
 .feature-icon {
   width: 18px;
   height: 18px;
-  border-radius: 3px;
+  border-radius: var(--sv-radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1374,7 +1374,7 @@ input[type="checkbox"] {
 .help-section code {
   background: var(--bg-input);
   padding: 2px 6px;
-  border-radius: 3px;
+  border-radius: var(--sv-radius-sm);
   font-family: monospace;
 }
 
@@ -1480,7 +1480,7 @@ input[type="checkbox"] {
 .quota-bar-track {
   height: 6px;
   background: var(--bg-input);
-  border-radius: 3px;
+  border-radius: var(--sv-radius-sm);
   overflow: hidden;
   margin-bottom: 4px;
 }
@@ -1488,7 +1488,7 @@ input[type="checkbox"] {
 .quota-bar-fill {
   height: 100%;
   background: var(--accent-green);
-  border-radius: 3px;
+  border-radius: var(--sv-radius-sm);
   transition: width 0.3s ease, background 0.3s ease;
   width: 0;
 }
@@ -1647,7 +1647,7 @@ input[type="checkbox"] {
 .help-step code {
   background: var(--bg-input);
   padding: 1px 5px;
-  border-radius: 3px;
+  border-radius: var(--sv-radius-sm);
   font-size: 0.75rem;
 }
 
@@ -1963,7 +1963,7 @@ tr.row-over-budget {
   font-size: 0.625rem;
   font-weight: 600;
   padding: 1px 6px;
-  border-radius: 3px;
+  border-radius: var(--sv-radius-sm);
   background: rgba(74, 222, 128, 0.15);
   color: var(--accent-green);
   margin-left: 6px;
@@ -2138,7 +2138,7 @@ tr.row-over-budget {
   color: var(--text-muted);
   cursor: pointer;
   padding: 2px 4px;
-  border-radius: 3px;
+  border-radius: var(--sv-radius-sm);
   font-size: 0.6875rem;
 }
 

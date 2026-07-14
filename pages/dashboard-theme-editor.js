@@ -396,7 +396,7 @@ const ThemeEditor = (() => {
   background: transparent;
 }
 .sv-te-color-input input[type="color"]::-webkit-color-swatch-wrapper { padding: 2px; }
-.sv-te-color-input input[type="color"]::-webkit-color-swatch { border: none; border-radius: 2px; }
+.sv-te-color-input input[type="color"]::-webkit-color-swatch { border: none; border-radius: var(--sv-radius-sm); }
 .sv-te-color-input input[type="text"] {
   flex: 1;
   padding: 5px 8px;
@@ -499,7 +499,7 @@ const ThemeEditor = (() => {
 .sv-te-preview-toggle {
   width: 32px;
   height: 18px;
-  border-radius: 9px;
+  border-radius: var(--sv-radius-control);
   position: relative;
 }
 .sv-te-preview-toggle::after {
@@ -567,7 +567,7 @@ const ThemeEditor = (() => {
 .sv-te-custom-tag {
   font-size: 0.5625rem;
   padding: 1px 5px;
-  border-radius: 3px;
+  border-radius: var(--sv-radius-sm);
   background: var(--accent-secondary, #60a5fa);
   color: var(--text-on-accent, #fff);
   margin-inline-start: 4px;
@@ -580,7 +580,7 @@ const ThemeEditor = (() => {
   height: 16px;
   border: none;
   background: var(--accent-error, #ef4444);
-  color: #fff;
+  color: var(--sv-text-on-danger);
   border-radius: 6px;
   font-size: 0.625rem;
   line-height: 1;
@@ -1215,7 +1215,7 @@ const ThemeEditor = (() => {
           <div style="display:flex;gap:6px;padding:4px 0">
             <span class="sv-te-preview-badge" style="background:${accent};color:${toggleDot}">GM_API</span>
             <span class="sv-te-preview-badge" style="background:${accentSecondary};color:${toggleDot}">CSS</span>
-            <span class="sv-te-preview-badge" style="background:${accentError};color:#fff">Error</span>
+            <span class="sv-te-preview-badge" style="background:${accentError};color:var(--sv-text-on-danger)">Error</span>
           </div>
           <div style="display:flex;justify-content:space-between;padding:4px 0">
             <span style="color:${textMuted};font-size:0.625rem">3 scripts installed</span>

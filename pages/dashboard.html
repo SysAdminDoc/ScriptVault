@@ -31,7 +31,7 @@
             --accent-primary: #22c55e;
             --accent-secondary: #60a5fa;
             --accent-error: #ef4444;
-            --text-on-accent: #fff;
+            --text-on-accent: var(--sv-text-on-accent);
             --toggle-dot: #fff;
             --toggle-on: #22c55e;
             --toggle-off: #555;
@@ -72,7 +72,7 @@
             --accent-primary: #16a34a;
             --accent-secondary: #2563eb;
             --accent-error: #dc2626;
-            --text-on-accent: #fff;
+            --text-on-accent: var(--sv-text-on-accent);
             --toggle-dot: #fff;
             --toggle-on: #16a34a;
             --toggle-off: #ccc;
@@ -113,7 +113,7 @@
             --accent-primary: #a6e3a1;
             --accent-secondary: #89b4fa;
             --accent-error: #f38ba8;
-            --text-on-accent: #1e1e2e;
+            --text-on-accent: var(--sv-text-on-accent);
             --toggle-dot: #1e1e2e;
             --toggle-on: #a6e3a1;
             --toggle-off: #585b70;
@@ -154,7 +154,7 @@
             --accent-primary: #22c55e;
             --accent-secondary: #60a5fa;
             --accent-error: #ef4444;
-            --text-on-accent: #fff;
+            --text-on-accent: var(--sv-text-on-accent);
             --toggle-dot: #fff;
             --toggle-on: #22c55e;
             --toggle-off: #444;
@@ -322,7 +322,7 @@
             top: -48px;
             left: 0;
             background: var(--accent-primary);
-            color: #fff;
+            color: var(--text-on-accent);
             padding: 8px 16px;
             z-index: 10001;
             font-size: 0.875rem;
@@ -416,7 +416,7 @@
         .tm-logo img {
             width: 24px;
             height: 24px;
-            border-radius: 7px;
+            border-radius: var(--sv-radius-panel);
             box-shadow: 0 10px 18px rgba(0, 0, 0, 0.18);
         }
 
@@ -672,7 +672,7 @@
         }
 
         .tm-tab[data-tab="newscript"]:hover {
-            color: #fff;
+            color: var(--text-on-accent);
             background: linear-gradient(135deg, #22c55e, #34d399);
             box-shadow: 0 18px 30px rgba(34, 197, 94, 0.24);
         }
@@ -708,7 +708,7 @@
             line-height: 14px;
             text-align: center;
             font-size: 0.875rem;
-            border-radius: 3px;
+            border-radius: var(--sv-radius-sm);
             opacity: 0.5;
             transition: opacity 0.15s, background 0.15s;
         }
@@ -966,7 +966,7 @@
 
         .toolbar-btn:hover { background: var(--bg-button-hover); border-color: rgba(127, 127, 127, 0.34); transform: translateY(-1px); box-shadow: 0 10px 20px rgba(0, 0, 0, 0.18); }
         .toolbar-btn:active { transform: translateY(0); box-shadow: none; }
-        .toolbar-btn.primary { background: var(--accent-primary); border-color: var(--accent-primary); color: #fff; }
+        .toolbar-btn.primary { background: var(--accent-primary); border-color: var(--accent-primary); color: var(--text-on-accent); }
         .toolbar-btn.primary:hover { background: #1ea34f; box-shadow: 0 2px 12px rgba(34, 197, 94, 0.3); }
         .toolbar-btn svg { width: 14px; height: 14px; }
         .toolbar-btn.compact {
@@ -1296,13 +1296,13 @@
             border-radius: 4px;
             font-size: 0.5625rem;
             font-weight: 700;
-            color: #fff;
+            color: var(--sv-text-inverse);
             letter-spacing: 0.02em;
         }
-        .badge-s { background: linear-gradient(135deg, #3b82f6, #2563eb); }
-        .badge-x { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
-        .badge-c { background: linear-gradient(135deg, #ec4899, #db2777); }
-        .badge-t { background: linear-gradient(135deg, #f59e0b, #d97706); }
+        .badge-s { background: linear-gradient(135deg, #1d4ed8, #1e40af); }
+        .badge-x { background: linear-gradient(135deg, #7c3aed, #6d28d9); }
+        .badge-c { background: linear-gradient(135deg, #be185d, #9d174d); }
+        .badge-t { background: linear-gradient(135deg, #f59e0b, #d97706); color: var(--sv-text-on-warning); }
 
         /* Action Icons */
         .updated-link {
@@ -1334,7 +1334,7 @@
             border: none;
             color: var(--text-muted);
             cursor: pointer;
-            border-radius: 5px;
+            border-radius: var(--sv-radius-control);
             transition: color 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
         }
         .action-icon:hover { color: var(--text-primary); background: var(--bg-button); transform: translateY(-1px); }
@@ -1430,9 +1430,9 @@
 
         .btn:hover { background: var(--bg-button-hover); transform: translateY(-1px); box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18); }
         .btn:active { transform: translateY(0); }
-        .btn-primary { background: var(--accent-primary); border-color: var(--accent-primary); color: #fff; }
+        .btn-primary { background: var(--accent-primary); border-color: var(--accent-primary); color: var(--text-on-accent); }
         .btn-primary:hover { background: #1ea34f; box-shadow: 0 2px 12px rgba(34, 197, 94, 0.3); }
-        .btn-danger { background: var(--accent-error); border-color: var(--accent-error); color: #fff; }
+        .btn-danger { background: var(--accent-error); border-color: var(--accent-error); color: var(--sv-text-on-danger); }
         .btn-danger:hover { background: #dc2626; box-shadow: 0 2px 12px rgba(239, 68, 68, 0.3); }
         .btn-group { display: flex; gap: 8px; }
 
@@ -1591,7 +1591,7 @@
             --panel-filter-hover-border: rgba(34, 197, 94, 0.24);
             --panel-filter-active-bg: var(--accent-primary);
             --panel-filter-active-border: var(--accent-primary);
-            --panel-filter-active-color: #fff;
+            --panel-filter-active-color: var(--text-on-accent);
             --panel-filter-active-shadow: 0 10px 18px rgba(34, 197, 94, 0.24);
             --panel-filter-focus-ring: rgba(34, 197, 94, 0.38);
         }
@@ -1600,7 +1600,7 @@
             --panel-filter-hover-border: rgba(96, 165, 250, 0.24);
             --panel-filter-active-bg: var(--accent-secondary);
             --panel-filter-active-border: var(--accent-secondary);
-            --panel-filter-active-color: #fff;
+            --panel-filter-active-color: var(--sv-text-on-info);
             --panel-filter-active-shadow: 0 10px 18px rgba(96, 165, 250, 0.24);
             --panel-filter-focus-ring: rgba(96, 165, 250, 0.38);
         }
@@ -2434,7 +2434,7 @@
         
         .url-pattern-list .pattern-item {
             padding: 2px 6px;
-            border-radius: 3px;
+            border-radius: var(--sv-radius-sm);
             display: inline-block;
             margin: 2px;
             background: rgba(255,255,255,0.05);
@@ -2476,7 +2476,7 @@
             color: var(--text-muted);
             font-weight: bold;
             padding: 0 2px;
-            border-radius: 2px;
+            border-radius: var(--sv-radius-sm);
             transition: color 0.15s ease, background-color 0.15s ease;
         }
         
@@ -2502,7 +2502,7 @@
         }
         .pattern-sort-btn[aria-pressed="true"] {
             background: var(--accent-blue, #4f8cff);
-            color: #fff;
+            color: var(--sv-text-on-info);
             border-color: var(--accent-blue, #4f8cff);
         }
 
@@ -2520,7 +2520,7 @@
         .btn-sm {
             padding: 3px 8px;
             font-size: 0.6875rem;
-            border-radius: 3px;
+            border-radius: var(--sv-radius-sm);
         }
 
         @media (max-width: 56.25rem) {
@@ -4373,7 +4373,7 @@
         /* Scrollbar */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: var(--sv-radius-sm); }
         ::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
 
         /* Sync Status Indicators */
@@ -4541,7 +4541,7 @@
         .script-favicon {
             width: 16px;
             height: 16px;
-            border-radius: 5px;
+            border-radius: var(--sv-radius-control);
             flex-shrink: 0;
             display: flex;
             align-items: center;
@@ -5492,7 +5492,7 @@
             border-color: rgba(22, 163, 74, 0.42);
         }
         html[data-theme="light"] .tm-tab[data-tab="newscript"]:hover {
-            color: #ffffff;
+            color: var(--text-on-accent);
             background: linear-gradient(135deg, #16a34a, #22c55e);
             box-shadow: 0 14px 26px rgba(22, 163, 74, 0.24);
         }
@@ -5516,7 +5516,7 @@
             background: rgba(15, 23, 42, 0.18);
         }
         html[data-theme="light"] .header-zoom-select {
-            background: #ffffff;
+            background: var(--sv-bg-raised);
             border-color: rgba(15, 23, 42, 0.14);
             color: #0f172a;
         }
@@ -5554,7 +5554,7 @@
             border-color: rgba(15, 23, 42, 0.08);
         }
         html[data-theme="light"] .toolbar-btn {
-            background: #ffffff;
+            background: var(--sv-bg-raised);
             border-color: rgba(15, 23, 42, 0.14);
             color: #1e293b;
         }
@@ -5566,7 +5566,7 @@
         html[data-theme="light"] .toolbar-btn.primary {
             background: #16a34a;
             border-color: #16a34a;
-            color: #ffffff;
+            color: var(--text-on-accent);
         }
         html[data-theme="light"] .toolbar-btn.primary:hover {
             background: #15803d;
@@ -5578,7 +5578,7 @@
             box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
         }
         html[data-theme="light"] .search-box {
-            background: #ffffff;
+            background: var(--sv-bg-raised);
             border-color: rgba(15, 23, 42, 0.14);
         }
         html[data-theme="light"] .search-box input {
@@ -5588,7 +5588,7 @@
             color: #94a3b8;
         }
         html[data-theme="light"] .select-field {
-            background: #ffffff;
+            background: var(--sv-bg-raised);
             border-color: rgba(15, 23, 42, 0.14);
             color: #0f172a;
         }
@@ -5642,7 +5642,7 @@
             color: #64748b;
         }
         html[data-theme="light"] .action-icon {
-            background: #ffffff;
+            background: var(--sv-bg-raised);
             border: 1px solid rgba(15, 23, 42, 0.1);
             color: #475569;
         }
@@ -5658,7 +5658,7 @@
             border-color: rgba(234, 179, 8, 0.3);
         }
         html[data-theme="light"] .btn {
-            background: #ffffff;
+            background: var(--sv-bg-raised);
             border-color: rgba(15, 23, 42, 0.14);
             color: #1e293b;
         }
@@ -5669,7 +5669,7 @@
         html[data-theme="light"] .btn-primary {
             background: #16a34a;
             border-color: #16a34a;
-            color: #ffffff;
+            color: var(--text-on-accent);
         }
         html[data-theme="light"] .btn-primary:hover {
             background: #15803d;
@@ -5959,7 +5959,7 @@
             height: 28px;
             margin-top: 1px;
             border: 1px solid rgba(245, 158, 11, 0.36);
-            border-radius: 7px;
+            border-radius: var(--sv-radius-panel);
             background: rgba(245, 158, 11, 0.12);
             color: var(--accent-yellow);
             font-size: 0.8125rem;
@@ -5982,7 +5982,7 @@
         .btn-warning {
             min-height: 32px;
             border-color: rgba(245, 158, 11, 0.42);
-            border-radius: 7px;
+            border-radius: var(--sv-radius-panel);
             background: rgba(245, 158, 11, 0.13);
             color: var(--text-primary);
             font-weight: 700;
@@ -6003,7 +6003,7 @@
             height: 32px;
             padding: 0;
             border: 1px solid rgba(127, 127, 127, 0.24);
-            border-radius: 7px;
+            border-radius: var(--sv-radius-panel);
             background: rgba(255, 255, 255, 0.04);
             color: var(--text-muted);
             transition: var(--premium-state-transition);
@@ -6040,7 +6040,7 @@
             width: 24px;
             height: 24px;
             border: 1px solid rgba(127, 127, 127, 0.22);
-            border-radius: 7px;
+            border-radius: var(--sv-radius-panel);
             background: rgba(255, 255, 255, 0.04);
             color: var(--text-muted);
             font-size: 0.6875rem;
@@ -6302,7 +6302,7 @@
             height: 24px;
             flex: 0 0 24px;
             border: 1px solid rgba(127, 127, 127, 0.24);
-            border-radius: 7px;
+            border-radius: var(--sv-radius-panel);
             background: rgba(255, 255, 255, 0.05);
             font-size: 0.6875rem;
             font-weight: 900;

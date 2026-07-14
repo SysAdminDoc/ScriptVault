@@ -87,7 +87,7 @@
         .sp-search-bar[hidden], .sp-search-meta[hidden], .sp-all-section[hidden] { display: none !important; }
         .sp-list::-webkit-scrollbar { width: 4px; }
         .sp-list::-webkit-scrollbar-track { background: transparent; }
-        .sp-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+        .sp-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: var(--sv-radius-sm); }
 
         /* Script items */
         .sp-item { display: flex; align-items: center; gap: 7px; padding: 8px 9px; border: 1px solid var(--sv-overlay); border-radius: var(--radius-panel); background: var(--sv-overlay-subtle); transition: background 0.14s ease, border-color 0.14s ease, transform 0.14s ease, box-shadow 0.14s ease, opacity 0.14s ease; cursor: default; content-visibility: auto; contain-intrinsic-size: 48px; }
@@ -181,7 +181,7 @@
         .sp-all-list { overflow: hidden; max-height: 300px; overflow-y: auto; overscroll-behavior: contain; padding: 5px; background: var(--sv-overlay-faint); }
         .sp-all-list.collapsed { max-height: 0; padding-top: 0; padding-bottom: 0; }
         .sp-all-list::-webkit-scrollbar { width: 4px; }
-        .sp-all-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+        .sp-all-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: var(--sv-radius-sm); }
 
         /* Empty state */
         .sp-empty { padding: 16px 8px; text-align: center; color: var(--text-muted); }

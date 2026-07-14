@@ -20,6 +20,11 @@
   --sv-scrollbar: #324038;
   --sv-scrollbar-hover: #45564c;
   --sv-text-on-accent: #06130b;
+  --sv-text-on-info: #06101e;
+  --sv-text-on-danger: #1b0404;
+  --sv-text-on-warning: #1c1101;
+  --sv-control-thumb: #ffffff;
+  --sv-text-inverse: #ffffff;
   --sv-success-text: #4ade80;
   --sv-backdrop: rgb(0 0 0 / 0.68);
   --sv-radius-0: 0;
@@ -60,6 +65,10 @@
   --sv-scrollbar: #bcc9c0;
   --sv-scrollbar-hover: #9eaea3;
   --sv-text-on-accent: #052e16;
+  --sv-text-on-info: #ffffff;
+  --sv-text-on-danger: #ffffff;
+  --sv-text-on-warning: #1c1101;
+  --sv-control-thumb: #ffffff;
   --sv-success-text: #137a3b;
   --sv-backdrop: rgb(15 23 42 / 0.42);
   --sv-focus-ring: 0 0 0 2px rgb(from var(--sv-accent) r g b / 0.68), 0 0 0 4px rgb(from var(--sv-accent) r g b / 0.16);
@@ -94,6 +103,10 @@
   --sv-scrollbar: #45475a;
   --sv-scrollbar-hover: #585b70;
   --sv-text-on-accent: #152115;
+  --sv-text-on-info: #111827;
+  --sv-text-on-danger: #241018;
+  --sv-text-on-warning: #241a08;
+  --sv-control-thumb: #ffffff;
   --sv-success-text: #a6e3a1;
   --sv-backdrop: rgb(10 10 20 / 0.72);
   --sv-focus-ring: 0 0 0 2px rgb(from var(--sv-accent) r g b / 0.72), 0 0 0 4px rgb(from var(--sv-accent) r g b / 0.16);
@@ -128,6 +141,10 @@
   --sv-scrollbar: #333;
   --sv-scrollbar-hover: #444;
   --sv-text-on-accent: #04160a;
+  --sv-text-on-info: #06101e;
+  --sv-text-on-danger: #1b0404;
+  --sv-text-on-warning: #1c1101;
+  --sv-control-thumb: #ffffff;
   --sv-success-text: #4ade80;
   --sv-backdrop: rgb(0 0 0 / 0.82);
   --sv-focus-ring: 0 0 0 2px rgb(from var(--sv-accent) r g b / 0.72), 0 0 0 4px rgb(from var(--sv-accent) r g b / 0.16);

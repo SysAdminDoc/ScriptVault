@@ -81,7 +81,7 @@ const DiffTool = (() => {
 }
 .sv-diff-btn-merge {
   background: var(--accent-green-dark, #22c55e);
-  color: #fff;
+  color: var(--sv-text-on-accent);
   border-color: var(--accent-green-dark, #22c55e);
 }
 .sv-diff-btn-merge:hover {
@@ -222,7 +222,7 @@ const DiffTool = (() => {
 }
 .sv-diff-hunk-btn.chosen {
   background: var(--accent-green-dark, #22c55e);
-  color: #fff;
+  color: var(--sv-text-on-accent);
   border-color: var(--accent-green-dark, #22c55e);
 }
 

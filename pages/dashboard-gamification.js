@@ -158,14 +158,14 @@ const Gamification = (() => {
 }
 .sv-gam-profile-xp-bar {
   height: 6px;
-  border-radius: 3px;
+  border-radius: var(--sv-radius-sm);
   background: var(--bg-input, #333);
   margin-top: 8px;
   overflow: hidden;
 }
 .sv-gam-profile-xp-fill {
   height: 100%;
-  border-radius: 3px;
+  border-radius: var(--sv-radius-sm);
   background: linear-gradient(90deg, var(--accent-green, #4ade80), var(--accent-blue, #60a5fa));
   transition: width 0.6s ease;
 }
@@ -286,14 +286,14 @@ const Gamification = (() => {
 }
 .sv-gam-badge-progress {
   height: 4px;
-  border-radius: 2px;
+  border-radius: var(--sv-radius-sm);
   background: var(--bg-input, #333);
   margin-top: 6px;
   overflow: hidden;
 }
 .sv-gam-badge-progress-fill {
   height: 100%;
-  border-radius: 2px;
+  border-radius: var(--sv-radius-sm);
   background: var(--accent-green, #4ade80);
   transition: width 0.4s ease;
 }

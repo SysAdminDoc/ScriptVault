@@ -20,6 +20,17 @@ function parseHtml(source) {
   return new DOMParser().parseFromString(source, "text/html");
 }
 
+function contrastRatio(foreground, background) {
+  const luminance = (hex) => {
+    const channels = hex.match(/[a-f\d]{2}/gi).map(value => parseInt(value, 16) / 255);
+    const [r, g, b] = channels.map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const lighter = Math.max(luminance(foreground), luminance(background));
+  const darker = Math.min(luminance(foreground), luminance(background));
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
 function pageUiFiles(dir = resolve(process.cwd(), "pages")) {
   return readdirSync(dir).flatMap((entry) => {
     const full = resolve(dir, entry);
@@ -47,8 +58,18 @@ describe("cross-surface UX audit", () => {
 
   test("shared controls enforce the finite radius, focus, disabled, and reduced-motion contracts", () => {
     const forbiddenPillRadius = /border-radius:\s*(?:50%|100%|999(?:9)?px)/;
-    const offenders = pageUiFiles()
-      .filter((file) => forbiddenPillRadius.test(readFileSync(file, "utf8")));
+    const allowedRadiusValues = new Set([0, 4, 6, 8, 10, 12]);
+    const offenders = [];
+    for (const file of pageUiFiles()) {
+      const source = readFileSync(file, "utf8");
+      if (forbiddenPillRadius.test(source)) offenders.push(`${file}: circular or pill radius`);
+      for (const declaration of source.matchAll(/border-radius:\s*([^;}\n]+)/g)) {
+        const numericValues = Array.from(declaration[1].matchAll(/(\d+)px/g), match => Number(match[1]));
+        if (numericValues.some(value => !allowedRadiusValues.has(value))) {
+          offenders.push(`${file}: radius outside the 0/4/6/8/10/12 scale (${declaration[1].trim()})`);
+        }
+      }
+    }
 
     expect(offenders).toEqual([]);
     expect(dashboardHtml).toContain(".sv-status-dot {\n            width: 9px;\n            height: 9px;\n            border-radius: var(--sv-radius-sm)");
@@ -63,6 +84,22 @@ describe("cross-surface UX audit", () => {
     expect(themeTokensCss).toContain("outline: 2px solid var(--sv-accent) !important");
     expect(themeTokensCss).toContain("cursor: not-allowed");
     expect(themeTokensCss).toContain("@media (prefers-reduced-motion: reduce)");
+  });
+
+  test("semantic accent foregrounds meet AA contrast without direct white control overrides", () => {
+    const pairs = [
+      ['#06130b', '#35d07f'], ['#052e16', '#16a34a'], ['#152115', '#a6e3a1'], ['#04160a', '#22c55e'],
+      ['#06101e', '#60a5fa'], ['#ffffff', '#2563eb'], ['#1b0404', '#ef4444'], ['#ffffff', '#dc2626'],
+      ['#1c1101', '#f59e0b'], ['#1c1101', '#d97706'],
+    ];
+    expect(pairs.map(([foreground, background]) => contrastRatio(foreground, background)).every(ratio => ratio >= 4.5)).toBe(true);
+
+    const directWhiteControl = /(?:color|background):\s*#(?:fff|ffffff)(?:\s|;|$)/i;
+    const offenders = pageUiFiles().filter(file => directWhiteControl.test(readFileSync(file, "utf8")));
+    expect(offenders).toEqual([]);
+    expect(themeTokensCss).toContain("--sv-text-on-accent: #052e16");
+    expect(themeTokensCss).toContain("--sv-text-on-info: #ffffff");
+    expect(themeTokensCss).toContain("--sv-text-on-danger: #ffffff");
   });
 
   test("dashboard navigation and deep panels expose honest destinations and page hierarchy", () => {

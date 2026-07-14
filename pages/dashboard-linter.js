@@ -65,14 +65,13 @@ const AdvancedLinter = (() => {
   min-width: 22px;
   height: 22px;
   padding: 0 6px;
-  border-radius: 11px;
+  border-radius: var(--sv-radius-control);
   font-size: 0.6875rem;
   font-weight: 700;
-  color: #fff;
 }
-.sv-lint-badge-error { background: var(--accent-red, #f87171); }
-.sv-lint-badge-warning { background: var(--accent-yellow, #fbbf24); color: #1a1a1a; }
-.sv-lint-badge-info { background: var(--accent-blue, #60a5fa); }
+.sv-lint-badge-error { background: var(--accent-red, #f87171); color: var(--sv-text-on-danger); }
+.sv-lint-badge-warning { background: var(--accent-yellow, #fbbf24); color: var(--sv-text-on-warning); }
+.sv-lint-badge-info { background: var(--accent-blue, #60a5fa); color: var(--sv-text-on-info); }
 .sv-lint-btn {
   padding: 5px 12px;
   border: 1px solid var(--border-color, #404040);
@@ -89,7 +88,7 @@ const AdvancedLinter = (() => {
 }
 .sv-lint-btn-fix {
   background: var(--accent-green-dark, #22c55e);
-  color: #fff;
+  color: var(--sv-text-on-accent);
   border-color: var(--accent-green-dark, #22c55e);
 }
 .sv-lint-btn-fix:hover {
@@ -99,7 +98,7 @@ const AdvancedLinter = (() => {
 }
 .sv-lint-btn-fixall {
   background: var(--accent-blue, #60a5fa);
-  color: #fff;
+  color: var(--sv-text-on-info);
   border-color: var(--accent-blue, #60a5fa);
 }
 .sv-lint-btn-fixall:hover {
@@ -151,7 +150,7 @@ const AdvancedLinter = (() => {
   color: var(--text-secondary, #a0a0a0);
   background: var(--bg-input, #333);
   padding: 1px 6px;
-  border-radius: 3px;
+  border-radius: var(--sv-radius-sm);
   margin-top: 3px;
   display: inline-block;
 }
@@ -161,7 +160,7 @@ const AdvancedLinter = (() => {
   font-size: 0.6875rem;
   border-radius: 4px;
   background: var(--accent-green-dark, #22c55e);
-  color: #fff;
+  color: var(--sv-text-on-accent);
   border: none;
   cursor: pointer;
   transition: opacity 0.15s;

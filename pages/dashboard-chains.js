@@ -127,7 +127,7 @@ const ScriptChains = (() => {
 }
 .sv-chains-btn.primary {
   background: var(--accent-green-dark, #22c55e);
-  color: #fff;
+  color: var(--sv-text-on-accent);
   border-color: var(--accent-green-dark, #22c55e);
 }
 .sv-chains-btn.primary:hover {
@@ -273,7 +273,7 @@ const ScriptChains = (() => {
   padding: 8px 10px;
   background: var(--bg-input, #333333);
   border: 1px solid var(--border-color, #404040);
-  border-radius: 5px;
+  border-radius: var(--sv-radius-control);
   color: var(--text-primary, #e0e0e0);
   font-size: 0.8125rem;
   outline: none;
@@ -320,7 +320,7 @@ const ScriptChains = (() => {
   height: 24px;
   border-radius: 6px;
   background: var(--accent-green-dark, #22c55e);
-  color: #fff;
+  color: var(--sv-text-on-accent);
   display: flex;
   align-items: center;
   justify-content: center;
