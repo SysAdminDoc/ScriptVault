@@ -1,9 +1,9 @@
 // LR-001 regression test — runtime modules/sync-providers.js
 // `_oauthFetchWithTimeout` must:
 //   1. Return the Response on a normal completion
-//   2. Return null when the AbortController fires (timeout)
+//   2. Return null when the platform timeout signal fires
 //   3. Return null when fetch rejects with a network error
-//   4. Always clearTimeout in the finally path (no leaked timer)
+//   4. Avoid application-owned timers that stop at response headers
 //
 // Extracted from the runtime file via source-text function extraction so a
 // refactor that drops the guard fails CI loudly.
@@ -59,8 +59,7 @@ describe('LR-001 — _oauthFetchWithTimeout', () => {
     expect(fetchFn).toHaveBeenCalledOnce();
   });
 
-  it('returns null when the AbortController fires (timeout)', async () => {
-    vi.useFakeTimers();
+  it('returns null when the platform timeout signal fires', async () => {
     // Honest fetch mock — only rejects when the supplied signal aborts.
     const fetchFn = vi.fn((url, opts) => new Promise((_, reject) => {
       const onAbort = () => reject(new DOMException('Aborted', 'AbortError'));
@@ -70,10 +69,7 @@ describe('LR-001 — _oauthFetchWithTimeout', () => {
     }));
     const _oauthFetchWithTimeout = factory(fetchFn, silentConsole);
 
-    const promise = _oauthFetchWithTimeout('https://example/', {}, 'Test', 100);
-    // Advance the wall clock past the timeout so the abort fires.
-    await vi.advanceTimersByTimeAsync(150);
-    const result = await promise;
+    const result = await _oauthFetchWithTimeout('https://example/', {}, 'Test', 20);
     expect(result).toBeNull();
   });
 
@@ -85,8 +81,7 @@ describe('LR-001 — _oauthFetchWithTimeout', () => {
     expect(result).toBeNull();
   });
 
-  it('clears the timer in the finally path on success (no leaked setTimeout)', async () => {
-    vi.useFakeTimers();
+  it('uses a platform timeout signal without an application-owned timer', async () => {
     const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
     const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout');
 
@@ -96,10 +91,8 @@ describe('LR-001 — _oauthFetchWithTimeout', () => {
 
     await _oauthFetchWithTimeout('https://example/', {}, 'Test', 15000);
 
-    // setTimeout was called exactly once with the abort callback; clearTimeout
-    // was called with the matching handle.
-    expect(setTimeoutSpy).toHaveBeenCalled();
-    expect(clearTimeoutSpy).toHaveBeenCalled();
+    expect(setTimeoutSpy).not.toHaveBeenCalled();
+    expect(clearTimeoutSpy).not.toHaveBeenCalled();
   });
 
   it('passes the AbortSignal through into the fetch init', async () => {

@@ -241,13 +241,73 @@ async function fetchWithTimeout(
   options: RequestInit = {},
   timeoutMs = 30_000,
 ): Promise<Response> {
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, { ...options, signal: controller.signal });
-  } finally {
-    clearTimeout(id);
+  const externalSignal = options.signal;
+  const { signal: _ignoredSignal, ...fetchOptions } = options;
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
+  const signal = externalSignal
+    ? AbortSignal.any([externalSignal, timeoutSignal])
+    : timeoutSignal;
+  return await fetch(url, { ...fetchOptions, signal });
+}
+
+const EASYCLOUD_SYNC_PAYLOAD_MAX_BYTES = 64 * 1024 * 1024;
+const EASYCLOUD_METADATA_MAX_BYTES = 4 * 1024 * 1024;
+const EASYCLOUD_ERROR_MAX_BYTES = 256 * 1024;
+
+async function readEasyCloudTextBounded(
+  response: Response,
+  maxBytes: number,
+  label: string,
+): Promise<string> {
+  const declared = Number.parseInt(response.headers?.get?.('content-length') || '0', 10);
+  if (Number.isFinite(declared) && declared > maxBytes) {
+    throw new Error(`${label} exceeds the ${Math.round(maxBytes / 1024 / 1024)} MB limit`);
   }
+  if (!response.body?.getReader) {
+    const text = await response.text();
+    if (new TextEncoder().encode(text).byteLength > maxBytes) {
+      throw new Error(`${label} exceeds the ${Math.round(maxBytes / 1024 / 1024)} MB limit`);
+    }
+    return text;
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let total = 0;
+  let text = '';
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel().catch(() => undefined);
+        throw new Error(`${label} exceeds the ${Math.round(maxBytes / 1024 / 1024)} MB limit`);
+      }
+      text += decoder.decode(value, { stream: true });
+    }
+    return text + decoder.decode();
+  } finally {
+    try { reader.releaseLock(); } catch (_) { /* already released */ }
+  }
+}
+
+async function readEasyCloudJsonBounded<T>(
+  response: Response,
+  maxBytes: number,
+  label: string,
+): Promise<T> {
+  const text = await readEasyCloudTextBounded(response, maxBytes, label);
+  try {
+    return JSON.parse(text) as T;
+  } catch (_) {
+    throw new Error(`${label} returned invalid JSON`);
+  }
+}
+
+async function discardEasyCloudResponse(response: Response): Promise<void> {
+  try { await response.body?.cancel(); } catch (_) { /* response already closed */ }
 }
 
 function log(...args: unknown[]): void {
@@ -608,7 +668,9 @@ async function _testToken(token: string): Promise<boolean> {
     const resp = await fetchWithTimeout(`${DRIVE_API}/about?fields=user`, {
       headers: { 'Authorization': `Bearer ${token}` },
     }, 10_000);
-    return resp.ok;
+    const ok = resp.ok;
+    await discardEasyCloudResponse(resp);
+    return ok;
   } catch (_) {
     return false;
   }
@@ -631,7 +693,9 @@ async function _findSyncFile(token: string): Promise<string | null> {
         { headers: { 'Authorization': `Bearer ${token}` } },
         10_000,
       );
-      if (resp.ok) return _cachedFileId;
+      const exists = resp.ok;
+      await discardEasyCloudResponse(resp);
+      if (exists) return _cachedFileId;
     } catch (_) { /* fall through to search */ }
     _cachedFileId = null;
   }
@@ -645,10 +709,15 @@ async function _findSyncFile(token: string): Promise<string | null> {
   );
 
   if (!resp.ok) {
+    await discardEasyCloudResponse(resp);
     throw new Error(`Drive file search failed: ${resp.status}`);
   }
 
-  const data: DriveFileSearchResult = await resp.json() as DriveFileSearchResult;
+  const data = await readEasyCloudJsonBounded<DriveFileSearchResult>(
+    resp,
+    EASYCLOUD_METADATA_MAX_BYTES,
+    'Drive file search response',
+  );
   const file = data.files?.[0];
   if (file) {
     _cachedFileId = file.id;
@@ -672,13 +741,19 @@ async function _downloadFromDrive(token: string): Promise<RemoteSyncEnvelope | n
 
   if (resp.status === 404) {
     _cachedFileId = null;
+    await discardEasyCloudResponse(resp);
     return null;
   }
   if (!resp.ok) {
+    await discardEasyCloudResponse(resp);
     throw new Error(`Drive download failed: ${resp.status}`);
   }
 
-  return resp.json() as Promise<RemoteSyncEnvelope>;
+  return await readEasyCloudJsonBounded<RemoteSyncEnvelope>(
+    resp,
+    EASYCLOUD_SYNC_PAYLOAD_MAX_BYTES,
+    'EasyCloud backup',
+  );
 }
 
 /**
@@ -723,11 +798,19 @@ async function _uploadToDrive(token: string, data: RemoteSyncEnvelope): Promise<
   }, 60_000);
 
   if (!resp.ok) {
-    const errText = await resp.text().catch(() => '');
+    const errText = await readEasyCloudTextBounded(
+      resp,
+      EASYCLOUD_ERROR_MAX_BYTES,
+      'Drive upload error',
+    ).catch(() => '');
     throw new Error(`Drive upload failed (${resp.status}): ${errText}`);
   }
 
-  const result: DriveUploadResult = await resp.json() as DriveUploadResult;
+  const result = await readEasyCloudJsonBounded<DriveUploadResult>(
+    resp,
+    EASYCLOUD_METADATA_MAX_BYTES,
+    'Drive upload response',
+  );
   if (result.id && !_cachedFileId) {
     _cachedFileId = result.id;
     await _setStorageValues({ [KEYS.FILE_ID]: result.id });
@@ -1241,7 +1324,13 @@ export const EasyCloudSync: EasyCloudSyncAPI = {
           headers: { 'Authorization': `Bearer ${token}` },
         }, 10_000);
         if (resp.ok) {
-          user = await resp.json() as UserInfoResult;
+          user = await readEasyCloudJsonBounded<UserInfoResult>(
+            resp,
+            EASYCLOUD_METADATA_MAX_BYTES,
+            'Google user response',
+          );
+        } else {
+          await discardEasyCloudResponse(resp);
         }
       } catch (_) { /* non-fatal */ }
 
@@ -1290,7 +1379,7 @@ export const EasyCloudSync: EasyCloudSyncAPI = {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: `token=${encodeURIComponent(_cachedToken)}`,
-          }, 10_000).catch(() => {});
+          }, 10_000).then(discardEasyCloudResponse).catch(() => {});
         } catch (_) { /* best effort */ }
         _cachedToken = null;
       }

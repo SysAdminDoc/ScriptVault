@@ -447,8 +447,6 @@ export async function fetchProvenanceBundle(url: string): Promise<string | null>
       credentials: 'omit',
       signal: controller.signal,
     });
-    clearTimeout(timeoutId);
-
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const postCheck = classifyResponseUrl(response, ['http:', 'https:']);
     if (!postCheck.ok) {
@@ -456,7 +454,13 @@ export async function fetchProvenanceBundle(url: string): Promise<string | null>
     }
     const text = await fetchTextBounded(response, MAX_PROVENANCE_BUNDLE_BYTES, 'Provenance bundle');
     return text && text.trim().length > 0 ? text : null;
+  } catch (error: unknown) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('@require-provenance fetch timed out after 10 seconds');
+    }
+    throw error;
   } finally {
+    // The deadline covers the body read as well as response headers.
     clearTimeout(timeoutId);
   }
 }
@@ -493,8 +497,6 @@ export async function fetchWithRetry(url: string, retries: number = 2): Promise<
         signal: controller.signal
       });
 
-      clearTimeout(timeoutId);
-
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
@@ -513,12 +515,17 @@ export async function fetchWithRetry(url: string, retries: number = 2): Promise<
 
       throw new Error('Empty response');
     } catch (e) {
-      clearTimeout(timeoutId); // Always clear to prevent dangling timers on network errors
       if (i === retries) {
+        if (e instanceof Error && e.name === 'AbortError') {
+          throw new Error('@require fetch timed out after 10 seconds');
+        }
         throw e;
       }
       // Wait before retry
       await new Promise<void>(r => setTimeout(r, 500 * (i + 1)));
+    } finally {
+      // Keep each attempt's timeout active until its bounded body read ends.
+      clearTimeout(timeoutId);
     }
   }
   return null;

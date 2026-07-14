@@ -197,16 +197,18 @@ export function registerContextMenuClickListener(): void {
               assertExternalFetchUrl(linkUrl, 'Script source', ['http:', 'https:']);
               const controller = new AbortController();
               const timeoutId = setTimeout(() => controller.abort(), 20_000);
-              let response: Response;
+              let code: string;
               try {
-                response = await fetch(linkUrl, { signal: controller.signal });
+                const response = await fetch(linkUrl, { signal: controller.signal });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const postCheck = classifyResponseUrl(response, ['http:', 'https:']);
+                if (!postCheck.ok) throw new Error(`Script source redirected to ${postCheck.message}`);
+                code = await fetchTextBounded(response, LINK_INSTALL_MAX_BYTES, 'Script');
               } finally {
+                // Keep the deadline alive through the response body. A server
+                // that sends headers and then stalls must not pin the worker.
                 clearTimeout(timeoutId);
               }
-              if (!response.ok) throw new Error(`HTTP ${response.status}`);
-              const postCheck = classifyResponseUrl(response, ['http:', 'https:']);
-              if (!postCheck.ok) throw new Error(`Script source redirected to ${postCheck.message}`);
-              const code: string = await fetchTextBounded(response, LINK_INSTALL_MAX_BYTES, 'Script');
               if (code.includes('==UserScript==')) {
                 const storageKey = createPendingInstallStorageKey('context-menu');
                 await storePendingInstall(storageKey, { code, url: linkUrl, timestamp: Date.now() });

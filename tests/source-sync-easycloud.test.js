@@ -117,6 +117,38 @@ describe('source easycloud sync module', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('rejects an oversized EasyCloud backup before parsing or applying it', async () => {
+    await chrome.storage.local.set({
+      easycloud_connected: true,
+      syncTombstones: {},
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ files: [{ id: 'drive-file-id' }] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response('{}', {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': String(64 * 1024 * 1024 + 1),
+          },
+        }),
+      );
+    globalThis.fetch = fetchMock;
+
+    const { EasyCloudSync, ScriptStorage } = await loadFreshEasyCloud();
+    const result = await EasyCloudSync.sync();
+
+    expect(result.error).toMatch(/EasyCloud backup exceeds the 64 MB limit/);
+    expect(ScriptStorage.set).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('runs a sync when the debounce alarm fires', async () => {
     chrome.storage.local.set({
       easycloud_connected: false,

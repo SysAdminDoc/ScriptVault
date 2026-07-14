@@ -27,9 +27,10 @@ class FakeLocalFolderFileHandle {
 
   async getFile() {
     if (!this.directory.files.has(this.name)) throw createNotFoundError();
-    const text = this.directory.files.get(this.name);
+    const entry = this.directory.files.get(this.name);
+    const text = typeof entry === 'string' ? entry : entry.text;
     return {
-      size: text.length,
+      size: typeof entry === 'string' ? text.length : entry.size,
       lastModified: 123456,
       text: async () => text,
     };
@@ -564,6 +565,19 @@ describe('source sync providers module', () => {
       connected: false,
       status: 'not_configured',
     });
+  });
+
+  it('rejects an oversized local sync backup before reading it into memory', async () => {
+    const { directory } = installLocalFolderBinding();
+    directory.files.set('scriptvault-backup.json', {
+      text: '{}',
+      size: 64 * 1024 * 1024 + 1,
+    });
+    const { CloudSyncProviders } = await loadFreshSyncProviders();
+
+    await expect(CloudSyncProviders.localfolder.download({})).rejects.toThrow(
+      'Local sync backup exceeds the 64 MB limit',
+    );
   });
 
   it('discloses OAuth token storage fields without exposing token values', async () => {

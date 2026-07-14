@@ -143,6 +143,12 @@ describe('source hardening parity guards', () => {
     expect(providers).toContain('assertSyncResponseAllowed(response, guardOptions);');
     expect(providers).toContain('const SYNC_PAYLOAD_MAX_BYTES = 64 * 1024 * 1024;');
     expect(providers).toContain('readSyncJsonBounded(response, SYNC_PAYLOAD_MAX_BYTES');
+    expect(providers).toContain('const timeoutSignal = AbortSignal.timeout(timeoutMs);');
+    expect(providers).toContain('AbortSignal.any([externalSignal, timeoutSignal])');
+    const easyCloud = source('src/modules/sync-easycloud.ts');
+    expect(easyCloud).toContain('const EASYCLOUD_SYNC_PAYLOAD_MAX_BYTES = 64 * 1024 * 1024;');
+    expect(easyCloud).toContain('readEasyCloudJsonBounded<RemoteSyncEnvelope>');
+    expect(easyCloud).toContain('const timeoutSignal = AbortSignal.timeout(timeoutMs);');
     const s3Start = providers.indexOf('const s3 = {');
     const s3End = providers.indexOf('export const CloudSyncProviders', s3Start);
     const s3 = providers.slice(s3Start, s3End);
@@ -158,6 +164,23 @@ describe('source hardening parity guards', () => {
     expect(core).not.toMatch(/code\.length\s*>\s*MAX_SCRIPT_SIZE/);
     expect(install).toContain('export function scriptSourceByteLength(code: string)');
     expect(install).not.toMatch(/code\.length\s*>\s*MAX_SCRIPT_SIZE/);
+  });
+
+  it('keeps install and dependency deadlines alive through bounded body reads', () => {
+    const core = source('src/background/core.ts');
+    const contextMenu = source('src/background/context-menu.ts');
+    const install = source('src/background/install-handler.ts');
+    const loader = source('src/background/resource-loader.ts');
+    for (const text of [core, contextMenu, install, loader]) {
+      expect(text).toMatch(/fetchTextBounded|_fetchTextBounded/);
+      expect(text).toContain('clearTimeout(timeoutId)');
+    }
+    expect(contextMenu.indexOf("fetchTextBounded(response, LINK_INSTALL_MAX_BYTES, 'Script')"))
+      .toBeLessThan(contextMenu.indexOf('clearTimeout(timeoutId)'));
+    expect(install.indexOf("fetchTextBounded(response, MAX_SCRIPT_SIZE, 'Script')"))
+      .toBeLessThan(install.indexOf('clearTimeout(timeoutId)', install.indexOf('export async function installFromUrl')));
+    expect(loader).toContain('@require fetch timed out after 10 seconds');
+    expect(core).toContain('Script download timed out after 30 seconds');
   });
 
   it('keeps PublicAPI trusted-origin and install URL checks on the canonical internal-host guard', () => {

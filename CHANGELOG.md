@@ -25,6 +25,10 @@ All notable changes to ScriptVault will be documented in this file.
 - **Kept compact navigation accessible.** Every dashboard destination retains
   a localized accessible name when the narrow layout hides its visible label,
   with browser-verified and automated regression coverage.
+- **Closed slow-response lifecycle gaps.** Install, context-menu, dependency,
+  provenance, standard cloud-sync, and EasyCloud requests now keep their
+  deadlines active through response-body reads; EasyCloud also rejects
+  oversized backup, metadata, and error payloads before parsing them.
 
 ## [v3.20.0] — Premium interaction and theme polish (2026-07-14)
 

@@ -3394,6 +3394,10 @@ const CloudSyncProviders = (() => {
     try {
       const fileHandle = await handle.getFileHandle(fileName);
       const file = await fileHandle.getFile();
+      const fileSize = typeof file.size === "number" ? file.size : 0;
+      if (fileSize > SYNC_PAYLOAD_MAX_BYTES) {
+        throw new Error(`Local sync backup exceeds the ${Math.round(SYNC_PAYLOAD_MAX_BYTES / 1024 / 1024)} MB limit`);
+      }
       return await file.text();
     } catch (error) {
       if (isExpectedMissingLocalFolderFileError(error)) return null;
@@ -3401,6 +3405,10 @@ const CloudSyncProviders = (() => {
     }
   }
   async function writeLocalFolderSyncFile(handle, fileName, text) {
+    const byteLength = new TextEncoder().encode(text).byteLength;
+    if (byteLength > SYNC_PAYLOAD_MAX_BYTES) {
+      throw new Error(`Local sync backup exceeds the ${Math.round(SYNC_PAYLOAD_MAX_BYTES / 1024 / 1024)} MB limit`);
+    }
     const fileHandle = await handle.getFileHandle(fileName, { create: true });
     const writable = await fileHandle.createWritable();
     try {
@@ -3410,57 +3418,86 @@ const CloudSyncProviders = (() => {
     }
   }
   async function _oauthFetchWithTimeout(url, init, providerLabel, timeoutMs = 15e3) {
-    const controller = new AbortController();
     const externalSignal = init.signal;
     const { signal: _ignoredSignal, ...fetchInit } = init;
-    const abortFromExternal = () => {
-      try {
-        controller.abort(externalSignal?.reason);
-      } catch (_) {
-        controller.abort();
-      }
-    };
-    if (externalSignal?.aborted) abortFromExternal();
-    else externalSignal?.addEventListener("abort", abortFromExternal, { once: true });
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const timeoutSignal = AbortSignal.timeout(timeoutMs);
+    const signal = externalSignal ? AbortSignal.any([externalSignal, timeoutSignal]) : timeoutSignal;
     try {
-      return await fetch(url, { ...fetchInit, signal: controller.signal });
+      return await fetch(url, { ...fetchInit, signal });
     } catch (e) {
       const name = e && typeof e === "object" && "name" in e ? String(e.name) : "";
       const message = e instanceof Error ? e.message : String(e);
-      if (name === "AbortError" || /aborted|timed?\s*out/i.test(message)) {
+      if (name === "AbortError" || name === "TimeoutError" || /aborted|timed?\s*out/i.test(message)) {
         console.warn(`[CloudSync] ${providerLabel} token refresh timed out after ${timeoutMs}ms`);
         return null;
       }
       console.warn(`[CloudSync] ${providerLabel} token refresh network error:`, message);
       return null;
-    } finally {
-      clearTimeout(timer);
-      externalSignal?.removeEventListener("abort", abortFromExternal);
     }
   }
   async function fetchWithTimeout(url, options = {}, timeoutMs = 3e4, guardOptions = { label: "Cloud sync endpoint" }) {
     assertSyncEndpointAllowed(url, guardOptions);
-    const controller = new AbortController();
     const externalSignal = options.signal;
     const { signal: _ignoredSignal, ...fetchOptions } = options;
-    const abortFromExternal = () => {
-      try {
-        controller.abort(externalSignal?.reason);
-      } catch (_) {
-        controller.abort();
+    const timeoutSignal = AbortSignal.timeout(timeoutMs);
+    const signal = externalSignal ? AbortSignal.any([externalSignal, timeoutSignal]) : timeoutSignal;
+    const response = await fetch(url, { ...fetchOptions, signal });
+    assertSyncResponseAllowed(response, guardOptions);
+    return response;
+  }
+  var SYNC_PAYLOAD_MAX_BYTES = 64 * 1024 * 1024;
+  var SYNC_METADATA_MAX_BYTES = 4 * 1024 * 1024;
+  var SYNC_ERROR_MAX_BYTES = 256 * 1024;
+  async function readSyncTextBounded(response, maxBytes, label) {
+    const declared = Number.parseInt(response.headers?.get?.("content-length") || "0", 10);
+    if (Number.isFinite(declared) && declared > maxBytes) {
+      throw new Error(`${label} exceeds the ${Math.round(maxBytes / 1024 / 1024)} MB limit`);
+    }
+    if (!response.body?.getReader) {
+      const text = await response.text();
+      if (new TextEncoder().encode(text).byteLength > maxBytes) {
+        throw new Error(`${label} exceeds the ${Math.round(maxBytes / 1024 / 1024)} MB limit`);
       }
-    };
-    if (externalSignal?.aborted) abortFromExternal();
-    else externalSignal?.addEventListener("abort", abortFromExternal, { once: true });
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      return text;
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    const chunks = [];
+    let bytesRead = 0;
     try {
-      const response = await fetch(url, { ...fetchOptions, signal: controller.signal });
-      assertSyncResponseAllowed(response, guardOptions);
-      return response;
+      for (; ; ) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (!value) continue;
+        bytesRead += value.byteLength;
+        if (bytesRead > maxBytes) {
+          try {
+            await reader.cancel();
+          } catch {
+          }
+          throw new Error(`${label} exceeds the ${Math.round(maxBytes / 1024 / 1024)} MB limit`);
+        }
+        chunks.push(decoder.decode(value, { stream: true }));
+      }
+      chunks.push(decoder.decode());
+      return chunks.join("");
     } finally {
-      clearTimeout(timeoutId);
-      externalSignal?.removeEventListener("abort", abortFromExternal);
+      try {
+        reader.releaseLock();
+      } catch {
+      }
+    }
+  }
+  async function readSyncJsonBounded(response, maxBytes, label) {
+    if (!response.body?.getReader && typeof response.json === "function") {
+      return response.json();
+    }
+    const text = await readSyncTextBounded(response, maxBytes, label);
+    if (!text.trim()) return {};
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new Error(`${label} returned invalid JSON`);
     }
   }
   var localfolder = {
@@ -3626,7 +3663,7 @@ const CloudSyncProviders = (() => {
       if (!response.ok) throw new Error(`WebDAV download failed: HTTP ${response.status}`);
       this._lastSyncEtag = response.headers?.get("ETag") || void 0;
       this._lastSyncEtagKey = objectName;
-      return await response.json();
+      return await readSyncJsonBounded(response, SYNC_PAYLOAD_MAX_BYTES, "WebDAV sync payload");
     },
     async test(settings) {
       try {
@@ -3873,7 +3910,11 @@ const CloudSyncProviders = (() => {
         15e3
       );
       if (!response.ok) throw new Error(`Failed to search files: ${response.status}`);
-      const data = await response.json();
+      const data = await readSyncJsonBounded(
+        response,
+        SYNC_METADATA_MAX_BYTES,
+        "Google Drive file list"
+      );
       return data.files?.[0] ?? null;
     },
     async upload(data, settings, opts = {}) {
@@ -3912,7 +3953,7 @@ const CloudSyncProviders = (() => {
         signal: opts.signal
       }, 6e4);
       if (!response.ok) {
-        const error = await response.text();
+        const error = await readSyncTextBounded(response, SYNC_ERROR_MAX_BYTES, "Google Drive upload error");
         throw new Error(`Upload failed: ${error}`);
       }
       this._lastSyncEtag = response.headers?.get("ETag") || this._lastSyncEtag;
@@ -3938,7 +3979,7 @@ const CloudSyncProviders = (() => {
       if (!response.ok) throw new Error(`Download failed: ${response.status}`);
       this._lastSyncEtag = response.headers?.get("ETag") || void 0;
       this._lastSyncEtagKey = objectName;
-      return await response.json();
+      return await readSyncJsonBounded(response, SYNC_PAYLOAD_MAX_BYTES, "Google Drive sync payload");
     },
     async test(settings) {
       try {
@@ -3969,7 +4010,11 @@ const CloudSyncProviders = (() => {
           1e4
         );
         if (!response.ok) return { connected: false };
-        const user = await response.json();
+        const user = await readSyncJsonBounded(
+          response,
+          SYNC_METADATA_MAX_BYTES,
+          "Google Drive user response"
+        );
         return { connected: true, user: { email: user.email ?? "", name: user.name ?? "" } };
       } catch (_e) {
         return { connected: false };
@@ -4157,7 +4202,7 @@ const CloudSyncProviders = (() => {
       }, 6e4);
       if (response.status === 401) throw new Error("Dropbox token expired. Please reconnect.");
       if (!response.ok) {
-        const error = await response.text();
+        const error = await readSyncTextBounded(response, SYNC_ERROR_MAX_BYTES, "Dropbox upload error");
         throw new Error(`Upload failed: ${error}`);
       }
       const metadata = await response.clone().json().catch(() => null);
@@ -4200,7 +4245,7 @@ const CloudSyncProviders = (() => {
         this._lastSyncRev = void 0;
         this._lastSyncRevPath = "";
       }
-      return await response.json();
+      return await readSyncJsonBounded(response, SYNC_PAYLOAD_MAX_BYTES, "Dropbox sync payload");
     },
     async test(settings) {
       try {
@@ -4237,7 +4282,11 @@ const CloudSyncProviders = (() => {
           15e3
         );
         if (!response.ok) return { connected: false };
-        const user = await response.json();
+        const user = await readSyncJsonBounded(
+          response,
+          SYNC_METADATA_MAX_BYTES,
+          "Dropbox account response"
+        );
         return {
           connected: true,
           user: {
@@ -4439,7 +4488,13 @@ const CloudSyncProviders = (() => {
         },
         6e4
       );
-      if (!response.ok) throw new Error("Upload failed: " + await response.text());
+      if (!response.ok) {
+        throw new Error("Upload failed: " + await readSyncTextBounded(
+          response,
+          SYNC_ERROR_MAX_BYTES,
+          "OneDrive upload error"
+        ));
+      }
       this._lastSyncEtag = response.headers.get("ETag") || response.headers.get("eTag") || this._lastSyncEtag;
       this._lastSyncEtagKey = objectName;
       return { success: true, timestamp: Date.now() };
@@ -4462,7 +4517,7 @@ const CloudSyncProviders = (() => {
       if (!response.ok) throw new Error("Download failed: " + response.status);
       this._lastSyncEtag = response.headers.get("ETag") || response.headers.get("eTag") || void 0;
       this._lastSyncEtagKey = objectName;
-      return await response.json();
+      return await readSyncJsonBounded(response, SYNC_PAYLOAD_MAX_BYTES, "OneDrive sync payload");
     },
     async test(settings) {
       try {
@@ -4488,7 +4543,11 @@ const CloudSyncProviders = (() => {
           headers: { "Authorization": `Bearer ${token}` }
         }, 15e3);
         if (!response.ok) return { connected: false };
-        const user = await response.json();
+        const user = await readSyncJsonBounded(
+          response,
+          SYNC_METADATA_MAX_BYTES,
+          "OneDrive user response"
+        );
         return {
           connected: true,
           user: {
@@ -4704,15 +4763,14 @@ const CloudSyncProviders = (() => {
         contentType: "application/json",
         extraHeaders: conditionalHeaders
       });
-      const response = await fetch(url, {
+      const response = await fetchWithTimeout(url, {
         method: "PUT",
         headers: signed.headers,
         body,
         signal: opts.signal
-      });
-      assertSyncResponseAllowed(response, guardOptions);
+      }, 3e4, guardOptions);
       if (!response.ok) {
-        const text = await response.text().catch(() => "");
+        const text = await readSyncTextBounded(response, SYNC_ERROR_MAX_BYTES, "S3 upload error").catch(() => "");
         throw new Error(`S3 upload failed: HTTP ${response.status}${text ? ` - ${text.slice(0, 200)}` : ""}`);
       }
       this._lastSyncEtag = response.headers?.get("ETag") || this._lastSyncEtag;
@@ -4739,24 +4797,23 @@ const CloudSyncProviders = (() => {
         accessKeyId: effectiveSettings.s3AccessKeyId,
         secretKey: effectiveSettings.s3SecretKey
       });
-      const response = await fetch(url, {
+      const response = await fetchWithTimeout(url, {
         method: "GET",
         headers: signed.headers,
         signal: opts.signal
-      });
-      assertSyncResponseAllowed(response, guardOptions);
+      }, 3e4, guardOptions);
       if (response.status === 404) {
         this._lastSyncEtag = null;
         this._lastSyncEtagKey = objectKey;
         return null;
       }
       if (!response.ok) {
-        const text = await response.text().catch(() => "");
+        const text = await readSyncTextBounded(response, SYNC_ERROR_MAX_BYTES, "S3 download error").catch(() => "");
         throw new Error(`S3 download failed: HTTP ${response.status}${text ? ` - ${text.slice(0, 200)}` : ""}`);
       }
       this._lastSyncEtag = response.headers?.get("ETag") || void 0;
       this._lastSyncEtagKey = objectKey;
-      return await response.json();
+      return await readSyncJsonBounded(response, SYNC_PAYLOAD_MAX_BYTES, "S3 sync payload");
     },
     async test(settings) {
       const effectiveSettings = await SyncCredentialStore.resolveSettings(settings);
@@ -4778,8 +4835,12 @@ const CloudSyncProviders = (() => {
           accessKeyId: effectiveSettings.s3AccessKeyId,
           secretKey: effectiveSettings.s3SecretKey
         });
-        const response = await fetch(url, { method: "HEAD", headers: signed.headers });
-        assertSyncResponseAllowed(response, guardOptions);
+        const response = await fetchWithTimeout(
+          url,
+          { method: "HEAD", headers: signed.headers },
+          15e3,
+          guardOptions
+        );
         if (response.ok || response.status === 404) return { success: true };
         return { success: false, error: `HTTP ${response.status}` };
       } catch (e) {
@@ -22719,6 +22780,7 @@ const MessageRouter = (() => {
     "exportZip",
     "factoryReset",
     "fetchResource",
+    "fetchScriptPreview",
     "forceUpdate",
     "generateDigest",
     "getAllScriptsValues",
@@ -22785,6 +22847,7 @@ const MessageRouter = (() => {
     "permanentlyDelete",
     "prefetchResources",
     "prepareBackgroundRunnerDryRun",
+    "probeInstallDependency",
     "publicApi_clearAuditLog",
     "publicApi_getAuditLog",
     "publicApi_getLocalMcpBridgeConfig",
@@ -29407,12 +29470,63 @@ const EasyCloudSync = (() => {
     };
   }
   async function fetchWithTimeout(url, options = {}, timeoutMs = 3e4) {
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), timeoutMs);
+    const externalSignal = options.signal;
+    const { signal: _ignoredSignal, ...fetchOptions } = options;
+    const timeoutSignal = AbortSignal.timeout(timeoutMs);
+    const signal = externalSignal ? AbortSignal.any([externalSignal, timeoutSignal]) : timeoutSignal;
+    return await fetch(url, { ...fetchOptions, signal });
+  }
+  var EASYCLOUD_SYNC_PAYLOAD_MAX_BYTES = 64 * 1024 * 1024;
+  var EASYCLOUD_METADATA_MAX_BYTES = 4 * 1024 * 1024;
+  var EASYCLOUD_ERROR_MAX_BYTES = 256 * 1024;
+  async function readEasyCloudTextBounded(response, maxBytes, label) {
+    const declared = Number.parseInt(response.headers?.get?.("content-length") || "0", 10);
+    if (Number.isFinite(declared) && declared > maxBytes) {
+      throw new Error(`${label} exceeds the ${Math.round(maxBytes / 1024 / 1024)} MB limit`);
+    }
+    if (!response.body?.getReader) {
+      const text2 = await response.text();
+      if (new TextEncoder().encode(text2).byteLength > maxBytes) {
+        throw new Error(`${label} exceeds the ${Math.round(maxBytes / 1024 / 1024)} MB limit`);
+      }
+      return text2;
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let total = 0;
+    let text = "";
     try {
-      return await fetch(url, { ...options, signal: controller.signal });
+      for (; ; ) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (!value) continue;
+        total += value.byteLength;
+        if (total > maxBytes) {
+          await reader.cancel().catch(() => void 0);
+          throw new Error(`${label} exceeds the ${Math.round(maxBytes / 1024 / 1024)} MB limit`);
+        }
+        text += decoder.decode(value, { stream: true });
+      }
+      return text + decoder.decode();
     } finally {
-      clearTimeout(id);
+      try {
+        reader.releaseLock();
+      } catch (_) {
+      }
+    }
+  }
+  async function readEasyCloudJsonBounded(response, maxBytes, label) {
+    const text = await readEasyCloudTextBounded(response, maxBytes, label);
+    try {
+      return JSON.parse(text);
+    } catch (_) {
+      throw new Error(`${label} returned invalid JSON`);
+    }
+  }
+  async function discardEasyCloudResponse(response) {
+    try {
+      await response.body?.cancel();
+    } catch (_) {
     }
   }
   function log(...args) {
@@ -29695,7 +29809,9 @@ const EasyCloudSync = (() => {
       const resp = await fetchWithTimeout(`${DRIVE_API}/about?fields=user`, {
         headers: { "Authorization": `Bearer ${token}` }
       }, 1e4);
-      return resp.ok;
+      const ok = resp.ok;
+      await discardEasyCloudResponse(resp);
+      return ok;
     } catch (_) {
       return false;
     }
@@ -29708,7 +29824,9 @@ const EasyCloudSync = (() => {
           { headers: { "Authorization": `Bearer ${token}` } },
           1e4
         );
-        if (resp2.ok) return _cachedFileId;
+        const exists = resp2.ok;
+        await discardEasyCloudResponse(resp2);
+        if (exists) return _cachedFileId;
       } catch (_) {
       }
       _cachedFileId = null;
@@ -29720,9 +29838,14 @@ const EasyCloudSync = (() => {
       15e3
     );
     if (!resp.ok) {
+      await discardEasyCloudResponse(resp);
       throw new Error(`Drive file search failed: ${resp.status}`);
     }
-    const data = await resp.json();
+    const data = await readEasyCloudJsonBounded(
+      resp,
+      EASYCLOUD_METADATA_MAX_BYTES,
+      "Drive file search response"
+    );
     const file = data.files?.[0];
     if (file) {
       _cachedFileId = file.id;
@@ -29740,12 +29863,18 @@ const EasyCloudSync = (() => {
     );
     if (resp.status === 404) {
       _cachedFileId = null;
+      await discardEasyCloudResponse(resp);
       return null;
     }
     if (!resp.ok) {
+      await discardEasyCloudResponse(resp);
       throw new Error(`Drive download failed: ${resp.status}`);
     }
-    return resp.json();
+    return await readEasyCloudJsonBounded(
+      resp,
+      EASYCLOUD_SYNC_PAYLOAD_MAX_BYTES,
+      "EasyCloud backup"
+    );
   }
   async function _uploadToDrive(token, data) {
     const fileId = await _findSyncFile(token);
@@ -29778,10 +29907,18 @@ const EasyCloudSync = (() => {
       body
     }, 6e4);
     if (!resp.ok) {
-      const errText = await resp.text().catch(() => "");
+      const errText = await readEasyCloudTextBounded(
+        resp,
+        EASYCLOUD_ERROR_MAX_BYTES,
+        "Drive upload error"
+      ).catch(() => "");
       throw new Error(`Drive upload failed (${resp.status}): ${errText}`);
     }
-    const result = await resp.json();
+    const result = await readEasyCloudJsonBounded(
+      resp,
+      EASYCLOUD_METADATA_MAX_BYTES,
+      "Drive upload response"
+    );
     if (result.id && !_cachedFileId) {
       _cachedFileId = result.id;
       await _setStorageValues({ [KEYS.FILE_ID]: result.id });
@@ -30124,7 +30261,13 @@ const EasyCloudSync = (() => {
             headers: { "Authorization": `Bearer ${token}` }
           }, 1e4);
           if (resp.ok) {
-            user = await resp.json();
+            user = await readEasyCloudJsonBounded(
+              resp,
+              EASYCLOUD_METADATA_MAX_BYTES,
+              "Google user response"
+            );
+          } else {
+            await discardEasyCloudResponse(resp);
           }
         } catch (_) {
         }
@@ -30160,7 +30303,7 @@ const EasyCloudSync = (() => {
               method: "POST",
               headers: { "Content-Type": "application/x-www-form-urlencoded" },
               body: `token=${encodeURIComponent(_cachedToken)}`
-            }, 1e4).catch(() => {
+            }, 1e4).then(discardEasyCloudResponse).catch(() => {
             });
           } catch (_) {
           }
@@ -42156,6 +42299,9 @@ async function buildLocalHealthReport() {
 // ============================================================================
 
 const MAX_SCRIPT_SIZE = 5 * 1024 * 1024; // 5MB limit
+function _scriptSourceByteLength(code) {
+  return typeof code === 'string' ? new TextEncoder().encode(code).byteLength : 0;
+}
 const SUBSCRIPTION_REFRESH_ALARM = 'subscriptionRefresh';
 const DEFAULT_SUBSCRIPTION_REFRESH_INTERVAL_HOURS = 24;
 
@@ -44661,8 +44807,9 @@ async function handleMessage(message, sender) {
       }
         
       case 'saveScript': {
-        if (data.code && data.code.length > MAX_SCRIPT_SIZE) {
-          return { error: `Script too large (${formatBytes(data.code.length)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.` };
+        const codeBytes = _scriptSourceByteLength(data.code);
+        if (codeBytes > MAX_SCRIPT_SIZE) {
+          return { error: `Script too large (${formatBytes(codeBytes)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.` };
         }
         const parsed = parseUserscript(data.code);
         if (parsed.error) return { error: parsed.error };
@@ -44846,8 +44993,9 @@ async function handleMessage(message, sender) {
       }
       
       case 'createScript': {
-        if (data.code && data.code.length > MAX_SCRIPT_SIZE) {
-          return { error: `Script too large (${formatBytes(data.code.length)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.` };
+        const codeBytes = _scriptSourceByteLength(data.code);
+        if (codeBytes > MAX_SCRIPT_SIZE) {
+          return { error: `Script too large (${formatBytes(codeBytes)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.` };
         }
         const parsed = parseUserscript(data.code);
         if (parsed.error) return { error: parsed.error };
@@ -45069,7 +45217,7 @@ async function handleMessage(message, sender) {
       }
 
       case 'importScript': {
-        if (data.code && data.code.length > MAX_SCRIPT_SIZE) return { error: `Script exceeds ${formatBytes(MAX_SCRIPT_SIZE)} size limit` };
+        if (_scriptSourceByteLength(data.code) > MAX_SCRIPT_SIZE) return { error: `Script exceeds ${formatBytes(MAX_SCRIPT_SIZE)} size limit` };
         const parsed = parseUserscript(data.code);
         if (parsed.error) return { error: parsed.error };
         
@@ -46237,6 +46385,12 @@ async function handleMessage(message, sender) {
           operation: data.operation || 'install'
         });
 
+      case 'fetchScriptPreview':
+        return await fetchScriptPreview(data.url);
+
+      case 'probeInstallDependency':
+        return await probeInstallDependency(data.url);
+
       case 'verifyRequireProvenancePreview':
         return await previewRequireProvenance(data);
 
@@ -46841,17 +46995,32 @@ async function handleMessage(message, sender) {
         // only touches the scripts partition, so without this a factory reset
         // leaves fully-restorable script code / GM values in the backups store.
         if (typeof BackupsDAO !== 'undefined' && BackupsDAO.clear) {
-          await BackupsDAO.clear().catch(() => {});
+          await BackupsDAO.clear();
         }
+        // Factory reset is a privacy boundary, not a curated key list. Clear
+        // every extension-owned local/session value so integration tokens,
+        // webhook configuration, signing keys, UI module caches, and future
+        // storage keys cannot silently survive an explicit wipe.
+        await chrome.storage.local.clear();
+        if (chrome.storage.session?.clear) await chrome.storage.session.clear();
+        // Recreate only the documented default settings after the wipe.
         await SettingsManager.reset();
-        // Clear ghost state that would otherwise survive the reset
-        await chrome.storage.local.remove([
-          'syncTombstones', 'trash', 'pendingUpdates', 'scriptFolders',
-          'cspReports', 'gistSettings', 'lastSyncResult', 'gmValueSyncRetryHistory', 'gmValueSyncRetryResolution', 'gmValueSyncRetryResolutionHistory', 'liveReloadScripts',
-          'restoreReceipts', 'autoBackups'
-        ]).catch(() => {});
+        // Remove orphaned DNR state too. Per-script cleanup above handles known
+        // rules, while these sweeps cover rules left by an interrupted delete.
+        if (chrome.declarativeNetRequest?.getDynamicRules) {
+          const dynamicRules = await chrome.declarativeNetRequest.getDynamicRules();
+          if (dynamicRules.length) {
+            await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: dynamicRules.map(rule => rule.id) });
+          }
+        }
+        if (chrome.declarativeNetRequest?.getSessionRules) {
+          const sessionRules = await chrome.declarativeNetRequest.getSessionRules();
+          if (sessionRules.length) {
+            await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: sessionRules.map(rule => rule.id) });
+          }
+        }
         // Clear all alarms (crontab, autoUpdate, autoSync, backup, etc.)
-        await chrome.alarms.clearAll().catch(() => {});
+        await chrome.alarms.clearAll();
         if (typeof FolderStorage !== 'undefined' && FolderStorage.cache) {
           FolderStorage.cache = null;
         }
@@ -47473,13 +47642,22 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       if (linkUrl) {
         try {
           InternalHostGuard.assertExternalFetchUrl(linkUrl, 'Script source', ['http:', 'https:']);
-          const response = await fetch(linkUrl);
-          if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          const postCheck = InternalHostGuard.classifyResponseUrl(response, ['http:', 'https:']);
-          if (!postCheck.ok) {
-            throw new Error('Script source redirected to ' + postCheck.message);
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 20000);
+          let code;
+          try {
+            const response = await fetch(linkUrl, { signal: controller.signal });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const postCheck = InternalHostGuard.classifyResponseUrl(response, ['http:', 'https:']);
+            if (!postCheck.ok) {
+              throw new Error('Script source redirected to ' + postCheck.message);
+            }
+            code = await _fetchTextBounded(response, MAX_SCRIPT_SIZE, 'Script');
+          } finally {
+            // Keep the deadline alive through the response body. A server that
+            // sends headers and then stalls must not pin the worker.
+            clearTimeout(timeoutId);
           }
-          const code = await _fetchTextBounded(response, MAX_SCRIPT_SIZE, 'Script');
           if (code.includes('==UserScript==')) {
             const storageKey = _createPendingInstallStorageKey('context-menu');
             await _storePendingInstall(storageKey, { code, url: linkUrl });
@@ -47492,10 +47670,13 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
             });
           }
         } catch (e) {
+          const message = e?.name === 'AbortError'
+            ? 'Request timed out after 20 seconds'
+            : e?.message || String(e);
           chrome.notifications.create({
             type: 'basic', iconUrl: 'images/icon128.png',
             title: 'Install Failed',
-            message: `Could not fetch script: ${e.message}`
+            message: `Could not fetch script: ${message}`
           });
         }
       }
@@ -48912,8 +49093,9 @@ async function installFromCode(code, receiptOptions = {}) {
       throw new Error('No script content provided');
     }
 
-    if (code.length > MAX_SCRIPT_SIZE) {
-      throw new Error(`Script too large (${formatBytes(code.length)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.`);
+    const codeBytes = _scriptSourceByteLength(code);
+    if (codeBytes > MAX_SCRIPT_SIZE) {
+      throw new Error(`Script too large (${formatBytes(codeBytes)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.`);
     }
 
     if (!code.includes('==UserScript==')) {
@@ -49069,6 +49251,11 @@ async function installFromUrl(url) {
       // Stream-bounded read (same protection as the webNavigation handler);
       // see _fetchTextBounded for rationale.
       code = await _fetchTextBounded(response, MAX_SCRIPT_SIZE, 'Script');
+    } catch (error) {
+      if (error?.name === 'AbortError') {
+        throw new Error('Script download timed out after 30 seconds');
+      }
+      throw error;
     } finally {
       clearTimeout(timeoutId);
     }
@@ -49076,6 +49263,67 @@ async function installFromUrl(url) {
     return await installFromCode(code, { sourceUrl: url, operation: 'install' });
   } catch (error) {
     return { success: false, error: error?.message || String(error) };
+  }
+}
+
+// Fetch source for the dashboard's inline catalog preview. This must stay in
+// the background: extension pages have broad host access, so fetching a
+// catalog-controlled URL in the renderer would bypass the canonical SSRF and
+// redirect checks used by installation itself.
+async function fetchScriptPreview(url) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 20000);
+  try {
+    InternalHostGuard.assertExternalFetchUrl(url, 'Script preview', ['http:', 'https:']);
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const postCheck = InternalHostGuard.classifyResponseUrl(response, ['http:', 'https:']);
+    if (!postCheck.ok) throw new Error('Script preview redirected to ' + postCheck.message);
+    const code = await _fetchTextBounded(response, MAX_SCRIPT_SIZE, 'Script preview');
+    return { success: true, code, finalUrl: response.url || url };
+  } catch (error) {
+    const message = error?.name === 'AbortError'
+      ? 'Script preview timed out after 20 seconds'
+      : error?.message || String(error);
+    return { success: false, error: message };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+// Probe @require dependencies at the privileged network boundary. The install
+// page still performs a cheap literal-host preflight, while this post-flight
+// response check blocks redirects and DNS-rebound destinations.
+async function probeInstallDependency(url) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+  let response = null;
+  try {
+    InternalHostGuard.assertExternalFetchUrl(url, 'Dependency', ['http:', 'https:']);
+    response = await fetch(url, { method: 'HEAD', signal: controller.signal });
+    if (response.status === 405 || response.status === 501) {
+      response = await fetch(url, {
+        method: 'GET',
+        headers: { Range: 'bytes=0-0' },
+        signal: controller.signal
+      });
+    }
+    const postCheck = InternalHostGuard.classifyResponseUrl(response, ['http:', 'https:']);
+    if (!postCheck.ok) throw new Error('Dependency redirected to ' + postCheck.message);
+    return {
+      success: true,
+      ok: response.ok,
+      status: response.status,
+      finalUrl: response.url || url
+    };
+  } catch (error) {
+    const message = error?.name === 'AbortError'
+      ? 'Dependency check timed out after 15 seconds'
+      : error?.message || String(error);
+    return { success: false, error: message };
+  } finally {
+    clearTimeout(timeoutId);
+    try { await response?.body?.cancel(); } catch (_error) { /* response already closed */ }
   }
 }
 
@@ -50892,6 +51140,11 @@ async function fetchProvenanceBundle(url) {
     const MAX_PROVENANCE_BUNDLE_BYTES = 256 * 1024;
     const text = await _fetchTextBounded(response, MAX_PROVENANCE_BUNDLE_BYTES, 'Provenance bundle');
     return text && text.trim().length > 0 ? text : null;
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw new Error('@require-provenance fetch timed out after 10 seconds');
+    }
+    throw error;
   } finally {
     clearTimeout(timeoutId);
   }
@@ -50950,6 +51203,9 @@ async function fetchWithRetry(url, retries = 2) {
       throw new Error('Empty response');
     } catch (e) {
       if (i === retries) {
+        if (e?.name === 'AbortError') {
+          throw new Error('@require fetch timed out after 10 seconds');
+        }
         throw e;
       }
       // Wait before retry

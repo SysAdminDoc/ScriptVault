@@ -412,6 +412,10 @@ const CloudSyncProviders = (() => {
     try {
       const fileHandle = await handle.getFileHandle(fileName);
       const file = await fileHandle.getFile();
+      const fileSize = typeof file.size === "number" ? file.size : 0;
+      if (fileSize > SYNC_PAYLOAD_MAX_BYTES) {
+        throw new Error(`Local sync backup exceeds the ${Math.round(SYNC_PAYLOAD_MAX_BYTES / 1024 / 1024)} MB limit`);
+      }
       return await file.text();
     } catch (error) {
       if (isExpectedMissingLocalFolderFileError(error)) return null;
@@ -419,6 +423,10 @@ const CloudSyncProviders = (() => {
     }
   }
   async function writeLocalFolderSyncFile(handle, fileName, text) {
+    const byteLength = new TextEncoder().encode(text).byteLength;
+    if (byteLength > SYNC_PAYLOAD_MAX_BYTES) {
+      throw new Error(`Local sync backup exceeds the ${Math.round(SYNC_PAYLOAD_MAX_BYTES / 1024 / 1024)} MB limit`);
+    }
     const fileHandle = await handle.getFileHandle(fileName, { create: true });
     const writable = await fileHandle.createWritable();
     try {
@@ -428,58 +436,32 @@ const CloudSyncProviders = (() => {
     }
   }
   async function _oauthFetchWithTimeout(url, init, providerLabel, timeoutMs = 15e3) {
-    const controller = new AbortController();
     const externalSignal = init.signal;
     const { signal: _ignoredSignal, ...fetchInit } = init;
-    const abortFromExternal = () => {
-      try {
-        controller.abort(externalSignal?.reason);
-      } catch (_) {
-        controller.abort();
-      }
-    };
-    if (externalSignal?.aborted) abortFromExternal();
-    else externalSignal?.addEventListener("abort", abortFromExternal, { once: true });
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const timeoutSignal = AbortSignal.timeout(timeoutMs);
+    const signal = externalSignal ? AbortSignal.any([externalSignal, timeoutSignal]) : timeoutSignal;
     try {
-      return await fetch(url, { ...fetchInit, signal: controller.signal });
+      return await fetch(url, { ...fetchInit, signal });
     } catch (e) {
       const name = e && typeof e === "object" && "name" in e ? String(e.name) : "";
       const message = e instanceof Error ? e.message : String(e);
-      if (name === "AbortError" || /aborted|timed?\s*out/i.test(message)) {
+      if (name === "AbortError" || name === "TimeoutError" || /aborted|timed?\s*out/i.test(message)) {
         console.warn(`[CloudSync] ${providerLabel} token refresh timed out after ${timeoutMs}ms`);
         return null;
       }
       console.warn(`[CloudSync] ${providerLabel} token refresh network error:`, message);
       return null;
-    } finally {
-      clearTimeout(timer);
-      externalSignal?.removeEventListener("abort", abortFromExternal);
     }
   }
   async function fetchWithTimeout(url, options = {}, timeoutMs = 3e4, guardOptions = { label: "Cloud sync endpoint" }) {
     assertSyncEndpointAllowed(url, guardOptions);
-    const controller = new AbortController();
     const externalSignal = options.signal;
     const { signal: _ignoredSignal, ...fetchOptions } = options;
-    const abortFromExternal = () => {
-      try {
-        controller.abort(externalSignal?.reason);
-      } catch (_) {
-        controller.abort();
-      }
-    };
-    if (externalSignal?.aborted) abortFromExternal();
-    else externalSignal?.addEventListener("abort", abortFromExternal, { once: true });
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      const response = await fetch(url, { ...fetchOptions, signal: controller.signal });
-      assertSyncResponseAllowed(response, guardOptions);
-      return response;
-    } finally {
-      clearTimeout(timeoutId);
-      externalSignal?.removeEventListener("abort", abortFromExternal);
-    }
+    const timeoutSignal = AbortSignal.timeout(timeoutMs);
+    const signal = externalSignal ? AbortSignal.any([externalSignal, timeoutSignal]) : timeoutSignal;
+    const response = await fetch(url, { ...fetchOptions, signal });
+    assertSyncResponseAllowed(response, guardOptions);
+    return response;
   }
   var SYNC_PAYLOAD_MAX_BYTES = 64 * 1024 * 1024;
   var SYNC_METADATA_MAX_BYTES = 4 * 1024 * 1024;

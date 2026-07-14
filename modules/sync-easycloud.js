@@ -342,12 +342,63 @@ const EasyCloudSync = (() => {
     };
   }
   async function fetchWithTimeout(url, options = {}, timeoutMs = 3e4) {
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), timeoutMs);
+    const externalSignal = options.signal;
+    const { signal: _ignoredSignal, ...fetchOptions } = options;
+    const timeoutSignal = AbortSignal.timeout(timeoutMs);
+    const signal = externalSignal ? AbortSignal.any([externalSignal, timeoutSignal]) : timeoutSignal;
+    return await fetch(url, { ...fetchOptions, signal });
+  }
+  var EASYCLOUD_SYNC_PAYLOAD_MAX_BYTES = 64 * 1024 * 1024;
+  var EASYCLOUD_METADATA_MAX_BYTES = 4 * 1024 * 1024;
+  var EASYCLOUD_ERROR_MAX_BYTES = 256 * 1024;
+  async function readEasyCloudTextBounded(response, maxBytes, label) {
+    const declared = Number.parseInt(response.headers?.get?.("content-length") || "0", 10);
+    if (Number.isFinite(declared) && declared > maxBytes) {
+      throw new Error(`${label} exceeds the ${Math.round(maxBytes / 1024 / 1024)} MB limit`);
+    }
+    if (!response.body?.getReader) {
+      const text2 = await response.text();
+      if (new TextEncoder().encode(text2).byteLength > maxBytes) {
+        throw new Error(`${label} exceeds the ${Math.round(maxBytes / 1024 / 1024)} MB limit`);
+      }
+      return text2;
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let total = 0;
+    let text = "";
     try {
-      return await fetch(url, { ...options, signal: controller.signal });
+      for (; ; ) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (!value) continue;
+        total += value.byteLength;
+        if (total > maxBytes) {
+          await reader.cancel().catch(() => void 0);
+          throw new Error(`${label} exceeds the ${Math.round(maxBytes / 1024 / 1024)} MB limit`);
+        }
+        text += decoder.decode(value, { stream: true });
+      }
+      return text + decoder.decode();
     } finally {
-      clearTimeout(id);
+      try {
+        reader.releaseLock();
+      } catch (_) {
+      }
+    }
+  }
+  async function readEasyCloudJsonBounded(response, maxBytes, label) {
+    const text = await readEasyCloudTextBounded(response, maxBytes, label);
+    try {
+      return JSON.parse(text);
+    } catch (_) {
+      throw new Error(`${label} returned invalid JSON`);
+    }
+  }
+  async function discardEasyCloudResponse(response) {
+    try {
+      await response.body?.cancel();
+    } catch (_) {
     }
   }
   function log(...args) {
@@ -630,7 +681,9 @@ const EasyCloudSync = (() => {
       const resp = await fetchWithTimeout(`${DRIVE_API}/about?fields=user`, {
         headers: { "Authorization": `Bearer ${token}` }
       }, 1e4);
-      return resp.ok;
+      const ok = resp.ok;
+      await discardEasyCloudResponse(resp);
+      return ok;
     } catch (_) {
       return false;
     }
@@ -643,7 +696,9 @@ const EasyCloudSync = (() => {
           { headers: { "Authorization": `Bearer ${token}` } },
           1e4
         );
-        if (resp2.ok) return _cachedFileId;
+        const exists = resp2.ok;
+        await discardEasyCloudResponse(resp2);
+        if (exists) return _cachedFileId;
       } catch (_) {
       }
       _cachedFileId = null;
@@ -655,9 +710,14 @@ const EasyCloudSync = (() => {
       15e3
     );
     if (!resp.ok) {
+      await discardEasyCloudResponse(resp);
       throw new Error(`Drive file search failed: ${resp.status}`);
     }
-    const data = await resp.json();
+    const data = await readEasyCloudJsonBounded(
+      resp,
+      EASYCLOUD_METADATA_MAX_BYTES,
+      "Drive file search response"
+    );
     const file = data.files?.[0];
     if (file) {
       _cachedFileId = file.id;
@@ -675,12 +735,18 @@ const EasyCloudSync = (() => {
     );
     if (resp.status === 404) {
       _cachedFileId = null;
+      await discardEasyCloudResponse(resp);
       return null;
     }
     if (!resp.ok) {
+      await discardEasyCloudResponse(resp);
       throw new Error(`Drive download failed: ${resp.status}`);
     }
-    return resp.json();
+    return await readEasyCloudJsonBounded(
+      resp,
+      EASYCLOUD_SYNC_PAYLOAD_MAX_BYTES,
+      "EasyCloud backup"
+    );
   }
   async function _uploadToDrive(token, data) {
     const fileId = await _findSyncFile(token);
@@ -713,10 +779,18 @@ const EasyCloudSync = (() => {
       body
     }, 6e4);
     if (!resp.ok) {
-      const errText = await resp.text().catch(() => "");
+      const errText = await readEasyCloudTextBounded(
+        resp,
+        EASYCLOUD_ERROR_MAX_BYTES,
+        "Drive upload error"
+      ).catch(() => "");
       throw new Error(`Drive upload failed (${resp.status}): ${errText}`);
     }
-    const result = await resp.json();
+    const result = await readEasyCloudJsonBounded(
+      resp,
+      EASYCLOUD_METADATA_MAX_BYTES,
+      "Drive upload response"
+    );
     if (result.id && !_cachedFileId) {
       _cachedFileId = result.id;
       await _setStorageValues({ [KEYS.FILE_ID]: result.id });
@@ -1059,7 +1133,13 @@ const EasyCloudSync = (() => {
             headers: { "Authorization": `Bearer ${token}` }
           }, 1e4);
           if (resp.ok) {
-            user = await resp.json();
+            user = await readEasyCloudJsonBounded(
+              resp,
+              EASYCLOUD_METADATA_MAX_BYTES,
+              "Google user response"
+            );
+          } else {
+            await discardEasyCloudResponse(resp);
           }
         } catch (_) {
         }
@@ -1095,7 +1175,7 @@ const EasyCloudSync = (() => {
               method: "POST",
               headers: { "Content-Type": "application/x-www-form-urlencoded" },
               body: `token=${encodeURIComponent(_cachedToken)}`
-            }, 1e4).catch(() => {
+            }, 1e4).then(discardEasyCloudResponse).catch(() => {
             });
           } catch (_) {
           }

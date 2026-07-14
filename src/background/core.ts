@@ -9147,18 +9147,20 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
           InternalHostGuard.assertExternalFetchUrl(linkUrl, 'Script source', ['http:', 'https:']);
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 20000);
-          let response;
+          let code;
           try {
-            response = await fetch(linkUrl, { signal: controller.signal });
+            const response = await fetch(linkUrl, { signal: controller.signal });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const postCheck = InternalHostGuard.classifyResponseUrl(response, ['http:', 'https:']);
+            if (!postCheck.ok) {
+              throw new Error('Script source redirected to ' + postCheck.message);
+            }
+            code = await _fetchTextBounded(response, MAX_SCRIPT_SIZE, 'Script');
           } finally {
+            // Keep the deadline alive through the response body. A server that
+            // sends headers and then stalls must not pin the worker.
             clearTimeout(timeoutId);
           }
-          if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          const postCheck = InternalHostGuard.classifyResponseUrl(response, ['http:', 'https:']);
-          if (!postCheck.ok) {
-            throw new Error('Script source redirected to ' + postCheck.message);
-          }
-          const code = await _fetchTextBounded(response, MAX_SCRIPT_SIZE, 'Script');
           if (code.includes('==UserScript==')) {
             const storageKey = _createPendingInstallStorageKey('context-menu');
             await _storePendingInstall(storageKey, { code, url: linkUrl });
@@ -10752,6 +10754,11 @@ async function installFromUrl(url) {
       // Stream-bounded read (same protection as the webNavigation handler);
       // see _fetchTextBounded for rationale.
       code = await _fetchTextBounded(response, MAX_SCRIPT_SIZE, 'Script');
+    } catch (error) {
+      if (error?.name === 'AbortError') {
+        throw new Error('Script download timed out after 30 seconds');
+      }
+      throw error;
     } finally {
       clearTimeout(timeoutId);
     }
@@ -12636,6 +12643,11 @@ async function fetchProvenanceBundle(url) {
     const MAX_PROVENANCE_BUNDLE_BYTES = 256 * 1024;
     const text = await _fetchTextBounded(response, MAX_PROVENANCE_BUNDLE_BYTES, 'Provenance bundle');
     return text && text.trim().length > 0 ? text : null;
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw new Error('@require-provenance fetch timed out after 10 seconds');
+    }
+    throw error;
   } finally {
     clearTimeout(timeoutId);
   }
@@ -12694,6 +12706,9 @@ async function fetchWithRetry(url, retries = 2) {
       throw new Error('Empty response');
     } catch (e) {
       if (i === retries) {
+        if (e?.name === 'AbortError') {
+          throw new Error('@require fetch timed out after 10 seconds');
+        }
         throw e;
       }
       // Wait before retry

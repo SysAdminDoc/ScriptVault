@@ -110,17 +110,20 @@ describe('popup.js null-safety (2026-06-04)', () => {
 // ── Factory reset completeness ───────────────────────────────────────────────
 
 describe('factoryReset cleanup (2026-06-04)', () => {
-  it('clears syncTombstones, trash, alarms, folders, and other ghost state', () => {
+  it('clears all extension-owned storage, alarms, backups, and network rules', () => {
     const src = fs.readFileSync(path.join(ROOT, 'background.core.js'), 'utf8');
     const resetBlock = src.slice(
       src.indexOf("case 'factoryReset':"),
-      src.indexOf("case 'factoryReset':") + 1500
+      src.indexOf("case 'factoryReset':") + 3000
     );
-    expect(resetBlock).toContain('syncTombstones');
-    expect(resetBlock).toContain('trash');
-    expect(resetBlock).toContain('pendingUpdates');
-    expect(resetBlock).toContain('scriptFolders');
-    expect(resetBlock).toContain('clearAll');
+    expect(resetBlock).toContain('await ScriptStorage.clear()');
+    expect(resetBlock).toContain('await BackupsDAO.clear()');
+    expect(resetBlock).toContain('await chrome.storage.local.clear()');
+    expect(resetBlock).toContain('await chrome.storage.session.clear()');
+    expect(resetBlock).toContain('await SettingsManager.reset()');
+    expect(resetBlock).toContain('updateDynamicRules');
+    expect(resetBlock).toContain('updateSessionRules');
+    expect(resetBlock).toContain('await chrome.alarms.clearAll()');
   });
 });
 

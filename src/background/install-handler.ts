@@ -346,24 +346,29 @@ export async function installFromUrl(url: string): Promise<InstallResult> {
       30000,
     );
 
-    let response: Response;
+    let code: string;
     try {
-      response = await fetch(url, { signal: controller.signal });
+      const response = await fetch(url, { signal: controller.signal });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      // Post-flight: catch redirect targets that resolved to an internal host.
+      const postCheck = classifyResponseUrl(response, ['http:', 'https:']);
+      if (!postCheck.ok) {
+        throw new Error(`Script source redirected to ${postCheck.message}`);
+      }
+
+      code = await fetchTextBounded(response, MAX_SCRIPT_SIZE, 'Script');
+    } catch (error: unknown) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error('Script download timed out after 30 seconds');
+      }
+      throw error;
     } finally {
+      // Keep the deadline alive through the response body, not only headers.
       clearTimeout(timeoutId);
     }
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    // Post-flight: catch redirect targets that resolved to an internal host.
-    const postCheck = classifyResponseUrl(response, ['http:', 'https:']);
-    if (!postCheck.ok) {
-      throw new Error(`Script source redirected to ${postCheck.message}`);
-    }
-
-    const code: string = await fetchTextBounded(response, MAX_SCRIPT_SIZE, 'Script');
 
     return await installFromCode(code, { sourceUrl: url, operation: 'install' });
   } catch (error: unknown) {
