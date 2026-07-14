@@ -41,6 +41,11 @@ const GistIntegration = (() => {
     const STORAGE_KEY_TOKEN_SESSION = 'sv_gist_pat_session';
     const STORAGE_KEY_AUTOSYNC = 'gist_autosync';
     const CACHE_TTL = 5 * 60 * 1000; // 5 min
+    const NETWORK_TIMEOUT_MS = 20 * 1000;
+    const MAX_API_RESPONSE_BYTES = 10 * 1024 * 1024;
+    const MAX_GIST_FILE_BYTES = 5 * 1024 * 1024;
+    const GITHUB_API_HOSTS = new Set(['api.github.com']);
+    const GITHUB_RAW_HOSTS = new Set(['gist.githubusercontent.com', 'raw.githubusercontent.com']);
 
     const _safeSetHtml = (typeof window.ScriptVaultDashboardUI?.safeSetHtml === 'function')
         ? window.ScriptVaultDashboardUI.safeSetHtml
@@ -242,13 +247,92 @@ const GistIntegration = (() => {
         return h;
     }
 
+    function assertGitHubEndpoint(url, allowedHosts, label) {
+        let parsed;
+        try { parsed = new URL(url); } catch { throw new Error(`${label} URL is invalid`); }
+        if (parsed.protocol !== 'https:' || !allowedHosts.has(parsed.hostname.toLowerCase())) {
+            throw new Error(`${label} must use an official GitHub HTTPS endpoint`);
+        }
+        return parsed;
+    }
+
+    async function fetchGitHub(url, options, allowedHosts, label) {
+        assertGitHubEndpoint(url, allowedHosts, label);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), NETWORK_TIMEOUT_MS);
+        try {
+            const response = await fetch(url, { ...options, signal: controller.signal });
+            assertGitHubEndpoint(response.url || url, allowedHosts, `${label} redirect`);
+            return response;
+        } catch (error) {
+            if (error?.name === 'AbortError') {
+                throw new Error(`${label} timed out after ${NETWORK_TIMEOUT_MS / 1000} seconds`);
+            }
+            throw error;
+        } finally {
+            clearTimeout(timeoutId);
+        }
+    }
+
+    async function readTextBounded(response, maxBytes, label) {
+        const declared = Number.parseInt(response.headers?.get?.('content-length') || '0', 10);
+        if (Number.isFinite(declared) && declared > maxBytes) {
+            throw new Error(`${label} exceeds the ${Math.round(maxBytes / 1024 / 1024)} MB limit`);
+        }
+        if (!response.body?.getReader) {
+            const text = await response.text();
+            if (new TextEncoder().encode(text).byteLength > maxBytes) {
+                throw new Error(`${label} exceeds the ${Math.round(maxBytes / 1024 / 1024)} MB limit`);
+            }
+            return text;
+        }
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        const chunks = [];
+        let bytesRead = 0;
+        try {
+            for (;;) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                if (!value) continue;
+                bytesRead += value.byteLength;
+                if (bytesRead > maxBytes) {
+                    try { await reader.cancel(); } catch { /* stream already closed */ }
+                    throw new Error(`${label} exceeds the ${Math.round(maxBytes / 1024 / 1024)} MB limit`);
+                }
+                chunks.push(decoder.decode(value, { stream: true }));
+            }
+            chunks.push(decoder.decode());
+            return chunks.join('');
+        } finally {
+            try { reader.releaseLock(); } catch { /* stream already released */ }
+        }
+    }
+
+    async function readJsonBounded(response, maxBytes, label) {
+        // Test adapters and older extension mocks may expose json() without a
+        // Response-compatible text() method. Real browser responses always use
+        // the bounded text path below.
+        if (typeof response?.text !== 'function' && typeof response?.json === 'function') {
+            return response.json();
+        }
+        const text = await readTextBounded(response, maxBytes, label);
+        if (!text.trim()) return {};
+        try { return JSON.parse(text); } catch { throw new Error(`${label} returned invalid JSON`); }
+    }
+
     async function apiRequest(url, options = {}) {
-        const resp = await fetch(url, { ...options, headers: { ...apiHeaders(), ...(options.headers || {}) } });
+        const resp = await fetchGitHub(
+            url,
+            { ...options, headers: { ...apiHeaders(), ...(options.headers || {}) } },
+            GITHUB_API_HOSTS,
+            'GitHub API request'
+        );
         if (!resp.ok) {
-            const body = await resp.json().catch(() => ({}));
+            const body = await readJsonBounded(resp, 256 * 1024, 'GitHub API error').catch(() => ({}));
             throw new Error(body.message || `GitHub API error ${resp.status}`);
         }
-        return resp.json();
+        return readJsonBounded(resp, MAX_API_RESPONSE_BYTES, 'GitHub API response');
     }
 
     function rawFileHeaders() {
@@ -259,12 +343,23 @@ const GistIntegration = (() => {
 
     async function resolveGistFileContent(file, filename) {
         if (!file || typeof file !== 'object') return '';
-        if (file.truncated !== true) return typeof file.content === 'string' ? file.content : '';
+        if (file.truncated !== true) {
+            const content = typeof file.content === 'string' ? file.content : '';
+            if (new TextEncoder().encode(content).byteLength > MAX_GIST_FILE_BYTES) {
+                throw new Error(`Gist file ${filename} exceeds the ${MAX_GIST_FILE_BYTES / 1024 / 1024} MB limit`);
+            }
+            return content;
+        }
         if (!file.raw_url) throw new Error(`Gist file ${filename} is truncated and has no raw URL`);
 
-        const resp = await fetch(file.raw_url, { headers: rawFileHeaders() });
+        const resp = await fetchGitHub(
+            file.raw_url,
+            { headers: rawFileHeaders() },
+            GITHUB_RAW_HOSTS,
+            `Gist file ${filename}`
+        );
         if (!resp.ok) throw new Error(`Failed to fetch full Gist file ${filename} (${resp.status})`);
-        return await resp.text();
+        return await readTextBounded(resp, MAX_GIST_FILE_BYTES, `Gist file ${filename}`);
     }
 
     function extractGistId(input) {
@@ -318,12 +413,17 @@ const GistIntegration = (() => {
     // =========================================
     async function verifyToken() {
         try {
-            const resp = await fetch('https://api.github.com/user', { headers: apiHeaders() });
+            const resp = await fetchGitHub(
+                'https://api.github.com/user',
+                { headers: apiHeaders() },
+                GITHUB_API_HOSTS,
+                'GitHub token verification'
+            );
             if (!resp.ok) return { valid: false, scopes: [] };
             const rawScopes = resp.headers.get('x-oauth-scopes');
             const hasScopeHeader = rawScopes != null && rawScopes !== '';
             const scopes = (rawScopes || '').split(',').map(s => s.trim()).filter(Boolean);
-            const user = await resp.json();
+            const user = await readJsonBounded(resp, 512 * 1024, 'GitHub user response');
             return { valid: true, scopes, login: user.login, hasGistScope: !hasScopeHeader || scopes.includes('gist'), hasScopeHeader };
         } catch {
             return { valid: false, scopes: [] };
@@ -392,10 +492,9 @@ const GistIntegration = (() => {
         const gistId = extractGistId(gistUrl);
         if (!gistId) throw new Error('Invalid Gist URL or ID');
 
-        const headers = _state.token ? apiHeaders() : { 'Accept': 'application/vnd.github+json' };
-        const resp = await fetch(`${API_BASE}/${gistId}`, { headers });
-        if (!resp.ok) throw new Error(`Failed to fetch Gist (${resp.status})`);
-        const gist = await resp.json();
+        const gist = await apiRequest(`${API_BASE}/${gistId}`, {
+            headers: _state.token ? apiHeaders() : { 'Accept': 'application/vnd.github+json' }
+        });
 
         if (!gist || !gist.files || typeof gist.files !== 'object') {
             throw new Error('No .user.js files found in this Gist');

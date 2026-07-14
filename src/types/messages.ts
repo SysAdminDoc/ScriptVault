@@ -870,6 +870,16 @@ interface InstallFromCode {
   operation?: string;
 }
 
+interface FetchScriptPreview {
+  action: 'fetchScriptPreview';
+  url: string;
+}
+
+interface ProbeInstallDependency {
+  action: 'probeInstallDependency';
+  url: string;
+}
+
 // ─── Storage Quota ───────────────────────────────────────────────────
 
 interface GetStorageUsage {
@@ -1693,6 +1703,7 @@ export type BackgroundMessage =
   | EasyCloudConnect | EasyCloudDisconnect | EasyCloudSync | EasyCloudStatus
   // Import/export
   | ExportAll | ImportAll | ImportBackup | ExportZip | ImportFromZip | InstallFromUrl | InstallFromCode
+  | FetchScriptPreview | ProbeInstallDependency
   | VerifyRequireProvenancePreview
   // Storage quota
   | GetStorageUsage | GetStorageBreakdown | CleanupStorage
@@ -1879,6 +1890,12 @@ export interface ResponseMap {
   // ── Install flow ───────────────────────────────────────────────────
   installFromUrl: { success: true } | ErrorResponse;
   installFromCode: { success: true } | ErrorResponse;
+  fetchScriptPreview:
+    | { success: true; code: string; finalUrl?: string }
+    | { success: false; error: string };
+  probeInstallDependency:
+    | { success: true; ok: boolean; status: number; finalUrl?: string }
+    | { success: false; error: string };
   verifyRequireProvenancePreview: unknown;
 
   // ── Storage / quota ────────────────────────────────────────────────

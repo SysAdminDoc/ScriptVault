@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -175,6 +175,54 @@ describe('install/update SSRF gates (TS background modules)', () => {
       expect(result.success).toBe(false);
       expect(result.error).toMatch(/Script source: internal host/);
       expect(fetchCalls).toBe(0);
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+
+  it('keeps catalog previews out of internal networks before and after redirects', async () => {
+    const mod = await import('../src/background/install-handler.ts');
+    const origFetch = globalThis.fetch;
+    let fetchCalls = 0;
+    globalThis.fetch = (() => {
+      fetchCalls += 1;
+      return Promise.reject(new Error('should not be called'));
+    });
+    try {
+      const blocked = await mod.fetchScriptPreview('https://127.0.0.1/private.user.js');
+      expect(blocked.success).toBe(false);
+      expect(blocked.error).toMatch(/Script preview: internal host/);
+      expect(fetchCalls).toBe(0);
+
+      const redirected = new Response('// ==UserScript==\n', { status: 200 });
+      Object.defineProperty(redirected, 'url', { value: 'https://169.254.169.254/private.user.js', configurable: true });
+      globalThis.fetch = (() => Promise.resolve(redirected));
+      const redirectedResult = await mod.fetchScriptPreview('https://catalog.example/script.user.js');
+      expect(redirectedResult.success).toBe(false);
+      expect(redirectedResult.error).toMatch(/Script preview redirected to internal host/);
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+
+  it('probes dependencies through guarded HEAD with a bounded range fallback', async () => {
+    const mod = await import('../src/background/install-handler.ts');
+    const origFetch = globalThis.fetch;
+    const calls = [];
+    const headResponse = new Response(null, { status: 405 });
+    Object.defineProperty(headResponse, 'url', { value: 'https://cdn.example/library.js', configurable: true });
+    const rangeResponse = new Response('x', { status: 206 });
+    Object.defineProperty(rangeResponse, 'url', { value: 'https://cdn.example/library.js', configurable: true });
+    globalThis.fetch = vi.fn(async (_url, init) => {
+      calls.push(init);
+      return calls.length === 1 ? headResponse : rangeResponse;
+    });
+    try {
+      const result = await mod.probeInstallDependency('https://cdn.example/library.js');
+      expect(result).toMatchObject({ success: true, ok: true, status: 206 });
+      expect(calls[0]?.method).toBe('HEAD');
+      expect(calls[1]?.method).toBe('GET');
+      expect(calls[1]?.headers).toEqual({ Range: 'bytes=0-0' });
     } finally {
       globalThis.fetch = origFetch;
     }

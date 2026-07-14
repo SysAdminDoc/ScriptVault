@@ -74,6 +74,29 @@ describe('source hardening parity guards', () => {
     expect(gist).not.toMatch(/new Promise\s*\(\s*resolve\s*=>\s*\{[\s\S]*chrome\.storage\.local\.(set|remove)/);
   });
 
+  it('keeps privileged catalog previews and dependency probes in the guarded background boundary', () => {
+    const dashboard = source('pages/dashboard.js');
+    const install = source('pages/install.js');
+    const core = source('src/background/core.ts');
+
+    expect(dashboard).toContain("action: 'fetchScriptPreview'");
+    expect(install).toContain("action: 'probeInstallDependency'");
+    expect(install).not.toMatch(/\bfetch\s*\(/);
+    expect(core).toContain("InternalHostGuard.assertExternalFetchUrl(url, 'Script preview'");
+    expect(core).toContain("InternalHostGuard.assertExternalFetchUrl(url, 'Dependency'");
+    expect(core).toContain("InternalHostGuard.classifyResponseUrl(response, ['http:', 'https:'])");
+    expect(core).toContain("_fetchTextBounded(response, MAX_SCRIPT_SIZE, 'Script preview')");
+  });
+
+  it('keeps Gist API and raw-file fetches host-allowlisted, timed out, and size bounded', () => {
+    const gist = source('pages/dashboard-gist.js');
+    expect(gist).toContain("const GITHUB_API_HOSTS = new Set(['api.github.com'])");
+    expect(gist).toContain("'gist.githubusercontent.com', 'raw.githubusercontent.com'");
+    expect(gist).toContain('const controller = new AbortController()');
+    expect(gist).toContain('readTextBounded(resp, MAX_GIST_FILE_BYTES');
+    expect(gist).toContain("readJsonBounded(resp, MAX_API_RESPONSE_BYTES, 'GitHub API response')");
+  });
+
   it('keeps GM_xmlhttpRequest behind the internal-host preflight and redirect guard', () => {
     const networkHandler = source('src/background/gm-network-handler.ts');
     expect(networkHandler).toContain("const xhrPreCheck = InternalHostGuard.classifyFetchUrl(data.url, ['http:', 'https:']);");

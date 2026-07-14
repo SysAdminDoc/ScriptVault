@@ -6,6 +6,12 @@
 import type { Script } from '../types/script';
 import type { Settings } from '../types/settings';
 import { fetchTextBounded } from './fetch-bounded';
+import { assertExternalFetchUrl, classifyResponseUrl } from './internal-host-guard';
+import {
+  createPendingInstallStorageKey,
+  pendingInstallPageUrl,
+  storePendingInstall,
+} from './install-handler';
 
 // ---------------------------------------------------------------------------
 // External dependencies (not yet migrated to TS modules)
@@ -188,6 +194,7 @@ export function registerContextMenuClickListener(): void {
           const linkUrl: string | undefined = info.linkUrl;
           if (linkUrl) {
             try {
+              assertExternalFetchUrl(linkUrl, 'Script source', ['http:', 'https:']);
               const controller = new AbortController();
               const timeoutId = setTimeout(() => controller.abort(), 20_000);
               let response: Response;
@@ -197,12 +204,13 @@ export function registerContextMenuClickListener(): void {
                 clearTimeout(timeoutId);
               }
               if (!response.ok) throw new Error(`HTTP ${response.status}`);
+              const postCheck = classifyResponseUrl(response, ['http:', 'https:']);
+              if (!postCheck.ok) throw new Error(`Script source redirected to ${postCheck.message}`);
               const code: string = await fetchTextBounded(response, LINK_INSTALL_MAX_BYTES, 'Script');
               if (code.includes('==UserScript==')) {
-                await chrome.storage.local.set({
-                  pendingInstall: { code, url: linkUrl, timestamp: Date.now() },
-                });
-                chrome.tabs.create({ url: chrome.runtime.getURL('pages/install.html') });
+                const storageKey = createPendingInstallStorageKey('context-menu');
+                await storePendingInstall(storageKey, { code, url: linkUrl, timestamp: Date.now() });
+                chrome.tabs.create({ url: pendingInstallPageUrl(storageKey) });
               } else {
                 chrome.notifications.create({
                   type: 'basic',
@@ -212,7 +220,9 @@ export function registerContextMenuClickListener(): void {
                 });
               }
             } catch (e: unknown) {
-              const message = e instanceof Error ? e.message : String(e);
+              const message = e instanceof Error && e.name === 'AbortError'
+                ? 'Request timed out after 20 seconds'
+                : e instanceof Error ? e.message : String(e);
               chrome.notifications.create({
                 type: 'basic',
                 iconUrl: 'images/icon128.png',

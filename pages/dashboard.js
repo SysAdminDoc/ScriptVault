@@ -37,6 +37,21 @@
         safeSetHtml(el, escapeUntrustedHtmlFallback(raw));
     }
 
+    async function fetchWithTimeout(url, options = {}, timeoutMs = 15_000, label = 'Request') {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+            return await fetch(url, { ...options, signal: controller.signal });
+        } catch (error) {
+            if (error?.name === 'AbortError') {
+                throw new Error(`${label} timed out after ${Math.round(timeoutMs / 1000)} seconds`);
+            }
+            throw error;
+        } finally {
+            clearTimeout(timeoutId);
+        }
+    }
+
     // State
     const state = {
         scripts: [],
@@ -14531,7 +14546,7 @@
             apiUrl = `https://api.greasyfork.org/en/scripts.json?q=${encodeURIComponent(query)}&page=${page}&per_page=${FIND_RESULTS_PAGE_SIZE}`;
         }
 
-        const resp = await fetch(apiUrl);
+        const resp = await fetchWithTimeout(apiUrl, {}, 15_000, 'Greasy Fork search');
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const scripts = await resp.json();
 
@@ -14546,7 +14561,7 @@
     async function searchOpenUserJS(query, page) {
         // OpenUserJS has a JSON API at /api/script/list
         const apiUrl = `https://openuserjs.org/api/script/list?q=${encodeURIComponent(query)}&p=${page}&limit=${FIND_RESULTS_PAGE_SIZE}`;
-        const resp = await fetch(apiUrl);
+        const resp = await fetchWithTimeout(apiUrl, {}, 15_000, 'OpenUserJS search');
         if (!resp.ok) throw new Error(`OpenUserJS returned HTTP ${resp.status}. Try again or choose another source.`);
         const data = await resp.json();
         const scripts = data?.scripts || data || [];
@@ -14717,13 +14732,14 @@
                 btn.disabled = true;
                 btn.setAttribute('aria-busy', 'true');
                 try {
-                    const resp = await fetch(url);
-                    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-                    const code = await resp.text();
-                    preview.textContent = code;
+                    const response = await chrome.runtime.sendMessage({ action: 'fetchScriptPreview', url });
+                    if (!response?.success || typeof response.code !== 'string') {
+                        throw new Error(response?.error || 'Source preview could not be loaded');
+                    }
+                    preview.textContent = response.code;
                     btn.textContent = 'Hide';
                 } catch (e) {
-                    preview.textContent = 'Preview unavailable. Open the source page to inspect this script.';
+                    preview.textContent = `Preview unavailable. ${e?.message || 'Open the source page to inspect this script.'}`;
                     preview.classList.add('is-error');
                     btn.textContent = 'Preview';
                     btn.setAttribute('aria-expanded', 'true');
@@ -15944,7 +15960,12 @@
                 safeSetHtml(libSearchResults, '<div class="panel-empty"><strong>Searching libraries…</strong><span>Fetching matching packages from cdnjs.</span></div>');
             }
             try {
-                const resp = await fetch(`https://api.cdnjs.com/libraries?search=${encodeURIComponent(query)}&fields=description,version,filename&limit=10`);
+                const resp = await fetchWithTimeout(
+                    `https://api.cdnjs.com/libraries?search=${encodeURIComponent(query)}&fields=description,version,filename&limit=10`,
+                    {},
+                    15_000,
+                    'Library search'
+                );
                 if (!resp.ok) throw new Error('Search failed');
                 const data = await resp.json();
                 if (!data.results || data.results.length === 0) {
@@ -16715,11 +16736,17 @@
         
         elements.btnFactoryReset?.addEventListener('click', async event => {
             await runButtonTask(event.currentTarget, async () => {
-                if (!await showConfirmModal('Factory Reset ScriptVault?', 'Delete every script and restore all settings to their defaults? This cannot be undone.', { confirmLabel: 'Factory Reset', tone: 'danger' })) return;
-                await chrome.runtime.sendMessage({ action: 'factoryReset' });
-                await loadSettings();
-                await loadScripts();
-                showToast('Factory reset complete', 'success');
+                if (!await showConfirmModal(
+                    'Factory Reset ScriptVault?',
+                    'Permanently delete every script, backup, local integration, credential, and setting? ScriptVault will restart with a clean vault. This cannot be undone.',
+                    { confirmLabel: 'Reset Everything', tone: 'danger' }
+                )) return;
+                const response = await chrome.runtime.sendMessage({ action: 'factoryReset' });
+                if (response?.error || response?.success === false) {
+                    throw new Error(response?.error || 'Factory reset did not complete');
+                }
+                showToast('Factory reset complete. Restarting ScriptVault…', 'success');
+                setTimeout(() => chrome.runtime.reload(), 600);
             }, { busyLabel: 'Resetting…', errorMessage: 'Factory reset failed' });
         });
 

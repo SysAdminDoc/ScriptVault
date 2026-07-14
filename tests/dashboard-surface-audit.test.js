@@ -395,6 +395,33 @@ describe('dashboard audit surfaces', () => {
     }));
   });
 
+  it('Gist imports refuse non-GitHub raw endpoints before sending credentials', async () => {
+    const GistIntegration = createGistIntegration();
+    const gistId = '1234567890abcdef5678';
+    await chrome.storage.local.set({ gist_pat: 'test-token' });
+    globalThis.fetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        id: gistId,
+        html_url: `https://gist.github.com/user/${gistId}`,
+        owner: { login: 'user' },
+        files: {
+          'unsafe.user.js': {
+            content: '// truncated',
+            truncated: true,
+            raw_url: 'https://127.0.0.1/private.user.js',
+          },
+        },
+      }),
+    }));
+
+    await GistIntegration.init(document.createElement('div'), {});
+    await expect(GistIntegration.importFromGist(gistId))
+      .rejects.toThrow(/official GitHub HTTPS endpoint/);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    GistIntegration.destroy();
+  });
+
   it('Gist sync-from fetches raw content for truncated linked files', async () => {
     const GistIntegration = createGistIntegration();
     const container = document.createElement('div');

@@ -12,6 +12,7 @@ const CollectionManager = (() => {
   const STORAGE_KEY = 'sv_collections';
   const BUILT_IN_INSTALLS_KEY = 'sv_builtin_collection_installs';
   const STYLE_ID = 'sv-collections-styles';
+  const CATALOG_TIMEOUT_MS = 15 * 1000;
 
   const BUILT_IN_COLLECTIONS = [
     {
@@ -814,7 +815,20 @@ const CollectionManager = (() => {
 
   async function fetchGreasyForkCodeUrl(greasyForkId) {
     if (!greasyForkId) throw new Error('Missing Greasy Fork ID');
-    const resp = await fetch(`https://api.greasyfork.org/en/scripts/${encodeURIComponent(greasyForkId)}.json`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), CATALOG_TIMEOUT_MS);
+    let resp;
+    try {
+      resp = await fetch(
+        `https://api.greasyfork.org/en/scripts/${encodeURIComponent(greasyForkId)}.json`,
+        { signal: controller.signal },
+      );
+    } catch (error) {
+      if (error?.name === 'AbortError') throw new Error('Greasy Fork lookup timed out after 15 seconds');
+      throw error;
+    } finally {
+      clearTimeout(timeoutId);
+    }
     if (!resp.ok) throw new Error(`Greasy Fork lookup failed (${resp.status})`);
     const data = await resp.json();
     if (!data?.code_url) throw new Error('Install URL unavailable for this script');

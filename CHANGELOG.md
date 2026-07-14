@@ -2,6 +2,23 @@
 
 All notable changes to ScriptVault will be documented in this file.
 
+## [Unreleased]
+
+- **Closed privileged catalog-fetch gaps.** Script previews and install
+  dependency probes now run through background actions with internal-host and
+  redirect checks, strict timeouts, bounded response reads, and limited probe
+  concurrency instead of fetching catalog-controlled URLs from extension UI.
+- **Hardened GitHub Gist integration.** API and raw-file requests are restricted
+  to official GitHub HTTPS hosts, time out cleanly, and reject oversized API or
+  userscript responses before they can exhaust the dashboard renderer.
+- **Made Factory Reset complete and truthful.** Reset now clears every local and
+  session storage key, integration credential, signing key, backup/receipt,
+  orphaned network rule, and alarm before restoring defaults; the dashboard
+  explains the full scope and restarts ScriptVault to discard in-memory state.
+- **Improved remote-flow recovery.** Context-menu installs, catalog searches,
+  library lookup, and curated collection resolution now fail with bounded,
+  actionable timeout behavior rather than hanging indefinitely.
+
 ## [v3.20.0] — Premium interaction and theme polish (2026-07-14)
 
 - **Unified the product around one deliberate visual system.** Every shipped

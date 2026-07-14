@@ -7883,6 +7883,12 @@ async function handleMessage(message, sender) {
           operation: data.operation || 'install'
         });
 
+      case 'fetchScriptPreview':
+        return await fetchScriptPreview(data.url);
+
+      case 'probeInstallDependency':
+        return await probeInstallDependency(data.url);
+
       case 'verifyRequireProvenancePreview':
         return await previewRequireProvenance(data);
 
@@ -8487,17 +8493,32 @@ async function handleMessage(message, sender) {
         // only touches the scripts partition, so without this a factory reset
         // leaves fully-restorable script code / GM values in the backups store.
         if (typeof BackupsDAO !== 'undefined' && BackupsDAO.clear) {
-          await BackupsDAO.clear().catch(() => {});
+          await BackupsDAO.clear();
         }
+        // Factory reset is a privacy boundary, not a curated key list. Clear
+        // every extension-owned local/session value so integration tokens,
+        // webhook configuration, signing keys, UI module caches, and future
+        // storage keys cannot silently survive an explicit wipe.
+        await chrome.storage.local.clear();
+        if (chrome.storage.session?.clear) await chrome.storage.session.clear();
+        // Recreate only the documented default settings after the wipe.
         await SettingsManager.reset();
-        // Clear ghost state that would otherwise survive the reset
-        await chrome.storage.local.remove([
-          'syncTombstones', 'trash', 'pendingUpdates', 'scriptFolders',
-          'cspReports', 'gistSettings', 'lastSyncResult', 'gmValueSyncRetryHistory', 'gmValueSyncRetryResolution', 'gmValueSyncRetryResolutionHistory', 'liveReloadScripts',
-          'restoreReceipts', 'autoBackups'
-        ]).catch(() => {});
+        // Remove orphaned DNR state too. Per-script cleanup above handles known
+        // rules, while these sweeps cover rules left by an interrupted delete.
+        if (chrome.declarativeNetRequest?.getDynamicRules) {
+          const dynamicRules = await chrome.declarativeNetRequest.getDynamicRules();
+          if (dynamicRules.length) {
+            await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: dynamicRules.map(rule => rule.id) });
+          }
+        }
+        if (chrome.declarativeNetRequest?.getSessionRules) {
+          const sessionRules = await chrome.declarativeNetRequest.getSessionRules();
+          if (sessionRules.length) {
+            await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: sessionRules.map(rule => rule.id) });
+          }
+        }
         // Clear all alarms (crontab, autoUpdate, autoSync, backup, etc.)
-        await chrome.alarms.clearAll().catch(() => {});
+        await chrome.alarms.clearAll();
         if (typeof FolderStorage !== 'undefined' && FolderStorage.cache) {
           FolderStorage.cache = null;
         }
@@ -9119,7 +9140,14 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       if (linkUrl) {
         try {
           InternalHostGuard.assertExternalFetchUrl(linkUrl, 'Script source', ['http:', 'https:']);
-          const response = await fetch(linkUrl);
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 20000);
+          let response;
+          try {
+            response = await fetch(linkUrl, { signal: controller.signal });
+          } finally {
+            clearTimeout(timeoutId);
+          }
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           const postCheck = InternalHostGuard.classifyResponseUrl(response, ['http:', 'https:']);
           if (!postCheck.ok) {
@@ -9138,10 +9166,13 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
             });
           }
         } catch (e) {
+          const message = e?.name === 'AbortError'
+            ? 'Request timed out after 20 seconds'
+            : e?.message || String(e);
           chrome.notifications.create({
             type: 'basic', iconUrl: 'images/icon128.png',
             title: 'Install Failed',
-            message: `Could not fetch script: ${e.message}`
+            message: `Could not fetch script: ${message}`
           });
         }
       }
@@ -10722,6 +10753,67 @@ async function installFromUrl(url) {
     return await installFromCode(code, { sourceUrl: url, operation: 'install' });
   } catch (error) {
     return { success: false, error: error?.message || String(error) };
+  }
+}
+
+// Fetch source for the dashboard's inline catalog preview. This must stay in
+// the background: extension pages have broad host access, so fetching a
+// catalog-controlled URL in the renderer would bypass the canonical SSRF and
+// redirect checks used by installation itself.
+async function fetchScriptPreview(url) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 20000);
+  try {
+    InternalHostGuard.assertExternalFetchUrl(url, 'Script preview', ['http:', 'https:']);
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const postCheck = InternalHostGuard.classifyResponseUrl(response, ['http:', 'https:']);
+    if (!postCheck.ok) throw new Error('Script preview redirected to ' + postCheck.message);
+    const code = await _fetchTextBounded(response, MAX_SCRIPT_SIZE, 'Script preview');
+    return { success: true, code, finalUrl: response.url || url };
+  } catch (error) {
+    const message = error?.name === 'AbortError'
+      ? 'Script preview timed out after 20 seconds'
+      : error?.message || String(error);
+    return { success: false, error: message };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+// Probe @require dependencies at the privileged network boundary. The install
+// page still performs a cheap literal-host preflight, while this post-flight
+// response check blocks redirects and DNS-rebound destinations.
+async function probeInstallDependency(url) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+  let response = null;
+  try {
+    InternalHostGuard.assertExternalFetchUrl(url, 'Dependency', ['http:', 'https:']);
+    response = await fetch(url, { method: 'HEAD', signal: controller.signal });
+    if (response.status === 405 || response.status === 501) {
+      response = await fetch(url, {
+        method: 'GET',
+        headers: { Range: 'bytes=0-0' },
+        signal: controller.signal
+      });
+    }
+    const postCheck = InternalHostGuard.classifyResponseUrl(response, ['http:', 'https:']);
+    if (!postCheck.ok) throw new Error('Dependency redirected to ' + postCheck.message);
+    return {
+      success: true,
+      ok: response.ok,
+      status: response.status,
+      finalUrl: response.url || url
+    };
+  } catch (error) {
+    const message = error?.name === 'AbortError'
+      ? 'Dependency check timed out after 15 seconds'
+      : error?.message || String(error);
+    return { success: false, error: message };
+  } finally {
+    clearTimeout(timeoutId);
+    try { await response?.body?.cancel(); } catch (_error) { /* response already closed */ }
   }
 }
 

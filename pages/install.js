@@ -2719,7 +2719,7 @@ async function checkDependencies(requires) {
 
   refreshDependencyState();
 
-  const checks = requires.map(async (url) => {
+  const checkDependency = async (url) => {
     const tag = document.querySelector(`[data-dep-url="${CSS.escape(url)}"]`);
     let outcome = 'fail';
     let detail = tInstall('installDependencyUnreachableDetail', '{url} - unreachable', { url });
@@ -2731,21 +2731,17 @@ async function checkDependencies(requires) {
       detail = tInstall('installDependencyNotProbedDetail', '{url} - not probed (only external http(s) URLs are checked)', { url });
     } else {
       try {
-        const resp = await fetch(url, { method: 'HEAD' });
-        if (resp.ok) {
+        const response = await chrome.runtime.sendMessage({ action: 'probeInstallDependency', url });
+        if (!response?.success) {
+          detail = `${url} - ${response?.error || 'dependency check failed'}`;
+        } else if (response.ok) {
           outcome = 'ok';
-          detail = tInstall('installDependencyOkDetail', '{url} - OK ({status})', { url, status: resp.status });
+          detail = tInstall('installDependencyOkDetail', '{url} - OK ({status})', { url, status: response.status });
         } else {
-          detail = tInstall('installDependencyHttpDetail', '{url} - HTTP {status}', { url, status: resp.status });
+          detail = tInstall('installDependencyHttpDetail', '{url} - HTTP {status}', { url, status: response.status });
         }
-      } catch {
-        try {
-          await fetch(url, { method: 'HEAD', mode: 'no-cors' });
-          outcome = 'unverifiable';
-          detail = tInstall('installDependencyStatusUnverifiableDetail', '{url} - server reachable (status unverifiable)', { url });
-        } catch {
-          detail = tInstall('installDependencyUnreachableDetail', '{url} - unreachable', { url });
-        }
+      } catch (error) {
+        detail = `${url} - ${error?.message || 'dependency check failed'}`;
       }
     }
 
@@ -2760,9 +2756,19 @@ async function checkDependencies(requires) {
     counters[outcome] += 1;
     counters.pending -= 1;
     refreshDependencyState();
-  });
+  };
 
-  await Promise.all(checks);
+  // Keep large metadata blocks from launching dozens of privileged network
+  // probes at once. Six workers preserve responsiveness without overwhelming
+  // the service worker or the dependency hosts.
+  let nextDependencyIndex = 0;
+  const workerCount = Math.min(6, requires.length);
+  await Promise.all(Array.from({ length: workerCount }, async () => {
+    while (nextDependencyIndex < requires.length) {
+      const url = requires[nextDependencyIndex++];
+      await checkDependency(url);
+    }
+  }));
 }
 
 function getRequireProvenanceDeclarations(meta) {

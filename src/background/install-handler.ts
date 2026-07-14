@@ -80,7 +80,14 @@ export function pendingInstallPageUrl(storageKey: string): string {
   return `${chrome.runtime.getURL('pages/install.html')}#${encodeURIComponent(storageKey)}`;
 }
 
-async function storePendingInstall(storageKey: string, payload: PendingInstallData): Promise<void> {
+export function createPendingInstallStorageKey(scope = 'request'): string {
+  const nonce = typeof crypto?.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  return `${PENDING_INSTALL_STORAGE_PREFIX}${scope}-${nonce}`;
+}
+
+export async function storePendingInstall(storageKey: string, payload: PendingInstallData): Promise<void> {
   if (!storageKey.startsWith(PENDING_INSTALL_STORAGE_PREFIX)) {
     throw new Error('Pending install storage key is invalid');
   }
@@ -181,6 +188,21 @@ export function registerWebNavigationListener(): void {
 export interface InstallResult {
   success: boolean;
   script?: Script;
+  error?: string;
+}
+
+export interface ScriptPreviewResult {
+  success: boolean;
+  code?: string;
+  finalUrl?: string;
+  error?: string;
+}
+
+export interface DependencyProbeResult {
+  success: boolean;
+  ok?: boolean;
+  status?: number;
+  finalUrl?: string;
   error?: string;
 }
 
@@ -319,8 +341,12 @@ export async function installFromUrl(url: string): Promise<InstallResult> {
       30000,
     );
 
-    const response: Response = await fetch(url, { signal: controller.signal });
-    clearTimeout(timeoutId);
+    let response: Response;
+    try {
+      response = await fetch(url, { signal: controller.signal });
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
@@ -338,5 +364,68 @@ export async function installFromUrl(url: string): Promise<InstallResult> {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     return { success: false, error: message };
+  }
+}
+
+/**
+ * Fetch source for the dashboard's inline preview without letting a catalog
+ * URL turn the privileged extension page into an internal-network fetcher.
+ */
+export async function fetchScriptPreview(url: string): Promise<ScriptPreviewResult> {
+  const controller = new AbortController();
+  const timeoutId: ReturnType<typeof setTimeout> = setTimeout(() => controller.abort(), 20_000);
+  try {
+    assertExternalFetchUrl(url, 'Script preview', ['http:', 'https:']);
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const postCheck = classifyResponseUrl(response, ['http:', 'https:']);
+    if (!postCheck.ok) throw new Error(`Script preview redirected to ${postCheck.message}`);
+    const code = await fetchTextBounded(response, MAX_SCRIPT_SIZE, 'Script preview');
+    return { success: true, code, finalUrl: response.url || url };
+  } catch (error: unknown) {
+    const message = error instanceof Error && error.name === 'AbortError'
+      ? 'Script preview timed out after 20 seconds'
+      : error instanceof Error ? error.message : String(error);
+    return { success: false, error: message };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+/**
+ * Probe an install dependency in the background so redirects and DNS-resolved
+ * destinations are checked at the privileged network boundary. A small range
+ * GET is used only when a server explicitly rejects HEAD.
+ */
+export async function probeInstallDependency(url: string): Promise<DependencyProbeResult> {
+  const controller = new AbortController();
+  const timeoutId: ReturnType<typeof setTimeout> = setTimeout(() => controller.abort(), 15_000);
+  let response: Response | null = null;
+  try {
+    assertExternalFetchUrl(url, 'Dependency', ['http:', 'https:']);
+    response = await fetch(url, { method: 'HEAD', signal: controller.signal });
+    if (response.status === 405 || response.status === 501) {
+      response = await fetch(url, {
+        method: 'GET',
+        headers: { Range: 'bytes=0-0' },
+        signal: controller.signal,
+      });
+    }
+    const postCheck = classifyResponseUrl(response, ['http:', 'https:']);
+    if (!postCheck.ok) throw new Error(`Dependency redirected to ${postCheck.message}`);
+    return {
+      success: true,
+      ok: response.ok,
+      status: response.status,
+      finalUrl: response.url || url,
+    };
+  } catch (error: unknown) {
+    const message = error instanceof Error && error.name === 'AbortError'
+      ? 'Dependency check timed out after 15 seconds'
+      : error instanceof Error ? error.message : String(error);
+    return { success: false, error: message };
+  } finally {
+    clearTimeout(timeoutId);
+    try { await response?.body?.cancel(); } catch { /* response already closed */ }
   }
 }

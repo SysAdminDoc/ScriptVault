@@ -198,5 +198,7 @@ export {
 export {
   installFromUrl,
   installFromCode,
+  fetchScriptPreview,
+  probeInstallDependency,
   registerWebNavigationListener,
 } from './install-handler';
