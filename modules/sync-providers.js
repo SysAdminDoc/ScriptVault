@@ -481,6 +481,61 @@ const CloudSyncProviders = (() => {
       externalSignal?.removeEventListener("abort", abortFromExternal);
     }
   }
+  var SYNC_PAYLOAD_MAX_BYTES = 64 * 1024 * 1024;
+  var SYNC_METADATA_MAX_BYTES = 4 * 1024 * 1024;
+  var SYNC_ERROR_MAX_BYTES = 256 * 1024;
+  async function readSyncTextBounded(response, maxBytes, label) {
+    const declared = Number.parseInt(response.headers?.get?.("content-length") || "0", 10);
+    if (Number.isFinite(declared) && declared > maxBytes) {
+      throw new Error(`${label} exceeds the ${Math.round(maxBytes / 1024 / 1024)} MB limit`);
+    }
+    if (!response.body?.getReader) {
+      const text = await response.text();
+      if (new TextEncoder().encode(text).byteLength > maxBytes) {
+        throw new Error(`${label} exceeds the ${Math.round(maxBytes / 1024 / 1024)} MB limit`);
+      }
+      return text;
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    const chunks = [];
+    let bytesRead = 0;
+    try {
+      for (; ; ) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (!value) continue;
+        bytesRead += value.byteLength;
+        if (bytesRead > maxBytes) {
+          try {
+            await reader.cancel();
+          } catch {
+          }
+          throw new Error(`${label} exceeds the ${Math.round(maxBytes / 1024 / 1024)} MB limit`);
+        }
+        chunks.push(decoder.decode(value, { stream: true }));
+      }
+      chunks.push(decoder.decode());
+      return chunks.join("");
+    } finally {
+      try {
+        reader.releaseLock();
+      } catch {
+      }
+    }
+  }
+  async function readSyncJsonBounded(response, maxBytes, label) {
+    if (!response.body?.getReader && typeof response.json === "function") {
+      return response.json();
+    }
+    const text = await readSyncTextBounded(response, maxBytes, label);
+    if (!text.trim()) return {};
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new Error(`${label} returned invalid JSON`);
+    }
+  }
   var localfolder = {
     name: "Local Folder",
     icon: "Folder",
@@ -644,7 +699,7 @@ const CloudSyncProviders = (() => {
       if (!response.ok) throw new Error(`WebDAV download failed: HTTP ${response.status}`);
       this._lastSyncEtag = response.headers?.get("ETag") || void 0;
       this._lastSyncEtagKey = objectName;
-      return await response.json();
+      return await readSyncJsonBounded(response, SYNC_PAYLOAD_MAX_BYTES, "WebDAV sync payload");
     },
     async test(settings) {
       try {
@@ -891,7 +946,11 @@ const CloudSyncProviders = (() => {
         15e3
       );
       if (!response.ok) throw new Error(`Failed to search files: ${response.status}`);
-      const data = await response.json();
+      const data = await readSyncJsonBounded(
+        response,
+        SYNC_METADATA_MAX_BYTES,
+        "Google Drive file list"
+      );
       return data.files?.[0] ?? null;
     },
     async upload(data, settings, opts = {}) {
@@ -930,7 +989,7 @@ const CloudSyncProviders = (() => {
         signal: opts.signal
       }, 6e4);
       if (!response.ok) {
-        const error = await response.text();
+        const error = await readSyncTextBounded(response, SYNC_ERROR_MAX_BYTES, "Google Drive upload error");
         throw new Error(`Upload failed: ${error}`);
       }
       this._lastSyncEtag = response.headers?.get("ETag") || this._lastSyncEtag;
@@ -956,7 +1015,7 @@ const CloudSyncProviders = (() => {
       if (!response.ok) throw new Error(`Download failed: ${response.status}`);
       this._lastSyncEtag = response.headers?.get("ETag") || void 0;
       this._lastSyncEtagKey = objectName;
-      return await response.json();
+      return await readSyncJsonBounded(response, SYNC_PAYLOAD_MAX_BYTES, "Google Drive sync payload");
     },
     async test(settings) {
       try {
@@ -987,7 +1046,11 @@ const CloudSyncProviders = (() => {
           1e4
         );
         if (!response.ok) return { connected: false };
-        const user = await response.json();
+        const user = await readSyncJsonBounded(
+          response,
+          SYNC_METADATA_MAX_BYTES,
+          "Google Drive user response"
+        );
         return { connected: true, user: { email: user.email ?? "", name: user.name ?? "" } };
       } catch (_e) {
         return { connected: false };
@@ -1175,7 +1238,7 @@ const CloudSyncProviders = (() => {
       }, 6e4);
       if (response.status === 401) throw new Error("Dropbox token expired. Please reconnect.");
       if (!response.ok) {
-        const error = await response.text();
+        const error = await readSyncTextBounded(response, SYNC_ERROR_MAX_BYTES, "Dropbox upload error");
         throw new Error(`Upload failed: ${error}`);
       }
       const metadata = await response.clone().json().catch(() => null);
@@ -1218,7 +1281,7 @@ const CloudSyncProviders = (() => {
         this._lastSyncRev = void 0;
         this._lastSyncRevPath = "";
       }
-      return await response.json();
+      return await readSyncJsonBounded(response, SYNC_PAYLOAD_MAX_BYTES, "Dropbox sync payload");
     },
     async test(settings) {
       try {
@@ -1255,7 +1318,11 @@ const CloudSyncProviders = (() => {
           15e3
         );
         if (!response.ok) return { connected: false };
-        const user = await response.json();
+        const user = await readSyncJsonBounded(
+          response,
+          SYNC_METADATA_MAX_BYTES,
+          "Dropbox account response"
+        );
         return {
           connected: true,
           user: {
@@ -1457,7 +1524,13 @@ const CloudSyncProviders = (() => {
         },
         6e4
       );
-      if (!response.ok) throw new Error("Upload failed: " + await response.text());
+      if (!response.ok) {
+        throw new Error("Upload failed: " + await readSyncTextBounded(
+          response,
+          SYNC_ERROR_MAX_BYTES,
+          "OneDrive upload error"
+        ));
+      }
       this._lastSyncEtag = response.headers.get("ETag") || response.headers.get("eTag") || this._lastSyncEtag;
       this._lastSyncEtagKey = objectName;
       return { success: true, timestamp: Date.now() };
@@ -1480,7 +1553,7 @@ const CloudSyncProviders = (() => {
       if (!response.ok) throw new Error("Download failed: " + response.status);
       this._lastSyncEtag = response.headers.get("ETag") || response.headers.get("eTag") || void 0;
       this._lastSyncEtagKey = objectName;
-      return await response.json();
+      return await readSyncJsonBounded(response, SYNC_PAYLOAD_MAX_BYTES, "OneDrive sync payload");
     },
     async test(settings) {
       try {
@@ -1506,7 +1579,11 @@ const CloudSyncProviders = (() => {
           headers: { "Authorization": `Bearer ${token}` }
         }, 15e3);
         if (!response.ok) return { connected: false };
-        const user = await response.json();
+        const user = await readSyncJsonBounded(
+          response,
+          SYNC_METADATA_MAX_BYTES,
+          "OneDrive user response"
+        );
         return {
           connected: true,
           user: {
@@ -1722,15 +1799,14 @@ const CloudSyncProviders = (() => {
         contentType: "application/json",
         extraHeaders: conditionalHeaders
       });
-      const response = await fetch(url, {
+      const response = await fetchWithTimeout(url, {
         method: "PUT",
         headers: signed.headers,
         body,
         signal: opts.signal
-      });
-      assertSyncResponseAllowed(response, guardOptions);
+      }, 3e4, guardOptions);
       if (!response.ok) {
-        const text = await response.text().catch(() => "");
+        const text = await readSyncTextBounded(response, SYNC_ERROR_MAX_BYTES, "S3 upload error").catch(() => "");
         throw new Error(`S3 upload failed: HTTP ${response.status}${text ? ` - ${text.slice(0, 200)}` : ""}`);
       }
       this._lastSyncEtag = response.headers?.get("ETag") || this._lastSyncEtag;
@@ -1757,24 +1833,23 @@ const CloudSyncProviders = (() => {
         accessKeyId: effectiveSettings.s3AccessKeyId,
         secretKey: effectiveSettings.s3SecretKey
       });
-      const response = await fetch(url, {
+      const response = await fetchWithTimeout(url, {
         method: "GET",
         headers: signed.headers,
         signal: opts.signal
-      });
-      assertSyncResponseAllowed(response, guardOptions);
+      }, 3e4, guardOptions);
       if (response.status === 404) {
         this._lastSyncEtag = null;
         this._lastSyncEtagKey = objectKey;
         return null;
       }
       if (!response.ok) {
-        const text = await response.text().catch(() => "");
+        const text = await readSyncTextBounded(response, SYNC_ERROR_MAX_BYTES, "S3 download error").catch(() => "");
         throw new Error(`S3 download failed: HTTP ${response.status}${text ? ` - ${text.slice(0, 200)}` : ""}`);
       }
       this._lastSyncEtag = response.headers?.get("ETag") || void 0;
       this._lastSyncEtagKey = objectKey;
-      return await response.json();
+      return await readSyncJsonBounded(response, SYNC_PAYLOAD_MAX_BYTES, "S3 sync payload");
     },
     async test(settings) {
       const effectiveSettings = await SyncCredentialStore.resolveSettings(settings);
@@ -1796,8 +1871,12 @@ const CloudSyncProviders = (() => {
           accessKeyId: effectiveSettings.s3AccessKeyId,
           secretKey: effectiveSettings.s3SecretKey
         });
-        const response = await fetch(url, { method: "HEAD", headers: signed.headers });
-        assertSyncResponseAllowed(response, guardOptions);
+        const response = await fetchWithTimeout(
+          url,
+          { method: "HEAD", headers: signed.headers },
+          15e3,
+          guardOptions
+        );
         if (response.ok || response.status === 404) return { success: true };
         return { success: false, error: `HTTP ${response.status}` };
       } catch (e) {

@@ -200,5 +200,6 @@ export {
   installFromCode,
   fetchScriptPreview,
   probeInstallDependency,
+  scriptSourceByteLength,
   registerWebNavigationListener,
 } from './install-handler';

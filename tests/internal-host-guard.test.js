@@ -244,6 +244,14 @@ describe('install/update SSRF gates (TS background modules)', () => {
     }
   });
 
+  it('enforces the script limit in UTF-8 bytes rather than UTF-16 characters', async () => {
+    const mod = await import('../src/background/install-handler.ts');
+    const header = '// ==UserScript==\n// @name Unicode size\n// ==/UserScript==\n';
+    const code = header + 'é'.repeat(Math.ceil(mod.MAX_SCRIPT_SIZE / 2));
+    expect(code.length).toBeLessThan(mod.MAX_SCRIPT_SIZE);
+    expect(mod.scriptSourceByteLength(code)).toBeGreaterThan(mod.MAX_SCRIPT_SIZE);
+  });
+
   it('rejects internal-host update URLs before any network I/O', async () => {
     const mod = await import('../src/background/update-checker.ts');
     const origFetch = globalThis.fetch;

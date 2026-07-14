@@ -141,6 +141,23 @@ describe('source hardening parity guards', () => {
     expect(providers).toContain('S3 sync endpoint');
     expect(providers).toContain('allowInternalSyncEndpoints');
     expect(providers).toContain('assertSyncResponseAllowed(response, guardOptions);');
+    expect(providers).toContain('const SYNC_PAYLOAD_MAX_BYTES = 64 * 1024 * 1024;');
+    expect(providers).toContain('readSyncJsonBounded(response, SYNC_PAYLOAD_MAX_BYTES');
+    const s3Start = providers.indexOf('const s3 = {');
+    const s3End = providers.indexOf('export const CloudSyncProviders', s3Start);
+    const s3 = providers.slice(s3Start, s3End);
+    expect(s3).toContain('await fetchWithTimeout(url, {');
+    expect(s3).not.toMatch(/await\s+fetch\s*\(/);
+  });
+
+  it('enforces local userscript limits in UTF-8 bytes across runtime and TypeScript paths', () => {
+    const core = source('src/background/core.ts');
+    const install = source('src/background/install-handler.ts');
+    expect(core).toContain('function _scriptSourceByteLength(code)');
+    expect(core).not.toMatch(/data\.code\.length\s*>\s*MAX_SCRIPT_SIZE/);
+    expect(core).not.toMatch(/code\.length\s*>\s*MAX_SCRIPT_SIZE/);
+    expect(install).toContain('export function scriptSourceByteLength(code: string)');
+    expect(install).not.toMatch(/code\.length\s*>\s*MAX_SCRIPT_SIZE/);
   });
 
   it('keeps PublicAPI trusted-origin and install URL checks on the canonical internal-host guard', () => {

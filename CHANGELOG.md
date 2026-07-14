@@ -18,6 +18,10 @@ All notable changes to ScriptVault will be documented in this file.
 - **Improved remote-flow recovery.** Context-menu installs, catalog searches,
   library lookup, and curated collection resolution now fail with bounded,
   actionable timeout behavior rather than hanging indefinitely.
+- **Hardened sync and script-size boundaries.** Every cloud-provider response is
+  now size-bounded before JSON parsing, S3 uses the same abortable timeout path
+  as the other providers, and the 5 MB userscript limit is enforced in UTF-8
+  bytes so multi-byte source cannot bypass storage safeguards.
 
 ## [v3.20.0] — Premium interaction and theme polish (2026-07-14)
 

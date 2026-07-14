@@ -259,6 +259,16 @@ describe('S3 provider — upload/download round trip against a mock server', () 
     expect(out).toEqual({ data: { scripts: [], timestamp: 1 } });
   });
 
+  it('rejects oversized sync payloads before buffering the response body', async () => {
+    const fetchImpl = async () => new Response('{"data":{}}', {
+      status: 200,
+      headers: { 'content-length': String(64 * 1024 * 1024 + 1) },
+    });
+    const { providers } = loadProviders({ fetchImpl });
+    await expect(providers.s3.download(validSettings()))
+      .rejects.toThrow(/S3 sync payload exceeds the 64 MB limit/);
+  });
+
   it('returns null on 404 (no backup yet)', async () => {
     const fetchImpl = async () => ({ ok: false, status: 404, json: async () => ({}), text: async () => '' });
     const { providers } = loadProviders({ fetchImpl });

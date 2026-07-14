@@ -68,6 +68,10 @@ const PENDING_INSTALL_MAX_ENTRIES = 32;
 /** Maximum allowed script size (5 MB) */
 export const MAX_SCRIPT_SIZE: number = 5 * 1024 * 1024;
 
+export function scriptSourceByteLength(code: string): number {
+  return new TextEncoder().encode(code).byteLength;
+}
+
 // ---------------------------------------------------------------------------
 // webNavigation listener — intercept .user.js navigation
 // ---------------------------------------------------------------------------
@@ -221,9 +225,10 @@ export async function installFromCode(code: string, receiptOptions: InstallRecei
       throw new Error('No script content provided');
     }
 
-    if (code.length > MAX_SCRIPT_SIZE) {
+    const codeBytes = scriptSourceByteLength(code);
+    if (codeBytes > MAX_SCRIPT_SIZE) {
       throw new Error(
-        `Script too large (${formatBytes(code.length)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.`,
+        `Script too large (${formatBytes(codeBytes)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.`,
       );
     }
 

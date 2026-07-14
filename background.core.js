@@ -3807,6 +3807,9 @@ async function buildLocalHealthReport() {
 // ============================================================================
 
 const MAX_SCRIPT_SIZE = 5 * 1024 * 1024; // 5MB limit
+function _scriptSourceByteLength(code) {
+  return typeof code === 'string' ? new TextEncoder().encode(code).byteLength : 0;
+}
 const SUBSCRIPTION_REFRESH_ALARM = 'subscriptionRefresh';
 const DEFAULT_SUBSCRIPTION_REFRESH_INTERVAL_HOURS = 24;
 
@@ -6312,8 +6315,9 @@ async function handleMessage(message, sender) {
       }
         
       case 'saveScript': {
-        if (data.code && data.code.length > MAX_SCRIPT_SIZE) {
-          return { error: `Script too large (${formatBytes(data.code.length)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.` };
+        const codeBytes = _scriptSourceByteLength(data.code);
+        if (codeBytes > MAX_SCRIPT_SIZE) {
+          return { error: `Script too large (${formatBytes(codeBytes)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.` };
         }
         const parsed = parseUserscript(data.code);
         if (parsed.error) return { error: parsed.error };
@@ -6497,8 +6501,9 @@ async function handleMessage(message, sender) {
       }
       
       case 'createScript': {
-        if (data.code && data.code.length > MAX_SCRIPT_SIZE) {
-          return { error: `Script too large (${formatBytes(data.code.length)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.` };
+        const codeBytes = _scriptSourceByteLength(data.code);
+        if (codeBytes > MAX_SCRIPT_SIZE) {
+          return { error: `Script too large (${formatBytes(codeBytes)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.` };
         }
         const parsed = parseUserscript(data.code);
         if (parsed.error) return { error: parsed.error };
@@ -6720,7 +6725,7 @@ async function handleMessage(message, sender) {
       }
 
       case 'importScript': {
-        if (data.code && data.code.length > MAX_SCRIPT_SIZE) return { error: `Script exceeds ${formatBytes(MAX_SCRIPT_SIZE)} size limit` };
+        if (_scriptSourceByteLength(data.code) > MAX_SCRIPT_SIZE) return { error: `Script exceeds ${formatBytes(MAX_SCRIPT_SIZE)} size limit` };
         const parsed = parseUserscript(data.code);
         if (parsed.error) return { error: parsed.error };
         
@@ -10594,8 +10599,9 @@ async function installFromCode(code, receiptOptions = {}) {
       throw new Error('No script content provided');
     }
 
-    if (code.length > MAX_SCRIPT_SIZE) {
-      throw new Error(`Script too large (${formatBytes(code.length)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.`);
+    const codeBytes = _scriptSourceByteLength(code);
+    if (codeBytes > MAX_SCRIPT_SIZE) {
+      throw new Error(`Script too large (${formatBytes(codeBytes)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.`);
     }
 
     if (!code.includes('==UserScript==')) {
