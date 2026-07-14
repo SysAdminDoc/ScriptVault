@@ -23055,6 +23055,164 @@ if (typeof self !== 'undefined') {
 }
 
 // ============================================================================
+// Generated from src/background/import-action-handler.ts; do not edit by hand.
+// Run `node scripts/generate-ts-runtime-modules.mjs` or `npm run build:bg`.
+// ============================================================================
+
+const ImportActionHandler = (() => {
+  const module = { exports: {} };
+  const exports = module.exports;
+  "use strict";
+  var __defProp = Object.defineProperty;
+  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, { get: all[name], enumerable: true });
+  };
+  var __copyProps = (to, from, except, desc) => {
+    if (from && typeof from === "object" || typeof from === "function") {
+      for (let key of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(to, key) && key !== except)
+          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+    }
+    return to;
+  };
+  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+  // src/background/import-action-handler.ts
+  var import_action_handler_exports = {};
+  __export(import_action_handler_exports, {
+    IMPORT_BACKGROUND_ACTIONS: () => IMPORT_BACKGROUND_ACTIONS,
+    ImportActionHandler: () => ImportActionHandler,
+    createImportActionHandlers: () => createImportActionHandlers,
+    default: () => import_action_handler_default
+  });
+  module.exports = __toCommonJS(import_action_handler_exports);
+  var IMPORT_BACKGROUND_ACTIONS = [
+    "importScript",
+    "importAll",
+    "importTampermonkeyBackup",
+    "importViolentmonkeyBackup",
+    "importGreasemonkeyBackup",
+    "importFromZip"
+  ];
+  function createImportActionHandlers(dependencies) {
+    return Object.freeze({
+      importScript: ({ message }) => dependencies.importScript(message.code),
+      importAll: ({ message }) => dependencies.importAll(message.data, message.options),
+      importTampermonkeyBackup: ({ message }) => dependencies.importVendorBackup(
+        "tampermonkey",
+        message.text,
+        message
+      ),
+      importViolentmonkeyBackup: ({ message }) => dependencies.importVendorBackup(
+        "violentmonkey",
+        message.text,
+        message
+      ),
+      importGreasemonkeyBackup: ({ message }) => dependencies.importVendorBackup(
+        "greasemonkey",
+        message.text,
+        message
+      ),
+      importFromZip: ({ message }) => dependencies.importFromZip(message.zipData, message.options)
+    });
+  }
+  var ImportActionHandler = Object.freeze({
+    IMPORT_BACKGROUND_ACTIONS,
+    createImportActionHandlers
+  });
+  var import_action_handler_default = ImportActionHandler;
+  return module.exports.default || module.exports.ImportActionHandler || module.exports;
+})();
+
+if (typeof self !== 'undefined') {
+  self.ImportActionHandler = ImportActionHandler;
+}
+
+// ============================================================================
+// Generated from src/background/telemetry-action-handler.ts; do not edit by hand.
+// Run `node scripts/generate-ts-runtime-modules.mjs` or `npm run build:bg`.
+// ============================================================================
+
+const TelemetryActionHandler = (() => {
+  const module = { exports: {} };
+  const exports = module.exports;
+  "use strict";
+  var __defProp = Object.defineProperty;
+  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, { get: all[name], enumerable: true });
+  };
+  var __copyProps = (to, from, except, desc) => {
+    if (from && typeof from === "object" || typeof from === "function") {
+      for (let key of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(to, key) && key !== except)
+          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+    }
+    return to;
+  };
+  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+  // src/background/telemetry-action-handler.ts
+  var telemetry_action_handler_exports = {};
+  __export(telemetry_action_handler_exports, {
+    EXECUTION_TELEMETRY_ACTIONS: () => EXECUTION_TELEMETRY_ACTIONS,
+    TelemetryActionHandler: () => TelemetryActionHandler,
+    createTelemetryActionHandlers: () => createTelemetryActionHandlers,
+    default: () => telemetry_action_handler_default
+  });
+  module.exports = __toCommonJS(telemetry_action_handler_exports);
+  var EXECUTION_TELEMETRY_ACTIONS = [
+    "recordBridgeTelemetry",
+    "netlog_record",
+    "reportExecError",
+    "reportExecTime"
+  ];
+  function asTelemetrySender(sender) {
+    return sender && typeof sender === "object" ? sender : {};
+  }
+  function createTelemetryActionHandlers(dependencies) {
+    return Object.freeze({
+      recordBridgeTelemetry: ({ message, sender }) => dependencies.handleBridgeTelemetry(
+        message,
+        asTelemetrySender(sender)
+      ),
+      netlog_record: ({ message, sender }) => dependencies.handleTrustedTelemetry(
+        "netlog_record",
+        message,
+        asTelemetrySender(sender)
+      ),
+      reportExecError: ({ message, sender }) => dependencies.handleTrustedTelemetry(
+        "reportExecError",
+        message,
+        asTelemetrySender(sender)
+      ),
+      reportExecTime: ({ message, sender }) => dependencies.handleTrustedTelemetry(
+        "reportExecTime",
+        message,
+        asTelemetrySender(sender)
+      )
+    });
+  }
+  var TelemetryActionHandler = Object.freeze({
+    EXECUTION_TELEMETRY_ACTIONS,
+    createTelemetryActionHandlers
+  });
+  var telemetry_action_handler_default = TelemetryActionHandler;
+  return module.exports.default || module.exports.TelemetryActionHandler || module.exports;
+})();
+
+if (typeof self !== 'undefined') {
+  self.TelemetryActionHandler = TelemetryActionHandler;
+}
+
+// ============================================================================
 // Generated from src/background/message-router.ts; do not edit by hand.
 // Run `node scripts/generate-ts-runtime-modules.mjs` or `npm run build:bg`.
 // ============================================================================
@@ -23086,6 +23244,7 @@ const MessageRouter = (() => {
   __export(message_router_exports, {
     BACKGROUND_MESSAGE_ACTIONS: () => BACKGROUND_MESSAGE_ACTIONS,
     MessageRouter: () => MessageRouter,
+    createBackgroundActionRegistry: () => createBackgroundActionRegistry,
     default: () => message_router_default,
     getBackgroundActionOrigin: () => getBackgroundActionOrigin,
     isKnownBackgroundAction: () => isKnownBackgroundAction,
@@ -23349,8 +23508,52 @@ const MessageRouter = (() => {
     }
     return { known: true, action, origin: getBackgroundActionOrigin(action) };
   }
+  function normalizeBackgroundMessage(message, action) {
+    const nested = message.data;
+    if (nested && typeof nested === "object" && !Array.isArray(nested)) {
+      return { ...nested, action };
+    }
+    return { ...message, action };
+  }
+  function createBackgroundActionRegistry(initialHandlers = {}) {
+    const handlers = /* @__PURE__ */ new Map();
+    function registerHandlers(nextHandlers) {
+      for (const [rawAction, handler] of Object.entries(nextHandlers)) {
+        if (!isKnownBackgroundAction(rawAction) || typeof handler !== "function") {
+          throw new Error(`Cannot register unknown background action: ${rawAction}`);
+        }
+        if (handlers.has(rawAction)) {
+          throw new Error(`Background action already has a handler: ${rawAction}`);
+        }
+        handlers.set(rawAction, handler);
+      }
+    }
+    async function dispatch(message, sender) {
+      if (!message || typeof message !== "object" || Array.isArray(message)) {
+        return { handled: false, action: String(message?.action) };
+      }
+      const record = message;
+      const resolution = resolveBackgroundAction(record.action);
+      if (!resolution.known) return { handled: false, action: resolution.action };
+      const handler = handlers.get(resolution.action);
+      if (!handler) return { handled: false, action: resolution.action };
+      const normalizedMessage = normalizeBackgroundMessage(record, resolution.action);
+      const response = await handler({
+        action: resolution.action,
+        message: normalizedMessage,
+        sender
+      });
+      return { handled: true, action: resolution.action, response };
+    }
+    function registeredActions() {
+      return [...handlers.keys()];
+    }
+    registerHandlers(initialHandlers);
+    return Object.freeze({ dispatch, registerHandlers, registeredActions });
+  }
   var MessageRouter = Object.freeze({
     BACKGROUND_MESSAGE_ACTIONS,
+    createBackgroundActionRegistry,
     getBackgroundActionOrigin,
     isKnownBackgroundAction,
     resolveBackgroundAction
@@ -44847,6 +45050,31 @@ async function importVendorBackup(vendor, text, options = {}) {
   return results;
 }
 
+async function importSingleScript(code) {
+  if (_scriptSourceByteLength(code) > MAX_SCRIPT_SIZE) {
+    return { error: `Script exceeds ${formatBytes(MAX_SCRIPT_SIZE)} size limit` };
+  }
+  const parsed = parseUserscript(code);
+  if (parsed.error) return { error: parsed.error };
+
+  const id = generateId();
+  const script = {
+    id,
+    code,
+    meta: parsed.meta,
+    enabled: true,
+    position: (await ScriptStorage.getAll()).length,
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  };
+
+  await ScriptStorage.set(id, script);
+  await registerScript(script);
+  await updateBadge();
+  notifyEasyCloudScriptSaved(id);
+  return { success: true, script: { ...script, metadata: script.meta } };
+}
+
 // ============================================================================
 // Message Handlers
 // ============================================================================
@@ -44867,6 +45095,17 @@ const executionTelemetryHandler = ExecutionTelemetry.createExecutionTelemetryHan
   retainStatsUrl: (url, mode) => _retainStatsUrl(url, mode),
   onTriggerError: error => console.error('[ScriptVault] After-script chain trigger error:', error)
 });
+const backgroundActionRegistry = MessageRouter.createBackgroundActionRegistry();
+backgroundActionRegistry.registerHandlers(ImportActionHandler.createImportActionHandlers({
+  importScript: code => importSingleScript(code),
+  importAll: (data, options) => importScripts(data, options),
+  importVendorBackup: (vendor, text, options) => importVendorBackup(vendor, text, options),
+  importFromZip: (zipData, options) => importFromZip(zipData, options || {})
+}));
+backgroundActionRegistry.registerHandlers(TelemetryActionHandler.createTelemetryActionHandlers({
+  handleBridgeTelemetry: (data, sender) => executionTelemetryHandler.handleBridgeTelemetry(data, sender),
+  handleTrustedTelemetry: (action, data, sender) => executionTelemetryHandler.handleTrustedTelemetry(action, data, sender)
+}));
 
 // USER_SCRIPT world message listener (for GM_* APIs)
 // This is SEPARATE from onMessage and required for messaging: true to work
@@ -45352,6 +45591,8 @@ async function handleMessage(message, sender) {
   if (typeof MessageRouter !== 'undefined' && !MessageRouter.isKnownBackgroundAction(action)) {
     return { error: 'Unknown action: ' + action };
   }
+  const routed = await backgroundActionRegistry.dispatch(message, sender);
+  if (routed.handled) return routed.response;
   
   try {
     switch (action) {
@@ -45797,30 +46038,6 @@ async function handleMessage(message, sender) {
           debugLog('Toggle error:', e);
           return { error: e?.message || 'Failed to update script' };
         });
-      }
-
-      case 'importScript': {
-        if (_scriptSourceByteLength(data.code) > MAX_SCRIPT_SIZE) return { error: `Script exceeds ${formatBytes(MAX_SCRIPT_SIZE)} size limit` };
-        const parsed = parseUserscript(data.code);
-        if (parsed.error) return { error: parsed.error };
-        
-        const id = generateId();
-        const script = {
-          id,
-          code: data.code,
-          meta: parsed.meta,
-          enabled: true,
-          position: (await ScriptStorage.getAll()).length,
-          createdAt: Date.now(),
-          updatedAt: Date.now()
-        };
-        
-        await ScriptStorage.set(id, script);
-        await registerScript(script);
-        await updateBadge();
-        notifyEasyCloudScriptSaved(id);
-        // Return with metadata property for dashboard compatibility
-        return { success: true, script: { ...script, metadata: script.meta } };
       }
 
       case 'duplicateScript': {
@@ -46398,13 +46615,6 @@ async function handleMessage(message, sender) {
       case 'exportAll':
         return await exportAllScripts(data?.options || {});
         
-      case 'importAll':
-        return await importScripts(data.data, data.options);
-
-      case 'importTampermonkeyBackup': {
-        return await importVendorBackup('tampermonkey', data.text, data);
-      }
-
       // v2.0: Storage Quota
       case 'getStorageUsage': {
         if (typeof QuotaManager !== 'undefined') return await QuotaManager.getUsage();
@@ -46592,16 +46802,6 @@ async function handleMessage(message, sender) {
         return { success: true };
       }
 
-      // v2.0: Violentmonkey backup import
-      case 'importViolentmonkeyBackup': {
-        return await importVendorBackup('violentmonkey', data.text, data);
-      }
-
-      // v2.0: Greasemonkey backup import (GM4 JSON format)
-      case 'importGreasemonkeyBackup': {
-        return await importVendorBackup('greasemonkey', data.text, data);
-      }
-
       case 'exportZip':
         return await exportToZip(data?.options || {});
 
@@ -46648,15 +46848,6 @@ async function handleMessage(message, sender) {
       case 'clearNetworkLog':
         NetworkLog.clear(data?.scriptId);
         return { success: true };
-
-      // Page-visible postMessage telemetry is deliberately untrusted and can
-      // never update script state, claim script attribution, or trigger chains.
-      case 'recordBridgeTelemetry':
-        return await executionTelemetryHandler.handleBridgeTelemetry(data, sender);
-
-      // Direct wrapper telemetry is authenticated by UserScriptMessagePolicy.
-      case 'netlog_record':
-        return await executionTelemetryHandler.handleTrustedTelemetry(action, data, sender);
 
       // Static Analysis — routes through offscreen document for AST analysis
       case 'analyzeScript': {
@@ -46804,9 +46995,6 @@ async function handleMessage(message, sender) {
         await FolderStorage.moveScript(data.scriptId, data.fromFolderId, data.toFolderId);
         return { success: true };
 
-      case 'importFromZip':
-        return await importFromZip(data.zipData, data.options || {});
-      
       case 'installFromUrl':
         return await installFromUrl(data.url);
 
@@ -47187,10 +47375,6 @@ async function handleMessage(message, sender) {
         });
         return { success: true };
       }
-
-      case 'reportExecTime':
-      case 'reportExecError':
-        return await executionTelemetryHandler.handleTrustedTelemetry(action, data, sender);
 
       // GM_audio API - Tab mute control (Tampermonkey-compatible)
       case 'GM_audio_setMute':

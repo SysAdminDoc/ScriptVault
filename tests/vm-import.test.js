@@ -3,6 +3,10 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const backgroundCore = readFileSync(resolve(process.cwd(), 'background.core.js'), 'utf8');
+const importActionHandler = readFileSync(
+  resolve(process.cwd(), 'src/background/import-action-handler.ts'),
+  'utf8',
+);
 
 const VM_EXPORT_FIXTURE = {
   scripts: [
@@ -46,7 +50,8 @@ console.log('disabled');`,
 
 describe('Violentmonkey backup import', () => {
   it('reads vmScript.code, vmScript.props.name, and vmScript.config.enabled from the runtime handler', () => {
-    expect(backgroundCore).toContain("importVendorBackup('violentmonkey', data.text, data)");
+    expect(importActionHandler).toContain("'violentmonkey',");
+    expect(importActionHandler).toContain('message.text');
     expect(backgroundCore).toContain('Array.isArray(parsed?.scripts)');
     expect(backgroundCore).toContain('script?.code || script?.custom?.code');
     expect(backgroundCore).toContain('script?.config?.enabled !== false');

@@ -406,7 +406,8 @@ describe('Easy Cloud reacts to real script mutations (2026-07 P2 regression)', (
     const toggleBlock = core.slice(core.indexOf("case 'toggleScript'"), core.indexOf("case 'importScript'"));
     expectNotifyAfter(toggleBlock, 'await ScriptStorage.set(scriptId, script);', 'notifyEasyCloudScriptSaved(scriptId);');
 
-    const importBlock = core.slice(core.indexOf("case 'importScript'"), core.indexOf("case 'duplicateScript'"));
+    const importStart = core.indexOf('async function importSingleScript');
+    const importBlock = core.slice(importStart, core.indexOf('// Message Handlers', importStart));
     expectNotifyAfter(importBlock, 'await ScriptStorage.set(id, script);', 'notifyEasyCloudScriptSaved(id);');
 
     const duplicateBlock = core.slice(core.indexOf("case 'duplicateScript'"), core.indexOf("case 'searchScripts'"));

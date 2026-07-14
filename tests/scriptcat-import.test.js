@@ -3,6 +3,10 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const backgroundCore = readFileSync(resolve(process.cwd(), 'background.core.js'), 'utf8');
+const importActionHandler = readFileSync(
+  resolve(process.cwd(), 'src/background/import-action-handler.ts'),
+  'utf8',
+);
 
 const SCRIPTCAT_TM_FIXTURE = [
   '// ==UserScript==',
@@ -31,12 +35,13 @@ const SCRIPTCAT_TM_FIXTURE = [
 
 describe('ScriptCat TM-shaped backup import', () => {
   it('imports ScriptCat TM-format exports through the existing TM handler', () => {
-    const handlerStart = backgroundCore.indexOf("case 'importTampermonkeyBackup':");
+    const handlerStart = importActionHandler.indexOf('importTampermonkeyBackup:');
     expect(handlerStart).toBeGreaterThan(-1);
-    const handlerEnd = backgroundCore.indexOf("case '", handlerStart + 40);
-    const handler = backgroundCore.slice(handlerStart, handlerEnd);
+    const handlerEnd = importActionHandler.indexOf('importViolentmonkeyBackup:', handlerStart);
+    const handler = importActionHandler.slice(handlerStart, handlerEnd);
 
-    expect(handler).toContain("importVendorBackup('tampermonkey', data.text, data)");
+    expect(handler).toContain("'tampermonkey',");
+    expect(handler).toContain('message.text');
   });
 
   it('fixture has valid multi-script TM-shaped export structure', () => {

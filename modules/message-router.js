@@ -30,6 +30,7 @@ const MessageRouter = (() => {
   __export(message_router_exports, {
     BACKGROUND_MESSAGE_ACTIONS: () => BACKGROUND_MESSAGE_ACTIONS,
     MessageRouter: () => MessageRouter,
+    createBackgroundActionRegistry: () => createBackgroundActionRegistry,
     default: () => message_router_default,
     getBackgroundActionOrigin: () => getBackgroundActionOrigin,
     isKnownBackgroundAction: () => isKnownBackgroundAction,
@@ -293,8 +294,52 @@ const MessageRouter = (() => {
     }
     return { known: true, action, origin: getBackgroundActionOrigin(action) };
   }
+  function normalizeBackgroundMessage(message, action) {
+    const nested = message.data;
+    if (nested && typeof nested === "object" && !Array.isArray(nested)) {
+      return { ...nested, action };
+    }
+    return { ...message, action };
+  }
+  function createBackgroundActionRegistry(initialHandlers = {}) {
+    const handlers = /* @__PURE__ */ new Map();
+    function registerHandlers(nextHandlers) {
+      for (const [rawAction, handler] of Object.entries(nextHandlers)) {
+        if (!isKnownBackgroundAction(rawAction) || typeof handler !== "function") {
+          throw new Error(`Cannot register unknown background action: ${rawAction}`);
+        }
+        if (handlers.has(rawAction)) {
+          throw new Error(`Background action already has a handler: ${rawAction}`);
+        }
+        handlers.set(rawAction, handler);
+      }
+    }
+    async function dispatch(message, sender) {
+      if (!message || typeof message !== "object" || Array.isArray(message)) {
+        return { handled: false, action: String(message?.action) };
+      }
+      const record = message;
+      const resolution = resolveBackgroundAction(record.action);
+      if (!resolution.known) return { handled: false, action: resolution.action };
+      const handler = handlers.get(resolution.action);
+      if (!handler) return { handled: false, action: resolution.action };
+      const normalizedMessage = normalizeBackgroundMessage(record, resolution.action);
+      const response = await handler({
+        action: resolution.action,
+        message: normalizedMessage,
+        sender
+      });
+      return { handled: true, action: resolution.action, response };
+    }
+    function registeredActions() {
+      return [...handlers.keys()];
+    }
+    registerHandlers(initialHandlers);
+    return Object.freeze({ dispatch, registerHandlers, registeredActions });
+  }
   var MessageRouter = Object.freeze({
     BACKGROUND_MESSAGE_ACTIONS,
+    createBackgroundActionRegistry,
     getBackgroundActionOrigin,
     isKnownBackgroundAction,
     resolveBackgroundAction

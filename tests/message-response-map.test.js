@@ -8,6 +8,8 @@ import {
   isKnownBackgroundAction,
   resolveBackgroundAction,
 } from "../src/background/message-router.ts";
+import { IMPORT_BACKGROUND_ACTIONS } from "../src/background/import-action-handler.ts";
+import { EXECUTION_TELEMETRY_ACTIONS } from "../src/background/telemetry-action-handler.ts";
 
 const source = readFileSync(resolve(process.cwd(), "src/types/messages.ts"), "utf8");
 const coreSource = readFileSync(resolve(process.cwd(), "src/background/core.ts"), "utf8");
@@ -61,6 +63,14 @@ function extractHandleMessageActions() {
     .sort();
 }
 
+function allLiveBackgroundActions() {
+  return [...new Set([
+    ...extractHandleMessageActions(),
+    ...IMPORT_BACKGROUND_ACTIONS,
+    ...EXECUTION_TELEMETRY_ACTIONS,
+  ])].sort();
+}
+
 describe("message response map coverage", () => {
   it("maps every BackgroundMessage action literal to a response type", () => {
     const actions = extractActionLiterals();
@@ -70,12 +80,19 @@ describe("message response map coverage", () => {
   });
 
   it("declares every handleMessage action literal in BackgroundMessage", () => {
-    expect(extractActionLiterals()).toEqual(extractHandleMessageActions());
+    expect(extractActionLiterals()).toEqual(allLiveBackgroundActions());
   });
 
   it("keeps the generated router action table exhaustive", () => {
     expect([...BACKGROUND_MESSAGE_ACTIONS]).toEqual(extractActionLiterals());
-    expect([...BACKGROUND_MESSAGE_ACTIONS]).toEqual(extractHandleMessageActions());
+    expect([...BACKGROUND_MESSAGE_ACTIONS]).toEqual(allLiveBackgroundActions());
+  });
+
+  it("gives every routed action one live implementation", () => {
+    const legacy = new Set(extractHandleMessageActions());
+    const routed = [...IMPORT_BACKGROUND_ACTIONS, ...EXECUTION_TELEMETRY_ACTIONS];
+    expect(routed.filter(action => legacy.has(action))).toEqual([]);
+    expect(new Set(routed).size).toBe(routed.length);
   });
 
   it("resolves known and unknown background actions", () => {

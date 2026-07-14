@@ -5955,6 +5955,31 @@ async function importVendorBackup(vendor, text, options = {}) {
   return results;
 }
 
+async function importSingleScript(code) {
+  if (_scriptSourceByteLength(code) > MAX_SCRIPT_SIZE) {
+    return { error: `Script exceeds ${formatBytes(MAX_SCRIPT_SIZE)} size limit` };
+  }
+  const parsed = parseUserscript(code);
+  if (parsed.error) return { error: parsed.error };
+
+  const id = generateId();
+  const script = {
+    id,
+    code,
+    meta: parsed.meta,
+    enabled: true,
+    position: (await ScriptStorage.getAll()).length,
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  };
+
+  await ScriptStorage.set(id, script);
+  await registerScript(script);
+  await updateBadge();
+  notifyEasyCloudScriptSaved(id);
+  return { success: true, script: { ...script, metadata: script.meta } };
+}
+
 // ============================================================================
 // Message Handlers
 // ============================================================================
@@ -5975,6 +6000,17 @@ const executionTelemetryHandler = ExecutionTelemetry.createExecutionTelemetryHan
   retainStatsUrl: (url, mode) => _retainStatsUrl(url, mode),
   onTriggerError: error => console.error('[ScriptVault] After-script chain trigger error:', error)
 });
+const backgroundActionRegistry = MessageRouter.createBackgroundActionRegistry();
+backgroundActionRegistry.registerHandlers(ImportActionHandler.createImportActionHandlers({
+  importScript: code => importSingleScript(code),
+  importAll: (data, options) => importScripts(data, options),
+  importVendorBackup: (vendor, text, options) => importVendorBackup(vendor, text, options),
+  importFromZip: (zipData, options) => importFromZip(zipData, options || {})
+}));
+backgroundActionRegistry.registerHandlers(TelemetryActionHandler.createTelemetryActionHandlers({
+  handleBridgeTelemetry: (data, sender) => executionTelemetryHandler.handleBridgeTelemetry(data, sender),
+  handleTrustedTelemetry: (action, data, sender) => executionTelemetryHandler.handleTrustedTelemetry(action, data, sender)
+}));
 
 // USER_SCRIPT world message listener (for GM_* APIs)
 // This is SEPARATE from onMessage and required for messaging: true to work
@@ -6460,6 +6496,8 @@ async function handleMessage(message, sender) {
   if (typeof MessageRouter !== 'undefined' && !MessageRouter.isKnownBackgroundAction(action)) {
     return { error: 'Unknown action: ' + action };
   }
+  const routed = await backgroundActionRegistry.dispatch(message, sender);
+  if (routed.handled) return routed.response;
   
   try {
     switch (action) {
@@ -6905,30 +6943,6 @@ async function handleMessage(message, sender) {
           debugLog('Toggle error:', e);
           return { error: e?.message || 'Failed to update script' };
         });
-      }
-
-      case 'importScript': {
-        if (_scriptSourceByteLength(data.code) > MAX_SCRIPT_SIZE) return { error: `Script exceeds ${formatBytes(MAX_SCRIPT_SIZE)} size limit` };
-        const parsed = parseUserscript(data.code);
-        if (parsed.error) return { error: parsed.error };
-        
-        const id = generateId();
-        const script = {
-          id,
-          code: data.code,
-          meta: parsed.meta,
-          enabled: true,
-          position: (await ScriptStorage.getAll()).length,
-          createdAt: Date.now(),
-          updatedAt: Date.now()
-        };
-        
-        await ScriptStorage.set(id, script);
-        await registerScript(script);
-        await updateBadge();
-        notifyEasyCloudScriptSaved(id);
-        // Return with metadata property for dashboard compatibility
-        return { success: true, script: { ...script, metadata: script.meta } };
       }
 
       case 'duplicateScript': {
@@ -7506,13 +7520,6 @@ async function handleMessage(message, sender) {
       case 'exportAll':
         return await exportAllScripts(data?.options || {});
         
-      case 'importAll':
-        return await importScripts(data.data, data.options);
-
-      case 'importTampermonkeyBackup': {
-        return await importVendorBackup('tampermonkey', data.text, data);
-      }
-
       // v2.0: Storage Quota
       case 'getStorageUsage': {
         if (typeof QuotaManager !== 'undefined') return await QuotaManager.getUsage();
@@ -7700,16 +7707,6 @@ async function handleMessage(message, sender) {
         return { success: true };
       }
 
-      // v2.0: Violentmonkey backup import
-      case 'importViolentmonkeyBackup': {
-        return await importVendorBackup('violentmonkey', data.text, data);
-      }
-
-      // v2.0: Greasemonkey backup import (GM4 JSON format)
-      case 'importGreasemonkeyBackup': {
-        return await importVendorBackup('greasemonkey', data.text, data);
-      }
-
       case 'exportZip':
         return await exportToZip(data?.options || {});
 
@@ -7756,15 +7753,6 @@ async function handleMessage(message, sender) {
       case 'clearNetworkLog':
         NetworkLog.clear(data?.scriptId);
         return { success: true };
-
-      // Page-visible postMessage telemetry is deliberately untrusted and can
-      // never update script state, claim script attribution, or trigger chains.
-      case 'recordBridgeTelemetry':
-        return await executionTelemetryHandler.handleBridgeTelemetry(data, sender);
-
-      // Direct wrapper telemetry is authenticated by UserScriptMessagePolicy.
-      case 'netlog_record':
-        return await executionTelemetryHandler.handleTrustedTelemetry(action, data, sender);
 
       // Static Analysis — routes through offscreen document for AST analysis
       case 'analyzeScript': {
@@ -7912,9 +7900,6 @@ async function handleMessage(message, sender) {
         await FolderStorage.moveScript(data.scriptId, data.fromFolderId, data.toFolderId);
         return { success: true };
 
-      case 'importFromZip':
-        return await importFromZip(data.zipData, data.options || {});
-      
       case 'installFromUrl':
         return await installFromUrl(data.url);
 
@@ -8295,10 +8280,6 @@ async function handleMessage(message, sender) {
         });
         return { success: true };
       }
-
-      case 'reportExecTime':
-      case 'reportExecError':
-        return await executionTelemetryHandler.handleTrustedTelemetry(action, data, sender);
 
       // GM_audio API - Tab mute control (Tampermonkey-compatible)
       case 'GM_audio_setMute':

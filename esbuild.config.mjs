@@ -109,6 +109,8 @@ async function buildBackground() {
     readFile("modules/execution-diagnostics.js"),
     readFile("modules/execution-telemetry.js"),
     readFile("modules/local-libraries.js"),
+    readFile("modules/import-action-handler.js"),
+    readFile("modules/telemetry-action-handler.js"),
     readFile("modules/message-router.js"),
     readFile("modules/gm-audio-handler.js"),
     readFile("modules/gm-menu-handler.js"),

@@ -108,6 +108,22 @@
       "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for exhaustive background action routing metadata."
     },
     {
+      "runtime": "modules/import-action-handler.js",
+      "sources": [
+        "src/background/import-action-handler.ts"
+      ],
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for import trust action dispatch."
+    },
+    {
+      "runtime": "modules/telemetry-action-handler.js",
+      "sources": [
+        "src/background/telemetry-action-handler.ts"
+      ],
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for execution telemetry action dispatch."
+    },
+    {
       "runtime": "modules/gm-audio-handler.js",
       "sources": [
         "src/background/gm-audio-handler.ts"

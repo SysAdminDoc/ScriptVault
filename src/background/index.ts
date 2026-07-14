@@ -44,6 +44,7 @@ export {
   getBackgroundActionOrigin,
   isKnownBackgroundAction,
   resolveBackgroundAction,
+  createBackgroundActionRegistry,
 } from './message-router';
 export type {
   BackgroundAction,
@@ -51,7 +52,31 @@ export type {
   BackgroundActionResolution,
   KnownBackgroundActionResolution,
   UnknownBackgroundActionResolution,
+  BackgroundActionContext,
+  BackgroundActionDispatchResult,
+  BackgroundActionHandler,
+  BackgroundActionHandlers,
+  BackgroundMessageFor,
 } from './message-router';
+export {
+  IMPORT_BACKGROUND_ACTIONS,
+  ImportActionHandler,
+  createImportActionHandlers,
+} from './import-action-handler';
+export type {
+  ImportActionDependencies,
+  ImportBackgroundAction,
+  VendorBackupType,
+} from './import-action-handler';
+export {
+  EXECUTION_TELEMETRY_ACTIONS,
+  TelemetryActionHandler,
+  createTelemetryActionHandlers,
+} from './telemetry-action-handler';
+export type {
+  ExecutionTelemetryBackgroundAction,
+  TelemetryActionDependencies,
+} from './telemetry-action-handler';
 export {
   GM_AUDIO_ACTIONS,
   GMAudioHandler,

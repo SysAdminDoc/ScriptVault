@@ -193,6 +193,20 @@ export const TS_RUNTIME_MODULES = [
     selfExportName: 'LocalLibraries',
   },
   {
+    id: 'import-action-handler',
+    source: 'src/background/import-action-handler.ts',
+    output: 'modules/import-action-handler.js',
+    exportName: 'ImportActionHandler',
+    selfExportName: 'ImportActionHandler',
+  },
+  {
+    id: 'telemetry-action-handler',
+    source: 'src/background/telemetry-action-handler.ts',
+    output: 'modules/telemetry-action-handler.js',
+    exportName: 'TelemetryActionHandler',
+    selfExportName: 'TelemetryActionHandler',
+  },
+  {
     id: 'message-router',
     source: 'src/background/message-router.ts',
     output: 'modules/message-router.js',
