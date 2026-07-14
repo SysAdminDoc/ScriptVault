@@ -76,7 +76,7 @@ const AdvancedLinter = (() => {
 .sv-lint-btn {
   padding: 5px 12px;
   border: 1px solid var(--border-color, #404040);
-  border-radius: 50%;
+  border-radius: var(--sv-radius-control);
   background: var(--bg-input, #333);
   color: var(--text-primary, #e0e0e0);
   font-size: 0.75rem;

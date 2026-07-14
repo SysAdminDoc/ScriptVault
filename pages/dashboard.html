@@ -724,7 +724,7 @@
             display: inline-block;
             width: 8px;
             height: 8px;
-            border-radius: 50%;
+            border-radius: var(--sv-radius-0);
             background: var(--accent-error);
             margin-inline-end: 6px;
             flex-shrink: 0;
@@ -1279,7 +1279,7 @@
             left: 2px;
             bottom: 2px;
             background-color: var(--toggle-dot);
-            border-radius: 50%;
+            border-radius: var(--sv-radius-sm);
             transition: 0.2s;
         }
 
@@ -1439,7 +1439,7 @@
         .color-preview {
             width: 20px;
             height: 20px;
-            border-radius: 50%;
+            border-radius: var(--sv-radius-control);
             border: 1px solid var(--border-color);
         }
 
@@ -4387,7 +4387,7 @@
             content: '';
             width: 8px;
             height: 8px;
-            border-radius: 50%;
+            border-radius: var(--sv-radius-0);
             background: var(--text-muted);
         }
         .sync-status.connected { color: var(--accent-primary); }
@@ -4688,7 +4688,7 @@
             height: 28px;
             border: 3px solid var(--border-color);
             border-top-color: var(--accent-primary);
-            border-radius: 50%;
+            border-radius: var(--sv-radius-panel);
             animation: lazySpin 0.8s linear infinite;
         }
         @keyframes lazySpin {
@@ -6109,7 +6109,7 @@
             height: 11px;
             border: 2px solid rgba(96, 165, 250, 0.26);
             border-top-color: var(--accent-secondary);
-            border-radius: 50%;
+            border-radius: var(--sv-radius-sm);
             animation: spin 0.8s linear infinite;
         }
 
@@ -6610,7 +6610,7 @@
         .sv-sync-dot {
             width: 8px;
             height: 8px;
-            border-radius: 50%;
+            border-radius: var(--sv-radius-0);
             background: var(--sv-accent);
             box-shadow: 0 0 0 4px rgba(53, 208, 127, 0.13);
         }
@@ -7071,7 +7071,7 @@
         .sv-status-dot {
             width: 9px;
             height: 9px;
-            border-radius: 50%;
+            border-radius: var(--sv-radius-sm);
             background: var(--sv-text-muted);
         }
 
@@ -8063,7 +8063,7 @@
                     <div class="setting-row">
                         <span class="label-text" data-i18n="settingsIconBadgeColorLabel">Icon badge color:</span>
                         <input type="text" class="input-field" id="settingsBadgeColor" value="#22c55e" style="width: 100px;" pattern="^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$" inputmode="text" autocomplete="off" aria-describedby="settingsBadgeColorError">
-                        <div class="color-preview" id="badgeColorPreview" style="width: 24px; height: 24px; border-radius: 50%; background: #22c55e; border: 1px solid var(--border-color);"></div>
+                        <div class="color-preview" id="badgeColorPreview" style="width: 24px; height: 24px; border-radius: var(--sv-radius-control); background: var(--sv-accent); border: 1px solid var(--border-color);"></div>
                         <span class="setting-error" id="settingsBadgeColorError" hidden></span>
                     </div>
                     <div class="setting-row">

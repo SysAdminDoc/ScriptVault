@@ -276,7 +276,7 @@ const CollectionManager = (() => {
   left: 2px;
   width: 14px;
   height: 14px;
-  border-radius: 50%;
+  border-radius: var(--sv-radius-sm);
   background: #fff;
   transition: transform 0.2s;
 }

@@ -166,7 +166,7 @@ const ScriptScheduler = (() => {
   width: 16px;
   height: 16px;
   background: var(--toggle-dot, #fff);
-  border-radius: 50%;
+  border-radius: var(--sv-radius-control);
   transition: transform 0.2s;
 }
 .sv-sched-toggle input:checked + .sv-sched-toggle-track {

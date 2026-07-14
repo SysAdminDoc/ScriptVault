@@ -269,7 +269,7 @@ const ThemeEditor = (() => {
   padding: 5px 12px;
   font-size: 0.6875rem;
   font-weight: 500;
-  border-radius: 50%;
+  border-radius: var(--sv-radius-control);
   border: 1px solid var(--border-color, #444);
   background: var(--bg-button, #333);
   color: var(--text-secondary, #a0a0a0);
@@ -1204,7 +1204,7 @@ const ThemeEditor = (() => {
             <div style="display:flex;gap:6px;align-items:center">
               <span class="sv-te-preview-badge" style="background:${accent};color:${toggleDot}">Active</span>
               <div class="sv-te-preview-toggle" style="background:${accent}">
-                <div style="position:absolute;top:2px;left:16px;width:14px;height:14px;border-radius:50%;background:${toggleDot}"></div>
+                <div style="position:absolute;top:2px;left:16px;width:14px;height:14px;border-radius:var(--sv-radius-sm);background:${toggleDot}"></div>
               </div>
             </div>
           </div>

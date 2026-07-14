@@ -612,7 +612,7 @@ const GistIntegration = (() => {
     padding: 8px 12px;
     background: var(--bg-input, #333333);
     border: 1px solid var(--border-color, #404040);
-    border-radius: 50%;
+    border-radius: var(--sv-radius-control);
     color: var(--text-primary, #e0e0e0);
     font-size: 0.8125rem;
     outline: none;
@@ -627,7 +627,7 @@ const GistIntegration = (() => {
 .gi-btn {
     padding: 8px 16px;
     border: none;
-    border-radius: 50%;
+    border-radius: var(--sv-radius-control);
     font-size: 0.75rem;
     font-weight: 500;
     cursor: pointer;

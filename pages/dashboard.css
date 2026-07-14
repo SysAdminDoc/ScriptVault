@@ -521,7 +521,7 @@ input[type="checkbox"] {
   left: 3px;
   bottom: 3px;
   background: var(--toggle-dot, #fff);
-  border-radius: 50%;
+  border-radius: var(--sv-radius-control);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 0 0 0.5px rgba(0, 0, 0, 0.15);
   transition: transform var(--t-base) var(--ease-spring),
               background var(--t-base) var(--ease-out);
@@ -987,7 +987,7 @@ input[type="checkbox"] {
   height: 24px;
   border: 2.5px solid var(--hairline-strong);
   border-top-color: var(--accent-green);
-  border-radius: 50%;
+  border-radius: var(--sv-radius-panel);
   animation: spin 0.95s linear infinite;
 }
 
@@ -1921,7 +1921,7 @@ tr.row-over-budget {
 .pattern-test-indicator {
   width: 8px;
   height: 8px;
-  border-radius: 50%;
+  border-radius: var(--sv-radius-sm);
   flex-shrink: 0;
 }
 
@@ -2115,7 +2115,7 @@ tr.row-over-budget {
   display: inline-block;
   width: 10px;
   height: 10px;
-  border-radius: 50%;
+  border-radius: var(--sv-radius-sm);
   margin-right: 8px;
   vertical-align: middle;
 }
@@ -2768,7 +2768,7 @@ thead {
 .sv-sync-dot {
   width: 8px;
   height: 8px;
-  border-radius: 50%;
+  border-radius: var(--sv-radius-0);
   background: var(--sv-accent);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--sv-accent) 13%, transparent);
 }
@@ -3181,7 +3181,7 @@ thead {
 .sv-status-dot {
   width: 9px;
   height: 9px;
-  border-radius: 50%;
+  border-radius: var(--sv-radius-sm);
   background: var(--sv-text-muted);
 }
 

@@ -172,7 +172,7 @@ const CardView = (() => {
 .cv-dot {
   width: 9px;
   height: 9px;
-  border-radius: 50%;
+  border-radius: var(--sv-radius-sm);
   display: inline-block;
   box-shadow: 0 0 0 4px rgba(15, 23, 42, 0.18);
 }
@@ -526,7 +526,7 @@ const CardView = (() => {
   left: 2px;
   bottom: 2px;
   background: #fff;
-  border-radius: 50%;
+  border-radius: var(--sv-radius-control);
   transition: transform 200ms;
 }
 .cv-toggle input:checked + .cv-toggle-slider { background: var(--toggle-on); }

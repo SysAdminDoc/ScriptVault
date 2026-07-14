@@ -73,7 +73,7 @@ const ScriptDebugger = (() => {
     .dbg-live-name{flex:1;font-size:0.8125rem}
     .dbg-toggle{position:relative;width:36px;height:20px;border:none;border-radius:10px;background:var(--toggle-off,#555);cursor:pointer;transition:background .2s,box-shadow .2s;flex-shrink:0}
     .dbg-toggle.active{background:var(--toggle-on,#22c55e)}
-    .dbg-toggle::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .2s}
+    .dbg-toggle::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:var(--sv-radius-control);background:#fff;transition:transform .2s}
     .dbg-toggle.active::after{transform:translateX(16px)}
 
     /* Variable Inspector */

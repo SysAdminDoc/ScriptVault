@@ -107,7 +107,7 @@ const ProfileManager = (() => {
   justify-content: center;
   width: 28px;
   height: 28px;
-  border-radius: 50%;
+  border-radius: var(--sv-radius-panel);
   border: 1px dashed var(--border-color, #404040);
   background: transparent;
   color: var(--text-secondary, #a0a0a0);
@@ -145,7 +145,7 @@ const ProfileManager = (() => {
 .sv-profile-indicator .sv-pi-dot {
   width: 8px;
   height: 8px;
-  border-radius: 50%;
+  border-radius: var(--sv-radius-0);
   flex-shrink: 0;
 }
 
@@ -276,7 +276,7 @@ const ProfileManager = (() => {
   padding: 8px 12px;
   background: var(--bg-input, #333333);
   border: 1px solid var(--border-color, #404040);
-  border-radius: 50%;
+  border-radius: var(--sv-radius-control);
   color: var(--text-primary, #e0e0e0);
   font-size: 0.8125rem;
   outline: none;

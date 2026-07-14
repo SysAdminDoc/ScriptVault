@@ -129,7 +129,7 @@ const DependencyGraph = (() => {
     left: 8px;
     background: var(--bg-header);
     border: 1px solid var(--border-color);
-    border-radius: 50%;
+    border-radius: var(--sv-radius-panel);
     padding: 8px 12px;
     display: flex;
     gap: 14px;
@@ -145,7 +145,7 @@ const DependencyGraph = (() => {
 .dg-legend-dot {
     width: 10px;
     height: 10px;
-    border-radius: 50%;
+    border-radius: var(--sv-radius-sm);
     display: inline-block;
 }
 .dg-sidebar {

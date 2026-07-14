@@ -44,14 +44,15 @@ describe("cross-surface UX audit", () => {
   });
 
   test("shared controls enforce the finite radius, focus, disabled, and reduced-motion contracts", () => {
-    const forbiddenPillRadius = /border-radius:\s*(?:100%|999(?:9)?px)/;
+    const forbiddenPillRadius = /border-radius:\s*(?:50%|100%|999(?:9)?px)/;
     const offenders = pageUiFiles()
       .filter((file) => forbiddenPillRadius.test(readFileSync(file, "utf8")));
 
     expect(offenders).toEqual([]);
-    expect(dashboardHtml).toContain(".sv-status-dot {\n            width: 9px;\n            height: 9px;\n            border-radius: 50%");
+    expect(dashboardHtml).toContain(".sv-status-dot {\n            width: 9px;\n            height: 9px;\n            border-radius: var(--sv-radius-sm)");
     expect(sidepanelHtml).toContain(".sp-toggle-slider::before");
-    expect(sidepanelHtml).toContain("border-radius: 50%");
+    expect(sidepanelHtml).toContain("border-radius: var(--sv-radius-control)");
+    expect(sidepanelHtml).not.toContain("border-radius: 50%");
     expect(themeTokensCss).toContain("--sv-radius-sm: 4px");
     expect(themeTokensCss).toContain("--sv-radius-control: 6px");
     expect(themeTokensCss).toContain("--sv-radius-card: 10px");

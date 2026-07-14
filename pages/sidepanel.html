@@ -163,13 +163,13 @@
         .sp-timing.fast { background: var(--timing-fast-bg, #14532d); color: var(--timing-fast, #4ade80); }
         .sp-timing.medium { background: var(--timing-med-bg, #78350f); color: var(--timing-med, #fbbf24); }
         .sp-timing.slow { background: var(--timing-slow-bg, #7f1d1d); color: var(--timing-slow, #f87171); }
-        .sp-error-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--danger); flex-shrink: 0; }
+        .sp-error-dot { width: 6px; height: 6px; border-radius: var(--sv-radius-0); background: var(--danger); flex-shrink: 0; }
 
         /* Toggle */
         .sp-toggle { position: relative; width: 40px; height: 24px; flex-shrink: 0; }
         .sp-toggle input { opacity: 0; width: 0; height: 0; }
         .sp-toggle-slider { position: absolute; inset: 0; background: var(--toggle-off-bg, #444); border-radius: 8px; cursor: pointer; transition: background 0.2s; }
-        .sp-toggle-slider::before { content: ''; position: absolute; left: 3px; top: 3px; width: 18px; height: 18px; background: var(--toggle-off-knob, #888); border-radius: 50%; transition: transform 0.2s, background 0.2s; }
+        .sp-toggle-slider::before { content: ''; position: absolute; left: 3px; top: 3px; width: 18px; height: 18px; background: var(--toggle-off-knob, #888); border-radius: var(--sv-radius-control); transition: transform 0.2s, background 0.2s; }
         .sp-toggle input:checked + .sp-toggle-slider { background: var(--accent-dim); }
         .sp-toggle input:checked + .sp-toggle-slider::before { background: var(--accent); transform: translateX(16px); }
 

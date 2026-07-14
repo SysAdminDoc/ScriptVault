@@ -61,7 +61,7 @@ const PatternBuilder = (() => {
     .pb-btn-primary:hover{background:var(--accent-green,#4ade80)}
     .pb-toggle{position:relative;width:36px;height:20px;border:none;border-radius:10px;background:var(--toggle-off,#555);cursor:pointer;transition:background .2s,box-shadow .2s;flex-shrink:0}
     .pb-toggle.active{background:var(--toggle-on,#22c55e)}
-    .pb-toggle::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .2s}
+    .pb-toggle::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:var(--sv-radius-control);background:#fff;transition:transform .2s}
     .pb-toggle.active::after{transform:translateX(16px)}
     .pb-preview{background:var(--bg-body,#1a1a1a);border:1px solid var(--border-color,#404040);border-radius:6px;padding:12px 14px;font-family:'Cascadia Code','Fira Code',monospace;font-size:0.8125rem;word-break:break-all;color:var(--accent-blue,#60a5fa);line-height:1.6;min-height:36px;user-select:all}
     .pb-warning{margin-top:8px;color:var(--accent-yellow,#facc15);font-size:0.75rem;line-height:1.5}
@@ -69,7 +69,7 @@ const PatternBuilder = (() => {
     .pb-segment .seg-sep{color:var(--text-muted,#707070);font-weight:700}
     .pb-segment select,.pb-segment input{background:transparent;border:1px solid transparent;color:var(--text-primary,#e0e0e0);font-size:0.75rem;padding:0;min-width:40px;font-family:inherit;border-radius:3px}
     .pb-test-row{display:flex;align-items:center;gap:8px;margin-top:4px}
-    .pb-test-badge{width:14px;height:14px;border-radius:50%;flex-shrink:0}
+    .pb-test-badge{width:14px;height:14px;border-radius:var(--sv-radius-sm);flex-shrink:0}
     .pb-test-badge.match{background:var(--accent-green,#4ade80)}
     .pb-test-badge.no-match{background:var(--accent-red,#f87171)}
     .pb-test-url{font-size:0.75rem;color:var(--text-secondary,#a0a0a0);word-break:break-all}
