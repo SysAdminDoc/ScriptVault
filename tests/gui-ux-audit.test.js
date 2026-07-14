@@ -175,7 +175,8 @@ describe("cross-surface UX audit", () => {
 
     expect(dashboardJs).toContain("function showConfirmModal(title, msg, { confirmLabel = 'Confirm', tone = 'default' } = {})");
     expect(dashboardJs).toContain("tone === 'danger' ? 'btn-danger' : 'btn-primary'");
-    expect(dashboardJs).toContain("{ confirmLabel: 'Factory Reset', tone: 'danger' }");
+    expect(dashboardJs).toContain("'Factory Reset ScriptVault?'");
+    expect(dashboardJs).toContain("{ confirmLabel: 'Reset Everything', tone: 'danger' }");
     expect(dashboardJs).toContain("{ confirmLabel: 'Discard Changes', tone: 'danger' }");
     expect(dashboardJs).toContain("{ confirmLabel: 'Restore Full Vault' }");
     expect(dashboardJs).not.toContain("'Reset to default settings?'");

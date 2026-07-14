@@ -121,9 +121,18 @@ describe("dashboard accessibility markup", () => {
     ]);
     expect(selectedTabs).toHaveLength(1);
     expect(selectedTabs[0]?.dataset.workbenchTab).toBe("scripts");
+    expect(tabs.map((tab) => tab.getAttribute("aria-label"))).toEqual([
+      "Scripts",
+      "Updates",
+      "Settings",
+      "Utilities",
+      "Trash",
+      "Help",
+    ]);
 
     tabs.forEach((tab) => {
       expect(tab.getAttribute("aria-controls")).toBeTruthy();
+      expect(tab.getAttribute("data-i18n-aria-label")).toBe(`tab${tab.getAttribute("aria-label")}`);
       expect(tab.getAttribute("tabindex")).toMatch(/^(-1|0)$/);
 
       const panel = doc.getElementById(tab.getAttribute("aria-controls"));
@@ -658,7 +667,8 @@ describe("dashboard accessibility markup", () => {
     expect(dashboardJs).toMatch(/elements\.btnFindScriptsSearch\.textContent = isBusy \? 'Searching…' : 'Search'/);
     expect(dashboardJs).toMatch(/data-original-label="\$\{installLabel\}"/);
     expect(dashboardJs).toMatch(/aria-controls="\$\{previewId\}" aria-expanded="false"/);
-    expect(dashboardJs).toMatch(/Preview unavailable\. Open the source page to inspect this script\./);
+    expect(dashboardJs).toMatch(/action: 'fetchScriptPreview', url/);
+    expect(dashboardJs).toMatch(/Preview unavailable\. \$\{e\?\.message \|\| 'Open the source page to inspect this script\.'\}/);
     expect(dashboardJs).toMatch(/btn\.setAttribute\('aria-expanded', 'true'\)/);
     expect(dashboardJs).toMatch(/Install URL unavailable for this result/);
   });

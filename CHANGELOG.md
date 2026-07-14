@@ -22,6 +22,9 @@ All notable changes to ScriptVault will be documented in this file.
   now size-bounded before JSON parsing, S3 uses the same abortable timeout path
   as the other providers, and the 5 MB userscript limit is enforced in UTF-8
   bytes so multi-byte source cannot bypass storage safeguards.
+- **Kept compact navigation accessible.** Every dashboard destination retains
+  a localized accessible name when the narrow layout hides its visible label,
+  with browser-verified and automated regression coverage.
 
 ## [v3.20.0] — Premium interaction and theme polish (2026-07-14)
 
