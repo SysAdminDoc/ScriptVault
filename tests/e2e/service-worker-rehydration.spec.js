@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { createServer } from 'node:http';
 
 import {
-  enableUserScriptsToggle,
+  ensureUserScriptsAvailable,
   launchScriptVault,
   openExtensionPage,
   sendRuntimeMessage,
@@ -67,18 +67,8 @@ test('enabled scripts are registered again after extension service worker restar
   const app = await launchScriptVault();
   try {
     const dashboard = await openExtensionPage(app);
-    let status = await sendRuntimeMessage(dashboard, { action: 'getExtensionStatus' });
-    let toggleResult = null;
-    if (status?.setupState === 'allow-user-scripts-disabled' || status?.userScriptsAvailable === false) {
-      toggleResult = await enableUserScriptsToggle(app);
-      if (toggleResult?.enabledAfter) {
-        status = await sendRuntimeMessage(dashboard, { action: 'repairRuntimeState' });
-      }
-    }
-    test.skip(
-      !status?.userScriptsAvailable,
-      `chrome.userScripts unavailable in this profile: ${status?.setupState || status?.apiProbeError || toggleResult?.note || 'unknown setup state'}`,
-    );
+    const executionCapability = await ensureUserScriptsAvailable(app, dashboard);
+    test.skip(!executionCapability.available, executionCapability.reason);
 
     await expect(sendRuntimeMessage(dashboard, {
       action: 'saveScript',

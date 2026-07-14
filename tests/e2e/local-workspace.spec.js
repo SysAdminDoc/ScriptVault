@@ -2,7 +2,8 @@ import { expect, test } from '@playwright/test';
 import { createServer } from 'node:http';
 
 import {
-  enableUserScriptsToggle,
+  ensureUserScriptsAvailable,
+  failReleaseIfUnsupported,
   launchScriptVault,
   openExtensionPage,
   sendRuntimeMessage,
@@ -118,17 +119,8 @@ test('dashboard local workspace refresh reviews and applies a changed file handl
     const dashboard = await openExtensionPage(app);
     await markWhatsNewSeen(dashboard);
 
-    let status = await sendRuntimeMessage(dashboard, { action: 'getExtensionStatus' });
-    if (status?.setupState === 'allow-user-scripts-disabled' || status?.userScriptsAvailable === false) {
-      const toggleResult = await enableUserScriptsToggle(app);
-      if (toggleResult?.enabledAfter) {
-        status = await sendRuntimeMessage(dashboard, { action: 'repairRuntimeState' });
-      }
-    }
-    test.skip(
-      !status?.userScriptsAvailable,
-      `chrome.userScripts unavailable in this profile: ${status?.setupState || status?.apiProbeError || 'unknown setup state'}`,
-    );
+    const executionCapability = await ensureUserScriptsAvailable(app, dashboard);
+    test.skip(!executionCapability.available, executionCapability.reason);
 
     const v1 = localWorkspaceUserscript('4.0.1', 'before-apply');
     const v2 = localWorkspaceUserscript('4.0.2', 'after-apply');
@@ -139,6 +131,7 @@ test('dashboard local workspace refresh reviews and applies a changed file handl
     await expectTargetVersion(app, `${server.url}/initial`, '4.0.1', 'before-apply');
 
     const handleProbe = await installOpfsPickerHandle(dashboard, v1);
+    failReleaseIfUnsupported(handleProbe.supported, handleProbe.reason || 'Origin Private File System unavailable', handleProbe);
     test.skip(!handleProbe.supported, handleProbe.reason || 'Origin Private File System unavailable');
     expect(handleProbe).toMatchObject({ permission: 'granted', name: LOCAL_FILE_NAME });
 

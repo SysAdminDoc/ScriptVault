@@ -4,6 +4,10 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Made release userscript smokes fail closed.** The shared headless fixture
+  now enables Chromium's shadow-DOM Allow User Scripts control, labels
+  capability and release reports separately, and turns missing execution/OPFS
+  support into evidence-bearing release failures; all 14 release E2Es execute.
 - **Made execution URL retention privacy-preserving and irreversible.** New
   installs retain origins by default; existing full URLs migrate to origins;
   stricter settings atomically rewrite IndexedDB records, delete URLs in None

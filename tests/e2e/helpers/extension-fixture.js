@@ -3,6 +3,9 @@ import { existsSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { e2eMode, failReleaseIfUnsupported, isReleaseE2EMode } from './e2e-mode.js';
+
+export { failReleaseIfUnsupported, isReleaseE2EMode } from './e2e-mode.js';
 
 const extensionPath = resolve(process.cwd());
 
@@ -37,8 +40,9 @@ async function findExtensionId(context) {
 export async function launchScriptVault() {
   assertExtensionFiles();
   const userDataDir = await mkdtemp(join(tmpdir(), 'scriptvault-pw-'));
+  const channel = process.env.SCRIPT_VAULT_PLAYWRIGHT_CHANNEL || 'chromium';
   const context = await chromium.launchPersistentContext(userDataDir, {
-    channel: process.env.SCRIPT_VAULT_PLAYWRIGHT_CHANNEL || 'chromium',
+    channel,
     headless: true,
     args: [
       `--disable-extensions-except=${extensionPath}`,
@@ -53,6 +57,7 @@ export async function launchScriptVault() {
   const extensionId = await findExtensionId(context);
   return {
     context,
+    channel,
     extensionId,
     url: path => `chrome-extension://${extensionId}/${path.replace(/^\/+/, '')}`,
     async close() {
@@ -79,8 +84,36 @@ export async function enableUserScriptsToggle(app) {
       waitUntil: 'domcontentloaded',
       timeout: 20_000,
     });
-    await page.waitForSelector('#itemAllowUserScripts', { timeout: 10_000 }).catch(() => null);
-    const toggle = await page.$('#itemAllowUserScripts');
+    const findToggle = () => page.evaluateHandle(() => {
+      const findControl = root => {
+        const direct = root.querySelector?.('#itemAllowUserScripts');
+        if (direct) return direct;
+        const row = root.querySelector?.('#allow-user-scripts');
+        if (row) {
+          return row.shadowRoot?.querySelector('#crToggle, cr-toggle')
+            || row.querySelector?.('#crToggle, cr-toggle')
+            || row;
+        }
+        for (const element of root.querySelectorAll?.('*') || []) {
+          if (!element.shadowRoot) continue;
+          const nested = findControl(element.shadowRoot);
+          if (nested) return nested;
+        }
+        return null;
+      };
+      return findControl(document);
+    });
+
+    let toggle = null;
+    const deadline = Date.now() + 10_000;
+    while (!toggle && Date.now() < deadline) {
+      const handle = await findToggle();
+      toggle = handle.asElement();
+      if (!toggle) {
+        await handle.dispose();
+        await page.waitForTimeout(150);
+      }
+    }
     if (!toggle) {
       return {
         present: false,
@@ -90,14 +123,27 @@ export async function enableUserScriptsToggle(app) {
       };
     }
 
-    const enabledBefore = await page.$eval('#itemAllowUserScripts', input => !!input.checked);
+    const enabledBefore = await toggle.evaluate(input => input.checked === true);
     if (!enabledBefore) {
-      await page.$eval('#itemAllowUserScripts', input => input.click());
-      await page.waitForFunction(() => document.querySelector('#itemAllowUserScripts')?.checked === true, {
-        timeout: 10_000,
-      });
+      await toggle.click();
+      await page.waitForFunction(() => {
+        const findControl = root => {
+          const direct = root.querySelector?.('#itemAllowUserScripts');
+          if (direct) return direct;
+          const row = root.querySelector?.('#allow-user-scripts');
+          if (row) return row.shadowRoot?.querySelector('#crToggle, cr-toggle') || row.querySelector?.('#crToggle, cr-toggle') || row;
+          for (const element of root.querySelectorAll?.('*') || []) {
+            if (element.shadowRoot) {
+              const nested = findControl(element.shadowRoot);
+              if (nested) return nested;
+            }
+          }
+          return null;
+        };
+        return findControl(document)?.checked === true;
+      }, { timeout: 10_000 });
     }
-    const enabledAfter = await page.$eval('#itemAllowUserScripts', input => !!input.checked);
+    const enabledAfter = await toggle.evaluate(input => input.checked === true);
     return {
       present: true,
       enabledBefore,
@@ -109,6 +155,32 @@ export async function enableUserScriptsToggle(app) {
   } finally {
     await page.close().catch(() => {});
   }
+}
+
+export async function ensureUserScriptsAvailable(app, page) {
+  let status = await sendRuntimeMessage(page, { action: 'getExtensionStatus' });
+  let toggleResult = null;
+  if (!status?.userScriptsAvailable) {
+    toggleResult = await enableUserScriptsToggle(app);
+    if (toggleResult?.enabledAfter) {
+      status = await sendRuntimeMessage(page, { action: 'repairRuntimeState' });
+    }
+  }
+
+  const available = status?.userScriptsAvailable === true;
+  const reason = `chrome.userScripts unavailable: ${status?.setupState || status?.apiProbeError || toggleResult?.note || 'unknown setup state'}`;
+  failReleaseIfUnsupported(available, reason, {
+    mode: e2eMode(),
+    channel: app.channel,
+    browserVersion: app.context.browser()?.version() || 'unknown',
+    status: {
+      userScriptsAvailable: status?.userScriptsAvailable ?? null,
+      setupState: status?.setupState || null,
+      apiProbeError: status?.apiProbeError || null,
+    },
+    toggle: toggleResult,
+  });
+  return { available, reason, status, toggleResult };
 }
 
 export async function seedPendingInstall(page, { code, url }) {

@@ -545,6 +545,19 @@ that script in the dashboard editor.
 
 ---
 
+## Headless E2E Verification
+
+```bash
+npm run test:e2e          # Labeled capability report; unsupported browser capabilities may skip
+npm run test:e2e:release  # Release gate; required userScripts/OPFS capabilities fail closed
+```
+
+Both commands use an isolated temporary headless Chromium profile. The release
+lane must execute local-workspace apply, service-worker rehydration, cross-tab
+value changes, and GM XHR FormData; it never treats a capability skip as proof.
+
+---
+
 ## Project Structure
 
 ```
