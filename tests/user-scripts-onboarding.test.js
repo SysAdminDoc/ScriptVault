@@ -96,7 +96,7 @@ describe('Chrome userScripts onboarding diagnostics', () => {
   });
 
   it('keeps one-shot run messages typed and wired through popup and dashboard', () => {
-    expect(backgroundCore).toContain("case 'runScriptNow':");
+    expect(backgroundCore).toContain('runScriptNow: async message');
     expect(backgroundCore).toContain('await chrome.userScripts.execute({');
     expect(backgroundCore).toContain("return { success: true, mode: 'userScripts.execute' };");
     expect(backgroundCore).toContain("return { success: true, mode: 'scripting.executeScript' };");

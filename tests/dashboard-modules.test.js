@@ -390,9 +390,9 @@ describe('dashboard surface modules', () => {
   });
 
   it('background dashboard launcher uses the current editor hash format', () => {
-    expect(backgroundCoreJs).toContain('#script_${encodeURIComponent(data.scriptId)}');
+    expect(backgroundCoreJs).toContain('#script_${encodeURIComponent(message.scriptId)}');
     expect(backgroundCoreJs).toContain("#new_script");
-    expect(backgroundCoreJs).not.toContain('#edit=${data.scriptId}');
+    expect(backgroundCoreJs).not.toContain('#edit=${message.scriptId}');
     expect(backgroundCoreJs).not.toContain("#new'");
   });
 

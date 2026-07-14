@@ -19,6 +19,7 @@ import { SECURITY_BACKGROUND_ACTIONS } from "../src/background/security-action-h
 import { DIAGNOSTICS_BACKGROUND_ACTIONS } from "../src/background/diagnostics-action-handler.ts";
 import { SCRIPT_BACKGROUND_ACTIONS } from "../src/background/script-action-handler.ts";
 import { DATA_BACKGROUND_ACTIONS } from "../src/background/data-action-handler.ts";
+import { RUNTIME_BACKGROUND_ACTIONS } from "../src/background/runtime-action-handler.ts";
 import { GM_AUDIO_ACTIONS } from "../src/background/gm-audio-handler.ts";
 import { GM_COOKIE_ACTIONS } from "../src/background/gm-cookie-handler.ts";
 import { GM_MENU_ACTIONS } from "../src/background/gm-menu-handler.ts";
@@ -41,6 +42,7 @@ const ROUTED_BACKGROUND_ACTIONS = [
   ...DIAGNOSTICS_BACKGROUND_ACTIONS,
   ...SCRIPT_BACKGROUND_ACTIONS,
   ...DATA_BACKGROUND_ACTIONS,
+  ...RUNTIME_BACKGROUND_ACTIONS,
   ...GM_AUDIO_ACTIONS,
   ...GM_COOKIE_ACTIONS,
   ...GM_MENU_ACTIONS,
@@ -78,7 +80,7 @@ function extractHandleMessageActions() {
   if (start === -1) throw new Error("handleMessage not found");
 
   const switchStart = coreSource.indexOf("switch (action)", start);
-  if (switchStart === -1) throw new Error("handleMessage switch not found");
+  if (switchStart === -1) return [];
 
   let bodyStart = -1;
   let bodyEnd = -1;

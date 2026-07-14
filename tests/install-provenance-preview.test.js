@@ -41,8 +41,7 @@ describe('install @require provenance preview wiring', () => {
 
   it('requests provenance verification from the background, not the install page', () => {
     expect(installPage).toContain("action: 'verifyRequireProvenancePreview'");
-    expect(backgroundCore).toContain("case 'verifyRequireProvenancePreview':");
-    expect(backgroundCore).toContain('return await previewRequireProvenance(data);');
+    expect(backgroundCore).toContain('verifyRequireProvenancePreview: message => previewRequireProvenance(message)');
   });
 
   it('uses the hardened background dependency and bundle fetchers for preview and saved receipts', () => {

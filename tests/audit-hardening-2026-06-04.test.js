@@ -115,8 +115,8 @@ describe('factoryReset cleanup (2026-06-04)', () => {
   it('clears all extension-owned storage, alarms, backups, and network rules', () => {
     const src = fs.readFileSync(path.join(ROOT, 'background.core.js'), 'utf8');
     const resetBlock = src.slice(
-      src.indexOf("case 'factoryReset':"),
-      src.indexOf("case 'factoryReset':") + 3000
+      src.indexOf('factoryReset: async () =>'),
+      src.indexOf('backgroundActionRegistry.registerHandlers(DiagnosticsActionHandler', src.indexOf('factoryReset: async () =>'))
     );
     expect(resetBlock).toContain('await ScriptStorage.clear()');
     expect(resetBlock).toContain('await BackupsDAO.clear()');

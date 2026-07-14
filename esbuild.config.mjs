@@ -120,6 +120,7 @@ async function buildBackground() {
     readFile("modules/diagnostics-action-handler.js"),
     readFile("modules/script-action-handler.js"),
     readFile("modules/data-action-handler.js"),
+    readFile("modules/runtime-action-handler.js"),
     readFile("modules/message-router.js"),
     readFile("modules/gm-audio-handler.js"),
     readFile("modules/gm-menu-handler.js"),

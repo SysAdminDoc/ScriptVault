@@ -521,7 +521,7 @@ describe('KeyboardNav does not hijack focused row controls (2026-07 regression)'
 describe('Per-tab run diagnostics (2026-07 feature)', () => {
   it('background exposes a diagnoseScripts handler covering the key run blockers', () => {
     const core = read('background.core.js');
-    expect(core).toContain("case 'diagnoseScripts'");
+    expect(core).toContain('diagnoseScripts: async (url, tabId)');
     expect(core).toContain('userScriptsAvailable');
     for (const status of ['disabled', 'no-match', 'not-registered', 'running', 'on-demand', 'scheduled']) {
       expect(core).toContain(`'${status}'`);
@@ -773,9 +773,9 @@ describe('Script chains use the real background API (2026-07 regression)', () =>
     expect(src).toContain('&#9939;');
   });
   it('wires URL, schedule, DOM event, and after-script chain dispatch', () => {
-    expect(background).toContain("case 'rescheduleChains'");
-    expect(background).toContain("case 'getChainDomEventTriggers'");
-    expect(background).toContain("case 'chainDomEvent'");
+    expect(background).toContain('rescheduleChains: async ()');
+    expect(background).toContain('getChainDomEventTriggers: async ()');
+    expect(background).toContain('chainDomEvent: async (eventType, url, sender)');
     expect(background).toContain('triggerChainsForUrl(tab.url, tabId)');
     expect(background).toContain('triggerChainsForAfterScript(scriptId');
     expect(background).toContain('CHAIN_ALARM_PREFIX');

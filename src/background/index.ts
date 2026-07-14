@@ -163,6 +163,15 @@ export type {
   DataBackgroundAction,
 } from './data-action-handler';
 export {
+  RUNTIME_BACKGROUND_ACTIONS,
+  RuntimeActionHandler,
+  createRuntimeActionHandlers,
+} from './runtime-action-handler';
+export type {
+  RuntimeActionDependencies,
+  RuntimeBackgroundAction,
+} from './runtime-action-handler';
+export {
   GM_AUDIO_ACTIONS,
   GMAudioHandler,
   handleGMAudioMessage,

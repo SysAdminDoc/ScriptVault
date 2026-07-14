@@ -192,8 +192,8 @@ describe('@crontab next-fire engine', () => {
   });
 
   it('blocks MAIN-world runScriptNow fallback unless the script explicitly requests page context', () => {
-    const runNowStart = backgroundCore.indexOf("case 'runScriptNow':");
-    const runNowEnd = backgroundCore.indexOf("case 'getExtensionInfo':", runNowStart);
+    const runNowStart = backgroundCore.indexOf('runScriptNow: async message');
+    const runNowEnd = backgroundCore.indexOf('rescheduleChains: async ()', runNowStart);
     const runNowSource = backgroundCore.slice(runNowStart, runNowEnd);
 
     expect(runNowSource).toContain('wantsPageContext');

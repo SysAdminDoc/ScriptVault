@@ -4,6 +4,10 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Completed typed background action routing.** Install review, resource
+  loading, URL diagnostics, one-shot execution, chains, UserCSS preview,
+  dashboard launch, and privacy-complete factory reset now use generated
+  domain contracts; the 227-action legacy switch has been removed.
 - **Typed data and Easy Cloud dispatch.** Script values, resource prefetch,
   export, quota cleanup, Gist settings, and Easy Cloud lifecycle operations now
   use generated contracts with explicit defaults and unavailable-module

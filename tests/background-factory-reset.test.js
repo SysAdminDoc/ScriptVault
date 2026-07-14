@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 const backgroundCoreCode = readFileSync(resolve(process.cwd(), 'background.core.js'), 'utf8');
 
 function extractFactoryResetCase(source) {
-  const marker = "case 'factoryReset': {";
+  const marker = 'factoryReset: async () => {';
   const start = source.indexOf(marker);
   if (start === -1) throw new Error('factoryReset handler not found');
 
@@ -25,7 +25,7 @@ describe('background factory reset handler', () => {
   it('clears scripts through ScriptStorage instead of bypassing storage cleanup', () => {
     const handler = extractFactoryResetCase(backgroundCoreCode);
 
-    expect(handler).toContain('await unregisterScript(s.id)');
+    expect(handler).toContain('await unregisterScript(script.id)');
     expect(handler).toContain('await ScriptStorage.clear()');
     expect(handler).not.toContain("chrome.storage.local.remove('userscripts')");
     expect(handler).not.toContain('ScriptStorage.cache = {}');

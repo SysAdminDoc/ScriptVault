@@ -24061,6 +24061,111 @@ if (typeof self !== 'undefined') {
 }
 
 // ============================================================================
+// Generated from src/background/runtime-action-handler.ts; do not edit by hand.
+// Run `node scripts/generate-ts-runtime-modules.mjs` or `npm run build:bg`.
+// ============================================================================
+
+const RuntimeActionHandler = (() => {
+  const module = { exports: {} };
+  const exports = module.exports;
+  "use strict";
+  var __defProp = Object.defineProperty;
+  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, { get: all[name], enumerable: true });
+  };
+  var __copyProps = (to, from, except, desc) => {
+    if (from && typeof from === "object" || typeof from === "function") {
+      for (let key of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(to, key) && key !== except)
+          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+    }
+    return to;
+  };
+  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+  // src/background/runtime-action-handler.ts
+  var runtime_action_handler_exports = {};
+  __export(runtime_action_handler_exports, {
+    RUNTIME_BACKGROUND_ACTIONS: () => RUNTIME_BACKGROUND_ACTIONS,
+    RuntimeActionHandler: () => RuntimeActionHandler,
+    createRuntimeActionHandlers: () => createRuntimeActionHandlers,
+    default: () => runtime_action_handler_default
+  });
+  module.exports = __toCommonJS(runtime_action_handler_exports);
+  var RUNTIME_BACKGROUND_ACTIONS = [
+    "installFromUrl",
+    "installFromCode",
+    "fetchScriptPreview",
+    "probeInstallDependency",
+    "verifyRequireProvenancePreview",
+    "fetchResource",
+    "getScriptsForUrl",
+    "diagnoseScripts",
+    "updateBadgeForTab",
+    "runScriptNow",
+    "rescheduleChains",
+    "runChainNow",
+    "getChainDomEventTriggers",
+    "chainDomEvent",
+    "userStylePreviewDraft",
+    "userStyleClearPreview",
+    "getExtensionInfo",
+    "openDashboard",
+    "factoryReset"
+  ];
+  function createRuntimeActionHandlers(dependencies) {
+    const handlers = {
+      installFromUrl: ({ message }) => dependencies.installFromUrl(message.url),
+      installFromCode: ({ message }) => dependencies.installFromCode(
+        message.code,
+        message.sourceUrl || "",
+        message.operation || "install"
+      ),
+      fetchScriptPreview: ({ message }) => dependencies.fetchScriptPreview(message.url),
+      probeInstallDependency: ({ message }) => dependencies.probeInstallDependency(message.url),
+      verifyRequireProvenancePreview: ({ message }) => dependencies.verifyRequireProvenancePreview(message),
+      fetchResource: ({ message }) => dependencies.fetchResource(message.url),
+      getScriptsForUrl: ({ message }) => dependencies.getScriptsForUrl(message.url),
+      diagnoseScripts: ({ message }) => dependencies.diagnoseScripts(message.url || "", message.tabId),
+      updateBadgeForTab: ({ message }) => dependencies.updateBadgeForTab(message.tabId, message.url),
+      runScriptNow: ({ message }) => dependencies.runScriptNow(message),
+      rescheduleChains: () => dependencies.rescheduleChains(),
+      runChainNow: ({ message }) => dependencies.runChainNow(
+        message.chainId,
+        message.reason || "manual",
+        message.tabId
+      ),
+      getChainDomEventTriggers: () => dependencies.getChainDomEventTriggers(),
+      chainDomEvent: ({ message, sender }) => dependencies.chainDomEvent(
+        String(message.eventType || "").trim(),
+        message.url || "",
+        sender
+      ),
+      userStylePreviewDraft: ({ message }) => dependencies.previewUserStyle(message.code || "", message.tabId),
+      userStyleClearPreview: ({ message }) => dependencies.clearUserStylePreview(message.tabId),
+      getExtensionInfo: () => dependencies.getExtensionInfo(),
+      openDashboard: ({ message }) => dependencies.openDashboard(message),
+      factoryReset: () => dependencies.factoryReset()
+    };
+    return Object.freeze(handlers);
+  }
+  var RuntimeActionHandler = Object.freeze({
+    RUNTIME_BACKGROUND_ACTIONS,
+    createRuntimeActionHandlers
+  });
+  var runtime_action_handler_default = RuntimeActionHandler;
+  return module.exports.default || module.exports.RuntimeActionHandler || module.exports;
+})();
+
+if (typeof self !== 'undefined') {
+  self.RuntimeActionHandler = RuntimeActionHandler;
+}
+
+// ============================================================================
 // Generated from src/background/message-router.ts; do not edit by hand.
 // Run `node scripts/generate-ts-runtime-modules.mjs` or `npm run build:bg`.
 // ============================================================================
@@ -47042,6 +47147,242 @@ backgroundActionRegistry.registerHandlers(DataActionHandler.createDataActionHand
   },
   exportZip: options => exportToZip(options)
 }));
+backgroundActionRegistry.registerHandlers(RuntimeActionHandler.createRuntimeActionHandlers({
+  installFromUrl: url => installFromUrl(url),
+  installFromCode: (code, sourceUrl, operation) => installFromCode(code, { sourceUrl, operation }),
+  fetchScriptPreview: url => fetchScriptPreview(url),
+  probeInstallDependency: url => probeInstallDependency(url),
+  verifyRequireProvenancePreview: message => previewRequireProvenance(message),
+  fetchResource: url => ResourceCache.fetchResource(url),
+  getScriptsForUrl: async url => {
+    const settings = await SettingsManager.get();
+    if (isUrlBlockedByGlobalSettings(url, settings)) return [];
+    const matchSet = await getMatchSet();
+    const filtered = matchSet.getMatching(url)
+      .sort((first, second) => (first.position || 0) - (second.position || 0));
+    return filtered.map(({ code, ...rest }) => ({ ...rest, metadata: rest.meta }));
+  },
+  diagnoseScripts: async (url, tabId) => {
+    const settings = await SettingsManager.get();
+    const userScriptsAvailable = !!chrome.userScripts;
+    const globallyEnabled = settings.enabled !== false;
+    const urlBlocked = url ? isUrlBlockedByGlobalSettings(url, settings) : false;
+
+    let registeredIds = new Set();
+    try {
+      if (chrome.userScripts && typeof chrome.userScripts.getScripts === 'function') {
+        const registrations = await chrome.userScripts.getScripts();
+        registeredIds = new Set((registrations || []).map(registration => registration.id));
+      }
+    } catch (_) {}
+
+    const allScripts = await ScriptStorage.getAll();
+    const scripts = allScripts.map(script => {
+      const enabled = script.enabled !== false;
+      const matches = url ? doesScriptMatchUrl(script, url) : false;
+      const registered = registeredIds.has(script.id);
+      const registrationError = script.settings?._registrationError || null;
+      const effectiveRunAt = script.settings?.runAt && script.settings.runAt !== 'default'
+        ? script.settings.runAt
+        : script.meta?.['run-at'];
+      const isContextMenu = effectiveRunAt === 'context-menu';
+      const isCrontab = !!script.meta?.crontab;
+      const isBackground = !!script.meta?.background;
+
+      let status;
+      let reason;
+      if (!enabled) {
+        status = 'disabled'; reason = 'Script is turned off.';
+      } else if (isContextMenu) {
+        status = 'on-demand'; reason = 'Runs from the right-click menu, not on page load.';
+      } else if (isCrontab) {
+        status = 'scheduled'; reason = 'Runs on its @crontab schedule, not on page load.';
+      } else if (isBackground) {
+        status = 'background'; reason = '@background script — runs without a page.';
+      } else if (!matches) {
+        status = 'no-match'; reason = 'No @match/@include pattern matches this page.';
+      } else if (urlBlocked) {
+        status = 'blocked'; reason = 'This page is excluded by your global page filter or blocklist.';
+      } else if (!userScriptsAvailable) {
+        status = 'blocked'; reason = 'User scripts are turned off for this extension. Enable "Allow User Scripts" at chrome://extensions.';
+      } else if (!globallyEnabled) {
+        status = 'paused'; reason = 'ScriptVault is paused — enable it from the popup toggle.';
+      } else if (registrationError) {
+        status = 'error'; reason = 'Registration failed: ' + registrationError;
+      } else if (!registered) {
+        status = 'not-registered'; reason = 'Not currently registered. Toggle the script off and on, or reload the page.';
+      } else {
+        status = 'running'; reason = 'Matches this page and is injected.';
+      }
+      return {
+        id: script.id,
+        name: script.meta?.name || script.id,
+        status,
+        reason,
+        matches,
+        enabled,
+        registered
+      };
+    }).sort((first, second) => first.name.localeCompare(second.name));
+
+    const executionDiagnostics = executionDiagnosticsStore.snapshot(Number(tabId));
+    return { url, userScriptsAvailable, globallyEnabled, urlBlocked, executionDiagnostics, scripts };
+  },
+  updateBadgeForTab: async (tabId, url) => {
+    if (tabId && url) await updateBadgeForTab(tabId, url);
+    return { success: true };
+  },
+  runScriptNow: async message => {
+    const scriptId = message.scriptId || message.id;
+    if (!scriptId) return { success: false, error: 'Missing scriptId' };
+    try {
+      const script = await ScriptStorage.get(scriptId);
+      if (!script) return { success: false, error: 'Script not found' };
+      if (script.settings?._importQuarantine) {
+        return { success: false, error: 'Review and enable this quarantined import before running it' };
+      }
+
+      let targetTabId = message.tabId;
+      if (typeof targetTabId !== 'number') {
+        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        targetTabId = activeTab?.id;
+      }
+      if (typeof targetTabId !== 'number') return { success: false, error: 'No target tab' };
+
+      const requireList = Array.isArray(script.meta?.require)
+        ? script.meta.require
+        : (script.meta?.require ? [script.meta.require] : []);
+      const requireScripts = [];
+      for (const url of requireList) {
+        try {
+          const code = await fetchRequireScript(url);
+          if (code) requireScripts.push({ url, code });
+        } catch (_) {}
+      }
+
+      let storedValues = {};
+      try { storedValues = await ScriptValues.getAll(script.id) || {}; } catch (_) {}
+      const scriptAuthToken = await UserScriptMessagePolicy.getScriptAuthToken(script.id);
+      const wrappedCode = buildWrappedScript(
+        script,
+        requireScripts,
+        storedValues,
+        [],
+        [],
+        '',
+        scriptAuthToken
+      );
+      const wantsDocumentStart = script?.meta?.['run-at'] === 'document-start';
+
+      if (typeof chrome.userScripts?.execute === 'function') {
+        try {
+          await chrome.userScripts.execute({
+            target: { tabId: targetTabId },
+            js: [{ code: wrappedCode }],
+            world: 'USER_SCRIPT',
+            ...(wantsDocumentStart ? { injectImmediately: true } : {})
+          });
+          return { success: true, mode: 'userScripts.execute' };
+        } catch (error) {
+          debugLog('userScripts.execute failed, falling back:', error?.message);
+        }
+      }
+
+      const injectInto = script.meta?.['inject-into'] || 'auto';
+      const sandbox = script.meta?.sandbox || '';
+      const wantsPageContext = injectInto === 'page' || sandbox === 'raw';
+      if (!wantsPageContext) {
+        return {
+          success: false,
+          error: 'chrome.userScripts.execute is unavailable and this script does not declare @inject-into page — MAIN-world fallback is not allowed to avoid silently downgrading USER_SCRIPT isolation. Update Chrome to 135+ or set @inject-into page if page context is intended.'
+        };
+      }
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: targetTabId },
+          world: 'MAIN',
+          func: code => {
+            try { (0, eval)(code); } catch (error) { console.error('[ScriptVault Run Now]', error); }
+          },
+          args: [wrappedCode],
+          ...(wantsDocumentStart ? { injectImmediately: true } : {})
+        });
+        return { success: true, mode: 'scripting.executeScript' };
+      } catch (error) {
+        return { success: false, error: error?.message || 'Run failed' };
+      }
+    } catch (error) {
+      console.error('[ScriptVault] runScriptNow error:', error);
+      return { success: false, error: error?.message || 'Run failed' };
+    }
+  },
+  rescheduleChains: async () => {
+    await setupChainAlarms();
+    await notifyChainDomTriggersChanged();
+    return { success: true };
+  },
+  runChainNow: (chainId, reason, tabId) => executeChainById(chainId, { reason, tabId }),
+  getChainDomEventTriggers: async () => ({
+    success: true,
+    eventTypes: await getChainDomEventTypes()
+  }),
+  chainDomEvent: async (eventType, url, sender) => {
+    if (!eventType) return { success: false, error: 'Missing eventType', triggered: 0 };
+    const effectiveUrl = url || sender?.tab?.url || '';
+    const tabId = typeof sender?.tab?.id === 'number' ? sender.tab.id : undefined;
+    const triggered = await triggerChainsForDomEvent(eventType, effectiveUrl, tabId);
+    return { success: true, triggered };
+  },
+  previewUserStyle: (code, tabId) => typeof UserStylesEngine !== 'undefined'
+    ? UserStylesEngine.previewDraft(String(code || ''), { tabId })
+    : Promise.resolve({ success: false, error: 'UserCSS tools unavailable' }),
+  clearUserStylePreview: tabId => typeof UserStylesEngine !== 'undefined'
+    ? UserStylesEngine.clearDraftPreview({ tabId })
+    : Promise.resolve({ success: true, cleared: 0 }),
+  getExtensionInfo: () => ({
+    name: 'ScriptVault',
+    version: chrome.runtime.getManifest().version,
+    scriptHandler: 'ScriptVault',
+    scriptMetaStr: null
+  }),
+  openDashboard: async message => {
+    const dashboardUrl = chrome.runtime.getURL('pages/dashboard.html');
+    const scriptParam = message.scriptId ? `#script_${encodeURIComponent(message.scriptId)}` : '';
+    const newParam = message.newScript ? '#new_script' : '';
+    const tabParam = message.tab ? `#tab=${encodeURIComponent(message.tab)}` : '';
+    await chrome.tabs.create({ url: dashboardUrl + (scriptParam || newParam || tabParam) });
+    return { success: true };
+  },
+  factoryReset: async () => {
+    const allScripts = await ScriptStorage.getAll();
+    for (const script of allScripts) await unregisterScript(script.id);
+    await ScriptStorage.clear();
+    if (typeof BackupsDAO !== 'undefined' && BackupsDAO.clear) await BackupsDAO.clear();
+    await chrome.storage.local.clear();
+    if (chrome.storage.session?.clear) await chrome.storage.session.clear();
+    await SettingsManager.reset();
+    if (chrome.declarativeNetRequest?.getDynamicRules) {
+      const dynamicRules = await chrome.declarativeNetRequest.getDynamicRules();
+      if (dynamicRules.length) {
+        await chrome.declarativeNetRequest.updateDynamicRules({
+          removeRuleIds: dynamicRules.map(rule => rule.id)
+        });
+      }
+    }
+    if (chrome.declarativeNetRequest?.getSessionRules) {
+      const sessionRules = await chrome.declarativeNetRequest.getSessionRules();
+      if (sessionRules.length) {
+        await chrome.declarativeNetRequest.updateSessionRules({
+          removeRuleIds: sessionRules.map(rule => rule.id)
+        });
+      }
+    }
+    await chrome.alarms.clearAll();
+    if (typeof FolderStorage !== 'undefined' && FolderStorage.cache) FolderStorage.cache = null;
+    await updateBadge();
+    return { success: true };
+  }
+}));
 backgroundActionRegistry.registerHandlers(DiagnosticsActionHandler.createDiagnosticsActionHandlers({
   reportCspFailure: async (url, scriptId, directive) => {
     const cspData = await chrome.storage.local.get('cspReports');
@@ -47696,350 +48037,12 @@ async function handleMessage(message, sender) {
   // handlers with uninitialised state and return empty results or throw.
   try { await ensureInitialized(); } catch (e) { /* init failure is logged in init() */ }
   const { action } = message;
-  // Support both patterns: { action, data: { ... } } and { action, prop1, prop2, ... }
-  const data = message.data || message;
   if (typeof MessageRouter !== 'undefined' && !MessageRouter.isKnownBackgroundAction(action)) {
     return { error: 'Unknown action: ' + action };
   }
-  const routed = await backgroundActionRegistry.dispatch(message, sender);
-  if (routed.handled) return routed.response;
-  
   try {
-    switch (action) {
-      // Script Management
-      // Settings
-      case 'installFromUrl':
-        return await installFromUrl(data.url);
-
-      case 'installFromCode':
-        return await installFromCode(data.code, {
-          sourceUrl: data.sourceUrl || '',
-          operation: data.operation || 'install'
-        });
-
-      case 'fetchScriptPreview':
-        return await fetchScriptPreview(data.url);
-
-      case 'probeInstallDependency':
-        return await probeInstallDependency(data.url);
-
-      case 'verifyRequireProvenancePreview':
-        return await previewRequireProvenance(data);
-
-      // Resources
-      case 'fetchResource':
-        return await ResourceCache.fetchResource(data.url);
-
-      // Get scripts for URL
-      case 'getScriptsForUrl': {
-        const settings = await SettingsManager.get();
-        const url = data.url || data;
-
-        if (isUrlBlockedByGlobalSettings(url, settings)) {
-          return [];
-        }
-
-        // Filter scripts that match this URL (both enabled and disabled for popup display).
-        // Use the cached MatchSet so we test only candidate scripts, not every script.
-        const matchSet = await getMatchSet();
-        const filtered = matchSet.getMatching(url)
-          .sort((a, b) => (a.position || 0) - (b.position || 0));
-        
-        // Return with metadata property for popup compatibility (strip code to reduce message size)
-        return filtered.map(({ code, ...rest }) => ({ ...rest, metadata: rest.meta }));
-      }
-
-      // Per-tab "why didn't my script run?" diagnostic. For the given URL,
-      // report each script's run status and a plain-language reason, computed
-      // from data the background already has (match state, enablement,
-      // registration, run mode, global gates). Turns the top userscript-manager
-      // support question into an inspectable answer.
-      case 'diagnoseScripts': {
-        const settings = await SettingsManager.get();
-        const url = data.url || '';
-        const userScriptsAvailable = !!chrome.userScripts;
-        const globallyEnabled = settings.enabled !== false;
-        const urlBlocked = url ? isUrlBlockedByGlobalSettings(url, settings) : false;
-
-        let registeredIds = new Set();
-        try {
-          if (chrome.userScripts && typeof chrome.userScripts.getScripts === 'function') {
-            const regs = await chrome.userScripts.getScripts();
-            registeredIds = new Set((regs || []).map(r => r.id));
-          }
-        } catch (_e) { /* getScripts unavailable — treat as unknown registration */ }
-
-        const allScripts = await ScriptStorage.getAll();
-        const scripts = allScripts.map(s => {
-          const enabled = s.enabled !== false;
-          const matches = url ? doesScriptMatchUrl(s, url) : false;
-          const registered = registeredIds.has(s.id);
-          const regError = s.settings?._registrationError || null;
-          const effectiveRunAt = (s.settings?.runAt && s.settings.runAt !== 'default')
-            ? s.settings.runAt : s.meta?.['run-at'];
-          const isContextMenu = effectiveRunAt === 'context-menu';
-          const isCrontab = !!s.meta?.crontab;
-          const isBackground = !!s.meta?.background;
-
-          let status, reason;
-          if (!enabled) {
-            status = 'disabled'; reason = 'Script is turned off.';
-          } else if (isContextMenu) {
-            status = 'on-demand'; reason = 'Runs from the right-click menu, not on page load.';
-          } else if (isCrontab) {
-            status = 'scheduled'; reason = 'Runs on its @crontab schedule, not on page load.';
-          } else if (isBackground) {
-            status = 'background'; reason = '@background script — runs without a page.';
-          } else if (!matches) {
-            status = 'no-match'; reason = 'No @match/@include pattern matches this page.';
-          } else if (urlBlocked) {
-            status = 'blocked'; reason = 'This page is excluded by your global page filter or blocklist.';
-          } else if (!userScriptsAvailable) {
-            status = 'blocked'; reason = 'User scripts are turned off for this extension. Enable "Allow User Scripts" at chrome://extensions.';
-          } else if (!globallyEnabled) {
-            status = 'paused'; reason = 'ScriptVault is paused — enable it from the popup toggle.';
-          } else if (regError) {
-            status = 'error'; reason = 'Registration failed: ' + regError;
-          } else if (!registered) {
-            status = 'not-registered'; reason = 'Not currently registered. Toggle the script off and on, or reload the page.';
-          } else {
-            status = 'running'; reason = 'Matches this page and is injected.';
-          }
-          return {
-            id: s.id,
-            name: s.meta?.name || s.id,
-            status,
-            reason,
-            matches,
-            enabled,
-            registered,
-          };
-        }).sort((a, b) => a.name.localeCompare(b.name));
-
-        const executionDiagnostics = executionDiagnosticsStore.snapshot(Number(data.tabId));
-        return { url, userScriptsAvailable, globallyEnabled, urlBlocked, executionDiagnostics, scripts };
-      }
-
-      // Update badge for specific tab
-      case 'updateBadgeForTab': {
-        if (data.tabId && data.url) {
-          await updateBadgeForTab(data.tabId, data.url);
-        }
-        return { success: true };
-      }
-
-      // Phase 11.4 — Run a script once on a specific tab without registering
-      // it for future page loads. Uses chrome.userScripts.execute() (Chrome
-      // 135+); falls back to chrome.scripting.executeScript so older Chrome
-      // can still run the wrapper-less code body. The script doesn't need
-      // to be enabled, and registration state is not modified.
-      case 'runScriptNow': {
-        const scriptId = data.scriptId || data.id;
-        const tabId = data.tabId;
-        if (!scriptId) return { success: false, error: 'Missing scriptId' };
-        try {
-          const script = await ScriptStorage.get(scriptId);
-          if (!script) return { success: false, error: 'Script not found' };
-          if (script.settings?._importQuarantine) {
-            return { success: false, error: 'Review and enable this quarantined import before running it' };
-          }
-
-          // Resolve the target tab — caller usually passes an explicit id;
-          // fall back to the active tab so the popup's "Run on current tab"
-          // affordance can omit it.
-          let targetTabId = tabId;
-          if (typeof targetTabId !== 'number') {
-            const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-            targetTabId = activeTab?.id;
-          }
-          if (typeof targetTabId !== 'number') {
-            return { success: false, error: 'No target tab' };
-          }
-
-          // Resolve @require dependencies the same way the context-menu
-          // injector does, so the one-shot run sees the same library set as
-          // a normal injection. Per-require failures are non-fatal — the
-          // user-script body still runs.
-          const reqList = Array.isArray(script.meta?.require)
-            ? script.meta.require
-            : (script.meta?.require ? [script.meta.require] : []);
-          const requireScripts = [];
-          for (const url of reqList) {
-            try {
-              const code = await fetchRequireScript(url);
-              if (code) requireScripts.push({ url, code });
-            } catch (_e) { /* require fetch failed — keep going */ }
-          }
-
-          let storedValues = {};
-          try { storedValues = await ScriptValues.getAll(script.id) || {}; } catch (_e) {}
-
-          const scriptAuthToken = await UserScriptMessagePolicy.getScriptAuthToken(script.id);
-          const wrappedCode = buildWrappedScript(script, requireScripts, storedValues, [], [], '', scriptAuthToken);
-
-          // Phase 39.28 — Chrome 149+ makes injectImmediately: true reliable
-          // for document-start one-shots. Pass it when the script declares
-          // @run-at document-start so the body runs before first paint
-          // instead of after.
-          const wantsDocumentStart = (script?.meta?.['run-at'] === 'document-start');
-
-          // Prefer userScripts.execute() (Chrome 135+) — runs in the same
-          // USER_SCRIPT world as a normal injection so unsafeWindow / GM_*
-          // APIs behave identically.
-          if (typeof chrome.userScripts?.execute === 'function') {
-            try {
-              await chrome.userScripts.execute({
-                target: { tabId: targetTabId },
-                js: [{ code: wrappedCode }],
-                world: 'USER_SCRIPT',
-                ...(wantsDocumentStart ? { injectImmediately: true } : {})
-              });
-              return { success: true, mode: 'userScripts.execute' };
-            } catch (e) {
-              // Fall through to chrome.scripting fallback below.
-              debugLog('userScripts.execute failed, falling back:', e?.message);
-            }
-          }
-
-          // MAIN-world fallback — only allowed when the script explicitly
-          // requests page context (@inject-into page or @sandbox raw). For
-          // all other scripts, report that the userScripts API is needed
-          // rather than silently downgrading isolation.
-          const injectInto = script.meta?.['inject-into'] || 'auto';
-          const sandbox = script.meta?.sandbox || '';
-          const wantsPageContext = (injectInto === 'page' || sandbox === 'raw');
-          if (!wantsPageContext) {
-            return {
-              success: false,
-              error: 'chrome.userScripts.execute is unavailable and this script does not declare @inject-into page — MAIN-world fallback is not allowed to avoid silently downgrading USER_SCRIPT isolation. Update Chrome to 135+ or set @inject-into page if page context is intended.'
-            };
-          }
-          try {
-            await chrome.scripting.executeScript({
-              target: { tabId: targetTabId },
-              world: 'MAIN',
-              func: (code) => {
-                try { (0, eval)(code); } catch (err) { console.error('[ScriptVault Run Now]', err); }
-              },
-              args: [wrappedCode],
-              ...(wantsDocumentStart ? { injectImmediately: true } : {})
-            });
-            return { success: true, mode: 'scripting.executeScript' };
-          } catch (e) {
-            return { success: false, error: e?.message || 'Run failed' };
-          }
-        } catch (e) {
-          console.error('[ScriptVault] runScriptNow error:', e);
-          return { success: false, error: e?.message || 'Run failed' };
-        }
-      }
-
-      case 'rescheduleChains':
-        await setupChainAlarms();
-        await notifyChainDomTriggersChanged();
-        return { success: true };
-
-      case 'runChainNow': {
-        return await executeChainById(data.chainId, {
-          reason: data.reason || 'manual',
-          tabId: typeof data.tabId === 'number' ? data.tabId : undefined
-        });
-      }
-
-      case 'getChainDomEventTriggers': {
-        const eventTypes = await getChainDomEventTypes();
-        return { success: true, eventTypes };
-      }
-
-      case 'chainDomEvent': {
-        const eventType = String(data.eventType || '').trim();
-        if (!eventType) return { success: false, error: 'Missing eventType', triggered: 0 };
-        const url = data.url || sender?.tab?.url || '';
-        const tabId = typeof sender?.tab?.id === 'number' ? sender.tab.id : undefined;
-        const triggered = await triggerChainsForDomEvent(eventType, url, tabId);
-        return { success: true, triggered };
-      }
-
-      case 'userStylePreviewDraft':
-        if (typeof UserStylesEngine === 'undefined') return { success: false, error: 'UserCSS tools unavailable' };
-        return await UserStylesEngine.previewDraft(String(data.code || ''), {
-          tabId: typeof data.tabId === 'number' ? data.tabId : undefined
-        });
-
-      case 'userStyleClearPreview':
-        if (typeof UserStylesEngine === 'undefined') return { success: true, cleared: 0 };
-        return await UserStylesEngine.clearDraftPreview({
-          tabId: typeof data.tabId === 'number' ? data.tabId : undefined
-        });
-      
-      // Get info
-      case 'getExtensionInfo':
-        return {
-          name: 'ScriptVault',
-          version: chrome.runtime.getManifest().version,
-          scriptHandler: 'ScriptVault',
-          scriptMetaStr: null
-        };
-        
-      // ── v2.0 Module Handlers ──────────────────────────────────────────────
-
-      // Performance History
-      // Easy Cloud Sync
-      case 'openDashboard': {
-        const dashUrl = chrome.runtime.getURL('pages/dashboard.html');
-        const scriptParam = data.scriptId ? `#script_${encodeURIComponent(data.scriptId)}` : '';
-        const newParam = data.newScript ? '#new_script' : '';
-        const tabParam = data.tab ? `#tab=${encodeURIComponent(data.tab)}` : '';
-        await chrome.tabs.create({ url: dashUrl + (scriptParam || newParam || tabParam) });
-        return { success: true };
-      }
-
-      case 'factoryReset': {
-        const allScripts = await ScriptStorage.getAll();
-        for (const s of allScripts) {
-          await unregisterScript(s.id);
-        }
-        await ScriptStorage.clear();
-        // Erase backup blobs + publication receipts too — ScriptStorage.clear()
-        // only touches the scripts partition, so without this a factory reset
-        // leaves fully-restorable script code / GM values in the backups store.
-        if (typeof BackupsDAO !== 'undefined' && BackupsDAO.clear) {
-          await BackupsDAO.clear();
-        }
-        // Factory reset is a privacy boundary, not a curated key list. Clear
-        // every extension-owned local/session value so integration tokens,
-        // webhook configuration, signing keys, UI module caches, and future
-        // storage keys cannot silently survive an explicit wipe.
-        await chrome.storage.local.clear();
-        if (chrome.storage.session?.clear) await chrome.storage.session.clear();
-        // Recreate only the documented default settings after the wipe.
-        await SettingsManager.reset();
-        // Remove orphaned DNR state too. Per-script cleanup above handles known
-        // rules, while these sweeps cover rules left by an interrupted delete.
-        if (chrome.declarativeNetRequest?.getDynamicRules) {
-          const dynamicRules = await chrome.declarativeNetRequest.getDynamicRules();
-          if (dynamicRules.length) {
-            await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: dynamicRules.map(rule => rule.id) });
-          }
-        }
-        if (chrome.declarativeNetRequest?.getSessionRules) {
-          const sessionRules = await chrome.declarativeNetRequest.getSessionRules();
-          if (sessionRules.length) {
-            await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: sessionRules.map(rule => rule.id) });
-          }
-        }
-        // Clear all alarms (crontab, autoUpdate, autoSync, backup, etc.)
-        await chrome.alarms.clearAll();
-        if (typeof FolderStorage !== 'undefined' && FolderStorage.cache) {
-          FolderStorage.cache = null;
-        }
-        await updateBadge();
-        return { success: true };
-      }
-
-      default:
-        return { error: 'Unknown action: ' + action };
-    }
+    const routed = await backgroundActionRegistry.dispatch(message, sender);
+    return routed.handled ? routed.response : { error: 'Unknown action: ' + action };
   } catch (e) {
     console.error('[ScriptVault] Message handler error:', e);
     // Log to error system if available

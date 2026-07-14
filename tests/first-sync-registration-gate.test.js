@@ -44,8 +44,8 @@ describe('first-sync registration gate', () => {
     }
 
     const runNow = backgroundCore.slice(
-      backgroundCore.indexOf("case 'runScriptNow':"),
-      backgroundCore.indexOf("case 'rescheduleChains':"),
+      backgroundCore.indexOf('runScriptNow: async message'),
+      backgroundCore.indexOf('rescheduleChains: async ()'),
     );
     expect(runNow).toContain('script.settings?._importQuarantine');
     expect(runNow).toContain('Review and enable this quarantined import before running it');

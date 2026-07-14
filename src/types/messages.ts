@@ -2220,7 +2220,12 @@ export interface ResponseMap {
   getCollections: { collections: unknown[] };
   getCSPReports: { reports: unknown[] };
   getErrorLogGrouped: unknown;
-  getExtensionInfo: { id: string; version: string; name?: string };
+  getExtensionInfo: {
+    name: string;
+    version: string;
+    scriptHandler: string;
+    scriptMetaStr: string | null;
+  };
   getGistSettings: Record<string, unknown>;
   getLiveReloadScripts: { scripts: Record<string, boolean> };
   getMenuCommands: { commands: unknown[] };
@@ -2229,7 +2234,7 @@ export interface ResponseMap {
   getProfiles: { profiles: unknown[] };
   getScriptSettings: unknown;
   getScriptValues: unknown;
-  getScriptsForUrl: { scripts: Script[] };
+  getScriptsForUrl: Array<Omit<Script, 'code'> & { metadata: Script['meta'] }>;
   diagnoseScripts: {
     url: string;
     userScriptsAvailable: boolean;

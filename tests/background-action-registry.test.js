@@ -47,6 +47,10 @@ import {
   DATA_BACKGROUND_ACTIONS,
   createDataActionHandlers,
 } from '../src/background/data-action-handler.ts';
+import {
+  RUNTIME_BACKGROUND_ACTIONS,
+  createRuntimeActionHandlers,
+} from '../src/background/runtime-action-handler.ts';
 
 describe('typed background action registry', () => {
   it('normalizes flat and nested runtime messages before dispatch', async () => {
@@ -383,5 +387,35 @@ describe('typed background action registry', () => {
       'colorScheme',
     );
     expect(dependencies.exportAll).toHaveBeenCalledWith({});
+  });
+
+  it('routes install, execution, chain, shell, and reset actions through typed dependencies', async () => {
+    const dependencies = Object.fromEntries([
+      'installFromUrl', 'installFromCode', 'fetchScriptPreview',
+      'probeInstallDependency', 'verifyRequireProvenancePreview',
+      'fetchResource', 'getScriptsForUrl', 'diagnoseScripts',
+      'updateBadgeForTab', 'runScriptNow', 'rescheduleChains', 'runChainNow',
+      'getChainDomEventTriggers', 'chainDomEvent', 'previewUserStyle',
+      'clearUserStylePreview', 'getExtensionInfo', 'openDashboard',
+      'factoryReset',
+    ].map(name => [name, vi.fn(async () => ({ success: true }))]));
+    const registry = createBackgroundActionRegistry(createRuntimeActionHandlers(dependencies));
+
+    await registry.dispatch({
+      action: 'installFromCode',
+      data: { code: '// demo', sourceUrl: 'https://example.test/demo.user.js' },
+    }, {});
+    await registry.dispatch({
+      action: 'runChainNow',
+      data: { chainId: 'chain-1', tabId: 7 },
+    }, {});
+
+    expect(registry.registeredActions()).toEqual(RUNTIME_BACKGROUND_ACTIONS);
+    expect(dependencies.installFromCode).toHaveBeenCalledWith(
+      '// demo',
+      'https://example.test/demo.user.js',
+      'install',
+    );
+    expect(dependencies.runChainNow).toHaveBeenCalledWith('chain-1', 'manual', 7);
   });
 });

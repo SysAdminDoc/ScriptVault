@@ -196,6 +196,14 @@
       "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for script values, exports, quota, resources, and Gist action dispatch."
     },
     {
+      "runtime": "modules/runtime-action-handler.js",
+      "sources": [
+        "src/background/runtime-action-handler.ts"
+      ],
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for install, execution, diagnostics, chain, UserCSS, shell, and reset action dispatch."
+    },
+    {
       "runtime": "modules/gm-audio-handler.js",
       "sources": [
         "src/background/gm-audio-handler.ts"
