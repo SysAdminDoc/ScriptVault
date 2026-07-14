@@ -1,12 +1,80 @@
 import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { buildWrappedScript } from '../src/background/wrapper-builder.ts';
 
 const contentBridgeCode = readFileSync(resolve(process.cwd(), 'content.js'), 'utf8');
 const backgroundCoreCode = readFileSync(resolve(process.cwd(), 'background.core.js'), 'utf8');
 const connectPolicyCode = readFileSync(resolve(process.cwd(), 'modules/connect-policy.js'), 'utf8');
 const userScriptMessagePolicyCode = readFileSync(resolve(process.cwd(), 'modules/user-script-message-policy.js'), 'utf8');
-const wrapperBuilderCode = readFileSync(resolve(process.cwd(), 'src/background/wrapper-builder.ts'), 'utf8');
+
+function makeWrapperScript(code) {
+  return {
+    id: 'script_wrapper_bridge',
+    code,
+    enabled: true,
+    position: 0,
+    createdAt: 1,
+    updatedAt: 1,
+    settings: {},
+    stats: { runs: 0, totalTime: 0, avgTime: 0, lastRun: 0, errors: 0 },
+    versionHistory: [],
+    meta: {
+      name: 'Wrapper Bridge Contract',
+      namespace: 'scriptvault-tests',
+      version: '1.0.0',
+      description: '',
+      author: '',
+      icon: '',
+      icon64: '',
+      homepage: '',
+      homepageURL: '',
+      website: '',
+      source: '',
+      updateURL: '',
+      downloadURL: '',
+      supportURL: '',
+      license: '',
+      copyright: '',
+      contributionURL: '',
+      match: ['https://example.com/*'],
+      include: [],
+      exclude: [],
+      excludeMatch: [],
+      matchTop: [],
+      excludeTop: [],
+      'run-at': 'document-idle',
+      'inject-into': 'auto',
+      module: '',
+      noframes: false,
+      unwrap: false,
+      sandbox: '',
+      'run-in': '',
+      grant: ['GM_xmlhttpRequest'],
+      require: [],
+      resource: {},
+      connect: ['cdn.example.com'],
+      'top-level-await': false,
+      webRequest: null,
+      priority: 0,
+      weight: 0,
+      antifeature: [],
+      tag: [],
+      compatible: [],
+      incompatible: [],
+      config: [],
+    },
+  };
+}
+
+async function waitForWindowValue(key) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    await Promise.resolve();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    if (window[key] !== undefined) return window[key];
+  }
+  throw new Error(`Wrapped userscript did not set window.${key}`);
+}
 
 function createBridgeWindow() {
   const listeners = new Map();
@@ -281,14 +349,121 @@ describe('content script bridge security boundary', () => {
     expect(chromeMock.runtime.sendMessage).not.toHaveBeenCalled();
   });
 
-  it('keeps generated wrapper fallbacks telemetry-only and preserves GM_loadScript context', () => {
-    for (const source of [backgroundCoreCode, wrapperBuilderCode]) {
-      expect(source).toContain('function canUsePostMessageBridge(action)');
-      expect(source).toContain('ScriptVault requires Chrome userScripts messaging for GM API calls.');
-      expect(source).toContain("sendToBackground('GM_loadScript', { scriptId, url, timeout: options.timeout })");
-      expect(source).toContain('if (scriptAuthToken) authenticatedData.scriptAuthToken = scriptAuthToken');
-      expect(source).toContain('chrome.runtime.sendMessage({ action, data: authenticatedData })');
+  it('executes generated GM_loadScript through authenticated runtime messaging and refuses bridge fallback', async () => {
+    const originalChrome = globalThis.chrome;
+    const originalFetch = window.fetch;
+    const originalXhr = window.XMLHttpRequest;
+    const originalWebSocket = window.WebSocket;
+    const originalBeacon = Object.getOwnPropertyDescriptor(window.navigator, 'sendBeacon');
+    const postMessage = vi.spyOn(window, 'postMessage');
+    const scriptAuthToken = 'a'.repeat(64);
+
+    try {
+      const sendMessage = vi.fn(async message => {
+        if (message.action === 'GM_getValues') return {};
+        if (message.action === 'GM_loadScript') {
+          return { code: 'window.__svLoadedDependency = "direct-runtime";' };
+        }
+        return {};
+      });
+      globalThis.chrome = {
+        runtime: {
+          id: 'wrapper-extension-id',
+          getManifest: () => ({ version: '3.20.0' }),
+          sendMessage,
+        },
+      };
+      const wrapped = buildWrappedScript(makeWrapperScript(`
+GM_loadScript('https://cdn.example.com/library.js', { timeout: 2500 })
+  .then(() => { window.__svLoadResult = window.__svLoadedDependency; })
+  .catch(error => { window.__svLoadResult = error.message; });
+`), [], {}, [], [], '', scriptAuthToken);
+
+      new Function(wrapped)();
+      await expect(waitForWindowValue('__svLoadResult')).resolves.toBe('direct-runtime');
+      expect(sendMessage).toHaveBeenCalledWith({
+        action: 'GM_loadScript',
+        data: {
+          scriptId: 'script_wrapper_bridge',
+          url: 'https://cdn.example.com/library.js',
+          timeout: 2500,
+          scriptAuthToken,
+        },
+      });
+
+      delete window.__svLoadResult;
+      delete window.__svLoadedDependency;
+      postMessage.mockClear();
+      sendMessage.mockImplementation(async message => {
+        if (message.action === 'GM_loadScript') throw new Error('messaging unavailable');
+        if (message.action === 'GM_getValues') return {};
+        return {};
+      });
+      const fallbackWrapped = buildWrappedScript(makeWrapperScript(`
+GM_loadScript('https://cdn.example.com/fallback.js')
+  .then(() => { window.__svLoadResult = 'unexpected success'; })
+  .catch(error => { window.__svLoadResult = error.message; });
+`), [], {}, [], [], '', scriptAuthToken);
+
+      new Function(fallbackWrapped)();
+      await expect(waitForWindowValue('__svLoadResult')).resolves.toContain(
+        'ScriptVault requires Chrome userScripts messaging for GM API calls.',
+      );
+      expect(postMessage.mock.calls.some(([message]) => message?.action === 'GM_loadScript')).toBe(false);
+    } finally {
+      globalThis.chrome = originalChrome;
+      window.fetch = originalFetch;
+      window.XMLHttpRequest = originalXhr;
+      window.WebSocket = originalWebSocket;
+      if (originalBeacon) {
+        Object.defineProperty(window.navigator, 'sendBeacon', originalBeacon);
+      } else {
+        Reflect.deleteProperty(window.navigator, 'sendBeacon');
+      }
+      delete window.__svLoadResult;
+      delete window.__svLoadedDependency;
+      postMessage.mockRestore();
     }
+  });
+
+  it('rejects generated malformed bridge messages without reaching extension privileges', async () => {
+    const { window: win, chromeMock, channel } = loadContentBridge();
+    chromeMock.runtime.sendMessage.mockClear();
+    let seed = 0x51a7c0de;
+    const next = () => {
+      seed = (Math.imul(seed, 1103515245) + 12345) >>> 0;
+      return seed;
+    };
+    const invalidActions = Array.from({ length: 64 }, (_, index) => {
+      const candidates = [
+        `GM_${next().toString(36)}`,
+        `factoryReset${index}`,
+        `reportExecTime ${index}`,
+        index % 2 ? null : { action: 'reportExecTime' },
+      ];
+      return candidates[next() % candidates.length];
+    });
+
+    for (const [index, action] of invalidActions.entries()) {
+      const id = `mutation-${index}`;
+      const response = waitForBridgeResponse(win, id);
+      win.dispatchEvent(new win.MessageEvent('message', {
+        source: win,
+        data: {
+          channel,
+          direction: 'to-background',
+          id,
+          action,
+          data: { scriptId: 'victim', code: 'privileged' },
+        },
+      }));
+      await expect(response, `mutation ${index}`).resolves.toMatchObject({
+        success: false,
+        error: 'Action not permitted via page-visible bridge',
+      });
+    }
+
+    expect(chromeMock.runtime.sendMessage).not.toHaveBeenCalled();
   });
 
   it('redacts sensitive background event payloads before posting to the page-visible bridge', () => {

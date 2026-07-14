@@ -359,4 +359,42 @@ describe('pending update queue', () => {
     expect(globalThis.ScriptStorage.get).toHaveBeenCalledTimes(2);
     expect(globalThis.ScriptStorage.set).toHaveBeenCalledTimes(2);
   });
+
+  it('normalizes malformed persisted queue state before any safe apply decision', async () => {
+    const malformed = [
+      null,
+      'text',
+      [],
+      { id: '', code: makeCode('Empty', '1.0.0'), safeToApply: true },
+      { id: 'missing-code', safeToApply: true },
+      { id: 'duplicate', code: makeCode('First', '2.0.0'), safeToApply: true },
+      { id: 'duplicate', code: makeCode('Second', '3.0.0'), safeToApply: true },
+      {
+        id: 'subscription',
+        kind: 'subscription-install',
+        code: makeCode('Subscription', '1.0.0'),
+        safeToApply: true,
+        reviewReasons: [1, 'New script from subscription', null],
+      },
+      {
+        id: 'recovered-update',
+        code: makeCode('Recovered', '2.0.0'),
+        safeToApply: 'yes',
+        reviewReasons: 'invalid',
+      },
+    ];
+    await chrome.storage.local.set({ pendingUpdates: malformed });
+    UpdateSystem._pendingUpdates = null;
+
+    const recovered = await UpdateSystem.getPendingUpdates();
+
+    expect(recovered.map(item => item.id)).toEqual(['duplicate', 'subscription', 'recovered-update']);
+    expect(recovered[0].kind).toBe('update');
+    expect(recovered[1]).toMatchObject({
+      kind: 'subscription-install',
+      safeToApply: false,
+      reviewReasons: ['New script from subscription'],
+    });
+    expect(recovered[2]).toMatchObject({ safeToApply: false, reviewReasons: [] });
+  });
 });

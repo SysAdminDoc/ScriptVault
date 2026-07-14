@@ -80,7 +80,7 @@ function compareVersions(v1: string, v2: string): number {
  */
 async function getAllScripts(): Promise<Record<string, LegacyScript>> {
   const data: { userscripts?: unknown } = await chrome.storage.local.get('userscripts');
-  return (data.userscripts && typeof data.userscripts === 'object')
+  return (data.userscripts && typeof data.userscripts === 'object' && !Array.isArray(data.userscripts))
     ? data.userscripts as Record<string, LegacyScript>
     : {};
 }
@@ -131,22 +131,23 @@ async function migrateToV2(): Promise<void> {
   const scripts = await getAllScripts();
   let migrated = 0;
   for (const [id, script] of Object.entries(scripts)) {
+    if (!script || typeof script !== 'object' || Array.isArray(script)) continue;
     let changed = false;
 
     // Ensure settings object exists
-    if (!script.settings) {
+    if (!script.settings || typeof script.settings !== 'object' || Array.isArray(script.settings)) {
       script.settings = {} as ScriptSettings;
       changed = true;
     }
 
     // Ensure stats object exists
-    if (!script.stats) {
+    if (!script.stats || typeof script.stats !== 'object' || Array.isArray(script.stats)) {
       script.stats = { runs: 0, totalTime: 0, avgTime: 0, errors: 0 } as ScriptStats;
       changed = true;
     }
 
     // Migrate old 'metadata' key to 'meta' if present
-    if (script.metadata && !script.meta) {
+    if (script.metadata && typeof script.metadata === 'object' && !Array.isArray(script.metadata) && !script.meta) {
       script.meta = script.metadata;
       delete script.metadata;
       changed = true;
@@ -225,7 +226,10 @@ async function migrateScopedHostPermissionsOptIn(): Promise<void> {
 async function run(): Promise<void> {
   try {
     const data: { [key: string]: unknown } = await chrome.storage.local.get(MIGRATION_KEY);
-    const lastVersion = (data[MIGRATION_KEY] as string | undefined) ?? '0.0.0';
+    const persistedVersion = data[MIGRATION_KEY];
+    const lastVersion = typeof persistedVersion === 'string' && persistedVersion.trim()
+      ? persistedVersion
+      : '0.0.0';
 
     if (lastVersion === CURRENT_VERSION) return; // Already migrated
 

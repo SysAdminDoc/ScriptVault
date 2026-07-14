@@ -152,8 +152,9 @@ export function isExtensionSurfaceSender(
 
   const ownExtensionPrefix = `chrome-extension://${extensionId}/`;
   const url = typeof sender.url === 'string' ? sender.url : '';
+  const ownChromeExtensionPage = sender.id === extensionId && url.startsWith(ownExtensionPrefix);
   const ownFirefoxExtensionPage = sender.id === extensionId && url.startsWith('moz-extension://');
-  if (url.startsWith(ownExtensionPrefix) || ownFirefoxExtensionPage) return true;
+  if (ownChromeExtensionPage || ownFirefoxExtensionPage) return true;
 
   // Service-worker self-messages have no sender.tab/url; only this extension's
   // own code can originate them.

@@ -27,16 +27,21 @@ export default defineConfig({
         "src/modules/**/*.ts",
         "src/shared/**/*.ts",
         "src/storage/**/*.ts",
-        "bg/*.js",
-        "modules/*.js",
-        "shared/*.js",
       ],
       exclude: ["src/config/**", "src/types/**", "lib/**", "node_modules/**"],
       thresholds: {
-        lines: 45,
-        functions: 48,
+        // Generated runtime modules are behavior-tested but no longer counted a
+        // second time beside their authoritative TypeScript sources. These
+        // aggregate floors are the rebased source-only baseline.
+        lines: 43,
+        functions: 47,
         branches: 32,
-        statements: 42,
+        statements: 41,
+        "src/background/cloud-sync.ts": { branches: 77 },
+        "src/background/update-checker.ts": { branches: 63 },
+        "src/background/user-script-message-policy.ts": { branches: 88 },
+        "src/background/wrapper-builder.ts": { branches: 57 },
+        "src/modules/migration.ts": { branches: 80 },
       },
     },
     // Mock chrome.* APIs that aren't available in jsdom

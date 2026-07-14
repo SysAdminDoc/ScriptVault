@@ -4201,6 +4201,9 @@ function validateArchiveEntryMeta(rawEntry, state) {
   }
   const compressedBytes = Number(rawEntry.size ?? 0);
   const uncompressedBytes = Number(rawEntry.originalSize ?? compressedBytes);
+  if (!Number.isFinite(compressedBytes) || compressedBytes < 0) {
+    throw archiveIntakeError(`entry ${name} has an invalid compressed size.`);
+  }
   if (!Number.isFinite(uncompressedBytes) || uncompressedBytes < 0) {
     throw archiveIntakeError(`entry ${name} has an invalid uncompressed size.`);
   }

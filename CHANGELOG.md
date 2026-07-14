@@ -4,6 +4,11 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Made trust-boundary tests executable and coverage-gated.** Generated
+  wrapper, sender-policy, archive, update-queue, sync, and migration contracts
+  now exercise runtime behavior with deterministic malformed inputs; the pass
+  also rejects mismatched Chrome sender IDs, invalid archive sizes, corrupt
+  migration records, and unsafe recovered update-queue state.
 - **Operationalized Chrome and AMO rollback.** Store status now runs a real
   previous-public/current/rollback recovery drill and reports per-channel
   readiness, rollout and pending-submission consequences; the incident

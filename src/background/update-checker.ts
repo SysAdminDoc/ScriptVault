@@ -85,6 +85,43 @@ export interface PendingUpdateInfo extends UpdateInfo {
   rollback?: unknown;
 }
 
+function normalizePendingUpdateList(value: unknown, limit: number): PendingUpdateInfo[] {
+  if (!Array.isArray(value)) return [];
+  const normalized: PendingUpdateInfo[] = [];
+  const seenIds = new Set<string>();
+
+  for (const candidate of value) {
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) continue;
+    const item = candidate as Partial<PendingUpdateInfo>;
+    const id = typeof item.id === 'string' ? item.id.trim() : '';
+    if (!id || id.length > 512 || seenIds.has(id) || typeof item.code !== 'string') continue;
+    const kind = item.kind === 'subscription-install' ? 'subscription-install' : 'update';
+    const reviewReasons = Array.isArray(item.reviewReasons)
+      ? item.reviewReasons.filter((reason): reason is string => typeof reason === 'string').slice(0, 50)
+      : [];
+    normalized.push({
+      ...item,
+      id,
+      code: item.code,
+      kind,
+      name: typeof item.name === 'string' ? item.name : id,
+      currentVersion: typeof item.currentVersion === 'string' ? item.currentVersion : '',
+      newVersion: typeof item.newVersion === 'string' ? item.newVersion : '',
+      source: typeof item.source === 'string' ? item.source : 'recovered',
+      sourceUrl: typeof item.sourceUrl === 'string' ? item.sourceUrl : '',
+      queuedAt: Number.isFinite(item.queuedAt) ? Number(item.queuedAt) : 0,
+      checkedAt: Number.isFinite(item.checkedAt) ? Number(item.checkedAt) : 0,
+      safeToApply: kind === 'update' && item.safeToApply === true,
+      reviewReasons,
+      sourceIdentityChanged: item.sourceIdentityChanged === true,
+    });
+    seenIds.add(id);
+    if (normalized.length >= limit) break;
+  }
+
+  return normalized;
+}
+
 export interface RecentUpdateInfo {
   id: string;
   name: string;
@@ -430,17 +467,13 @@ export const UpdateSystem = {
     if (Array.isArray(this._pendingUpdates)) return this._pendingUpdates;
     const data = await chrome.storage.local.get(this._PENDING_UPDATES_KEY);
     const raw = data[this._PENDING_UPDATES_KEY];
-    this._pendingUpdates = Array.isArray(raw)
-      ? raw.filter((item: Partial<PendingUpdateInfo>) => item?.id && typeof item.code === 'string') as PendingUpdateInfo[]
-      : [];
+    this._pendingUpdates = normalizePendingUpdateList(raw, this._MAX_PENDING_UPDATES);
     return this._pendingUpdates;
   },
 
   async _savePendingUpdates(list: PendingUpdateInfo[] | null = null): Promise<PendingUpdateInfo[]> {
     const sourceList = list || this._pendingUpdates;
-    const normalized = (Array.isArray(sourceList) ? sourceList : [])
-      .filter((item) => item?.id && typeof item.code === 'string')
-      .slice(0, this._MAX_PENDING_UPDATES);
+    const normalized = normalizePendingUpdateList(sourceList, this._MAX_PENDING_UPDATES);
     this._pendingUpdates = normalized;
     await chrome.storage.local.set({ [this._PENDING_UPDATES_KEY]: normalized });
     return normalized.slice();

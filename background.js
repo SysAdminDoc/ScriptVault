@@ -22385,8 +22385,9 @@ const UserScriptMessagePolicy = (() => {
     if (!sender || !extensionId) return false;
     const ownExtensionPrefix = `chrome-extension://${extensionId}/`;
     const url = typeof sender.url === "string" ? sender.url : "";
+    const ownChromeExtensionPage = sender.id === extensionId && url.startsWith(ownExtensionPrefix);
     const ownFirefoxExtensionPage = sender.id === extensionId && url.startsWith("moz-extension://");
-    if (url.startsWith(ownExtensionPrefix) || ownFirefoxExtensionPage) return true;
+    if (ownChromeExtensionPage || ownFirefoxExtensionPage) return true;
     if (sender.id === extensionId && !sender.tab && !url) return true;
     return false;
   }
@@ -35454,7 +35455,7 @@ const Migration = (() => {
   }
   async function getAllScripts() {
     const data = await chrome.storage.local.get("userscripts");
-    return data.userscripts && typeof data.userscripts === "object" ? data.userscripts : {};
+    return data.userscripts && typeof data.userscripts === "object" && !Array.isArray(data.userscripts) ? data.userscripts : {};
   }
   async function migrateToV2() {
     console.log("[Migration] Running v1.x \u2192 v2.0 migration...");
@@ -35491,16 +35492,17 @@ const Migration = (() => {
     const scripts = await getAllScripts();
     let migrated = 0;
     for (const [id, script] of Object.entries(scripts)) {
+      if (!script || typeof script !== "object" || Array.isArray(script)) continue;
       let changed = false;
-      if (!script.settings) {
+      if (!script.settings || typeof script.settings !== "object" || Array.isArray(script.settings)) {
         script.settings = {};
         changed = true;
       }
-      if (!script.stats) {
+      if (!script.stats || typeof script.stats !== "object" || Array.isArray(script.stats)) {
         script.stats = { runs: 0, totalTime: 0, avgTime: 0, errors: 0 };
         changed = true;
       }
-      if (script.metadata && !script.meta) {
+      if (script.metadata && typeof script.metadata === "object" && !Array.isArray(script.metadata) && !script.meta) {
         script.meta = script.metadata;
         delete script.metadata;
         changed = true;
@@ -35555,7 +35557,8 @@ const Migration = (() => {
   async function run() {
     try {
       const data = await chrome.storage.local.get(MIGRATION_KEY);
-      const lastVersion = data[MIGRATION_KEY] ?? "0.0.0";
+      const persistedVersion = data[MIGRATION_KEY];
+      const lastVersion = typeof persistedVersion === "string" && persistedVersion.trim() ? persistedVersion : "0.0.0";
       if (lastVersion === CURRENT_VERSION) return;
       console.log(`[Migration] Migrating from ${lastVersion} to ${CURRENT_VERSION}`);
       if (compareVersions(lastVersion, "2.0.0") < 0) {
@@ -43095,6 +43098,9 @@ function validateArchiveEntryMeta(rawEntry, state) {
   }
   const compressedBytes = Number(rawEntry.size ?? 0);
   const uncompressedBytes = Number(rawEntry.originalSize ?? compressedBytes);
+  if (!Number.isFinite(compressedBytes) || compressedBytes < 0) {
+    throw archiveIntakeError(`entry ${name} has an invalid compressed size.`);
+  }
   if (!Number.isFinite(uncompressedBytes) || uncompressedBytes < 0) {
     throw archiveIntakeError(`entry ${name} has an invalid uncompressed size.`);
   }

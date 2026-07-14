@@ -150,8 +150,9 @@ const UserScriptMessagePolicy = (() => {
     if (!sender || !extensionId) return false;
     const ownExtensionPrefix = `chrome-extension://${extensionId}/`;
     const url = typeof sender.url === "string" ? sender.url : "";
+    const ownChromeExtensionPage = sender.id === extensionId && url.startsWith(ownExtensionPrefix);
     const ownFirefoxExtensionPage = sender.id === extensionId && url.startsWith("moz-extension://");
-    if (url.startsWith(ownExtensionPrefix) || ownFirefoxExtensionPage) return true;
+    if (ownChromeExtensionPage || ownFirefoxExtensionPage) return true;
     if (sender.id === extensionId && !sender.tab && !url) return true;
     return false;
   }

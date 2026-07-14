@@ -1,14 +1,8 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-
-const migrationCode = readFileSync(resolve(__dirname, '../modules/migration.js'), 'utf8');
-const _body = migrationCode + '\nreturn Migration;';
-let fn;
-try { const vm = require('node:vm'); fn = vm.compileFunction(_body, ['chrome', 'console'], { filename: resolve(__dirname, '../modules/migration.js') }); } catch { fn = new Function('chrome', 'console', _body); }
+import { Migration } from '../src/modules/migration.ts';
 
 function createFreshMigration() {
-  return fn(globalThis.chrome, console);
+  return Migration;
 }
 
 beforeEach(() => {
@@ -17,12 +11,6 @@ beforeEach(() => {
 });
 
 describe('Migration runtime module', () => {
-  it('is generated from the TypeScript migration source', () => {
-    expect(migrationCode).toContain('Generated from src/modules/migration.ts');
-    expect(migrationCode).toContain('const Migration = (() => {');
-    expect(migrationCode).toContain('return module.exports.default || module.exports.Migration || module.exports;');
-  });
-
   it('initializes notification preferences with the current quiet-hours schema', async () => {
     const Migration = createFreshMigration();
 
@@ -121,5 +109,48 @@ describe('Migration runtime module', () => {
     expect(afterSecondRun).toEqual(afterFirstRun);
     expect(chrome.storage.local.set).not.toHaveBeenCalled();
     expect(chrome.storage.local.remove).not.toHaveBeenCalled();
+  });
+
+  it('recovers deterministically from malformed persisted versions and script records', async () => {
+    const malformedStates = [
+      { version: null, userscripts: null },
+      { version: 42, userscripts: [] },
+      { version: {}, userscripts: { null_record: null, string_record: 'bad' } },
+      { version: true, userscripts: { array_record: [], number_record: 7 } },
+      {
+        version: '',
+        userscripts: {
+          recoverable: {
+            id: 'recoverable',
+            code: 'console.log("recoverable")',
+            settings: 'invalid',
+            stats: [],
+            metadata: { name: 'Recovered' },
+          },
+        },
+      },
+    ];
+
+    for (const state of malformedStates) {
+      globalThis.__resetStorageMock();
+      await chrome.storage.local.set({
+        sv_lastMigratedVersion: state.version,
+        userscripts: state.userscripts,
+      });
+
+      await expect(createFreshMigration().run()).resolves.toBeUndefined();
+      const stored = await chrome.storage.local.get(['sv_lastMigratedVersion', 'userscripts']);
+      expect(stored.sv_lastMigratedVersion).toBe('3.20.0');
+      if (state.userscripts?.recoverable) {
+        expect(stored.userscripts.recoverable.settings).toEqual({});
+        expect(stored.userscripts.recoverable.stats).toEqual({
+          runs: 0,
+          totalTime: 0,
+          avgTime: 0,
+          errors: 0,
+        });
+        expect(stored.userscripts.recoverable.meta).toEqual({ name: 'Recovered' });
+      }
+    }
   });
 });

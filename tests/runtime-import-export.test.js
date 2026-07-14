@@ -127,7 +127,7 @@ function extractRuntimeImportExportCode() {
   return `${backgroundCoreCode.slice(parserStart, parserEnd)}\n${backgroundCoreCode.slice(importStart, importEnd)}`;
 }
 
-function createRuntimeHarness(existingScripts = [], storedValuesByScript = {}, settings = { enabled: true }, storageLocalState = {}) {
+function createRuntimeHarness(existingScripts = [], storedValuesByScript = {}, settings = { enabled: true }, storageLocalState = {}, runtimeConsole = console) {
   const fakeFflate = makeFakeFflate();
   let generatedIdCounter = 1;
   const scriptCache = new Map(existingScripts.map(script => [script.id, structuredClone(script)]));
@@ -192,7 +192,7 @@ function createRuntimeHarness(existingScripts = [], storedValuesByScript = {}, s
 
   const _body = `${extractRuntimeImportExportCode()}; return { exportAllScripts, exportToZip, importFromZip, importScripts, importVendorBackup, recordImportedScriptTrustReview };`;
   let fn;
-  try { const vm = require('node:vm'); fn = vm.compileFunction(_body, ['fflate', 'ScriptStorage', 'ScriptValues', 'SettingsManager', 'registerAllScripts', 'updateBadge', 'generateId', 'chrome', 'LocalLibraries'], { filename: resolve(process.cwd(), 'background.core.js') }); } catch { fn = new Function('fflate', 'ScriptStorage', 'ScriptValues', 'SettingsManager', 'registerAllScripts', 'updateBadge', 'generateId', 'chrome', 'LocalLibraries', _body); }
+  try { const vm = require('node:vm'); fn = vm.compileFunction(_body, ['fflate', 'ScriptStorage', 'ScriptValues', 'SettingsManager', 'registerAllScripts', 'updateBadge', 'generateId', 'chrome', 'LocalLibraries', 'console'], { filename: resolve(process.cwd(), 'background.core.js') }); } catch { fn = new Function('fflate', 'ScriptStorage', 'ScriptValues', 'SettingsManager', 'registerAllScripts', 'updateBadge', 'generateId', 'chrome', 'LocalLibraries', 'console', _body); }
 
   return {
     ...fn(
@@ -205,6 +205,7 @@ function createRuntimeHarness(existingScripts = [], storedValuesByScript = {}, s
       generateId,
       chrome,
       { normalizeLocalLibrarySnapshots },
+      runtimeConsole,
     ),
     fakeFflate,
     generateId,
@@ -894,6 +895,45 @@ describe('runtime import/export archive identity', () => {
 
       expect(result.error, testCase.name).toMatch(testCase.error);
       expect(harness.ScriptStorage.set, testCase.name).not.toHaveBeenCalled();
+    }
+  });
+
+  it('rejects generated path and size mutations at the archive boundary', async () => {
+    let seed = 0x5eed1234;
+    const next = () => {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      return seed;
+    };
+    const mutations = Array.from({ length: 18 }, (_, index) => {
+      switch (next() % 6) {
+        case 0:
+          return { name: `../escape-${index}.user.js`, meta: {} };
+        case 1:
+          return { name: `folder/../escape-${index}.json`, meta: {} };
+        case 2:
+          return { name: `nested-${index}.${index % 2 ? 'ZIP' : 'xpi'}`, meta: {} };
+        case 3:
+          return { name: `negative-${index}.user.js`, meta: { size: -1 } };
+        case 4:
+          return { name: `nan-${index}.user.js`, meta: { size: 'not-a-number' } };
+        default:
+          return { name: `huge-${index}.options.json`, meta: { originalSize: 512 * 1024 + 1 } };
+      }
+    });
+
+    const quietConsole = Object.create(console);
+    quietConsole.error = vi.fn();
+    for (const [index, mutation] of mutations.entries()) {
+      const harness = createRuntimeHarness([], {}, { enabled: true }, {}, quietConsole);
+      const entries = {
+        [mutation.name]: textEntry(userscriptText(`Mutation ${index}`), mutation.meta),
+      };
+      const result = await harness.importFromZip(bytesToBase64(fakeZipBytes(entries)), {
+        overwrite: true,
+      });
+
+      expect(result.error, `mutation ${index}: ${mutation.name}`).toMatch(/Backup archive rejected/);
+      expect(harness.ScriptStorage.set, mutation.name).not.toHaveBeenCalled();
     }
   });
 });

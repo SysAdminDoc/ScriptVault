@@ -141,4 +141,33 @@ describe('user-script message policy', () => {
       }
     }
   });
+
+  it('rejects generated near-miss actions and extension-origin spoofs', () => {
+    let seed = 0xc0ffee12;
+    const next = () => {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      return seed;
+    };
+    const extensionId = 'trusted-extension';
+
+    for (let index = 0; index < 128; index += 1) {
+      const suffix = next().toString(36);
+      const action = [
+        `gm_${suffix}`,
+        `GM ${suffix}`,
+        `GM-${suffix}`,
+        `reportExecTime:${suffix}`,
+        `factoryReset${suffix}`,
+      ][next() % 5];
+      expect(isUserScriptAllowedAction(action), `action ${action}`).toBe(false);
+
+      const sender = [
+        { id: `other-${suffix}`, url: `chrome-extension://${extensionId}/pages/dashboard.html` },
+        { id: extensionId, url: `chrome-extension://other-${suffix}/pages/dashboard.html` },
+        { id: `other-${suffix}`, url: `moz-extension://${suffix}/pages/dashboard.html` },
+        { id: extensionId, url: `https://${suffix}.example/`, tab: { id: index } },
+      ][next() % 4];
+      expect(isExtensionSurfaceSender(sender, extensionId), JSON.stringify(sender)).toBe(false);
+    }
+  });
 });
