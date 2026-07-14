@@ -9127,10 +9127,9 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
           }
           const code = await _fetchTextBounded(response, MAX_SCRIPT_SIZE, 'Script');
           if (code.includes('==UserScript==')) {
-            await chrome.storage.local.set({
-              pendingInstall: { code, url: linkUrl, timestamp: Date.now() }
-            });
-            chrome.tabs.create({ url: chrome.runtime.getURL('pages/install.html') });
+            const storageKey = _createPendingInstallStorageKey('context-menu');
+            await _storePendingInstall(storageKey, { code, url: linkUrl });
+            chrome.tabs.create({ url: _pendingInstallPageUrl(storageKey) });
           } else {
             chrome.notifications.create({
               type: 'basic', iconUrl: 'images/icon128.png',
@@ -10407,6 +10406,63 @@ chrome.windows.onFocusChanged.addListener(async (windowId) => {
 // redirect to install.html).
 const _pendingFetches = new Map();
 
+const _PENDING_INSTALL_STORAGE_PREFIX = 'pendingInstall_';
+const _PENDING_INSTALL_LEGACY_KEY = 'pendingInstall';
+const _PENDING_INSTALL_TTL_MS = 5 * 60 * 1000;
+const _PENDING_INSTALL_MAX_ENTRIES = 32;
+
+function _pendingInstallStorageKey(requestId) {
+  const suffix = String(requestId ?? '').trim().replace(/[^a-z0-9_-]/gi, '-').slice(0, 96);
+  return suffix ? `${_PENDING_INSTALL_STORAGE_PREFIX}${suffix}` : '';
+}
+
+function _pendingInstallKeyForTab(tabId) {
+  const numericTabId = Number(tabId);
+  return Number.isInteger(numericTabId) && numericTabId >= 0
+    ? _pendingInstallStorageKey(`tab-${numericTabId}`)
+    : '';
+}
+
+function _createPendingInstallStorageKey(scope = 'request') {
+  const nonce = typeof crypto?.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  return _pendingInstallStorageKey(`${scope}-${nonce}`);
+}
+
+function _pendingInstallPageUrl(storageKey) {
+  return `${chrome.runtime.getURL('pages/install.html')}#${encodeURIComponent(storageKey)}`;
+}
+
+async function _storePendingInstall(storageKey, payload) {
+  if (!storageKey?.startsWith(_PENDING_INSTALL_STORAGE_PREFIX)) {
+    throw new Error('Pending install storage key is invalid');
+  }
+  const timestamp = Number(payload?.timestamp) || Date.now();
+  try {
+    const stored = await chrome.storage.local.get(null);
+    const candidates = Object.entries(stored || {})
+      .filter(([key]) => key === _PENDING_INSTALL_LEGACY_KEY || key.startsWith(_PENDING_INSTALL_STORAGE_PREFIX))
+      .filter(([key]) => key !== storageKey);
+    const expiredKeys = candidates
+      .filter(([, value]) => !Number.isFinite(Number(value?.timestamp)) || timestamp - Number(value.timestamp) > _PENDING_INSTALL_TTL_MS)
+      .map(([key]) => key);
+    const expiredSet = new Set(expiredKeys);
+    const overflowKeys = candidates
+      .filter(([key]) => !expiredSet.has(key))
+      .sort(([, left], [, right]) => Number(right?.timestamp || 0) - Number(left?.timestamp || 0))
+      .slice(_PENDING_INSTALL_MAX_ENTRIES - 1)
+      .map(([key]) => key);
+    const removableKeys = [...new Set([...expiredKeys, ...overflowKeys])];
+    if (removableKeys.length) await chrome.storage.local.remove(removableKeys);
+  } catch (cleanupError) {
+    debugLog('[ScriptVault] Pending install cleanup failed:', cleanupError?.message || cleanupError);
+  }
+  const pendingInstall = { ...payload, timestamp };
+  await chrome.storage.local.set({ [storageKey]: pendingInstall });
+  return pendingInstall;
+}
+
 async function _fetchPendingUserscript(url) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 30000);
@@ -10431,29 +10487,13 @@ async function _fetchPendingUserscript(url) {
     if (!code.includes('==UserScript==')) {
       return { action: 'pass-through' };
     }
-    // Defensive: storage.set can reject (quota, disk full). Surface the
-    // failure so the caller can still navigate the tab somewhere sensible
-    // rather than dropping the user on a blank install page.
-    try {
-      await chrome.storage.local.set({
-        pendingInstall: { url, code, timestamp: Date.now() }
-      });
-    } catch (storageErr) {
-      console.error('[ScriptVault] Failed to persist pendingInstall:', storageErr);
-      throw storageErr;
-    }
-    return { action: 'install' };
+    return { action: 'install', pendingInstall: { url, code, timestamp: Date.now() } };
   } catch (error) {
     console.error('[ScriptVault] Failed to fetch script:', error);
-    // Best-effort: try to record the error for install.html. If that also
-    // fails (quota exhausted, disk full), there's nothing more we can do
-    // from the SW — at least we logged the original fetch failure above.
-    try {
-      await chrome.storage.local.set({
-        pendingInstall: { url, error: error?.message || String(error), timestamp: Date.now() }
-      });
-    } catch (_e) { /* see above */ }
-    return { action: 'install' };
+    return {
+      action: 'install',
+      pendingInstall: { url, error: error?.message || String(error), timestamp: Date.now() }
+    };
   } finally {
     clearTimeout(timeoutId);
   }
@@ -10483,20 +10523,22 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
 
   try {
     const result = await pending;
+    const storageKey = _pendingInstallKeyForTab(details.tabId);
     if (result.action === 'install') {
+      await _storePendingInstall(storageKey, result.pendingInstall);
       // The tab may have been closed between the fetch start and resolution;
       // chrome.tabs.update on a vanished tab rejects with an unhandled error
       // that bubbles out of this async listener. Swallow that specific case
       // (the user closed the tab — there's nothing to redirect).
       chrome.tabs.update(details.tabId, {
-        url: chrome.runtime.getURL('pages/install.html')
+        url: _pendingInstallPageUrl(storageKey)
       }).catch((updateErr) => {
         debugLog('[ScriptVault] tab.update post-fetch failed (tab likely closed):', updateErr?.message || updateErr);
       });
     } else {
-      // Not a userscript — let this tab's navigation continue and clear any
-      // stale pendingInstall written by an earlier interception of the same URL.
-      await chrome.storage.local.remove('pendingInstall').catch(() => {});
+      // Not a userscript — let this tab's navigation continue and clear only
+      // this tab's stale request without disturbing another install review.
+      if (storageKey) await chrome.storage.local.remove(storageKey).catch(() => {});
     }
   } catch (e) {
     // _fetchPendingUserscript catches its own errors; any throw here means the

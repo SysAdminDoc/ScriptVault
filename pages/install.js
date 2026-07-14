@@ -399,6 +399,9 @@ let autoUpdate = true;
 let enableOnInstall = true;
 let allowBroadHostAccess = false;
 let installSourceUrl = '';
+const LEGACY_PENDING_INSTALL_STORAGE_KEY = 'pendingInstall';
+const PENDING_INSTALL_STORAGE_KEY_PATTERN = /^pendingInstall_[a-z0-9_-]{1,96}$/i;
+let pendingInstallStorageKey = LEGACY_PENDING_INSTALL_STORAGE_KEY;
 let signatureVerification = null;
 const numberFormatter = new Intl.NumberFormat();
 const dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
@@ -428,6 +431,21 @@ let signatureDecisionState = {
   tone: 'neutral',
   detail: tInstall('installSignatureCheckingDetail', 'Checking embedded signature and signer trust.')
 };
+
+function resolvePendingInstallStorageKey(hash = window.location.hash) {
+  try {
+    const candidate = decodeURIComponent(String(hash || '').replace(/^#/, ''));
+    return PENDING_INSTALL_STORAGE_KEY_PATTERN.test(candidate)
+      ? candidate
+      : LEGACY_PENDING_INSTALL_STORAGE_KEY;
+  } catch (_) {
+    return LEGACY_PENDING_INSTALL_STORAGE_KEY;
+  }
+}
+
+function clearPendingInstallStorage() {
+  return chrome.storage.local.remove(pendingInstallStorageKey);
+}
 let cancelReviewArmed = false;
 let cancelReviewTimer = null;
 let reviewExitGuardActive = false;
@@ -684,9 +702,13 @@ async function init() {
     await applySavedTheme();
 
     // Get pending install data
-    const data = await chrome.storage.local.get('pendingInstall');
+    // Each intercepted tab gets a distinct request key in the URL hash. The
+    // legacy key remains readable for older entry points and test fixtures.
+    pendingInstallStorageKey = resolvePendingInstallStorageKey();
+    const data = await chrome.storage.local.get(pendingInstallStorageKey);
+    const pendingInstall = data[pendingInstallStorageKey];
 
-    if (!data.pendingInstall) {
+    if (!pendingInstall) {
       showError(
         tInstall('installErrorNoUserscriptFoundTitle', 'No userscript was found'),
         tInstall('installErrorNoUserscriptFoundMessage', 'ScriptVault could not find a pending install request. Download the userscript again from its source page.')
@@ -695,29 +717,29 @@ async function init() {
     }
 
     // Handle fetch error from background
-    if (data.pendingInstall.error) {
-      showError(tInstall('installErrorFailedDownloadTitle', 'Failed to download script'), data.pendingInstall.error);
-      chrome.storage.local.remove('pendingInstall');
+    if (pendingInstall.error) {
+      showError(tInstall('installErrorFailedDownloadTitle', 'Failed to download script'), pendingInstall.error);
+      clearPendingInstallStorage();
       return;
     }
 
-    // Reject stale pendingInstall (older than 5 minutes)
-    if (data.pendingInstall.timestamp && Date.now() - data.pendingInstall.timestamp > 300000) {
+    // Reject stale pending installs (older than 5 minutes)
+    if (pendingInstall.timestamp && Date.now() - pendingInstall.timestamp > 300000) {
       showError(
         tInstall('installErrorExpiredTitle', 'Install expired'),
         tInstall('installErrorExpiredMessage', 'This install request is too old. Please try downloading the script again.')
       );
-      chrome.storage.local.remove('pendingInstall');
+      clearPendingInstallStorage();
       return;
     }
 
-    scriptCode = data.pendingInstall.code;
-    const sourceUrl = data.pendingInstall.url || '';
+    scriptCode = pendingInstall.code;
+    const sourceUrl = pendingInstall.url || '';
     installSourceUrl = sourceUrl;
 
     if (!scriptCode) {
       showError(tInstall('installErrorEmptyScriptTitle', 'Empty script'), tInstall('installErrorEmptyScriptMessage', 'The downloaded script was empty.'));
-      chrome.storage.local.remove('pendingInstall');
+      clearPendingInstallStorage();
       return;
     }
 
@@ -726,7 +748,7 @@ async function init() {
 
     if (!scriptMeta) {
       showError(tInstall('installErrorInvalidUserscriptTitle', 'Invalid userscript'), tInstall('installErrorInvalidUserscriptMessage', 'No valid userscript metadata block found.'));
-      chrome.storage.local.remove('pendingInstall');
+      clearPendingInstallStorage();
       return;
     }
 
@@ -2225,7 +2247,7 @@ function handleCancel() {
   setCancelReviewArmed(false);
   allowInstallExitOnce();
   setReviewExitGuard(false);
-  chrome.storage.local.remove('pendingInstall');
+  clearPendingInstallStorage();
   if (history.length > 1) {
     history.back();
   } else {
@@ -2317,7 +2339,7 @@ async function handleInstall() {
       throw new Error(result.error);
     }
 
-    await chrome.storage.local.remove('pendingInstall');
+    await clearPendingInstallStorage();
 
     const successAction = presentation.isDowngrade
       ? 'downgraded'

@@ -45,8 +45,25 @@ async function fetchRequireScriptForTrustReceipt(url: string): Promise<string | 
 // Constants
 // ---------------------------------------------------------------------------
 
-/** De-duplicate concurrent fetches for the same URL */
-export const _pendingFetches: Set<string> = new Set();
+interface PendingInstallData {
+  url: string;
+  code?: string;
+  error?: string;
+  timestamp: number;
+}
+
+interface PendingInstallFetchResult {
+  action: 'install' | 'pass-through';
+  pendingInstall?: PendingInstallData;
+}
+
+/** De-duplicate concurrent fetches for the same URL while preserving every requesting tab. */
+export const _pendingFetches: Map<string, Promise<PendingInstallFetchResult>> = new Map();
+
+export const PENDING_INSTALL_STORAGE_PREFIX = 'pendingInstall_';
+const PENDING_INSTALL_LEGACY_KEY = 'pendingInstall';
+const PENDING_INSTALL_TTL_MS = 5 * 60 * 1000;
+const PENDING_INSTALL_MAX_ENTRIES = 32;
 
 /** Maximum allowed script size (5 MB) */
 export const MAX_SCRIPT_SIZE: number = 5 * 1024 * 1024;
@@ -54,6 +71,67 @@ export const MAX_SCRIPT_SIZE: number = 5 * 1024 * 1024;
 // ---------------------------------------------------------------------------
 // webNavigation listener — intercept .user.js navigation
 // ---------------------------------------------------------------------------
+
+export function pendingInstallKeyForTab(tabId: number): string {
+  return Number.isInteger(tabId) && tabId >= 0 ? `${PENDING_INSTALL_STORAGE_PREFIX}tab-${tabId}` : '';
+}
+
+export function pendingInstallPageUrl(storageKey: string): string {
+  return `${chrome.runtime.getURL('pages/install.html')}#${encodeURIComponent(storageKey)}`;
+}
+
+async function storePendingInstall(storageKey: string, payload: PendingInstallData): Promise<void> {
+  if (!storageKey.startsWith(PENDING_INSTALL_STORAGE_PREFIX)) {
+    throw new Error('Pending install storage key is invalid');
+  }
+  try {
+    const stored = await chrome.storage.local.get();
+    const candidates = Object.entries(stored || {})
+      .filter(([key]) => key === PENDING_INSTALL_LEGACY_KEY || key.startsWith(PENDING_INSTALL_STORAGE_PREFIX))
+      .filter(([key]) => key !== storageKey);
+    const expiredKeys = candidates
+      .filter(([, value]) => {
+        const timestamp = Number((value as { timestamp?: unknown })?.timestamp);
+        return !Number.isFinite(timestamp) || payload.timestamp - timestamp > PENDING_INSTALL_TTL_MS;
+      })
+      .map(([key]) => key);
+    const expiredSet = new Set(expiredKeys);
+    const overflowKeys = candidates
+      .filter(([key]) => !expiredSet.has(key))
+      .sort(([, left], [, right]) => (
+        Number((right as { timestamp?: unknown })?.timestamp || 0)
+        - Number((left as { timestamp?: unknown })?.timestamp || 0)
+      ))
+      .slice(PENDING_INSTALL_MAX_ENTRIES - 1)
+      .map(([key]) => key);
+    const removableKeys = [...new Set([...expiredKeys, ...overflowKeys])];
+    if (removableKeys.length) await chrome.storage.local.remove(removableKeys);
+  } catch (cleanupError) {
+    debugLog('[ScriptVault] Pending install cleanup failed:', cleanupError);
+  }
+  await chrome.storage.local.set({ [storageKey]: payload });
+}
+
+async function fetchPendingUserscript(url: string): Promise<PendingInstallFetchResult> {
+  const controller = new AbortController();
+  const timeoutId: ReturnType<typeof setTimeout> = setTimeout(() => controller.abort(), 30000);
+  try {
+    assertExternalFetchUrl(url, 'Script source', ['http:', 'https:']);
+    const response: Response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    const postCheck = classifyResponseUrl(response, ['http:', 'https:']);
+    if (!postCheck.ok) throw new Error(`Script source redirected to ${postCheck.message}`);
+    const code = await fetchTextBounded(response, MAX_SCRIPT_SIZE, 'Script');
+    if (!code.includes('==UserScript==')) return { action: 'pass-through' };
+    return { action: 'install', pendingInstall: { url, code, timestamp: Date.now() } };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('[ScriptVault] Failed to fetch script:', error);
+    return { action: 'install', pendingInstall: { url, error: message, timestamp: Date.now() } };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
 
 export function registerWebNavigationListener(): void {
   chrome.webNavigation.onBeforeNavigate.addListener(
@@ -69,76 +147,25 @@ export function registerWebNavigationListener(): void {
       // Don't intercept extension pages
       if (url.startsWith('chrome-extension://')) return;
 
-      // Dedup concurrent fetches for same URL
-      if (_pendingFetches.has(url)) return;
-      _pendingFetches.add(url);
-
       debugLog('Intercepting userscript URL:', url);
 
       try {
-        // Pre-flight: refuse to fetch internal/loopback/link-local targets and
-        // non-https schemes; mirrors the public install-API guard.
-        assertExternalFetchUrl(url, 'Script source', ['http:', 'https:']);
-
-        // Fetch with timeout
-        const controller = new AbortController();
-        const timeoutId: ReturnType<typeof setTimeout> = setTimeout(
-          () => controller.abort(),
-          30000,
-        );
-        const response: Response = await fetch(url, { signal: controller.signal });
-        clearTimeout(timeoutId);
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        let pending = _pendingFetches.get(url);
+        if (!pending) {
+          pending = fetchPendingUserscript(url).finally(() => _pendingFetches.delete(url));
+          _pendingFetches.set(url, pending);
         }
-
-        // Post-flight: re-check the final URL so a redirect into an internal
-        // host is still rejected after the round trip.
-        const postCheck = classifyResponseUrl(response, ['http:', 'https:']);
-        if (!postCheck.ok) {
-          throw new Error(`Script source redirected to ${postCheck.message}`);
-        }
-
-        const code: string = await fetchTextBounded(response, MAX_SCRIPT_SIZE, 'Script');
-
-        // Verify it looks like a userscript
-        if (!code.includes('==UserScript==')) {
-          debugLog('Not a valid userscript, allowing normal navigation');
-          _pendingFetches.delete(url);
+        const result = await pending;
+        const storageKey = pendingInstallKeyForTab(details.tabId);
+        if (result.action === 'pass-through') {
+          if (storageKey) await chrome.storage.local.remove(storageKey).catch(() => undefined);
           return;
         }
-
-        // Store pending install data
-        await chrome.storage.local.set({
-          pendingInstall: {
-            url: url,
-            code: code,
-            timestamp: Date.now(),
-          },
-        });
-
-        // Redirect to install page
-        chrome.tabs.update(details.tabId, {
-          url: chrome.runtime.getURL('pages/install.html'),
-        });
-      } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : String(error);
-        console.error('[ScriptVault] Failed to fetch script:', error);
-        // Store error for install page to display
-        await chrome.storage.local.set({
-          pendingInstall: {
-            url: url,
-            error: message,
-            timestamp: Date.now(),
-          },
-        });
-
-        chrome.tabs.update(details.tabId, {
-          url: chrome.runtime.getURL('pages/install.html'),
-        });
-      } finally {
-        _pendingFetches.delete(url);
+        if (!result.pendingInstall) throw new Error('Pending install payload is missing');
+        await storePendingInstall(storageKey, result.pendingInstall);
+        await chrome.tabs.update(details.tabId, { url: pendingInstallPageUrl(storageKey) });
+      } catch (error) {
+        console.error('[ScriptVault] webNavigation install handoff failed:', error);
       }
     },
     {
