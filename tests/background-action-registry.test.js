@@ -31,6 +31,10 @@ import {
   SETTINGS_BACKGROUND_ACTIONS,
   createSettingsActionHandlers,
 } from '../src/background/settings-action-handler.ts';
+import {
+  SECURITY_BACKGROUND_ACTIONS,
+  createSecurityActionHandlers,
+} from '../src/background/security-action-handler.ts';
 
 describe('typed background action registry', () => {
   it('normalizes flat and nested runtime messages before dispatch', async () => {
@@ -255,5 +259,30 @@ describe('typed background action registry', () => {
       'script-1',
       { runAt: 'document-start' },
     );
+  });
+
+  it('routes signing and public API controls with fail-closed input checks', async () => {
+    const dependencies = Object.fromEntries([
+      'getPublicKey', 'sign', 'verify', 'verifyRaw', 'trustKey', 'untrustKey',
+      'getTrustedKeys', 'generateKeypair', 'getTrustedOrigins',
+      'setTrustedOrigins', 'getTrustedExtensionIds', 'setTrustedExtensionIds',
+      'getLocalMcpBridgeConfig', 'setLocalMcpBridgeConfig', 'getPermissions',
+      'getAuditLog', 'clearAuditLog', 'handleWebMessage',
+    ].map(name => [name, vi.fn(async () => ({ success: true }))]));
+    const registry = createBackgroundActionRegistry(createSecurityActionHandlers(dependencies));
+
+    await expect(registry.dispatch({ action: 'signing_sign', code: '' }, {}))
+      .resolves.toMatchObject({ response: { error: 'No code provided' } });
+    await registry.dispatch({
+      action: 'publicApi_setLocalMcpBridgeConfig',
+      data: { config: { enabled: true, origins: ['http://127.0.0.1:43110'] } },
+    }, {});
+
+    expect(registry.registeredActions()).toEqual(SECURITY_BACKGROUND_ACTIONS);
+    expect(dependencies.sign).not.toHaveBeenCalled();
+    expect(dependencies.setLocalMcpBridgeConfig).toHaveBeenCalledWith({
+      enabled: true,
+      origins: ['http://127.0.0.1:43110'],
+    });
   });
 });

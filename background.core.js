@@ -6571,6 +6571,59 @@ backgroundActionRegistry.registerHandlers(SettingsActionHandler.createSettingsAc
   setScriptSettings: (scriptId, settings) => updatePerScriptSettings(scriptId, settings),
   resetScriptSettings: scriptId => resetPerScriptSettings(scriptId)
 }));
+backgroundActionRegistry.registerHandlers(SecurityActionHandler.createSecurityActionHandlers({
+  getPublicKey: async () => ({ publicKey: await ScriptSigning.getPublicKeyJwk() }),
+  sign: code => ScriptSigning.signAndEmbedInCode(code),
+  verify: code => ScriptSigning.verifyCodeSignature(code),
+  verifyRaw: (code, signatureInfo) => ScriptSigning.verifyScript(code, signatureInfo),
+  trustKey: (publicKey, name) => ScriptSigning.trustKey(publicKey, name),
+  untrustKey: publicKey => ScriptSigning.untrustKey(publicKey),
+  getTrustedKeys: async () => ({ keys: await ScriptSigning.getTrustedKeys() }),
+  generateKeypair: () => ScriptSigning.generateAndStoreKeypair(),
+  getTrustedOrigins: () => typeof PublicAPI !== 'undefined'
+    ? { origins: PublicAPI.getTrustedOrigins() }
+    : { origins: [] },
+  setTrustedOrigins: async origins => {
+    if (typeof PublicAPI === 'undefined') return { error: 'Public API controls unavailable' };
+    await PublicAPI.setTrustedOrigins(origins);
+    return { success: true, origins: PublicAPI.getTrustedOrigins() };
+  },
+  getTrustedExtensionIds: () => typeof PublicAPI !== 'undefined'
+    ? { extensionIds: PublicAPI.getTrustedExtensionIds() }
+    : { extensionIds: [] },
+  setTrustedExtensionIds: async extensionIds => {
+    if (typeof PublicAPI === 'undefined') return { error: 'Public API controls unavailable' };
+    await PublicAPI.setTrustedExtensionIds(extensionIds);
+    return { success: true, extensionIds: PublicAPI.getTrustedExtensionIds() };
+  },
+  getLocalMcpBridgeConfig: () => typeof PublicAPI !== 'undefined'
+    ? { config: PublicAPI.getLocalMcpBridgeConfig() }
+    : { config: { enabled: false, origins: [], hasToken: false, tokenHint: '', capabilities: [] } },
+  setLocalMcpBridgeConfig: async config => {
+    if (typeof PublicAPI === 'undefined') return { error: 'Public API controls unavailable' };
+    return { success: true, config: await PublicAPI.setLocalMcpBridgeConfig(config) };
+  },
+  getPermissions: () => typeof PublicAPI !== 'undefined'
+    ? { permissions: PublicAPI.getPermissions() }
+    : { permissions: {} },
+  getAuditLog: limit => typeof PublicAPI !== 'undefined'
+    ? { entries: PublicAPI.getAuditLog(limit) }
+    : { entries: [] },
+  clearAuditLog: async () => {
+    if (typeof PublicAPI === 'undefined') return { error: 'Public API controls unavailable' };
+    await PublicAPI.clearAuditLog();
+    return { success: true };
+  },
+  handleWebMessage: async (origin, message) => {
+    if (typeof PublicAPI === 'undefined' || !origin) return { response: null };
+    return {
+      response: await PublicAPI.handleWebMessagePayload(
+        message && typeof message === 'object' ? message : null,
+        origin
+      )
+    };
+  }
+}));
 backgroundActionRegistry.registerHandlers(MessageRouter.createBackgroundDomainHandlers(
   GMValuesHandler.GM_VALUES_ACTIONS,
   ({ action, message, sender }) => GMValuesHandler.handleGMValuesMessage(action, message, sender)
@@ -7713,90 +7766,6 @@ async function handleMessage(message, sender) {
           prompt: data.prompt || ''
         });
       }
-
-      // ── Script Signing (Ed25519) ──────────────────────────────────────────
-      case 'signing_getPublicKey':
-        return { publicKey: await ScriptSigning.getPublicKeyJwk() };
-
-      case 'signing_sign': {
-        if (!data.code) return { error: 'No code provided' };
-        return ScriptSigning.signAndEmbedInCode(data.code);
-      }
-
-      case 'signing_verify': {
-        if (!data.code) return { error: 'No code provided' };
-        return ScriptSigning.verifyCodeSignature(data.code);
-      }
-
-      case 'signing_verifyRaw': {
-        if (!data.code || !data.signatureInfo) return { error: 'Missing inputs' };
-        return ScriptSigning.verifyScript(data.code, data.signatureInfo);
-      }
-
-      case 'signing_trustKey': {
-        if (!data.publicKey) return { error: 'No public key' };
-        return ScriptSigning.trustKey(data.publicKey, data.name);
-      }
-
-      case 'signing_untrustKey': {
-        if (!data.publicKey) return { error: 'No public key' };
-        return ScriptSigning.untrustKey(data.publicKey);
-      }
-
-      case 'signing_getTrustedKeys':
-        return { keys: await ScriptSigning.getTrustedKeys() };
-
-      case 'publicApi_getTrustedOrigins':
-        if (typeof PublicAPI === 'undefined') return { origins: [] };
-        return { origins: PublicAPI.getTrustedOrigins() };
-
-      case 'publicApi_setTrustedOrigins':
-        if (typeof PublicAPI === 'undefined') return { error: 'Public API controls unavailable' };
-        await PublicAPI.setTrustedOrigins(Array.isArray(data.origins) ? data.origins : []);
-        return { success: true, origins: PublicAPI.getTrustedOrigins() };
-
-      case 'publicApi_getTrustedExtensionIds':
-        if (typeof PublicAPI === 'undefined') return { extensionIds: [] };
-        return { extensionIds: PublicAPI.getTrustedExtensionIds() };
-
-      case 'publicApi_setTrustedExtensionIds':
-        if (typeof PublicAPI === 'undefined') return { error: 'Public API controls unavailable' };
-        await PublicAPI.setTrustedExtensionIds(Array.isArray(data.extensionIds) ? data.extensionIds : []);
-        return { success: true, extensionIds: PublicAPI.getTrustedExtensionIds() };
-
-      case 'publicApi_getLocalMcpBridgeConfig':
-        if (typeof PublicAPI === 'undefined') return { config: { enabled: false, origins: [], hasToken: false, tokenHint: '', capabilities: [] } };
-        return { config: PublicAPI.getLocalMcpBridgeConfig() };
-
-      case 'publicApi_setLocalMcpBridgeConfig':
-        if (typeof PublicAPI === 'undefined') return { error: 'Public API controls unavailable' };
-        return { success: true, config: await PublicAPI.setLocalMcpBridgeConfig(data.config && typeof data.config === 'object' ? data.config : {}) };
-
-      case 'publicApi_getPermissions':
-        if (typeof PublicAPI === 'undefined') return { permissions: {} };
-        return { permissions: PublicAPI.getPermissions() };
-
-      case 'publicApi_getAuditLog':
-        if (typeof PublicAPI === 'undefined') return { entries: [] };
-        return { entries: PublicAPI.getAuditLog(data.limit || 50) };
-
-      case 'publicApi_clearAuditLog':
-        if (typeof PublicAPI === 'undefined') return { error: 'Public API controls unavailable' };
-        await PublicAPI.clearAuditLog();
-        return { success: true };
-
-      case 'publicApi_handleWebMessage':
-        if (typeof PublicAPI === 'undefined') return { response: null };
-        if (!data || typeof data.origin !== 'string') return { response: null };
-        return {
-          response: await PublicAPI.handleWebMessagePayload(
-            data.message && typeof data.message === 'object' ? data.message : null,
-            data.origin
-          )
-        };
-
-      case 'signing_generateNewKeypair':
-        return ScriptSigning.generateAndStoreKeypair();
 
       case 'installFromUrl':
         return await installFromUrl(data.url);

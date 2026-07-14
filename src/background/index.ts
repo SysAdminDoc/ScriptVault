@@ -125,6 +125,16 @@ export type {
   SettingsBackgroundAction,
 } from './settings-action-handler';
 export {
+  SECURITY_BACKGROUND_ACTIONS,
+  SecurityActionHandler,
+  createSecurityActionHandlers,
+} from './security-action-handler';
+export type {
+  LocalMcpBridgeConfigUpdate,
+  SecurityActionDependencies,
+  SecurityBackgroundAction,
+} from './security-action-handler';
+export {
   GM_AUDIO_ACTIONS,
   GMAudioHandler,
   handleGMAudioMessage,

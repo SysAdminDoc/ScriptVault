@@ -4,6 +4,9 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Typed signing and Public API security dispatch.** Key trust, signature
+  verification, trusted callers, local MCP bridge configuration, permissions,
+  audit logs, and web messages now share a generated fail-closed contract.
 - **Typed global and per-script settings dispatch.** Settings changes now flow
   through a generated contract while preserving registration, alarm, badge,
   context-menu, import-review, and local-library cleanup side effects.

@@ -242,6 +242,13 @@ export const TS_RUNTIME_MODULES = [
     selfExportName: 'SettingsActionHandler',
   },
   {
+    id: 'security-action-handler',
+    source: 'src/background/security-action-handler.ts',
+    output: 'modules/security-action-handler.js',
+    exportName: 'SecurityActionHandler',
+    selfExportName: 'SecurityActionHandler',
+  },
+  {
     id: 'message-router',
     source: 'src/background/message-router.ts',
     output: 'modules/message-router.js',

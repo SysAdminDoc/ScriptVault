@@ -1412,6 +1412,12 @@ interface PublicApiGetLocalMcpBridgeConfig {
 
 interface PublicApiSetLocalMcpBridgeConfig {
   action: 'publicApi_setLocalMcpBridgeConfig';
+  config?: {
+    enabled?: boolean;
+    origins?: string[];
+    token?: string;
+    clearToken?: boolean;
+  };
   data?: {
     config?: {
       enabled?: boolean;
@@ -2253,12 +2259,12 @@ export interface ResponseMap {
   setScriptValue: SuccessOrError;
   signing_generateNewKeypair: SuccessOrError<{ publicKey: string }>;
   signing_getPublicKey: { publicKey: string } | ErrorResponse;
-  signing_getTrustedKeys: Record<string, { name: string; addedAt: number }>;
+  signing_getTrustedKeys: { keys: Record<string, { name: string; addedAt: number }> };
   signing_sign: SuccessOrError<{ code?: string; signature?: string; publicKey?: string }>;
   signing_trustKey: SuccessOrError;
-  signing_untrustKey: SuccessResponse;
-  signing_verify: { valid: boolean; trusted?: boolean; trustedName?: string | null; reason?: string };
-  signing_verifyRaw: { valid: boolean; trusted?: boolean; trustedName?: string | null; reason?: string };
+  signing_untrustKey: SuccessOrError;
+  signing_verify: { valid: boolean; trusted?: boolean; trustedName?: string | null; reason?: string } | ErrorResponse;
+  signing_verifyRaw: { valid: boolean; trusted?: boolean; trustedName?: string | null; reason?: string } | ErrorResponse;
   switchProfile: SuccessOrError;
   sync: SuccessOrError<{ valueBundleSync?: Record<string, number> }> | { skipped: true };
   testSync: SuccessOrError;
