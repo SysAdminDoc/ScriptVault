@@ -15,6 +15,10 @@ export const SYNC_BACKGROUND_ACTIONS = [
   'cloudExport',
   'cloudImport',
   'cloudStatus',
+  'easyCloudConnect',
+  'easyCloudDisconnect',
+  'easyCloudSync',
+  'easyCloudStatus',
 ] as const;
 
 export type SyncBackgroundAction = typeof SYNC_BACKGROUND_ACTIONS[number];
@@ -44,6 +48,10 @@ export interface SyncActionDependencies {
   export(provider: string, options: CloudExportOptions): Promise<ResponseMap['cloudExport']>;
   import(provider: string, options: CloudImportOptions): Promise<ResponseMap['cloudImport']>;
   cloudStatus(provider: string): Promise<ResponseMap['cloudStatus']>;
+  easyCloudConnect(): Promise<ResponseMap['easyCloudConnect']>;
+  easyCloudDisconnect(): Promise<ResponseMap['easyCloudDisconnect']>;
+  easyCloudSync(): Promise<ResponseMap['easyCloudSync']>;
+  easyCloudStatus(): Promise<ResponseMap['easyCloudStatus']>;
 }
 
 export function createSyncActionHandlers(
@@ -72,6 +80,10 @@ export function createSyncActionHandlers(
       trustImportedScripts: message.trustImportedScripts === true,
     }),
     cloudStatus: ({ message }) => dependencies.cloudStatus(message.provider),
+    easyCloudConnect: () => dependencies.easyCloudConnect(),
+    easyCloudDisconnect: () => dependencies.easyCloudDisconnect(),
+    easyCloudSync: () => dependencies.easyCloudSync(),
+    easyCloudStatus: () => dependencies.easyCloudStatus(),
   };
   return Object.freeze(handlers);
 }

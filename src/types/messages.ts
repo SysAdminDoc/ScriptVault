@@ -860,6 +860,7 @@ interface ImportBackupResponse {
 
 interface ExportZip {
   action: 'exportZip';
+  options?: Record<string, unknown>;
 }
 
 interface ImportFromZip {
@@ -1942,7 +1943,7 @@ export interface ResponseMap {
   getScriptStorage: unknown;
   setScriptStorage: SuccessOrError;
   clearScriptStorage: SuccessOrError;
-  cleanupStorage: SuccessOrError<{ removed: number }>;
+  cleanupStorage: SuccessOrError<{ freedBytes?: number; actions?: unknown[] }>;
 
   // ── Import (vendor backups) ───────────────────────────────────────
   importTampermonkeyBackup: ImportBackupResponse;
@@ -2211,14 +2212,16 @@ export interface ResponseMap {
   exportErrorLog: SuccessOrError<{ data?: string; filename?: string }>;
   exportZip: SuccessOrError<{ data?: string; blob?: unknown; filename?: string }>;
   generateDigest: SuccessOrError;
-  getAllScriptsValues: unknown;
+  getAllScriptsValues: {
+    allValues: Record<string, { scriptName: string; values: Record<string, unknown> }>;
+  };
   getBackups: { backups: { id: string; timestamp: number; scriptCount?: number; size?: number }[] };
   getBackupSettings: unknown;
   getCollections: { collections: unknown[] };
   getCSPReports: { reports: unknown[] };
   getErrorLogGrouped: unknown;
   getExtensionInfo: { id: string; version: string; name?: string };
-  getGistSettings: unknown;
+  getGistSettings: Record<string, unknown>;
   getLiveReloadScripts: { scripts: Record<string, boolean> };
   getMenuCommands: { commands: unknown[] };
   getNetworkLogStats: unknown;

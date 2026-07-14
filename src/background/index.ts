@@ -154,6 +154,15 @@ export type {
   ScriptBackgroundAction,
 } from './script-action-handler';
 export {
+  DATA_BACKGROUND_ACTIONS,
+  DataActionHandler,
+  createDataActionHandlers,
+} from './data-action-handler';
+export type {
+  DataActionDependencies,
+  DataBackgroundAction,
+} from './data-action-handler';
+export {
   GM_AUDIO_ACTIONS,
   GMAudioHandler,
   handleGMAudioMessage,

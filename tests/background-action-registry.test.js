@@ -43,6 +43,10 @@ import {
   SCRIPT_BACKGROUND_ACTIONS,
   createScriptActionHandlers,
 } from '../src/background/script-action-handler.ts';
+import {
+  DATA_BACKGROUND_ACTIONS,
+  createDataActionHandlers,
+} from '../src/background/data-action-handler.ts';
 
 describe('typed background action registry', () => {
   it('normalizes flat and nested runtime messages before dispatch', async () => {
@@ -185,6 +189,8 @@ describe('typed background action registry', () => {
     const dependencies = Object.fromEntries([
       'sync', 'test', 'getLastResult', 'health', 'preview', 'connect',
       'disconnect', 'status', 'export', 'import', 'cloudStatus',
+      'easyCloudConnect', 'easyCloudDisconnect', 'easyCloudSync',
+      'easyCloudStatus',
     ].map(name => [name, vi.fn(async () => ({ success: true }))]));
     const registry = createBackgroundActionRegistry(createSyncActionHandlers(dependencies));
 
@@ -353,5 +359,29 @@ describe('typed background action registry', () => {
       scriptId: 'script-2',
       enabled: false,
     });
+  });
+
+  it('routes values, export, quota, resource, and Gist actions through typed dependencies', async () => {
+    const dependencies = Object.fromEntries([
+      'prefetchResources', 'getAllScriptsValues', 'setScriptValue',
+      'clearScriptStorage', 'renameScriptValue', 'exportAll',
+      'getStorageUsage', 'getStorageBreakdown', 'cleanupStorage',
+      'getGistSettings', 'saveGistSettings', 'exportZip',
+    ].map(name => [name, vi.fn(async () => ({ success: true }))]));
+    const registry = createBackgroundActionRegistry(createDataActionHandlers(dependencies));
+
+    await registry.dispatch({
+      action: 'renameScriptValue',
+      data: { scriptId: 'script-1', oldKey: 'theme', newKey: 'colorScheme' },
+    }, {});
+    await registry.dispatch({ action: 'exportAll' }, {});
+
+    expect(registry.registeredActions()).toEqual(DATA_BACKGROUND_ACTIONS);
+    expect(dependencies.renameScriptValue).toHaveBeenCalledWith(
+      'script-1',
+      'theme',
+      'colorScheme',
+    );
+    expect(dependencies.exportAll).toHaveBeenCalledWith({});
   });
 });

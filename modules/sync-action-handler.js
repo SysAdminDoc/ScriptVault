@@ -47,7 +47,11 @@ const SyncActionHandler = (() => {
     "getSyncProviderStatus",
     "cloudExport",
     "cloudImport",
-    "cloudStatus"
+    "cloudStatus",
+    "easyCloudConnect",
+    "easyCloudDisconnect",
+    "easyCloudSync",
+    "easyCloudStatus"
   ];
   function createSyncActionHandlers(dependencies) {
     const handlers = {
@@ -72,7 +76,11 @@ const SyncActionHandler = (() => {
         importSettingsCredentials: message.importSettingsCredentials === true,
         trustImportedScripts: message.trustImportedScripts === true
       }),
-      cloudStatus: ({ message }) => dependencies.cloudStatus(message.provider)
+      cloudStatus: ({ message }) => dependencies.cloudStatus(message.provider),
+      easyCloudConnect: () => dependencies.easyCloudConnect(),
+      easyCloudDisconnect: () => dependencies.easyCloudDisconnect(),
+      easyCloudSync: () => dependencies.easyCloudSync(),
+      easyCloudStatus: () => dependencies.easyCloudStatus()
     };
     return Object.freeze(handlers);
   }

@@ -23365,7 +23365,11 @@ const SyncActionHandler = (() => {
     "getSyncProviderStatus",
     "cloudExport",
     "cloudImport",
-    "cloudStatus"
+    "cloudStatus",
+    "easyCloudConnect",
+    "easyCloudDisconnect",
+    "easyCloudSync",
+    "easyCloudStatus"
   ];
   function createSyncActionHandlers(dependencies) {
     const handlers = {
@@ -23390,7 +23394,11 @@ const SyncActionHandler = (() => {
         importSettingsCredentials: message.importSettingsCredentials === true,
         trustImportedScripts: message.trustImportedScripts === true
       }),
-      cloudStatus: ({ message }) => dependencies.cloudStatus(message.provider)
+      cloudStatus: ({ message }) => dependencies.cloudStatus(message.provider),
+      easyCloudConnect: () => dependencies.easyCloudConnect(),
+      easyCloudDisconnect: () => dependencies.easyCloudDisconnect(),
+      easyCloudSync: () => dependencies.easyCloudSync(),
+      easyCloudStatus: () => dependencies.easyCloudStatus()
     };
     return Object.freeze(handlers);
   }
@@ -23967,6 +23975,89 @@ const ScriptActionHandler = (() => {
 
 if (typeof self !== 'undefined') {
   self.ScriptActionHandler = ScriptActionHandler;
+}
+
+// ============================================================================
+// Generated from src/background/data-action-handler.ts; do not edit by hand.
+// Run `node scripts/generate-ts-runtime-modules.mjs` or `npm run build:bg`.
+// ============================================================================
+
+const DataActionHandler = (() => {
+  const module = { exports: {} };
+  const exports = module.exports;
+  "use strict";
+  var __defProp = Object.defineProperty;
+  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, { get: all[name], enumerable: true });
+  };
+  var __copyProps = (to, from, except, desc) => {
+    if (from && typeof from === "object" || typeof from === "function") {
+      for (let key of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(to, key) && key !== except)
+          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+    }
+    return to;
+  };
+  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+  // src/background/data-action-handler.ts
+  var data_action_handler_exports = {};
+  __export(data_action_handler_exports, {
+    DATA_BACKGROUND_ACTIONS: () => DATA_BACKGROUND_ACTIONS,
+    DataActionHandler: () => DataActionHandler,
+    createDataActionHandlers: () => createDataActionHandlers,
+    default: () => data_action_handler_default
+  });
+  module.exports = __toCommonJS(data_action_handler_exports);
+  var DATA_BACKGROUND_ACTIONS = [
+    "prefetchResources",
+    "getAllScriptsValues",
+    "setScriptValue",
+    "clearScriptStorage",
+    "renameScriptValue",
+    "exportAll",
+    "getStorageUsage",
+    "getStorageBreakdown",
+    "cleanupStorage",
+    "getGistSettings",
+    "saveGistSettings",
+    "exportZip"
+  ];
+  function createDataActionHandlers(dependencies) {
+    const handlers = {
+      prefetchResources: ({ message }) => dependencies.prefetchResources(message.resources),
+      getAllScriptsValues: () => dependencies.getAllScriptsValues(),
+      setScriptValue: ({ message }) => dependencies.setScriptValue(message.scriptId, message.key, message.value),
+      clearScriptStorage: ({ message }) => dependencies.clearScriptStorage(message.scriptId),
+      renameScriptValue: ({ message }) => dependencies.renameScriptValue(
+        message.scriptId,
+        message.oldKey,
+        message.newKey
+      ),
+      exportAll: ({ message }) => dependencies.exportAll(message.options || {}),
+      getStorageUsage: () => dependencies.getStorageUsage(),
+      getStorageBreakdown: () => dependencies.getStorageBreakdown(),
+      cleanupStorage: ({ message }) => dependencies.cleanupStorage(message.options || {}),
+      getGistSettings: () => dependencies.getGistSettings(),
+      saveGistSettings: ({ message }) => dependencies.saveGistSettings(message.settings),
+      exportZip: ({ message }) => dependencies.exportZip(message.options || {})
+    };
+    return Object.freeze(handlers);
+  }
+  var DataActionHandler = Object.freeze({
+    DATA_BACKGROUND_ACTIONS,
+    createDataActionHandlers
+  });
+  var data_action_handler_default = DataActionHandler;
+  return module.exports.default || module.exports.DataActionHandler || module.exports;
+})();
+
+if (typeof self !== 'undefined') {
+  self.DataActionHandler = DataActionHandler;
 }
 
 // ============================================================================
@@ -46284,7 +46375,19 @@ backgroundActionRegistry.registerHandlers(SyncActionHandler.createSyncActionHand
   status: provider => getCloudSyncProviderStatus(provider),
   export: (provider, options) => exportCloudSyncBackup(provider, options),
   import: (provider, options) => importCloudSyncBackup(provider, options),
-  cloudStatus: provider => getCloudSyncStatus(provider)
+  cloudStatus: provider => getCloudSyncStatus(provider),
+  easyCloudConnect: () => typeof EasyCloudSync !== 'undefined'
+    ? EasyCloudSync.connect()
+    : Promise.resolve({ error: 'EasyCloudSync not available' }),
+  easyCloudDisconnect: () => typeof EasyCloudSync !== 'undefined'
+    ? EasyCloudSync.disconnect()
+    : Promise.resolve({ error: 'EasyCloudSync not available' }),
+  easyCloudSync: () => typeof EasyCloudSync !== 'undefined'
+    ? EasyCloudSync.sync()
+    : Promise.resolve({ error: 'EasyCloudSync not available' }),
+  easyCloudStatus: () => typeof EasyCloudSync !== 'undefined'
+    ? EasyCloudSync.getStatus()
+    : Promise.resolve({ connected: false })
 }));
 backgroundActionRegistry.registerHandlers(BackupActionHandler.createBackupActionHandlers({
   create: reason => typeof BackupScheduler !== 'undefined'
@@ -46878,6 +46981,66 @@ backgroundActionRegistry.registerHandlers(ScriptActionHandler.createScriptAction
     await ScriptStorage.reorder(orderedIds);
     return { success: true };
   }
+}));
+backgroundActionRegistry.registerHandlers(DataActionHandler.createDataActionHandlers({
+  prefetchResources: async resources => {
+    await ResourceCache.prefetchResources(resources);
+    return { success: true };
+  },
+  getAllScriptsValues: async () => {
+    const scripts = await ScriptStorage.getAll();
+    const valueResults = await Promise.all(scripts.map(script => ScriptValues.getAll(script.id)));
+    const allValues = {};
+    scripts.forEach((script, index) => {
+      const values = valueResults[index];
+      if (values && Object.keys(values).length > 0) {
+        allValues[script.id] = {
+          scriptName: script.meta?.name || 'Unknown Script',
+          values
+        };
+      }
+    });
+    return { allValues };
+  },
+  setScriptValue: async (scriptId, key, value) => {
+    await ScriptValues.set(scriptId, key, value);
+    return { success: true };
+  },
+  clearScriptStorage: async scriptId => {
+    await ScriptValues.deleteAll(scriptId);
+    return { success: true };
+  },
+  renameScriptValue: async (scriptId, oldKey, newKey) => {
+    if (!scriptId || !oldKey || !newKey || oldKey === newKey) {
+      return { error: 'Invalid rename parameters' };
+    }
+    const current = await ScriptValues.get(scriptId, oldKey);
+    if (current === undefined) return { error: 'Key not found' };
+    const existingNew = await ScriptValues.get(scriptId, newKey);
+    if (existingNew !== undefined) return { error: `Key "${newKey}" already exists` };
+    await ScriptValues.set(scriptId, newKey, current);
+    await ScriptValues.delete(scriptId, oldKey);
+    return { success: true };
+  },
+  exportAll: options => exportAllScripts(options),
+  getStorageUsage: () => typeof QuotaManager !== 'undefined'
+    ? QuotaManager.getUsage()
+    : Promise.resolve({ bytesUsed: 0, quota: 10485760, percentage: 0, level: 'ok' }),
+  getStorageBreakdown: () => typeof QuotaManager !== 'undefined'
+    ? QuotaManager.getBreakdown()
+    : Promise.resolve({}),
+  cleanupStorage: options => typeof QuotaManager !== 'undefined'
+    ? QuotaManager.cleanup(options)
+    : Promise.resolve({ freedBytes: 0, actions: [] }),
+  getGistSettings: async () => {
+    const gistData = await chrome.storage.local.get('gistSettings');
+    return gistData.gistSettings || {};
+  },
+  saveGistSettings: async settings => {
+    await chrome.storage.local.set({ gistSettings: settings });
+    return { success: true };
+  },
+  exportZip: options => exportToZip(options)
 }));
 backgroundActionRegistry.registerHandlers(DiagnosticsActionHandler.createDiagnosticsActionHandlers({
   reportCspFailure: async (url, scriptId, directive) => {
@@ -47545,84 +47708,6 @@ async function handleMessage(message, sender) {
     switch (action) {
       // Script Management
       // Settings
-      case 'prefetchResources': {
-        await ResourceCache.prefetchResources(data.resources);
-        return { success: true };
-      }
-
-      // Values Editor - Get all scripts' values
-      case 'getAllScriptsValues': {
-        const scripts = await ScriptStorage.getAll();
-        const allValuesResults = await Promise.all(scripts.map(s => ScriptValues.getAll(s.id)));
-        const allValues = {};
-        scripts.forEach((script, i) => {
-          const values = allValuesResults[i];
-          if (values && Object.keys(values).length > 0) {
-            allValues[script.id] = {
-              scriptName: script.meta?.name || 'Unknown Script',
-              values
-            };
-          }
-        });
-        return { allValues };
-      }
-      
-      // Values Editor - Set a single value
-      case 'setScriptValue': {
-        await ScriptValues.set(data.scriptId, data.key, data.value);
-        return { success: true };
-      }
-      
-      // Values Editor - Clear all values for a script
-      case 'clearScriptStorage': {
-        await ScriptValues.deleteAll(data.scriptId);
-        return { success: true };
-      }
-
-      // Values Editor - Rename a key
-      case 'renameScriptValue': {
-        const { scriptId, oldKey, newKey } = data;
-        if (!scriptId || !oldKey || !newKey || oldKey === newKey) return { error: 'Invalid rename parameters' };
-        const current = await ScriptValues.get(scriptId, oldKey);
-        if (current === undefined) return { error: 'Key not found' };
-        const existingNew = await ScriptValues.get(scriptId, newKey);
-        if (existingNew !== undefined) return { error: `Key "${newKey}" already exists` };
-        await ScriptValues.set(scriptId, newKey, current);
-        await ScriptValues.delete(scriptId, oldKey);
-        return { success: true };
-      }
-      
-      // Import/Export
-      case 'exportAll':
-        return await exportAllScripts(data?.options || {});
-        
-      // v2.0: Storage Quota
-      case 'getStorageUsage': {
-        if (typeof QuotaManager !== 'undefined') return await QuotaManager.getUsage();
-        return { bytesUsed: 0, quota: 10485760, percentage: 0, level: 'ok' };
-      }
-      case 'getStorageBreakdown': {
-        if (typeof QuotaManager !== 'undefined') return await QuotaManager.getBreakdown();
-        return {};
-      }
-      case 'cleanupStorage': {
-        if (typeof QuotaManager !== 'undefined') return await QuotaManager.cleanup(data.options || {});
-        return { freedBytes: 0, actions: [] };
-      }
-
-      // v2.0: Gist Integration
-      case 'getGistSettings': {
-        const gData = await chrome.storage.local.get('gistSettings');
-        return gData.gistSettings || {};
-      }
-      case 'saveGistSettings': {
-        await chrome.storage.local.set({ gistSettings: data.settings });
-        return { success: true };
-      }
-
-      case 'exportZip':
-        return await exportToZip(data?.options || {});
-
       case 'installFromUrl':
         return await installFromUrl(data.url);
 
@@ -47900,34 +47985,6 @@ async function handleMessage(message, sender) {
 
       // Performance History
       // Easy Cloud Sync
-      case 'easyCloudConnect': {
-        if (typeof EasyCloudSync !== 'undefined') {
-          return await EasyCloudSync.connect();
-        }
-        return { error: 'EasyCloudSync not available' };
-      }
-
-      case 'easyCloudDisconnect': {
-        if (typeof EasyCloudSync !== 'undefined') {
-          return await EasyCloudSync.disconnect();
-        }
-        return { error: 'EasyCloudSync not available' };
-      }
-
-      case 'easyCloudSync': {
-        if (typeof EasyCloudSync !== 'undefined') {
-          return await EasyCloudSync.sync();
-        }
-        return { error: 'EasyCloudSync not available' };
-      }
-
-      case 'easyCloudStatus': {
-        if (typeof EasyCloudSync !== 'undefined') {
-          return await EasyCloudSync.getStatus();
-        }
-        return { connected: false };
-      }
-
       case 'openDashboard': {
         const dashUrl = chrome.runtime.getURL('pages/dashboard.html');
         const scriptParam = data.scriptId ? `#script_${encodeURIComponent(data.scriptId)}` : '';

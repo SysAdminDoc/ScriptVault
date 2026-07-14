@@ -4,6 +4,10 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Typed data and Easy Cloud dispatch.** Script values, resource prefetch,
+  export, quota cleanup, Gist settings, and Easy Cloud lifecycle operations now
+  use generated contracts with explicit defaults and unavailable-module
+  fallbacks.
 - **Typed script lifecycle dispatch.** Script reads, saves, creation, deletion,
   trash recovery, enable/disable, duplication, ordering, host-access recovery,
   and schedule refresh now share one generated action/response contract while
