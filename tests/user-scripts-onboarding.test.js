@@ -25,7 +25,7 @@ describe('Chrome userScripts onboarding diagnostics', () => {
   });
 
   it('keeps repairRuntimeState on the live probe instead of stale cached settings', () => {
-    const repairBlock = backgroundCore.match(/case 'repairRuntimeState': \{[\s\S]*?case 'getSetting':/);
+    const repairBlock = backgroundCore.match(/repairRuntimeState: async \(\) => \{[\s\S]*?getSetting: key =>/);
 
     expect(repairBlock?.[0]).toContain('const status = await configureUserScriptsWorld();');
     expect(repairBlock?.[0]).toContain('if (status.userScriptsAvailable)');

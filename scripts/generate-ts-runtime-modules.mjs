@@ -235,6 +235,13 @@ export const TS_RUNTIME_MODULES = [
     selfExportName: 'OrganizationActionHandler',
   },
   {
+    id: 'settings-action-handler',
+    source: 'src/background/settings-action-handler.ts',
+    output: 'modules/settings-action-handler.js',
+    exportName: 'SettingsActionHandler',
+    selfExportName: 'SettingsActionHandler',
+  },
+  {
     id: 'message-router',
     source: 'src/background/message-router.ts',
     output: 'modules/message-router.js',

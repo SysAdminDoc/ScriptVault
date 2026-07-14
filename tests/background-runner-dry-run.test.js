@@ -8,13 +8,15 @@ const messagesTs = readFileSync(resolve(ROOT, 'src/types/messages.ts'), 'utf8');
 
 describe('background runner dry-run action', () => {
   it('exposes a non-executing background dry-run action in the promoted source', () => {
-    expect(coreTs).toContain("case 'prepareBackgroundRunnerDryRun':");
-    expect(coreTs).toContain('return buildBackgroundRunnerDryRun(script, settings);');
+    expect(coreTs).toContain('prepareBackgroundRunnerDryRun: async scriptId =>');
+    expect(coreTs).toContain('return buildBackgroundRunnerDryRun(script, await SettingsManager.get());');
     expect(coreTs).toContain('function buildBackgroundRunnerDryRun(script, settings = {})');
     expect(coreTs).toContain('executionEnabled: false');
     expect(coreTs).toContain('includesCode: false');
     expect(coreTs).toContain("source: 'scriptvault-background-runner'");
-    expect(coreTs).not.toMatch(/case 'prepareBackgroundRunnerDryRun':[\s\S]{0,600}buildBackgroundWrappedScript/);
+    const routeStart = coreTs.indexOf('prepareBackgroundRunnerDryRun: async scriptId =>');
+    const route = coreTs.slice(routeStart, coreTs.indexOf('repairRuntimeState:', routeStart));
+    expect(route).not.toContain('buildBackgroundWrappedScript');
   });
 
   it('types the action and response without exposing wrapper code', () => {

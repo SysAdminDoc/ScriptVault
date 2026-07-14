@@ -24,7 +24,7 @@ describe('Per-script frameMode override (runtime)', () => {
   });
 
   it('lists frameMode in the per-script settings re-register key list', () => {
-    expect(backgroundCoreCode).toMatch(/EXEC_KEYS = \[[\s\S]*?'frameMode'/);
+    expect(backgroundCoreCode).toMatch(/executionKeys = \[[\s\S]*?'frameMode'/);
   });
 
   it('exposes the same override in the TS mirror', () => {

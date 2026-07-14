@@ -15,8 +15,8 @@ const messagesTs = readFileSync(resolve(repoRoot, 'src/types/messages.ts'), 'utf
 describe('local health report background action', () => {
   it('exposes a local-only aggregate health report action from the promoted TS source', () => {
     expect(backgroundCoreTs).toContain("const LOCAL_HEALTH_SCHEMA = 'scriptvault-local-health/v1';");
-    expect(backgroundCoreTs).toMatch(/case 'getLocalHealthReport':\s*return await buildLocalHealthReport\(\);/);
-    expect(backgroundCoreJs).toContain("case 'getLocalHealthReport':");
+    expect(backgroundCoreTs).toContain('getLocalHealthReport: () => buildLocalHealthReport()');
+    expect(backgroundCoreJs).toContain('getLocalHealthReport: () => buildLocalHealthReport()');
     expect(backgroundCoreJs).toContain('scriptvault-local-health/v1');
   });
 

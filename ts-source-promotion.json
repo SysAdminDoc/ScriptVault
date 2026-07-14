@@ -156,6 +156,14 @@
       "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for profile, collection, workspace, and folder action dispatch."
     },
     {
+      "runtime": "modules/settings-action-handler.js",
+      "sources": [
+        "src/background/settings-action-handler.ts"
+      ],
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for global and per-script settings action dispatch."
+    },
+    {
       "runtime": "modules/gm-audio-handler.js",
       "sources": [
         "src/background/gm-audio-handler.ts"

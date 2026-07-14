@@ -4,6 +4,9 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Typed global and per-script settings dispatch.** Settings changes now flow
+  through a generated contract while preserving registration, alarm, badge,
+  context-menu, import-review, and local-library cleanup side effects.
 - **Typed organizational action dispatch.** Profiles, collections, workspaces,
   and folders now use one generated contract, and workspace/folder mutation
   responses consistently include the documented success discriminant.

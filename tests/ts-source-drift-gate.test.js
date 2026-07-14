@@ -84,7 +84,7 @@ describe('TS source drift gate', () => {
     const report = analyzeSourceDrift(map, []);
     const text = formatTextReport(report, { reportMode: true });
 
-    expect(report.totals.promoted).toBe(49);
+    expect(report.totals.promoted).toBe(50);
     expect(report.totals.candidate).toBe(0);
     expect(report.totals.mirrored).toBe(0);
     expect(report.totals['intentionally-divergent']).toBe(0);
@@ -96,6 +96,7 @@ describe('TS source drift gate', () => {
     expect(text).toContain('modules/sync-action-handler.js -> src/background/sync-action-handler.ts');
     expect(text).toContain('modules/backup-action-handler.js -> src/background/backup-action-handler.ts');
     expect(text).toContain('modules/organization-action-handler.js -> src/background/organization-action-handler.ts');
+    expect(text).toContain('modules/settings-action-handler.js -> src/background/settings-action-handler.ts');
     expect(text).toContain('modules/gm-audio-handler.js -> src/background/gm-audio-handler.ts');
     expect(text).toContain('modules/gm-menu-handler.js -> src/background/gm-menu-handler.ts');
     expect(text).toContain('modules/gm-tabs-handler.js -> src/background/gm-tabs-handler.ts');

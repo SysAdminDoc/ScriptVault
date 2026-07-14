@@ -6247,6 +6247,108 @@ async function deleteScriptCollection(collectionId) {
   return { success: true };
 }
 
+async function applyGlobalSettingsUpdate(changed) {
+  const oldSettings = await getEffectiveSyncSettings(await SettingsManager.get());
+  const result = await persistSyncSettingsUpdate(changed, oldSettings);
+  if ('enabled' in changed && changed.enabled !== oldSettings.enabled) {
+    await registerAllScripts(true);
+  }
+  if ('checkInterval' in changed || 'autoUpdate' in changed ||
+      'syncEnabled' in changed || 'syncProvider' in changed || 'syncInterval' in changed ||
+      'subscriptionAutoRefresh' in changed || 'subscriptionRefreshInterval' in changed) {
+    await setupAlarms();
+  }
+  if ('syncEncryptionEnabled' in changed && changed.syncEncryptionEnabled === false) {
+    await SettingsManager.set('syncEncryptionEstablished', false);
+  }
+  if ('badgeColor' in changed || 'badgeInfo' in changed || 'showBadge' in changed) {
+    await updateBadge();
+  }
+  if ('enableContextMenu' in changed) {
+    await setupContextMenus();
+  }
+  if ('pageFilterMode' in changed || 'whitelistedPages' in changed ||
+      'scopedHostPermissions' in changed || 'blacklistedPages' in changed || 'deniedHosts' in changed) {
+    await registerAllScripts(true);
+  }
+  return result;
+}
+
+async function updatePerScriptSettings(scriptId, changedSettings) {
+  if (!scriptId) return { error: 'No script ID provided' };
+  return await _runExclusiveScriptOperation(scriptId, async () => {
+    const script = await ScriptStorage.get(scriptId);
+    if (!script) return { error: 'Script not found' };
+
+    const oldSettings = script.settings || {};
+    const settingsUpdate = { ...changedSettings };
+    if (Object.prototype.hasOwnProperty.call(settingsUpdate, 'localLibraries') && typeof LocalLibraries !== 'undefined') {
+      settingsUpdate.localLibraries = LocalLibraries.normalizeLocalLibrarySnapshots(settingsUpdate.localLibraries);
+    }
+    const oldEnabled = script.enabled;
+    script.settings = { ...oldSettings, ...settingsUpdate };
+    script.updatedAt = Date.now();
+
+    if ('enabled' in settingsUpdate) {
+      script.enabled = !!settingsUpdate.enabled;
+      if (script.enabled && script.settings?._importQuarantine) {
+        script.settings = recordImportedScriptTrustReview(script.settings);
+      }
+    }
+
+    await ScriptStorage.set(scriptId, script);
+    notifyEasyCloudScriptSaved(scriptId);
+
+    if ('enabled' in settingsUpdate && script.enabled !== oldEnabled) {
+      if (script.enabled) await reregisterScript(script);
+      else await unregisterScript(scriptId);
+      await updateBadge();
+      try {
+        const tabs = await chrome.tabs.query({});
+        for (const tab of tabs) {
+          if (tab.url && doesScriptMatchUrl(script, tab.url)) {
+            chrome.tabs.reload(tab.id).catch(() => {});
+          }
+        }
+      } catch (_) {}
+      return { success: true };
+    }
+
+    const executionKeys = [
+      'runAt', 'injectInto', 'useOriginalMatches', 'useOriginalIncludes',
+      'useOriginalExcludes', 'userMatches', 'userIncludes', 'userExcludes',
+      'frameMode', 'userConfig', 'localLibraries'
+    ];
+    const needsReregister = executionKeys.some(key =>
+      key in settingsUpdate && JSON.stringify(oldSettings[key]) !== JSON.stringify(settingsUpdate[key])
+    );
+    if (needsReregister && script.enabled !== false) await reregisterScript(script);
+    return { success: true };
+  });
+}
+
+async function resetPerScriptSettings(scriptId) {
+  const script = await ScriptStorage.get(scriptId);
+  if (!script) return { error: 'Script not found' };
+  const executionKeys = [
+    'runAt', 'frameMode', 'userMatches', 'userIncludes', 'userExcludes',
+    'useOriginalMatches', 'useOriginalIncludes', 'useOriginalExcludes',
+    'injectInto', 'userConfig', 'localLibraries'
+  ];
+  const hadExecutionSettings = script.settings && Object.keys(script.settings)
+    .some(key => executionKeys.includes(key));
+  if (Array.isArray(script.settings?.localLibraries) && typeof LocalWorkspaceBindings !== 'undefined') {
+    const bindings = await LocalWorkspaceBindings.getByScript(scriptId).catch(() => []);
+    await Promise.all(bindings
+      .filter(binding => binding.bindingKind === 'library')
+      .map(binding => LocalWorkspaceBindings.delete(binding.bindingId).catch(() => {})));
+  }
+  script.settings = {};
+  await ScriptStorage.set(scriptId, script);
+  if (hadExecutionSettings && script.enabled) await reregisterScript(script);
+  return { success: true };
+}
+
 // ============================================================================
 // Message Handlers
 // ============================================================================
@@ -6431,6 +6533,43 @@ backgroundActionRegistry.registerHandlers(OrganizationActionHandler.createOrgani
     await FolderStorage.moveScript(scriptId, fromFolderId, toFolderId);
     return { success: true };
   }
+}));
+backgroundActionRegistry.registerHandlers(SettingsActionHandler.createSettingsActionHandlers({
+  getSettings: async () => ({
+    settings: await getEffectiveSyncSettings(await SettingsManager.get())
+  }),
+  getExtensionStatus: async () => {
+    let status = await probeUserScriptsAvailability();
+    if (status.userScriptsAvailable) status = await configureUserScriptsWorld(status);
+    return status;
+  },
+  getLocalHealthReport: () => buildLocalHealthReport(),
+  prepareBackgroundRunnerDryRun: async scriptId => {
+    const script = await ScriptStorage.get(scriptId);
+    if (!script) return { error: 'Script not found' };
+    return buildBackgroundRunnerDryRun(script, await SettingsManager.get());
+  },
+  repairRuntimeState: async () => {
+    try {
+      const status = await configureUserScriptsWorld();
+      await setupContextMenus();
+      if (status.userScriptsAvailable) await registerAllScripts(true);
+      await updateBadge();
+      await setupAlarms();
+      return { success: true, ...status };
+    } catch (error) {
+      return { success: false, error: error?.message || 'Runtime repair failed' };
+    }
+  },
+  getSetting: key => SettingsManager.get(key),
+  setSettings: settings => applyGlobalSettingsUpdate(settings),
+  resetSettings: () => SettingsManager.reset(),
+  getScriptSettings: async scriptId => {
+    const script = await ScriptStorage.get(scriptId);
+    return script ? { settings: script.settings || {} } : { error: 'Script not found' };
+  },
+  setScriptSettings: (scriptId, settings) => updatePerScriptSettings(scriptId, settings),
+  resetScriptSettings: scriptId => resetPerScriptSettings(scriptId)
 }));
 backgroundActionRegistry.registerHandlers(MessageRouter.createBackgroundDomainHandlers(
   GMValuesHandler.GM_VALUES_ACTIONS,
@@ -7433,96 +7572,6 @@ async function handleMessage(message, sender) {
         return { success: true };
       }
 
-      case 'getSettings': {
-        const settings = await getEffectiveSyncSettings(await SettingsManager.get());
-        return { settings };
-      }
-
-      case 'getExtensionStatus': {
-        let status = await probeUserScriptsAvailability();
-        // The toggle may have flipped on while the SW was already running.
-        // Configure the world now so script registration works on next save.
-        if (status.userScriptsAvailable) {
-          status = await configureUserScriptsWorld(status);
-        }
-        return status;
-      }
-
-      case 'getLocalHealthReport':
-        return await buildLocalHealthReport();
-
-      case 'prepareBackgroundRunnerDryRun': {
-        const script = await ScriptStorage.get(data.scriptId);
-        if (!script) return { error: 'Script not found' };
-        const settings = await SettingsManager.get();
-        return buildBackgroundRunnerDryRun(script, settings);
-      }
-
-      case 'repairRuntimeState': {
-        try {
-          const status = await configureUserScriptsWorld();
-          await setupContextMenus();
-          if (status.userScriptsAvailable) {
-            await registerAllScripts(true);
-          }
-          await updateBadge();
-          await setupAlarms();
-
-          return { success: true, ...status };
-        } catch (error) {
-          return { success: false, error: error?.message || 'Runtime repair failed' };
-        }
-      }
-        
-      case 'getSetting':
-        return await SettingsManager.get(data.key);
-        
-      case 'setSettings': {
-        const oldSettings = await getEffectiveSyncSettings(await SettingsManager.get());
-        const result = await persistSyncSettingsUpdate(data.settings, oldSettings);
-        const changed = data.settings;
-
-        // If global enabled state changed, re-register all scripts
-        if ('enabled' in changed && changed.enabled !== oldSettings.enabled) {
-          await registerAllScripts(true);
-        }
-
-        // If update/sync intervals changed, reconfigure alarms
-        if ('checkInterval' in changed || 'autoUpdate' in changed ||
-            'syncEnabled' in changed || 'syncProvider' in changed || 'syncInterval' in changed ||
-            'subscriptionAutoRefresh' in changed || 'subscriptionRefreshInterval' in changed) {
-          await setupAlarms();
-        }
-
-        // Turning sync encryption off clears the downgrade latch so a later
-        // re-enable gets a fresh plaintext→encrypted migration window.
-        if ('syncEncryptionEnabled' in changed && changed.syncEncryptionEnabled === false) {
-          await SettingsManager.set('syncEncryptionEstablished', false);
-        }
-
-        // If badge settings changed, refresh badge
-        if ('badgeColor' in changed || 'badgeInfo' in changed || 'showBadge' in changed) {
-          await updateBadge();
-        }
-
-        // If context menu setting changed, rebuild menus
-        if ('enableContextMenu' in changed) {
-          await setupContextMenus();
-        }
-
-        // If page filter settings changed, re-register scripts
-        if ('pageFilterMode' in changed || 'whitelistedPages' in changed ||
-            'scopedHostPermissions' in changed ||
-            'blacklistedPages' in changed || 'deniedHosts' in changed) {
-          await registerAllScripts(true);
-        }
-
-        return result;
-      }
-        
-      case 'resetSettings':
-        return await SettingsManager.reset();
-        
       // Values Editor - Get all scripts' values
       case 'getAllScriptsValues': {
         const scripts = await ScriptStorage.getAll();
@@ -7563,71 +7612,6 @@ async function handleMessage(message, sender) {
         await ScriptValues.set(scriptId, newKey, current);
         await ScriptValues.delete(scriptId, oldKey);
         return { success: true };
-      }
-      
-      // Per-Script Settings
-      case 'getScriptSettings': {
-        const script = await ScriptStorage.get(data.scriptId);
-        if (!script) return { error: 'Script not found' };
-        return { settings: script.settings || {} };
-      }
-      
-      case 'setScriptSettings': {
-        if (!data.scriptId) return { error: 'No script ID provided' };
-        return await _runExclusiveScriptOperation(data.scriptId, async () => {
-          const script = await ScriptStorage.get(data.scriptId);
-          if (!script) return { error: 'Script not found' };
-
-          const oldSettings = script.settings || {};
-          const settingsUpdate = { ...data.settings };
-          if (Object.prototype.hasOwnProperty.call(settingsUpdate, 'localLibraries') && typeof LocalLibraries !== 'undefined') {
-            settingsUpdate.localLibraries = LocalLibraries.normalizeLocalLibrarySnapshots(settingsUpdate.localLibraries);
-          }
-          const oldEnabled = script.enabled;
-          script.settings = { ...oldSettings, ...settingsUpdate };
-          script.updatedAt = Date.now();
-
-          if ('enabled' in settingsUpdate) {
-            script.enabled = !!settingsUpdate.enabled;
-            if (script.enabled && script.settings?._importQuarantine) {
-              script.settings = recordImportedScriptTrustReview(script.settings);
-            }
-          }
-
-          await ScriptStorage.set(data.scriptId, script);
-          notifyEasyCloudScriptSaved(data.scriptId);
-
-          if ('enabled' in settingsUpdate && script.enabled !== oldEnabled) {
-            if (script.enabled) {
-              await reregisterScript(script);
-            } else {
-              await unregisterScript(data.scriptId);
-            }
-            await updateBadge();
-            try {
-              const tabs = await chrome.tabs.query({});
-              for (const tab of tabs) {
-                if (tab.url && doesScriptMatchUrl(script, tab.url)) {
-                  chrome.tabs.reload(tab.id).catch(() => {});
-                }
-              }
-            } catch {}
-            return { success: true };
-          }
-
-          const EXEC_KEYS = ['runAt', 'injectInto', 'useOriginalMatches', 'useOriginalIncludes',
-                             'useOriginalExcludes', 'userMatches', 'userIncludes', 'userExcludes',
-                             'frameMode', 'userConfig', 'localLibraries'];
-          const needsReregister = EXEC_KEYS.some(k =>
-            k in settingsUpdate &&
-            JSON.stringify(oldSettings[k]) !== JSON.stringify(settingsUpdate[k])
-          );
-          if (needsReregister && script.enabled !== false) {
-            await reregisterScript(script);
-          }
-
-          return { success: true };
-        });
       }
       
       // Import/Export
@@ -8327,27 +8311,6 @@ async function handleMessage(message, sender) {
           FolderStorage.cache = null;
         }
         await updateBadge();
-        return { success: true };
-      }
-
-      case 'resetScriptSettings': {
-        const script = await ScriptStorage.get(data.scriptId);
-        if (!script) return { error: 'Script not found' };
-        const hadExecKeys = script.settings && Object.keys(script.settings).some(k =>
-          ['runAt', 'frameMode', 'userMatches', 'userIncludes', 'userExcludes',
-           'useOriginalMatches', 'useOriginalIncludes', 'useOriginalExcludes',
-           'injectInto', 'userConfig', 'localLibraries'].includes(k));
-        if (Array.isArray(script.settings?.localLibraries) && typeof LocalWorkspaceBindings !== 'undefined') {
-          const bindings = await LocalWorkspaceBindings.getByScript(data.scriptId).catch(() => []);
-          await Promise.all(bindings
-            .filter(binding => binding.bindingKind === 'library')
-            .map(binding => LocalWorkspaceBindings.delete(binding.bindingId).catch(() => {})));
-        }
-        script.settings = {};
-        await ScriptStorage.set(data.scriptId, script);
-        if (hadExecKeys && script.enabled) {
-          await reregisterScript(script);
-        }
         return { success: true };
       }
 

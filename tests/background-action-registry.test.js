@@ -27,6 +27,10 @@ import {
   ORGANIZATION_BACKGROUND_ACTIONS,
   createOrganizationActionHandlers,
 } from '../src/background/organization-action-handler.ts';
+import {
+  SETTINGS_BACKGROUND_ACTIONS,
+  createSettingsActionHandlers,
+} from '../src/background/settings-action-handler.ts';
 
 describe('typed background action registry', () => {
   it('normalizes flat and nested runtime messages before dispatch', async () => {
@@ -230,5 +234,26 @@ describe('typed background action registry', () => {
 
     expect(registry.registeredActions()).toEqual(ORGANIZATION_BACKGROUND_ACTIONS);
     expect(dependencies.moveScriptToFolder).toHaveBeenCalledWith('script-1', 'old', 'new');
+  });
+
+  it('routes global and per-script settings through separate typed dependencies', async () => {
+    const dependencies = Object.fromEntries([
+      'getSettings', 'getExtensionStatus', 'getLocalHealthReport',
+      'prepareBackgroundRunnerDryRun', 'repairRuntimeState', 'getSetting',
+      'setSettings', 'resetSettings', 'getScriptSettings', 'setScriptSettings',
+      'resetScriptSettings',
+    ].map(name => [name, vi.fn(async () => ({ success: true }))]));
+    const registry = createBackgroundActionRegistry(createSettingsActionHandlers(dependencies));
+
+    await registry.dispatch({
+      action: 'setScriptSettings',
+      data: { scriptId: 'script-1', settings: { runAt: 'document-start' } },
+    }, {});
+
+    expect(registry.registeredActions()).toEqual(SETTINGS_BACKGROUND_ACTIONS);
+    expect(dependencies.setScriptSettings).toHaveBeenCalledWith(
+      'script-1',
+      { runAt: 'document-start' },
+    );
   });
 });

@@ -116,6 +116,15 @@ export type {
   OrganizationBackgroundAction,
 } from './organization-action-handler';
 export {
+  SETTINGS_BACKGROUND_ACTIONS,
+  SettingsActionHandler,
+  createSettingsActionHandlers,
+} from './settings-action-handler';
+export type {
+  SettingsActionDependencies,
+  SettingsBackgroundAction,
+} from './settings-action-handler';
+export {
   GM_AUDIO_ACTIONS,
   GMAudioHandler,
   handleGMAudioMessage,

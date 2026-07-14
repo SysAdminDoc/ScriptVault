@@ -417,9 +417,9 @@ describe('Easy Cloud reacts to real script mutations (2026-07 P2 regression)', (
     const rollbackBlock = core.slice(rollbackStart, core.indexOf('// Message Handlers', rollbackStart));
     expectNotifyAfter(rollbackBlock, 'await ScriptStorage.set(scriptId, script);', 'notifyEasyCloudScriptSaved(scriptId);');
 
-    const settingsStart = core.indexOf("case 'setScriptSettings'");
-    const settingsBlock = core.slice(settingsStart, core.indexOf('// Import/Export', settingsStart));
-    expectNotifyAfter(settingsBlock, 'await ScriptStorage.set(data.scriptId, script);', 'notifyEasyCloudScriptSaved(data.scriptId);');
+    const settingsStart = core.indexOf('async function updatePerScriptSettings');
+    const settingsBlock = core.slice(settingsStart, core.indexOf('async function resetPerScriptSettings', settingsStart));
+    expectNotifyAfter(settingsBlock, 'await ScriptStorage.set(scriptId, script);', 'notifyEasyCloudScriptSaved(scriptId);');
   });
 
   it('notifies Easy Cloud after update application persists new script code', () => {
