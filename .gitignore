@@ -8,6 +8,7 @@ build-edge/
 dist/
 firefox-artifacts/
 edge-artifacts/
+chromium-derivative-artifacts/
 release-artifacts/
 background.js
 *.js.map

@@ -36,6 +36,7 @@
     "smoke:dashboard": "node scripts/smoke-dashboard.mjs",
     "smoke:editor": "node scripts/smoke-editor.mjs",
     "smoke:edge": "node scripts/smoke-edge-sideload.mjs",
+    "smoke:derivatives": "node scripts/smoke-chromium-derivatives.mjs",
     "smoke:firefox": "node scripts/smoke-firefox-sideload.mjs",
     "smoke:large-library": "node scripts/smoke-large-library.mjs",
     "smoke:large-library:check": "node scripts/smoke-large-library.mjs --check",

@@ -85,12 +85,16 @@ describe('Microsoft Edge sideload smoke wiring', () => {
   it('loads the generated Edge package and exercises extension runtime paths', () => {
     expect(edgeSmoke).toContain('enableExtensions: [BUILD_DIR]');
     expect(edgeSmoke).toContain('#itemAllowUserScripts');
+    expect(edgeSmoke).toContain('#allow-user-scripts');
+    expect(edgeSmoke).toContain('fluent-switch');
     expect(edgeSmoke).toContain('pages/dashboard.html');
     expect(edgeSmoke).toContain('pages/popup.html');
+    expect(edgeSmoke).toContain('pages/install.html');
+    expect(edgeSmoke).toContain("chrome.storage.local.set({ pendingInstall: payload })");
     expect(edgeSmoke).toContain("action: 'getExtensionStatus'");
     expect(edgeSmoke).toContain("action: 'saveScript'");
     expect(edgeSmoke).toContain("action: 'toggleScript'");
-    expect(edgeSmoke).toContain('document.documentElement.dataset.scriptvaultEdgeSmoke');
+    expect(edgeSmoke).toContain('document.documentElement.dataset.scriptvaultBrowserSmoke');
     expect(edgeSmoke).toContain("args.has('--strict-console')");
     expect(edgeSmoke).toContain("error.type !== 'console.error'");
   });

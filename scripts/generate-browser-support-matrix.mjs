@@ -133,6 +133,55 @@ function edgeSmokeSummary(version) {
   return null;
 }
 
+function derivativeSmokeSummary(version) {
+  const path = `chromium-derivative-artifacts/summary-${version}.json`;
+  const fullPath = resolve(root, path);
+  if (!existsSync(fullPath)) {
+    return { path, status: 'missing', generatedAt: null, browsers: [] };
+  }
+  try {
+    const report = readJson(path);
+    return {
+      path,
+      status: report.version === version ? (report.status || 'unknown') : 'stale',
+      generatedAt: report.generatedAt || null,
+      browsers: Array.isArray(report.browsers) ? report.browsers : [],
+    };
+  } catch {
+    return { path, status: 'unreadable', generatedAt: null, browsers: [] };
+  }
+}
+
+function derivativeLastVerification(evidence) {
+  const date = evidence.generatedAt?.slice(0, 10) || 'Unknown date';
+  const passed = evidence.browsers.filter(browser => browser?.status === 'passed');
+  if (evidence.status === 'passed' && passed.length > 0) {
+    return `${date} local smoke passed: ${passed.map(browser => browser.name || browser.id).join(', ')}`;
+  }
+  if (evidence.status === 'failed') {
+    const failed = evidence.browsers.filter(browser => browser?.status === 'failed');
+    return `${date} local smoke failed: ${failed.map(browser => browser.name || browser.id).join(', ') || 'unknown target'}`;
+  }
+  if (evidence.status === 'stale') return 'Local derivative evidence is stale';
+  if (evidence.status === 'unreadable') return 'Local derivative evidence is unreadable';
+  return 'Not release-verified';
+}
+
+function derivativeEvidenceText(evidence) {
+  const files = evidence.browsers
+    .filter(browser => browser?.evidence)
+    .map(browser => `\`${browser.evidence}\``);
+  return [`\`npm run smoke:derivatives\``, `\`${evidence.path}\``, ...files].join(', ');
+}
+
+function derivativeDeferredText(evidence) {
+  const missing = evidence.browsers
+    .filter(browser => browser?.status === 'not-installed')
+    .map(browser => browser.name || browser.id);
+  const unavailable = missing.length > 0 ? `${missing.join(', ')} were not installed for the latest local run; ` : '';
+  return `${unavailable}store policy, shields/sidebar behavior, and extension UI chrome remain browser-specific`;
+}
+
 function trimSentence(value) {
   return String(value || '').replace(/[.。]+$/u, '');
 }
@@ -198,6 +247,7 @@ function matrixMarkdown(date) {
   const hasFirefoxAndroidTarget = !!firefoxManifest.browser_specific_settings?.gecko_android?.strict_min_version;
   const firefoxEvidence = firefoxLintSummary();
   const edgeEvidence = edgeBuildSummary(version);
+  const derivativeEvidence = derivativeSmokeSummary(version);
   const firefoxAndroidRow = hasFirefoxAndroidTarget
     ? `| Firefox for Android | Manifest validation target | Firefox for Android ${firefoxManifest.browser_specific_settings.gecko_android.strict_min_version}+ | ${date} package/manifests; no Android device smoke yet | \`manifest-firefox.json\` \`gecko_android\` target plus Firefox source/package ZIP | Same Firefox API deferrals; no side panel; Android device smoke is not wired |`
     : `| Firefox for Android | Deferred; not an AMO compatibility target | No current \`gecko_android\` manifest target | ${date} | \`manifest-firefox.json\` intentionally omits \`gecko_android\` until an Android smoke gate exists | Android UI/runtime, extension-action overlay, host-permission, import/export, and WebDAV paths are unverified |`;
@@ -213,7 +263,7 @@ _Last generated: ${date} with \`npm run support:matrix\`. Version source: \`mani
 | Microsoft Edge | Tier 1 compatible package; Partner Center publication manual | Edge ${chromeMin}+ Chromium MV3 package | ${edgeLastVerification} | \`${edgeEvidence.packageCommand}\`, \`${edgeEvidence.artifact}\`, \`${edgeEvidence.reportPath}\`${edgeEvidence.browserSmokeCommand ? `, \`${edgeEvidence.browserSmokeCommand}\`` : ''}${edgeEvidence.browserSmokeEvidence ? `, \`${edgeEvidence.browserSmokeEvidence}\`` : ''}; local release attaches \`edge-artifacts/*\` manually | ${trimSentence(edgeEvidence.initialPublication)}; ${trimSentence(edgeEvidence.updateAutomation)}; ${trimSentence(edgeEvidence.browserSmoke)} |
 | Firefox Desktop | AMO validation target, not a published listing | Firefox ${firefoxMin}+ MV3 | ${date} | ${firefoxEvidence} | \`sidePanel\`, \`offscreen\`, \`identity\` OAuth, and some \`userScripts.execute\` flows are unsupported/deferred; host grant/revoke diagnostics listen to permissions events; Firefox package omits Monaco until the Firefox editor-loading pass |
 ${firefoxAndroidRow}
-| Brave / Vivaldi / Opera / Arc | Chromium derivative watchlist | Chrome ${chromeMin}+ package may load | Not release-verified | No local smoke or store package for these browsers | Store policy, shields/sidebar behavior, and extension UI chrome are unverified |
+| Brave / Vivaldi / Opera / Arc | Chromium derivative local-smoke targets | Chrome ${chromeMin}+ compatible package | ${derivativeLastVerification(derivativeEvidence)} | ${derivativeEvidenceText(derivativeEvidence)} | ${derivativeDeferredText(derivativeEvidence)} |
 | Orion / Safari | Not supported | Not a current target | Not verified | No build, smoke, or package path | Requires separate WebKit/Orion validation and likely native Safari extension work |
 <!-- SCRIPT_VAULT_BROWSER_SUPPORT_MATRIX:END -->`;
 }
