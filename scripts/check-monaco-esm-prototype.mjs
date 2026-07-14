@@ -15,6 +15,7 @@ const REQUIRED_OUTPUTS = [
   'lib/monaco-esm/workers/css.worker.js',
   'lib/monaco-esm/workers/html.worker.js',
   'lib/monaco-esm/workers/ts.worker.js',
+  'lib/monaco-esm/workers/userscript-lsp.worker.js',
 ];
 
 export const DEFAULT_SIZE_BUDGETS = Object.freeze({

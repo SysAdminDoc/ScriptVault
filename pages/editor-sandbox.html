@@ -84,6 +84,8 @@
   let ignoreNextChange = false;
   let currentScriptId = null;
   let monacoApi = null;
+  let userscriptLanguageServerWorker = null;
+  let userscriptLanguageServerTransport = null;
   const scriptModels = new Map();
 
   // ── Load Monaco from local bundle ────────────────────────────────────────
@@ -92,6 +94,7 @@
   const LOCAL_ESM_ENTRY = '../lib/monaco-esm/editor.js';
   const LOCAL_ESM_CSS = '../lib/monaco-esm/editor.css';
   const DEFAULT_WORKER_FILE = 'editor.worker.js';
+  const USERSCRIPT_LSP_WORKER_FILE = 'userscript-lsp.worker.js';
   const MONACO_WORKER_FILES = Object.freeze({
     default: DEFAULT_WORKER_FILE,
     editorWorkerService: DEFAULT_WORKER_FILE,
@@ -136,7 +139,11 @@
   }
 
   function getWorkerBootstrapUrl(label) {
-    const workerUrl = resolveLocalAsset(`../lib/monaco-esm/workers/${workerFileForLabel(label)}`);
+    return getWorkerBootstrapUrlForFile(workerFileForLabel(label));
+  }
+
+  function getWorkerBootstrapUrlForFile(workerFile) {
+    const workerUrl = resolveLocalAsset(`../lib/monaco-esm/workers/${workerFile}`);
     let bootstrapUrl = workerBootstrapUrls.get(workerUrl);
     if (!bootstrapUrl) {
       const source = [
@@ -150,8 +157,37 @@
   }
 
   function revokeWorkerBootstrapUrls() {
+    userscriptLanguageServerTransport?.dispose?.();
+    userscriptLanguageServerWorker?.terminate?.();
+    userscriptLanguageServerTransport = null;
+    userscriptLanguageServerWorker = null;
     for (const url of workerBootstrapUrls.values()) URL.revokeObjectURL(url);
     workerBootstrapUrls.clear();
+  }
+
+  function startUserscriptLanguageServer(monaco) {
+    const lsp = monaco?.lsp;
+    if (!lsp?.MonacoLspClient || typeof lsp.createTransportToWorker !== 'function') return false;
+
+    let worker = null;
+    let transport = null;
+    try {
+      worker = new Worker(getWorkerBootstrapUrlForFile(USERSCRIPT_LSP_WORKER_FILE), {
+        name: 'ScriptVault userscript language server'
+      });
+      transport = lsp.createTransportToWorker(worker);
+      new lsp.MonacoLspClient(transport);
+      userscriptLanguageServerWorker = worker;
+      userscriptLanguageServerTransport = transport;
+      return true;
+    } catch (error) {
+      console.warn('ScriptVault userscript language service could not start; using editor completions only.', error);
+      transport?.dispose?.();
+      worker?.terminate?.();
+      userscriptLanguageServerWorker = null;
+      userscriptLanguageServerTransport = null;
+      return false;
+    }
   }
 
   async function loadMonacoEsm() {
@@ -176,8 +212,9 @@
     monacoApi = monaco;
       registerScriptVaultTypes(monaco);
       // ── Custom userscript language extension ──────────────────────────────
-      // Register @metadata keywords in the completion provider
-      monaco.languages.registerCompletionItemProvider('javascript', {
+      // Keep the original metadata provider as a graceful fallback when the
+      // native Monaco LSP client is unavailable or its worker cannot start.
+      if (!startUserscriptLanguageServer(monaco)) monaco.languages.registerCompletionItemProvider('javascript', {
         triggerCharacters: ['@'],
         provideCompletionItems(model, position) {
           const textUntilPosition = model.getValueInRange({ startLineNumber: 1, startColumn: 1, endLineNumber: position.lineNumber, endColumn: position.column });

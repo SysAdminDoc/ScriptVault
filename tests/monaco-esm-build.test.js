@@ -20,6 +20,7 @@ describe('Monaco ESM prototype build contract', () => {
       'workers/css.worker.js',
       'workers/html.worker.js',
       'workers/ts.worker.js',
+      'workers/userscript-lsp.worker.js',
     ]) {
       expect(entry).toContain(worker);
     }
@@ -45,6 +46,7 @@ describe('Monaco ESM prototype build contract', () => {
       '"css.worker":',
       '"html.worker":',
       '"ts.worker":',
+      '"userscript-lsp.worker":',
     ]) {
       expect(config).toContain(worker);
     }

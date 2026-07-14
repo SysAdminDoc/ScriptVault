@@ -14,7 +14,7 @@ function sandboxScript() {
   );
 }
 
-function createFakeMonaco() {
+function createFakeMonaco({ lspConstructorFails = false, withLsp = false } = {}) {
   const javascriptDefaults = {
     addExtraLib: vi.fn(),
   };
@@ -37,9 +37,7 @@ function createFakeMonaco() {
     getAction: vi.fn(() => ({ run: vi.fn() })),
   };
 
-  return {
-    editorInstance,
-    monaco: {
+  const monaco = {
       KeyMod: { CtrlCmd: 1, Shift: 2 },
       KeyCode: { KeyS: 1, Escape: 2, Slash: 3, F8: 4 },
       languages: {
@@ -55,23 +53,37 @@ function createFakeMonaco() {
         defineTheme: vi.fn(),
         setTheme: vi.fn(),
       },
-    },
+    };
+  if (withLsp) {
+    monaco.lsp = {
+      createTransportToWorker: vi.fn(worker => ({ worker, dispose: vi.fn() })),
+      MonacoLspClient: vi.fn(function MonacoLspClient(transport) {
+        if (lspConstructorFails) throw new Error('LSP startup failed');
+        this.transport = transport;
+      }),
+    };
+  }
+  return {
+    editorInstance,
+    monaco,
   };
 }
 
 function createHarness({
   blobClass = Blob,
   moduleFails = false,
+  lspConstructorFails = false,
   stylesheetFails = false,
   typeDefinitions = 'declare const GM_info: unknown;',
   urlClass = URL,
+  withLsp = false,
   workerClass = class Worker {},
 } = {}) {
   const messages = [];
   const appendedLinks = [];
   const loading = { style: {}, innerHTML: '' };
   const container = {};
-  const { monaco, editorInstance } = createFakeMonaco();
+  const { monaco, editorInstance } = createFakeMonaco({ lspConstructorFails, withLsp });
   const windowObject = {};
   const document = {
     baseURI: 'https://scriptvault.local/pages/editor-sandbox.html',
@@ -199,6 +211,70 @@ describe('Monaco ESM sandbox loader', () => {
     expect(createdBlobs[0].parts.join('\n')).toContain(
       'self.MonacoEnvironment = { baseUrl: "https://scriptvault.local/lib/monaco-esm/" };',
     );
+  });
+
+  it('starts the local userscript language server through Monaco native LSP transport', async () => {
+    const createdBlobs = [];
+    class CapturedBlob {
+      constructor(parts, options) {
+        this.parts = parts;
+        this.options = options;
+        createdBlobs.push(this);
+      }
+    }
+    class URLWithBlobSupport extends URL {}
+    URLWithBlobSupport.createObjectURL = vi.fn(blob => `blob:scriptvault-worker-${createdBlobs.indexOf(blob)}`);
+    URLWithBlobSupport.revokeObjectURL = vi.fn();
+    const Worker = vi.fn(function Worker(url, options) {
+      this.url = url;
+      this.options = options;
+    });
+    const harness = createHarness({
+      blobClass: CapturedBlob,
+      urlClass: URLWithBlobSupport,
+      withLsp: true,
+      workerClass: Worker,
+    });
+
+    await runSandbox(harness.context);
+
+    expect(Worker).toHaveBeenCalledWith('blob:scriptvault-worker-0', {
+      name: 'ScriptVault userscript language server',
+    });
+    expect(createdBlobs[0].parts.join('\n')).toContain(
+      'importScripts("https://scriptvault.local/lib/monaco-esm/workers/userscript-lsp.worker.js");',
+    );
+    expect(harness.monaco.lsp.createTransportToWorker).toHaveBeenCalledWith(Worker.mock.instances[0]);
+    expect(harness.monaco.lsp.MonacoLspClient).toHaveBeenCalledWith(
+      harness.monaco.lsp.createTransportToWorker.mock.results[0].value,
+    );
+    expect(harness.monaco.languages.registerCompletionItemProvider).not.toHaveBeenCalled();
+  });
+
+  it('terminates a failed language worker and restores metadata completion fallback', async () => {
+    class URLWithBlobSupport extends URL {}
+    URLWithBlobSupport.createObjectURL = vi.fn(() => 'blob:failed-userscript-worker');
+    URLWithBlobSupport.revokeObjectURL = vi.fn();
+    const terminate = vi.fn();
+    const Worker = vi.fn(function Worker() {
+      this.terminate = terminate;
+    });
+    const harness = createHarness({
+      lspConstructorFails: true,
+      urlClass: URLWithBlobSupport,
+      withLsp: true,
+      workerClass: Worker,
+    });
+
+    await runSandbox(harness.context);
+
+    expect(harness.monaco.lsp.createTransportToWorker.mock.results[0].value.dispose).toHaveBeenCalled();
+    expect(terminate).toHaveBeenCalled();
+    expect(harness.monaco.languages.registerCompletionItemProvider).toHaveBeenCalledWith(
+      'javascript',
+      expect.objectContaining({ triggerCharacters: ['@'] }),
+    );
+    expect(harness.messages).toContainEqual({ type: 'ready' });
   });
 
   it('posts the existing fallback message when the ESM bundle is missing', async () => {

@@ -14,6 +14,7 @@ export const monacoWorkerFiles: Readonly<Record<string, string>> = Object.freeze
   razor: 'workers/html.worker.js',
   typescript: 'workers/ts.worker.js',
   javascript: 'workers/ts.worker.js',
+  userscriptLsp: 'workers/userscript-lsp.worker.js',
 });
 
 export function getMonacoWorkerFile(label: string): string {

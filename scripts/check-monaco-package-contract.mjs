@@ -124,6 +124,8 @@ function checkSandbox(files, failures) {
     "const LOCAL_ESM_CSS = '../lib/monaco-esm/editor.css';",
     'await import(LOCAL_ESM_ENTRY)',
     'loadStylesheet(LOCAL_ESM_CSS)',
+    "const USERSCRIPT_LSP_WORKER_FILE = 'userscript-lsp.worker.js';",
+    'new lsp.MonacoLspClient(transport)',
     "parent.postMessage({ type: 'monaco-load-error', reason: 'missing-bundle' }, '*')",
   ]) {
     if (!hasNeedle(text, needle)) {

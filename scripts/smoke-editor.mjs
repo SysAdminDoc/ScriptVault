@@ -129,6 +129,36 @@ try {
         { timeout: 5000 }
     );
 
+    // Exercise the local userscript language server through the real sandbox,
+    // worker transport, Monaco model bridge, and rendered diagnostic layer.
+    const editorFrame = await page.waitForFrame(
+        frame => frame.url().includes('/pages/editor-sandbox.html'),
+        { timeout: 15000 }
+    );
+    await editorFrame.waitForSelector('.monaco-editor', { timeout: 15000 });
+    const diagnosticFixture = [
+        '// ==UserScript==',
+        '// @name Smoke test',
+        '// @run-at eventually',
+        '// @require http://example.com/helper.js',
+        '// @connect *',
+        '// ==/UserScript==',
+    ].join('\n');
+    await page.evaluate(value => {
+        document.getElementById('monacoFrame').contentWindow.postMessage({
+            type: 'set-value',
+            value,
+            scriptId: 'editor-smoke-lsp',
+        }, '*');
+    }, diagnosticFixture);
+    await editorFrame.waitForFunction(
+        () => document.querySelectorAll('.squiggly-warning').length >= 4,
+        { timeout: 15000 }
+    );
+    const diagnosticCount = await editorFrame.evaluate(
+        () => document.querySelectorAll('.squiggly-warning').length
+    );
+
     const geometry = await page.evaluate(() => {
         const rect = id => {
             const el = document.getElementById(id) || document.querySelector(id);
@@ -203,7 +233,7 @@ try {
         throw new Error(`Editor smoke failed: ${failures.join('; ')}`);
     }
 
-    console.log(`Editor smoke passed: overlay full-viewport, code pane ${(geometry.codePaneShare * 100).toFixed(0)}% of viewport, all ${Object.keys(geometry.hits).length} controls hit-testable, close works.`);
+    console.log(`Editor smoke passed: overlay full-viewport, code pane ${(geometry.codePaneShare * 100).toFixed(0)}% of viewport, all ${Object.keys(geometry.hits).length} controls hit-testable, ${diagnosticCount} userscript warnings rendered, close works.`);
     console.log('Screenshot: smoke-editor.png');
     if (pageErrors.length > 0) {
         console.warn(`Editor smoke observed ${pageErrors.length} console/page error(s):`);

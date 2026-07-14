@@ -13,6 +13,7 @@ const REQUIRED_OUTPUTS = [
   'lib/monaco-esm/workers/css.worker.js',
   'lib/monaco-esm/workers/html.worker.js',
   'lib/monaco-esm/workers/ts.worker.js',
+  'lib/monaco-esm/workers/userscript-lsp.worker.js',
 ];
 
 let tempRoots = [];
@@ -50,7 +51,7 @@ describe('Monaco ESM prototype checker', () => {
     const result = runMonacoEsmPrototypeCheck({ projectRoot: root });
 
     expect(result.failures).toEqual([]);
-    expect(result.outputs).toHaveLength(8);
+    expect(result.outputs).toHaveLength(9);
     expect(result.outputs.find((output) => output.path === 'lib/monaco-esm/editor.js')).toMatchObject({
       bytes: 1024,
     });

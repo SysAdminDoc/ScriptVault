@@ -207,6 +207,7 @@ async function buildMonacoEsm() {
       "css.worker": join(ROOT, "node_modules", "monaco-editor", "esm", "vs", "language", "css", "css.worker.js"),
       "html.worker": join(ROOT, "node_modules", "monaco-editor", "esm", "vs", "language", "html", "html.worker.js"),
       "ts.worker": join(ROOT, "node_modules", "monaco-editor", "esm", "vs", "language", "typescript", "ts.worker.js"),
+      "userscript-lsp.worker": join(ROOT, "src", "editor", "userscript-lsp-worker.ts"),
     },
     outdir: workersDir,
     format: "iife",
