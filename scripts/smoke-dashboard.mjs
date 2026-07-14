@@ -118,6 +118,7 @@ try {
 
     const extensionId = await findExtensionId(browser);
     const page = await browser.newPage();
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1 });
     page.on('pageerror', error => pageErrors.push(error.message));
     page.on('console', message => {
         if (message.type() === 'error') pageErrors.push(message.text());
@@ -159,7 +160,74 @@ try {
         throw new Error(`Dashboard smoke failed: ${failures.join('; ')}`);
     }
 
-    console.log(`Dashboard smoke passed for ScriptVault ${snapshot.version} (${extensionId}).`);
+    const whatsNewDismiss = await page.$('#svWnDismiss');
+    if (whatsNewDismiss) {
+        await whatsNewDismiss.click();
+        await page.waitForFunction(() => !document.querySelector('.sv-wn-overlay'), { timeout: 5000 });
+    }
+
+    const workbenchDestinations = [
+        { target: 'signingTrustSection', tab: 'utilities', filter: 'diagnostics' },
+        { target: 'runtimeHostPermissionsSection', tab: 'settings', filter: 'security' },
+        { target: 'pageAccessSettingsRow', tab: 'settings', filter: 'security' },
+    ];
+    for (const destination of workbenchDestinations) {
+        const shortcutSelector = `[data-workbench-target="${destination.target}"]`;
+        await page.focus(shortcutSelector);
+        await page.keyboard.press('Enter');
+        const destinationReady = ({ target, tab, filter }) => {
+            const panel = document.getElementById(`${tab}Panel`);
+            const targetElement = document.getElementById(target);
+            const filterButton = document.querySelector(
+                tab === 'utilities'
+                    ? `[data-utilities-filter="${filter}"]`
+                    : `[data-settings-filter="${filter}"]`
+            );
+            const focusSurface = targetElement?.closest('.settings-section') || targetElement;
+            return Boolean(
+                panel?.classList.contains('active')
+                && !panel.hidden
+                && filterButton?.getAttribute('aria-pressed') === 'true'
+                && document.activeElement === targetElement
+                && focusSurface?.dataset.workbenchFocus === 'true'
+            );
+        };
+        try {
+            await page.waitForFunction(destinationReady, { timeout: 5000 }, destination);
+        } catch (error) {
+            const detail = await page.evaluate(({ target, tab, filter }) => {
+                const shortcut = document.querySelector(`[data-workbench-target="${target}"]`);
+                const panel = document.getElementById(`${tab}Panel`);
+                const targetElement = document.getElementById(target);
+                const filterButton = document.querySelector(
+                    tab === 'utilities'
+                        ? `[data-utilities-filter="${filter}"]`
+                        : `[data-settings-filter="${filter}"]`
+                );
+                const focusSurface = targetElement?.closest('.settings-section') || targetElement;
+                return {
+                    shortcut: shortcut ? {
+                        disabled: shortcut.disabled,
+                        tabIndex: shortcut.tabIndex,
+                        connected: shortcut.isConnected,
+                        rect: shortcut.getBoundingClientRect().toJSON(),
+                        display: getComputedStyle(shortcut).display,
+                        visibility: getComputedStyle(shortcut).visibility,
+                        pointerEvents: getComputedStyle(shortcut).pointerEvents,
+                    } : null,
+                    panelActive: panel?.classList.contains('active'),
+                    panelHidden: panel?.hidden,
+                    filterPressed: filterButton?.getAttribute('aria-pressed'),
+                    activeElement: document.activeElement?.id,
+                    focusSurface: focusSurface?.id,
+                    focusState: focusSurface?.dataset.workbenchFocus,
+                };
+            }, destination);
+            throw new Error(`Workbench shortcut ${destination.target} failed: ${JSON.stringify(detail)}`, { cause: error });
+        }
+    }
+
+    console.log(`Dashboard smoke passed for ScriptVault ${snapshot.version} (${extensionId}); ${workbenchDestinations.length} deep links verified.`);
     if (pageErrors.length > 0) {
         console.warn(`Dashboard smoke observed ${pageErrors.length} console/page error(s):`);
         pageErrors.slice(0, 5).forEach(error => console.warn(`- ${error}`));

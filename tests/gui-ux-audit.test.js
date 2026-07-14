@@ -68,6 +68,7 @@ describe("cross-surface UX audit", () => {
   test("dashboard navigation and deep panels expose honest destinations and page hierarchy", () => {
     const doc = parseHtml(dashboardHtml);
     const primaryItems = Array.from(doc.querySelectorAll(".sv-rail-nav > .sv-rail-item"));
+    const trustItems = Array.from(doc.querySelectorAll('.sv-rail-section[aria-label="Trust tools"] .sv-rail-subitem'));
 
     expect(primaryItems.map((item) => item.dataset.workbenchTab)).toEqual([
       "scripts", "updates", "settings", "utilities", "trash", "help",
@@ -77,6 +78,18 @@ describe("cross-surface UX audit", () => {
     expect(primaryItems.every((item) => item.getAttribute("role") === "tab")).toBe(true);
     expect(primaryItems.every((item) => item.hasAttribute("aria-controls"))).toBe(true);
     expect(dashboardHtml).not.toContain("ScriptVault Pro");
+    expect(trustItems.map((item) => ({
+      label: item.textContent?.replace(/\s+/g, " ").trim(),
+      tab: item.dataset.workbenchTab,
+      filter: item.dataset.workbenchFilter,
+      target: item.dataset.workbenchTarget,
+    }))).toEqual([
+      { label: "T Trusted Sources", tab: "utilities", filter: "diagnostics", target: "signingTrustSection" },
+      { label: "P Permissions", tab: "settings", filter: "security", target: "runtimeHostPermissionsSection" },
+      { label: "D Domain Access", tab: "settings", filter: "security", target: "pageAccessSettingsRow" },
+    ]);
+    expect(doc.getElementById("signingTrustSection")?.getAttribute("role")).toBe("region");
+    expect(doc.getElementById("runtimeHostPermissionsSection")?.getAttribute("role")).toBe("region");
     expect(dashboardWorkbenchCss).toContain(".tm-header {\n  display: none;");
     expect(dashboardWorkbenchCss).toContain(".settings-hero,");
     expect(dashboardWorkbenchCss).toContain("display: grid !important");
@@ -86,6 +99,12 @@ describe("cross-surface UX audit", () => {
     expect(dashboardWorkbenchCss).toContain("#trashPanel .trash-surface");
     expect(dashboardJs).toContain("getActiveWorkbenchTab(nextTab)?.focus()");
     expect(dashboardJs).toContain("button.getAttribute('role') === 'tab'");
+    expect(dashboardJs).toContain("function focusWorkbenchDestination(targetId)");
+    expect(dashboardJs).toContain("if (!focusWorkbenchDestination(targetId)) filterButton?.focus()");
+    expect(dashboardWorkbenchCss).toContain('[data-workbench-focus="true"]');
+    const dashboardSmoke = readFileSync(resolve(process.cwd(), "scripts/smoke-dashboard.mjs"), "utf8");
+    expect(dashboardSmoke).toContain("const workbenchDestinations = [");
+    expect(dashboardSmoke).toContain("document.activeElement === targetElement");
   });
 
   test("settings autosave and update empty states communicate progress and recovery", () => {
@@ -295,6 +314,9 @@ describe("cross-surface UX audit", () => {
     expect(devtoolsJs).toContain("function closeDetail");
     expect(devtoolsJs).toContain("function updateToolbarContext");
     expect(devtoolsJs).toContain("function updateNetworkClearButton()");
+    expect(devtoolsJs).toContain("function removeColorSchemeListener()");
+    expect(devtoolsJs).toContain("colorSchemeMedia.removeEventListener('change', colorSchemeChangeHandler)");
+    expect(devtoolsJs).toContain("window.addEventListener('pagehide'");
     expect(devtoolsJs).toContain("renderConsoleState()");
     expect(devtoolsJs).toContain("event.key === 'ArrowRight'");
     expect(devtoolsJs).toContain("event.key === 'ArrowDown'");

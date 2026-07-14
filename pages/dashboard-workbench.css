@@ -769,6 +769,21 @@ body {
 #settingsPanel .settings-section,
 #utilitiesPanel .settings-section {
   grid-template-columns: minmax(170px, 220px) minmax(0, 1fr);
+  scroll-margin-block: 24px;
+  transition: border-color var(--sv-transition-base), box-shadow var(--sv-transition-base), background-color var(--sv-transition-base);
+}
+
+#settingsPanel :is(.settings-section, .setting-row)[data-workbench-focus="true"],
+#utilitiesPanel :is(.settings-section, .setting-row)[data-workbench-focus="true"] {
+  border-color: var(--sv-accent-border);
+  background: color-mix(in srgb, var(--sv-accent) 5%, var(--sv-surface));
+  box-shadow: var(--sv-focus-ring), var(--sv-shadow-sm);
+}
+
+#settingsPanel :is(.settings-section, .setting-row):focus-visible,
+#utilitiesPanel :is(.settings-section, .setting-row):focus-visible {
+  outline: 2px solid var(--sv-accent);
+  outline-offset: 3px;
 }
 
 #settingsPanel .section-label,

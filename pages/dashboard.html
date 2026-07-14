@@ -7556,16 +7556,16 @@
             </div>
             <div class="sv-rail-section" aria-label="Trust tools">
                 <span class="sv-rail-section-title">Trust</span>
-                <button type="button" class="sv-rail-item sv-rail-subitem" data-workbench-tab="settings" data-workbench-filter="security" aria-pressed="false">
+                <button type="button" class="sv-rail-item sv-rail-subitem" data-workbench-tab="utilities" data-workbench-filter="diagnostics" data-workbench-target="signingTrustSection" aria-pressed="false">
                     <span class="sv-rail-icon" aria-hidden="true">T</span>
                     <span>Trusted Sources</span>
                     <span class="sv-status-dot good" aria-hidden="true"></span>
                 </button>
-                <button type="button" class="sv-rail-item sv-rail-subitem" data-workbench-tab="settings" data-workbench-filter="security" aria-pressed="false">
+                <button type="button" class="sv-rail-item sv-rail-subitem" data-workbench-tab="settings" data-workbench-filter="security" data-workbench-target="runtimeHostPermissionsSection" aria-pressed="false">
                     <span class="sv-rail-icon" aria-hidden="true">P</span>
                     <span>Permissions</span>
                 </button>
-                <button type="button" class="sv-rail-item sv-rail-subitem" data-workbench-tab="settings" data-workbench-filter="security" aria-pressed="false">
+                <button type="button" class="sv-rail-item sv-rail-subitem" data-workbench-tab="settings" data-workbench-filter="security" data-workbench-target="pageAccessSettingsRow" aria-pressed="false">
                     <span class="sv-rail-icon" aria-hidden="true">D</span>
                     <span>Domain Access</span>
                 </button>
@@ -8449,8 +8449,8 @@
             </div>
 
             <!-- Security Section -->
-            <div class="settings-section" data-config-level="advanced">
-                <div class="section-label" data-i18n="settingsSecurity">Security</div>
+            <div class="settings-section" id="securitySettingsSection" data-config-level="advanced" role="region" aria-labelledby="securitySettingsLabel">
+                <div class="section-label" id="securitySettingsLabel" data-i18n="settingsSecurity">Security</div>
                 <div class="section-content">
                     <div class="setting-row">
                         <span class="label-text" data-i18n="settingsContentScriptApiLabel">Content Script API:</span>
@@ -8584,7 +8584,7 @@
                         </select>
                         <span class="setting-error" id="settingsIncognitoStorageError" hidden></span>
                     </div>
-                    <div class="setting-row">
+                    <div class="setting-row" id="pageAccessSettingsRow" tabindex="-1" aria-label="Domain access rules">
                         <span class="label-text" data-i18n="settingsPageFilterModeLabel">Page Filter Mode:</span>
                         <select class="select-field" id="settingsPageFilterMode" aria-describedby="settingsPageFilterModeError">
                             <option value="blacklist" selected data-i18n="pageFilterBlacklist">Blacklist</option>
@@ -8623,8 +8623,8 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
             </div>
 
             <!-- Runtime Host Permissions Section -->
-            <div class="settings-section" data-config-level="advanced">
-                <div class="section-label" data-i18n="settingsRuntimeHostPermissions">Runtime Host Permissions</div>
+            <div class="settings-section" id="runtimeHostPermissionsSection" data-config-level="advanced" role="region" aria-labelledby="runtimeHostPermissionsLabel" tabindex="-1">
+                <div class="section-label" id="runtimeHostPermissionsLabel" data-i18n="settingsRuntimeHostPermissions">Runtime Host Permissions</div>
                 <div class="section-content">
                     <div class="setting-row">
                         <span class="label-text" data-i18n="settingsDeniedHostsLabel">Host permissions denied by user:</span>
@@ -9292,8 +9292,8 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 </div>
             </div>
 
-            <div class="settings-section">
-                <div class="section-label" data-i18n="signingTrustTitle">Signing Trust</div>
+            <div class="settings-section" id="signingTrustSection" role="region" aria-labelledby="signingTrustLabel" tabindex="-1">
+                <div class="section-label" id="signingTrustLabel" data-i18n="signingTrustTitle">Signing Trust</div>
                 <div class="section-content">
                     <div class="utility-note" style="margin-bottom:8px" data-i18n="signingTrustNote">Manage the trusted signing keys used during install and verification flows.</div>
                     <div class="utility-inline-status" id="signingTrustSummary" style="display:block;margin-bottom:8px" data-i18n="signingTrustLoading">Loading trusted signing keys...</div>

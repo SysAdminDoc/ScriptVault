@@ -1220,6 +1220,30 @@
         ) || null;
     }
 
+    let workbenchDestinationTimer = null;
+
+    function focusWorkbenchDestination(targetId) {
+        const target = targetId ? document.getElementById(targetId) : null;
+        if (!target || target.hidden) return false;
+
+        document.querySelectorAll('[data-workbench-focus="true"]').forEach(element => {
+            element.removeAttribute('data-workbench-focus');
+        });
+        const focusSurface = target.closest('.settings-section') || target;
+        focusSurface.dataset.workbenchFocus = 'true';
+
+        const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+        target.scrollIntoView({ block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
+        requestAnimationFrame(() => target.focus({ preventScroll: true }));
+
+        if (workbenchDestinationTimer) clearTimeout(workbenchDestinationTimer);
+        workbenchDestinationTimer = setTimeout(() => {
+            focusSurface.removeAttribute('data-workbench-focus');
+            workbenchDestinationTimer = null;
+        }, 1800);
+        return true;
+    }
+
     function setDashboardSection(name, { focusControl = false } = {}) {
         const nextTab = DASHBOARD_TABS.includes(name) ? name : 'scripts';
         clearDashboardSectionSelection();
@@ -14880,6 +14904,7 @@
             button.addEventListener('click', async () => {
                 const tabName = button.dataset.workbenchTab;
                 const filter = button.dataset.workbenchFilter;
+                const targetId = button.dataset.workbenchTarget;
                 await switchTab(tabName, { focusControl: !filter });
                 if (filter) {
                     const selector = tabName === 'utilities'
@@ -14887,7 +14912,7 @@
                         : `[data-settings-filter="${filter}"]`;
                     const filterButton = document.querySelector(selector);
                     filterButton?.click();
-                    filterButton?.focus();
+                    if (!focusWorkbenchDestination(targetId)) filterButton?.focus();
                     Array.from(elements.workbenchNavButtons || [])
                         .filter(item => item.classList.contains('sv-rail-subitem'))
                         .forEach(item => item.setAttribute('aria-pressed', String(item === button)));

@@ -72,6 +72,8 @@
   let selectedRow = null;
   let focusedRow = null;
   let refreshTimer = null;
+  let colorSchemeMedia = null;
+  let colorSchemeChangeHandler = null;
   let activeTab = 'network';
   let isRefreshing = false;
 
@@ -267,6 +269,14 @@
   }
 
   // ── Init ─────────────────────────────────────────────────────────────────
+  function removeColorSchemeListener() {
+    if (colorSchemeMedia && colorSchemeChangeHandler) {
+      colorSchemeMedia.removeEventListener('change', colorSchemeChangeHandler);
+    }
+    colorSchemeMedia = null;
+    colorSchemeChangeHandler = null;
+  }
+
   async function applyTheme() {
     // The panel HTML hardcodes data-theme="dark"; without this the panel
     // stayed dark for light/catppuccin/oled users (and its per-theme CSS
@@ -275,14 +285,17 @@
       const settings = await chrome.runtime.sendMessage({ action: 'getSettings' });
       const themeSettings = settings?.settings || settings || {};
       const layoutPref = themeSettings.layout || 'dark';
+      removeColorSchemeListener();
+      colorSchemeMedia = window.matchMedia('(prefers-color-scheme: dark)');
       const resolve = () => layoutPref === 'auto'
-        ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+        ? (colorSchemeMedia.matches ? 'dark' : 'light')
         : layoutPref;
       document.documentElement.setAttribute('data-theme', resolve());
       if (layoutPref === 'auto') {
-        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+        colorSchemeChangeHandler = () => {
           document.documentElement.setAttribute('data-theme', resolve());
-        });
+        };
+        colorSchemeMedia.addEventListener('change', colorSchemeChangeHandler);
       }
     } catch (_e) { /* keep the default dark theme on failure */ }
   }
@@ -343,6 +356,11 @@
       refreshTimer = null;
     }
   }
+
+  window.addEventListener('pagehide', () => {
+    stopAutoRefresh();
+    removeColorSchemeListener();
+  }, { once: true });
 
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
