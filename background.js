@@ -4608,7 +4608,7 @@ const CloudSyncProviders = (() => {
       const canonicalHeaders = sortedHeaderNames.map((key) => `${key}:${headers[key]}
   `).join("");
       const signedHeaders = sortedHeaderNames.join(";");
-      const canonicalQuery = parsedUrl.searchParams.toString().split("&").filter(Boolean).sort().join("&");
+      const canonicalQuery = this._canonicalQuery(parsedUrl);
       const canonicalRequest = [
         method,
         parsedUrl.pathname || "/",
@@ -4636,6 +4636,14 @@ const CloudSyncProviders = (() => {
           Authorization: `AWS4-HMAC-SHA256 Credential=${accessKeyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`
         }
       };
+    },
+    _canonicalQuery(url) {
+      const parsedUrl = typeof url === "string" ? new URL(url) : url;
+      const encode = (value) => encodeURIComponent(value).replace(
+        /[!'()*]/g,
+        (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`
+      );
+      return Array.from(parsedUrl.searchParams.entries(), ([key, value]) => [encode(key), encode(value)]).sort(([leftKey, leftValue], [rightKey, rightValue]) => leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : leftValue < rightValue ? -1 : leftValue > rightValue ? 1 : 0).map(([key, value]) => `${key}=${value}`).join("&");
     },
     async _sha256Hex(input) {
       const bytes = typeof input === "string" ? new TextEncoder().encode(input) : input;

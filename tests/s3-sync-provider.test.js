@@ -137,6 +137,41 @@ describe('S3 provider — SigV4 signing', () => {
     // SHA-256("hello") = 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
     expect(hex).toBe('2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824');
   });
+
+  it('canonicalizes query parameters by encoded key and value using AWS URI rules', () => {
+    const canonical = providers.s3._canonicalQuery(
+      'https://s3.example.test/object?z=last&a=space+value&a=~&empty&plus=%2B&%C3%A9=unicode&a=%21%2A%27%28%29',
+    );
+
+    expect(canonical).toBe(
+      '%C3%A9=unicode&a=%21%2A%27%28%29&a=space%20value&a=~&empty=&plus=%2B&z=last',
+    );
+  });
+
+  it('produces the same signature for equivalent query parameters in different orders', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-14T18:00:00Z'));
+    try {
+      const request = {
+        method: 'GET',
+        region: 'us-east-1',
+        accessKeyId: 'AKIAIOSFODNN7EXAMPLE',
+        secretKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+      };
+      const first = await providers.s3._signRequest({
+        ...request,
+        url: 'https://scriptvault-backups.s3.us-east-1.amazonaws.com/object?versionId=3&partNumber=2&partNumber=1',
+      });
+      const reordered = await providers.s3._signRequest({
+        ...request,
+        url: 'https://scriptvault-backups.s3.us-east-1.amazonaws.com/object?partNumber=1&versionId=3&partNumber=2',
+      });
+
+      expect(reordered.headers.Authorization).toBe(first.headers.Authorization);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe('S3 provider — upload/download round trip against a mock server', () => {
