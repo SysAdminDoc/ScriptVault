@@ -4,6 +4,10 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Typed diagnostics and observability dispatch.** CSP reports, network logs,
+  static analysis, local AI, execution statistics, error logs, notifications,
+  script consoles, NPM resolution, and live reload now share one generated
+  action/response contract instead of duplicated background switch cases.
 - **Typed signing and Public API security dispatch.** Key trust, signature
   verification, trusted callers, local MCP bridge configuration, permissions,
   audit logs, and web messages now share a generated fail-closed contract.

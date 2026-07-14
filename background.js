@@ -23766,6 +23766,121 @@ if (typeof self !== 'undefined') {
 }
 
 // ============================================================================
+// Generated from src/background/diagnostics-action-handler.ts; do not edit by hand.
+// Run `node scripts/generate-ts-runtime-modules.mjs` or `npm run build:bg`.
+// ============================================================================
+
+const DiagnosticsActionHandler = (() => {
+  const module = { exports: {} };
+  const exports = module.exports;
+  "use strict";
+  var __defProp = Object.defineProperty;
+  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, { get: all[name], enumerable: true });
+  };
+  var __copyProps = (to, from, except, desc) => {
+    if (from && typeof from === "object" || typeof from === "function") {
+      for (let key of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(to, key) && key !== except)
+          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+    }
+    return to;
+  };
+  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+  // src/background/diagnostics-action-handler.ts
+  var diagnostics_action_handler_exports = {};
+  __export(diagnostics_action_handler_exports, {
+    DIAGNOSTICS_BACKGROUND_ACTIONS: () => DIAGNOSTICS_BACKGROUND_ACTIONS,
+    DiagnosticsActionHandler: () => DiagnosticsActionHandler,
+    createDiagnosticsActionHandlers: () => createDiagnosticsActionHandlers,
+    default: () => diagnostics_action_handler_default
+  });
+  module.exports = __toCommonJS(diagnostics_action_handler_exports);
+  var DIAGNOSTICS_BACKGROUND_ACTIONS = [
+    "reportCSPFailure",
+    "getCSPReports",
+    "getNetworkLog",
+    "getNetworkLogStats",
+    "clearNetworkLog",
+    "analyzeScript",
+    "getOnDeviceAIStatus",
+    "runOnDeviceAI",
+    "getScriptStats",
+    "getExecutionDiagnostics",
+    "resetScriptStats",
+    "reportDocumentReady",
+    "npmResolve",
+    "npmResolveAll",
+    "logError",
+    "getErrorLog",
+    "getErrorLogGrouped",
+    "exportErrorLog",
+    "clearErrorLog",
+    "getNotificationPrefs",
+    "setNotificationPrefs",
+    "generateDigest",
+    "scriptConsoleCapture",
+    "getScriptConsole",
+    "clearScriptConsole",
+    "setLiveReload",
+    "getLiveReloadScripts"
+  ];
+  function createDiagnosticsActionHandlers(dependencies) {
+    const handlers = {
+      reportCSPFailure: ({ message }) => dependencies.reportCspFailure(message.url, message.scriptId, message.directive),
+      getCSPReports: () => dependencies.getCspReports(),
+      getNetworkLog: ({ message }) => dependencies.getNetworkLog(message),
+      getNetworkLogStats: () => dependencies.getNetworkLogStats(),
+      clearNetworkLog: ({ message }) => dependencies.clearNetworkLog(message.scriptId),
+      analyzeScript: ({ message }) => dependencies.analyzeScript(message.code || ""),
+      getOnDeviceAIStatus: () => dependencies.getOnDeviceAiStatus(),
+      runOnDeviceAI: ({ message }) => dependencies.runOnDeviceAi({
+        mode: message.mode,
+        code: message.code || "",
+        metadata: message.metadata || null,
+        analysis: message.analysis || null,
+        prompt: message.prompt || ""
+      }),
+      getScriptStats: ({ message }) => dependencies.getScriptStats(message.scriptId),
+      getExecutionDiagnostics: ({ message }) => dependencies.getExecutionDiagnostics(Number(message.tabId)),
+      resetScriptStats: ({ message }) => dependencies.resetScriptStats(message.scriptId),
+      reportDocumentReady: ({ message, sender }) => dependencies.reportDocumentReady(message.url || "", sender),
+      npmResolve: ({ message }) => dependencies.npmResolve(message.spec),
+      npmResolveAll: ({ message }) => dependencies.npmResolveAll(message.requires),
+      logError: ({ message }) => dependencies.logError(message.entry || message),
+      getErrorLog: ({ message }) => dependencies.getErrorLog(message.filters),
+      getErrorLogGrouped: () => dependencies.getErrorLogGrouped(),
+      exportErrorLog: ({ message }) => dependencies.exportErrorLog(message.format || "json"),
+      clearErrorLog: () => dependencies.clearErrorLog(),
+      getNotificationPrefs: () => dependencies.getNotificationPrefs(),
+      setNotificationPrefs: ({ message }) => dependencies.setNotificationPrefs(message.prefs),
+      generateDigest: () => dependencies.generateDigest(),
+      scriptConsoleCapture: ({ message }) => dependencies.captureScriptConsole(message.scriptId, message.entries),
+      getScriptConsole: ({ message }) => dependencies.getScriptConsole(message.scriptId),
+      clearScriptConsole: ({ message }) => dependencies.clearScriptConsole(message.scriptId),
+      setLiveReload: ({ message }) => dependencies.setLiveReload(message.scriptId, message.enabled),
+      getLiveReloadScripts: () => dependencies.getLiveReloadScripts()
+    };
+    return Object.freeze(handlers);
+  }
+  var DiagnosticsActionHandler = Object.freeze({
+    DIAGNOSTICS_BACKGROUND_ACTIONS,
+    createDiagnosticsActionHandlers
+  });
+  var diagnostics_action_handler_default = DiagnosticsActionHandler;
+  return module.exports.default || module.exports.DiagnosticsActionHandler || module.exports;
+})();
+
+if (typeof self !== 'undefined') {
+  self.DiagnosticsActionHandler = DiagnosticsActionHandler;
+}
+
+// ============================================================================
 // Generated from src/background/message-router.ts; do not edit by hand.
 // Run `node scripts/generate-ts-runtime-modules.mjs` or `npm run build:bg`.
 // ============================================================================
@@ -46286,6 +46401,144 @@ backgroundActionRegistry.registerHandlers(SecurityActionHandler.createSecurityAc
     };
   }
 }));
+backgroundActionRegistry.registerHandlers(DiagnosticsActionHandler.createDiagnosticsActionHandlers({
+  reportCspFailure: async (url, scriptId, directive) => {
+    const cspData = await chrome.storage.local.get('cspReports');
+    let reports = cspData.cspReports || [];
+    reports.push({ url, scriptId, directive, timestamp: Date.now() });
+    if (reports.length > 510) reports = reports.slice(-500);
+    await chrome.storage.local.set({ cspReports: reports });
+    return { success: true };
+  },
+  getCspReports: async () => {
+    const cspData = await chrome.storage.local.get('cspReports');
+    return { reports: cspData.cspReports || [] };
+  },
+  getNetworkLog: filters => NetworkLog.getAll(filters),
+  getNetworkLogStats: () => NetworkLog.getStats(),
+  clearNetworkLog: scriptId => {
+    NetworkLog.clear(scriptId);
+    return { success: true };
+  },
+  analyzeScript: code => ScriptAnalyzer.analyzeAsync(code),
+  getOnDeviceAiStatus: async () => {
+    const settings = await SettingsManager.get();
+    if (typeof OnDeviceAI === 'undefined' || typeof OnDeviceAI.getStatus !== 'function') {
+      return {
+        enabled: settings?.onDeviceAiEnabled === true,
+        localOnly: true,
+        provider: 'chrome-prompt-api',
+        available: false,
+        availability: 'module-missing',
+        downloadable: false,
+        downloading: false,
+        reason: 'On-device AI module is unavailable.'
+      };
+    }
+    return await OnDeviceAI.getStatus(settings);
+  },
+  runOnDeviceAi: async input => {
+    const settings = await SettingsManager.get();
+    if (typeof OnDeviceAI === 'undefined' || typeof OnDeviceAI.runPrompt !== 'function') {
+      return { success: false, error: 'On-device AI module is unavailable.' };
+    }
+    return await OnDeviceAI.runPrompt(settings, input);
+  },
+  getScriptStats: async scriptId => {
+    if (scriptId) {
+      const script = await ScriptStorage.get(scriptId);
+      return { stats: script?.stats || null };
+    }
+    const scripts = await ScriptStorage.getAll();
+    const allStats = {};
+    for (const script of scripts) {
+      if (script.stats) allStats[script.id] = script.stats;
+    }
+    return { allStats };
+  },
+  getExecutionDiagnostics: tabId => executionDiagnosticsStore.snapshot(tabId),
+  resetScriptStats: async scriptId => {
+    const script = await ScriptStorage.get(scriptId);
+    if (script) {
+      script.stats = { runs: 0, totalTime: 0, avgTime: 0, lastRun: 0, errors: 0 };
+      await ScriptStorage.set(scriptId, script);
+    }
+    return { success: true };
+  },
+  reportDocumentReady: (url, sender) => {
+    executionDiagnosticsStore.record(sender, {
+      type: 'document-ready',
+      url: url || sender?.tab?.url || ''
+    });
+    return { success: true };
+  },
+  npmResolve: spec => typeof NpmResolver !== 'undefined'
+    ? NpmResolver.resolve(spec)
+    : Promise.resolve({ error: 'NpmResolver not available' }),
+  npmResolveAll: requires => typeof NpmResolver !== 'undefined'
+    ? NpmResolver.resolveAll(requires)
+    : Promise.resolve({ error: 'NpmResolver not available' }),
+  logError: async entry => {
+    if (typeof ErrorLog === 'undefined') return { error: 'ErrorLog not available' };
+    await ErrorLog.log(entry);
+    return { success: true };
+  },
+  getErrorLog: filters => typeof ErrorLog !== 'undefined'
+    ? ErrorLog.getAll(filters)
+    : Promise.resolve({ log: [] }),
+  getErrorLogGrouped: () => typeof ErrorLog !== 'undefined'
+    ? ErrorLog.getGrouped()
+    : Promise.resolve({ groups: [] }),
+  exportErrorLog: async format => {
+    if (typeof ErrorLog === 'undefined') return { error: 'ErrorLog not available' };
+    if (format === 'csv') return { data: await ErrorLog.exportCSV() };
+    if (format === 'text') return { data: await ErrorLog.exportText() };
+    return { data: await ErrorLog.exportJSON() };
+  },
+  clearErrorLog: async () => {
+    if (typeof ErrorLog === 'undefined') return { error: 'ErrorLog not available' };
+    await ErrorLog.clear();
+    return { success: true };
+  },
+  getNotificationPrefs: () => typeof NotificationSystem !== 'undefined'
+    ? NotificationSystem.getPreferences()
+    : Promise.resolve({}),
+  setNotificationPrefs: async prefs => {
+    if (typeof NotificationSystem === 'undefined') return { error: 'NotificationSystem not available' };
+    await NotificationSystem.setPreferences(prefs);
+    return { success: true };
+  },
+  generateDigest: () => typeof NotificationSystem !== 'undefined'
+    ? NotificationSystem.generateDigest()
+    : Promise.resolve({ error: 'NotificationSystem not available' }),
+  captureScriptConsole: async (scriptId, capturedEntries) => {
+    const key = `console_${scriptId}`;
+    const existing = await chrome.storage.session.get(key);
+    const entries = existing[key] || [];
+    entries.push(...capturedEntries.slice(-200));
+    await chrome.storage.session.set({ [key]: entries.slice(-200) });
+    return { success: true };
+  },
+  getScriptConsole: async scriptId => {
+    const consoleData = await chrome.storage.session.get(`console_${scriptId}`);
+    return { entries: consoleData[`console_${scriptId}`] || [] };
+  },
+  clearScriptConsole: async scriptId => {
+    await chrome.storage.session.remove(`console_${scriptId}`);
+    return { success: true };
+  },
+  setLiveReload: async (scriptId, enabled) => {
+    const { liveReloadScripts = {} } = await chrome.storage.local.get('liveReloadScripts');
+    if (enabled) liveReloadScripts[scriptId] = true;
+    else delete liveReloadScripts[scriptId];
+    await chrome.storage.local.set({ liveReloadScripts });
+    return { success: true };
+  },
+  getLiveReloadScripts: async () => {
+    const { liveReloadScripts = {} } = await chrome.storage.local.get('liveReloadScripts');
+    return { scripts: liveReloadScripts };
+  }
+}));
 backgroundActionRegistry.registerHandlers(MessageRouter.createBackgroundDomainHandlers(
   GMValuesHandler.GM_VALUES_ACTIONS,
   ({ action, message, sender }) => GMValuesHandler.handleGMValuesMessage(action, message, sender)
@@ -47347,22 +47600,6 @@ async function handleMessage(message, sender) {
         return { freedBytes: 0, actions: [] };
       }
 
-      // v2.0: Script Analytics
-      // v2.0: CSP Reports
-      case 'reportCSPFailure': {
-        const cspData = await chrome.storage.local.get('cspReports');
-        let reports = cspData.cspReports || [];
-        reports.push({ url: data.url, scriptId: data.scriptId, directive: data.directive, timestamp: Date.now() });
-        // Keep last 500 reports (slice is cheaper than splice-from-head)
-        if (reports.length > 510) reports = reports.slice(-500);
-        await chrome.storage.local.set({ cspReports: reports });
-        return { success: true };
-      }
-      case 'getCSPReports': {
-        const cspData2 = await chrome.storage.local.get('cspReports');
-        return { reports: cspData2.cspReports || [] };
-      }
-
       // v2.0: Gist Integration
       case 'getGistSettings': {
         const gData = await chrome.storage.local.get('gistSettings');
@@ -47375,59 +47612,6 @@ async function handleMessage(message, sender) {
 
       case 'exportZip':
         return await exportToZip(data?.options || {});
-
-      // Network Log — returns flat array (limit optional) + stats
-      case 'getNetworkLog': {
-        const filters = typeof data === 'object' && data ? data : {};
-        const log = NetworkLog.getAll(filters);
-        const stats = NetworkLog.getStats();
-        // Support both flat-array callers (DevTools) and object callers (dashboard)
-        return log; // stats available via getNetworkLogStats
-      }
-
-      case 'getNetworkLogStats':
-        return NetworkLog.getStats();
-
-      case 'clearNetworkLog':
-        NetworkLog.clear(data?.scriptId);
-        return { success: true };
-
-      // Static Analysis — routes through offscreen document for AST analysis
-      case 'analyzeScript': {
-        const code = data.code || '';
-        return ScriptAnalyzer.analyzeAsync(code);
-      }
-
-      case 'getOnDeviceAIStatus': {
-        const settings = await SettingsManager.get();
-        if (typeof OnDeviceAI === 'undefined' || typeof OnDeviceAI.getStatus !== 'function') {
-          return {
-            enabled: settings?.onDeviceAiEnabled === true,
-            localOnly: true,
-            provider: 'chrome-prompt-api',
-            available: false,
-            availability: 'module-missing',
-            downloadable: false,
-            downloading: false,
-            reason: 'On-device AI module is unavailable.'
-          };
-        }
-        return await OnDeviceAI.getStatus(settings);
-      }
-
-      case 'runOnDeviceAI': {
-        const settings = await SettingsManager.get();
-        if (typeof OnDeviceAI === 'undefined' || typeof OnDeviceAI.runPrompt !== 'function') {
-          return { success: false, error: 'On-device AI module is unavailable.' };
-        }
-        return await OnDeviceAI.runPrompt(settings, {
-          mode: data.mode,
-          code: data.code || '',
-          metadata: data.metadata || null,
-          analysis: data.analysis || null,
-          prompt: data.prompt || ''
-        });
-      }
 
       case 'installFromUrl':
         return await installFromUrl(data.url);
@@ -47702,124 +47886,7 @@ async function handleMessage(message, sender) {
           scriptMetaStr: null
         };
         
-      // Execution profiling - get stats for dashboard
-      case 'getScriptStats': {
-        const scriptId = data.scriptId;
-        if (scriptId) {
-          const script = await ScriptStorage.get(scriptId);
-          return { stats: script?.stats || null };
-        }
-        // Get stats for all scripts
-        const scripts = await ScriptStorage.getAll();
-        const allStats = {};
-        for (const s of scripts) {
-          if (s.stats) allStats[s.id] = s.stats;
-        }
-        return { allStats };
-      }
-
-      case 'getExecutionDiagnostics': {
-        return executionDiagnosticsStore.snapshot(Number(data.tabId));
-      }
-
-      case 'resetScriptStats': {
-        const scriptId = data.scriptId;
-        const script = await ScriptStorage.get(scriptId);
-        if (script) {
-          script.stats = { runs: 0, totalTime: 0, avgTime: 0, lastRun: 0, errors: 0 };
-          await ScriptStorage.set(scriptId, script);
-        }
-        return { success: true };
-      }
-
-      case 'reportDocumentReady': {
-        executionDiagnosticsStore.record(sender, {
-          type: 'document-ready',
-          url: data.url || sender?.tab?.url || ''
-        });
-        return { success: true };
-      }
-
       // ── v2.0 Module Handlers ──────────────────────────────────────────────
-
-      // NPM Package Resolution
-      case 'npmResolve': {
-        if (typeof NpmResolver !== 'undefined') {
-          return await NpmResolver.resolve(data.spec);
-        }
-        return { error: 'NpmResolver not available' };
-      }
-
-      case 'npmResolveAll': {
-        if (typeof NpmResolver !== 'undefined') {
-          return await NpmResolver.resolveAll(data.requires);
-        }
-        return { error: 'NpmResolver not available' };
-      }
-
-      // Error Log
-      case 'logError': {
-        if (typeof ErrorLog !== 'undefined') {
-          await ErrorLog.log(data.entry || data);
-          return { success: true };
-        }
-        return { error: 'ErrorLog not available' };
-      }
-
-      case 'getErrorLog': {
-        if (typeof ErrorLog !== 'undefined') {
-          return await ErrorLog.getAll(data.filters);
-        }
-        return { log: [] };
-      }
-
-      case 'getErrorLogGrouped': {
-        if (typeof ErrorLog !== 'undefined') {
-          return await ErrorLog.getGrouped();
-        }
-        return { groups: [] };
-      }
-
-      case 'exportErrorLog': {
-        if (typeof ErrorLog !== 'undefined') {
-          const format = data.format || 'json';
-          if (format === 'csv') return { data: await ErrorLog.exportCSV() };
-          if (format === 'text') return { data: await ErrorLog.exportText() };
-          return { data: await ErrorLog.exportJSON() };
-        }
-        return { error: 'ErrorLog not available' };
-      }
-
-      case 'clearErrorLog': {
-        if (typeof ErrorLog !== 'undefined') {
-          await ErrorLog.clear();
-          return { success: true };
-        }
-        return { error: 'ErrorLog not available' };
-      }
-
-      // Notification System
-      case 'getNotificationPrefs': {
-        if (typeof NotificationSystem !== 'undefined') {
-          return await NotificationSystem.getPreferences();
-        }
-        return {};
-      }
-
-      case 'setNotificationPrefs': {
-        if (typeof NotificationSystem !== 'undefined') {
-          await NotificationSystem.setPreferences(data.prefs);
-          return { success: true };
-        }
-        return { error: 'NotificationSystem not available' };
-      }
-
-      case 'generateDigest': {
-        if (typeof NotificationSystem !== 'undefined') {
-          return await NotificationSystem.generateDigest();
-        }
-        return { error: 'NotificationSystem not available' };
-      }
 
       // Performance History
       // Easy Cloud Sync
@@ -47849,48 +47916,6 @@ async function handleMessage(message, sender) {
           return await EasyCloudSync.getStatus();
         }
         return { connected: false };
-      }
-
-      // Script Console Capture (for debugger)
-      case 'scriptConsoleCapture': {
-        // Append captured console entries to session storage
-        const key = `console_${data.scriptId}`;
-        const existing = await chrome.storage.session.get(key);
-        const entries = existing[key] || [];
-        const incoming = (data.entries || []).slice(-200);
-        entries.push(...incoming);
-        // Keep last 200 entries per script
-        const trimmedEntries = entries.slice(-200);
-        await chrome.storage.session.set({ [key]: trimmedEntries });
-        return { success: true };
-      }
-
-      case 'getScriptConsole': {
-        const consoleData = await chrome.storage.session.get(`console_${data.scriptId}`);
-        return { entries: consoleData[`console_${data.scriptId}`] || [] };
-      }
-
-      case 'clearScriptConsole': {
-        await chrome.storage.session.remove(`console_${data.scriptId}`);
-        return { success: true };
-      }
-
-      // Live Reload toggle
-      case 'setLiveReload': {
-        const lrData = await chrome.storage.local.get('liveReloadScripts');
-        const lrScripts = lrData.liveReloadScripts || {};
-        if (data.enabled) {
-          lrScripts[data.scriptId] = true;
-        } else {
-          delete lrScripts[data.scriptId];
-        }
-        await chrome.storage.local.set({ liveReloadScripts: lrScripts });
-        return { success: true };
-      }
-
-      case 'getLiveReloadScripts': {
-        const lrData2 = await chrome.storage.local.get('liveReloadScripts');
-        return { scripts: lrData2.liveReloadScripts || {} };
       }
 
       case 'openDashboard': {

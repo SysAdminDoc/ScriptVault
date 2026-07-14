@@ -117,6 +117,7 @@ async function buildBackground() {
     readFile("modules/organization-action-handler.js"),
     readFile("modules/settings-action-handler.js"),
     readFile("modules/security-action-handler.js"),
+    readFile("modules/diagnostics-action-handler.js"),
     readFile("modules/message-router.js"),
     readFile("modules/gm-audio-handler.js"),
     readFile("modules/gm-menu-handler.js"),

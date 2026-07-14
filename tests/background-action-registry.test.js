@@ -35,6 +35,10 @@ import {
   SECURITY_BACKGROUND_ACTIONS,
   createSecurityActionHandlers,
 } from '../src/background/security-action-handler.ts';
+import {
+  DIAGNOSTICS_BACKGROUND_ACTIONS,
+  createDiagnosticsActionHandlers,
+} from '../src/background/diagnostics-action-handler.ts';
 
 describe('typed background action registry', () => {
   it('normalizes flat and nested runtime messages before dispatch', async () => {
@@ -284,5 +288,41 @@ describe('typed background action registry', () => {
       enabled: true,
       origins: ['http://127.0.0.1:43110'],
     });
+  });
+
+  it('routes diagnostics, error reporting, and debugger state through typed dependencies', async () => {
+    const dependencies = Object.fromEntries([
+      'reportCspFailure', 'getCspReports', 'getNetworkLog',
+      'getNetworkLogStats', 'clearNetworkLog', 'analyzeScript',
+      'getOnDeviceAiStatus', 'runOnDeviceAi', 'getScriptStats',
+      'getExecutionDiagnostics', 'resetScriptStats', 'reportDocumentReady',
+      'npmResolve', 'npmResolveAll', 'logError', 'getErrorLog',
+      'getErrorLogGrouped', 'exportErrorLog', 'clearErrorLog',
+      'getNotificationPrefs', 'setNotificationPrefs', 'generateDigest',
+      'captureScriptConsole', 'getScriptConsole', 'clearScriptConsole',
+      'setLiveReload', 'getLiveReloadScripts',
+    ].map(name => [name, vi.fn(async () => ({ success: true }))]));
+    const registry = createBackgroundActionRegistry(
+      createDiagnosticsActionHandlers(dependencies),
+    );
+
+    await registry.dispatch({
+      action: 'runOnDeviceAI',
+      data: { mode: 'editor-explain', code: 'alert(1)' },
+    }, {});
+    await registry.dispatch({
+      action: 'setLiveReload',
+      data: { scriptId: 'script-1', enabled: true },
+    }, {});
+
+    expect(registry.registeredActions()).toEqual(DIAGNOSTICS_BACKGROUND_ACTIONS);
+    expect(dependencies.runOnDeviceAi).toHaveBeenCalledWith({
+      mode: 'editor-explain',
+      code: 'alert(1)',
+      metadata: null,
+      analysis: null,
+      prompt: '',
+    });
+    expect(dependencies.setLiveReload).toHaveBeenCalledWith('script-1', true);
   });
 });

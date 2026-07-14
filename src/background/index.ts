@@ -135,6 +135,16 @@ export type {
   SecurityBackgroundAction,
 } from './security-action-handler';
 export {
+  DIAGNOSTICS_BACKGROUND_ACTIONS,
+  DiagnosticsActionHandler,
+  createDiagnosticsActionHandlers,
+} from './diagnostics-action-handler';
+export type {
+  DiagnosticsActionDependencies,
+  DiagnosticsBackgroundAction,
+  OnDeviceAiPromptInput,
+} from './diagnostics-action-handler';
+export {
   GM_AUDIO_ACTIONS,
   GMAudioHandler,
   handleGMAudioMessage,

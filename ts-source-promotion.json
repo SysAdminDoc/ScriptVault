@@ -172,6 +172,14 @@
       "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for signing and public-API security action dispatch."
     },
     {
+      "runtime": "modules/diagnostics-action-handler.js",
+      "sources": [
+        "src/background/diagnostics-action-handler.ts"
+      ],
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for diagnostics, logs, analysis, and local observability action dispatch."
+    },
+    {
       "runtime": "modules/gm-audio-handler.js",
       "sources": [
         "src/background/gm-audio-handler.ts"

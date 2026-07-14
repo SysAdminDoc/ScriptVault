@@ -2088,9 +2088,9 @@ export interface ResponseMap {
   deleteBackup: SuccessOrError;
 
   // ── Logging / observability ────────────────────────────────────────
-  getErrorLog: { entries: { scriptId: string; scriptName: string; error: string; url?: string; timestamp: number }[] };
-  clearErrorLog: SuccessResponse;
-  getNetworkLog: { entries: unknown[] };
+  getErrorLog: unknown;
+  clearErrorLog: SuccessOrError;
+  getNetworkLog: unknown[] | { entries: unknown[] };
   clearNetworkLog: SuccessResponse;
   getScriptStats: unknown;
   getExecutionDiagnostics: import('../background/execution-diagnostics').ExecutionDiagnosticsSnapshot;
@@ -2209,7 +2209,7 @@ export interface ResponseMap {
   getErrorLogGrouped: unknown;
   getExtensionInfo: { id: string; version: string; name?: string };
   getGistSettings: unknown;
-  getLiveReloadScripts: { scripts: unknown[] };
+  getLiveReloadScripts: { scripts: Record<string, boolean> };
   getMenuCommands: { commands: unknown[] };
   getNetworkLogStats: unknown;
   getNotificationPrefs: unknown;

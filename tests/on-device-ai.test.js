@@ -9,6 +9,7 @@ const dashboardJs = readFileSync(resolve(ROOT, 'pages/dashboard.js'), 'utf8');
 const installJs = readFileSync(resolve(ROOT, 'pages/install.js'), 'utf8');
 const coreTs = readFileSync(resolve(ROOT, 'src/background/core.ts'), 'utf8');
 const routerTs = readFileSync(resolve(ROOT, 'src/background/message-router.ts'), 'utf8');
+const diagnosticsHandlerTs = readFileSync(resolve(ROOT, 'src/background/diagnostics-action-handler.ts'), 'utf8');
 
 let compiled;
 try {
@@ -109,8 +110,9 @@ describe('on-device AI UI and background wiring', () => {
   it('registers background actions with the router and handler', () => {
     expect(routerTs).toContain("'getOnDeviceAIStatus'");
     expect(routerTs).toContain("'runOnDeviceAI'");
-    expect(coreTs).toContain("case 'getOnDeviceAIStatus'");
-    expect(coreTs).toContain("case 'runOnDeviceAI'");
+    expect(diagnosticsHandlerTs).toContain("'getOnDeviceAIStatus'");
+    expect(diagnosticsHandlerTs).toContain("'runOnDeviceAI'");
+    expect(coreTs).toContain('createDiagnosticsActionHandlers');
     expect(coreTs).toContain('OnDeviceAI.runPrompt');
   });
 });
