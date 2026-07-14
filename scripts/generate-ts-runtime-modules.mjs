@@ -179,6 +179,13 @@ export const TS_RUNTIME_MODULES = [
     selfExportName: 'FindScriptSources',
   },
   {
+    id: 'local-libraries',
+    source: 'src/background/local-libraries.ts',
+    output: 'modules/local-libraries.js',
+    exportName: 'LocalLibraries',
+    selfExportName: 'LocalLibraries',
+  },
+  {
     id: 'message-router',
     source: 'src/background/message-router.ts',
     output: 'modules/message-router.js',

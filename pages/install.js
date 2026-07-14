@@ -1342,6 +1342,9 @@ function renderInstallUI(sourceUrl) {
   const iconUrl = scriptMeta.icon64 || scriptMeta.icon;
   const source = getSourceSummary(sourceUrl);
   const dependencyCount = scriptMeta.require.length;
+  const localLibraries = typeof LocalLibraries !== 'undefined'
+    ? LocalLibraries.normalizeLocalLibrarySnapshots(existingScript?.settings?.localLibraries)
+    : [];
   const hasRequireProvenance = (scriptMeta.requireProvenance || []).length > 0
     || (scriptMeta.requireIdentity || []).length > 0
     || hasRequireMetadataMap(scriptMeta.requireProvenanceByUrl)
@@ -1504,6 +1507,13 @@ function renderInstallUI(sourceUrl) {
       }))
     ));
   }
+  if (localLibraries.length > 0) {
+    alerts.push(buildInstallAlert(
+      'is-info',
+      'Reviewed Local Libraries Remain Active',
+      escapeHtml(`${localLibraries.length} reviewed local snapshot${localLibraries.length === 1 ? '' : 's'} will continue running after this ${presentation.isUpdate ? 'update' : 'install review'}. Review or remove them from the dashboard Externals panel.`)
+    ));
+  }
 
   const installTitle = presentation.isUpdate
     ? tInstall('installTitleUpdate', 'Update this script')
@@ -1565,10 +1575,27 @@ function renderInstallUI(sourceUrl) {
     </div>
   ` : '';
 
+  const localLibraryCard = localLibraries.length > 0 ? `
+    <div class="surface-card analysis-card review-section" id="reviewLocalLibraries">
+      <div class="install-card-header">
+        <div>
+          <div class="install-card-title">Reviewed Local Libraries</div>
+          <div class="install-card-subtitle">These portable snapshots run after remote @require code and before the userscript. This update preserves them.</div>
+        </div>
+        <span class="count status-neutral">${numberFormatter.format(localLibraries.length)}</span>
+      </div>
+      <div class="tag-list">
+        ${localLibraries.map(library => `<span class="tag warning" title="SHA-256 ${escapeHtml(library.sha256)}">${escapeHtml(library.name)} · ${escapeHtml(formatBytes(library.bytes))}</span>`).join('')}
+      </div>
+      <div class="analysis-summary" style="margin-top:12px">File handles and local paths stay on the original device. The reviewed code snapshots can travel in JSON backups and sync; reconnect source files from the dashboard to refresh them on another device.</div>
+    </div>
+  ` : '';
+
   const reviewNavItems = [
     { id: 'reviewSummary', label: tInstall('installReviewSummary', 'Summary') },
     { id: 'reviewDetails', label: tInstall('installReviewDetails', 'Details') },
     { id: 'reviewSecurity', label: tInstall('installReviewSecurity', 'Security') },
+    ...(localLibraries.length > 0 ? [{ id: 'reviewLocalLibraries', label: 'Local libraries' }] : []),
     ...(dependencyCount > 0 ? [{ id: 'reviewDependencies', label: tInstall('installReviewDependencies', 'Dependencies') }] : []),
     { id: 'reviewTrust', label: tInstall('installReviewTrust', 'Trust') },
     { id: 'reviewCode', label: tInstall('installReviewCode', 'Code') },
@@ -1800,6 +1827,7 @@ function renderInstallUI(sourceUrl) {
           </div>
         </div>
 
+      ${localLibraryCard}
       ${dependencyCard}
 
         <div class="surface-card trust-card review-section" id="reviewTrust">
@@ -1865,6 +1893,12 @@ function renderInstallUI(sourceUrl) {
               <span>${escapeHtml(tInstall('installReviewDependencies', 'Dependencies'))}</span>
               <span class="count status-neutral" id="decisionDependencyState" title="${escapeHtml(dependencyCount > 0 ? tInstall('installDependencyVerifyingExternalUrls', 'Verifying external @require URLs.') : tInstall('installNoExternalRequires', 'No external @require dependencies were declared.'))}">${escapeHtml(dependencyCount > 0 ? tInstall('installStateCheckingCount', 'Checking {count}', { count: numberFormatter.format(dependencyCount) }) : tInstall('installStateNoneDeclared', 'None declared'))}</span>
             </div>
+            ${localLibraries.length > 0 ? `
+              <div class="decision-row">
+                <span>Local libraries</span>
+                <strong>${numberFormatter.format(localLibraries.length)} preserved</strong>
+              </div>
+            ` : ''}
             ${dependencyCount > 0 ? `
               <div class="decision-row">
                 <span>${escapeHtml(tInstall('installDependencyProvenance', 'Dependency provenance'))}</span>

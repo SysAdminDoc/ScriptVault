@@ -725,6 +725,8 @@ const StorageModule = (() => {
     const {
       bindingId,
       scriptId,
+      bindingKind,
+      libraryId,
       displayName,
       lastKnownSha256,
       lastKnownSize,
@@ -739,6 +741,8 @@ const StorageModule = (() => {
     return {
       bindingId,
       scriptId,
+      bindingKind: bindingKind === "library" ? "library" : "script",
+      libraryId: bindingKind === "library" ? libraryId : void 0,
       displayName,
       lastKnownSha256,
       lastKnownSize,

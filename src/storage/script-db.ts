@@ -85,6 +85,8 @@ interface StoredScriptRecord extends Omit<Script, 'code'> {
 export interface LocalWorkspaceBindingRecord {
   bindingId: string;
   scriptId: string;
+  bindingKind?: 'script' | 'library';
+  libraryId?: string;
   handle?: unknown;
   displayName: string;
   lastKnownSha256?: string;
@@ -101,6 +103,8 @@ export interface LocalWorkspaceBindingRecord {
 export interface LocalWorkspaceBindingSummary {
   bindingId: string;
   scriptId: string;
+  bindingKind: 'script' | 'library';
+  libraryId?: string;
   displayName: string;
   lastKnownSha256?: string;
   lastKnownSize?: number;
@@ -554,6 +558,8 @@ function summarizeLocalWorkspaceBinding(row: LocalWorkspaceBindingRecord): Local
   const {
     bindingId,
     scriptId,
+    bindingKind,
+    libraryId,
     displayName,
     lastKnownSha256,
     lastKnownSize,
@@ -568,6 +574,8 @@ function summarizeLocalWorkspaceBinding(row: LocalWorkspaceBindingRecord): Local
   return {
     bindingId,
     scriptId,
+    bindingKind: bindingKind === 'library' ? 'library' : 'script',
+    libraryId: bindingKind === 'library' ? libraryId : undefined,
     displayName,
     lastKnownSha256,
     lastKnownSize,

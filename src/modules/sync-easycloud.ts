@@ -5,6 +5,7 @@
 
 import type { Script, ScriptMeta, ScriptSettings } from '../types/index';
 import { SyncCrypto, type RemoteSyncEnvelope } from './sync-crypto';
+import { normalizeLocalLibrarySnapshots } from '../background/local-libraries';
 
 // ============================================================================
 // External globals (not yet migrated to TS modules)
@@ -337,6 +338,7 @@ const SYNC_SAFE_SCRIPT_SETTING_KEYS = new Set<string>([
   'perfBudget',
   'syncValues',
   'tags',
+  'localLibraries',
 ]);
 
 const LOCAL_ONLY_SCRIPT_SETTING_KEYS = new Set<string>([
@@ -372,7 +374,9 @@ function cloneSyncSafeScriptSettings(settings: unknown): ScriptSettings {
     if (!SYNC_SAFE_SCRIPT_SETTING_KEYS.has(key) || LOCAL_ONLY_SCRIPT_SETTING_KEYS.has(key)) {
       continue;
     }
-    result[key] = cloneScriptSettingValue(value);
+    result[key] = key === 'localLibraries'
+      ? normalizeLocalLibrarySnapshots(value)
+      : cloneScriptSettingValue(value);
   }
   return result;
 }

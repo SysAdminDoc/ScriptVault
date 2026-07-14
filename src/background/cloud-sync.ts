@@ -6,6 +6,7 @@
 import type { Script, ScriptMeta, ScriptSettings } from '../types/index';
 import type { Settings, SyncProvider } from '../types/settings';
 import { SyncCrypto, type RemoteSyncEnvelope } from '../modules/sync-crypto';
+import { normalizeLocalLibrarySnapshots } from './local-libraries';
 import {
   GM_VALUE_SYNC_SCHEMA,
   buildGmValueSyncBundle,
@@ -424,6 +425,7 @@ const SYNC_SAFE_SCRIPT_SETTING_KEYS = new Set<string>([
   'perfBudget',
   'syncValues',
   'tags',
+  'localLibraries',
 ]);
 
 const LOCAL_ONLY_SCRIPT_SETTING_KEYS = new Set<string>([
@@ -459,7 +461,9 @@ function cloneSyncSafeScriptSettings(settings: unknown): ScriptSettings {
     if (!SYNC_SAFE_SCRIPT_SETTING_KEYS.has(key) || LOCAL_ONLY_SCRIPT_SETTING_KEYS.has(key)) {
       continue;
     }
-    result[key] = cloneScriptSettingValue(value);
+    result[key] = key === 'localLibraries'
+      ? normalizeLocalLibrarySnapshots(value)
+      : cloneScriptSettingValue(value);
   }
   return result;
 }

@@ -3,6 +3,7 @@
  */
 
 import type { ScriptConfigVariable } from '../modules/script-config';
+import type { LocalLibrarySnapshot } from '../background/local-libraries';
 
 /** Parsed userscript `@antifeature` metadata entry. */
 export interface ScriptAntifeature {
@@ -150,6 +151,8 @@ export interface ScriptSettings {
   managedAppliedAt?: number;
   /** Opt-in marker for future cross-device GM storage value sync. */
   syncValues?: boolean;
+  /** Reviewed, portable code snapshots. File handles remain in local IndexedDB bindings. */
+  localLibraries?: LocalLibrarySnapshot[];
   // User-facing preferences such as runAt, URL overrides, notes, tags, and
   // pinned state are synced only when explicitly allowlisted by the sync helper.
   [key: string]: unknown;

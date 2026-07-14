@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { normalizeLocalLibrarySnapshots } from '../src/background/local-libraries.ts';
 
 const backgroundCoreCode = readFileSync(resolve(process.cwd(), 'background.core.js'), 'utf8');
 const encoder = new TextEncoder();
@@ -191,10 +192,20 @@ function createRuntimeHarness(existingScripts = [], storedValuesByScript = {}, s
 
   const _body = `${extractRuntimeImportExportCode()}; return { exportAllScripts, exportToZip, importFromZip, importScripts };`;
   let fn;
-  try { const vm = require('node:vm'); fn = vm.compileFunction(_body, ['fflate', 'ScriptStorage', 'ScriptValues', 'SettingsManager', 'registerAllScripts', 'updateBadge', 'generateId', 'chrome'], { filename: resolve(process.cwd(), 'background.core.js') }); } catch { fn = new Function('fflate', 'ScriptStorage', 'ScriptValues', 'SettingsManager', 'registerAllScripts', 'updateBadge', 'generateId', 'chrome', _body); }
+  try { const vm = require('node:vm'); fn = vm.compileFunction(_body, ['fflate', 'ScriptStorage', 'ScriptValues', 'SettingsManager', 'registerAllScripts', 'updateBadge', 'generateId', 'chrome', 'LocalLibraries'], { filename: resolve(process.cwd(), 'background.core.js') }); } catch { fn = new Function('fflate', 'ScriptStorage', 'ScriptValues', 'SettingsManager', 'registerAllScripts', 'updateBadge', 'generateId', 'chrome', 'LocalLibraries', _body); }
 
   return {
-    ...fn(fakeFflate, ScriptStorage, ScriptValues, SettingsManager, registerAllScripts, updateBadge, generateId, chrome),
+    ...fn(
+      fakeFflate,
+      ScriptStorage,
+      ScriptValues,
+      SettingsManager,
+      registerAllScripts,
+      updateBadge,
+      generateId,
+      chrome,
+      { normalizeLocalLibrarySnapshots },
+    ),
     fakeFflate,
     generateId,
     ScriptStorage,
@@ -267,6 +278,48 @@ describe('runtime import/export archive identity', () => {
     expect(JSON.stringify(exported)).not.toContain('binding-secret');
     expect(JSON.stringify(exported)).not.toContain('secret\\\\local.user.js');
     expect(JSON.stringify(exported)).not.toContain('handle');
+  });
+
+  it('round-trips reviewed local library snapshots without local file metadata', async () => {
+    const script = makeScript('script_local_library', 'Local Library Script');
+    script.settings = {
+      notes: 'portable note',
+      localLibraries: [{
+        id: 'local-library-helpers-1234',
+        name: 'C:\\Users\\--\\private\\helpers.js',
+        code: 'globalThis.helpersReady = true;',
+        sha256: 'a'.repeat(64),
+        bytes: 9999,
+        reviewedAt: 1_700_000_000_000,
+        bindingId: 'binding-private',
+        absolutePath: 'C:\\Users\\--\\private\\helpers.js',
+        handle: { name: 'helpers.js' },
+      }],
+    };
+    const harness = createRuntimeHarness([script]);
+
+    const exported = await harness.exportAllScripts({ includeSettings: true });
+    expect(exported.scripts[0].settings.localLibraries).toEqual([{
+      id: 'local-library-helpers-1234',
+      name: 'helpers.js',
+      code: 'globalThis.helpersReady = true;',
+      sha256: 'a'.repeat(64),
+      bytes: encoder.encode('globalThis.helpersReady = true;').byteLength,
+      reviewedAt: 1_700_000_000_000,
+    }]);
+    expect(JSON.stringify(exported)).not.toContain('binding-private');
+    expect(JSON.stringify(exported)).not.toContain('private\\\\helpers.js');
+    expect(JSON.stringify(exported)).not.toContain('handle');
+
+    const restoreHarness = createRuntimeHarness();
+    const result = await restoreHarness.importScripts(exported, {
+      importSettings: true,
+      trustImportedScripts: true,
+    });
+
+    expect(result.errors).toEqual([]);
+    expect(Array.from(restoreHarness.scriptCache.values())[0].settings.localLibraries)
+      .toEqual(exported.scripts[0].settings.localLibraries);
   });
 
   it('round-trips JSON vault exports with stored values, folders, and workspaces', async () => {

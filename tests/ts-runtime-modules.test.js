@@ -156,6 +156,13 @@ describe('TS runtime module generator', () => {
         selfExportName: 'FindScriptSources',
       }),
       expect.objectContaining({
+        id: 'local-libraries',
+        source: 'src/background/local-libraries.ts',
+        output: 'modules/local-libraries.js',
+        exportName: 'LocalLibraries',
+        selfExportName: 'LocalLibraries',
+      }),
+      expect.objectContaining({
         id: 'message-router',
         source: 'src/background/message-router.ts',
         output: 'modules/message-router.js',

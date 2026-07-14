@@ -9,6 +9,7 @@
 
 import type { Script, ScriptMeta } from '../types/script';
 import { ScriptConfig } from '../modules/script-config';
+import { getLocalLibraryRequireScripts } from './local-libraries';
 
 /** A fetched @require script with its source URL and code text. */
 export interface RequireScript {
@@ -50,7 +51,11 @@ export function buildWrappedScript(
   // Code runs INSIDE the main IIFE after GM APIs are available
   // No try/catch wrapper because let/const are block-scoped and wouldn't escape
   let requireCode = '';
-  for (const req of requireScripts) {
+  const allRequireScripts = [
+    ...requireScripts,
+    ...getLocalLibraryRequireScripts(script.settings),
+  ];
+  for (const req of allRequireScripts) {
     const safeUrl = req.url.replace(/\*\//g, '* /');
     requireCode += `
 // @require ${safeUrl}

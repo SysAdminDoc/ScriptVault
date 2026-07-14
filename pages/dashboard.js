@@ -1930,6 +1930,9 @@
         elements.externalRequireList = document.getElementById('externalRequireList');
         elements.externalResourceList = document.getElementById('externalResourceList');
         elements.btnRefreshExternals = document.getElementById('btnRefreshExternals');
+        elements.localLibraryList = document.getElementById('localLibraryList');
+        elements.localLibraryStatus = document.getElementById('localLibraryStatus');
+        elements.btnAttachLocalLibrary = document.getElementById('btnAttachLocalLibrary');
 
         // Per-script settings panel
         elements.scriptAutoUpdate = document.getElementById('scriptAutoUpdate');
@@ -5449,7 +5452,7 @@
             if (res?.error) throw new Error(res.error);
 
             // Update local state
-            if (script) script.settings = settings;
+            if (script) script.settings = { ...(script.settings || {}), ...settings };
 
             showToast('Settings saved', 'success');
         } catch (e) {
@@ -5489,7 +5492,7 @@
             if (res?.error) throw new Error(res.error);
 
             const script = state.scripts.find(s => s.id === state.currentScriptId);
-            if (script) script.settings = defaults;
+            if (script) script.settings = { ...(script.settings || {}), ...defaults };
 
             loadScriptSettings(script);
             showToast('Settings reset', 'success');
@@ -10391,6 +10394,8 @@
         return {
             bindingId: row.bindingId,
             scriptId: row.scriptId,
+            bindingKind: row.bindingKind === 'library' ? 'library' : 'script',
+            libraryId: row.bindingKind === 'library' ? row.libraryId : undefined,
             displayName: String(row.displayName || '').slice(0, 160),
             lastKnownSha256: row.lastKnownSha256,
             lastKnownSize: row.lastKnownSize,
@@ -10404,7 +10409,7 @@
         };
     }
 
-    async function getDashboardLocalWorkspaceBindingsByScript(scriptId) {
+    async function getDashboardLocalWorkspaceBindingsByScript(scriptId, bindingKind = '') {
         if (!scriptId || !isLocalWorkspaceHandleStorageSupported()) return [];
         return withDashboardLocalWorkspaceStore('readonly', (store) => new Promise((resolve, reject) => {
             const out = [];
@@ -10412,7 +10417,8 @@
             request.onsuccess = () => {
                 const cursor = request.result;
                 if (!cursor) {
-                    resolve(out.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)));
+                    const sorted = out.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+                    resolve(bindingKind ? sorted.filter(binding => binding.bindingKind === bindingKind) : sorted);
                     return;
                 }
                 out.push(summarizeDashboardLocalWorkspaceBinding(cursor.value));
@@ -10422,7 +10428,7 @@
         }));
     }
 
-    async function deleteDashboardLocalWorkspaceBindingsForScript(scriptId) {
+    async function deleteDashboardLocalWorkspaceBindingsForScript(scriptId, bindingKind = '') {
         if (!scriptId || !isLocalWorkspaceHandleStorageSupported()) return;
         await withDashboardLocalWorkspaceStore('readwrite', (store) => new Promise((resolve, reject) => {
             const request = store.index('by-script').openCursor(IDBKeyRange.only(scriptId));
@@ -10432,7 +10438,8 @@
                     resolve();
                     return;
                 }
-                cursor.delete();
+                const summary = summarizeDashboardLocalWorkspaceBinding(cursor.value);
+                if (!bindingKind || summary.bindingKind === bindingKind) cursor.delete();
                 cursor.continue();
             };
             request.onerror = () => reject(request.error || new Error('IndexedDB cursor failed'));
@@ -10730,6 +10737,363 @@
         };
     }
 
+    function getScriptLocalLibraries(script = getCurrentScript()) {
+        if (typeof LocalLibraries === 'undefined') return [];
+        return LocalLibraries.normalizeLocalLibrarySnapshots(script?.settings?.localLibraries);
+    }
+
+    async function readLocalLibraryFileText(handle) {
+        if (typeof LocalLibraries === 'undefined') throw new Error('Local library support is unavailable. Reload ScriptVault and try again.');
+        const file = await handle.getFile();
+        if (typeof file.size === 'number' && file.size > LocalLibraries.MAX_LOCAL_LIBRARY_BYTES) {
+            const error = new Error(`Local library is too large (${formatBytes(file.size)}). Maximum is ${formatBytes(LocalLibraries.MAX_LOCAL_LIBRARY_BYTES)}.`);
+            error.localWorkspaceErrorKind = 'too-large';
+            throw error;
+        }
+        return {
+            text: await file.text(),
+            displayName: handle.name || file.name || 'local-library.js',
+            lastKnownSize: typeof file.size === 'number' ? file.size : undefined,
+            lastKnownModified: typeof file.lastModified === 'number' ? file.lastModified : undefined
+        };
+    }
+
+    function createLocalLibraryId(scriptId) {
+        const safeScriptId = String(scriptId || 'script').replace(/[^a-z0-9_-]/gi, '-').slice(0, 48) || 'script';
+        return `local-library-${safeScriptId}-${Date.now().toString(36)}`.toLowerCase();
+    }
+
+    function confirmLocalLibraryReview(script, currentSnapshot, candidate, fileMeta) {
+        return new Promise(resolve => {
+            let settled = false;
+            const finish = result => {
+                if (settled) return;
+                settled = true;
+                modalDismissHandler = null;
+                closeModalShell();
+                resolve(result);
+            };
+            const diff = buildLocalWorkspaceDiffPreview(
+                currentSnapshot?.code || '',
+                candidate.code,
+                currentSnapshot?.name || 'No previous snapshot',
+                fileMeta.displayName || candidate.name
+            );
+            const signals = LocalLibraries.getLocalLibraryReviewSignals(candidate.code);
+            const signalCopy = signals.length
+                ? `Review signals: ${signals.join(', ')}. Automated signals are incomplete.`
+                : 'No high-signal patterns were detected, but automated checks cannot prove this helper is safe.';
+            const html = `
+                <div class="local-library-review-warning">
+                    This helper runs after remote @require code and before <strong>${escapeHtml(script?.metadata?.name || script?.meta?.name || 'this userscript')}</strong> on every matched page. Review every change before attaching it.
+                </div>
+                <div class="panel-empty-inline" style="margin:10px 0">
+                    ${escapeHtml(signalCopy)} The reviewed code snapshot can travel in JSON backups and sync. The file handle and local path stay only on this device.
+                </div>
+                ${diff.html}
+            `;
+            showModal(currentSnapshot ? 'Review local library update' : 'Review local library', html, [
+                { label: 'Cancel', callback: () => finish(false) },
+                { label: currentSnapshot ? 'Apply Reviewed Snapshot' : 'Attach Reviewed Snapshot', class: 'btn-primary', busyLabel: 'Saving...', callback: () => finish(true) }
+            ], { onDismiss: () => finish(false) });
+        });
+    }
+
+    async function saveLocalLibrariesForScript(script, libraries) {
+        if (!script?.id || typeof LocalLibraries === 'undefined') throw new Error('Local library support is unavailable.');
+        const normalized = LocalLibraries.normalizeLocalLibrarySnapshots(libraries);
+        const response = await chrome.runtime.sendMessage({
+            action: 'setScriptSettings',
+            scriptId: script.id,
+            settings: { localLibraries: normalized }
+        });
+        if (response?.error) throw new Error(response.error);
+        await loadScripts();
+        const updated = state.scripts.find(item => item.id === script.id) || script;
+        updated.settings = { ...(updated.settings || {}), localLibraries: normalized };
+        if (state.openTabs[script.id]) state.openTabs[script.id].script = updated;
+        loadExternals(updated);
+        return updated;
+    }
+
+    async function attachLocalLibrary(options = {}) {
+        const script = getCurrentScript();
+        if (!script) return showToast('Open a script first', 'warning');
+        if (!isLocalWorkspaceFileAccessSupported() || typeof LocalLibraries === 'undefined') {
+            showToast('Local library attachment is not available in this browser', 'warning');
+            return false;
+        }
+        const currentLibraries = getScriptLocalLibraries(script);
+        const currentSnapshot = options.replaceId
+            ? currentLibraries.find(item => item.id === options.replaceId) || null
+            : null;
+        if (!currentSnapshot && currentLibraries.length >= LocalLibraries.MAX_LOCAL_LIBRARIES) {
+            showToast(`Remove a local library before adding another (maximum ${LocalLibraries.MAX_LOCAL_LIBRARIES})`, 'warning');
+            return false;
+        }
+
+        let handle;
+        try {
+            [handle] = await window.showOpenFilePicker({
+                id: 'scriptvault-local-library',
+                multiple: false,
+                types: [{
+                    description: 'JavaScript library',
+                    accept: {
+                        'text/javascript': ['.js'],
+                        'application/javascript': ['.js']
+                    }
+                }]
+            });
+        } catch (error) {
+            if (error?.name !== 'AbortError') showToast(error?.message || 'Failed to choose local library', 'error');
+            return false;
+        }
+        if (!handle) return false;
+
+        try {
+            const [permissionState, fileRead] = await Promise.all([
+                queryLocalWorkspacePermission(handle),
+                readLocalLibraryFileText(handle)
+            ]);
+            const result = await LocalLibraries.createLocalLibrarySnapshot({
+                id: currentSnapshot?.id || createLocalLibraryId(script.id),
+                name: fileRead.displayName,
+                code: fileRead.text,
+                reviewedAt: Date.now()
+            });
+            if (!result.ok) throw new Error(result.error);
+            if (!await confirmLocalLibraryReview(script, currentSnapshot, result.snapshot, fileRead)) return false;
+
+            const nextLibraries = [
+                ...currentLibraries.filter(item => item.id !== result.snapshot.id),
+                result.snapshot
+            ];
+            const updatedScript = await saveLocalLibrariesForScript(script, nextLibraries);
+            const oldBindings = (await getDashboardLocalWorkspaceBindingsByScript(script.id, 'library'))
+                .filter(binding => binding.libraryId === result.snapshot.id);
+            oldBindings.forEach(binding => disconnectLocalWorkspaceObserver(binding.bindingId));
+            await Promise.all(oldBindings.map(binding => deleteDashboardLocalWorkspaceBinding(binding.bindingId)));
+            const summary = await putDashboardLocalWorkspaceBinding({
+                bindingId: oldBindings[0]?.bindingId || createLocalWorkspaceBindingId(script.id),
+                scriptId: script.id,
+                bindingKind: 'library',
+                libraryId: result.snapshot.id,
+                handle,
+                displayName: result.snapshot.name,
+                lastKnownSha256: result.snapshot.sha256,
+                lastKnownSize: fileRead.lastKnownSize,
+                lastKnownModified: fileRead.lastKnownModified,
+                permissionState,
+                createdAt: oldBindings[0]?.createdAt || Date.now(),
+                updatedAt: Date.now(),
+                lastRefreshAt: Date.now(),
+                lastErrorKind: '',
+                lastStatusKind: currentSnapshot ? 'applied' : 'bound'
+            });
+            void ensureLocalWorkspaceObserverForBinding(script.id, summary);
+            await renderLocalLibraries(updatedScript);
+            showToast(`${result.snapshot.name} attached as a reviewed local library`, 'success');
+            return true;
+        } catch (error) {
+            showToast(error?.message || 'Failed to attach local library', 'error');
+            return false;
+        }
+    }
+
+    async function refreshLocalLibraryBinding(scriptId, libraryId, options = {}) {
+        const script = state.scripts.find(item => item.id === scriptId) || (scriptId === state.currentScriptId ? getCurrentScript() : null);
+        const currentSnapshot = getScriptLocalLibraries(script).find(item => item.id === libraryId);
+        if (!script || !currentSnapshot) return false;
+        const bindings = (await getDashboardLocalWorkspaceBindingsByScript(script.id, 'library'))
+            .filter(binding => binding.libraryId === libraryId);
+        const bindingSummary = bindings.find(binding => !options.bindingId || binding.bindingId === options.bindingId) || null;
+        if (!bindingSummary) {
+            if (options.source !== 'observer') return attachLocalLibrary({ replaceId: libraryId });
+            return false;
+        }
+        const bindingRecord = await getDashboardLocalWorkspaceBindingRecord(bindingSummary.bindingId);
+        if (!bindingRecord?.handle) {
+            await putDashboardLocalWorkspaceBinding({ ...bindingRecord, ...bindingSummary, lastErrorKind: 'handle-missing', lastStatusKind: '' });
+            if (options.source !== 'observer') showToast('Local library source is not connected. Reconnect the file to refresh it.', 'warning');
+            await renderLocalLibraries(script);
+            return false;
+        }
+
+        const initialPermission = await queryLocalWorkspacePermission(bindingRecord.handle, 'read');
+        const permissionState = initialPermission === 'granted'
+            ? initialPermission
+            : options.skipPermissionPrompt
+                ? initialPermission
+                : await requestLocalWorkspacePermission(bindingRecord.handle, 'read');
+        if (permissionState !== 'granted') {
+            await putDashboardLocalWorkspaceBinding({ ...bindingRecord, permissionState, lastRefreshAt: Date.now(), lastErrorKind: 'permission-denied', lastStatusKind: '' });
+            if (options.source !== 'observer') showToast('Local library permission was not granted', 'warning');
+            await renderLocalLibraries(script);
+            return false;
+        }
+
+        try {
+            const fileRead = await readLocalLibraryFileText(bindingRecord.handle);
+            const result = await LocalLibraries.createLocalLibrarySnapshot({
+                id: currentSnapshot.id,
+                name: fileRead.displayName,
+                code: fileRead.text,
+                reviewedAt: Date.now()
+            });
+            if (!result.ok) throw new Error(result.error);
+            if (result.snapshot.sha256 === currentSnapshot.sha256) {
+                await putDashboardLocalWorkspaceBinding({
+                    ...bindingRecord,
+                    displayName: result.snapshot.name,
+                    lastKnownSha256: result.snapshot.sha256,
+                    lastKnownSize: fileRead.lastKnownSize,
+                    lastKnownModified: fileRead.lastKnownModified,
+                    permissionState,
+                    lastRefreshAt: Date.now(),
+                    lastErrorKind: '',
+                    lastStatusKind: 'unchanged'
+                });
+                if (!options.quietUnchanged) showToast(`${result.snapshot.name} is unchanged`, 'info');
+                await renderLocalLibraries(script);
+                return true;
+            }
+            if (!await confirmLocalLibraryReview(script, currentSnapshot, result.snapshot, fileRead)) {
+                await putDashboardLocalWorkspaceBinding({ ...bindingRecord, permissionState, lastRefreshAt: Date.now(), lastErrorKind: '', lastStatusKind: 'review-cancelled' });
+                if (options.source !== 'observer') showToast('Local library refresh cancelled', 'info');
+                await renderLocalLibraries(script);
+                return false;
+            }
+            const nextLibraries = getScriptLocalLibraries(script).map(item => item.id === libraryId ? result.snapshot : item);
+            const updatedScript = await saveLocalLibrariesForScript(script, nextLibraries);
+            await putDashboardLocalWorkspaceBinding({
+                ...bindingRecord,
+                displayName: result.snapshot.name,
+                lastKnownSha256: result.snapshot.sha256,
+                lastKnownSize: fileRead.lastKnownSize,
+                lastKnownModified: fileRead.lastKnownModified,
+                permissionState,
+                lastRefreshAt: Date.now(),
+                lastErrorKind: '',
+                lastStatusKind: 'applied'
+            });
+            await renderLocalLibraries(updatedScript);
+            showToast(`${result.snapshot.name} reviewed and refreshed`, 'success');
+            return true;
+        } catch (error) {
+            await putDashboardLocalWorkspaceBinding({ ...bindingRecord, permissionState, lastRefreshAt: Date.now(), lastErrorKind: classifyLocalWorkspaceError(error), lastStatusKind: '' }).catch(() => {});
+            showToast(error?.message || 'Failed to refresh local library', 'error');
+            await renderLocalLibraries(script);
+            return false;
+        }
+    }
+
+    async function removeLocalLibrary(scriptId, libraryId) {
+        const script = state.scripts.find(item => item.id === scriptId) || getCurrentScript();
+        const snapshot = getScriptLocalLibraries(script).find(item => item.id === libraryId);
+        if (!script || !snapshot) return false;
+        if (!await showConfirmModal(
+            'Remove local library?',
+            `Remove ${snapshot.name}? Its reviewed snapshot will stop running with this script. The userscript code and stored values stay intact.`,
+            { confirmLabel: 'Remove Library', tone: 'danger' }
+        )) return false;
+        const updatedScript = await saveLocalLibrariesForScript(script, getScriptLocalLibraries(script).filter(item => item.id !== libraryId));
+        const bindings = (await getDashboardLocalWorkspaceBindingsByScript(script.id, 'library')).filter(binding => binding.libraryId === libraryId);
+        bindings.forEach(binding => disconnectLocalWorkspaceObserver(binding.bindingId));
+        await Promise.all(bindings.map(binding => deleteDashboardLocalWorkspaceBinding(binding.bindingId)));
+        await renderLocalLibraries(updatedScript);
+        showToast(`${snapshot.name} removed`, 'success');
+        return true;
+    }
+
+    async function renderLocalLibraries(script = getCurrentScript()) {
+        const list = elements.localLibraryList;
+        const status = elements.localLibraryStatus;
+        const attach = elements.btnAttachLocalLibrary;
+        if (!list) return;
+        list.replaceChildren();
+        if (typeof LocalLibraries === 'undefined') {
+            if (status) status.textContent = 'Local library support failed to load. Reload ScriptVault and try again.';
+            if (attach) attach.disabled = true;
+            return;
+        }
+        const libraries = getScriptLocalLibraries(script);
+        const supported = isLocalWorkspaceFileAccessSupported();
+        if (attach) {
+            attach.disabled = !script || !supported || libraries.length >= LocalLibraries.MAX_LOCAL_LIBRARIES;
+            attach.title = supported
+                ? 'Attach a reviewed JavaScript helper snapshot'
+                : 'File System Access is unavailable in this browser; imported snapshots remain usable';
+        }
+        if (status) {
+            status.textContent = libraries.length
+                ? `${libraries.length} reviewed snapshot${libraries.length === 1 ? '' : 's'} · maximum ${LocalLibraries.MAX_LOCAL_LIBRARIES}`
+                : 'No local libraries attached.';
+        }
+        if (!libraries.length) {
+            safeSetHtml(list, '<div class="panel-empty"><strong>No local libraries</strong><span>Attach a .js helper to review a portable snapshot before it runs with this script.</span></div>');
+            return;
+        }
+
+        const bindings = script?.id && supported
+            ? await getDashboardLocalWorkspaceBindingsByScript(script.id, 'library').catch(() => [])
+            : [];
+        if (script?.id !== state.currentScriptId) return;
+        const bindingByLibrary = new Map(bindings.map(binding => [binding.libraryId, binding]));
+        const activeLibraryIds = new Set(libraries.map(library => library.id));
+        for (const [bindingId, slot] of localWorkspaceFileObservers.entries()) {
+            if (slot.scriptId === script.id && slot.bindingKind === 'library' && !activeLibraryIds.has(slot.libraryId)) disconnectLocalWorkspaceObserver(bindingId);
+        }
+
+        libraries.forEach(snapshot => {
+            const binding = bindingByLibrary.get(snapshot.id) || null;
+            const item = document.createElement('div');
+            item.className = 'local-library-item';
+
+            const meta = document.createElement('div');
+            meta.className = 'local-library-meta';
+            const name = document.createElement('div');
+            name.className = 'local-library-name';
+            name.textContent = snapshot.name;
+            const detail = document.createElement('div');
+            detail.className = 'local-library-detail';
+            detail.textContent = `${formatBytes(snapshot.bytes)} · SHA-256 ${snapshot.sha256.slice(0, 12)}… · reviewed ${formatTime(snapshot.reviewedAt)}`;
+            const source = document.createElement('div');
+            source.className = 'local-library-source';
+            source.textContent = binding
+                ? `${formatLocalWorkspacePermission(binding.permissionState)} · ${formatLocalWorkspaceRefreshStatus(binding)}${localWorkspaceFileObservers.has(binding.bindingId) ? ' · auto-refresh on' : ''}`
+                : 'Portable snapshot · source file not connected on this device';
+            meta.append(name, detail, source);
+
+            const actions = document.createElement('div');
+            actions.className = 'local-library-actions';
+            const refresh = document.createElement('button');
+            refresh.type = 'button';
+            refresh.className = 'toolbar-btn';
+            refresh.textContent = binding ? 'Refresh' : 'Reconnect';
+            refresh.disabled = !supported;
+            refresh.setAttribute('aria-label', `${binding ? 'Refresh' : 'Reconnect'} ${snapshot.name}`);
+            refresh.addEventListener('click', event => {
+                const task = binding
+                    ? () => refreshLocalLibraryBinding(script.id, snapshot.id, { source: 'manual', bindingId: binding.bindingId })
+                    : () => attachLocalLibrary({ replaceId: snapshot.id });
+                runButtonTask(event.currentTarget, task, { busyLabel: binding ? 'Refreshing...' : 'Connecting...' });
+            });
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.className = 'toolbar-btn';
+            remove.textContent = 'Remove';
+            remove.setAttribute('aria-label', `Remove ${snapshot.name}`);
+            remove.addEventListener('click', event => {
+                runButtonTask(event.currentTarget, () => removeLocalLibrary(script.id, snapshot.id), { busyLabel: 'Removing...' });
+            });
+            actions.append(refresh, remove);
+            item.append(meta, actions);
+            list.appendChild(item);
+            if (binding) void ensureLocalWorkspaceObserverForBinding(script.id, binding);
+        });
+    }
+
     function disconnectLocalWorkspaceObserver(bindingId) {
         const slot = bindingId ? localWorkspaceFileObservers.get(bindingId) : null;
         if (!slot) return;
@@ -10765,12 +11129,21 @@
         }
         slot.refreshing = true;
         try {
-            await refreshScriptFromLocalFile(slot.scriptId, {
-                source: 'observer',
-                bindingId,
-                quietUnchanged: true,
-                skipPermissionPrompt: true
-            });
+            if (slot.bindingKind === 'library') {
+                await refreshLocalLibraryBinding(slot.scriptId, slot.libraryId, {
+                    source: 'observer',
+                    bindingId,
+                    quietUnchanged: true,
+                    skipPermissionPrompt: true
+                });
+            } else {
+                await refreshScriptFromLocalFile(slot.scriptId, {
+                    source: 'observer',
+                    bindingId,
+                    quietUnchanged: true,
+                    skipPermissionPrompt: true
+                });
+            }
         } finally {
             slot.refreshing = false;
             if (slot.queued) {
@@ -10836,6 +11209,8 @@
                 observer,
                 bindingId: binding.bindingId,
                 scriptId,
+                bindingKind: binding.bindingKind === 'library' ? 'library' : 'script',
+                libraryId: binding.libraryId || '',
                 timerId: null,
                 refreshing: false,
                 queued: false
@@ -10948,13 +11323,14 @@
         }
 
         try {
-            const [binding = null] = await getDashboardLocalWorkspaceBindingsByScript(scriptId);
+            const bindings = await getDashboardLocalWorkspaceBindingsByScript(scriptId);
+            const binding = bindings.find(item => item.bindingKind === 'script') || null;
             patchOpenTabStatus(scriptId, { localWorkspaceBinding: binding }, state.scripts.find(s => s.id === scriptId) || null);
-            if (binding) {
-                void ensureLocalWorkspaceObserverForBinding(scriptId, binding);
-            } else {
-                disconnectLocalWorkspaceObserversForScript(scriptId);
+            const activeBindingIds = new Set(bindings.map(item => item.bindingId));
+            for (const [bindingId, slot] of localWorkspaceFileObservers.entries()) {
+                if (slot.scriptId === scriptId && !activeBindingIds.has(bindingId)) disconnectLocalWorkspaceObserver(bindingId);
             }
+            bindings.forEach(item => { void ensureLocalWorkspaceObserverForBinding(scriptId, item); });
             if (scriptId === state.currentScriptId) refreshLocalWorkspaceControls();
             return binding;
         } catch (error) {
@@ -11016,16 +11392,17 @@
         const button = event?.currentTarget instanceof HTMLElement ? event.currentTarget : elements.tbtnBindLocalFile;
         if (button) button.disabled = true;
         try {
-            const existing = (await getDashboardLocalWorkspaceBindingsByScript(script.id))[0] || null;
+            const existing = (await getDashboardLocalWorkspaceBindingsByScript(script.id, 'script'))[0] || null;
             const [permissionState, fileMeta] = await Promise.all([
                 queryLocalWorkspacePermission(handle),
                 readLocalWorkspaceFileMetadata(handle)
             ]);
             if (existing?.bindingId) disconnectLocalWorkspaceObserver(existing.bindingId);
-            await deleteDashboardLocalWorkspaceBindingsForScript(script.id);
+            await deleteDashboardLocalWorkspaceBindingsForScript(script.id, 'script');
             const summary = await putDashboardLocalWorkspaceBinding({
                 bindingId: existing?.bindingId || createLocalWorkspaceBindingId(script.id),
                 scriptId: script.id,
+                bindingKind: 'script',
                 handle,
                 displayName: fileMeta.displayName,
                 lastKnownSize: fileMeta.lastKnownSize,
@@ -12069,6 +12446,7 @@
         const m = script.metadata || script.meta || {};
         const requires = Array.isArray(m.require) ? m.require : [];
         const resources = Array.isArray(m.resource) ? m.resource : [];
+        void renderLocalLibraries(script);
 
         if (elements.externalRequireList) {
             if (requires.length === 0) {
@@ -15549,6 +15927,9 @@
             } catch (e) {
                 showToast('Failed to refresh some resources', 'error');
             }
+        });
+        elements.btnAttachLocalLibrary?.addEventListener('click', event => {
+            runButtonTask(event.currentTarget, attachLocalLibrary, { busyLabel: 'Choosing...' });
         });
 
         // Library search (cdnjs API)

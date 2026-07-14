@@ -4049,6 +4049,50 @@
             word-break: break-all;
         }
 
+        .local-library-section-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .local-library-section-head > .btn {
+            flex: 0 0 auto;
+            white-space: nowrap;
+        }
+
+        .local-library-help {
+            margin-top: 8px;
+            color: var(--text-muted);
+            font-size: 0.6875rem;
+            line-height: 1.5;
+        }
+
+        .local-library-list {
+            display: grid;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .local-library-item {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            align-items: center;
+            gap: 12px;
+            padding: 11px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--bg-section-header);
+        }
+
+        .local-library-meta { min-width: 0; }
+        .local-library-name { color: var(--text-primary); font-size: 0.75rem; font-weight: 650; }
+        .local-library-detail { margin-top: 3px; color: var(--text-secondary); font-size: 0.6875rem; line-height: 1.45; overflow-wrap: anywhere; }
+        .local-library-source { margin-top: 3px; color: var(--text-muted); font-size: 0.625rem; line-height: 1.45; }
+        .local-library-actions { display: flex; align-items: center; gap: 6px; }
+        .local-library-status { display: block; margin-top: 7px; color: var(--text-muted); font-size: 0.6875rem; }
+        .local-library-review-warning { padding: 10px 12px; border: 1px solid var(--sv-warning); border-radius: 8px; background: color-mix(in srgb, var(--sv-warning) 12%, var(--bg-content)); color: var(--text-primary); font-size: 0.75rem; line-height: 1.5; }
+
         /* ============================================
            Find Scripts
            ============================================ */
@@ -4195,6 +4239,11 @@
             .find-scripts-search .select-field { flex: 1; width: auto; }
             .find-scripts-custom-row,
             .find-scripts-source-form { grid-template-columns: 1fr; align-items: stretch; }
+            .local-library-section-head { flex-direction: column; align-items: stretch; }
+            .local-library-section-head > .btn { align-self: flex-start; }
+            .local-library-item { grid-template-columns: 1fr; align-items: stretch; }
+            .local-library-actions { justify-content: stretch; }
+            .local-library-actions .toolbar-btn { flex: 1; justify-content: center; }
         }
         .find-script-card {
             display: grid;
@@ -10240,7 +10289,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                         </div>
                         <div class="editor-panel-scroll">
                             <div class="externals-panel">
-                                <div class="settings-section">
+                        <div class="settings-section">
                             <div class="section-label" data-i18n="findLibrariesTitle">Find Libraries</div>
                             <div class="section-content">
                                 <div class="editor-inline-search">
@@ -10248,6 +10297,19 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                                     <button type="button" class="btn btn-primary" id="btnLibSearch" data-i18n="helpSearchLabel">Search</button>
                                 </div>
                                 <div id="libSearchResults" class="panel-empty-inline" aria-live="polite" data-i18n="searchCdnjsPrompt">Search cdnjs for popular libraries to add as @require</div>
+                            </div>
+                        </div>
+                                <div class="settings-section">
+                            <div class="section-content">
+                                <div class="local-library-section-head">
+                                    <div>
+                                        <div class="section-label">Local Libraries</div>
+                                        <div class="local-library-help" id="localLibraryHelp">Reviewed snapshots run after remote @require code and before this userscript. Snapshot code travels in JSON backups and sync; file handles and local paths stay on this device. Plain .user.js exports do not include snapshots.</div>
+                                    </div>
+                                    <button type="button" class="btn" id="btnAttachLocalLibrary" aria-describedby="localLibraryHelp localLibraryStatus">Attach .js</button>
+                                </div>
+                                <span class="local-library-status" id="localLibraryStatus" role="status" aria-live="polite"></span>
+                                <div class="local-library-list" id="localLibraryList"></div>
                             </div>
                         </div>
                                 <div class="settings-section">
@@ -10345,6 +10407,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
     <script src="../shared/utils.js"></script>
     <script src="../modules/i18n.js"></script>
     <script src="../modules/find-script-sources.js"></script>
+    <script src="../modules/local-libraries.js"></script>
     <script src="../modules/script-config.js"></script>
     <script src="../modules/user-scripts-setup.js"></script>
 

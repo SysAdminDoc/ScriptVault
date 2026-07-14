@@ -59,6 +59,7 @@ const SYNC_SAFE_SCRIPT_SETTING_KEYS = new Set([
   'perfBudget',
   'syncValues',
   'tags',
+  'localLibraries',
 ]);
 
 const LOCAL_ONLY_SCRIPT_SETTING_KEYS = new Set([
@@ -100,7 +101,9 @@ function cloneSyncSafeScriptSettings(settings) {
     if (!SYNC_SAFE_SCRIPT_SETTING_KEYS.has(key) || LOCAL_ONLY_SCRIPT_SETTING_KEYS.has(key)) {
       continue;
     }
-    result[key] = cloneScriptSettingValue(value);
+    result[key] = key === 'localLibraries' && typeof LocalLibraries !== 'undefined'
+      ? LocalLibraries.normalizeLocalLibrarySnapshots(value)
+      : cloneScriptSettingValue(value);
   }
   return result;
 }
@@ -4370,6 +4373,9 @@ function redactLocalWorkspaceScriptSettings(settings) {
       redactedLocalWorkspaceSettingKeys.push(key);
     }
   }
+  if (Object.prototype.hasOwnProperty.call(sanitized, 'localLibraries') && typeof LocalLibraries !== 'undefined') {
+    sanitized.localLibraries = LocalLibraries.normalizeLocalLibrarySnapshots(sanitized.localLibraries);
+  }
   return {
     settings: sanitized,
     redactedLocalWorkspaceSettingKeys
@@ -5244,6 +5250,9 @@ async function importScripts(data, options = {}) {
       const nextSettings = importSettings && script.settings && typeof script.settings === 'object'
         ? { ...script.settings }
         : { ...(existing?.settings || {}) };
+      if (Object.prototype.hasOwnProperty.call(nextSettings, 'localLibraries') && typeof LocalLibraries !== 'undefined') {
+        nextSettings.localLibraries = LocalLibraries.normalizeLocalLibrarySnapshots(nextSettings.localLibraries);
+      }
       const trustState = applyImportedScriptTrust(nextSettings, script.enabled !== false, {
         trustImportedScripts,
         source: 'import-json',
@@ -7237,18 +7246,22 @@ async function handleMessage(message, sender) {
           if (!script) return { error: 'Script not found' };
 
           const oldSettings = script.settings || {};
+          const settingsUpdate = { ...data.settings };
+          if (Object.prototype.hasOwnProperty.call(settingsUpdate, 'localLibraries') && typeof LocalLibraries !== 'undefined') {
+            settingsUpdate.localLibraries = LocalLibraries.normalizeLocalLibrarySnapshots(settingsUpdate.localLibraries);
+          }
           const oldEnabled = script.enabled;
-          script.settings = { ...oldSettings, ...data.settings };
+          script.settings = { ...oldSettings, ...settingsUpdate };
           script.updatedAt = Date.now();
 
-          if ('enabled' in data.settings) {
-            script.enabled = !!data.settings.enabled;
+          if ('enabled' in settingsUpdate) {
+            script.enabled = !!settingsUpdate.enabled;
           }
 
           await ScriptStorage.set(data.scriptId, script);
           notifyEasyCloudScriptSaved(data.scriptId);
 
-          if ('enabled' in data.settings && script.enabled !== oldEnabled) {
+          if ('enabled' in settingsUpdate && script.enabled !== oldEnabled) {
             if (script.enabled) {
               await reregisterScript(script);
             } else {
@@ -7268,10 +7281,10 @@ async function handleMessage(message, sender) {
 
           const EXEC_KEYS = ['runAt', 'injectInto', 'useOriginalMatches', 'useOriginalIncludes',
                              'useOriginalExcludes', 'userMatches', 'userIncludes', 'userExcludes',
-                             'frameMode', 'userConfig'];
+                             'frameMode', 'userConfig', 'localLibraries'];
           const needsReregister = EXEC_KEYS.some(k =>
-            k in data.settings &&
-            JSON.stringify(oldSettings[k]) !== JSON.stringify(data.settings[k])
+            k in settingsUpdate &&
+            JSON.stringify(oldSettings[k]) !== JSON.stringify(settingsUpdate[k])
           );
           if (needsReregister && script.enabled !== false) {
             await reregisterScript(script);
@@ -8486,7 +8499,13 @@ async function handleMessage(message, sender) {
         const hadExecKeys = script.settings && Object.keys(script.settings).some(k =>
           ['runAt', 'frameMode', 'userMatches', 'userIncludes', 'userExcludes',
            'useOriginalMatches', 'useOriginalIncludes', 'useOriginalExcludes',
-           'injectInto', 'userConfig'].includes(k));
+           'injectInto', 'userConfig', 'localLibraries'].includes(k));
+        if (Array.isArray(script.settings?.localLibraries) && typeof LocalWorkspaceBindings !== 'undefined') {
+          const bindings = await LocalWorkspaceBindings.getByScript(data.scriptId).catch(() => []);
+          await Promise.all(bindings
+            .filter(binding => binding.bindingKind === 'library')
+            .map(binding => LocalWorkspaceBindings.delete(binding.bindingId).catch(() => {})));
+        }
         script.settings = {};
         await ScriptStorage.set(data.scriptId, script);
         if (hadExecKeys && script.enabled) {
@@ -13052,7 +13071,10 @@ function buildWrappedScript(script, requireScripts = [], preloadedStorage = {}, 
   // Code runs INSIDE the main IIFE after GM APIs are available
   // No try/catch wrapper because let/const are block-scoped and wouldn't escape
   let requireCode = '';
-  for (const req of requireScripts) {
+  const localLibraryRequireScripts = typeof LocalLibraries !== 'undefined'
+    ? LocalLibraries.getLocalLibraryRequireScripts(script.settings)
+    : [];
+  for (const req of [...requireScripts, ...localLibraryRequireScripts]) {
     const safeUrl = req.url.replace(/\*\//g, '* /');
     requireCode += `
 // @require ${safeUrl}
