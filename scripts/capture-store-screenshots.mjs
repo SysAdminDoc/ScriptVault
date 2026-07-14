@@ -73,6 +73,7 @@ const SCREENSHOTS = [
     height: 800,
   }))),
   ...THEMES.map(theme => ({ name: `dashboard-editor-${theme}`, page: 'dashboard', variant: 'editor', theme, width: 1280, height: 800 })),
+  ...THEMES.map(theme => ({ name: `dashboard-confirm-${theme}`, page: 'dashboard', variant: 'confirm', theme, width: 1280, height: 800 })),
   ...THEMES.map(theme => ({ name: `popup-${theme}`, page: 'popup', theme, width: 400, height: 600 })),
   ...THEMES.map(theme => ({ name: `sidepanel-${theme}`, page: 'sidepanel', theme, width: 420, height: 800 })),
   ...THEMES.map(theme => ({ name: `install-${theme}`, page: 'install', theme, width: 1280, height: 800 })),
@@ -136,7 +137,16 @@ try {
         await whatsNewDismiss.click();
         await page.waitForFunction(() => !document.querySelector('.sv-wn-overlay'), { timeout: 5000 });
       }
-      if (shot.variant === 'editor') {
+      if (shot.variant === 'confirm') {
+        await page.evaluate(() => {
+          window.ScriptVaultDashboardUI?.confirm(
+            'Factory Reset ScriptVault?',
+            'Delete every script and restore all settings to their defaults? This cannot be undone.',
+            { confirmLabel: 'Factory Reset', tone: 'danger' },
+          );
+        });
+        await page.waitForSelector('#modal.show', { visible: true, timeout: 10000 });
+      } else if (shot.variant === 'editor') {
         await page.click('#btnNewScript');
         await page.waitForSelector('.editor-overlay.active', { visible: true, timeout: 15000 });
         await page.evaluate(theme => window._monacoEditorAdapter?.setTheme(theme), shot.theme);

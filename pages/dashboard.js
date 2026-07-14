@@ -3022,7 +3022,7 @@
                                     const script = state.scripts.find(s => s.id === id);
                                     const name = script?.metadata?.name || id;
                                     const deleteCopy = getSingleDeleteDialogCopy(name);
-                                    if (await showConfirmModal(deleteCopy.title, deleteCopy.message)) {
+                                    if (await showConfirmModal(deleteCopy.title, deleteCopy.message, { confirmLabel: 'Move to Trash' })) {
                                         await deleteScript(id);
                                     }
                                 };
@@ -5165,7 +5165,7 @@
             showToast(`${state.runtimeDescriptor?.buildLabel || 'This build'} does not support ${capitalize(provider)} sync`, 'info');
             return;
         }
-        if (!await showConfirmModal('Disconnect', `Disconnect from ${capitalize(provider)}?`)) return;
+        if (!await showConfirmModal('Disconnect Sync', `Disconnect from ${capitalize(provider)}?`, { confirmLabel: 'Disconnect' })) return;
         
         try {
             const response = await chrome.runtime.sendMessage({ action: 'disconnectSyncProvider', provider });
@@ -5451,7 +5451,11 @@
     
     async function resetScriptSettings() {
         if (!state.currentScriptId) return;
-        if (!await showConfirmModal('Reset Settings', 'Reset to default settings?')) return;
+        if (!await showConfirmModal(
+            'Reset Script Settings',
+            'Reset this script’s settings to defaults? Code and stored values stay intact, but custom URLs, notes, and per-script options will be cleared.',
+            { confirmLabel: 'Reset Script Settings', tone: 'danger' }
+        )) return;
         
         const defaults = {
             autoUpdate: true,
@@ -6343,7 +6347,7 @@
                 const publicKey = button.dataset.untrustKey;
                 const meta = keys[publicKey] || {};
                 const label = meta.name || `${publicKey.slice(0, 12)}...`;
-                if (!await showConfirmModal('Remove trusted key?', `Stop trusting ${label}? Verified installs from this key will require trust again.`)) {
+                if (!await showConfirmModal('Remove Trusted Key?', `Stop trusting ${label}? Verified installs from this key will require trust again.`, { confirmLabel: 'Remove Trust', tone: 'danger' })) {
                     return;
                 }
                 try {
@@ -7471,7 +7475,8 @@
                 await runButtonTask(button, async () => {
                     const confirm = await showConfirmModal(
                         tDashboard('deleteForever', 'Delete Forever'),
-                        tDashboard('confirmDeleteForever', 'Permanently remove "{name}" from trash?', { name: metadata.name })
+                        tDashboard('confirmDeleteForever', 'Permanently remove "{name}" from trash?', { name: metadata.name }),
+                        { confirmLabel: 'Delete Forever', tone: 'danger' }
                     );
                     if (!confirm) return;
                     try {
@@ -7556,7 +7561,7 @@
     }
 
     async function deleteFolder(folderId) {
-        if (!await showConfirmModal('Delete Folder', 'Delete this folder? Scripts will not be deleted.')) return;
+        if (!await showConfirmModal('Delete Folder', 'Delete this folder? Scripts will not be deleted.', { confirmLabel: 'Delete Folder', tone: 'danger' })) return;
         try {
             await chrome.runtime.sendMessage({ action: 'deleteFolder', id: folderId });
             await loadFolders();
@@ -8178,7 +8183,7 @@
                 break;
 
             case 'reset':
-                if (!await showConfirmModal('Factory Reset', `Reset settings for ${ids.length} scripts?`)) return;
+                if (!await showConfirmModal('Reset Script Settings', `Reset settings for ${ids.length} scripts? Script code and stored values will stay intact.`, { confirmLabel: 'Reset Script Settings', tone: 'danger' })) return;
                 await runBulkScriptOperation(ids, {
                     action,
                     progressTitle: `Resetting ${ids.length} scripts…`,
@@ -8191,7 +8196,7 @@
 
             case 'delete':
                 const deleteCopy = getBulkDeleteDialogCopy(ids.length);
-                if (!await showConfirmModal(deleteCopy.title, deleteCopy.message)) return;
+                if (!await showConfirmModal(deleteCopy.title, deleteCopy.message, { confirmLabel: 'Move to Trash' })) return;
                 await runBulkScriptOperation(ids, {
                     action,
                     progressTitle: deleteCopy.progressTitle,
@@ -9074,7 +9079,7 @@
         tr.querySelector('[data-action="delete"]')?.addEventListener('click', async () => {
             const name = script.metadata?.name || script.id;
             const deleteCopy = getSingleDeleteDialogCopy(name);
-            if (await showConfirmModal(deleteCopy.title, deleteCopy.message)) {
+            if (await showConfirmModal(deleteCopy.title, deleteCopy.message, { confirmLabel: 'Move to Trash' })) {
                 deleteScript(script.id);
             }
         });
@@ -9798,7 +9803,7 @@
         clearButton?.addEventListener('click', async () => {
             const scriptId = clearButton.dataset.publicationReceiptsClear || state.currentScriptId || '';
             if (!scriptId) return;
-            const confirmed = await showConfirmModal('Clear publication receipts', 'Clear local Greasy Fork publication receipts for this script? This does not affect the script or Greasy Fork.');
+            const confirmed = await showConfirmModal('Clear Publication Receipts', 'Clear local Greasy Fork publication receipts for this script? This does not affect the script or Greasy Fork.', { confirmLabel: 'Clear Receipts', tone: 'danger' });
             if (!confirmed) return;
             const count = await deleteGreasyForkPublicationReceiptsForScript(scriptId);
             const script = state.scripts.find(item => item.id === scriptId) || null;
@@ -11670,7 +11675,7 @@
 
         // Check for unsaved changes (skip if noSaveConfirm setting is enabled)
         if (tabData?.unsaved && !state.settings.noSaveConfirm) {
-            showConfirmModal('Unsaved Changes', 'You have unsaved changes. Close without saving?')
+            showConfirmModal('Discard Unsaved Changes?', 'Close this editor tab without saving your changes?', { confirmLabel: 'Discard Changes', tone: 'danger' })
                 .then(confirmed => {
                     if (confirmed) doClose();
                 });
@@ -11878,7 +11883,7 @@
                     btn.addEventListener('click', async () => {
                         const idx = parseInt(btn.dataset.rollbackIdx);
                         const ver = history[idx]?.version || '?';
-                        if (!await showConfirmModal('Rollback', `Rollback to v${ver}? Current code will be lost.`)) return;
+                        if (!await showConfirmModal('Roll Back Script?', `Restore v${ver}? The current code will be replaced.`, { confirmLabel: 'Roll Back', tone: 'danger' })) return;
                         try {
                             const res = await chrome.runtime.sendMessage({ action: 'rollbackScript', scriptId: script.id, index: idx });
                             if (res?.success) {
@@ -12175,7 +12180,7 @@
         keySpan?.addEventListener('click', () => item.querySelectorAll('.btn')[1]?.click());
 
         item.querySelector('.btn-danger')?.addEventListener('click', async () => {
-            if (await showConfirmModal('Delete', `Delete "${currentKey}"?`)) {
+            if (await showConfirmModal('Delete Stored Value?', `Delete “${currentKey}”? This cannot be undone.`, { confirmLabel: 'Delete Value', tone: 'danger' })) {
                 await chrome.runtime.sendMessage({ action: 'deleteScriptValue', scriptId, key: currentKey });
                 await loadScriptStorage(state.scripts.find(s => s.id === scriptId) || { id: scriptId });
                 showToast(`Deleted storage value "${currentKey}"`, 'success');
@@ -13112,7 +13117,8 @@
             if (hasStructuredImports) {
                 const confirmed = await showConfirmModal(
                     'Import Files',
-                    buildStructuredImportConfirmationMessage(files, transfer)
+                    buildStructuredImportConfirmationMessage(files, transfer),
+                    { confirmLabel: 'Import Files' }
                 );
                 if (!confirmed) return;
             }
@@ -13527,7 +13533,7 @@
         if (!subscriptionId) return;
         const subscription = state.subscriptions.find(item => item.id === subscriptionId);
         const label = subscription?.name || 'this feed';
-        if (!await showConfirmModal('Remove Subscription', `Remove ${label}?`)) return;
+        if (!await showConfirmModal('Remove Subscription?', `Stop checking ${label} for new scripts and updates?`, { confirmLabel: 'Remove Subscription' })) return;
         const response = await chrome.runtime.sendMessage({ action: 'removeSubscription', subscriptionId });
         if (response?.error) throw new Error(response.error);
         state.subscriptions = Array.isArray(response?.subscriptions) ? response.subscriptions : [];
@@ -14386,7 +14392,7 @@
         onDismiss?.();
     }
 
-    function showConfirmModal(title, msg) {
+    function showConfirmModal(title, msg, { confirmLabel = 'Confirm', tone = 'default' } = {}) {
         return new Promise(resolve => {
             let settled = false;
             const finish = result => {
@@ -14398,7 +14404,7 @@
             };
             showModal(title, `<p>${escapeHtml(msg)}</p>`, [
                 { label: 'Cancel', class: '', callback: () => finish(false) },
-                { label: 'Confirm', class: 'btn-primary', callback: () => finish(true) }
+                { label: confirmLabel, class: tone === 'danger' ? 'btn-danger' : 'btn-primary', callback: () => finish(true) }
             ], { onDismiss: () => finish(false) });
         });
     }
@@ -15290,7 +15296,7 @@
             const name = script?.metadata?.name || 'this script';
             const scriptId = state.currentScriptId;
             const deleteCopy = getSingleDeleteDialogCopy(name);
-            if (await showConfirmModal(deleteCopy.title, deleteCopy.message)) {
+            if (await showConfirmModal(deleteCopy.title, deleteCopy.message, { confirmLabel: 'Move to Trash' })) {
                 deleteScript(scriptId);
             }
         });
@@ -15299,7 +15305,7 @@
         elements.btnEmptyTrash?.addEventListener('click', async () => {
             const total = state.trashItems.length;
             if (total === 0) return;
-            if (!await showConfirmModal('Empty Trash', `Permanently delete ${numberFormatter.format(total)} script${total === 1 ? '' : 's'} from trash?`)) return;
+            if (!await showConfirmModal('Empty Trash?', `Permanently delete ${numberFormatter.format(total)} script${total === 1 ? '' : 's'} from trash? This cannot be undone.`, { confirmLabel: 'Empty Trash', tone: 'danger' })) return;
             try {
                 const r = await chrome.runtime.sendMessage({ action: 'emptyTrash' });
                 showToast(r?.error ? r.error : 'Trash emptied', r?.error ? 'error' : 'success');
@@ -15991,7 +15997,7 @@
                     showToast('Choose a sync provider first', 'info');
                     return;
                 }
-                if (!await showConfirmModal('Revoke sync access?', `Revoke or clear saved access for ${capitalize(provider)} and disable userscript sync?`)) {
+                if (!await showConfirmModal('Revoke Sync Access?', `Revoke or clear saved access for ${capitalize(provider)} and disable userscript sync?`, { confirmLabel: 'Revoke Access', tone: 'danger' })) {
                     return;
                 }
                 const response = await chrome.runtime.sendMessage({ action: 'revokeSyncProvider', provider });
@@ -16087,7 +16093,7 @@
                 showToast('No denied hosts to restore', 'info');
                 return;
             }
-            if (!await showConfirmModal('Restore all denied hosts?', `Remove ${currentHosts.length} remembered host deny entr${currentHosts.length === 1 ? 'y' : 'ies'} from ScriptVault's runtime list.`)) {
+            if (!await showConfirmModal('Clear Denied Hosts?', `Remove ${currentHosts.length} remembered host deny entr${currentHosts.length === 1 ? 'y' : 'ies'} from ScriptVault's runtime list.`, { confirmLabel: 'Clear Denied Hosts' })) {
                 return;
             }
             await persistDeniedHosts([], 'Cleared all denied host entries');
@@ -16104,7 +16110,7 @@
         // Reset buttons
         elements.btnRestartExtension?.addEventListener('click', async event => {
             await runButtonTask(event.currentTarget, async () => {
-                if (!await showConfirmModal('Restart', 'Restart ScriptVault?')) return;
+                if (!await showConfirmModal('Restart ScriptVault?', 'Restart the extension now? Open editor tabs will close.', { confirmLabel: 'Restart' })) return;
                 await chrome.runtime.sendMessage({ action: 'restart' });
                 showToast('Restarting…', 'info');
             }, { busyLabel: 'Restarting…', errorMessage: 'Restart failed' });
@@ -16112,7 +16118,7 @@
         
         elements.btnFactoryReset?.addEventListener('click', async event => {
             await runButtonTask(event.currentTarget, async () => {
-                if (!await showConfirmModal('Factory Reset', 'This will delete all scripts and reset all settings. This cannot be undone. Continue?')) return;
+                if (!await showConfirmModal('Factory Reset ScriptVault?', 'Delete every script and restore all settings to their defaults? This cannot be undone.', { confirmLabel: 'Factory Reset', tone: 'danger' })) return;
                 await chrome.runtime.sendMessage({ action: 'factoryReset' });
                 await loadSettings();
                 await loadScripts();
@@ -16329,7 +16335,7 @@
         elements.btnShowSetupGuide?.addEventListener('click', showSetupInstructions);
         elements.btnRepairRuntime?.addEventListener('click', async event => {
             await runButtonTask(event.currentTarget, async () => {
-                if (!await showConfirmModal('Repair runtime?', 'Rebuild registrations, context menus, alarms, and badge state now.')) return;
+                if (!await showConfirmModal('Repair Runtime?', 'Rebuild registrations, context menus, alarms, and badge state now.', { confirmLabel: 'Repair Runtime' })) return;
                 try {
                     const result = await chrome.runtime.sendMessage({ action: 'repairRuntimeState' });
                     if (result?.error || result?.success === false) {
@@ -16423,7 +16429,7 @@
         });
         elements.btnClearPublicApiAudit?.addEventListener('click', async event => {
             await runButtonTask(event.currentTarget, async () => {
-                if (!await showConfirmModal('Clear audit log?', 'Remove recent Public API audit entries from the local log.')) return;
+                if (!await showConfirmModal('Clear Audit Log?', 'Remove recent Public API audit entries from the local log?', { confirmLabel: 'Clear Audit Log', tone: 'danger' })) return;
                 try {
                     const response = await chrome.runtime.sendMessage({ action: 'publicApi_clearAuditLog' });
                     if (response?.error) {
@@ -16691,7 +16697,8 @@
                         importSettingsCredentials: transfer.includeSettingsCredentials,
                         importStorage: transfer.includeStorage,
                         overwriteTarget: 'matching scripts in this vault'
-                    })
+                    }),
+                    { confirmLabel: 'Restore From Cloud' }
                 );
                 if (!confirmed) return;
                 showToast('Restoring from ' + provider + '…', 'info');
@@ -16744,7 +16751,11 @@
                             importSettingsCredentials: transfer.includeSettingsCredentials,
                             importStorage: transfer.includeStorage
                         });
-                if (!await showConfirmModal(isScriptFile ? 'Install Script' : 'Restore File', confirmMessage)) return;
+                if (!await showConfirmModal(
+                    isScriptFile ? 'Install Script' : 'Restore File',
+                    confirmMessage,
+                    { confirmLabel: isScriptFile ? 'Install Script' : 'Restore File' }
+                )) return;
                 if (file.size > 50 * 1024 * 1024) { showToast('File too large (max 50 MB)', 'error'); return; }
                 showProgress(`Importing ${file.name}…`);
                 updateProgress(0, 1, 'Reading file…');
@@ -16845,7 +16856,7 @@
                 const textarea = document.getElementById('batchUrlInput');
                 const urls = (textarea?.value || '').split('\n').map(u => u.trim()).filter(u => u && u.startsWith('http'));
                 if (urls.length === 0) return showToast('No valid URLs found', 'error');
-                if (!await showConfirmModal('Batch Install', `Install ${urls.length} script${urls.length > 1 ? 's' : ''} from URLs?`)) return;
+                if (!await showConfirmModal('Install Scripts?', `Install ${urls.length} script${urls.length > 1 ? 's' : ''} from the listed URLs?`, { confirmLabel: 'Install Scripts' })) return;
                 showProgress(`Installing ${urls.length} scripts…`);
                 let installed = 0, failed = 0;
                 try {
@@ -16900,7 +16911,7 @@
                         importSettings: transfer.includeSettings,
                         importSettingsCredentials: transfer.includeSettingsCredentials,
                         importStorage: transfer.includeStorage
-                    }))) return;
+                    }), { confirmLabel: 'Restore JSON' })) return;
                     showProgress(`Importing ${data.scripts?.length || 0} scripts…`);
                     updateProgress(0, 1, 'Processing…');
                     try {
@@ -17059,7 +17070,8 @@
                 const transfer = getTransferPreferences();
                 const confirmed = await showConfirmModal(
                     'Import Files',
-                    buildStructuredImportConfirmationMessage(files, transfer)
+                    buildStructuredImportConfirmationMessage(files, transfer),
+                    { confirmLabel: 'Import Files' }
                 );
                 if (!confirmed) return;
             }
@@ -17309,7 +17321,7 @@
                 await runButtonTask(button, async () => {
                     const backup = state.backups.find(entry => entry.id === button.dataset.backupDelete);
                     const label = backup?.timestamp ? dateTimeFormatter.format(new Date(backup.timestamp)) : 'this backup';
-                    const confirmed = await showConfirmModal('Delete Backup', `Delete the backup from ${label}? This removes the stored archive from ScriptVault.`);
+                    const confirmed = await showConfirmModal('Delete Backup?', `Delete the backup from ${label}? This removes the stored archive from ScriptVault.`, { confirmLabel: 'Delete Backup', tone: 'danger' });
                     if (!confirmed) return;
                     try {
                         const response = await chrome.runtime.sendMessage({ action: 'deleteBackup', backupId: button.dataset.backupDelete });
@@ -17782,7 +17794,8 @@
                                 archivedEnabledCount: stats.archivedEnabledCount,
                                 archivedDisabledCount: stats.archivedDisabledCount,
                                 trustImportedScripts
-                            })
+                            }),
+                            { confirmLabel: 'Restore Selected Scripts' }
                         );
                         if (!confirmed) {
                             await reopenBackupReview(selected);
@@ -17817,7 +17830,8 @@
                                 archivedEnabledCount: archiveEnabledCount,
                                 archivedDisabledCount: archiveDisabledCount,
                                 trustImportedScripts
-                            })
+                            }),
+                            { confirmLabel: hasVaultRestoreItems ? 'Restore Scripts Only' : 'Restore All Scripts' }
                         );
                         if (!confirmed) {
                             await reopenBackupReview(preservedSelection);
@@ -17844,7 +17858,8 @@
                         const trustImportedScripts = !!document.getElementById('trustBackupScripts')?.checked;
                         const confirmed = await showConfirmModal(
                             'Restore Full Vault',
-                            buildRestoreMessage({ mode: 'full', trustImportedScripts, includeSettingsCredentials })
+                            buildRestoreMessage({ mode: 'full', trustImportedScripts, includeSettingsCredentials }),
+                            { confirmLabel: 'Restore Full Vault' }
                         );
                         if (!confirmed) {
                             await reopenBackupReview(preservedSelection);
@@ -18074,7 +18089,8 @@
                         const workspaceName = btn.closest('[data-ws-id]')?.querySelector('.workspace-name')?.textContent?.trim() || 'workspace';
                         const confirmed = await showConfirmModal(
                             'Delete Workspace',
-                            `Delete "${workspaceName}"? This removes the saved snapshot but does not delete any scripts.`
+                            `Delete "${workspaceName}"? This removes the saved snapshot but does not delete any scripts.`,
+                            { confirmLabel: 'Delete Workspace', tone: 'danger' }
                         );
                         if (!confirmed) return;
                         try {

@@ -998,7 +998,7 @@ const ProfileManager = (() => {
     if (deleteBtn) {
       deleteBtn.addEventListener('click', async () => {
         const confirmed = typeof window.ScriptVaultDashboardUI?.confirm === 'function'
-          ? await window.ScriptVaultDashboardUI.confirm('Delete Profile', `Delete profile "${editing.name}"?`)
+          ? await window.ScriptVaultDashboardUI.confirm('Delete Profile?', `Delete profile "${editing.name}"? Scripts will return to the default profile.`, { confirmLabel: 'Delete Profile', tone: 'danger' })
           : confirm(`Delete profile "${editing.name}"?`);
         if (!confirmed) return;
         _profiles = _profiles.filter(p => p.id !== editing.id);

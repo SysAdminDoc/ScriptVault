@@ -1108,7 +1108,7 @@ const TemplateManager = (() => {
                 _safeSetHtml(delBtn, '&#10005;');
                 delBtn.onclick = async () => {
                     const confirmed = typeof window.ScriptVaultDashboardUI?.confirm === 'function'
-                        ? await window.ScriptVaultDashboardUI.confirm('Delete Template', `Delete template "${tpl.name}"?`)
+                        ? await window.ScriptVaultDashboardUI.confirm('Delete Template?', `Delete template "${tpl.name}"? This cannot be undone.`, { confirmLabel: 'Delete Template', tone: 'danger' })
                         : confirm(`Delete template "${tpl.name}"?`);
                     if (confirmed) {
                         deleteTemplateById(tpl.id);

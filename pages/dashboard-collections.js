@@ -660,10 +660,10 @@ const CollectionManager = (() => {
   }
 
   function confirmCollectionDelete(coll) {
-    const title = 'Delete Collection';
-    const message = `Delete collection "${coll.name}"?`;
+    const title = 'Delete Collection?';
+    const message = `Delete collection "${coll.name}"? Scripts in the collection will stay in your vault.`;
     if (typeof window.ScriptVaultDashboardUI?.confirm === 'function') {
-      return window.ScriptVaultDashboardUI.confirm(title, message);
+      return window.ScriptVaultDashboardUI.confirm(title, message, { confirmLabel: 'Delete Collection', tone: 'danger' });
     }
     return Promise.resolve(window.confirm(message));
   }

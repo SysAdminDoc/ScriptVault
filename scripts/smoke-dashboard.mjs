@@ -227,7 +227,31 @@ try {
         }
     }
 
-    console.log(`Dashboard smoke passed for ScriptVault ${snapshot.version} (${extensionId}); ${workbenchDestinations.length} deep links verified.`);
+    await page.evaluate(() => {
+        window.ScriptVaultDashboardUI.confirm(
+            'Factory Reset ScriptVault?',
+            'Delete every script and restore all settings to their defaults? This cannot be undone.',
+            { confirmLabel: 'Factory Reset', tone: 'danger' }
+        );
+    });
+    await page.waitForSelector('#modal.show', { visible: true, timeout: 5000 });
+    await page.waitForFunction(() => document.activeElement?.textContent?.trim() === 'Cancel', { timeout: 5000 });
+    const destructiveDialog = await page.evaluate(() => ({
+        labels: Array.from(document.querySelectorAll('#modalActions button')).map(button => button.textContent.trim()),
+        dangerClass: document.querySelector('#modalActions .btn-danger')?.textContent.trim(),
+        focusedLabel: document.activeElement?.textContent?.trim(),
+        title: document.getElementById('modalTitle')?.textContent?.trim(),
+    }));
+    if (destructiveDialog.title !== 'Factory Reset ScriptVault?'
+        || destructiveDialog.dangerClass !== 'Factory Reset'
+        || destructiveDialog.focusedLabel !== 'Cancel'
+        || destructiveDialog.labels.join('|') !== 'Cancel|Factory Reset') {
+        throw new Error(`Destructive dialog contract failed: ${JSON.stringify(destructiveDialog)}`);
+    }
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('#modal.show'), { timeout: 5000 });
+
+    console.log(`Dashboard smoke passed for ScriptVault ${snapshot.version} (${extensionId}); ${workbenchDestinations.length} deep links and destructive dialog focus verified.`);
     if (pageErrors.length > 0) {
         console.warn(`Dashboard smoke observed ${pageErrors.length} console/page error(s):`);
         pageErrors.slice(0, 5).forEach(error => console.warn(`- ${error}`));

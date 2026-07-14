@@ -893,7 +893,7 @@ const ScriptChains = (() => {
         delBtn.addEventListener('click', async (e) => {
           e.stopPropagation();
           const confirmed = typeof window.ScriptVaultDashboardUI?.confirm === 'function'
-            ? await window.ScriptVaultDashboardUI.confirm('Delete Chain', `Delete chain "${chain.name}"?`)
+            ? await window.ScriptVaultDashboardUI.confirm('Delete Chain?', `Delete chain "${chain.name}"? Scripts in the chain will stay in your vault.`, { confirmLabel: 'Delete Chain', tone: 'danger' })
             : confirm(`Delete chain "${chain.name}"?`);
           if (confirmed) {
             await _runButtonTask(delBtn, () => deleteChain(chain.id), { busyLabel: 'Deleting…' });

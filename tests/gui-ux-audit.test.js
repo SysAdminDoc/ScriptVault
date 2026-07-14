@@ -105,6 +105,7 @@ describe("cross-surface UX audit", () => {
     const dashboardSmoke = readFileSync(resolve(process.cwd(), "scripts/smoke-dashboard.mjs"), "utf8");
     expect(dashboardSmoke).toContain("const workbenchDestinations = [");
     expect(dashboardSmoke).toContain("document.activeElement === targetElement");
+    expect(dashboardSmoke).toContain("destructiveDialog.focusedLabel !== 'Cancel'");
   });
 
   test("settings autosave and update empty states communicate progress and recovery", () => {
@@ -128,6 +129,22 @@ describe("cross-surface UX audit", () => {
     expect(dashboardJs).toContain("data-empty-check-updates");
     expect(dashboardJs).toContain("'Sync not configured'");
     expect(dashboardHtml).toContain('id="svCommandHealthTitle">Local vault ready');
+  });
+
+  test("confirmation dialogs name the action and de-emphasize destructive defaults", () => {
+    const chainsJs = readFileSync(resolve(process.cwd(), "pages/dashboard-chains.js"), "utf8");
+    const profilesJs = readFileSync(resolve(process.cwd(), "pages/dashboard-profiles.js"), "utf8");
+    const templatesJs = readFileSync(resolve(process.cwd(), "pages/dashboard-templates.js"), "utf8");
+
+    expect(dashboardJs).toContain("function showConfirmModal(title, msg, { confirmLabel = 'Confirm', tone = 'default' } = {})");
+    expect(dashboardJs).toContain("tone === 'danger' ? 'btn-danger' : 'btn-primary'");
+    expect(dashboardJs).toContain("{ confirmLabel: 'Factory Reset', tone: 'danger' }");
+    expect(dashboardJs).toContain("{ confirmLabel: 'Discard Changes', tone: 'danger' }");
+    expect(dashboardJs).toContain("{ confirmLabel: 'Restore Full Vault' }");
+    expect(dashboardJs).not.toContain("'Reset to default settings?'");
+    expect(chainsJs).toContain("{ confirmLabel: 'Delete Chain', tone: 'danger' }");
+    expect(profilesJs).toContain("{ confirmLabel: 'Delete Profile', tone: 'danger' }");
+    expect(templatesJs).toContain("{ confirmLabel: 'Delete Template', tone: 'danger' }");
   });
 
   test("shared pre-paint theme cache prevents non-dark startup flashes", () => {
@@ -160,6 +177,7 @@ describe("cross-surface UX audit", () => {
 
     expect(screenshotHarness).toContain("...THEMES.flatMap(theme => ['updates', 'utilities', 'trash', 'help']");
     expect(screenshotHarness).toContain("dashboard-editor-${theme}");
+    expect(screenshotHarness).toContain("dashboard-confirm-${theme}");
     expect(screenshotHarness).toContain("shot.variant === 'editor'");
     expect(screenshotHarness).toContain("window._monacoEditorAdapter?.setTheme(theme)");
     expect(screenshotHarness).toContain("document.documentElement.dataset.theme === theme");
