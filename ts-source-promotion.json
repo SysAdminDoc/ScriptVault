@@ -180,6 +180,14 @@
       "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for diagnostics, logs, analysis, and local observability action dispatch."
     },
     {
+      "runtime": "modules/script-action-handler.js",
+      "sources": [
+        "src/background/script-action-handler.ts"
+      ],
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for script lifecycle, trash, host-access, and registration action dispatch."
+    },
+    {
       "runtime": "modules/gm-audio-handler.js",
       "sources": [
         "src/background/gm-audio-handler.ts"

@@ -39,6 +39,10 @@ import {
   DIAGNOSTICS_BACKGROUND_ACTIONS,
   createDiagnosticsActionHandlers,
 } from '../src/background/diagnostics-action-handler.ts';
+import {
+  SCRIPT_BACKGROUND_ACTIONS,
+  createScriptActionHandlers,
+} from '../src/background/script-action-handler.ts';
 
 describe('typed background action registry', () => {
   it('normalizes flat and nested runtime messages before dispatch', async () => {
@@ -324,5 +328,30 @@ describe('typed background action registry', () => {
       prompt: '',
     });
     expect(dependencies.setLiveReload).toHaveBeenCalledWith('script-1', true);
+  });
+
+  it('routes script lifecycle and trash actions with normalized IDs', async () => {
+    const dependencies = Object.fromEntries([
+      'getScripts', 'getHostPermissionStatus', 'queueHostAccessRequest',
+      'getScript', 'saveScript', 'createScript', 'deleteScript', 'getTrash',
+      'restoreFromTrash', 'emptyTrash', 'rescheduleScript', 'restart',
+      'permanentlyDelete', 'toggleScript', 'duplicateScript', 'searchScripts',
+      'reorderScripts',
+    ].map(name => [name, vi.fn(async () => ({ success: true }))]));
+    const registry = createBackgroundActionRegistry(createScriptActionHandlers(dependencies));
+
+    await registry.dispatch({ action: 'deleteScript', data: { id: 'script-1' } }, {});
+    await registry.dispatch({
+      action: 'toggleScript',
+      data: { scriptId: 'script-2', enabled: false },
+    }, {});
+
+    expect(registry.registeredActions()).toEqual(SCRIPT_BACKGROUND_ACTIONS);
+    expect(dependencies.deleteScript).toHaveBeenCalledWith('script-1');
+    expect(dependencies.toggleScript).toHaveBeenCalledWith({
+      action: 'toggleScript',
+      scriptId: 'script-2',
+      enabled: false,
+    });
   });
 });

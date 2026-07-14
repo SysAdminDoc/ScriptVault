@@ -6624,6 +6624,395 @@ backgroundActionRegistry.registerHandlers(SecurityActionHandler.createSecurityAc
     };
   }
 }));
+backgroundActionRegistry.registerHandlers(ScriptActionHandler.createScriptActionHandlers({
+  getScripts: async () => {
+    const scripts = await ScriptStorage.getAll();
+    return { scripts: scripts.map(script => ({ ...script, metadata: script.meta })) };
+  },
+  getHostPermissionStatus: async (message, sender) => {
+    const remembered = getRememberedRuntimeHostPermissionTarget();
+    const url = message.url || message.currentUrl || sender?.tab?.url || remembered?.url || '';
+    const status = await getRuntimeHostPermissionStatus(url);
+    if (remembered && remembered.url === url) {
+      status.tabId = remembered.tabId;
+      status.tabTitle = remembered.title;
+    }
+    return status;
+  },
+  queueHostAccessRequest: async (message, sender) => {
+    const remembered = getRememberedRuntimeHostPermissionTarget();
+    return await queueRuntimeHostAccessRequest(
+      message.url || message.currentUrl || sender?.tab?.url || remembered?.url || '',
+      typeof message.tabId === 'number' ? message.tabId : sender?.tab?.id || remembered?.tabId,
+      message.documentId
+    );
+  },
+  getScript: async id => {
+    const script = await ScriptStorage.get(id);
+    return script ? { ...script, metadata: script.meta } : null;
+  },
+  saveScript: async message => {
+    const codeBytes = _scriptSourceByteLength(message.code);
+    if (codeBytes > MAX_SCRIPT_SIZE) {
+      return { error: `Script too large (${formatBytes(codeBytes)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.` };
+    }
+    const parsed = parseUserscript(message.code);
+    if (parsed.error) return { error: parsed.error };
+
+    const id = message.id || message.scriptId || generateId();
+    return await _runExclusiveScriptOperation(id, async () => {
+      const existing = await ScriptStorage.get(id);
+      const scriptSettings = { ...(existing?.settings || {}) };
+      delete scriptSettings.mergeConflict;
+      if (message.markModified) scriptSettings.userModified = true;
+      if (message.settings && typeof message.settings === 'object' && 'allowBroadHostAccess' in message.settings) {
+        scriptSettings.allowBroadHostAccess = message.settings.allowBroadHostAccess === true;
+      }
+      const receiptOptions = message.trust && typeof message.trust === 'object' ? message.trust : null;
+      const shouldRecordReceipt = !!receiptOptions?.recordReceipt
+        || !!receiptOptions?.operation
+        || !!receiptOptions?.sourceUrl
+        || !!receiptOptions?.sourceKind
+        || !!receiptOptions?.sourceLabel
+        || receiptOptions?.suppressMetadataSourceFallback === true;
+      let previousScript = existing && existing.code !== message.code
+        ? {
+            ...existing,
+            meta: { ...existing.meta },
+            code: existing.code,
+            updatedAt: existing.updatedAt || Date.now()
+          }
+        : null;
+      const versionHistory = Array.isArray(existing?.versionHistory) ? [...existing.versionHistory] : [];
+      let historyEntry = null;
+      let rollbackIndex = -1;
+      const now = Date.now();
+      _sweepExpiredLocalSaveCoalescing(now);
+      const coalesceStorageKey = _localSaveCoalesceKey(id, receiptOptions?.coalesceKey);
+      const coalesceWindowMs = _localSaveCoalesceWindowMs(receiptOptions?.coalesceWindowMs);
+      const canCoalesceLocalSave = !!previousScript
+        && !!coalesceStorageKey
+        && coalesceWindowMs > 0
+        && receiptOptions?.operation === 'local-save'
+        && receiptOptions?.sourceKind === 'local-editor';
+      if (shouldRecordReceipt && !canCoalesceLocalSave) _clearLocalSaveCoalescingForScript(id);
+      let coalescedHistoryEntry = null;
+      if (shouldRecordReceipt && canCoalesceLocalSave) {
+        const coalesceState = _localSaveReceiptCoalescing.get(coalesceStorageKey);
+        const candidate = coalesceState?.scriptId === id && coalesceState.expiresAt >= now
+          ? versionHistory[coalesceState.rollbackIndex]
+          : null;
+        if (candidate && typeof candidate.code === 'string') {
+          const parsedPrevious = parseUserscript(candidate.code);
+          coalescedHistoryEntry = candidate;
+          rollbackIndex = coalesceState.rollbackIndex;
+          previousScript = {
+            ...existing,
+            code: candidate.code,
+            meta: parsedPrevious?.error ? { ...existing.meta } : { ...parsedPrevious.meta },
+            updatedAt: candidate.updatedAt || existing.updatedAt || now,
+            trustReceipt: candidate.trustReceipt || existing.trustReceipt
+          };
+          coalesceState.expiresAt = now + coalesceWindowMs;
+          coalesceState.updatedAt = now;
+        } else {
+          _localSaveReceiptCoalescing.delete(coalesceStorageKey);
+        }
+      }
+      if (shouldRecordReceipt && previousScript && !coalescedHistoryEntry) {
+        historyEntry = {
+          version: existing.meta.version,
+          code: existing.code,
+          updatedAt: existing.updatedAt || Date.now()
+        };
+        versionHistory.push(historyEntry);
+        if (versionHistory.length > 5) versionHistory.splice(0, versionHistory.length - 5);
+        rollbackIndex = versionHistory.indexOf(historyEntry);
+        if (canCoalesceLocalSave && rollbackIndex >= 0) {
+          _localSaveReceiptCoalescing.set(coalesceStorageKey, {
+            scriptId: id,
+            rollbackIndex,
+            expiresAt: now + coalesceWindowMs,
+            updatedAt: now
+          });
+        }
+      }
+      const trustReceipt = shouldRecordReceipt
+        ? await createScriptTrustReceipt({
+            operation: receiptOptions?.operation || (existing ? 'update' : 'install'),
+            code: message.code,
+            meta: parsed.meta,
+            sourceUrl: receiptOptions?.sourceUrl || '',
+            sourceKind: receiptOptions?.sourceKind || '',
+            sourceLabel: receiptOptions?.sourceLabel || '',
+            suppressMetadataSourceFallback: receiptOptions?.suppressMetadataSourceFallback === true,
+            previousScript,
+            rollbackIndex,
+            fetchDependencyBody: fetchRequireScriptForTrustReceipt,
+            fetchProvenanceBundle,
+            optionalPermissions: receiptOptions?.optionalPermissions || null,
+            optionalHostPermissions: receiptOptions?.optionalHostPermissions || null
+          })
+        : existing?.trustReceipt;
+      const tofuSriFailure = shouldRecordReceipt ? _getRequireTofuSriFailure(trustReceipt) : null;
+      if (tofuSriFailure) return { error: tofuSriFailure.message };
+      const provenanceFailure = shouldRecordReceipt ? _getRequireProvenanceFailure(trustReceipt) : null;
+      if (provenanceFailure) return { error: provenanceFailure.message };
+      if (historyEntry && previousScript && !coalescedHistoryEntry) {
+        historyEntry.trustReceipt = previousScript.trustReceipt || await createScriptTrustReceipt({
+          operation: 'rollback-point',
+          code: previousScript.code,
+          meta: previousScript.meta,
+          sourceUrl: previousScript.trustReceipt?.source?.installUrl || previousScript.meta.downloadURL || previousScript.meta.updateURL
+        });
+      }
+
+      const script = {
+        ...existing,
+        id,
+        code: message.code,
+        meta: parsed.meta,
+        enabled: message.enabled !== undefined ? message.enabled : (existing?.enabled ?? true),
+        settings: scriptSettings,
+        position: existing?.position ?? (await ScriptStorage.getAll()).length,
+        createdAt: existing?.createdAt || Date.now(),
+        updatedAt: Date.now(),
+        trustReceipt
+      };
+      if (versionHistory.length > 0) script.versionHistory = versionHistory;
+
+      await ensurePersistentStorageForScriptWrite(existing ? 'script-save' : 'script-create', script.code);
+      await ScriptStorage.set(id, script);
+      await updateBadge();
+      notifyEasyCloudScriptSaved(id);
+      await reregisterScript(script);
+
+      try {
+        const liveReloadData = await chrome.storage.local.get('liveReloadScripts');
+        if (liveReloadData.liveReloadScripts?.[id]) {
+          const allTabs = await chrome.tabs.query({});
+          for (const tab of allTabs) {
+            if (tab.url && doesScriptMatchUrl(script, tab.url)) {
+              try { chrome.tabs.reload(tab.id).catch(() => {}); } catch {}
+            }
+          }
+        } else {
+          await autoReloadMatchingTabs(script);
+        }
+      } catch {
+        await autoReloadMatchingTabs(script);
+      }
+
+      const settings = await SettingsManager.get();
+      if (!existing && settings.notifyOnInstall) {
+        chrome.notifications.create({
+          type: 'basic',
+          iconUrl: 'images/icon128.png',
+          title: 'Script Installed',
+          message: `${script.meta.name} v${script.meta.version}`
+        });
+      }
+      return { success: true, scriptId: id, script: { ...script, metadata: script.meta } };
+    });
+  },
+  createScript: async code => {
+    const codeBytes = _scriptSourceByteLength(code);
+    if (codeBytes > MAX_SCRIPT_SIZE) {
+      return { error: `Script too large (${formatBytes(codeBytes)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.` };
+    }
+    const parsed = parseUserscript(code);
+    if (parsed.error) return { error: parsed.error };
+
+    const id = generateId();
+    const script = {
+      id,
+      code,
+      meta: parsed.meta,
+      enabled: true,
+      position: (await ScriptStorage.getAll()).length,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+    await ensurePersistentStorageForScriptWrite('script-create', script.code);
+    await ScriptStorage.set(id, script);
+    await updateBadge();
+    notifyEasyCloudScriptSaved(id);
+    await registerScript(script);
+
+    const settings = await SettingsManager.get();
+    if (settings.notifyOnInstall) {
+      chrome.notifications.create({
+        type: 'basic',
+        iconUrl: 'images/icon128.png',
+        title: 'Script Created',
+        message: `${script.meta.name} v${script.meta.version}`
+      });
+    }
+    return { success: true, scriptId: id, script: { ...script, metadata: script.meta } };
+  },
+  deleteScript: async scriptId => {
+    if (!scriptId) return { error: 'No script ID provided' };
+    return await _runExclusiveScriptOperation(scriptId, async () => {
+      const script = await ScriptStorage.get(scriptId);
+      if (!script) return { error: 'Script not found' };
+      const settings = await SettingsManager.get();
+      const trashMode = settings.trashMode || '30';
+      if (trashMode !== 'disabled') {
+        const trashData = await chrome.storage.local.get('trash');
+        const trash = trashData.trash || [];
+        trash.push({ ...script, trashedAt: Date.now() });
+        await chrome.storage.local.set({ trash });
+      }
+
+      await unregisterScript(scriptId);
+      await ScriptStorage.delete(scriptId);
+      try {
+        const commandData = await chrome.storage.session.get('menuCommands');
+        if (commandData?.menuCommands?.[scriptId]) {
+          delete commandData.menuCommands[scriptId];
+          await chrome.storage.session.set(commandData);
+        }
+      } catch {}
+
+      const tombstoneData = await chrome.storage.local.get('syncTombstones');
+      const tombstones = tombstoneData.syncTombstones || {};
+      tombstones[scriptId] = Date.now();
+      await chrome.storage.local.set({ syncTombstones: tombstones });
+      await updateBadge();
+      notifyEasyCloudScriptDeleted(scriptId);
+      return { success: true, scriptId, scriptName: script.meta?.name || scriptId };
+    });
+  },
+  getTrash: async () => {
+    const trashData = await chrome.storage.local.get('trash');
+    const trash = trashData.trash || [];
+    const settings = await SettingsManager.get();
+    const trashMode = settings.trashMode || '30';
+    const maxAge = trashMode === '1'
+      ? 86400000
+      : trashMode === '7'
+        ? 604800000
+        : trashMode === '30'
+          ? 2592000000
+          : 0;
+    const now = Date.now();
+    const valid = maxAge > 0 ? trash.filter(script => now - script.trashedAt < maxAge) : trash;
+    if (valid.length !== trash.length) await chrome.storage.local.set({ trash: valid });
+    return { trash: valid };
+  },
+  restoreFromTrash: async scriptId => {
+    const trashData = await chrome.storage.local.get('trash');
+    const trash = trashData.trash || [];
+    const index = trash.findIndex(script => script.id === scriptId);
+    if (index === -1) return { error: 'Not found in trash' };
+
+    const script = trash[index];
+    if (!script.code || typeof script.code !== 'string') {
+      return { error: 'Corrupt trash entry: missing code' };
+    }
+    const parsed = parseUserscript(script.code);
+    if (parsed.error) return { error: 'Corrupt trash entry: ' + parsed.error };
+    script.meta = parsed.meta;
+    delete script.trashedAt;
+    await ScriptStorage.set(script.id, script);
+    const tombstoneData = await chrome.storage.local.get('syncTombstones');
+    const tombstones = tombstoneData.syncTombstones || {};
+    if (tombstones[scriptId]) {
+      delete tombstones[scriptId];
+      await chrome.storage.local.set({ syncTombstones: tombstones });
+    }
+    trash.splice(index, 1);
+    await chrome.storage.local.set({ trash });
+    if (script.enabled !== false) await registerScript(script);
+    await updateBadge();
+    notifyEasyCloudScriptSaved(script.id);
+    return { success: true };
+  },
+  emptyTrash: async () => {
+    await chrome.storage.local.set({ trash: [] });
+    return { success: true };
+  },
+  rescheduleScript: async scriptId => {
+    if (!scriptId) return { error: 'Missing scriptId' };
+    const script = await ScriptStorage.get(scriptId);
+    const schedule = await getScheduleForScript(scriptId);
+    await chrome.alarms.clear(SCHEDULE_ALARM_PREFIX + scriptId).catch(() => {});
+    if (schedule && schedule.type === 'interval') {
+      const periodMinutes = schedule.intervalUnit === 'hours'
+        ? (schedule.interval || 1) * 60
+        : (schedule.interval || 1);
+      await chrome.alarms.create(SCHEDULE_ALARM_PREFIX + scriptId, {
+        delayInMinutes: periodMinutes,
+        periodInMinutes: periodMinutes
+      }).catch(() => {});
+    } else if (schedule && schedule.type === 'oneTime' && schedule.oneTime) {
+      const when = new Date(schedule.oneTime).getTime();
+      if (when > Date.now()) {
+        await chrome.alarms.create(SCHEDULE_ALARM_PREFIX + scriptId, { when }).catch(() => {});
+      }
+    }
+    if (script && script.enabled !== false) await reregisterScript(script);
+    return { success: true };
+  },
+  restart: () => {
+    chrome.runtime.reload();
+    return { success: true };
+  },
+  permanentlyDelete: async scriptId => {
+    const trashData = await chrome.storage.local.get('trash');
+    const trash = trashData.trash || [];
+    await chrome.storage.local.set({ trash: trash.filter(script => script.id !== scriptId) });
+    return { success: true };
+  },
+  toggleScript: async message => {
+    const scriptId = message.id || message.scriptId;
+    return await _runExclusiveScriptOperation(scriptId, async () => {
+      const script = await ScriptStorage.get(scriptId);
+      if (!script) return { error: 'Script not found' };
+
+      script.enabled = message.enabled !== undefined ? !!message.enabled : !script.enabled;
+      if (script.enabled && script.settings?._importQuarantine) {
+        script.settings = recordImportedScriptTrustReview(script.settings);
+      }
+      script.updatedAt = Date.now();
+      await ScriptStorage.set(scriptId, script);
+      await reregisterScript(script);
+      await updateBadge();
+      notifyEasyCloudScriptSaved(scriptId);
+
+      try {
+        const tabs = await chrome.tabs.query({});
+        for (const tab of tabs) {
+          if (tab.url && doesScriptMatchUrl(script, tab.url)) {
+            chrome.tabs.reload(tab.id).catch(() => {});
+          }
+        }
+      } catch (error) {
+        debugLog('Toggle reload failed:', error.message);
+      }
+      return { success: true, script: { id: script.id, enabled: script.enabled } };
+    }).catch(error => {
+      debugLog('Toggle error:', error);
+      return { error: error?.message || 'Failed to update script' };
+    });
+  },
+  duplicateScript: async id => {
+    const newScript = await ScriptStorage.duplicate(id);
+    if (!newScript) return { error: 'Script not found' };
+    if (newScript.enabled !== false) await registerScript(newScript);
+    await updateBadge();
+    notifyEasyCloudScriptSaved(newScript.id);
+    return { success: true, script: { ...newScript, metadata: newScript.meta } };
+  },
+  searchScripts: async query => {
+    const scripts = await ScriptStorage.search(query);
+    return { scripts: scripts.map(script => ({ ...script, metadata: script.meta })) };
+  },
+  reorderScripts: async orderedIds => {
+    await ScriptStorage.reorder(orderedIds);
+    return { success: true };
+  }
+}));
 backgroundActionRegistry.registerHandlers(DiagnosticsActionHandler.createDiagnosticsActionHandlers({
   reportCspFailure: async (url, scriptId, directive) => {
     const cspData = await chrome.storage.local.get('cspReports');
@@ -7289,474 +7678,6 @@ async function handleMessage(message, sender) {
   try {
     switch (action) {
       // Script Management
-      case 'getScripts': {
-        const scripts = await ScriptStorage.getAll();
-        // Convert meta -> metadata for dashboard compatibility
-        return { scripts: scripts.map(s => ({ ...s, metadata: s.meta })) };
-      }
-
-      case 'getHostPermissionStatus': {
-        const remembered = getRememberedRuntimeHostPermissionTarget();
-        const url = data.url || data.currentUrl || sender?.tab?.url || remembered?.url || '';
-        const status = await getRuntimeHostPermissionStatus(url);
-        if (remembered && remembered.url === url) {
-          status.tabId = remembered.tabId;
-          status.tabTitle = remembered.title;
-        }
-        return status;
-      }
-
-      case 'queueHostAccessRequest': {
-        const remembered = getRememberedRuntimeHostPermissionTarget();
-        return await queueRuntimeHostAccessRequest(
-          data.url || data.currentUrl || sender?.tab?.url || remembered?.url || '',
-          typeof data.tabId === 'number' ? data.tabId : sender?.tab?.id || remembered?.tabId,
-          data.documentId
-        );
-      }
-        
-      case 'getScript': {
-        const script = await ScriptStorage.get(data.id);
-        if (script) {
-          return { ...script, metadata: script.meta };
-        }
-        return null;
-      }
-        
-      case 'saveScript': {
-        const codeBytes = _scriptSourceByteLength(data.code);
-        if (codeBytes > MAX_SCRIPT_SIZE) {
-          return { error: `Script too large (${formatBytes(codeBytes)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.` };
-        }
-        const parsed = parseUserscript(data.code);
-        if (parsed.error) return { error: parsed.error };
-        
-        const id = data.id || data.scriptId || generateId();
-        return await _runExclusiveScriptOperation(id, async () => {
-        const existing = await ScriptStorage.get(id);
-        
-        const scriptSettings = { ...(existing?.settings || {}) };
-        delete scriptSettings.mergeConflict;
-        // Mark as locally modified when saved from editor — prevents sync from overwriting
-        if (data.markModified) scriptSettings.userModified = true;
-        if (data.settings && typeof data.settings === 'object' && 'allowBroadHostAccess' in data.settings) {
-          scriptSettings.allowBroadHostAccess = data.settings.allowBroadHostAccess === true;
-        }
-        const receiptOptions = data.trust && typeof data.trust === 'object' ? data.trust : null;
-        const shouldRecordReceipt = !!receiptOptions?.recordReceipt
-          || !!receiptOptions?.operation
-          || !!receiptOptions?.sourceUrl
-          || !!receiptOptions?.sourceKind
-          || !!receiptOptions?.sourceLabel
-          || receiptOptions?.suppressMetadataSourceFallback === true;
-        let previousScript = existing && existing.code !== data.code
-          ? {
-              ...existing,
-              meta: { ...existing.meta },
-              code: existing.code,
-              updatedAt: existing.updatedAt || Date.now()
-            }
-          : null;
-        const versionHistory = Array.isArray(existing?.versionHistory) ? [...existing.versionHistory] : [];
-        let historyEntry = null;
-        let rollbackIndex = -1;
-        const now = Date.now();
-        _sweepExpiredLocalSaveCoalescing(now);
-        const coalesceStorageKey = _localSaveCoalesceKey(id, receiptOptions?.coalesceKey);
-        const coalesceWindowMs = _localSaveCoalesceWindowMs(receiptOptions?.coalesceWindowMs);
-        const canCoalesceLocalSave = !!previousScript
-          && !!coalesceStorageKey
-          && coalesceWindowMs > 0
-          && receiptOptions?.operation === 'local-save'
-          && receiptOptions?.sourceKind === 'local-editor';
-        if (shouldRecordReceipt && !canCoalesceLocalSave) {
-          _clearLocalSaveCoalescingForScript(id);
-        }
-        let coalescedHistoryEntry = null;
-        if (shouldRecordReceipt && canCoalesceLocalSave) {
-          const coalesceState = _localSaveReceiptCoalescing.get(coalesceStorageKey);
-          const candidate = coalesceState?.scriptId === id && coalesceState.expiresAt >= now
-            ? versionHistory[coalesceState.rollbackIndex]
-            : null;
-          if (candidate && typeof candidate.code === 'string') {
-            const parsedPrevious = parseUserscript(candidate.code);
-            coalescedHistoryEntry = candidate;
-            rollbackIndex = coalesceState.rollbackIndex;
-            previousScript = {
-              ...existing,
-              code: candidate.code,
-              meta: parsedPrevious?.error ? { ...existing.meta } : { ...parsedPrevious.meta },
-              updatedAt: candidate.updatedAt || existing.updatedAt || now,
-              trustReceipt: candidate.trustReceipt || existing.trustReceipt
-            };
-            coalesceState.expiresAt = now + coalesceWindowMs;
-            coalesceState.updatedAt = now;
-          } else {
-            _localSaveReceiptCoalescing.delete(coalesceStorageKey);
-          }
-        }
-        if (shouldRecordReceipt && previousScript && !coalescedHistoryEntry) {
-          historyEntry = {
-            version: existing.meta.version,
-            code: existing.code,
-            updatedAt: existing.updatedAt || Date.now()
-          };
-          versionHistory.push(historyEntry);
-          if (versionHistory.length > 5) {
-            versionHistory.splice(0, versionHistory.length - 5);
-          }
-          rollbackIndex = versionHistory.indexOf(historyEntry);
-          if (canCoalesceLocalSave && rollbackIndex >= 0) {
-            _localSaveReceiptCoalescing.set(coalesceStorageKey, {
-              scriptId: id,
-              rollbackIndex,
-              expiresAt: now + coalesceWindowMs,
-              updatedAt: now
-            });
-          }
-        }
-        const trustReceipt = shouldRecordReceipt
-          ? await createScriptTrustReceipt({
-              operation: receiptOptions?.operation || (existing ? 'update' : 'install'),
-              code: data.code,
-              meta: parsed.meta,
-              sourceUrl: receiptOptions?.sourceUrl || '',
-              sourceKind: receiptOptions?.sourceKind || '',
-              sourceLabel: receiptOptions?.sourceLabel || '',
-              suppressMetadataSourceFallback: receiptOptions?.suppressMetadataSourceFallback === true,
-              previousScript,
-              rollbackIndex,
-              fetchDependencyBody: fetchRequireScriptForTrustReceipt,
-              fetchProvenanceBundle,
-              optionalPermissions: receiptOptions?.optionalPermissions || null,
-              optionalHostPermissions: receiptOptions?.optionalHostPermissions || null
-            })
-          : existing?.trustReceipt;
-        const tofuSriFailure = shouldRecordReceipt ? _getRequireTofuSriFailure(trustReceipt) : null;
-        if (tofuSriFailure) {
-          return { error: tofuSriFailure.message };
-        }
-        const provenanceFailure = shouldRecordReceipt ? _getRequireProvenanceFailure(trustReceipt) : null;
-        if (provenanceFailure) {
-          return { error: provenanceFailure.message };
-        }
-        if (historyEntry && previousScript && !coalescedHistoryEntry) {
-          historyEntry.trustReceipt = previousScript.trustReceipt || await createScriptTrustReceipt({
-            operation: 'rollback-point',
-            code: previousScript.code,
-            meta: previousScript.meta,
-            sourceUrl: previousScript.trustReceipt?.source?.installUrl || previousScript.meta.downloadURL || previousScript.meta.updateURL
-          });
-        }
-
-        const script = {
-          ...existing,
-          id,
-          code: data.code,
-          meta: parsed.meta,
-          enabled: data.enabled !== undefined ? data.enabled : (existing?.enabled ?? true),
-          settings: scriptSettings,
-          position: existing?.position ?? (await ScriptStorage.getAll()).length,
-          createdAt: existing?.createdAt || Date.now(),
-          updatedAt: Date.now(),
-          trustReceipt
-        };
-        if (versionHistory.length > 0) script.versionHistory = versionHistory;
-        
-        await ensurePersistentStorageForScriptWrite(existing ? 'script-save' : 'script-create', script.code);
-        await ScriptStorage.set(id, script);
-        await updateBadge();
-        notifyEasyCloudScriptSaved(id);
-
-        // Re-register BEFORE reloading tabs so reloaded pages pick up the new
-        // script. reregisterScript uses chrome.userScripts.update on Chrome
-        // 138+ to avoid the unregister/register flicker; older Chrome falls
-        // back to the explicit two-step cycle.
-        await reregisterScript(script);
-
-        // Live reload takes priority over debounced auto-reload (prevents double reload)
-        try {
-          const lrData = await chrome.storage.local.get('liveReloadScripts');
-          if (lrData.liveReloadScripts?.[id]) {
-            // Force reload all matching tabs immediately (new registration already active)
-            const allTabs = await chrome.tabs.query({});
-            for (const tab of allTabs) {
-              if (tab.url && doesScriptMatchUrl(script, tab.url)) {
-                try { chrome.tabs.reload(tab.id).catch(() => {}); } catch {}
-              }
-            }
-          } else {
-            // Debounced auto-reload for normal saves (gated by settings.autoReload)
-            await autoReloadMatchingTabs(script);
-          }
-        } catch {
-          // Fallback: attempt debounced auto-reload if live-reload check failed
-          await autoReloadMatchingTabs(script);
-        }
-
-        const settings = await SettingsManager.get();
-        if (!existing && settings.notifyOnInstall) {
-          chrome.notifications.create({
-            type: 'basic',
-            iconUrl: 'images/icon128.png',
-            title: 'Script Installed',
-            message: `${script.meta.name} v${script.meta.version}`
-          });
-        }
-        
-        // Return with metadata property for dashboard compatibility
-        return { success: true, scriptId: id, script: { ...script, metadata: script.meta } };
-        });
-      }
-      
-      case 'createScript': {
-        const codeBytes = _scriptSourceByteLength(data.code);
-        if (codeBytes > MAX_SCRIPT_SIZE) {
-          return { error: `Script too large (${formatBytes(codeBytes)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.` };
-        }
-        const parsed = parseUserscript(data.code);
-        if (parsed.error) return { error: parsed.error };
-        
-        const id = generateId();
-        const script = {
-          id,
-          code: data.code,
-          meta: parsed.meta,
-          enabled: true,
-          position: (await ScriptStorage.getAll()).length,
-          createdAt: Date.now(),
-          updatedAt: Date.now()
-        };
-        
-        await ensurePersistentStorageForScriptWrite('script-create', script.code);
-        await ScriptStorage.set(id, script);
-        await updateBadge();
-        notifyEasyCloudScriptSaved(id);
-
-        // Register the new script
-        await registerScript(script);
-        
-        const settings = await SettingsManager.get();
-        if (settings.notifyOnInstall) {
-          chrome.notifications.create({
-            type: 'basic',
-            iconUrl: 'images/icon128.png',
-            title: 'Script Created',
-            message: `${script.meta.name} v${script.meta.version}`
-          });
-        }
-        
-        // Return scriptId for dashboard compatibility
-        return { success: true, scriptId: id, script: { ...script, metadata: script.meta } };
-      }
-      
-      case 'deleteScript': {
-        const scriptId = data.id || data.scriptId;
-        if (!scriptId) return { error: 'No script ID provided' };
-        return await _runExclusiveScriptOperation(scriptId, async () => {
-          const script = await ScriptStorage.get(scriptId);
-          if (!script) return { error: 'Script not found' };
-          const settings = await SettingsManager.get();
-          const trashMode = settings.trashMode || '30';
-
-          if (trashMode !== 'disabled') {
-            const trashData = await chrome.storage.local.get('trash');
-            const trash = trashData.trash || [];
-            trash.push({ ...script, trashedAt: Date.now() });
-            await chrome.storage.local.set({ trash });
-          }
-
-          await unregisterScript(scriptId);
-          await ScriptStorage.delete(scriptId);
-
-          try {
-            const cmdData = await chrome.storage.session.get('menuCommands');
-            if (cmdData?.menuCommands?.[scriptId]) {
-              delete cmdData.menuCommands[scriptId];
-              await chrome.storage.session.set(cmdData);
-            }
-          } catch {}
-
-          const tombstoneData = await chrome.storage.local.get('syncTombstones');
-          const tombstones = tombstoneData.syncTombstones || {};
-          tombstones[scriptId] = Date.now();
-          await chrome.storage.local.set({ syncTombstones: tombstones });
-
-          await updateBadge();
-          notifyEasyCloudScriptDeleted(scriptId);
-          return {
-            success: true,
-            scriptId,
-            scriptName: script.meta?.name || scriptId
-          };
-        });
-      }
-
-      case 'getTrash': {
-        const trashData = await chrome.storage.local.get('trash');
-        const trash = trashData.trash || [];
-        // Clean expired entries
-        const settings = await SettingsManager.get();
-        const trashMode = settings.trashMode || '30';
-        const maxAge = trashMode === '1' ? 86400000 : trashMode === '7' ? 604800000 : trashMode === '30' ? 2592000000 : 0;
-        const now = Date.now();
-        const valid = maxAge > 0 ? trash.filter(s => now - s.trashedAt < maxAge) : trash;
-        if (valid.length !== trash.length) {
-          await chrome.storage.local.set({ trash: valid });
-        }
-        return { trash: valid };
-      }
-
-      case 'restoreFromTrash': {
-        const scriptId = data.scriptId;
-        const trashData = await chrome.storage.local.get('trash');
-        const trash = trashData.trash || [];
-        const idx = trash.findIndex(s => s.id === scriptId);
-        if (idx === -1) return { error: 'Not found in trash' };
-
-        const script = trash[idx];
-        if (!script.code || typeof script.code !== 'string') return { error: 'Corrupt trash entry: missing code' };
-        const parsed = parseUserscript(script.code);
-        if (parsed.error) return { error: 'Corrupt trash entry: ' + parsed.error };
-        script.meta = parsed.meta;
-        delete script.trashedAt;
-        // Persist the restored script BEFORE removing it from trash. If the
-        // service worker dies mid-restore, the worst case is a harmless
-        // duplicate (script in both storage and trash, restore is idempotent)
-        // rather than losing the script from both stores.
-        await ScriptStorage.set(script.id, script);
-        const _tombstoneData = await chrome.storage.local.get('syncTombstones');
-        const _tombstones = _tombstoneData.syncTombstones || {};
-        if (_tombstones[scriptId]) {
-          delete _tombstones[scriptId];
-          await chrome.storage.local.set({ syncTombstones: _tombstones });
-        }
-        trash.splice(idx, 1);
-        await chrome.storage.local.set({ trash });
-        if (script.enabled !== false) await registerScript(script);
-        await updateBadge();
-        notifyEasyCloudScriptSaved(script.id);
-        return { success: true };
-      }
-
-      case 'emptyTrash': {
-        await chrome.storage.local.set({ trash: [] });
-        return { success: true };
-      }
-
-      case 'rescheduleScript': {
-        // The dashboard scheduler saved a schedule for this script. Recreate
-        // its interval/oneTime alarm and reregister so the page-load guard
-        // snapshot (time/day/dateRange) is refreshed or the registration is
-        // dropped for alarm-only schedules.
-        const scriptId = data.scriptId;
-        if (!scriptId) return { error: 'Missing scriptId' };
-        const script = await ScriptStorage.get(scriptId);
-        const sched = await getScheduleForScript(scriptId);
-        await chrome.alarms.clear(SCHEDULE_ALARM_PREFIX + scriptId).catch(() => {});
-        if (sched && sched.type === 'interval') {
-          const periodMinutes = sched.intervalUnit === 'hours'
-            ? (sched.interval || 1) * 60
-            : (sched.interval || 1);
-          await chrome.alarms.create(SCHEDULE_ALARM_PREFIX + scriptId, { delayInMinutes: periodMinutes, periodInMinutes: periodMinutes }).catch(() => {});
-        } else if (sched && sched.type === 'oneTime' && sched.oneTime) {
-          const when = new Date(sched.oneTime).getTime();
-          if (when > Date.now()) await chrome.alarms.create(SCHEDULE_ALARM_PREFIX + scriptId, { when }).catch(() => {});
-        }
-        if (script && script.enabled !== false) {
-          await reregisterScript(script);
-        }
-        return { success: true };
-      }
-
-      case 'restart': {
-        chrome.runtime.reload();
-        return { success: true };
-      }
-
-      case 'permanentlyDelete': {
-        const scriptId = data.scriptId;
-        const trashData = await chrome.storage.local.get('trash');
-        const trash = trashData.trash || [];
-        const filtered = trash.filter(s => s.id !== scriptId);
-        await chrome.storage.local.set({ trash: filtered });
-        return { success: true };
-      }
-        
-      case 'toggleScript': {
-        const scriptId = data.id || data.scriptId;
-        // Per-script chained lock prevents toggle/save races from corrupting
-        // registration state when users act quickly from multiple surfaces.
-        return await _runExclusiveScriptOperation(scriptId, async () => {
-          const script = await ScriptStorage.get(scriptId);
-          if (!script) {
-            return { error: 'Script not found' };
-          }
-
-          script.enabled = data.enabled !== undefined ? !!data.enabled : !script.enabled;
-          if (script.enabled && script.settings?._importQuarantine) {
-            script.settings = recordImportedScriptTrustReview(script.settings);
-          }
-          script.updatedAt = Date.now();
-          await ScriptStorage.set(scriptId, script);
-
-          // Toggle re-registration goes through reregisterScript so Chrome
-          // 138+ swaps the registration in place when enabling/disabling
-          // settings without dropping the script briefly.
-          await reregisterScript(script);
-
-          await updateBadge();
-          notifyEasyCloudScriptSaved(scriptId);
-
-          try {
-            const tabs = await chrome.tabs.query({});
-            for (const tab of tabs) {
-              if (tab.url && doesScriptMatchUrl(script, tab.url)) {
-                chrome.tabs.reload(tab.id).catch(() => {});
-              }
-            }
-          } catch (e) {
-            debugLog('Toggle reload failed:', e.message);
-          }
-
-          return {
-            success: true,
-            script: {
-              id: script.id,
-              enabled: script.enabled
-            }
-          };
-        }).catch(e => {
-          debugLog('Toggle error:', e);
-          return { error: e?.message || 'Failed to update script' };
-        });
-      }
-
-      case 'duplicateScript': {
-        const newScript = await ScriptStorage.duplicate(data.id);
-        if (newScript) {
-          // Honor the duplicated script's `enabled` state — duplicating a disabled
-          // script was silently re-enabling it because register was unconditional.
-          if (newScript.enabled !== false) {
-            await registerScript(newScript);
-          }
-          await updateBadge();
-          notifyEasyCloudScriptSaved(newScript.id);
-          // Return with metadata property for dashboard compatibility
-          return { success: true, script: { ...newScript, metadata: newScript.meta } };
-        }
-        return { error: 'Script not found' };
-      }
-      
-      case 'searchScripts': {
-        const scripts = await ScriptStorage.search(data.query);
-        return { scripts: scripts.map(s => ({ ...s, metadata: s.meta })) };
-      }
-        
-      case 'reorderScripts':
-        await ScriptStorage.reorder(data.orderedIds);
-        return { success: true };
-        
       // Settings
       case 'prefetchResources': {
         await ResourceCache.prefetchResources(data.resources);

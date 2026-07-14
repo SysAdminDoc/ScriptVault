@@ -389,28 +389,28 @@ describe('Easy Cloud reacts to real script mutations (2026-07 P2 regression)', (
   });
 
   it('notifies Easy Cloud after central save/create/delete paths persist', () => {
-    const saveBlock = core.slice(core.indexOf("case 'saveScript'"), core.indexOf("case 'createScript'"));
+    const saveBlock = core.slice(core.indexOf('saveScript: async message'), core.indexOf('createScript: async code'));
     expectNotifyAfter(saveBlock, 'await ScriptStorage.set(id, script);', 'notifyEasyCloudScriptSaved(id);');
 
-    const createBlock = core.slice(core.indexOf("case 'createScript'"), core.indexOf("case 'deleteScript'"));
+    const createBlock = core.slice(core.indexOf('createScript: async code'), core.indexOf('deleteScript: async scriptId'));
     expectNotifyAfter(createBlock, 'await ScriptStorage.set(id, script);', 'notifyEasyCloudScriptSaved(id);');
 
-    const deleteBlock = core.slice(core.indexOf("case 'deleteScript'"), core.indexOf("case 'getTrash'"));
+    const deleteBlock = core.slice(core.indexOf('deleteScript: async scriptId'), core.indexOf('getTrash: async'));
     expectNotifyAfter(deleteBlock, 'await ScriptStorage.delete(scriptId);', 'notifyEasyCloudScriptDeleted(scriptId);');
   });
 
   it('notifies Easy Cloud after adjacent script-state mutation paths persist', () => {
-    const restoreBlock = core.slice(core.indexOf("case 'restoreFromTrash'"), core.indexOf("case 'emptyTrash'"));
+    const restoreBlock = core.slice(core.indexOf('restoreFromTrash: async scriptId'), core.indexOf('emptyTrash: async'));
     expectNotifyAfter(restoreBlock, 'await ScriptStorage.set(script.id, script);', 'notifyEasyCloudScriptSaved(script.id);');
 
-    const toggleBlock = core.slice(core.indexOf("case 'toggleScript'"), core.indexOf("case 'importScript'"));
+    const toggleBlock = core.slice(core.indexOf('toggleScript: async message'), core.indexOf('duplicateScript: async id'));
     expectNotifyAfter(toggleBlock, 'await ScriptStorage.set(scriptId, script);', 'notifyEasyCloudScriptSaved(scriptId);');
 
     const importStart = core.indexOf('async function importSingleScript');
     const importBlock = core.slice(importStart, core.indexOf('// Message Handlers', importStart));
     expectNotifyAfter(importBlock, 'await ScriptStorage.set(id, script);', 'notifyEasyCloudScriptSaved(id);');
 
-    const duplicateBlock = core.slice(core.indexOf("case 'duplicateScript'"), core.indexOf("case 'searchScripts'"));
+    const duplicateBlock = core.slice(core.indexOf('duplicateScript: async id'), core.indexOf('searchScripts: async query'));
     expect(duplicateBlock).toContain('notifyEasyCloudScriptSaved(newScript.id);');
 
     const rollbackStart = core.indexOf('async function rollbackScriptVersion');

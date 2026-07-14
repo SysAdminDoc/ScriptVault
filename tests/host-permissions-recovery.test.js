@@ -45,8 +45,10 @@ describe('runtime host permission origin patterns', () => {
 describe('runtime host permission recovery wiring', () => {
   it('exposes background diagnostics, Chrome host access queueing, and permission events', () => {
     const core = source('src/background/core.ts');
-    expect(core).toContain("case 'getHostPermissionStatus':");
-    expect(core).toContain("case 'queueHostAccessRequest':");
+    const handler = source('src/background/script-action-handler.ts');
+    expect(handler).toContain("'getHostPermissionStatus'");
+    expect(handler).toContain("'queueHostAccessRequest'");
+    expect(core).toContain('createScriptActionHandlers');
     expect(core).toContain('chrome.permissions.addHostAccessRequest(request)');
     expect(core).toContain('chrome.permissions.onAdded.addListener');
     expect(core).toContain('chrome.permissions.onRemoved.addListener');

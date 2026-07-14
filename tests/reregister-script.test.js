@@ -38,18 +38,19 @@ describe('reregisterScript helper presence', () => {
     // Pin the migration so a future refactor that reverts to the manual
     // pattern fails CI. The block of interest is the live-reload comment
     // immediately after the registration call.
-    const window = bgCore.slice(0, bgCore.indexOf('Live reload takes priority'));
-    const tail = window.slice(-400);
-    expect(tail).toMatch(/await reregisterScript\(script\)/);
-    expect(tail).not.toMatch(/await unregisterScript\(id\);[\s\S]*await registerScript\(script\)/);
+    const start = bgCore.indexOf('saveScript: async message');
+    const end = bgCore.indexOf('createScript: async code', start);
+    const window = bgCore.slice(start, end);
+    expect(window).toMatch(/await reregisterScript\(script\)/);
+    expect(window).not.toMatch(/await unregisterScript\(id\);[\s\S]*await registerScript\(script\)/);
   });
 
   it('toggle path (setScriptSettings) routes through reregisterScript', () => {
     // Find the toggle block and confirm it now calls reregisterScript instead
     // of the unregister+register dance.
-    const start = bgCore.indexOf("case 'toggleScript'");
+    const start = bgCore.indexOf('toggleScript: async message');
     expect(start).toBeGreaterThan(0);
-    const end = bgCore.indexOf("case 'importScript'", start);
+    const end = bgCore.indexOf('duplicateScript: async id', start);
     const window = bgCore.slice(start, end);
     expect(window).toMatch(/await reregisterScript\(script\)/);
   });
@@ -58,16 +59,16 @@ describe('reregisterScript helper presence', () => {
     expect(bgCore).toMatch(/async function _runExclusiveScriptOperation\(scriptId, operation\)/);
     expect(bgCore).toContain('if (!self._toggleLocks) self._toggleLocks = new Map()');
 
-    const saveStart = bgCore.indexOf("case 'saveScript'");
-    const createStart = bgCore.indexOf("case 'createScript'");
+    const saveStart = bgCore.indexOf('saveScript: async message');
+    const createStart = bgCore.indexOf('createScript: async code');
     const saveBlock = bgCore.slice(saveStart, createStart);
     expect(saveBlock).toContain('return await _runExclusiveScriptOperation(id, async () => {');
     expect(saveBlock.indexOf('ScriptStorage.get(id)')).toBeGreaterThan(saveBlock.indexOf('_runExclusiveScriptOperation'));
     expect(saveBlock).toContain('await reregisterScript(script)');
 
-    const toggleStart = bgCore.indexOf("case 'toggleScript'");
-    const importStart = bgCore.indexOf("case 'importScript'");
-    const toggleBlock = bgCore.slice(toggleStart, importStart);
+    const toggleStart = bgCore.indexOf('toggleScript: async message');
+    const duplicateStart = bgCore.indexOf('duplicateScript: async id');
+    const toggleBlock = bgCore.slice(toggleStart, duplicateStart);
     expect(toggleBlock).toContain('return await _runExclusiveScriptOperation(scriptId, async () => {');
     expect(toggleBlock).toContain('await reregisterScript(script)');
     expect(toggleBlock).not.toContain('const prev = self._toggleLocks.get(scriptId)');

@@ -145,6 +145,15 @@ export type {
   OnDeviceAiPromptInput,
 } from './diagnostics-action-handler';
 export {
+  SCRIPT_BACKGROUND_ACTIONS,
+  ScriptActionHandler,
+  createScriptActionHandlers,
+} from './script-action-handler';
+export type {
+  ScriptActionDependencies,
+  ScriptBackgroundAction,
+} from './script-action-handler';
+export {
   GM_AUDIO_ACTIONS,
   GMAudioHandler,
   handleGMAudioMessage,

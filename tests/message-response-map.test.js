@@ -17,6 +17,7 @@ import { ORGANIZATION_BACKGROUND_ACTIONS } from "../src/background/organization-
 import { SETTINGS_BACKGROUND_ACTIONS } from "../src/background/settings-action-handler.ts";
 import { SECURITY_BACKGROUND_ACTIONS } from "../src/background/security-action-handler.ts";
 import { DIAGNOSTICS_BACKGROUND_ACTIONS } from "../src/background/diagnostics-action-handler.ts";
+import { SCRIPT_BACKGROUND_ACTIONS } from "../src/background/script-action-handler.ts";
 import { GM_AUDIO_ACTIONS } from "../src/background/gm-audio-handler.ts";
 import { GM_COOKIE_ACTIONS } from "../src/background/gm-cookie-handler.ts";
 import { GM_MENU_ACTIONS } from "../src/background/gm-menu-handler.ts";
@@ -37,6 +38,7 @@ const ROUTED_BACKGROUND_ACTIONS = [
   ...SETTINGS_BACKGROUND_ACTIONS,
   ...SECURITY_BACKGROUND_ACTIONS,
   ...DIAGNOSTICS_BACKGROUND_ACTIONS,
+  ...SCRIPT_BACKGROUND_ACTIONS,
   ...GM_AUDIO_ACTIONS,
   ...GM_COOKIE_ACTIONS,
   ...GM_MENU_ACTIONS,

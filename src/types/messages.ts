@@ -35,6 +35,10 @@ interface SaveScript {
   code: string;
   enabled?: boolean;
   markModified?: boolean;
+  settings?: {
+    allowBroadHostAccess?: boolean;
+    [key: string]: unknown;
+  };
   trust?: {
     operation?: ScriptTrustReceipt['operation'];
     sourceUrl?: string;
@@ -45,6 +49,12 @@ interface SaveScript {
     coalesceWindowMs?: number;
     recordReceipt?: boolean;
     optionalPermissions?: {
+      requested?: string[];
+      granted?: string[];
+      denied?: string[];
+      unavailable?: string[];
+    } | null;
+    optionalHostPermissions?: {
       requested?: string[];
       granted?: string[];
       denied?: string[];
@@ -73,7 +83,7 @@ interface ToggleScript {
   action: 'toggleScript';
   scriptId?: string;
   id?: string;
-  enabled: boolean;
+  enabled?: boolean;
 }
 
 interface RunScriptNow {
@@ -1859,8 +1869,8 @@ export interface ResponseMap {
   getScript: Script | null;
   saveScript: SaveScriptResponse | ErrorResponse;
   createScript: SaveScriptResponse | ErrorResponse;
-  deleteScript: SuccessResponse | ErrorResponse;
-  toggleScript: SuccessResponse;
+  deleteScript: SuccessOrError<{ scriptId: string; scriptName: string }>;
+  toggleScript: SuccessOrError<{ script: { id: string; enabled: boolean } }>;
   runScriptNow: SuccessOrError<{ mode: 'userScripts.execute' | 'scripting.executeScript' }>;
   rescheduleChains: SuccessOrError;
   runChainNow: SuccessOrError<{ alreadyRunning?: boolean }>;

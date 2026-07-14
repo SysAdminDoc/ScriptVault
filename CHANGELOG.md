@@ -4,6 +4,10 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Typed script lifecycle dispatch.** Script reads, saves, creation, deletion,
+  trash recovery, enable/disable, duplication, ordering, host-access recovery,
+  and schedule refresh now share one generated action/response contract while
+  preserving per-script locks, trust receipts, registrations, and tombstones.
 - **Typed diagnostics and observability dispatch.** CSP reports, network logs,
   static analysis, local AI, execution statistics, error logs, notifications,
   script consoles, NPM resolution, and live reload now share one generated
