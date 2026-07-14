@@ -149,6 +149,13 @@ describe('TS runtime module generator', () => {
         selfExportName: 'ExecutionDiagnostics',
       }),
       expect.objectContaining({
+        id: 'find-script-sources',
+        source: 'src/background/find-script-sources.ts',
+        output: 'modules/find-script-sources.js',
+        exportName: 'FindScriptSources',
+        selfExportName: 'FindScriptSources',
+      }),
+      expect.objectContaining({
         id: 'message-router',
         source: 'src/background/message-router.ts',
         output: 'modules/message-router.js',
@@ -357,6 +364,16 @@ describe('TS runtime module generator', () => {
     expect(text).toContain('const ExecutionDiagnostics = (() => {');
     expect(text).toContain('self.ExecutionDiagnostics = ExecutionDiagnostics;');
     expect(text).toContain('createExecutionDiagnosticsStore');
+  });
+
+  it('generates the reviewed Find Scripts source registry', async () => {
+    const definition = TS_RUNTIME_MODULES.find((entry) => entry.id === 'find-script-sources');
+    const text = await buildTsRuntimeModuleText(definition, { rootDir: ROOT });
+
+    expect(text).toContain('Generated from src/background/find-script-sources.ts');
+    expect(text).toContain('const FindScriptSources = (() => {');
+    expect(text).toContain('self.FindScriptSources = FindScriptSources;');
+    expect(text).toContain('buildCustomFindScriptSourceUrl');
   });
 
   it('generates the extracted GM audio handler before the raw core bridge', async () => {

@@ -172,6 +172,13 @@ export const TS_RUNTIME_MODULES = [
     selfExportName: 'ExecutionDiagnostics',
   },
   {
+    id: 'find-script-sources',
+    source: 'src/background/find-script-sources.ts',
+    output: 'modules/find-script-sources.js',
+    exportName: 'FindScriptSources',
+    selfExportName: 'FindScriptSources',
+  },
+  {
     id: 'message-router',
     source: 'src/background/message-router.ts',
     output: 'modules/message-router.js',

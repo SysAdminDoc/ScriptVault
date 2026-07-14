@@ -2,6 +2,21 @@
  * Global extension settings managed by SettingsManager.
  */
 
+export interface FindScriptsSourceSettings {
+  builtin: {
+    greasyfork: boolean;
+    openuserjs: boolean;
+    github: boolean;
+  };
+  custom: Array<{
+    id: string;
+    label: string;
+    urlTemplate: string;
+    allowedOrigin: string;
+    enabled: boolean;
+  }>;
+}
+
 export interface Settings {
   // General
   enabled: boolean;
@@ -87,6 +102,7 @@ export interface Settings {
   debugMode: boolean;
   experimentalESMUserscripts: boolean;
   experimentalBackgroundScripts: boolean;
+  findScriptsSources: FindScriptsSourceSettings;
   dashboardVirtualizationThreshold: number;
   injectIntoFrames: boolean;
   xhrTimeout: number;

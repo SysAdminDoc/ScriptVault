@@ -2273,6 +2273,14 @@
         elements.btnFindScriptsSearch = document.getElementById('btnFindScriptsSearch');
         elements.btnCloseFindScripts = document.getElementById('btnCloseFindScripts');
         elements.findScriptsResults = document.getElementById('findScriptsResults');
+        elements.findScriptsSourceStatus = document.getElementById('findScriptsSourceStatus');
+        elements.btnManageFindScriptsSources = document.getElementById('btnManageFindScriptsSources');
+        elements.findScriptsSourcesPanel = document.getElementById('findScriptsSourcesPanel');
+        elements.findScriptsCustomSources = document.getElementById('findScriptsCustomSources');
+        elements.findScriptsCustomName = document.getElementById('findScriptsCustomName');
+        elements.findScriptsCustomTemplate = document.getElementById('findScriptsCustomTemplate');
+        elements.findScriptsCustomError = document.getElementById('findScriptsCustomError');
+        elements.btnAddFindScriptsSource = document.getElementById('btnAddFindScriptsSource');
 
         // Toast
         elements.toastContainer = document.getElementById('toastContainer');
@@ -13777,6 +13785,201 @@
     // (OpenUserJS limit / GreasyFork per_page) or pagination breaks.
     const FIND_RESULTS_PAGE_SIZE = 25;
 
+    function getFindScriptsSourceSettings() {
+        if (typeof FindScriptSources === 'undefined') {
+            return {
+                builtin: { greasyfork: true, openuserjs: true, github: true },
+                custom: []
+            };
+        }
+        return FindScriptSources.normalizeFindScriptSourceSettings(state.settings.findScriptsSources);
+    }
+
+    function getEnabledFindScriptsSources() {
+        if (typeof FindScriptSources === 'undefined') {
+            return [
+                { id: 'greasyfork', label: 'GreasyFork', kind: 'builtin-api' },
+                { id: 'openuserjs', label: 'OpenUserJS', kind: 'builtin-api' },
+                { id: 'github', label: 'GitHub', kind: 'builtin-external' }
+            ];
+        }
+        return FindScriptSources.getEnabledFindScriptSources(getFindScriptsSourceSettings());
+    }
+
+    function setFindScriptsCustomError(message = '') {
+        const error = elements.findScriptsCustomError;
+        const template = elements.findScriptsCustomTemplate;
+        if (error) {
+            error.textContent = message;
+            error.hidden = !message;
+        }
+        template?.setAttribute('aria-invalid', String(!!message));
+    }
+
+    function setFindScriptsSourcesPanelOpen(open) {
+        if (!elements.findScriptsSourcesPanel) return;
+        elements.findScriptsSourcesPanel.hidden = !open;
+        elements.btnManageFindScriptsSources?.setAttribute('aria-expanded', String(open));
+        if (open) elements.findScriptsSourcesPanel.scrollTop = 0;
+    }
+
+    async function persistFindScriptsSources(nextSettings, successMessage) {
+        if (typeof FindScriptSources === 'undefined') {
+            setFindScriptsCustomError('Search source management is unavailable. Reload ScriptVault and try again.');
+            return false;
+        }
+        const normalized = FindScriptSources.normalizeFindScriptSourceSettings(nextSettings);
+        try {
+            const response = await chrome.runtime.sendMessage({ action: 'setSettings', settings: { findScriptsSources: normalized } });
+            if (response?.error) throw new Error(response.error);
+            state.settings.findScriptsSources = normalized;
+            renderFindScriptsSourceRegistry();
+            if (successMessage) showToast(successMessage, 'success');
+            return true;
+        } catch (error) {
+            setFindScriptsCustomError(error?.message || 'Could not save search sources. Try again.');
+            renderFindScriptsSourceRegistry();
+            return false;
+        }
+    }
+
+    function renderFindScriptsSourceRegistry() {
+        const settings = getFindScriptsSourceSettings();
+        const sources = getEnabledFindScriptsSources();
+        const sourceSelect = elements.findScriptsSource;
+        const previousSource = sourceSelect?.value || findScriptsState.source;
+
+        if (sourceSelect) {
+            sourceSelect.replaceChildren();
+            for (const source of sources) {
+                const option = document.createElement('option');
+                option.value = source.id;
+                option.textContent = source.label;
+                sourceSelect.appendChild(option);
+            }
+            sourceSelect.value = sources.some(source => source.id === previousSource)
+                ? previousSource
+                : (sources[0]?.id || '');
+            sourceSelect.disabled = sources.length === 0;
+        }
+        if (elements.btnFindScriptsSearch instanceof HTMLButtonElement) {
+            elements.btnFindScriptsSearch.disabled = findScriptsState.loading || sources.length === 0;
+        }
+        if (elements.findScriptsSourceStatus) {
+            const customCount = settings.custom.filter(source => source.enabled).length;
+            elements.findScriptsSourceStatus.textContent = sources.length
+                ? `${sources.length} source${sources.length === 1 ? '' : 's'} enabled${customCount ? ` · ${customCount} custom` : ''}`
+                : 'No search sources enabled. Manage sources to continue.';
+        }
+
+        document.querySelectorAll('[data-find-builtin-source]').forEach(input => {
+            const id = input.dataset.findBuiltinSource;
+            input.checked = settings.builtin[id] !== false;
+            input.disabled = false;
+        });
+
+        const customList = elements.findScriptsCustomSources;
+        if (!customList) return;
+        customList.replaceChildren();
+        if (!settings.custom.length) {
+            const empty = document.createElement('p');
+            empty.className = 'find-scripts-custom-empty';
+            empty.textContent = 'No custom catalog searches yet. Add an HTTPS template below; searches open on the reviewed origin in a new tab.';
+            customList.appendChild(empty);
+            return;
+        }
+
+        for (const source of settings.custom) {
+            const row = document.createElement('div');
+            row.className = 'find-scripts-custom-row';
+            row.dataset.sourceId = source.id;
+
+            const checkLabel = document.createElement('label');
+            checkLabel.className = 'find-scripts-source-check find-scripts-custom-meta';
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.checked = source.enabled;
+            checkbox.setAttribute('aria-label', `${source.enabled ? 'Disable' : 'Enable'} ${source.label}`);
+            const names = document.createElement('span');
+            const name = document.createElement('span');
+            name.className = 'find-scripts-custom-name';
+            name.textContent = source.label;
+            const origin = document.createElement('span');
+            origin.className = 'find-scripts-custom-origin';
+            origin.textContent = source.allowedOrigin;
+            names.append(name, origin);
+            checkLabel.append(checkbox, names);
+
+            const template = document.createElement('code');
+            template.className = 'find-scripts-custom-template';
+            template.textContent = source.urlTemplate;
+            template.title = source.urlTemplate;
+
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.className = 'toolbar-btn';
+            remove.textContent = 'Remove';
+            remove.setAttribute('aria-label', `Remove ${source.label} search source`);
+
+            checkbox.addEventListener('change', async () => {
+                const next = getFindScriptsSourceSettings();
+                const target = next.custom.find(item => item.id === source.id);
+                if (target) target.enabled = checkbox.checked;
+                checkbox.disabled = true;
+                await persistFindScriptsSources(next, `${source.label} ${checkbox.checked ? 'enabled' : 'disabled'}`);
+            });
+            remove.addEventListener('click', async () => {
+                const confirmed = await showConfirmModal(
+                    'Remove search source?',
+                    `Remove ${source.label} from Find Scripts? You can add the URL template again later.`,
+                    { confirmLabel: 'Remove Source', tone: 'danger' }
+                );
+                if (!confirmed) return;
+                const next = getFindScriptsSourceSettings();
+                next.custom = next.custom.filter(item => item.id !== source.id);
+                remove.disabled = true;
+                await persistFindScriptsSources(next, `${source.label} removed`);
+            });
+
+            row.append(checkLabel, template, remove);
+            customList.appendChild(row);
+        }
+    }
+
+    async function addCustomFindScriptsSource() {
+        setFindScriptsCustomError('');
+        if (typeof FindScriptSources === 'undefined') {
+            setFindScriptsCustomError('Search source management is unavailable. Reload ScriptVault and try again.');
+            return;
+        }
+        const settings = getFindScriptsSourceSettings();
+        if (settings.custom.length >= 10) {
+            setFindScriptsCustomError('Remove a custom source before adding another (maximum 10).');
+            return;
+        }
+        const validation = FindScriptSources.validateCustomFindScriptSource({
+            label: elements.findScriptsCustomName?.value,
+            urlTemplate: elements.findScriptsCustomTemplate?.value,
+            enabled: true
+        });
+        if (!validation.ok) {
+            setFindScriptsCustomError(validation.error);
+            (validation.error.includes('name') ? elements.findScriptsCustomName : elements.findScriptsCustomTemplate)?.focus();
+            return;
+        }
+        if (settings.custom.some(source => source.urlTemplate === validation.source.urlTemplate)) {
+            setFindScriptsCustomError('That catalog URL template is already configured.');
+            elements.findScriptsCustomTemplate?.focus();
+            return;
+        }
+        settings.custom.push(validation.source);
+        if (await persistFindScriptsSources(settings, `${validation.source.label} added`)) {
+            if (elements.findScriptsCustomName) elements.findScriptsCustomName.value = '';
+            if (elements.findScriptsCustomTemplate) elements.findScriptsCustomTemplate.value = '';
+            setFindScriptsCustomError('');
+        }
+    }
+
     function setFindScriptsBackgroundHidden(hidden) {
         FIND_SCRIPTS_BACKGROUND_SELECTORS.forEach(selector => {
             const element = document.querySelector(selector);
@@ -13813,6 +14016,7 @@
         overlay.classList.add('active');
         elements.btnFindScripts?.setAttribute('aria-expanded', 'true');
         setFindScriptsBackgroundHidden(true);
+        renderFindScriptsSourceRegistry();
 
         if (typeof A11y !== 'undefined' && typeof A11y.trapFocus === 'function') {
             A11y.trapFocus(overlay);
@@ -13846,18 +14050,14 @@
     }
 
     function getFindScriptsSourceLabel(source = findScriptsState.source || elements.findScriptsSource?.value || 'greasyfork') {
-        return {
-            greasyfork: 'GreasyFork',
-            openuserjs: 'OpenUserJS',
-            github: 'GitHub'
-        }[source] || source;
+        return getEnabledFindScriptsSources().find(item => item.id === source)?.label || source;
     }
 
     function setFindScriptsBusy(isBusy) {
         findScriptsState.loading = isBusy;
         elements.findScriptsResults?.setAttribute('aria-busy', String(isBusy));
         if (elements.btnFindScriptsSearch instanceof HTMLButtonElement) {
-            elements.btnFindScriptsSearch.disabled = isBusy;
+            elements.btnFindScriptsSearch.disabled = isBusy || getEnabledFindScriptsSources().length === 0;
             elements.btnFindScriptsSearch.setAttribute('aria-busy', String(isBusy));
             elements.btnFindScriptsSearch.textContent = isBusy ? 'Searching…' : 'Search';
         }
@@ -13894,6 +14094,13 @@
             return showToast('Enter a search term', 'error');
         }
         if (findScriptsState.loading) return;
+        const sourceDescriptor = typeof FindScriptSources !== 'undefined'
+            ? FindScriptSources.resolveFindScriptSource(getFindScriptsSourceSettings(), source)
+            : getEnabledFindScriptsSources().find(item => item.id === source);
+        if (!sourceDescriptor) {
+            renderFindScriptsState('error', 'Choose a search source', 'No enabled source matches this selection. Open Manage sources and enable one.');
+            return;
+        }
 
         findScriptsState.query = query;
         findScriptsState.source = source;
@@ -13912,7 +14119,11 @@
             } else if (source === 'openuserjs') {
                 await searchOpenUserJS(query, page);
             } else if (source === 'github') {
-                searchExternal(`https://github.com/search?q=${encodeURIComponent(query + ' userscript')}&type=code`);
+                await searchExternal(`https://github.com/search?q=${encodeURIComponent(query + ' userscript')}&type=code`, 'GitHub');
+            } else if (sourceDescriptor.kind === 'custom-external') {
+                const result = FindScriptSources.buildCustomFindScriptSourceUrl(sourceDescriptor.custom, query, page);
+                if (!result.ok) throw new Error(result.error);
+                await searchExternal(result.url, sourceDescriptor.label);
             }
         } catch (e) {
             renderFindScriptsState(
@@ -13926,9 +14137,9 @@
         }
     }
 
-    function searchExternal(url) {
-        showToast('Opening GitHub search in a new tab', 'info');
-        chrome.tabs.create({ url });
+    async function searchExternal(url, sourceLabel = 'catalog') {
+        showToast(`Opening ${sourceLabel} search in a new tab`, 'info');
+        await chrome.tabs.create({ url });
         closeFindScripts();
     }
 
@@ -13957,37 +14168,28 @@
     async function searchOpenUserJS(query, page) {
         // OpenUserJS has a JSON API at /api/script/list
         const apiUrl = `https://openuserjs.org/api/script/list?q=${encodeURIComponent(query)}&p=${page}&limit=${FIND_RESULTS_PAGE_SIZE}`;
-        try {
-            const resp = await fetch(apiUrl);
-            if (!resp.ok) {
-                // Fallback to external if API fails
-                searchExternal(`https://openuserjs.org/?q=${encodeURIComponent(query)}`);
-                return;
-            }
-            const data = await resp.json();
-            const scripts = data?.scripts || data || [];
-            if (!Array.isArray(scripts) || scripts.length === 0) {
-                renderFindScriptsState('empty', 'No scripts found', `OpenUserJS has no results for "${query}". Try a broader keyword or switch sources.`);
-                return;
-            }
-            // Normalize to same format as GreasyFork results
-            const normalized = scripts.map(s => ({
-                name: s.name || 'Unnamed',
-                description: s.about || s.description || '',
-                version: s.meta?.version || '',
-                url: `https://openuserjs.org/scripts/${encodeURIComponent(s.author || '_')}/${encodeURIComponent(s.name || '')}`,
-                code_url: s.installURL || `https://openuserjs.org/install/${encodeURIComponent(s.author || '_')}/${encodeURIComponent(s.name || '')}.user.js`,
-                total_installs: s.installs || 0,
-                daily_installs: 0,
-                fan_score: s.rating || 0,
-                code_updated_at: s.updated || s._updated,
-                users: [{ name: s.author || 'Unknown' }]
-            }));
-            renderFindResults(normalized, page, null, FIND_RESULTS_PAGE_SIZE);
-        } catch (e) {
-            // Fallback to external
-            searchExternal(`https://openuserjs.org/?q=${encodeURIComponent(query)}`);
+        const resp = await fetch(apiUrl);
+        if (!resp.ok) throw new Error(`OpenUserJS returned HTTP ${resp.status}. Try again or choose another source.`);
+        const data = await resp.json();
+        const scripts = data?.scripts || data || [];
+        if (!Array.isArray(scripts) || scripts.length === 0) {
+            renderFindScriptsState('empty', 'No scripts found', `OpenUserJS has no results for "${query}". Try a broader keyword or switch sources.`);
+            return;
         }
+        // Normalize to same format as GreasyFork results
+        const normalized = scripts.map(s => ({
+            name: s.name || 'Unnamed',
+            description: s.about || s.description || '',
+            version: s.meta?.version || '',
+            url: `https://openuserjs.org/scripts/${encodeURIComponent(s.author || '_')}/${encodeURIComponent(s.name || '')}`,
+            code_url: s.installURL || `https://openuserjs.org/install/${encodeURIComponent(s.author || '_')}/${encodeURIComponent(s.name || '')}.user.js`,
+            total_installs: s.installs || 0,
+            daily_installs: 0,
+            fan_score: s.rating || 0,
+            code_updated_at: s.updated || s._updated,
+            users: [{ name: s.author || 'Unknown' }]
+        }));
+        renderFindResults(normalized, page, null, FIND_RESULTS_PAGE_SIZE);
     }
 
     function renderFindResults(scripts, page, domain, pageSize = FIND_RESULTS_PAGE_SIZE) {
@@ -15181,6 +15383,20 @@
         elements.btnFindScripts?.addEventListener('click', openFindScripts);
         elements.btnCloseFindScripts?.addEventListener('click', closeFindScripts);
         elements.btnFindScriptsSearch?.addEventListener('click', () => searchScripts(1));
+        elements.btnManageFindScriptsSources?.addEventListener('click', () => {
+            const open = elements.findScriptsSourcesPanel?.hidden !== false;
+            setFindScriptsSourcesPanelOpen(open);
+            if (open) elements.findScriptsSourcesPanel?.querySelector('input')?.focus();
+        });
+        elements.btnAddFindScriptsSource?.addEventListener('click', addCustomFindScriptsSource);
+        document.querySelectorAll('[data-find-builtin-source]').forEach(input => {
+            input.addEventListener('change', async () => {
+                const settings = getFindScriptsSourceSettings();
+                settings.builtin[input.dataset.findBuiltinSource] = input.checked;
+                input.disabled = true;
+                await persistFindScriptsSources(settings, `${input.closest('label')?.textContent?.trim() || 'Source'} ${input.checked ? 'enabled' : 'disabled'}`);
+            });
+        });
         elements.findScriptsOverlay?.addEventListener('keydown', e => {
             if (e.key === 'Escape') {
                 e.preventDefault();
@@ -18314,7 +18530,7 @@
             { category: 'Actions', label: 'Export All (ZIP)', desc: 'Export all scripts as ZIP', action: () => { closeCommandPalette(); elements.btnExportZip?.click(); } },
             { category: 'Actions', label: 'Export All (JSON)', desc: 'Export all scripts as JSON', action: () => { closeCommandPalette(); elements.btnExportFile?.click(); } },
             { category: 'Actions', label: 'Export Stats CSV', desc: 'Export execution statistics', action: () => { closeCommandPalette(); exportStatsCSV(); } },
-            { category: 'Actions', label: 'Find Scripts', desc: 'Search GreasyFork/OpenUserJS', action: () => { closeCommandPalette(); openFindScripts(); } },
+            { category: 'Actions', label: 'Find Scripts', desc: 'Search built-in and custom script catalogs', action: () => { closeCommandPalette(); openFindScripts(); } },
             { category: 'Editor', label: 'Go to Line (Ctrl+G)', desc: 'Jump to a specific line number', action: async () => { closeCommandPalette(); await goToEditorLine(state.editor); } },
             // Navigation
             { category: 'Navigation', label: 'Scripts Tab', desc: 'Go to installed scripts', action: () => { closeCommandPalette(); switchTab('scripts'); } },

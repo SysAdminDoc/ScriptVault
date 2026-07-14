@@ -89,7 +89,7 @@ describe('settings schema gate', () => {
     const report = analyzeSettingsSchema({ rootDir: ROOT });
 
     expect(report.ok).toBe(true);
-    expect(report.counts.defaults).toBe(81);
+    expect(report.counts.defaults).toBe(82);
     expect(report.counts.dashboardSaveKeys).toBeGreaterThan(70);
     expect(report.counts.classified).toBeGreaterThanOrEqual(report.counts.dashboardSaveKeys);
     expect(report.counts.metadata).toBeGreaterThan(100);

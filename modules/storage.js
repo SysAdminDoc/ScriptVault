@@ -109,6 +109,14 @@ const StorageModule = (() => {
     debugMode: false,
     experimentalESMUserscripts: false,
     experimentalBackgroundScripts: false,
+    findScriptsSources: {
+      builtin: {
+        greasyfork: true,
+        openuserjs: true,
+        github: true
+      },
+      custom: []
+    },
     dashboardVirtualizationThreshold: 500,
     injectIntoFrames: true,
     xhrTimeout: 3e4,

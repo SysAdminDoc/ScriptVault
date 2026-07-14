@@ -49,6 +49,7 @@
       "enabled",
       "experimentalESMUserscripts",
       "externalsInterval",
+      "findScriptsSources",
       "hideDisabledPopup",
       "highlightMatches",
       "highlightTrailingWhitespace",
@@ -892,6 +893,20 @@
       "help": "Controls hide disabled popup.",
       "elementId": "settingsHideDisabledPopup",
       "defaultSource": "runtime"
+    },
+    "findScriptsSources": {
+      "type": "object",
+      "control": "readonly",
+      "label": "Find Scripts sources",
+      "help": "Controls the built-in and reviewed custom catalog URL templates shown in Find Scripts.",
+      "default": {
+        "builtin": {
+          "greasyfork": true,
+          "openuserjs": true,
+          "github": true
+        },
+        "custom": []
+      }
     },
     "highlightMatches": {
       "type": "string",
