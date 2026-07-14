@@ -98,6 +98,15 @@ export type {
   SyncBackgroundAction,
 } from './sync-action-handler';
 export {
+  BACKUP_BACKGROUND_ACTIONS,
+  BackupActionHandler,
+  createBackupActionHandlers,
+} from './backup-action-handler';
+export type {
+  BackupActionDependencies,
+  BackupBackgroundAction,
+} from './backup-action-handler';
+export {
   GM_AUDIO_ACTIONS,
   GMAudioHandler,
   handleGMAudioMessage,

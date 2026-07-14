@@ -221,6 +221,13 @@ export const TS_RUNTIME_MODULES = [
     selfExportName: 'SyncActionHandler',
   },
   {
+    id: 'backup-action-handler',
+    source: 'src/background/backup-action-handler.ts',
+    output: 'modules/backup-action-handler.js',
+    exportName: 'BackupActionHandler',
+    selfExportName: 'BackupActionHandler',
+  },
+  {
     id: 'message-router',
     source: 'src/background/message-router.ts',
     output: 'modules/message-router.js',

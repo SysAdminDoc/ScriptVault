@@ -140,6 +140,14 @@
       "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for cloud-sync action dispatch."
     },
     {
+      "runtime": "modules/backup-action-handler.js",
+      "sources": [
+        "src/background/backup-action-handler.ts"
+      ],
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for backup and restore action dispatch."
+    },
+    {
       "runtime": "modules/gm-audio-handler.js",
       "sources": [
         "src/background/gm-audio-handler.ts"

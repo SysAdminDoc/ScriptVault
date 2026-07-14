@@ -4,6 +4,9 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Typed the backup and recovery boundary.** Backup creation, inspection,
+  restore receipts, rollback, and settings now share one generated contract;
+  successful restore and rollback paths still re-register scripts and badges.
 - **Typed cloud-sync dispatch without weakening import trust.** Manual sync,
   provider lifecycle, dry-run, health, and remote import/export actions now
   share a generated contract that keeps credentials and imported-script trust

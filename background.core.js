@@ -6263,6 +6263,62 @@ backgroundActionRegistry.registerHandlers(SyncActionHandler.createSyncActionHand
   import: (provider, options) => importCloudSyncBackup(provider, options),
   cloudStatus: provider => getCloudSyncStatus(provider)
 }));
+backgroundActionRegistry.registerHandlers(BackupActionHandler.createBackupActionHandlers({
+  create: reason => typeof BackupScheduler !== 'undefined'
+    ? BackupScheduler.createBackup(reason)
+    : Promise.resolve({ error: 'BackupScheduler not available' }),
+  list: () => typeof BackupScheduler !== 'undefined'
+    ? BackupScheduler.getBackups()
+    : Promise.resolve({ backups: [] }),
+  restore: async (backupId, options) => {
+    if (typeof BackupScheduler === 'undefined') return { error: 'BackupScheduler not available' };
+    const result = await BackupScheduler.restoreBackup(backupId, options);
+    if (result?.success) {
+      try { await registerAllScripts(true); } catch (_) {}
+      try { await updateBadge(); } catch (_) {}
+    }
+    return result;
+  },
+  verify: backupId => typeof BackupScheduler !== 'undefined'
+    ? BackupScheduler.verifyBackup(backupId, { parseUserscript })
+    : Promise.resolve({ error: 'BackupScheduler not available' }),
+  listReceipts: async () => ({
+    receipts: typeof BackupScheduler !== 'undefined' ? await BackupScheduler.listReceipts() : []
+  }),
+  getReceipt: async receiptId => ({
+    receipt: typeof BackupScheduler !== 'undefined' ? await BackupScheduler.getReceipt(receiptId) : null
+  }),
+  rollback: async (receiptId, options) => {
+    if (typeof BackupScheduler === 'undefined') return { error: 'BackupScheduler not available' };
+    const result = await BackupScheduler.rollbackRestoreReceipt(receiptId, options);
+    if (result?.success) {
+      try { await registerAllScripts(true); } catch (_) {}
+      try { await updateBadge(); } catch (_) {}
+    }
+    return result;
+  },
+  clearReceipts: () => typeof BackupScheduler !== 'undefined'
+    ? BackupScheduler.clearReceipts()
+    : Promise.resolve({ success: false, error: 'BackupScheduler not available' }),
+  delete: backupId => typeof BackupScheduler !== 'undefined'
+    ? BackupScheduler.deleteBackup(backupId)
+    : Promise.resolve({ error: 'BackupScheduler not available' }),
+  import: zipData => typeof BackupScheduler !== 'undefined'
+    ? BackupScheduler.importBackup(zipData)
+    : Promise.resolve({ error: 'BackupScheduler not available' }),
+  export: backupId => typeof BackupScheduler !== 'undefined'
+    ? BackupScheduler.exportBackup(backupId)
+    : Promise.resolve({ error: 'BackupScheduler not available' }),
+  inspect: backupId => typeof BackupScheduler !== 'undefined'
+    ? BackupScheduler.inspectBackup(backupId)
+    : Promise.resolve({ error: 'BackupScheduler not available' }),
+  getSettings: () => typeof BackupScheduler !== 'undefined' ? BackupScheduler.getSettings() : {},
+  setSettings: async settings => {
+    if (typeof BackupScheduler === 'undefined') return { error: 'BackupScheduler not available' };
+    const savedSettings = await BackupScheduler.setSettings(settings);
+    return { success: true, settings: savedSettings };
+  }
+}));
 backgroundActionRegistry.registerHandlers(MessageRouter.createBackgroundDomainHandlers(
   GMValuesHandler.GM_VALUES_ACTIONS,
   ({ action, message, sender }) => GMValuesHandler.handleGMValuesMessage(action, message, sender)
@@ -7477,88 +7533,6 @@ async function handleMessage(message, sender) {
       case 'cleanupStorage': {
         if (typeof QuotaManager !== 'undefined') return await QuotaManager.cleanup(data.options || {});
         return { freedBytes: 0, actions: [] };
-      }
-
-      // v2.0: Backup Scheduler
-      case 'createBackup': {
-        if (typeof BackupScheduler !== 'undefined') return await BackupScheduler.createBackup(data.reason || 'manual');
-        return { error: 'BackupScheduler not available' };
-      }
-      case 'getBackups': {
-        if (typeof BackupScheduler !== 'undefined') return await BackupScheduler.getBackups();
-        return { backups: [] };
-      }
-      case 'restoreBackup': {
-        if (typeof BackupScheduler !== 'undefined') {
-          const result = await BackupScheduler.restoreBackup(data.backupId, data.options);
-          // Restoring scripts means new IDs may now be live — make sure
-          // chrome.userScripts reflects the post-restore state.
-          if (result && result.success) {
-            try { await registerAllScripts(true); } catch (_) {}
-            try { await updateBadge(); } catch (_) {}
-          }
-          return result;
-        }
-        return { error: 'BackupScheduler not available' };
-      }
-      case 'verifyBackup': {
-        if (typeof BackupScheduler !== 'undefined') {
-          return await BackupScheduler.verifyBackup(data.backupId, { parseUserscript });
-        }
-        return { error: 'BackupScheduler not available' };
-      }
-      case 'getRestoreReceipts': {
-        if (typeof BackupScheduler !== 'undefined') return { receipts: await BackupScheduler.listReceipts() };
-        return { receipts: [] };
-      }
-      case 'getRestoreReceipt': {
-        if (typeof BackupScheduler !== 'undefined') {
-          const receipt = await BackupScheduler.getReceipt(data.receiptId);
-          return { receipt };
-        }
-        return { receipt: null };
-      }
-      case 'rollbackRestore': {
-        if (typeof BackupScheduler !== 'undefined') {
-          const result = await BackupScheduler.rollbackRestoreReceipt(data.receiptId, data.options || {});
-          if (result && result.success) {
-            try { await registerAllScripts(true); } catch (_) {}
-            try { await updateBadge(); } catch (_) {}
-          }
-          return result;
-        }
-        return { error: 'BackupScheduler not available' };
-      }
-      case 'clearRestoreReceipts': {
-        if (typeof BackupScheduler !== 'undefined') return await BackupScheduler.clearReceipts();
-        return { success: false, error: 'BackupScheduler not available' };
-      }
-      case 'deleteBackup': {
-        if (typeof BackupScheduler !== 'undefined') return await BackupScheduler.deleteBackup(data.backupId);
-        return { error: 'BackupScheduler not available' };
-      }
-      case 'importBackup': {
-        if (typeof BackupScheduler !== 'undefined') return await BackupScheduler.importBackup(data.zipData);
-        return { error: 'BackupScheduler not available' };
-      }
-      case 'exportBackup': {
-        if (typeof BackupScheduler !== 'undefined') return await BackupScheduler.exportBackup(data.backupId);
-        return { error: 'BackupScheduler not available' };
-      }
-      case 'inspectBackup': {
-        if (typeof BackupScheduler !== 'undefined') return await BackupScheduler.inspectBackup(data.backupId);
-        return { error: 'BackupScheduler not available' };
-      }
-      case 'getBackupSettings': {
-        if (typeof BackupScheduler !== 'undefined') return BackupScheduler.getSettings();
-        return {};
-      }
-      case 'setBackupSettings': {
-        if (typeof BackupScheduler !== 'undefined') {
-          const settings = await BackupScheduler.setSettings(data.settings);
-          return { success: true, settings };
-        }
-        return { error: 'BackupScheduler not available' };
       }
 
       // v2.0: Script Analytics

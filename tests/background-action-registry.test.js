@@ -19,6 +19,10 @@ import {
   SYNC_BACKGROUND_ACTIONS,
   createSyncActionHandlers,
 } from '../src/background/sync-action-handler.ts';
+import {
+  BACKUP_BACKGROUND_ACTIONS,
+  createBackupActionHandlers,
+} from '../src/background/backup-action-handler.ts';
 
 describe('typed background action registry', () => {
   it('normalizes flat and nested runtime messages before dispatch', async () => {
@@ -184,5 +188,21 @@ describe('typed background action registry', () => {
       importSettingsCredentials: false,
       trustImportedScripts: true,
     });
+  });
+
+  it('routes backup recovery actions with explicit default options', async () => {
+    const dependencies = Object.fromEntries([
+      'create', 'list', 'restore', 'verify', 'listReceipts', 'getReceipt',
+      'rollback', 'clearReceipts', 'delete', 'import', 'export', 'inspect',
+      'getSettings', 'setSettings',
+    ].map(name => [name, vi.fn(async () => ({ success: true }))]));
+    const registry = createBackgroundActionRegistry(createBackupActionHandlers(dependencies));
+
+    await registry.dispatch({ action: 'createBackup' }, {});
+    await registry.dispatch({ action: 'rollbackRestore', receiptId: 'receipt-1' }, {});
+
+    expect(registry.registeredActions()).toEqual(BACKUP_BACKGROUND_ACTIONS);
+    expect(dependencies.create).toHaveBeenCalledWith('manual');
+    expect(dependencies.rollback).toHaveBeenCalledWith('receipt-1', {});
   });
 });

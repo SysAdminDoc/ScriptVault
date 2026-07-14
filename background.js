@@ -23407,6 +23407,89 @@ if (typeof self !== 'undefined') {
 }
 
 // ============================================================================
+// Generated from src/background/backup-action-handler.ts; do not edit by hand.
+// Run `node scripts/generate-ts-runtime-modules.mjs` or `npm run build:bg`.
+// ============================================================================
+
+const BackupActionHandler = (() => {
+  const module = { exports: {} };
+  const exports = module.exports;
+  "use strict";
+  var __defProp = Object.defineProperty;
+  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, { get: all[name], enumerable: true });
+  };
+  var __copyProps = (to, from, except, desc) => {
+    if (from && typeof from === "object" || typeof from === "function") {
+      for (let key of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(to, key) && key !== except)
+          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+    }
+    return to;
+  };
+  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+  // src/background/backup-action-handler.ts
+  var backup_action_handler_exports = {};
+  __export(backup_action_handler_exports, {
+    BACKUP_BACKGROUND_ACTIONS: () => BACKUP_BACKGROUND_ACTIONS,
+    BackupActionHandler: () => BackupActionHandler,
+    createBackupActionHandlers: () => createBackupActionHandlers,
+    default: () => backup_action_handler_default
+  });
+  module.exports = __toCommonJS(backup_action_handler_exports);
+  var BACKUP_BACKGROUND_ACTIONS = [
+    "createBackup",
+    "getBackups",
+    "restoreBackup",
+    "verifyBackup",
+    "getRestoreReceipts",
+    "getRestoreReceipt",
+    "rollbackRestore",
+    "clearRestoreReceipts",
+    "deleteBackup",
+    "importBackup",
+    "exportBackup",
+    "inspectBackup",
+    "getBackupSettings",
+    "setBackupSettings"
+  ];
+  function createBackupActionHandlers(dependencies) {
+    const handlers = {
+      createBackup: ({ message }) => dependencies.create(message.reason || "manual"),
+      getBackups: () => dependencies.list(),
+      restoreBackup: ({ message }) => dependencies.restore(message.backupId, message.options),
+      verifyBackup: ({ message }) => dependencies.verify(message.backupId),
+      getRestoreReceipts: () => dependencies.listReceipts(),
+      getRestoreReceipt: ({ message }) => dependencies.getReceipt(message.receiptId),
+      rollbackRestore: ({ message }) => dependencies.rollback(message.receiptId, message.options || {}),
+      clearRestoreReceipts: () => dependencies.clearReceipts(),
+      deleteBackup: ({ message }) => dependencies.delete(message.backupId),
+      importBackup: ({ message }) => dependencies.import(message.zipData),
+      exportBackup: ({ message }) => dependencies.export(message.backupId),
+      inspectBackup: ({ message }) => dependencies.inspect(message.backupId),
+      getBackupSettings: () => dependencies.getSettings(),
+      setBackupSettings: ({ message }) => dependencies.setSettings(message.settings)
+    };
+    return Object.freeze(handlers);
+  }
+  var BackupActionHandler = Object.freeze({
+    BACKUP_BACKGROUND_ACTIONS,
+    createBackupActionHandlers
+  });
+  var backup_action_handler_default = BackupActionHandler;
+  return module.exports.default || module.exports.BackupActionHandler || module.exports;
+})();
+
+if (typeof self !== 'undefined') {
+  self.BackupActionHandler = BackupActionHandler;
+}
+
+// ============================================================================
 // Generated from src/background/message-router.ts; do not edit by hand.
 // Run `node scripts/generate-ts-runtime-modules.mjs` or `npm run build:bg`.
 // ============================================================================
@@ -45566,6 +45649,62 @@ backgroundActionRegistry.registerHandlers(SyncActionHandler.createSyncActionHand
   import: (provider, options) => importCloudSyncBackup(provider, options),
   cloudStatus: provider => getCloudSyncStatus(provider)
 }));
+backgroundActionRegistry.registerHandlers(BackupActionHandler.createBackupActionHandlers({
+  create: reason => typeof BackupScheduler !== 'undefined'
+    ? BackupScheduler.createBackup(reason)
+    : Promise.resolve({ error: 'BackupScheduler not available' }),
+  list: () => typeof BackupScheduler !== 'undefined'
+    ? BackupScheduler.getBackups()
+    : Promise.resolve({ backups: [] }),
+  restore: async (backupId, options) => {
+    if (typeof BackupScheduler === 'undefined') return { error: 'BackupScheduler not available' };
+    const result = await BackupScheduler.restoreBackup(backupId, options);
+    if (result?.success) {
+      try { await registerAllScripts(true); } catch (_) {}
+      try { await updateBadge(); } catch (_) {}
+    }
+    return result;
+  },
+  verify: backupId => typeof BackupScheduler !== 'undefined'
+    ? BackupScheduler.verifyBackup(backupId, { parseUserscript })
+    : Promise.resolve({ error: 'BackupScheduler not available' }),
+  listReceipts: async () => ({
+    receipts: typeof BackupScheduler !== 'undefined' ? await BackupScheduler.listReceipts() : []
+  }),
+  getReceipt: async receiptId => ({
+    receipt: typeof BackupScheduler !== 'undefined' ? await BackupScheduler.getReceipt(receiptId) : null
+  }),
+  rollback: async (receiptId, options) => {
+    if (typeof BackupScheduler === 'undefined') return { error: 'BackupScheduler not available' };
+    const result = await BackupScheduler.rollbackRestoreReceipt(receiptId, options);
+    if (result?.success) {
+      try { await registerAllScripts(true); } catch (_) {}
+      try { await updateBadge(); } catch (_) {}
+    }
+    return result;
+  },
+  clearReceipts: () => typeof BackupScheduler !== 'undefined'
+    ? BackupScheduler.clearReceipts()
+    : Promise.resolve({ success: false, error: 'BackupScheduler not available' }),
+  delete: backupId => typeof BackupScheduler !== 'undefined'
+    ? BackupScheduler.deleteBackup(backupId)
+    : Promise.resolve({ error: 'BackupScheduler not available' }),
+  import: zipData => typeof BackupScheduler !== 'undefined'
+    ? BackupScheduler.importBackup(zipData)
+    : Promise.resolve({ error: 'BackupScheduler not available' }),
+  export: backupId => typeof BackupScheduler !== 'undefined'
+    ? BackupScheduler.exportBackup(backupId)
+    : Promise.resolve({ error: 'BackupScheduler not available' }),
+  inspect: backupId => typeof BackupScheduler !== 'undefined'
+    ? BackupScheduler.inspectBackup(backupId)
+    : Promise.resolve({ error: 'BackupScheduler not available' }),
+  getSettings: () => typeof BackupScheduler !== 'undefined' ? BackupScheduler.getSettings() : {},
+  setSettings: async settings => {
+    if (typeof BackupScheduler === 'undefined') return { error: 'BackupScheduler not available' };
+    const savedSettings = await BackupScheduler.setSettings(settings);
+    return { success: true, settings: savedSettings };
+  }
+}));
 backgroundActionRegistry.registerHandlers(MessageRouter.createBackgroundDomainHandlers(
   GMValuesHandler.GM_VALUES_ACTIONS,
   ({ action, message, sender }) => GMValuesHandler.handleGMValuesMessage(action, message, sender)
@@ -46780,88 +46919,6 @@ async function handleMessage(message, sender) {
       case 'cleanupStorage': {
         if (typeof QuotaManager !== 'undefined') return await QuotaManager.cleanup(data.options || {});
         return { freedBytes: 0, actions: [] };
-      }
-
-      // v2.0: Backup Scheduler
-      case 'createBackup': {
-        if (typeof BackupScheduler !== 'undefined') return await BackupScheduler.createBackup(data.reason || 'manual');
-        return { error: 'BackupScheduler not available' };
-      }
-      case 'getBackups': {
-        if (typeof BackupScheduler !== 'undefined') return await BackupScheduler.getBackups();
-        return { backups: [] };
-      }
-      case 'restoreBackup': {
-        if (typeof BackupScheduler !== 'undefined') {
-          const result = await BackupScheduler.restoreBackup(data.backupId, data.options);
-          // Restoring scripts means new IDs may now be live — make sure
-          // chrome.userScripts reflects the post-restore state.
-          if (result && result.success) {
-            try { await registerAllScripts(true); } catch (_) {}
-            try { await updateBadge(); } catch (_) {}
-          }
-          return result;
-        }
-        return { error: 'BackupScheduler not available' };
-      }
-      case 'verifyBackup': {
-        if (typeof BackupScheduler !== 'undefined') {
-          return await BackupScheduler.verifyBackup(data.backupId, { parseUserscript });
-        }
-        return { error: 'BackupScheduler not available' };
-      }
-      case 'getRestoreReceipts': {
-        if (typeof BackupScheduler !== 'undefined') return { receipts: await BackupScheduler.listReceipts() };
-        return { receipts: [] };
-      }
-      case 'getRestoreReceipt': {
-        if (typeof BackupScheduler !== 'undefined') {
-          const receipt = await BackupScheduler.getReceipt(data.receiptId);
-          return { receipt };
-        }
-        return { receipt: null };
-      }
-      case 'rollbackRestore': {
-        if (typeof BackupScheduler !== 'undefined') {
-          const result = await BackupScheduler.rollbackRestoreReceipt(data.receiptId, data.options || {});
-          if (result && result.success) {
-            try { await registerAllScripts(true); } catch (_) {}
-            try { await updateBadge(); } catch (_) {}
-          }
-          return result;
-        }
-        return { error: 'BackupScheduler not available' };
-      }
-      case 'clearRestoreReceipts': {
-        if (typeof BackupScheduler !== 'undefined') return await BackupScheduler.clearReceipts();
-        return { success: false, error: 'BackupScheduler not available' };
-      }
-      case 'deleteBackup': {
-        if (typeof BackupScheduler !== 'undefined') return await BackupScheduler.deleteBackup(data.backupId);
-        return { error: 'BackupScheduler not available' };
-      }
-      case 'importBackup': {
-        if (typeof BackupScheduler !== 'undefined') return await BackupScheduler.importBackup(data.zipData);
-        return { error: 'BackupScheduler not available' };
-      }
-      case 'exportBackup': {
-        if (typeof BackupScheduler !== 'undefined') return await BackupScheduler.exportBackup(data.backupId);
-        return { error: 'BackupScheduler not available' };
-      }
-      case 'inspectBackup': {
-        if (typeof BackupScheduler !== 'undefined') return await BackupScheduler.inspectBackup(data.backupId);
-        return { error: 'BackupScheduler not available' };
-      }
-      case 'getBackupSettings': {
-        if (typeof BackupScheduler !== 'undefined') return BackupScheduler.getSettings();
-        return {};
-      }
-      case 'setBackupSettings': {
-        if (typeof BackupScheduler !== 'undefined') {
-          const settings = await BackupScheduler.setSettings(data.settings);
-          return { success: true, settings };
-        }
-        return { error: 'BackupScheduler not available' };
       }
 
       // v2.0: Script Analytics
