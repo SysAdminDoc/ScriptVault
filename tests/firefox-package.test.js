@@ -60,6 +60,7 @@ describe('Firefox AMO validation gate', () => {
     expect(buildFirefox).toContain('generate-manifest-firefox.mjs" --profile firefox --check');
     expect(buildFirefox).toContain('check-vendored-library-provenance.mjs" --check');
     expect(buildFirefox).toContain('npx web-ext lint');
+    expect(buildFirefox).toContain('node scripts/check-firefox-lint-warnings.mjs');
     expect(buildFirefox).toContain('npx web-ext build');
     expect(buildFirefox).toContain('scriptvault-firefox-source-v${VERSION}.zip');
     expect(buildFirefox).toContain('git -C "$SCRIPT_DIR" archive --format=zip');

@@ -123,6 +123,7 @@ if ((summary.errors || 0) > 0) {
   process.exit(1);
 }
 NODE
+  node scripts/check-firefox-lint-warnings.mjs
 fi
 
 if [ "$PACKAGE" -eq 1 ]; then
