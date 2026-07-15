@@ -37,6 +37,18 @@ const SIGNATURES: Readonly<Record<string, { label: string; documentation: string
 
 const VALID_RUN_AT = new Set(['document-start', 'document-body', 'document-end', 'document-idle', 'context-menu']);
 
+// Value completions offered after `@grant ` — parity with the pre-LSP
+// fallback provider in pages/editor-sandbox.html.
+const GRANT_VALUES = [
+  'GM_getValue', 'GM_setValue', 'GM_deleteValue', 'GM_listValues', 'GM_getValues', 'GM_setValues',
+  'GM_deleteValues', 'GM_addStyle', 'GM_xmlhttpRequest', 'GM.xmlHttpRequest', 'GM_webSocket',
+  'GM.webSocket', 'GM_setClipboard', 'GM_notification', 'GM_openInTab', 'GM_download', 'GM_log',
+  'GM_registerMenuCommand', 'GM_unregisterMenuCommand', 'GM_getMenuCommands', 'GM_getResourceText',
+  'GM_getResourceURL', 'GM_addElement', 'GM_loadScript', 'GM_getTab', 'GM_saveTab', 'GM_getTabs',
+  'GM_addValueChangeListener', 'GM_removeValueChangeListener', 'GM_cookie', 'GM_focusTab',
+  'GM_webRequest', 'GM_audio', 'window.close', 'window.focus', 'window.onurlchange', 'none', '*',
+] as const;
+
 function lineRange(line: number, text: string): LspRange {
   return { start: { line, character: 0 }, end: { line, character: Math.max(1, text.length) } };
 }
@@ -78,6 +90,24 @@ export function getMetadataCompletions(text: string, position: LspPosition) {
   const headerEnd = beforeCursor.lastIndexOf('==/UserScript==');
   if (headerStart < 0 || headerEnd > headerStart) return [];
   const currentLine = beforeCursor.slice(beforeCursor.lastIndexOf('\n') + 1);
+
+  const valueMatch = currentLine.match(/^\s*\/\/\s*@(grant|run-at)\s+(\S*)$/);
+  if (valueMatch) {
+    const partial = valueMatch[2] ?? '';
+    const valueRange: LspRange = {
+      start: { line: position.line, character: position.character - partial.length },
+      end: { line: position.line, character: position.character },
+    };
+    const candidates: readonly string[] = valueMatch[1] === 'grant' ? GRANT_VALUES : [...VALID_RUN_AT];
+    return candidates.map(value => ({
+      label: value,
+      kind: 12,
+      detail: valueMatch[1] === 'grant' ? 'GM permission' : 'Run stage',
+      insertText: value,
+      textEdit: { range: valueRange, newText: value },
+    }));
+  }
+
   if (!/^\s*\/\/\s*@[-\w]*$/.test(currentLine)) return [];
   const replaceStart = currentLine.lastIndexOf('@');
   const textEditRange: LspRange = {

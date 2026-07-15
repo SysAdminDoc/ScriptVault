@@ -13257,6 +13257,18 @@
         updateUserCssPreviewButton();
     }
 
+    // Debounced wrapper for editor keystrokes: updateUserCssPreviewButton
+    // runs a full UserCSS metadata parse, which is too heavy per keystroke
+    // on large styles.
+    let userCssPreviewButtonTimer = null;
+    function scheduleUserCssPreviewButtonUpdate() {
+        if (userCssPreviewButtonTimer) clearTimeout(userCssPreviewButtonTimer);
+        userCssPreviewButtonTimer = setTimeout(() => {
+            userCssPreviewButtonTimer = null;
+            updateUserCssPreviewButton();
+        }, 250);
+    }
+
     function updateUserCssPreviewButton(script = getCurrentScript()) {
         const button = elements.btnEditorPreviewUserCSS;
         if (!button) return;
@@ -13466,8 +13478,23 @@
             ${controls.join('')}
             <div id="userCssConfigurationStatus" class="utility-inline-status" role="status" aria-live="polite">Ready for live preview.</div>
         </div>`;
+        // Live-preview edits mutate state.userCssPreview immediately; Cancel
+        // must restore the pre-modal values and refresh the tab, or abandoned
+        // tweaks keep rendering until the preview is fully cleared.
+        const previousPreview = {
+            values: JSON.parse(JSON.stringify(state.userCssPreview.values || {})),
+            colorScheme: state.userCssPreview.colorScheme || 'auto'
+        };
         showModal(tDashboard('configureUserCssTitle', 'Configure UserCSS variables'), body, [
-            { label: tDashboard('cancel', 'Cancel'), callback: hideModal },
+            {
+                label: tDashboard('cancel', 'Cancel'),
+                callback: () => {
+                    state.userCssPreview.values = previousPreview.values;
+                    state.userCssPreview.colorScheme = previousPreview.colorScheme;
+                    if (state.userCssPreview.active) scheduleUserCssPreviewRefresh();
+                    hideModal();
+                }
+            },
             {
                 label: tDashboard('applyToDraft', 'Apply to Draft'),
                 class: 'btn-primary',
@@ -13806,7 +13833,7 @@
             if (change.origin === 'setValue') return;
             markCurrentEditorDirty();
             updateLineCount();
-            updateUserCssPreviewButton();
+            scheduleUserCssPreviewButtonUpdate();
             scheduleUserCssPreviewRefresh();
             if (state.settings.autoSave) {
                 clearTimeout(autoSaveTimer);

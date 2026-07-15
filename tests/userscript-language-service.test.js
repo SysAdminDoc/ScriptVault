@@ -19,6 +19,24 @@ describe('userscript language service', () => {
     expect(getMetadataCompletions(`${source}\n// @na`, { line: 4, character: 6 })).toEqual([]);
   });
 
+  it('offers @grant and @run-at value completions after the directive', () => {
+    const source = '// ==UserScript==\n// @grant GM_se\n// ==/UserScript==\n';
+    const grants = getMetadataCompletions(source, { line: 1, character: 15 });
+    expect(grants.map(item => item.label)).toContain('GM_setValue');
+    expect(grants.find(item => item.label === 'GM_setValue')?.textEdit).toEqual({
+      range: { start: { line: 1, character: 10 }, end: { line: 1, character: 15 } },
+      newText: 'GM_setValue',
+    });
+
+    const runAtSource = '// ==UserScript==\n// @run-at doc\n// ==/UserScript==\n';
+    const stages = getMetadataCompletions(runAtSource, { line: 1, character: 14 });
+    expect(stages.map(item => item.label)).toContain('document-idle');
+
+    // Value completions stay inside the header.
+    const outside = '// ==UserScript==\n// ==/UserScript==\n// @grant GM_se';
+    expect(getMetadataCompletions(outside, { line: 2, character: 15 })).toEqual([]);
+  });
+
   it('returns signatures for classic and promise-based GM APIs', () => {
     expect(getGmSignatureHelp('GM_setValue("theme", ', { line: 0, character: 21 })).toMatchObject({
       activeParameter: 1,

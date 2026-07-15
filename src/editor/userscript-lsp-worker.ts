@@ -46,7 +46,7 @@ workerScope.addEventListener('message', (event: MessageEvent<JsonRpcMessage>) =>
       respond(message.id, {
         capabilities: {
           textDocumentSync: { openClose: true, change: 2 },
-          completionProvider: { triggerCharacters: ['@'] },
+          completionProvider: { triggerCharacters: ['@', ' '] },
           signatureHelpProvider: { triggerCharacters: ['(', ','] },
         },
         serverInfo: { name: 'ScriptVault userscript language service', version: '1' },
