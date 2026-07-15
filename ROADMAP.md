@@ -96,6 +96,16 @@ are lower-priority findings deferred for a later pass.
   `scheduleUserCssPreviewRefresh` or debounce.
   Where: `pages/dashboard.js:13260-13269` wired to the editor change event.
 
+- [ ] P3 — Editor open logs an `insertBefore` NotFoundError (pre-existing)
+  Why: `npm run smoke:editor` reports one console error on editor open —
+  "Failed to execute 'insertBefore' on 'Node': the node before which the new
+  node is to be inserted is not a child of this node." The editor still works
+  (overlay, code pane, all 14 controls, close), but a DOM insertion path
+  targets a stale/detached reference. Present in the v3.20.0 workbench redesign
+  before the 2026-07-15 audit; trace which render path (likely a tab/toolbar
+  or What's New insertion) holds the stale node.
+  Where: `pages/dashboard.js` editor-open render path.
+
 - [ ] P3 — MV3 SW-death leaves orphaned UserCSS preview/registered-tab maps
   Why: `_registeredTabs`/`_draftPreviewTabs` are in-memory; if the worker is
   killed between injection and a later disable/clear, `removeCSS` has no record
