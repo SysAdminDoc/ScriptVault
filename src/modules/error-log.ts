@@ -11,8 +11,11 @@ export interface ErrorLogRecord {
   error: string;
   stack: string | null;
   url: string | null;
+  source: string | null;
   line: number | null;
   col: number | null;
+  generatedLine: number | null;
+  generatedCol: number | null;
   context: string | null;
 }
 
@@ -23,8 +26,11 @@ export interface ErrorLogEntry {
   error: string | { message?: string; stack?: string } | unknown;
   stack?: string | null;
   url?: string | null;
+  source?: string | null;
   line?: number | null;
   col?: number | null;
+  generatedLine?: number | null;
+  generatedCol?: number | null;
   context?: string | null;
 }
 
@@ -72,10 +78,13 @@ export interface ScriptErrorData {
   error?: string;
   stack?: string | null;
   url?: string | null;
+  source?: string | null;
   line?: number | null;
   lineno?: number | null;
   col?: number | null;
   colno?: number | null;
+  generatedLine?: number | null;
+  generatedCol?: number | null;
 }
 
 // ScriptStorage is a global in the service-worker context (loaded before this module).
@@ -141,7 +150,7 @@ export async function _save(): Promise<void> {
 
 /**
  * Log an error entry.
- * entry: { scriptId, scriptName?, error, stack?, url?, line?, col?, context? }
+ * entry: { scriptId, scriptName?, error, stack?, url?, source?, line?, col?, context? }
  */
 export async function log(entry: ErrorLogEntry): Promise<ErrorLogRecord> {
   let entries = await _load();
@@ -157,10 +166,13 @@ export async function log(entry: ErrorLogEntry): Promise<ErrorLogRecord> {
     error: typeof errorValue === 'string'
       ? errorValue
       : (errorObj?.message || String(errorValue)),
-    stack: (entry.stack as string) || errorObj?.stack || null,
+    stack: ((entry.stack as string) || errorObj?.stack || '').slice(0, 8000) || null,
     url: (entry.url as string) || null,
+    source: typeof entry.source === 'string' ? entry.source.slice(0, 4096) : null,
     line: entry.line ?? null,
     col: entry.col ?? null,
+    generatedLine: entry.generatedLine ?? null,
+    generatedCol: entry.generatedCol ?? null,
     context: (entry.context as string) || null,
   };
 
@@ -302,7 +314,8 @@ export async function exportText(filters?: ErrorLogFilters): Promise<string> {
     const time = new Date(e.timestamp).toISOString();
     lines.push(`[${time}] ${e.scriptName || e.scriptId || 'Unknown'}`);
     lines.push(`  Error: ${e.error}`);
-    if (e.url) lines.push(`  URL: ${e.url}${e.line != null ? `:${e.line}` : ''}${e.col != null ? `:${e.col}` : ''}`);
+    if (e.url) lines.push(`  URL: ${e.url}`);
+    if (e.source) lines.push(`  Source: ${e.source}${e.line != null ? `:${e.line}` : ''}${e.col != null ? `:${e.col}` : ''}`);
     if (e.context) lines.push(`  Context: ${e.context}`);
     if (e.stack) {
       lines.push('  Stack:');
@@ -330,7 +343,7 @@ export async function exportText(filters?: ErrorLogFilters): Promise<string> {
  */
 export async function exportCSV(filters?: ErrorLogFilters): Promise<string> {
   const entries = await getAll(filters);
-  const headers = ['timestamp', 'datetime', 'scriptId', 'scriptName', 'error', 'url', 'line', 'col', 'context'];
+  const headers = ['timestamp', 'datetime', 'scriptId', 'scriptName', 'error', 'url', 'source', 'line', 'col', 'generatedLine', 'generatedCol', 'context'];
 
   const escapeCSV = (val: string | number | null | undefined): string => {
     if (val == null) return '';
@@ -353,8 +366,11 @@ export async function exportCSV(filters?: ErrorLogFilters): Promise<string> {
       escapeCSV(e.scriptName),
       escapeCSV(e.error),
       escapeCSV(e.url),
+      escapeCSV(e.source),
       e.line ?? '',
       e.col ?? '',
+      e.generatedLine ?? '',
+      e.generatedCol ?? '',
       escapeCSV(e.context),
     ].join(','));
   }
@@ -459,8 +475,11 @@ export async function logScriptError(
     error: errorData.message || errorData.error || 'Script execution error',
     stack: errorData.stack || null,
     url: errorData.url || null,
+    source: errorData.source || null,
     line: errorData.line ?? errorData.lineno ?? null,
     col: errorData.col ?? errorData.colno ?? null,
+    generatedLine: errorData.generatedLine ?? null,
+    generatedCol: errorData.generatedCol ?? null,
     context: 'script-execution',
   });
 }

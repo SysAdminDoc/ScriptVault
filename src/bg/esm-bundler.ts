@@ -52,6 +52,13 @@ export interface ESMBundleResult {
   code: string;
   imports: Array<{ url: string; bytes: number }>;
   entryUrl: string;
+  sourceMap: ESMBundleSourceMap;
+}
+
+export interface ESMBundleSourceMap {
+  sources: Array<{ url: string; content: string | null }>;
+  lineMap: Array<[sourceIndex: number, originalLine: number]>;
+  entrySourceIndex: number;
 }
 
 interface BundleOptions {
@@ -61,7 +68,13 @@ interface BundleOptions {
 }
 
 interface BundleContext {
-  modules: Map<string, { url: string; code: string; bytes?: number }>;
+  modules: Map<string, {
+    url: string;
+    code: string;
+    originalCode: string;
+    lineMap: number[];
+    bytes?: number;
+  }>;
   fetchImport: (url: string) => Promise<string | null>;
   collectSyntax: (code: string) => Promise<ESMSyntaxInfo>;
 }
@@ -155,6 +168,13 @@ function exportReplacement(exp: ESMExportInfo, code: string): string {
 }
 
 export function rewriteModuleSyntax(code: string, analysis: ESMSyntaxInfo): string {
+  return rewriteModuleSyntaxWithLineMap(code, analysis).code;
+}
+
+export function rewriteModuleSyntaxWithLineMap(
+  code: string,
+  analysis: ESMSyntaxInfo,
+): { code: string; lineMap: number[] } {
   const replacements: Array<{ start: number; end: number; text: string }> = [];
   for (const imp of analysis.imports || []) {
     replacements.push({ start: imp.start, end: imp.end, text: importReplacement(imp) });
@@ -162,46 +182,113 @@ export function rewriteModuleSyntax(code: string, analysis: ESMSyntaxInfo): stri
   for (const exp of analysis.exports || []) {
     replacements.push({ start: exp.start, end: exp.end, text: exportReplacement(exp, code) });
   }
-  replacements.sort((a, b) => b.start - a.start);
-  let out = code;
+  replacements.sort((a, b) => a.start - b.start);
+
+  const output: string[] = [];
+  const lineMap: number[] = [];
+  let outputLine = 0;
+  let cursor = 0;
+  let originalLine = 1;
+
+  const appendMapped = (text: string, mappedLines: number[]): void => {
+    if (!text) return;
+    output.push(text);
+    const partCount = text.split('\n').length;
+    for (let index = 0; index < partCount; index++) {
+      if (lineMap[outputLine] === undefined) {
+        lineMap[outputLine] = mappedLines[Math.min(index, mappedLines.length - 1)] || originalLine;
+      }
+      if (index < partCount - 1) outputLine++;
+    }
+  };
+
+  const countNewlines = (text: string): number => text.split('\n').length - 1;
+
   for (const item of replacements) {
-    out = out.slice(0, item.start) + item.text + out.slice(item.end);
+    if (item.start < cursor) throw new Error('Overlapping ESM syntax ranges are not supported');
+    const unchanged = code.slice(cursor, item.start);
+    const unchangedLineCount = countNewlines(unchanged);
+    appendMapped(
+      unchanged,
+      Array.from({ length: unchangedLineCount + 1 }, (_, index) => originalLine + index),
+    );
+    originalLine += unchangedLineCount;
+
+    const replaced = code.slice(item.start, item.end);
+    const replacementEndLine = originalLine + countNewlines(replaced);
+    const replacementLineCount = countNewlines(item.text);
+    appendMapped(
+      item.text,
+      Array.from(
+        { length: replacementLineCount + 1 },
+        (_, index) => Math.min(originalLine + index, replacementEndLine),
+      ),
+    );
+    originalLine = replacementEndLine;
+    cursor = item.end;
   }
-  return out;
+
+  const tail = code.slice(cursor);
+  const tailLineCount = countNewlines(tail);
+  appendMapped(tail, Array.from({ length: tailLineCount + 1 }, (_, index) => originalLine + index));
+  return { code: output.join(''), lineMap: lineMap.length > 0 ? lineMap : [1] };
 }
 
-function buildBundle(entryCode: string, modules: BundleContext['modules']): string {
-  const moduleDefs = [...modules.values()]
-    .map((mod) => [
-      `__modules[${JSON.stringify(mod.url)}] = function(__module, __exports, __require) {`,
-      mod.code,
-      '};',
-    ].join('\n'))
-    .join('\n');
-  return [
-    '(function () {',
-    "'use strict';",
-    'const __modules = Object.create(null);',
-    'const __cache = Object.create(null);',
-    moduleDefs,
-    'function __require(id) {',
-    '  if (__cache[id]) return __cache[id].exports;',
-    '  const factory = __modules[id];',
-    '  if (!factory) throw new Error("Missing ESM module: " + id);',
-    '  const module = { exports: {} };',
-    '  __cache[id] = module;',
-    '  factory(module, module.exports, __require);',
-    '  return module.exports;',
-    '}',
-    'const __exports = {};',
-    entryCode,
-    '})();',
-  ].filter(Boolean).join('\n');
+function buildBundle(
+  entryCode: string,
+  entryOriginalCode: string,
+  entryLineMap: number[],
+  entryUrl: string,
+  modules: BundleContext['modules'],
+): { code: string; sourceMap: ESMBundleSourceMap } {
+  const outputLines: string[] = [];
+  const lineMap: ESMBundleSourceMap['lineMap'] = [];
+  const sources: ESMBundleSourceMap['sources'] = [
+    { url: 'scriptvault://generated/esm-bundle-wrapper.js', content: null },
+  ];
+  const appendLine = (line: string, sourceIndex = 0, originalLine = 1): void => {
+    outputLines.push(line);
+    lineMap.push([sourceIndex, Math.max(1, originalLine)]);
+  };
+  const appendSource = (code: string, sourceIndex: number, mappedLines: number[]): void => {
+    code.split('\n').forEach((line, index) => {
+      appendLine(line, sourceIndex, mappedLines[index] || mappedLines.at(-1) || index + 1);
+    });
+  };
+
+  appendLine('(function () {');
+  appendLine("'use strict';");
+  appendLine('const __modules = Object.create(null);');
+  appendLine('const __cache = Object.create(null);');
+  for (const mod of modules.values()) {
+    const sourceIndex = sources.push({ url: mod.url, content: mod.originalCode }) - 1;
+    appendLine(`__modules[${JSON.stringify(mod.url)}] = function(__module, __exports, __require) {`);
+    appendSource(mod.code, sourceIndex, mod.lineMap);
+    appendLine('};');
+  }
+  appendLine('function __require(id) {');
+  appendLine('  if (__cache[id]) return __cache[id].exports;');
+  appendLine('  const factory = __modules[id];');
+  appendLine('  if (!factory) throw new Error("Missing ESM module: " + id);');
+  appendLine('  const module = { exports: {} };');
+  appendLine('  __cache[id] = module;');
+  appendLine('  factory(module, module.exports, __require);');
+  appendLine('  return module.exports;');
+  appendLine('}');
+  appendLine('const __exports = {};');
+  const entrySourceIndex = sources.push({ url: entryUrl, content: entryOriginalCode }) - 1;
+  appendSource(entryCode, entrySourceIndex, entryLineMap);
+  appendLine('})();');
+
+  return {
+    code: outputLines.join('\n'),
+    sourceMap: { sources, lineMap, entrySourceIndex },
+  };
 }
 
 async function bundleModule(url: string, code: string, context: BundleContext): Promise<void> {
   if (context.modules.has(url)) return;
-  context.modules.set(url, { url, code: '' });
+  context.modules.set(url, { url, code: '', originalCode: code, lineMap: [1] });
 
   const analysis = await context.collectSyntax(code);
   assertSupportedSyntax(analysis);
@@ -212,9 +299,12 @@ async function bundleModule(url: string, code: string, context: BundleContext): 
     await bundleModule(imp.resolvedSource, depCode, context);
   }
 
+  const rewritten = rewriteModuleSyntaxWithLineMap(code, analysis);
   context.modules.set(url, {
     url,
-    code: rewriteModuleSyntax(code, analysis),
+    code: rewritten.code,
+    originalCode: code,
+    lineMap: rewritten.lineMap,
     bytes: code.length,
   });
 }
@@ -234,11 +324,19 @@ export async function bundle(code: string, options: BundleOptions = {}): Promise
     if (!depCode) throw new Error(`Failed to fetch ESM import: ${imp.resolvedSource}`);
     await bundleModule(imp.resolvedSource, depCode, context);
   }
-  const rewrittenEntry = rewriteModuleSyntax(code, entryAnalysis);
+  const rewrittenEntry = rewriteModuleSyntaxWithLineMap(code, entryAnalysis);
+  const built = buildBundle(
+    rewrittenEntry.code,
+    code,
+    rewrittenEntry.lineMap,
+    entryUrl,
+    context.modules,
+  );
   return {
-    code: buildBundle(rewrittenEntry, context.modules),
+    code: built.code,
     imports: [...context.modules.values()].map((mod) => ({ url: mod.url, bytes: mod.bytes || 0 })),
     entryUrl,
+    sourceMap: built.sourceMap,
   };
 }
 
@@ -249,7 +347,13 @@ export async function bundleIfNeeded(
   options: BundleOptions = {},
 ): Promise<ESMBundleResult & { bundled: boolean }> {
   if (!isESMMetadata(meta)) {
-    return { bundled: false, code, imports: [], entryUrl: options.sourceUrl || '' };
+    return {
+      bundled: false,
+      code,
+      imports: [],
+      entryUrl: options.sourceUrl || '',
+      sourceMap: { sources: [], lineMap: [], entrySourceIndex: 0 },
+    };
   }
   if (!settings?.experimentalESMUserscripts) {
     throw new Error('ESM userscripts are experimental and require the experimentalESMUserscripts setting.');
@@ -262,6 +366,7 @@ export const ESMUserscriptBundler = {
   isESMMetadata,
   resolveImportSpecifier,
   rewriteModuleSyntax,
+  rewriteModuleSyntaxWithLineMap,
   bundle,
   bundleIfNeeded,
 };

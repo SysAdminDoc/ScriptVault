@@ -373,6 +373,7 @@ export const UpdateSystem = {
         entryUrl: bundleResult.entryUrl,
         imports: bundleResult.imports,
         bundledAt: Date.now(),
+        sourceMap: bundleResult.sourceMap,
       };
     }
 

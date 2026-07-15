@@ -194,6 +194,13 @@ export const TS_RUNTIME_MODULES = [
     selfExportName: 'LocalLibraries',
   },
   {
+    id: 'script-source-maps',
+    source: 'src/background/script-source-maps.ts',
+    output: 'modules/script-source-maps.js',
+    exportName: 'ScriptSourceMaps',
+    selfExportName: 'ScriptSourceMaps',
+  },
+  {
     id: 'import-action-handler',
     source: 'src/background/import-action-handler.ts',
     output: 'modules/import-action-handler.js',

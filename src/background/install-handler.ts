@@ -254,6 +254,7 @@ export async function installFromCode(code: string, receiptOptions: InstallRecei
         entryUrl: bundleResult.entryUrl,
         imports: bundleResult.imports,
         bundledAt: Date.now(),
+        sourceMap: bundleResult.sourceMap,
       };
     }
     const allScripts: Script[] = await ScriptStorage.getAll();

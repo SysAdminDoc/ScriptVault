@@ -2721,7 +2721,11 @@
             ScriptDebugger.recordError(event.scriptId, {
                 message: event.message || event.error || 'Script error',
                 stack: event.stack || '',
-                line: event.line || null
+                source: event.source || null,
+                line: event.line || null,
+                column: event.column || event.col || null,
+                generatedLine: event.generatedLine || null,
+                generatedColumn: event.generatedColumn || event.generatedCol || null
             });
         }
 
@@ -2825,7 +2829,11 @@
                     ScriptDebugger.recordError(scriptId, {
                         message: entry.error || entry.message || entry.detail || 'Script error',
                         stack: entry.stack || '',
-                        line: entry.line || null
+                        source: entry.source || null,
+                        line: entry.line || null,
+                        column: entry.column || entry.col || null,
+                        generatedLine: entry.generatedLine || null,
+                        generatedColumn: entry.generatedColumn || entry.generatedCol || null
                     });
                 }
             } catch {

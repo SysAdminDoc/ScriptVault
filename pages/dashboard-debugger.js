@@ -15,7 +15,7 @@ const ScriptDebugger = (() => {
   let _activeTab = 'console';
   let _consoleLogs = {};       // scriptId -> [{level, args, time}]
   let _liveReload = {};        // scriptId -> boolean
-  let _errorTimeline = {};     // scriptId -> [{message, stack, line, time}]
+  let _errorTimeline = {};     // scriptId -> [{message, stack, source, line, column, generatedLine, generatedColumn, time}]
   let _variableRefreshTimer = null;
   let _consoleFilter = 'all';  // 'all' | 'log' | 'warn' | 'error'
   let _variableSearch = '';
@@ -617,16 +617,38 @@ const ScriptDebugger = (() => {
         const header = el('div', { style: 'display:flex;justify-content:space-between;align-items:center' });
         header.appendChild(el('span', { class: 'dbg-error-time', text: formatTime(err.time) }));
         if (err.line) {
+          const rawSourceName = err.source ? String(err.source).split('/').pop() || err.source : '';
+          let sourceName = rawSourceName;
+          try { sourceName = decodeURIComponent(rawSourceName); } catch { /* keep the safe raw label */ }
+          sourceName = sourceName.replace(/\.user\.js$/i, '');
+          const location = `${sourceName ? `${sourceName}:` : 'Line '}${err.line}${err.column ? `:${err.column}` : ''}`;
           const lineLink = el('span', {
             class: 'dbg-error-line-link',
-            text: `Line ${err.line}`,
+            text: location,
+            title: err.source || `Line ${err.line}`,
           });
-          lineLink.addEventListener('click', e => {
-            e.stopPropagation();
-            if (typeof _onJumpToLine === 'function') {
-              _onJumpToLine(err.scriptId, err.line);
-            }
-          });
+          const canJump = !err.source || String(err.source).startsWith('scriptvault://userscript/');
+          if (canJump) {
+            lineLink.setAttribute('role', 'button');
+            lineLink.tabIndex = 0;
+            const jumpToLocation = e => {
+              e.stopPropagation();
+              if (typeof _onJumpToLine === 'function') {
+                _onJumpToLine(err.scriptId, err.line, err.column, err.source);
+              }
+            };
+            lineLink.addEventListener('click', e => {
+              jumpToLocation(e);
+            });
+            lineLink.addEventListener('keydown', e => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                jumpToLocation(e);
+              }
+            });
+          } else {
+            lineLink.style.cursor = 'text';
+          }
           header.appendChild(lineLink);
         }
         entry.appendChild(header);
@@ -787,7 +809,7 @@ const ScriptDebugger = (() => {
      * Initialize the debugger inside a container element.
      * @param {HTMLElement} containerEl
      * @param {Object} [options]
-     * @param {Function} [options.onJumpToLine] — callback(scriptId, lineNumber)
+     * @param {Function} [options.onJumpToLine] — callback(scriptId, lineNumber, columnNumber, source)
      */
     init(containerEl, options = {}) {
       // Guard against double-init (prevents duplicate interval timers)
@@ -871,7 +893,7 @@ const ScriptDebugger = (() => {
     /**
      * Record an error for a script. Used by the script execution wrapper.
      * @param {string} scriptId
-     * @param {Object} error — { message, stack, line }
+     * @param {Object} error — { message, stack, source, line, column, generatedLine, generatedColumn }
      */
     recordError(scriptId, error) {
       ensureScript(scriptId);
@@ -879,7 +901,11 @@ const ScriptDebugger = (() => {
       entries.push({
         message: error.message || String(error),
         stack: error.stack || '',
+        source: error.source || null,
         line: error.line || null,
+        column: error.column || error.col || null,
+        generatedLine: error.generatedLine || null,
+        generatedColumn: error.generatedColumn || error.generatedCol || null,
         time: Date.now(),
       });
       while (entries.length > MAX_ERRORS) entries.shift();
@@ -899,7 +925,7 @@ const ScriptDebugger = (() => {
 
     /**
      * Set the callback for "jump to line" in error timeline.
-     * @param {Function} fn — receives (scriptId, lineNumber)
+     * @param {Function} fn — receives (scriptId, lineNumber, columnNumber, source)
      */
     onJumpToLine(fn) {
       _onJumpToLine = fn;

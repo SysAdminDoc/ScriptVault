@@ -51,6 +51,7 @@ declare const ScriptActionHandler: any;
 declare const ScriptAnalyzer: any;
 declare const ScriptConfig: any;
 declare const ScriptSigning: any;
+declare const ScriptSourceMaps: any;
 declare const ScriptStorage: any;
 declare const ScriptSubscriptions: any;
 declare const ScriptValues: any;

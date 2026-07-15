@@ -12,6 +12,7 @@ function createHarness() {
   ]);
   const diagnostics = [];
   const networkLog = [];
+  const errorLog = [];
   const scheduleStatsSave = vi.fn();
   const triggerAfterScript = vi.fn();
   const handler = createExecutionTelemetryHandler({
@@ -22,6 +23,7 @@ function createHarness() {
     addNetworkLog: entry => networkLog.push(entry),
     getStatsUrlRetention: () => 'origin',
     retainStatsUrl: url => new URL(url).origin,
+    logExecutionError: entry => errorLog.push(entry),
     now: () => clock,
   });
   return {
@@ -29,6 +31,7 @@ function createHarness() {
     scripts,
     diagnostics,
     networkLog,
+    errorLog,
     scheduleStatsSave,
     triggerAfterScript,
     advance: milliseconds => { clock += milliseconds; },
@@ -110,6 +113,12 @@ describe('execution telemetry trust boundary', () => {
     await expect(harness.handler.handleTrustedTelemetry('reportExecError', {
       completionId,
       error: 'boom',
+      stack: 'x'.repeat(9000),
+      source: 'scriptvault://userscript/victim/Victim.user.js',
+      line: 17,
+      col: 9,
+      generatedLine: 917,
+      generatedCol: 9,
     }, sender)).resolves.toEqual({ success: true, trusted: true });
     await expect(harness.handler.handleTrustedTelemetry('reportExecError', {
       completionId,
@@ -129,6 +138,18 @@ describe('execution telemetry trust boundary', () => {
 
     expect(harness.scripts.get('victim').stats).toMatchObject({ errors: 1, runs: 1 });
     expect(harness.triggerAfterScript).toHaveBeenCalledTimes(1);
+    expect(harness.errorLog).toEqual([expect.objectContaining({
+      scriptId: 'victim',
+      scriptName: 'Victim',
+      error: 'boom',
+      source: 'scriptvault://userscript/victim/Victim.user.js',
+      line: 17,
+      col: 9,
+      generatedLine: 917,
+      generatedCol: 9,
+      context: 'script-execution',
+    })]);
+    expect(harness.errorLog[0].stack).toHaveLength(8000);
   });
 
   it('attributes trusted network telemetry from storage and leaves bridge entries unattributed', async () => {

@@ -8,6 +8,12 @@ import {
   isESMMetadata,
   resolveImportSpecifier,
 } from '../src/bg/esm-bundler.ts';
+import { buildWrappedScript } from '../src/background/wrapper-builder.ts';
+import {
+  deterministicGeneratedSourceUrl,
+  deterministicScriptSourceUrl,
+  resolveGeneratedLocation,
+} from '../src/background/script-source-maps.ts';
 import { parseUserscript } from '../src/background/parser.ts';
 
 const acornSandbox = {};
@@ -184,6 +190,74 @@ describe('ESM userscript bundler', () => {
     ]);
     expect(result.code).toContain('const { value } = __require("https://cdn.example.com/lib/value.js");');
     expect(result.code).toContain('__exports.value = value;');
+  });
+
+  it('composes imported-module and entry locations through the registered wrapper map', async () => {
+    const source = userscript([
+      "import { explode } from 'https://cdn.example.com/explode.js';",
+      'function entryFailure() {',
+      '  throw new Error("entry boom");',
+      '}',
+      'explode();',
+      'entryFailure();',
+    ].join('\n'));
+    const imported = [
+      'export function explode() {',
+      '  throw new Error("module boom");',
+      '}',
+    ].join('\n');
+    const result = await bundle(source, {
+      sourceUrl: 'https://scripts.example/main.user.js',
+      collectSyntax,
+      fetchImport: async () => imported,
+    });
+    const bundledModuleLine = result.code.split('\n').findIndex(line => line.includes('module boom'));
+    const bundledEntryLine = result.code.split('\n').findIndex(line => line.includes('entry boom'));
+    const [moduleSourceIndex, moduleOriginalLine] = result.sourceMap.lineMap[bundledModuleLine];
+    const [entrySourceIndex, entryOriginalLine] = result.sourceMap.lineMap[bundledEntryLine];
+
+    expect(result.sourceMap.sources[moduleSourceIndex]).toEqual({
+      url: 'https://cdn.example.com/explode.js',
+      content: imported,
+    });
+    expect(moduleOriginalLine).toBe(2);
+    expect(entrySourceIndex).toBe(result.sourceMap.entrySourceIndex);
+    expect(entryOriginalLine).toBe(source.split('\n').findIndex(line => line.includes('entry boom')) + 1);
+
+    const parsed = parseUserscript(result.code);
+    if (parsed.error || !parsed.meta) throw new Error(parsed.error || 'Bundled metadata missing');
+    parsed.meta.esmBundle = {
+      entryUrl: result.entryUrl,
+      imports: result.imports,
+      bundledAt: 1,
+      sourceMap: result.sourceMap,
+    };
+    const wrapped = buildWrappedScript({
+      id: 'esm_map_test',
+      code: result.code,
+      enabled: true,
+      position: 0,
+      settings: {},
+      meta: parsed.meta,
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    const executable = wrapped.split('\n').slice(0, -2).join('\n');
+    const ranges = JSON.parse(executable.match(/const __svLocationSegments = (\[[^;]+\]);/u)[1]);
+    const wrappedModuleLine = executable.split('\n').findLastIndex(line => line.includes('module boom')) + 1;
+    const wrappedEntryLine = executable.split('\n').findLastIndex(line => line.includes('entry boom')) + 1;
+    const generatedUrl = deterministicGeneratedSourceUrl('esm_map_test');
+
+    expect(resolveGeneratedLocation(ranges, generatedUrl, {
+      stack: `Error: module boom\n    at explode (${generatedUrl}:${wrappedModuleLine}:9)`,
+    })).toMatchObject({ source: 'https://cdn.example.com/explode.js', line: 2 });
+    expect(resolveGeneratedLocation(ranges, generatedUrl, {
+      stack: `entryFailure@${generatedUrl}:${wrappedEntryLine}:9`,
+    })).toMatchObject({
+      source: deterministicScriptSourceUrl('esm_map_test', 'ESM Demo'),
+      line: entryOriginalLine,
+    });
+    expect(() => new Function(wrapped)).not.toThrow();
   });
 
   it('rejects bare specifiers that cannot be resolved safely', async () => {

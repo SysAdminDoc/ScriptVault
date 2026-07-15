@@ -55,6 +55,11 @@ export interface ScriptMeta {
     entryUrl: string;
     imports: Array<{ url: string; bytes: number }>;
     bundledAt: number;
+    sourceMap?: {
+      sources: Array<{ url: string; content: string | null }>;
+      lineMap: Array<[sourceIndex: number, originalLine: number]>;
+      entrySourceIndex: number;
+    };
   };
   noframes: boolean;
   unwrap: boolean;

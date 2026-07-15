@@ -276,6 +276,21 @@ const ExecutionTelemetry = (() => {
       stats.lastErrorTime = now();
       setSenderContext(stats, sender);
       dependencies.recordDiagnostic(sender, { type: "error", scriptId, error, url: eventUrl });
+      if (dependencies.logExecutionError) {
+        await dependencies.logExecutionError({
+          scriptId,
+          scriptName: cleanString(script.meta?.name || script.name, 256) || scriptId,
+          error,
+          stack: cleanString(data.stack, 8e3) || null,
+          url: eventUrl || null,
+          source: cleanString(data.source, 4096) || null,
+          line: cleanInteger(data.line, 1, 1e7) ?? null,
+          col: cleanInteger(data.col, 1, 1e7) ?? null,
+          generatedLine: cleanInteger(data.generatedLine, 1, 1e7) ?? null,
+          generatedCol: cleanInteger(data.generatedCol, 1, 1e7) ?? null,
+          context: "script-execution"
+        });
+      }
       dependencies.scheduleStatsSave();
       return { success: true, trusted: true };
     }

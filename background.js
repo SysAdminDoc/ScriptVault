@@ -22896,6 +22896,21 @@ const ExecutionTelemetry = (() => {
       stats.lastErrorTime = now();
       setSenderContext(stats, sender);
       dependencies.recordDiagnostic(sender, { type: "error", scriptId, error, url: eventUrl });
+      if (dependencies.logExecutionError) {
+        await dependencies.logExecutionError({
+          scriptId,
+          scriptName: cleanString(script.meta?.name || script.name, 256) || scriptId,
+          error,
+          stack: cleanString(data.stack, 8e3) || null,
+          url: eventUrl || null,
+          source: cleanString(data.source, 4096) || null,
+          line: cleanInteger(data.line, 1, 1e7) ?? null,
+          col: cleanInteger(data.col, 1, 1e7) ?? null,
+          generatedLine: cleanInteger(data.generatedLine, 1, 1e7) ?? null,
+          generatedCol: cleanInteger(data.generatedCol, 1, 1e7) ?? null,
+          context: "script-execution"
+        });
+      }
       dependencies.scheduleStatsSave();
       return { success: true, trusted: true };
     }
@@ -23052,6 +23067,287 @@ const LocalLibraries = (() => {
 
 if (typeof self !== 'undefined') {
   self.LocalLibraries = LocalLibraries;
+}
+
+// ============================================================================
+// Generated from src/background/script-source-maps.ts; do not edit by hand.
+// Run `node scripts/generate-ts-runtime-modules.mjs` or `npm run build:bg`.
+// ============================================================================
+
+const ScriptSourceMaps = (() => {
+  const module = { exports: {} };
+  const exports = module.exports;
+  "use strict";
+  var __defProp = Object.defineProperty;
+  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, { get: all[name], enumerable: true });
+  };
+  var __copyProps = (to, from, except, desc) => {
+    if (from && typeof from === "object" || typeof from === "function") {
+      for (let key of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(to, key) && key !== except)
+          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+    }
+    return to;
+  };
+  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+  // src/background/script-source-maps.ts
+  var script_source_maps_exports = {};
+  __export(script_source_maps_exports, {
+    ScriptSourceMaps: () => ScriptSourceMaps,
+    createBundledSourceSegment: () => createBundledSourceSegment,
+    default: () => script_source_maps_default,
+    deterministicGeneratedSourceUrl: () => deterministicGeneratedSourceUrl,
+    deterministicRequireSourceUrl: () => deterministicRequireSourceUrl,
+    deterministicScriptSourceUrl: () => deterministicScriptSourceUrl,
+    finalizeWrappedSource: () => finalizeWrappedSource,
+    markSourceSegment: () => markSourceSegment,
+    neutralizeSourceDirectives: () => neutralizeSourceDirectives,
+    resolveGeneratedLocation: () => resolveGeneratedLocation
+  });
+  module.exports = __toCommonJS(script_source_maps_exports);
+  var SOURCE_BEGIN = /^\s*\/\*__SV_SOURCE_BEGIN_(\d+)__\*\/\s*$/u;
+  var SOURCE_END = /^\s*\/\*__SV_SOURCE_END__\*\/\s*$/u;
+  var SOURCE_DIRECTIVE = /^\s*(?:\/\/[#@]\s*source(?:Mapping)?URL\s*=.*|\/\*[#@]\s*source(?:Mapping)?URL\s*=.*\*\/)\s*$/iu;
+  var RUNTIME_SEGMENTS_PLACEHOLDER = "__SV_RUNTIME_LOCATION_SEGMENTS__";
+  var GENERATED_URL_PLACEHOLDER = "__SV_GENERATED_SOURCE_URL__";
+  var BASE64_VLQ = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  var MAX_BUNDLED_SOURCES = 256;
+  var MAX_BUNDLED_LINES = 2e5;
+  var MAX_SOURCE_CONTENT_BYTES = 5e6;
+  function safePathSegment(value, fallback) {
+    const normalized = String(value || fallback).replace(/[\u0000-\u001f\u007f]/gu, "").trim() || fallback;
+    return encodeURIComponent(normalized).slice(0, 240);
+  }
+  function deterministicScriptSourceUrl(scriptId, scriptName) {
+    return `scriptvault://userscript/${safePathSegment(scriptId, "script")}/${safePathSegment(scriptName, "userscript")}.user.js`;
+  }
+  function deterministicGeneratedSourceUrl(scriptId) {
+    return `scriptvault://generated/${safePathSegment(scriptId, "script")}/wrapper.js`;
+  }
+  function deterministicRequireSourceUrl(scriptId, index, url) {
+    const normalized = typeof url === "string" ? url.replace(/[\u0000-\u001f\u007f]/gu, "").trim() : "";
+    return normalized || `scriptvault://require/${safePathSegment(scriptId, "script")}/${index + 1}.js`;
+  }
+  function neutralizeSourceDirectives(code) {
+    return String(code ?? "").split(/\r?\n/u).map((line) => {
+      if (SOURCE_DIRECTIVE.test(line)) return "// [ScriptVault neutralized source directive]";
+      if (SOURCE_BEGIN.test(line) || SOURCE_END.test(line)) return "// [ScriptVault neutralized source marker]";
+      return line;
+    }).join("\n");
+  }
+  function neutralizeGeneratedDirectives(code) {
+    return code.split(/\r?\n/u).map((line) => SOURCE_DIRECTIVE.test(line) ? "// [ScriptVault neutralized source directive]" : line).join("\n");
+  }
+  function markSourceSegment(index, code) {
+    if (!Number.isInteger(index) || index < 0) throw new Error("Invalid wrapped source segment index");
+    return `/*__SV_SOURCE_BEGIN_${index}__*/
+  ${neutralizeSourceDirectives(code)}
+  /*__SV_SOURCE_END__*/`;
+  }
+  function createBundledSourceSegment(scriptId, scriptName, bundledCode, input) {
+    if (!input || typeof input !== "object") return null;
+    const value = input;
+    if (!Array.isArray(value.sources) || value.sources.length === 0 || value.sources.length > MAX_BUNDLED_SOURCES) {
+      return null;
+    }
+    const generatedLines = bundledCode.split(/\r?\n/u).length;
+    if (!Array.isArray(value.lineMap) || value.lineMap.length !== generatedLines || value.lineMap.length > MAX_BUNDLED_LINES) {
+      return null;
+    }
+    const entrySourceIndex = Number(value.entrySourceIndex);
+    if (!Number.isInteger(entrySourceIndex) || entrySourceIndex < 0 || entrySourceIndex >= value.sources.length) {
+      return null;
+    }
+    const sources = [];
+    for (const [index, rawSource] of value.sources.entries()) {
+      if (!rawSource || typeof rawSource !== "object") return null;
+      const candidate = rawSource;
+      const rawUrl = typeof candidate.url === "string" ? candidate.url.replace(/[\u0000-\u001f\u007f]/gu, "").trim().slice(0, 4096) : "";
+      const url = index === entrySourceIndex ? deterministicScriptSourceUrl(scriptId, scriptName) : /^(?:https?:\/\/|scriptvault:)/iu.test(rawUrl) ? rawUrl : `scriptvault://generated/${safePathSegment(scriptId, "script")}/esm-source-${index + 1}.js`;
+      if (candidate.content !== null && candidate.content !== void 0 && (typeof candidate.content !== "string" || candidate.content.length > MAX_SOURCE_CONTENT_BYTES)) {
+        return null;
+      }
+      sources.push({ url, content: typeof candidate.content === "string" ? candidate.content : null });
+    }
+    const lineMap = [];
+    for (const rawLine of value.lineMap) {
+      if (!Array.isArray(rawLine) || rawLine.length < 2) return null;
+      const sourceIndex = Number(rawLine[0]);
+      const originalLine = Number(rawLine[1]);
+      if (!Number.isInteger(sourceIndex) || sourceIndex < 0 || sourceIndex >= sources.length || !Number.isInteger(originalLine) || originalLine < 1 || originalLine > 1e7) {
+        return null;
+      }
+      lineMap.push([sourceIndex, originalLine]);
+    }
+    return {
+      url: `${deterministicGeneratedSourceUrl(scriptId)}?source=esm-bundle`,
+      content: neutralizeSourceDirectives(bundledCode),
+      sources,
+      lineMap
+    };
+  }
+  function encodeVlq(value) {
+    let encoded = "";
+    let vlq = value < 0 ? -value << 1 | 1 : value << 1;
+    do {
+      let digit = vlq & 31;
+      vlq >>>= 5;
+      if (vlq > 0) digit |= 32;
+      encoded += BASE64_VLQ[digit];
+    } while (vlq > 0);
+    return encoded;
+  }
+  function utf8Base64(value) {
+    const bytes = new TextEncoder().encode(value);
+    let binary = "";
+    for (let offset = 0; offset < bytes.length; offset += 32768) {
+      binary += String.fromCharCode(...bytes.subarray(offset, offset + 32768));
+    }
+    return btoa(binary);
+  }
+  function sourceMapMappings(lines) {
+    let previousSource = 0;
+    let previousOriginalLine = 0;
+    let previousOriginalColumn = 0;
+    return lines.map((line) => {
+      const mapping = [
+        encodeVlq(0),
+        encodeVlq(line.source - previousSource),
+        encodeVlq(line.originalLine - previousOriginalLine),
+        encodeVlq(-previousOriginalColumn)
+      ].join("");
+      previousSource = line.source;
+      previousOriginalLine = line.originalLine;
+      previousOriginalColumn = 0;
+      return mapping;
+    }).join(";");
+  }
+  function addRuntimeRange(ranges, generatedLine, source, originalLine) {
+    const previous = ranges.at(-1);
+    if (previous && previous[2] === source && previous[1] + 1 === generatedLine && previous[3] + (previous[1] - previous[0]) + 1 === originalLine) {
+      previous[1] = generatedLine;
+      return;
+    }
+    ranges.push([generatedLine, generatedLine, source, originalLine]);
+  }
+  function finalizeWrappedSource(generatedCode, options) {
+    const generatedUrl = deterministicGeneratedSourceUrl(options.scriptId);
+    const wrapperUrl = `${generatedUrl}?source=wrapper`;
+    const sources = [{ url: wrapperUrl, content: null }];
+    const sourceIndexes = /* @__PURE__ */ new Map([[wrapperUrl, 0]]);
+    const mappings = [];
+    const runtimeRanges = [];
+    const outputLines = [];
+    let activeSegment = null;
+    let segmentLine = 0;
+    const registerSource = (source) => {
+      const existing = sourceIndexes.get(source.url);
+      if (existing !== void 0) return existing;
+      const index = sources.length;
+      sourceIndexes.set(source.url, index);
+      sources.push(source);
+      return index;
+    };
+    for (const rawLine of neutralizeGeneratedDirectives(generatedCode).split("\n")) {
+      const begin = rawLine.match(SOURCE_BEGIN);
+      if (begin) {
+        const index = Number.parseInt(begin[1], 10);
+        activeSegment = options.segments[index] || null;
+        segmentLine = 0;
+        continue;
+      }
+      if (SOURCE_END.test(rawLine)) {
+        activeSegment = null;
+        segmentLine = 0;
+        continue;
+      }
+      const generatedLine = outputLines.length + 1;
+      outputLines.push(rawLine);
+      if (!activeSegment) {
+        mappings.push({ source: 0, originalLine: generatedLine - 1 });
+        continue;
+      }
+      const nested = activeSegment.lineMap?.[segmentLine];
+      const nestedSource = nested ? activeSegment.sources?.[nested[0]] : void 0;
+      const originalSource = nestedSource || activeSegment;
+      const originalLine = nested ? nested[1] : segmentLine + 1;
+      const source = registerSource(originalSource);
+      mappings.push({ source, originalLine: Math.max(0, originalLine - 1) });
+      addRuntimeRange(runtimeRanges, generatedLine, originalSource.url, Math.max(1, originalLine));
+      segmentLine++;
+    }
+    const sourceMap = {
+      version: 3,
+      file: generatedUrl,
+      sources: sources.map((source) => source.url),
+      sourcesContent: sources.map((source) => source.content),
+      names: [],
+      mappings: sourceMapMappings(mappings)
+    };
+    const runtimeSegments = JSON.stringify(runtimeRanges).replace(/</gu, "\\u003c");
+    const finalized = outputLines.join("\n").replaceAll(RUNTIME_SEGMENTS_PLACEHOLDER, runtimeSegments).replaceAll(GENERATED_URL_PLACEHOLDER, JSON.stringify(generatedUrl));
+    return [
+      finalized,
+      `//# sourceURL=${generatedUrl}`,
+      `//# sourceMappingURL=data:application/json;base64,${utf8Base64(JSON.stringify(sourceMap))}`
+    ].join("\n");
+  }
+  function parseLocationForUrl(stack, url) {
+    if (!stack || !url) return null;
+    const escaped = url.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+    const match = stack.match(new RegExp(`${escaped}:(\\d+):(\\d+)`, "u"));
+    if (!match) return null;
+    return { line: Number.parseInt(match[1], 10), column: Number.parseInt(match[2], 10) };
+  }
+  function resolveGeneratedLocation(ranges, generatedUrl, input = {}) {
+    const stack = String(input.stack || "");
+    for (const range2 of ranges) {
+      const original = parseLocationForUrl(stack, range2[2]);
+      if (original) {
+        return {
+          source: range2[2],
+          line: original.line,
+          column: original.column,
+          generatedLine: Number(input.line || 0),
+          generatedColumn: Number(input.column || 0)
+        };
+      }
+    }
+    const generatedStackLocation = parseLocationForUrl(stack, generatedUrl);
+    const generatedLine = generatedStackLocation?.line || Number(input.line || 0);
+    const generatedColumn = generatedStackLocation?.column || Number(input.column || 0);
+    const range = ranges.find((item) => generatedLine >= item[0] && generatedLine <= item[1]);
+    if (!range) return null;
+    return {
+      source: range[2],
+      line: range[3] + generatedLine - range[0],
+      column: Math.max(1, generatedColumn || 1),
+      generatedLine,
+      generatedColumn: Math.max(1, generatedColumn || 1)
+    };
+  }
+  var ScriptSourceMaps = Object.freeze({
+    deterministicScriptSourceUrl,
+    deterministicGeneratedSourceUrl,
+    deterministicRequireSourceUrl,
+    neutralizeSourceDirectives,
+    markSourceSegment,
+    createBundledSourceSegment,
+    finalizeWrappedSource,
+    resolveGeneratedLocation
+  });
+  var script_source_maps_default = ScriptSourceMaps;
+  return module.exports.default || module.exports.ScriptSourceMaps || module.exports;
+})();
+
+if (typeof self !== 'undefined') {
+  self.ScriptSourceMaps = ScriptSourceMaps;
 }
 
 // ============================================================================
@@ -27899,10 +28195,13 @@ const ErrorLog = (() => {
       scriptId: entry.scriptId || null,
       scriptName: entry.scriptName || null,
       error: typeof errorValue === "string" ? errorValue : errorObj?.message || String(errorValue),
-      stack: entry.stack || errorObj?.stack || null,
+      stack: (entry.stack || errorObj?.stack || "").slice(0, 8e3) || null,
       url: entry.url || null,
+      source: typeof entry.source === "string" ? entry.source.slice(0, 4096) : null,
       line: entry.line ?? null,
       col: entry.col ?? null,
+      generatedLine: entry.generatedLine ?? null,
+      generatedCol: entry.generatedCol ?? null,
       context: entry.context || null
     };
     if (!record.scriptName && record.scriptId) {
@@ -27999,7 +28298,8 @@ const ErrorLog = (() => {
       const time = new Date(e.timestamp).toISOString();
       lines.push(`[${time}] ${e.scriptName || e.scriptId || "Unknown"}`);
       lines.push(`  Error: ${e.error}`);
-      if (e.url) lines.push(`  URL: ${e.url}${e.line != null ? `:${e.line}` : ""}${e.col != null ? `:${e.col}` : ""}`);
+      if (e.url) lines.push(`  URL: ${e.url}`);
+      if (e.source) lines.push(`  Source: ${e.source}${e.line != null ? `:${e.line}` : ""}${e.col != null ? `:${e.col}` : ""}`);
       if (e.context) lines.push(`  Context: ${e.context}`);
       if (e.stack) {
         lines.push("  Stack:");
@@ -28013,7 +28313,7 @@ const ErrorLog = (() => {
   }
   async function exportCSV(filters) {
     const entries = await getAll(filters);
-    const headers = ["timestamp", "datetime", "scriptId", "scriptName", "error", "url", "line", "col", "context"];
+    const headers = ["timestamp", "datetime", "scriptId", "scriptName", "error", "url", "source", "line", "col", "generatedLine", "generatedCol", "context"];
     const escapeCSV = (val) => {
       if (val == null) return "";
       let str = String(val);
@@ -28034,8 +28334,11 @@ const ErrorLog = (() => {
         escapeCSV(e.scriptName),
         escapeCSV(e.error),
         escapeCSV(e.url),
+        escapeCSV(e.source),
         e.line ?? "",
         e.col ?? "",
+        e.generatedLine ?? "",
+        e.generatedCol ?? "",
         escapeCSV(e.context)
       ].join(","));
     }
@@ -28104,8 +28407,11 @@ const ErrorLog = (() => {
       error: errorData.message || errorData.error || "Script execution error",
       stack: errorData.stack || null,
       url: errorData.url || null,
+      source: errorData.source || null,
       line: errorData.line ?? errorData.lineno ?? null,
       col: errorData.col ?? errorData.colno ?? null,
+      generatedLine: errorData.generatedLine ?? null,
+      generatedCol: errorData.generatedCol ?? null,
       context: "script-execution"
     });
   }
@@ -39389,7 +39695,8 @@ const ESMUserscriptBundler = (() => {
     bundleIfNeeded: () => bundleIfNeeded,
     isESMMetadata: () => isESMMetadata,
     resolveImportSpecifier: () => resolveImportSpecifier,
-    rewriteModuleSyntax: () => rewriteModuleSyntax
+    rewriteModuleSyntax: () => rewriteModuleSyntax,
+    rewriteModuleSyntaxWithLineMap: () => rewriteModuleSyntaxWithLineMap
   });
   module.exports = __toCommonJS(esm_bundler_exports);
   function isESMMetadata(meta) {
@@ -39475,6 +39782,9 @@ const ESMUserscriptBundler = (() => {
     return [declaration, assignments].join("\n");
   }
   function rewriteModuleSyntax(code, analysis) {
+    return rewriteModuleSyntaxWithLineMap(code, analysis).code;
+  }
+  function rewriteModuleSyntaxWithLineMap(code, analysis) {
     const replacements = [];
     for (const imp of analysis.imports || []) {
       replacements.push({ start: imp.start, end: imp.end, text: importReplacement(imp) });
@@ -39482,42 +39792,97 @@ const ESMUserscriptBundler = (() => {
     for (const exp of analysis.exports || []) {
       replacements.push({ start: exp.start, end: exp.end, text: exportReplacement(exp, code) });
     }
-    replacements.sort((a, b) => b.start - a.start);
-    let out = code;
+    replacements.sort((a, b) => a.start - b.start);
+    const output = [];
+    const lineMap = [];
+    let outputLine = 0;
+    let cursor = 0;
+    let originalLine = 1;
+    const appendMapped = (text, mappedLines) => {
+      if (!text) return;
+      output.push(text);
+      const partCount = text.split("\n").length;
+      for (let index = 0; index < partCount; index++) {
+        if (lineMap[outputLine] === void 0) {
+          lineMap[outputLine] = mappedLines[Math.min(index, mappedLines.length - 1)] || originalLine;
+        }
+        if (index < partCount - 1) outputLine++;
+      }
+    };
+    const countNewlines = (text) => text.split("\n").length - 1;
     for (const item of replacements) {
-      out = out.slice(0, item.start) + item.text + out.slice(item.end);
+      if (item.start < cursor) throw new Error("Overlapping ESM syntax ranges are not supported");
+      const unchanged = code.slice(cursor, item.start);
+      const unchangedLineCount = countNewlines(unchanged);
+      appendMapped(
+        unchanged,
+        Array.from({ length: unchangedLineCount + 1 }, (_, index) => originalLine + index)
+      );
+      originalLine += unchangedLineCount;
+      const replaced = code.slice(item.start, item.end);
+      const replacementEndLine = originalLine + countNewlines(replaced);
+      const replacementLineCount = countNewlines(item.text);
+      appendMapped(
+        item.text,
+        Array.from(
+          { length: replacementLineCount + 1 },
+          (_, index) => Math.min(originalLine + index, replacementEndLine)
+        )
+      );
+      originalLine = replacementEndLine;
+      cursor = item.end;
     }
-    return out;
+    const tail = code.slice(cursor);
+    const tailLineCount = countNewlines(tail);
+    appendMapped(tail, Array.from({ length: tailLineCount + 1 }, (_, index) => originalLine + index));
+    return { code: output.join(""), lineMap: lineMap.length > 0 ? lineMap : [1] };
   }
-  function buildBundle(entryCode, modules) {
-    const moduleDefs = [...modules.values()].map((mod) => [
-      `__modules[${JSON.stringify(mod.url)}] = function(__module, __exports, __require) {`,
-      mod.code,
-      "};"
-    ].join("\n")).join("\n");
-    return [
-      "(function () {",
-      "'use strict';",
-      "const __modules = Object.create(null);",
-      "const __cache = Object.create(null);",
-      moduleDefs,
-      "function __require(id) {",
-      "  if (__cache[id]) return __cache[id].exports;",
-      "  const factory = __modules[id];",
-      '  if (!factory) throw new Error("Missing ESM module: " + id);',
-      "  const module = { exports: {} };",
-      "  __cache[id] = module;",
-      "  factory(module, module.exports, __require);",
-      "  return module.exports;",
-      "}",
-      "const __exports = {};",
-      entryCode,
-      "})();"
-    ].filter(Boolean).join("\n");
+  function buildBundle(entryCode, entryOriginalCode, entryLineMap, entryUrl, modules) {
+    const outputLines = [];
+    const lineMap = [];
+    const sources = [
+      { url: "scriptvault://generated/esm-bundle-wrapper.js", content: null }
+    ];
+    const appendLine = (line, sourceIndex = 0, originalLine = 1) => {
+      outputLines.push(line);
+      lineMap.push([sourceIndex, Math.max(1, originalLine)]);
+    };
+    const appendSource = (code, sourceIndex, mappedLines) => {
+      code.split("\n").forEach((line, index) => {
+        appendLine(line, sourceIndex, mappedLines[index] || mappedLines.at(-1) || index + 1);
+      });
+    };
+    appendLine("(function () {");
+    appendLine("'use strict';");
+    appendLine("const __modules = Object.create(null);");
+    appendLine("const __cache = Object.create(null);");
+    for (const mod of modules.values()) {
+      const sourceIndex = sources.push({ url: mod.url, content: mod.originalCode }) - 1;
+      appendLine(`__modules[${JSON.stringify(mod.url)}] = function(__module, __exports, __require) {`);
+      appendSource(mod.code, sourceIndex, mod.lineMap);
+      appendLine("};");
+    }
+    appendLine("function __require(id) {");
+    appendLine("  if (__cache[id]) return __cache[id].exports;");
+    appendLine("  const factory = __modules[id];");
+    appendLine('  if (!factory) throw new Error("Missing ESM module: " + id);');
+    appendLine("  const module = { exports: {} };");
+    appendLine("  __cache[id] = module;");
+    appendLine("  factory(module, module.exports, __require);");
+    appendLine("  return module.exports;");
+    appendLine("}");
+    appendLine("const __exports = {};");
+    const entrySourceIndex = sources.push({ url: entryUrl, content: entryOriginalCode }) - 1;
+    appendSource(entryCode, entrySourceIndex, entryLineMap);
+    appendLine("})();");
+    return {
+      code: outputLines.join("\n"),
+      sourceMap: { sources, lineMap, entrySourceIndex }
+    };
   }
   async function bundleModule(url, code, context) {
     if (context.modules.has(url)) return;
-    context.modules.set(url, { url, code: "" });
+    context.modules.set(url, { url, code: "", originalCode: code, lineMap: [1] });
     const analysis = await context.collectSyntax(code);
     assertSupportedSyntax(analysis);
     for (const imp of analysis.imports || []) {
@@ -39526,9 +39891,12 @@ const ESMUserscriptBundler = (() => {
       if (!depCode) throw new Error(`Failed to fetch ESM import: ${imp.resolvedSource}`);
       await bundleModule(imp.resolvedSource, depCode, context);
     }
+    const rewritten = rewriteModuleSyntaxWithLineMap(code, analysis);
     context.modules.set(url, {
       url,
-      code: rewriteModuleSyntax(code, analysis),
+      code: rewritten.code,
+      originalCode: code,
+      lineMap: rewritten.lineMap,
       bytes: code.length
     });
   }
@@ -39547,16 +39915,30 @@ const ESMUserscriptBundler = (() => {
       if (!depCode) throw new Error(`Failed to fetch ESM import: ${imp.resolvedSource}`);
       await bundleModule(imp.resolvedSource, depCode, context);
     }
-    const rewrittenEntry = rewriteModuleSyntax(code, entryAnalysis);
+    const rewrittenEntry = rewriteModuleSyntaxWithLineMap(code, entryAnalysis);
+    const built = buildBundle(
+      rewrittenEntry.code,
+      code,
+      rewrittenEntry.lineMap,
+      entryUrl,
+      context.modules
+    );
     return {
-      code: buildBundle(rewrittenEntry, context.modules),
+      code: built.code,
       imports: [...context.modules.values()].map((mod) => ({ url: mod.url, bytes: mod.bytes || 0 })),
-      entryUrl
+      entryUrl,
+      sourceMap: built.sourceMap
     };
   }
   async function bundleIfNeeded(code, meta, settings, options = {}) {
     if (!isESMMetadata(meta)) {
-      return { bundled: false, code, imports: [], entryUrl: options.sourceUrl || "" };
+      return {
+        bundled: false,
+        code,
+        imports: [],
+        entryUrl: options.sourceUrl || "",
+        sourceMap: { sources: [], lineMap: [], entrySourceIndex: 0 }
+      };
     }
     if (!settings?.experimentalESMUserscripts) {
       throw new Error("ESM userscripts are experimental and require the experimentalESMUserscripts setting.");
@@ -39568,6 +39950,7 @@ const ESMUserscriptBundler = (() => {
     isESMMetadata,
     resolveImportSpecifier,
     rewriteModuleSyntax,
+    rewriteModuleSyntaxWithLineMap,
     bundle,
     bundleIfNeeded
   };
@@ -42068,7 +42451,8 @@ const UpdateSystem = {
       parsed.meta.esmBundle = {
         entryUrl: bundleResult.entryUrl,
         imports: bundleResult.imports,
-        bundledAt: Date.now()
+        bundledAt: Date.now(),
+        sourceMap: bundleResult.sourceMap
       };
     }
     const previousScript = {
@@ -46435,6 +46819,7 @@ const executionTelemetryHandler = ExecutionTelemetry.createExecutionTelemetryHan
   addNetworkLog: entry => NetworkLog.add(entry),
   getStatsUrlRetention: () => (SettingsManager.cache && SettingsManager.cache.statsUrlRetention) || 'origin',
   retainStatsUrl: (url, mode) => _retainStatsUrl(url, mode),
+  logExecutionError: entry => typeof ErrorLog !== 'undefined' ? ErrorLog.log(entry) : undefined,
   onTriggerError: error => console.error('[ScriptVault] After-script chain trigger error:', error)
 });
 const backgroundActionRegistry = MessageRouter.createBackgroundActionRegistry();
@@ -50123,7 +50508,8 @@ async function installFromCode(code, receiptOptions = {}) {
       meta.esmBundle = {
         entryUrl: bundleResult.entryUrl,
         imports: bundleResult.imports,
-        bundledAt: Date.now()
+        bundledAt: Date.now(),
+        sourceMap: bundleResult.sourceMap
       };
     }
     const allScripts = await ScriptStorage.getAll();
@@ -52730,6 +53116,18 @@ async function unregisterScript(scriptId) {
 function buildWrappedScript(script, requireScripts = [], preloadedStorage = {}, regexIncludes = [], regexExcludes = [], scheduleGuard = '', scriptAuthToken = '') {
   const meta = script.meta;
   const grants = meta.grant || ['none'];
+  const sourceSegments = [];
+  const appendEmbeddedSourceSegment = segment => {
+    const content = ScriptSourceMaps.neutralizeSourceDirectives(segment.content || '');
+    const index = sourceSegments.push({ ...segment, content }) - 1;
+    return ScriptSourceMaps.markSourceSegment(index, content);
+  };
+  const appendSourceSegment = (url, code) => appendEmbeddedSourceSegment({ url, content: code });
+  const finalize = code => ScriptSourceMaps.finalizeWrappedSource(code, {
+    scriptId: script.id,
+    scriptName: meta.name,
+    segments: sourceSegments
+  });
   const scriptConfigValues = typeof ScriptConfig !== 'undefined' && ScriptConfig.normalizeValues
     ? ScriptConfig.normalizeValues(
       Array.isArray(meta.config) ? meta.config : [],
@@ -52746,11 +53144,15 @@ function buildWrappedScript(script, requireScripts = [], preloadedStorage = {}, 
   const localLibraryRequireScripts = typeof LocalLibraries !== 'undefined'
     ? LocalLibraries.getLocalLibraryRequireScripts(script.settings)
     : [];
-  for (const req of [...requireScripts, ...localLibraryRequireScripts]) {
+  for (const [index, req] of [...requireScripts, ...localLibraryRequireScripts].entries()) {
     const safeUrl = req.url.replace(/\*\//g, '* /');
+    const mappedCode = appendSourceSegment(
+      ScriptSourceMaps.deterministicRequireSourceUrl(script.id, index, req.url),
+      req.code
+    );
     requireCode += `
 // @require ${safeUrl}
-${req.code}
+${mappedCode}
 `;
   }
   
@@ -52768,10 +53170,39 @@ ${req.code}
   // Build the GM API initialization with pre-loaded storage
   // Get the extension ID at build time so it's available in the wrapper
   const extId = chrome.runtime.id;
+  const runtimeMeta = meta.esmBundle?.sourceMap
+    ? { ...meta, esmBundle: { ...meta.esmBundle, sourceMap: undefined } }
+    : meta;
   
   const apiInit = `
 (function() {
   'use strict';
+
+  const __svGeneratedSourceUrl = __SV_GENERATED_SOURCE_URL__;
+  const __svLocationSegments = __SV_RUNTIME_LOCATION_SEGMENTS__;
+  function __svStackLocation(stack, source) {
+    const marker = String(source || '') + ':';
+    const offset = String(stack || '').indexOf(marker);
+    if (offset < 0) return null;
+    const match = String(stack).slice(offset + marker.length).match(/^(\\d+):(\\d+)/);
+    return match ? { line: Number(match[1]), column: Number(match[2]) } : null;
+  }
+  function __svResolveErrorLocation(line, column, filename, stack) {
+    for (const segment of __svLocationSegments) {
+      const original = __svStackLocation(stack, segment[2]);
+      if (original) {
+        return { source: segment[2], line: original.line, column: original.column, generatedLine: Number(line || 0), generatedColumn: Number(column || 0) };
+      }
+    }
+    const generatedStack = __svStackLocation(stack, __svGeneratedSourceUrl);
+    const generatedLine = generatedStack?.line || Number(line || 0);
+    const generatedColumn = generatedStack?.column || Number(column || 0);
+    const segment = __svLocationSegments.find(item => generatedLine >= item[0] && generatedLine <= item[1]);
+    if (!segment) {
+      return { source: filename || __svGeneratedSourceUrl, line: generatedLine || null, column: generatedColumn || null, generatedLine: generatedLine || null, generatedColumn: generatedColumn || null };
+    }
+    return { source: segment[2], line: segment[3] + generatedLine - segment[0], column: Math.max(1, generatedColumn || 1), generatedLine, generatedColumn: Math.max(1, generatedColumn || 1) };
+  }
   
   // ============ Console Capture (v2.0) ============
   // Intercept console.log/warn/error for per-script debugging
@@ -52810,13 +53241,21 @@ ${req.code}
     event.stopImmediatePropagation();
     event.preventDefault();
     // Report to error log
-    try { chrome.runtime.sendMessage({ action: 'logError', entry: { scriptId: ${JSON.stringify(script.id)}, scriptName: ${JSON.stringify(meta.name)}, error: event.message || 'Unknown error', url: location.href, line: event.lineno, col: event.colno, timestamp: Date.now() } }); } catch {}
+    try {
+      const __stack = String(event.error?.stack || '').slice(0, 8000);
+      const __location = __svResolveErrorLocation(event.lineno, event.colno, event.filename, __stack);
+      chrome.runtime.sendMessage({ action: 'logError', entry: { scriptId: ${JSON.stringify(script.id)}, scriptName: ${JSON.stringify(meta.name)}, error: event.message || 'Unknown error', stack: __stack, url: location.href, source: __location.source, line: __location.line, col: __location.column, generatedLine: __location.generatedLine, generatedCol: __location.generatedColumn, timestamp: Date.now() } });
+    } catch {}
     return true;
   }, true);
   window.addEventListener('unhandledrejection', function(event) {
     event.stopImmediatePropagation();
     event.preventDefault();
-    try { chrome.runtime.sendMessage({ action: 'logError', entry: { scriptId: ${JSON.stringify(script.id)}, scriptName: ${JSON.stringify(meta.name)}, error: event.reason?.message || String(event.reason) || 'Unhandled rejection', url: location.href, timestamp: Date.now() } }); } catch {}
+    try {
+      const __stack = String(event.reason?.stack || '').slice(0, 8000);
+      const __location = __svResolveErrorLocation(0, 0, '', __stack);
+      chrome.runtime.sendMessage({ action: 'logError', entry: { scriptId: ${JSON.stringify(script.id)}, scriptName: ${JSON.stringify(meta.name)}, error: event.reason?.message || String(event.reason) || 'Unhandled rejection', stack: __stack, url: location.href, source: __location.source, line: __location.line, col: __location.column, generatedLine: __location.generatedLine, generatedCol: __location.generatedColumn, timestamp: Date.now() } });
+    } catch {}
   }, true);
   // ============ End Error Suppression ============
 
@@ -52899,7 +53338,7 @@ ${req.code}
   })()}
   const scriptId = ${JSON.stringify(script.id)};
   const scriptAuthToken = ${JSON.stringify(scriptAuthToken)};
-  const meta = ${JSON.stringify(meta)};
+  const meta = ${JSON.stringify(runtimeMeta)};
   const grants = ${JSON.stringify(grants)};
   const grantSet = new Set(grants);
   const __scriptConfigValues = Object.freeze(${JSON.stringify(scriptConfigValues)});
@@ -55117,7 +55556,9 @@ ${libraryExports}
   const apiClose = `
     } catch (e) {
       // Report error to background for profiling
-      sendToBackground('reportExecError', { scriptId, completionId: __completionId, error: (e?.message || String(e)).slice(0, 200), url: location.href }).catch(() => {});
+      const __stack = String(e?.stack || '').slice(0, 8000);
+      const __location = __svResolveErrorLocation(0, 0, '', __stack);
+      sendToBackground('reportExecError', { scriptId, completionId: __completionId, error: (e?.message || String(e)).slice(0, 500), stack: __stack, source: __location.source, line: __location.line, col: __location.column, generatedLine: __location.generatedLine, generatedCol: __location.generatedColumn, url: location.href }).catch(() => {});
     } finally {
       // Report execution time to background for profiling
       const __elapsed = Math.round((performance.now() - __startTime) * 100) / 100;
@@ -55128,9 +55569,18 @@ ${libraryExports}
 `;
 
   // @top-level-await: wrap user code in async IIFE so top-level await works
+  const bundledSourceSegment = ScriptSourceMaps.createBundledSourceSegment(
+    script.id,
+    meta.name,
+    script.code,
+    meta.esmBundle?.sourceMap
+  );
+  const mappedUserCode = bundledSourceSegment
+    ? appendEmbeddedSourceSegment(bundledSourceSegment)
+    : appendSourceSegment(ScriptSourceMaps.deterministicScriptSourceUrl(script.id, meta.name), script.code);
   let userCode = meta['top-level-await']
-    ? `(async () => {\n${script.code}\n})();`
-    : script.code;
+    ? `(async () => {\n${mappedUserCode}\n})();`
+    : mappedUserCode;
 
   // @delay: postpone script execution by N milliseconds
   if (meta.delay > 0) {
@@ -55155,9 +55605,9 @@ ${libraryExports}
     if (scheduleGuard) {
       // @unwrap has no runner function to `return` from, so wrap the raw body
       // in a guard IIFE that only runs it inside the schedule window.
-      return `${banner}\n${scheduleGuard}\n(function(){ if(!__svScheduleOk())return;\n${userCode}\n})();`;
+      return finalize(`${banner}\n${scheduleGuard}\n(function(){ if(!__svScheduleOk())return;\n${userCode}\n})();`);
     }
-    return banner + '\n' + userCode;
+    return finalize(banner + '\n' + userCode);
   }
 
   // Schedule guard: prepend the guard function definition + early return so a
@@ -55168,7 +55618,7 @@ ${libraryExports}
     userCode = `${scheduleGuard}\nif(!__svScheduleOk())return;\n${userCode}`;
   }
 
-  return apiInit + userCode + apiClose;
+  return finalize(apiInit + userCode + apiClose);
 }
 
 // Helper: Check if a pattern is a valid match pattern

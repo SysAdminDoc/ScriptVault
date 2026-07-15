@@ -100,6 +100,14 @@
       "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for the authenticated execution telemetry trust boundary."
     },
     {
+      "runtime": "modules/script-source-maps.js",
+      "sources": [
+        "src/background/script-source-maps.ts"
+      ],
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for deterministic userscript source identities and inline source maps."
+    },
+    {
       "runtime": "modules/message-router.js",
       "sources": [
         "src/background/message-router.ts"

@@ -10,6 +10,15 @@
 import type { Script, ScriptMeta } from '../types/script';
 import { ScriptConfig } from '../modules/script-config';
 import { getLocalLibraryRequireScripts } from './local-libraries';
+import {
+  createBundledSourceSegment,
+  deterministicRequireSourceUrl,
+  deterministicScriptSourceUrl,
+  finalizeWrappedSource,
+  markSourceSegment,
+  neutralizeSourceDirectives,
+  type EmbeddedSourceSegment,
+} from './script-source-maps';
 
 /** A fetched @require script with its source URL and code text. */
 export interface RequireScript {
@@ -40,6 +49,18 @@ export function buildWrappedScript(
 ): string {
   const meta = script.meta;
   const grants: string[] = meta.grant.length > 0 ? meta.grant : ['none'];
+  const sourceSegments: EmbeddedSourceSegment[] = [];
+  const appendEmbeddedSourceSegment = (segment: EmbeddedSourceSegment): string => {
+    const content = neutralizeSourceDirectives(segment.content || '');
+    const index = sourceSegments.push({ ...segment, content }) - 1;
+    return markSourceSegment(index, content);
+  };
+  const appendSourceSegment = (url: string, code: string): string => appendEmbeddedSourceSegment({ url, content: code });
+  const finalize = (code: string): string => finalizeWrappedSource(code, {
+    scriptId: script.id,
+    scriptName: meta.name,
+    segments: sourceSegments,
+  });
   const scriptConfigValues = ScriptConfig.normalizeValues(
     Array.isArray(meta.config) ? meta.config : [],
     (script.settings?.userConfig && typeof script.settings.userConfig === 'object')
@@ -55,11 +76,15 @@ export function buildWrappedScript(
     ...requireScripts,
     ...getLocalLibraryRequireScripts(script.settings),
   ];
-  for (const req of allRequireScripts) {
+  for (const [index, req] of allRequireScripts.entries()) {
     const safeUrl = req.url.replace(/\*\//g, '* /');
+    const mappedCode = appendSourceSegment(
+      deterministicRequireSourceUrl(script.id, index, req.url),
+      req.code,
+    );
     requireCode += `
 // @require ${safeUrl}
-${req.code}
+${mappedCode}
 `;
   }
 
@@ -172,10 +197,39 @@ ${req.code}
     script.code.match(/\/\/\s*==UserScript==([\s\S]*?)\/\/\s*==\/UserScript==/)?.[0] ?? '';
 
   const manifestVersion: string = chrome.runtime.getManifest().version;
+  const runtimeMeta: ScriptMeta = meta.esmBundle?.sourceMap
+    ? { ...meta, esmBundle: { ...meta.esmBundle, sourceMap: undefined } }
+    : meta;
 
   const apiInit: string = `
 (function() {
   'use strict';
+
+  const __svGeneratedSourceUrl = __SV_GENERATED_SOURCE_URL__;
+  const __svLocationSegments = __SV_RUNTIME_LOCATION_SEGMENTS__;
+  function __svStackLocation(stack, source) {
+    const marker = String(source || '') + ':';
+    const offset = String(stack || '').indexOf(marker);
+    if (offset < 0) return null;
+    const match = String(stack).slice(offset + marker.length).match(/^(\\d+):(\\d+)/);
+    return match ? { line: Number(match[1]), column: Number(match[2]) } : null;
+  }
+  function __svResolveErrorLocation(line, column, filename, stack) {
+    for (const segment of __svLocationSegments) {
+      const original = __svStackLocation(stack, segment[2]);
+      if (original) {
+        return { source: segment[2], line: original.line, column: original.column, generatedLine: Number(line || 0), generatedColumn: Number(column || 0) };
+      }
+    }
+    const generatedStack = __svStackLocation(stack, __svGeneratedSourceUrl);
+    const generatedLine = generatedStack?.line || Number(line || 0);
+    const generatedColumn = generatedStack?.column || Number(column || 0);
+    const segment = __svLocationSegments.find(item => generatedLine >= item[0] && generatedLine <= item[1]);
+    if (!segment) {
+      return { source: filename || __svGeneratedSourceUrl, line: generatedLine || null, column: generatedColumn || null, generatedLine: generatedLine || null, generatedColumn: generatedColumn || null };
+    }
+    return { source: segment[2], line: segment[3] + generatedLine - segment[0], column: Math.max(1, generatedColumn || 1), generatedLine, generatedColumn: Math.max(1, generatedColumn || 1) };
+  }
 
   // ============ Console Capture (v2.0) ============
   // Intercept console.log/warn/error for per-script debugging
@@ -214,13 +268,21 @@ ${req.code}
     event.stopImmediatePropagation();
     event.preventDefault();
     // Report to error log
-    try { chrome.runtime.sendMessage({ action: 'logError', entry: { scriptId: ${JSON.stringify(script.id)}, scriptName: ${JSON.stringify(meta.name)}, error: event.message || 'Unknown error', url: location.href, line: event.lineno, col: event.colno, timestamp: Date.now() } }); } catch {}
+    try {
+      const __stack = String(event.error?.stack || '').slice(0, 8000);
+      const __location = __svResolveErrorLocation(event.lineno, event.colno, event.filename, __stack);
+      chrome.runtime.sendMessage({ action: 'logError', entry: { scriptId: ${JSON.stringify(script.id)}, scriptName: ${JSON.stringify(meta.name)}, error: event.message || 'Unknown error', stack: __stack, url: location.href, source: __location.source, line: __location.line, col: __location.column, generatedLine: __location.generatedLine, generatedCol: __location.generatedColumn, timestamp: Date.now() } });
+    } catch {}
     return true;
   }, true);
   window.addEventListener('unhandledrejection', function(event) {
     event.stopImmediatePropagation();
     event.preventDefault();
-    try { chrome.runtime.sendMessage({ action: 'logError', entry: { scriptId: ${JSON.stringify(script.id)}, scriptName: ${JSON.stringify(meta.name)}, error: event.reason?.message || String(event.reason) || 'Unhandled rejection', url: location.href, timestamp: Date.now() } }); } catch {}
+    try {
+      const __stack = String(event.reason?.stack || '').slice(0, 8000);
+      const __location = __svResolveErrorLocation(0, 0, '', __stack);
+      chrome.runtime.sendMessage({ action: 'logError', entry: { scriptId: ${JSON.stringify(script.id)}, scriptName: ${JSON.stringify(meta.name)}, error: event.reason?.message || String(event.reason) || 'Unhandled rejection', stack: __stack, url: location.href, source: __location.source, line: __location.line, col: __location.column, generatedLine: __location.generatedLine, generatedCol: __location.generatedColumn, timestamp: Date.now() } });
+    } catch {}
   }, true);
   // ============ End Error Suppression ============
 
@@ -229,7 +291,7 @@ ${req.code}
   ${topOriginGuard}
   const scriptId = ${JSON.stringify(script.id)};
   const scriptAuthToken = ${JSON.stringify(scriptAuthToken)};
-  const meta = ${JSON.stringify(meta)};
+  const meta = ${JSON.stringify(runtimeMeta)};
   const grants = ${JSON.stringify(grants)};
   const grantSet = new Set(grants);
   const __scriptConfigValues = Object.freeze(${JSON.stringify(scriptConfigValues)});
@@ -2611,7 +2673,9 @@ ${libraryExports}
   const apiClose: string = `
     } catch (e) {
       // Report error to background for profiling
-      sendToBackground('reportExecError', { scriptId, completionId: __completionId, error: (e?.message || String(e)).slice(0, 200), url: location.href }).catch(() => {});
+      const __stack = String(e?.stack || '').slice(0, 8000);
+      const __location = __svResolveErrorLocation(0, 0, '', __stack);
+      sendToBackground('reportExecError', { scriptId, completionId: __completionId, error: (e?.message || String(e)).slice(0, 500), stack: __stack, source: __location.source, line: __location.line, col: __location.column, generatedLine: __location.generatedLine, generatedCol: __location.generatedColumn, url: location.href }).catch(() => {});
     } finally {
       // Report execution time to background for profiling
       const __elapsed = Math.round((performance.now() - __startTime) * 100) / 100;
@@ -2622,9 +2686,18 @@ ${libraryExports}
 `;
 
   // @top-level-await: wrap user code in async IIFE so top-level await works
+  const bundledSourceSegment = createBundledSourceSegment(
+    script.id,
+    meta.name,
+    script.code,
+    meta.esmBundle?.sourceMap,
+  );
+  const mappedUserCode = bundledSourceSegment
+    ? appendEmbeddedSourceSegment(bundledSourceSegment)
+    : appendSourceSegment(deterministicScriptSourceUrl(script.id, meta.name), script.code);
   let userCode: string = meta['top-level-await']
-    ? `(async () => {\n${script.code}\n})();`
-    : script.code;
+    ? `(async () => {\n${mappedUserCode}\n})();`
+    : mappedUserCode;
 
   // @delay: postpone script execution by N milliseconds (legacy alignment)
   const delay = (meta as Partial<ScriptMeta> & { delay?: number }).delay;
@@ -2648,9 +2721,9 @@ ${libraryExports}
     if (scheduleGuard) {
       // @unwrap has no runner function to `return` from, so wrap the raw body
       // in a guard IIFE that only runs it inside the schedule window.
-      return `${banner}\n${scheduleGuard}\n(function(){ if(!__svScheduleOk())return;\n${userCode}\n})();`;
+      return finalize(`${banner}\n${scheduleGuard}\n(function(){ if(!__svScheduleOk())return;\n${userCode}\n})();`);
     }
-    return banner + '\n' + userCode;
+    return finalize(banner + '\n' + userCode);
   }
 
   // Schedule guard: a time/day/dateRange schedule gates page-load execution to
@@ -2660,5 +2733,5 @@ ${libraryExports}
     userCode = `${scheduleGuard}\nif(!__svScheduleOk())return;\n${userCode}`;
   }
 
-  return apiInit + userCode + apiClose;
+  return finalize(apiInit + userCode + apiClose);
 }

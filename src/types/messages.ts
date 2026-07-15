@@ -1265,6 +1265,12 @@ interface ReportExecError {
   scriptId: string;
   completionId: string;
   error: string;
+  stack?: string;
+  source?: string;
+  line?: number;
+  col?: number;
+  generatedLine?: number;
+  generatedCol?: number;
   url?: string;
 }
 

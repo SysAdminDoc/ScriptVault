@@ -44,6 +44,20 @@ interface ExecutionDiagnosticInput {
   url?: string;
 }
 
+interface ExecutionErrorLogInput {
+  scriptId: string;
+  scriptName: string;
+  error: string;
+  stack: string | null;
+  url: string | null;
+  source: string | null;
+  line: number | null;
+  col: number | null;
+  generatedLine: number | null;
+  generatedCol: number | null;
+  context: 'script-execution';
+}
+
 interface NetworkLogInput {
   method?: string;
   url: string;
@@ -66,6 +80,7 @@ export interface ExecutionTelemetryDependencies {
   addNetworkLog(entry: NetworkLogInput): void;
   getStatsUrlRetention(): string;
   retainStatsUrl(url: string, mode: string): string;
+  logExecutionError?(entry: ExecutionErrorLogInput): Promise<unknown> | unknown;
   onTriggerError?(error: unknown): void;
   now?(): number;
 }
@@ -378,6 +393,21 @@ export function createExecutionTelemetryHandler(
     stats.lastErrorTime = now();
     setSenderContext(stats, sender);
     dependencies.recordDiagnostic(sender, { type: 'error', scriptId, error, url: eventUrl });
+    if (dependencies.logExecutionError) {
+      await dependencies.logExecutionError({
+        scriptId,
+        scriptName: cleanString(script.meta?.name || script.name, 256) || scriptId,
+        error,
+        stack: cleanString(data.stack, 8000) || null,
+        url: eventUrl || null,
+        source: cleanString(data.source, 4096) || null,
+        line: cleanInteger(data.line, 1, 10_000_000) ?? null,
+        col: cleanInteger(data.col, 1, 10_000_000) ?? null,
+        generatedLine: cleanInteger(data.generatedLine, 1, 10_000_000) ?? null,
+        generatedCol: cleanInteger(data.generatedCol, 1, 10_000_000) ?? null,
+        context: 'script-execution',
+      });
+    }
     dependencies.scheduleStatsSave();
     return { success: true, trusted: true };
   }

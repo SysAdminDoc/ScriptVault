@@ -4,6 +4,13 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Mapped runtime failures to original userscript sources.** Every registered
+  wrapper now carries a deterministic local source identity and inline Source
+  Map v3 data across `@require`, top-level-await, delay, unwrap, and bundled ESM
+  module offsets. Error telemetry persists original and generated coordinates,
+  and debugger links open editable userscript lines while labeling dependency
+  failures without misdirecting the editor. Hostile source directives are
+  neutralized before registration.
 - **Removed the background core's blanket type-check suppression.** Strict
   TypeScript now checks the full concatenated core; classic-script globals are
   isolated in an explicit declaration boundary and legacy dynamic parameters
