@@ -1,0 +1,166 @@
+{
+  "code": "ja",
+  "name": "日本語",
+  "direction": "ltr",
+  "translationStatus": "partial",
+  "runtimeCoverageBaseline": 71,
+  "runtime": {
+    "enabled": "有効",
+    "disabled": "無効",
+    "save": "保存",
+    "cancel": "キャンセル",
+    "delete": "削除",
+    "edit": "編集",
+    "close": "閉じる",
+    "confirm": "確認",
+    "yes": "はい",
+    "no": "いいえ",
+    "error": "エラー",
+    "success": "成功",
+    "warning": "警告",
+    "loading": "読み込み中...",
+    "search": "検索",
+    "refresh": "更新",
+    "tabScripts": "インストール済みスクリプト",
+    "tabSettings": "設定",
+    "tabUtilities": "ユーティリティ",
+    "tabHelp": "ヘルプ",
+    "tabValues": "値エディタ",
+    "editorTabCode": "コード",
+    "editorTabScriptSettings": "設定",
+    "editorTabExternals": "外部リソース",
+    "editorTabStorage": "ストレージ",
+    "editorTabInfo": "情報",
+    "settingsAppearance": "外観",
+    "settingsSecurity": "セキュリティ",
+    "settingsUpdate": "スクリプト更新",
+    "settingsExternals": "外部リソース",
+    "settingsExperimental": "実験的",
+    "settingsReset": "リセット",
+    "settingsBackup": "バックアップ",
+    "newScript": "新規スクリプト",
+    "importScript": "インポート",
+    "checkUpdates": "更新を確認",
+    "searchScripts": "スクリプトを検索...",
+    "noScripts": "スクリプトがインストールされていません",
+    "syncProvider": "同期プロバイダー",
+    "syncProviderNone": "無効",
+    "syncConnect": "接続",
+    "syncDisconnect": "切断",
+    "syncNow": "今すぐ同期",
+    "lastSync": "最終同期",
+    "scriptsWorkspaceDescription": "Install, organize, and inspect scripts without slowing down the control surface.",
+    "assetNoun.other": "リソース",
+    "dayNoun.other": "日",
+    "errorNoun.other": "エラー",
+    "exclusionNoun.other": "除外",
+    "fileNoun.other": "ファイル",
+    "hostNoun.other": "ホスト",
+    "issueNoun.other": "問題",
+    "permissionNoun.other": "権限",
+    "requestNoun.other": "リクエスト",
+    "ruleNoun.other": "ルール",
+    "scriptNoun.other": "スクリプト",
+    "scriptProfileNoun.other": "スクリプトプロファイル",
+    "targetNoun.other": "対象",
+    "updateNoun.other": "更新",
+    "settingsSectionCount.zero": "{count} セクション",
+    "settingsSectionCount.one": "{count} セクション",
+    "settingsSectionCount.two": "{count} セクション",
+    "settingsSectionCount.few": "{count} セクション",
+    "settingsSectionCount.many": "{count} セクション",
+    "settingsSectionCount.other": "{count} セクション",
+    "settingsResultCount.zero": "「{query}」の結果を{count}件表示しています。",
+    "settingsResultCount.one": "「{query}」の結果を{count}件表示しています。",
+    "settingsResultCount.two": "「{query}」の結果を{count}件表示しています。",
+    "settingsResultCount.few": "「{query}」の結果を{count}件表示しています。",
+    "settingsResultCount.many": "「{query}」の結果を{count}件表示しています。",
+    "settingsResultCount.other": "「{query}」の結果を{count}件表示しています。"
+  },
+  "manifest": {
+    "extName": {
+      "message": "ScriptVault",
+      "description": "Extension name"
+    },
+    "extDescription": {
+      "message": "GM APIサポート、クラウド同期、自動更新を備えた強力なユーザースクリプトマネージャー",
+      "description": "Extension description"
+    },
+    "cmdOpenPopup": {
+      "message": "ポップアップを開く",
+      "description": "Command to open the popup"
+    },
+    "cmdOpenDashboard": {
+      "message": "ダッシュボードを開く",
+      "description": "Command to open the dashboard"
+    },
+    "cmdToggleScripts": {
+      "message": "すべてのスクリプトを切り替え",
+      "description": "Command to toggle all scripts"
+    },
+    "settingsGeneral": {
+      "message": "一般",
+      "description": "General settings section"
+    },
+    "settingsSecurity": {
+      "message": "セキュリティ",
+      "description": "Security settings section"
+    },
+    "settingsEditor": {
+      "message": "エディター",
+      "description": "Editor settings section"
+    },
+    "settingsSync": {
+      "message": "同期",
+      "description": "Sync settings section"
+    },
+    "settingsUtilities": {
+      "message": "ユーティリティ",
+      "description": "Utilities section"
+    },
+    "sandboxRaw": {
+      "message": "Raw（ページコンテキスト）",
+      "description": "Raw sandbox mode"
+    },
+    "sandboxJs": {
+      "message": "JavaScript（CSPバイパス）",
+      "description": "JavaScript sandbox mode"
+    },
+    "sandboxDom": {
+      "message": "DOM（拡張機能コンテキスト）",
+      "description": "DOM sandbox mode"
+    },
+    "blacklistLow": {
+      "message": "低（警告するが許可）",
+      "description": "Low blacklist severity"
+    },
+    "blacklistMedium": {
+      "message": "中（オーバーライドでブロック）",
+      "description": "Medium blacklist severity"
+    },
+    "blacklistHigh": {
+      "message": "高（常にブロック）",
+      "description": "High blacklist severity"
+    },
+    "btnSave": {
+      "message": "保存",
+      "description": "Save button"
+    },
+    "btnCancel": {
+      "message": "キャンセル",
+      "description": "Cancel button"
+    },
+    "btnDelete": {
+      "message": "削除",
+      "description": "Delete button"
+    },
+    "btnImport": {
+      "message": "インポート",
+      "description": "Import button"
+    },
+    "btnExport": {
+      "message": "エクスポート",
+      "description": "Export button"
+    }
+  }
+}

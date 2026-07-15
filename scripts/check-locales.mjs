@@ -1,263 +1,177 @@
 #!/usr/bin/env node
-// scripts/check-locales.mjs
-//
-// Locale coverage report and CI gate. Validates three things:
-//   1. _locales/* JSON: every locale carries the same key set as `en`.
-//   2. modules/i18n.js inline translation dictionary: each locale carries
-//      the same keys as `en`, and the locale list lines up with the on-disk
-//      _locales/ directories.
-//   3. Cross-source locale set: _locales/ and the runtime i18n module agree
-//      on which languages ScriptVault claims to ship. A directory without
-//      runtime support, or a runtime locale that has no _locales counterpart,
-//      is flagged.
-//
-// Usage:
-//   node scripts/check-locales.mjs            # report
-//   node scripts/check-locales.mjs --check    # exit 1 on any drift
-//   node scripts/check-locales.mjs --json     # machine-readable output
 
 import { readFile, readdir, stat } from 'node:fs/promises';
-import { resolve, join } from 'node:path';
-import { createContext, runInContext } from 'node:vm';
+import { join } from 'node:path';
+
+import { generateLocales } from './generate-locales.mjs';
+import { generateTsRuntimeModules } from './generate-ts-runtime-modules.mjs';
 
 const args = new Set(process.argv.slice(2));
-const wantCheck = args.has('--check');
-const wantStrict = args.has('--strict');
+const wantCheck = args.has('--check') || args.has('--strict');
 const wantJson = args.has('--json');
+const root = process.cwd();
 
-// Severities:
-//   --check    => exits 1 on _locales/* key drift or cross-source locale set
-//                 mismatches (the externally-shipped manifests).
-//   --strict   => same as --check, plus fails on inline module-dict key drift
-//                 (modules/i18n.js). Use after a dedicated translation
-//                 backfill.
-//
-// Translation-coverage shortfalls (value equals English) are always
-// informational — they're useful to surface but not a CI failure.
-const FATAL_KINDS = new Set([
-  'locale-json-error',
-  'locale-key-drift',
-  'cross-source-locale-mismatch'
-]);
-const STRICT_KINDS = new Set([
-  ...FATAL_KINDS,
-  'runtime-key-drift'
-]);
-
-const REPO_ROOT = process.cwd();
-
-// --- _locales scan ----------------------------------------------------------
-async function loadLocalesDir() {
-  const root = join(REPO_ROOT, '_locales');
-  const entries = await readdir(root);
-  const locales = {};
-  for (const name of entries) {
-    const path = join(root, name);
-    const info = await stat(path);
-    if (!info.isDirectory()) continue;
-    const messagesPath = join(path, 'messages.json');
-    let messages;
-    try {
-      messages = JSON.parse(await readFile(messagesPath, 'utf8'));
-    } catch (err) {
-      messages = { __error: err.message || String(err) };
-    }
-    locales[name] = messages;
+async function readLocaleSources() {
+  const sourceRoot = join(root, 'src/locales');
+  const files = (await readdir(sourceRoot)).filter(file => file.endsWith('.json')).sort();
+  const sources = {};
+  for (const file of files) {
+    const code = file.slice(0, -'.json'.length);
+    sources[code] = JSON.parse(await readFile(join(sourceRoot, file), 'utf8'));
   }
-  return locales;
+  return sources;
 }
 
-// --- Inline-translations extractor -----------------------------------------
-// modules/i18n.js declares a translations object (`const` in handwritten
-// sources, `var` in generated CommonJS wrappers).
-// We evaluate just that const in an isolated VM context so we can read the
-// resulting object without booting the full extension.
-async function extractInlineTranslations(filePath, varName = 'translations') {
-  const source = await readFile(filePath, 'utf8');
-  const startMatch = source.match(new RegExp(`(?:const|let|var)\\s+${varName}\\s*=\\s*\\{`));
-  if (!startMatch) {
-    throw new Error(`No translations declaration found in ${filePath}`);
+async function readManifestLocales() {
+  const localeRoot = join(root, '_locales');
+  const entries = (await readdir(localeRoot)).sort();
+  const catalogs = {};
+  for (const code of entries) {
+    const path = join(localeRoot, code);
+    if (!(await stat(path)).isDirectory()) continue;
+    catalogs[code] = JSON.parse(await readFile(join(path, 'messages.json'), 'utf8'));
   }
-  const start = startMatch.index + startMatch[0].length - 1; // include the {
-  // Walk balanced braces to find the end of the object literal.
-  let depth = 0;
-  let end = -1;
-  let inString = null;
-  let escape = false;
-  for (let i = start; i < source.length; i++) {
-    const ch = source[i];
-    if (inString) {
-      if (escape) { escape = false; continue; }
-      if (ch === '\\') { escape = true; continue; }
-      if (ch === inString) { inString = null; }
-      continue;
-    }
-    if (ch === '"' || ch === "'" || ch === '`') { inString = ch; continue; }
-    if (ch === '{') depth++;
-    else if (ch === '}') {
-      depth--;
-      if (depth === 0) { end = i; break; }
-    }
-  }
-  if (end === -1) {
-    throw new Error(`Could not find end of translations object in ${filePath}`);
-  }
-  const literal = source.slice(start, end + 1);
-  // Wrap in parentheses so the VM treats it as an expression.
-  const sandbox = { result: null };
-  const ctx = createContext(sandbox);
-  runInContext(`result = (${literal});`, ctx);
-  return sandbox.result;
+  return catalogs;
 }
 
-function buildKeySet(obj) {
-  return new Set(Object.keys(obj || {}));
+function sameJson(left, right) {
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 
-function diffKeySets(canonical, other) {
-  const missing = [...canonical].filter(k => !other.has(k));
-  const orphaned = [...other].filter(k => !canonical.has(k));
-  return { missing, orphaned };
+function setDifference(left, right) {
+  return [...left].filter(value => !right.has(value));
 }
 
-function countTranslated(reference, other) {
-  // For modules/i18n.js dictionaries (string-keyed),
-  // count how many values are present and *differ from* the English version.
-  // Equal-to-English strings are treated as untranslated.
-  const enKeys = Object.keys(reference);
-  let translated = 0;
-  let same = 0;
-  for (const k of enKeys) {
-    if (!(k in other)) continue;
-    if (reference[k] === other[k]) same++;
-    else translated++;
-  }
-  return { translated, untranslatedCount: same, total: enKeys.length };
-}
-
-// --- Main runner ------------------------------------------------------------
 const report = {
-  generatedAt: new Date().toISOString(),
   sources: {},
+  coverage: [],
   drifts: [],
-  warnings: []
+  warnings: [],
 };
 
-let localesDirData;
+let localeSources = {};
+let manifestLocales = {};
 try {
-  localesDirData = await loadLocalesDir();
-} catch (err) {
-  console.error(`[check-locales] Failed to read _locales/: ${err.message}`);
-  process.exit(2);
+  localeSources = await readLocaleSources();
+} catch (error) {
+  report.drifts.push({
+    kind: 'locale-source-error',
+    error: error instanceof Error ? error.message : String(error),
+  });
 }
-
-const localesDirNames = Object.keys(localesDirData).sort();
-report.sources.localesDir = localesDirNames;
-
-const localesDirEnglish = localesDirData.en;
-if (!localesDirEnglish) {
-  console.error('[check-locales] _locales/en/messages.json missing — cannot anchor coverage.');
-  process.exit(2);
-}
-const enLocaleKeys = buildKeySet(localesDirEnglish);
-
-for (const name of localesDirNames) {
-  if (name === 'en') continue;
-  const msgs = localesDirData[name];
-  if (msgs.__error) {
-    report.drifts.push({ kind: 'locale-json-error', locale: name, error: msgs.__error });
-    continue;
-  }
-  const otherKeys = buildKeySet(msgs);
-  const { missing, orphaned } = diffKeySets(enLocaleKeys, otherKeys);
-  if (missing.length || orphaned.length) {
-    report.drifts.push({ kind: 'locale-key-drift', locale: name, missing, orphaned });
-  }
-}
-
-let runtimeTranslations;
 try {
-  runtimeTranslations = await extractInlineTranslations(join(REPO_ROOT, 'modules/i18n.js'));
-} catch (err) {
-  console.error('[check-locales] modules/i18n.js extraction failed:', err.message);
-  process.exit(2);
+  manifestLocales = await readManifestLocales();
+} catch (error) {
+  report.drifts.push({
+    kind: 'manifest-locale-error',
+    error: error instanceof Error ? error.message : String(error),
+  });
 }
-const runtimeLocaleNames = Object.keys(runtimeTranslations).sort();
-report.sources.runtimeI18n = runtimeLocaleNames;
-const runtimeEnKeys = buildKeySet(runtimeTranslations.en || {});
-for (const name of runtimeLocaleNames) {
-  if (name === 'en') continue;
-  const dictKeys = buildKeySet(runtimeTranslations[name] || {});
-  const { missing, orphaned } = diffKeySets(runtimeEnKeys, dictKeys);
-  if (missing.length || orphaned.length) {
-    report.drifts.push({ kind: 'runtime-key-drift', locale: name, missing, orphaned });
-  }
-  const counts = countTranslated(runtimeTranslations.en, runtimeTranslations[name] || {});
-  if (counts.untranslatedCount > 0) {
-    report.warnings.push({ kind: 'runtime-untranslated', locale: name, ...counts });
+
+const sourceCodes = Object.keys(localeSources).sort();
+const manifestCodes = Object.keys(manifestLocales).sort();
+report.sources.localeSources = sourceCodes;
+report.sources.localesDir = manifestCodes;
+// Kept for report consumers that previously tracked the inline dictionaries.
+// Runtime locales now come directly from the typed generated source catalog.
+report.sources.runtimeI18n = sourceCodes;
+report.sources.generatedRuntime = 'src/generated/locale-catalogs.ts';
+
+const sourceSet = new Set(sourceCodes);
+const manifestSet = new Set(manifestCodes);
+for (const code of setDifference(sourceSet, manifestSet)) {
+  report.drifts.push({ kind: 'cross-source-locale-mismatch', locale: code, missingFrom: ['_locales'] });
+}
+for (const code of setDifference(manifestSet, sourceSet)) {
+  report.drifts.push({ kind: 'cross-source-locale-mismatch', locale: code, missingFrom: ['src/locales'] });
+}
+
+for (const code of sourceCodes) {
+  if (manifestLocales[code] && !sameJson(localeSources[code].manifest, manifestLocales[code])) {
+    report.drifts.push({ kind: 'manifest-generated-drift', locale: code });
   }
 }
 
-// Cross-source locale-set agreement.
-const allSets = {
-  localesDir: new Set(localesDirNames),
-  runtimeI18n: new Set(runtimeLocaleNames)
-};
-const universe = new Set([...allSets.localesDir, ...allSets.runtimeI18n]);
-for (const locale of universe) {
-  const missingFrom = [];
-  for (const [sourceName, set] of Object.entries(allSets)) {
-    if (!set.has(locale)) missingFrom.push(sourceName);
+try {
+  await generateLocales({ rootDir: root, check: true });
+} catch (error) {
+  report.drifts.push({
+    kind: 'generated-artifact-drift',
+    error: error instanceof Error ? error.message : String(error),
+  });
+}
+
+try {
+  const runtimeResults = await generateTsRuntimeModules({ rootDir: root, check: true, modules: ['i18n'] });
+  if (runtimeResults.some(result => result.changed)) {
+    report.drifts.push({ kind: 'runtime-generated-drift', file: 'modules/i18n.js' });
   }
-  if (missingFrom.length > 0) {
-    report.drifts.push({ kind: 'cross-source-locale-mismatch', locale, missingFrom });
+} catch (error) {
+  report.drifts.push({
+    kind: 'runtime-generated-drift',
+    file: 'modules/i18n.js',
+    error: error instanceof Error ? error.message : String(error),
+  });
+}
+
+const english = localeSources.en;
+if (!english) {
+  report.drifts.push({ kind: 'locale-source-error', locale: 'en', error: 'src/locales/en.json is required' });
+} else {
+  const total = Object.keys(english.runtime).length;
+  for (const code of sourceCodes) {
+    const source = localeSources[code];
+    const translated = code === 'en' ? total : Object.keys(source.runtime || {}).length;
+    const baseline = source.runtimeCoverageBaseline;
+    const status = source.translationStatus;
+    const coverage = {
+      locale: code,
+      status,
+      direction: source.direction,
+      translated,
+      total,
+      baseline,
+      percent: Number(((translated / total) * 100).toFixed(1)),
+    };
+    report.coverage.push(coverage);
+    if (!Number.isInteger(baseline) || translated < baseline) {
+      report.drifts.push({ kind: 'runtime-coverage-regression', locale: code, translated, baseline });
+    }
+    if (code !== 'en' && status !== 'partial' && translated < total) {
+      report.drifts.push({ kind: 'runtime-status-mismatch', locale: code, status, translated, total });
+    }
+    if (status === 'partial') {
+      report.warnings.push({ kind: 'runtime-partial', ...coverage });
+    }
   }
 }
 
 if (wantJson) {
-  process.stdout.write(JSON.stringify(report, null, 2) + '\n');
+  process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
 } else {
   console.log('ScriptVault — locale coverage report');
-  console.log(`  _locales/      ${localesDirNames.join(', ')}`);
-  console.log(`  modules/i18n   ${runtimeLocaleNames.join(', ')}`);
+  console.log(`  sources         ${sourceCodes.join(', ') || '(unavailable)'}`);
+  console.log(`  generated MV3   ${manifestCodes.join(', ') || '(unavailable)'}`);
+  console.log(`  generated typed ${report.sources.generatedRuntime}`);
   console.log('');
-  if (report.drifts.length === 0) {
-    console.log('  No drift detected.');
-  } else {
+  if (report.drifts.length) {
     console.log(`  ${report.drifts.length} drift entr${report.drifts.length === 1 ? 'y' : 'ies'}:`);
-    for (const d of report.drifts) {
-      switch (d.kind) {
-        case 'locale-json-error':
-          console.log(`    [_locales/${d.locale}] JSON error: ${d.error}`);
-          break;
-        case 'locale-key-drift':
-          if (d.missing.length) console.log(`    [_locales/${d.locale}] missing keys (${d.missing.length}): ${d.missing.slice(0, 6).join(', ')}${d.missing.length > 6 ? '…' : ''}`);
-          if (d.orphaned.length) console.log(`    [_locales/${d.locale}] orphaned keys (${d.orphaned.length}): ${d.orphaned.slice(0, 6).join(', ')}${d.orphaned.length > 6 ? '…' : ''}`);
-          break;
-        case 'runtime-key-drift':
-          if (d.missing.length) console.log(`    [modules/i18n.${d.locale}] missing keys (${d.missing.length}): ${d.missing.slice(0, 6).join(', ')}${d.missing.length > 6 ? '…' : ''}`);
-          if (d.orphaned.length) console.log(`    [modules/i18n.${d.locale}] orphaned keys (${d.orphaned.length}): ${d.orphaned.slice(0, 6).join(', ')}${d.orphaned.length > 6 ? '…' : ''}`);
-          break;
-        case 'cross-source-locale-mismatch':
-          console.log(`    locale ${d.locale} missing from: ${d.missingFrom.join(', ')}`);
-          break;
-      }
+    for (const drift of report.drifts) {
+      console.log(`    [${drift.kind}] ${drift.locale ? `${drift.locale}: ` : ''}${drift.error || JSON.stringify(drift)}`);
     }
+  } else {
+    console.log('  Generated catalogs are current and no coverage regressed.');
   }
-  if (report.warnings.length > 0) {
-    console.log('');
-    console.log(`  ${report.warnings.length} translation-coverage warning${report.warnings.length === 1 ? '' : 's'} (informational):`);
-    for (const w of report.warnings) {
-      console.log(`    [modules/i18n.${w.locale}] ${w.translated}/${w.total} translated, ${w.untranslatedCount} still match en`);
-    }
+  console.log('');
+  console.log('  Runtime coverage:');
+  for (const coverage of report.coverage) {
+    const label = coverage.status === 'partial' ? 'partial' : 'complete';
+    console.log(`    ${coverage.locale.padEnd(3)} ${String(coverage.translated).padStart(4)}/${coverage.total} ` +
+      `(${String(coverage.percent).padStart(4)}%) ${label}; baseline ${coverage.baseline}`);
   }
 }
 
-const gatedKinds = wantStrict ? STRICT_KINDS : FATAL_KINDS;
-const fatalDrifts = report.drifts.filter(d => gatedKinds.has(d.kind));
-if (fatalDrifts.length > 0 && (wantCheck || wantStrict)) {
-  if (!wantJson) {
-    console.error(`\n[check-locales] ${fatalDrifts.length} fatal drift entr${fatalDrifts.length === 1 ? 'y' : 'ies'} — failing build.`);
-  }
-  process.exit(1);
+if (wantCheck && report.drifts.length) {
+  if (!wantJson) console.error(`\n[check-locales] ${report.drifts.length} locale drift entr${report.drifts.length === 1 ? 'y' : 'ies'} — failing build.`);
+  process.exitCode = 1;
 }

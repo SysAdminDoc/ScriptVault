@@ -33,16 +33,23 @@
     return message && message !== key ? message : fallback;
   }
 
+  function pDevtools(family, count, singularFallback, pluralFallback) {
+    const message = getDevtoolsI18n()?.getPluralMessage?.(family, count);
+    return message && !message.startsWith(`${family}.`)
+      ? message
+      : (count === 1 ? singularFallback : pluralFallback);
+  }
+
   function requestLabel(count) {
-    return tDevtools(count === 1 ? 'requestSingular' : 'requestPlural', count === 1 ? 'request' : 'requests');
+    return pDevtools('requestNoun', count, 'request', 'requests');
   }
 
   function scriptLabel(count) {
-    return tDevtools(count === 1 ? 'scriptSingular' : 'scriptPlural', count === 1 ? 'script' : 'scripts');
+    return pDevtools('scriptNoun', count, 'script', 'scripts');
   }
 
   function profileLabel(count) {
-    return tDevtools(count === 1 ? 'scriptProfileSingular' : 'scriptProfilePlural', count === 1 ? 'script profile' : 'script profiles');
+    return pDevtools('scriptProfileNoun', count, 'script profile', 'script profiles');
   }
 
   function applyDevtoolsI18n() {
@@ -483,7 +490,7 @@
         filtered.length
           ? tDevtools('devtoolsNetworkSummary', '{requests} visible • {errors} • {bytes} transferred', {
               requests: `${filtered.length} ${requestLabel(filtered.length)}`,
-              errors: `${errors} ${tDevtools(errors === 1 ? 'errorSingular' : 'errorPlural', errors === 1 ? 'error' : 'errors')}`,
+              errors: `${errors} ${pDevtools('errorNoun', errors, 'error', 'errors')}`,
               bytes: formatBytes(bytes)
             })
           : (filterText

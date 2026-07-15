@@ -33,8 +33,8 @@ describe('dashboard i18n-v2 removal', () => {
   });
 
   it('keeps locale claims scoped to active runtime surfaces', () => {
-    expect(readme).toContain('Manifest, browser-facing extension messages, and core dashboard shell controls');
-    expect(readme).toContain('Deep dashboard content is still being migrated to DOM translation coverage');
+    expect(readme).toContain('ScriptVault ships English plus 8 explicitly partial translations');
+    expect(readme).toContain('untranslated runtime messages fall back to English');
     expect(localeDocs).not.toContain('dashboard-i18n-v2.js');
     expect(dashboardHtml).toContain('<script src="../modules/i18n.js"></script>');
     expect(dashboardJs).toContain('function applyDashboardI18n()');
@@ -58,7 +58,8 @@ describe('dashboard i18n-v2 removal', () => {
     expect(dashboardHtml).toContain('data-i18n-placeholder="settingsSearchPlaceholder"');
     expect(dashboardHtml).toContain('data-i18n-aria-label="settingsCategoryFilters"');
     expect(dashboardHtml).toContain('data-i18n="settingsFilterSecurity"');
-    expect(dashboardJs).toContain("'settingsSectionsCount'");
+    expect(dashboardJs).toContain("'settingsSectionCount'");
+    expect(dashboardJs).toContain('getDashboardPluralMessage');
     expect(dashboardJs).toContain("'settingsAdvancedShownCount'");
     expect(dashboardJs).toContain("'settingsShowingFilterMode'");
     expect(dashboardJs).toContain('function getSettingsFilterLabel(filter)');

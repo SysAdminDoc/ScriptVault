@@ -25,8 +25,8 @@ const locales = readdirSync(LOCALES_DIR).filter((d) =>
 );
 
 describe('CWS manifest locale length caps (Phase 39.4)', () => {
-  it('discovers at least the documented 8 locales', () => {
-    expect(locales.length).toBeGreaterThanOrEqual(8);
+  it('discovers all 9 documented locale catalogs', () => {
+    expect(locales.length).toBe(9);
   });
 
   describe.each(locales)('locale: %s', (locale) => {

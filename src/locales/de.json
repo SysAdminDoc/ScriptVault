@@ -1,0 +1,138 @@
+{
+  "code": "de",
+  "name": "Deutsch",
+  "direction": "ltr",
+  "translationStatus": "partial",
+  "runtimeCoverageBaseline": 43,
+  "runtime": {
+    "enabled": "Aktiviert",
+    "disabled": "Deaktiviert",
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "delete": "Löschen",
+    "edit": "Bearbeiten",
+    "close": "Schließen",
+    "confirm": "Bestätigen",
+    "yes": "Ja",
+    "no": "Nein",
+    "error": "Fehler",
+    "success": "Erfolg",
+    "warning": "Warnung",
+    "loading": "Laden...",
+    "search": "Suchen",
+    "refresh": "Aktualisieren",
+    "tabScripts": "Installierte Scripts",
+    "tabSettings": "Einstellungen",
+    "tabUtilities": "Werkzeuge",
+    "tabHelp": "Hilfe",
+    "tabValues": "Werte-Editor",
+    "editorTabScriptSettings": "Einstellungen",
+    "editorTabExternals": "Externe",
+    "editorTabStorage": "Speicher",
+    "settingsAppearance": "Darstellung",
+    "settingsSecurity": "Sicherheit",
+    "settingsUpdate": "Skript-Aktualisierung",
+    "settingsExternals": "Externe Ressourcen",
+    "settingsExperimental": "Experimentell",
+    "settingsReset": "Zurücksetzen",
+    "settingsBackup": "Sicherung",
+    "newScript": "Neues Script",
+    "importScript": "Importieren",
+    "checkUpdates": "Updates prüfen",
+    "searchScripts": "Scripts suchen...",
+    "noScripts": "Keine Scripts installiert",
+    "syncProvider": "Sync-Anbieter",
+    "syncProviderNone": "Deaktiviert",
+    "syncConnect": "Verbinden",
+    "syncDisconnect": "Trennen",
+    "syncNow": "Jetzt synchronisieren",
+    "lastSync": "Letzte Synchronisation",
+    "scriptsWorkspaceDescription": "Install, organize, and inspect scripts without slowing down the control surface."
+  },
+  "manifest": {
+    "extName": {
+      "message": "ScriptVault",
+      "description": "Extension name"
+    },
+    "extDescription": {
+      "message": "Ein leistungsstarker Userscript-Manager mit GM API-Unterstützung, Cloud-Synchronisierung und Auto-Updates",
+      "description": "Extension description"
+    },
+    "cmdOpenPopup": {
+      "message": "Popup öffnen",
+      "description": "Command to open the popup"
+    },
+    "cmdOpenDashboard": {
+      "message": "Dashboard öffnen",
+      "description": "Command to open the dashboard"
+    },
+    "cmdToggleScripts": {
+      "message": "Alle Skripte umschalten",
+      "description": "Command to toggle all scripts"
+    },
+    "settingsGeneral": {
+      "message": "Allgemein",
+      "description": "General settings section"
+    },
+    "settingsSecurity": {
+      "message": "Sicherheit",
+      "description": "Security settings section"
+    },
+    "settingsEditor": {
+      "message": "Editor",
+      "description": "Editor settings section"
+    },
+    "settingsSync": {
+      "message": "Synchronisierung",
+      "description": "Sync settings section"
+    },
+    "settingsUtilities": {
+      "message": "Werkzeuge",
+      "description": "Utilities section"
+    },
+    "sandboxRaw": {
+      "message": "Raw (Seitenkontext)",
+      "description": "Raw sandbox mode"
+    },
+    "sandboxJs": {
+      "message": "JavaScript (CSP-Umgehung)",
+      "description": "JavaScript sandbox mode"
+    },
+    "sandboxDom": {
+      "message": "DOM (Erweiterungskontext)",
+      "description": "DOM sandbox mode"
+    },
+    "blacklistLow": {
+      "message": "Niedrig (warnen, aber erlauben)",
+      "description": "Low blacklist severity"
+    },
+    "blacklistMedium": {
+      "message": "Mittel (blockieren mit Überschreibung)",
+      "description": "Medium blacklist severity"
+    },
+    "blacklistHigh": {
+      "message": "Hoch (immer blockieren)",
+      "description": "High blacklist severity"
+    },
+    "btnSave": {
+      "message": "Speichern",
+      "description": "Save button"
+    },
+    "btnCancel": {
+      "message": "Abbrechen",
+      "description": "Cancel button"
+    },
+    "btnDelete": {
+      "message": "Löschen",
+      "description": "Delete button"
+    },
+    "btnImport": {
+      "message": "Importieren",
+      "description": "Import button"
+    },
+    "btnExport": {
+      "message": "Exportieren",
+      "description": "Export button"
+    }
+  }
+}

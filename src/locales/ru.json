@@ -1,0 +1,212 @@
+{
+  "code": "ru",
+  "name": "Русский",
+  "direction": "ltr",
+  "translationStatus": "partial",
+  "runtimeCoverageBaseline": 117,
+  "runtime": {
+    "enabled": "Включено",
+    "disabled": "Отключено",
+    "save": "Сохранить",
+    "cancel": "Отмена",
+    "delete": "Удалить",
+    "edit": "Редактировать",
+    "close": "Закрыть",
+    "confirm": "Подтвердить",
+    "yes": "Да",
+    "no": "Нет",
+    "error": "Ошибка",
+    "success": "Успешно",
+    "warning": "Предупреждение",
+    "loading": "Загрузка...",
+    "search": "Поиск",
+    "refresh": "Обновить",
+    "tabScripts": "Установленные скрипты",
+    "tabSettings": "Настройки",
+    "tabUtilities": "Утилиты",
+    "tabHelp": "Помощь",
+    "tabValues": "Редактор значений",
+    "editorTabCode": "Код",
+    "editorTabScriptSettings": "Настройки",
+    "editorTabExternals": "Внешние ресурсы",
+    "editorTabStorage": "Хранилище",
+    "editorTabInfo": "Инфо",
+    "settingsAppearance": "Оформление",
+    "settingsSecurity": "Безопасность",
+    "settingsUpdate": "Обновление скриптов",
+    "settingsExternals": "Внешние ресурсы",
+    "settingsExperimental": "Экспериментальные",
+    "settingsReset": "Сброс",
+    "settingsBackup": "Резервное копирование",
+    "newScript": "Новый скрипт",
+    "importScript": "Импорт",
+    "checkUpdates": "Проверить обновления",
+    "searchScripts": "Поиск скриптов...",
+    "noScripts": "Нет установленных скриптов",
+    "syncProvider": "Провайдер синхронизации",
+    "syncProviderNone": "Отключено",
+    "syncConnect": "Подключить",
+    "syncDisconnect": "Отключить",
+    "syncNow": "Синхронизировать",
+    "lastSync": "Последняя синхронизация",
+    "scriptsWorkspaceDescription": "Install, organize, and inspect scripts without slowing down the control surface.",
+    "assetNoun.one": "ресурс",
+    "assetNoun.few": "ресурса",
+    "assetNoun.many": "ресурсов",
+    "assetNoun.other": "ресурса",
+    "dayNoun.one": "день",
+    "dayNoun.few": "дня",
+    "dayNoun.many": "дней",
+    "dayNoun.other": "дня",
+    "errorNoun.one": "ошибка",
+    "errorNoun.few": "ошибки",
+    "errorNoun.many": "ошибок",
+    "errorNoun.other": "ошибки",
+    "exclusionNoun.one": "исключение",
+    "exclusionNoun.few": "исключения",
+    "exclusionNoun.many": "исключений",
+    "exclusionNoun.other": "исключения",
+    "fileNoun.one": "файл",
+    "fileNoun.few": "файла",
+    "fileNoun.many": "файлов",
+    "fileNoun.other": "файла",
+    "hostNoun.one": "хост",
+    "hostNoun.few": "хоста",
+    "hostNoun.many": "хостов",
+    "hostNoun.other": "хоста",
+    "issueNoun.one": "проблема",
+    "issueNoun.few": "проблемы",
+    "issueNoun.many": "проблем",
+    "issueNoun.other": "проблемы",
+    "permissionNoun.one": "разрешение",
+    "permissionNoun.few": "разрешения",
+    "permissionNoun.many": "разрешений",
+    "permissionNoun.other": "разрешения",
+    "requestNoun.one": "запрос",
+    "requestNoun.few": "запроса",
+    "requestNoun.many": "запросов",
+    "requestNoun.other": "запроса",
+    "ruleNoun.one": "правило",
+    "ruleNoun.few": "правила",
+    "ruleNoun.many": "правил",
+    "ruleNoun.other": "правила",
+    "scriptNoun.one": "скрипт",
+    "scriptNoun.few": "скрипта",
+    "scriptNoun.many": "скриптов",
+    "scriptNoun.other": "скрипта",
+    "scriptProfileNoun.one": "профиль скрипта",
+    "scriptProfileNoun.few": "профиля скриптов",
+    "scriptProfileNoun.many": "профилей скриптов",
+    "scriptProfileNoun.other": "профиля скрипта",
+    "targetNoun.one": "цель",
+    "targetNoun.few": "цели",
+    "targetNoun.many": "целей",
+    "targetNoun.other": "цели",
+    "updateNoun.one": "обновление",
+    "updateNoun.few": "обновления",
+    "updateNoun.many": "обновлений",
+    "updateNoun.other": "обновления",
+    "urlNoun.one": "URL-адрес",
+    "urlNoun.few": "URL-адреса",
+    "urlNoun.many": "URL-адресов",
+    "urlNoun.other": "URL-адреса",
+    "settingsSectionCount.zero": "{count} раздела",
+    "settingsSectionCount.one": "{count} раздел",
+    "settingsSectionCount.two": "{count} раздела",
+    "settingsSectionCount.few": "{count} раздела",
+    "settingsSectionCount.many": "{count} разделов",
+    "settingsSectionCount.other": "{count} раздела",
+    "settingsResultCount.zero": "Показано {count} результата по запросу «{query}».",
+    "settingsResultCount.one": "Показан {count} результат по запросу «{query}».",
+    "settingsResultCount.two": "Показано {count} результата по запросу «{query}».",
+    "settingsResultCount.few": "Показано {count} результата по запросу «{query}».",
+    "settingsResultCount.many": "Показано {count} результатов по запросу «{query}».",
+    "settingsResultCount.other": "Показано {count} результата по запросу «{query}»."
+  },
+  "manifest": {
+    "extName": {
+      "message": "ScriptVault",
+      "description": "Extension name"
+    },
+    "extDescription": {
+      "message": "Мощный менеджер пользовательских скриптов с поддержкой GM API, облачной синхронизацией и автообновлениями",
+      "description": "Extension description"
+    },
+    "cmdOpenPopup": {
+      "message": "Открыть всплывающее окно",
+      "description": "Command to open the popup"
+    },
+    "cmdOpenDashboard": {
+      "message": "Открыть панель управления",
+      "description": "Command to open the dashboard"
+    },
+    "cmdToggleScripts": {
+      "message": "Переключить все скрипты",
+      "description": "Command to toggle all scripts"
+    },
+    "settingsGeneral": {
+      "message": "Общие",
+      "description": "General settings section"
+    },
+    "settingsSecurity": {
+      "message": "Безопасность",
+      "description": "Security settings section"
+    },
+    "settingsEditor": {
+      "message": "Редактор",
+      "description": "Editor settings section"
+    },
+    "settingsSync": {
+      "message": "Синхронизация",
+      "description": "Sync settings section"
+    },
+    "settingsUtilities": {
+      "message": "Утилиты",
+      "description": "Utilities section"
+    },
+    "sandboxRaw": {
+      "message": "Raw (контекст страницы)",
+      "description": "Raw sandbox mode"
+    },
+    "sandboxJs": {
+      "message": "JavaScript (обход CSP)",
+      "description": "JavaScript sandbox mode"
+    },
+    "sandboxDom": {
+      "message": "DOM (контекст расширения)",
+      "description": "DOM sandbox mode"
+    },
+    "blacklistLow": {
+      "message": "Низкий (предупредить, но разрешить)",
+      "description": "Low blacklist severity"
+    },
+    "blacklistMedium": {
+      "message": "Средний (блокировать с возможностью переопределения)",
+      "description": "Medium blacklist severity"
+    },
+    "blacklistHigh": {
+      "message": "Высокий (всегда блокировать)",
+      "description": "High blacklist severity"
+    },
+    "btnSave": {
+      "message": "Сохранить",
+      "description": "Save button"
+    },
+    "btnCancel": {
+      "message": "Отмена",
+      "description": "Cancel button"
+    },
+    "btnDelete": {
+      "message": "Удалить",
+      "description": "Delete button"
+    },
+    "btnImport": {
+      "message": "Импорт",
+      "description": "Import button"
+    },
+    "btnExport": {
+      "message": "Экспорт",
+      "description": "Export button"
+    }
+  }
+}

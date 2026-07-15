@@ -256,12 +256,20 @@ Two additional zero-config flows ship as separate modules: **Easy Cloud** for on
 
 ### Internationalization
 
-Manifest, browser-facing extension messages, and core dashboard shell controls
-are localized in 9 languages:
+ScriptVault ships English plus 8 explicitly partial translations:
 
 English &bull; German &bull; Spanish &bull; French &bull; Hebrew &bull; Japanese &bull; Portuguese &bull; Russian &bull; Chinese
 
-Deep dashboard content is still being migrated to DOM translation coverage.
+English is complete. German, Spanish, French, Hebrew, Japanese, Portuguese,
+Russian, and Chinese currently cover the manifest and a measured subset of the
+runtime interface; untranslated runtime messages fall back to English. Hebrew
+sets the extension document direction to RTL, and count labels use the active
+locale's `Intl.PluralRules` categories.
+
+Contributors edit one source per language under `src/locales/`; `npm run
+locale:generate` produces both the typed runtime catalog and `_locales`
+messages. `npm run locale:check:gate` rejects stale generated files, locale-set
+drift, and any drop below the recorded per-language coverage baseline.
 
 ### v2.0 — New Features
 
@@ -582,7 +590,9 @@ ScriptVault/
 │   ├── sync-providers.js      # WebDAV, local folder, Google Drive, Dropbox, OneDrive, S3
 │   ├── resources.js           # @resource/@require cache
 │   ├── xhr.js                 # XHR abort tracking
-│   └── i18n.js                # Inline translations (9 languages)
+│   └── i18n.js                # Generated locale/plural runtime
+├── src/locales/               # Canonical per-language runtime + manifest sources
+├── src/generated/             # Generated typed locale catalog
 ├── shared/
 │   └── utils.js               # escapeHtml, generateId, sanitizeUrl, formatBytes
 ├── pages/
@@ -603,7 +613,7 @@ ScriptVault/
 ├── images/                    # Extension icons
 ├── tests/e2e/                 # Playwright install/update/restore/sync flows
 ├── tests/visual/              # Vitest Browser Mode screenshot baselines
-└── _locales/                  # 8 language translations
+└── _locales/                  # 9 generated browser message catalogs
 ```
 
 ---

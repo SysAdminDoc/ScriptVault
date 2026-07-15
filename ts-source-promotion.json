@@ -45,8 +45,11 @@
       "sources": [
         "src/modules/i18n.ts"
       ],
+      "generatedArtifacts": [
+        "src/generated/locale-catalogs.ts"
+      ],
       "status": "promoted",
-      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs."
+      "notes": "Generated from TypeScript plus the typed locale catalog emitted from src/locales/*.json."
     },
     {
       "runtime": "modules/storage.js",

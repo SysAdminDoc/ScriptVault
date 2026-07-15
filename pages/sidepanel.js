@@ -20,6 +20,13 @@
     return message && message !== key ? message : fallback;
   }
 
+  function pSidepanel(family, count, singularFallback, pluralFallback) {
+    const message = getSidepanelI18n()?.getPluralMessage?.(family, count);
+    return message && !message.startsWith(`${family}.`)
+      ? message
+      : (count === 1 ? singularFallback : pluralFallback);
+  }
+
   function applySidepanelI18n() {
     const i18n = getSidepanelI18n();
     if (!i18n?.applyToDOM) return;
@@ -811,7 +818,7 @@
     const stats = script.stats || {};
     const hasError = stats.errors > 0;
     const avgMs = stats.avgTime;
-    const errorLabel = tSidepanel(stats.errors === 1 ? 'errorSingular' : 'errorPlural', stats.errors === 1 ? 'error' : 'errors');
+    const errorLabel = pSidepanel('errorNoun', stats.errors, 'error', 'errors');
     const documentActivity = isPageScript ? getScriptDocumentActivity(script.id) : '';
     let detailText = isPageScript
       ? (hasError
@@ -1016,7 +1023,7 @@
       }
 
       if (failed > 0) {
-        const updatedLabel = tSidepanel(updated === 1 ? 'scriptSingular' : 'scriptPlural', updated === 1 ? 'script' : 'scripts');
+        const updatedLabel = pSidepanel('scriptNoun', updated, 'script', 'scripts');
         showPanelNotice(
           updated > 0
             ? tSidepanel('sideBulkUpdatePartial', 'Updated {updated} {scripts}, but {failed} failed.', {
@@ -1033,7 +1040,7 @@
         return;
       }
 
-      const updatedLabel = tSidepanel(updated === 1 ? 'scriptSingular' : 'scriptPlural', updated === 1 ? 'script' : 'scripts');
+      const updatedLabel = pSidepanel('scriptNoun', updated, 'script', 'scripts');
       showPanelNotice(
         tSidepanel('sideBulkUpdateSuccess', '{state} {count} {scripts} on this page.', {
           state: newState ? tSidepanel('enabled', 'Enabled') : tSidepanel('disabled', 'Disabled'),
@@ -1082,7 +1089,7 @@
       chip.textContent = numberFormatter.format(count);
       chip.setAttribute('aria-label', tSidepanel('sideQueuedUpdates', '{count} queued {updates}', {
         count: numberFormatter.format(count),
-        updates: tSidepanel(count === 1 ? 'updateSingular' : 'updatePlural', count === 1 ? 'update' : 'updates')
+        updates: pSidepanel('updateNoun', count, 'update', 'updates')
       }));
     } catch (_error) {
       chip.hidden = true;

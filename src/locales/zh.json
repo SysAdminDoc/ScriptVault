@@ -1,0 +1,141 @@
+{
+  "code": "zh",
+  "name": "中文",
+  "direction": "ltr",
+  "translationStatus": "partial",
+  "runtimeCoverageBaseline": 46,
+  "runtime": {
+    "enabled": "已启用",
+    "disabled": "已禁用",
+    "save": "保存",
+    "cancel": "取消",
+    "delete": "删除",
+    "edit": "编辑",
+    "close": "关闭",
+    "confirm": "确认",
+    "yes": "是",
+    "no": "否",
+    "ok": "确定",
+    "error": "错误",
+    "success": "成功",
+    "warning": "警告",
+    "loading": "加载中...",
+    "search": "搜索",
+    "refresh": "刷新",
+    "tabScripts": "已安装脚本",
+    "tabSettings": "设置",
+    "tabUtilities": "工具",
+    "tabHelp": "帮助",
+    "tabValues": "值编辑器",
+    "editorTabCode": "代码",
+    "editorTabScriptSettings": "设置",
+    "editorTabExternals": "外部资源",
+    "editorTabStorage": "存储",
+    "editorTabInfo": "信息",
+    "settingsAppearance": "外观",
+    "settingsSecurity": "安全",
+    "settingsUpdate": "脚本更新",
+    "settingsExternals": "外部资源",
+    "settingsExperimental": "实验性",
+    "settingsReset": "重置",
+    "settingsBackup": "备份",
+    "newScript": "新建脚本",
+    "importScript": "导入",
+    "checkUpdates": "检查更新",
+    "searchScripts": "搜索脚本...",
+    "noScripts": "没有安装脚本",
+    "syncProvider": "同步服务",
+    "syncProviderNone": "禁用",
+    "syncConnect": "连接",
+    "syncDisconnect": "断开",
+    "syncNow": "立即同步",
+    "lastSync": "上次同步",
+    "scriptsWorkspaceDescription": "Install, organize, and inspect scripts without slowing down the control surface."
+  },
+  "manifest": {
+    "extName": {
+      "message": "ScriptVault",
+      "description": "Extension name"
+    },
+    "extDescription": {
+      "message": "强大的用户脚本管理器，支持GM API、云同步和自动更新",
+      "description": "Extension description"
+    },
+    "cmdOpenPopup": {
+      "message": "打开弹出窗口",
+      "description": "Command to open the popup"
+    },
+    "cmdOpenDashboard": {
+      "message": "打开仪表板",
+      "description": "Command to open the dashboard"
+    },
+    "cmdToggleScripts": {
+      "message": "切换所有脚本",
+      "description": "Command to toggle all scripts"
+    },
+    "settingsGeneral": {
+      "message": "常规",
+      "description": "General settings section"
+    },
+    "settingsSecurity": {
+      "message": "安全",
+      "description": "Security settings section"
+    },
+    "settingsEditor": {
+      "message": "编辑器",
+      "description": "Editor settings section"
+    },
+    "settingsSync": {
+      "message": "同步",
+      "description": "Sync settings section"
+    },
+    "settingsUtilities": {
+      "message": "工具",
+      "description": "Utilities section"
+    },
+    "sandboxRaw": {
+      "message": "原始（页面上下文）",
+      "description": "Raw sandbox mode"
+    },
+    "sandboxJs": {
+      "message": "JavaScript（绕过CSP）",
+      "description": "JavaScript sandbox mode"
+    },
+    "sandboxDom": {
+      "message": "DOM（扩展上下文）",
+      "description": "DOM sandbox mode"
+    },
+    "blacklistLow": {
+      "message": "低（警告但允许）",
+      "description": "Low blacklist severity"
+    },
+    "blacklistMedium": {
+      "message": "中（阻止但可覆盖）",
+      "description": "Medium blacklist severity"
+    },
+    "blacklistHigh": {
+      "message": "高（始终阻止）",
+      "description": "High blacklist severity"
+    },
+    "btnSave": {
+      "message": "保存",
+      "description": "Save button"
+    },
+    "btnCancel": {
+      "message": "取消",
+      "description": "Cancel button"
+    },
+    "btnDelete": {
+      "message": "删除",
+      "description": "Delete button"
+    },
+    "btnImport": {
+      "message": "导入",
+      "description": "Import button"
+    },
+    "btnExport": {
+      "message": "导出",
+      "description": "Export button"
+    }
+  }
+}

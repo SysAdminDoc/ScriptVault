@@ -1053,7 +1053,8 @@ const AdvancedLinter = (() => {
         div.textContent = '+ ' + entry.text;
       } else if (entry.type === 'gap') {
         div.className = 'sv-lint-diff-gap';
-        const noun = entry.count === 1 ? 'line' : 'lines';
+        const noun = new Intl.PluralRules(document.documentElement.lang || navigator.language)
+            .select(entry.count) === 'one' ? 'line' : 'lines';
         div.textContent = `... ${entry.count} unchanged ${noun} ...`;
       } else {
         div.className = 'sv-lint-diff-line-ctx';

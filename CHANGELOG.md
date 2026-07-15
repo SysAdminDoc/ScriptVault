@@ -4,6 +4,14 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Unified runtime and manifest localization behind generated catalogs.** One
+  canonical source per locale now emits typed runtime data, shipped
+  `modules/i18n.js`, and `_locales` messages with deterministic drift checks.
+  English is labeled complete; the other eight locales are honestly labeled
+  partial with non-regressing translated-message baselines instead of counting
+  English copies as translations. Extension pages now set `lang` and `dir`,
+  Hebrew renders RTL, and live count labels use CLDR plural categories through
+  `Intl.PluralRules`, including Russian and Japanese forms.
 - **Release-gated real extension accessibility against WCAG 2.2 AA.** Headless
   Chromium now scans the dashboard, popup, side panel, install review, and
   DevTools panel across dark, light, Catppuccin, and OLED themes at compact and

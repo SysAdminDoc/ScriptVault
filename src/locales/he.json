@@ -1,0 +1,132 @@
+{
+  "code": "he",
+  "name": "עברית",
+  "direction": "rtl",
+  "translationStatus": "partial",
+  "runtimeCoverageBaseline": 58,
+  "runtime": {
+    "scriptsWorkspaceDescription": "Install, organize, and inspect scripts without slowing down the control surface.",
+    "assetNoun.one": "משאב",
+    "assetNoun.two": "משאבים",
+    "assetNoun.other": "משאבים",
+    "dayNoun.one": "יום",
+    "dayNoun.two": "יומיים",
+    "dayNoun.other": "ימים",
+    "errorNoun.one": "שגיאה",
+    "errorNoun.two": "שגיאות",
+    "errorNoun.other": "שגיאות",
+    "exclusionNoun.one": "החרגה",
+    "exclusionNoun.two": "החרגות",
+    "exclusionNoun.other": "החרגות",
+    "fileNoun.one": "קובץ",
+    "fileNoun.two": "קבצים",
+    "fileNoun.other": "קבצים",
+    "hostNoun.one": "מארח",
+    "hostNoun.two": "מארחים",
+    "hostNoun.other": "מארחים",
+    "issueNoun.one": "בעיה",
+    "issueNoun.two": "בעיות",
+    "issueNoun.other": "בעיות",
+    "permissionNoun.one": "הרשאה",
+    "permissionNoun.two": "הרשאות",
+    "permissionNoun.other": "הרשאות",
+    "requestNoun.one": "בקשה",
+    "requestNoun.two": "בקשות",
+    "requestNoun.other": "בקשות",
+    "ruleNoun.one": "כלל",
+    "ruleNoun.two": "כללים",
+    "ruleNoun.other": "כללים",
+    "scriptNoun.one": "סקריפט",
+    "scriptNoun.two": "סקריפטים",
+    "scriptNoun.other": "סקריפטים",
+    "scriptProfileNoun.one": "פרופיל סקריפט",
+    "scriptProfileNoun.two": "פרופילי סקריפטים",
+    "scriptProfileNoun.other": "פרופילי סקריפטים",
+    "targetNoun.one": "יעד",
+    "targetNoun.two": "יעדים",
+    "targetNoun.other": "יעדים",
+    "updateNoun.one": "עדכון",
+    "updateNoun.two": "עדכונים",
+    "updateNoun.other": "עדכונים",
+    "urlNoun.one": "כתובת URL",
+    "urlNoun.two": "כתובות URL",
+    "urlNoun.other": "כתובות URL",
+    "settingsSectionCount.zero": "{count} מקטעים",
+    "settingsSectionCount.one": "{count} מקטע",
+    "settingsSectionCount.two": "{count} מקטעים",
+    "settingsSectionCount.few": "{count} מקטעים",
+    "settingsSectionCount.many": "{count} מקטעים",
+    "settingsSectionCount.other": "{count} מקטעים",
+    "settingsResultCount.zero": "מוצגות {count} תוצאות עבור \"{query}\".",
+    "settingsResultCount.one": "מוצגת {count} תוצאה עבור \"{query}\".",
+    "settingsResultCount.two": "מוצגות {count} תוצאות עבור \"{query}\".",
+    "settingsResultCount.few": "מוצגות {count} תוצאות עבור \"{query}\".",
+    "settingsResultCount.many": "מוצגות {count} תוצאות עבור \"{query}\".",
+    "settingsResultCount.other": "מוצגות {count} תוצאות עבור \"{query}\"."
+  },
+  "manifest": {
+    "extName": {
+      "message": "ScriptVault"
+    },
+    "extDescription": {
+      "message": "מנהל סקריפטי משתמש עוצמתי עם תמיכה ב-GM API, סנכרון ענן ועדכונים אוטומטיים"
+    },
+    "cmdOpenPopup": {
+      "message": "פתח חלון קופץ"
+    },
+    "cmdOpenDashboard": {
+      "message": "פתח לוח בקרה"
+    },
+    "cmdToggleScripts": {
+      "message": "הפעל/כבה את כל הסקריפטים"
+    },
+    "settingsGeneral": {
+      "message": "כללי"
+    },
+    "settingsSecurity": {
+      "message": "אבטחה"
+    },
+    "settingsEditor": {
+      "message": "עורך"
+    },
+    "settingsSync": {
+      "message": "סנכרון"
+    },
+    "settingsUtilities": {
+      "message": "כלים"
+    },
+    "sandboxRaw": {
+      "message": "גולמי (הקשר דף)"
+    },
+    "sandboxJs": {
+      "message": "JavaScript (עקיפת CSP)"
+    },
+    "sandboxDom": {
+      "message": "DOM (הקשר הרחבה)"
+    },
+    "blacklistLow": {
+      "message": "נמוך (אזהרה בלבד)"
+    },
+    "blacklistMedium": {
+      "message": "בינוני (חסימה עם עקיפה)"
+    },
+    "blacklistHigh": {
+      "message": "גבוה (חסימה תמידית)"
+    },
+    "btnSave": {
+      "message": "שמור"
+    },
+    "btnCancel": {
+      "message": "ביטול"
+    },
+    "btnDelete": {
+      "message": "מחק"
+    },
+    "btnImport": {
+      "message": "ייבוא"
+    },
+    "btnExport": {
+      "message": "ייצוא"
+    }
+  }
+}

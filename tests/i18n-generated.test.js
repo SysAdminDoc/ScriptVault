@@ -46,4 +46,16 @@ describe('generated I18n runtime', () => {
     expect(document.querySelector('[data-i18n-title="refresh"]')?.getAttribute('title')).toBe('刷新');
     expect(document.querySelector('[data-i18n-aria-label="clearScriptSearch"]')?.getAttribute('aria-label')).toBe('Clear script search');
   });
+
+  it('preserves generated plural and RTL behavior', () => {
+    const I18n = createI18n('ru-RU');
+    I18n.init('ru-RU');
+    expect(I18n.getPluralMessage('scriptNoun', 2)).toBe('скрипта');
+    expect(I18n.getPluralMessage('scriptNoun', 5)).toBe('скриптов');
+
+    I18n.setLocale('he');
+    expect(document.documentElement.lang).toBe('he');
+    expect(document.documentElement.dir).toBe('rtl');
+    expect(I18n.getPluralCategory(2)).toBe('two');
+  });
 });

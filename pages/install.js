@@ -35,6 +35,13 @@ function tInstall(key, fallback = key, placeholders = {}) {
   return message && message !== key ? message : formatInstallI18nFallback(fallback, placeholders);
 }
 
+function pInstall(family, count, singularFallback, pluralFallback) {
+  const message = getInstallI18n()?.getPluralMessage?.(family, count);
+  return message && !message.startsWith(`${family}.`)
+    ? message
+    : (count === 1 ? singularFallback : pluralFallback);
+}
+
 function applyInstallI18n() {
   const i18n = getInstallI18n();
   if (!i18n?.applyToDOM) return;
@@ -1430,7 +1437,7 @@ function renderInstallUI(sourceUrl) {
       meta: hasDangerousPerms
         ? tInstall('installElevatedPermissionsNeedReview', '{count} elevated {permissions} need review', {
             count: numberFormatter.format(dangerousPermissions.length),
-            permissions: dangerousPermissions.length === 1 ? tInstall('permissionSingular', 'permission') : tInstall('permissionPlural', 'permissions')
+            permissions: pInstall('permissionNoun', dangerousPermissions.length, 'permission', 'permissions')
           })
         : tInstall('installMetadataLowRiskApis', 'Metadata only asks for low-risk userscript APIs')
     },
@@ -1438,12 +1445,12 @@ function renderInstallUI(sourceUrl) {
       label: tInstall('installSummaryScope', 'Scope'),
       value: matches.length > 0 ? tInstall('installRunRulesCount', '{count} run {rules}', {
         count: numberFormatter.format(matches.length),
-        rules: matches.length === 1 ? tInstall('ruleSingular', 'rule') : tInstall('rulePlural', 'rules')
+        rules: pInstall('ruleNoun', matches.length, 'rule', 'rules')
       }) : tInstall('installNoExplicitMatchRules', 'No explicit match rules'),
       meta: excludes.length > 0
         ? tInstall('installExclusionsApplied', '{count} {exclusions} applied', {
             count: numberFormatter.format(excludes.length),
-            exclusions: excludes.length === 1 ? tInstall('exclusionSingular', 'exclusion') : tInstall('exclusionPlural', 'exclusions')
+            exclusions: pInstall('exclusionNoun', excludes.length, 'exclusion', 'exclusions')
           })
         : tInstall('installNoExtraExclusions', 'No extra exclusions declared')
     },
@@ -1453,7 +1460,7 @@ function renderInstallUI(sourceUrl) {
       meta: tInstall('installPayloadMeta', '{lines} lines • {assets} external {assetLabel}', {
         lines: numberFormatter.format(lineCount),
         assets: numberFormatter.format(resourceCount),
-        assetLabel: resourceCount === 1 ? tInstall('assetSingular', 'asset') : tInstall('assetPlural', 'assets')
+        assetLabel: pInstall('assetNoun', resourceCount, 'asset', 'assets')
       })
     }
   ];
@@ -1472,7 +1479,7 @@ function renderInstallUI(sourceUrl) {
       tInstall('installAlertElevatedAccess', 'Elevated Browser Access'),
       escapeHtml(tInstall('installAlertElevatedAccessBody', 'This script requests {count} high-trust {permissions}, including {examples}.', {
         count: numberFormatter.format(dangerousPermissions.length),
-        permissions: dangerousPermissions.length === 1 ? tInstall('permissionSingular', 'permission') : tInstall('permissionPlural', 'permissions'),
+        permissions: pInstall('permissionNoun', dangerousPermissions.length, 'permission', 'permissions'),
         examples: dangerousPermissions.slice(0, 3).join(', ')
       }))
     ));
@@ -1792,7 +1799,7 @@ function renderInstallUI(sourceUrl) {
               : `<span class="tag safe">${escapeHtml(tInstall('installNoHttpHostGrantsNeeded', 'No HTTP(S) host grants needed'))}</span>`}
           ${hostPermissionPlan.origins.length > 12 ? `<span class="tag neutral">${escapeHtml(tInstall('installMoreCount', '+{count} more', { count: numberFormatter.format(hostPermissionPlan.origins.length - 12) }))}</span>` : ''}
           ${hostPermissionPlan.requiresBroadHostAccess ? hostPermissionPlan.broadOrigins.map(origin => `<span class="tag warning">${escapeHtml(origin)}</span>`).join('') : ''}
-          ${hostPermissionPlan.unsupported.length > 0 ? `<span class="tag neutral" title="${escapeHtml(hostPermissionPlan.unsupported.slice(0, 6).join(', '))}">${escapeHtml(tInstall('installNonHttpRulesCount', '{count} non-HTTP {rules}', { count: numberFormatter.format(hostPermissionPlan.unsupported.length), rules: hostPermissionPlan.unsupported.length === 1 ? tInstall('ruleSingular', 'rule') : tInstall('rulePlural', 'rules') }))}</span>` : ''}
+          ${hostPermissionPlan.unsupported.length > 0 ? `<span class="tag neutral" title="${escapeHtml(hostPermissionPlan.unsupported.slice(0, 6).join(', '))}">${escapeHtml(tInstall('installNonHttpRulesCount', '{count} non-HTTP {rules}', { count: numberFormatter.format(hostPermissionPlan.unsupported.length), rules: pInstall('ruleNoun', hostPermissionPlan.unsupported.length, 'rule', 'rules') }))}</span>` : ''}
         </div>
       </div>
 
@@ -1942,7 +1949,7 @@ function renderInstallUI(sourceUrl) {
                 : hostPermissionPlan.origins.length > 0
                   ? tInstall('installScopedHostsCount', '{count} scoped {hosts}', {
                       count: numberFormatter.format(hostPermissionPlan.origins.length),
-                      hosts: hostPermissionPlan.origins.length === 1 ? tInstall('hostSingular', 'host') : tInstall('hostPlural', 'hosts')
+                      hosts: pInstall('hostNoun', hostPermissionPlan.origins.length, 'host', 'hosts')
                     })
                   : tInstall('installNoHttpGrants', 'No HTTP(S) grants'))}</strong>
             </div>
@@ -2681,7 +2688,7 @@ async function checkDependencies(requires) {
         tone: 'good',
         detail: tInstall('installAllReachableDetail', '{count} dependency {urls} {verb} reachable.', {
           count: numberFormatter.format(counters.ok),
-          urls: counters.ok === 1 ? tInstall('urlSingular', 'URL') : tInstall('urlPlural', 'URLs'),
+          urls: pInstall('urlNoun', counters.ok, 'URL', 'URLs'),
           verb: counters.ok === 1 ? tInstall('isVerb', 'is') : tInstall('areVerb', 'are')
         })
       };
@@ -2700,7 +2707,7 @@ async function checkDependencies(requires) {
         tone: 'warn',
         detail: tInstall('installDependencyFailedDetail', '{count} dependency {urls} failed to respond cleanly.', {
           count: numberFormatter.format(counters.fail),
-          urls: counters.fail === 1 ? tInstall('urlSingular', 'URL') : tInstall('urlPlural', 'URLs')
+          urls: pInstall('urlNoun', counters.fail, 'URL', 'URLs')
         })
       };
     }
@@ -2947,7 +2954,7 @@ async function checkRequireProvenance(meta) {
       setRequireProvenanceStatus({
         label: tInstall('installIssueCount', '{count} {issues}', {
           count: numberFormatter.format(failed),
-          issues: failed === 1 ? tInstall('issueSingular', 'issue') : tInstall('issuePlural', 'issues')
+          issues: pInstall('issueNoun', failed, 'issue', 'issues')
         }),
         tone: 'warn',
         detail: tInstall('installProvenanceFailedOrIncomplete', 'One or more @require provenance checks failed or are incomplete.')

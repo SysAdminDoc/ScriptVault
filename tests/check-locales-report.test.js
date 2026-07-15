@@ -14,18 +14,17 @@ function runReport(flags = []) {
 }
 
 describe('scripts/check-locales.mjs', () => {
-  it('lists the same 9 locales across _locales and modules/i18n.js', () => {
+  it('lists the same 9 locales across sources and generated catalogs', () => {
     const report = runReport();
+    expect(report.sources.localeSources).toEqual(['de', 'en', 'es', 'fr', 'he', 'ja', 'pt', 'ru', 'zh']);
     expect(report.sources.localesDir).toEqual(['de', 'en', 'es', 'fr', 'he', 'ja', 'pt', 'ru', 'zh']);
     expect(report.sources.runtimeI18n).toEqual(['de', 'en', 'es', 'fr', 'he', 'ja', 'pt', 'ru', 'zh']);
-    expect(report.sources.dashboardI18nV2).toBeUndefined();
+    expect(report.sources.generatedRuntime).toBe('src/generated/locale-catalogs.ts');
   });
 
-  it('reports zero drift for _locales/ key parity (the CI-gated source-of-truth)', () => {
+  it('reports zero source, generation, manifest, and coverage drift', () => {
     const report = runReport();
-    const fatalKinds = new Set(['locale-json-error', 'locale-key-drift', 'cross-source-locale-mismatch']);
-    const fatal = report.drifts.filter(d => fatalKinds.has(d.kind));
-    expect(fatal).toEqual([]);
+    expect(report.drifts).toEqual([]);
   });
 
   it('exits 0 in --check mode (no fatal drift)', () => {
@@ -38,9 +37,9 @@ describe('scripts/check-locales.mjs', () => {
     expect(exitCode).toBe(0);
   });
 
-  it('exits 0 in --strict mode after runtime dictionary key parity backfill', () => {
+  it('exits 0 in --strict mode with generated runtime parity', () => {
     const report = runReport();
-    expect(report.drifts.filter(d => d.kind === 'runtime-key-drift')).toEqual([]);
+    expect(report.drifts).toEqual([]);
 
     let exitCode = 0;
     try {
@@ -51,12 +50,17 @@ describe('scripts/check-locales.mjs', () => {
     expect(exitCode).toBe(0);
   });
 
-  it('translation-coverage warnings include explicit counts', () => {
+  it('labels every incomplete locale partial and pins explicit baselines', () => {
     const report = runReport();
+    expect(report.coverage.find(entry => entry.locale === 'en')).toMatchObject({ status: 'complete', percent: 100 });
+    expect(report.coverage.find(entry => entry.locale === 'he')).toMatchObject({ status: 'partial', direction: 'rtl' });
+    expect(report.warnings).toHaveLength(8);
     for (const w of report.warnings) {
       expect(w).toHaveProperty('translated');
       expect(w).toHaveProperty('total');
-      expect(w).toHaveProperty('untranslatedCount');
+      expect(w).toHaveProperty('baseline');
+      expect(w.status).toBe('partial');
+      expect(w.translated).toBeGreaterThanOrEqual(w.baseline);
       expect(w.locale).not.toBe('en');
     }
   });

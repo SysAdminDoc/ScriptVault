@@ -27,6 +27,13 @@
         return message && message !== key ? message : formatPopupI18nFallback(fallback, placeholders);
     }
 
+    function pPopup(family, count, singularFallback, pluralFallback) {
+        const message = getPopupI18n()?.getPluralMessage?.(family, count);
+        return message && !message.startsWith(`${family}.`)
+            ? message
+            : (count === 1 ? singularFallback : pluralFallback);
+    }
+
     function applyPopupI18n() {
         const i18n = getPopupI18n();
         if (!i18n?.applyToDOM) return;
@@ -1777,7 +1784,7 @@
                 updateCount > 0
                     ? tPopup('popupUpdatesQueued', '{count} {updates} queued', {
                         count: numberFormatter.format(updateCount),
-                        updates: updateCount === 1 ? tPopup('updateSingular', 'update') : tPopup('updatePlural', 'updates')
+                        updates: pPopup('updateNoun', updateCount, 'update', 'updates')
                     })
                     : tPopup('noUpdates', 'All scripts are up to date')
             );
@@ -1798,7 +1805,7 @@
                 elements.pendingUpdatesBadge.textContent = numberFormatter.format(count);
                 elements.pendingUpdatesBadge.setAttribute('aria-label', tPopup('popupQueuedUpdatesAria', '{count} queued {updates}', {
                     count: numberFormatter.format(count),
-                    updates: count === 1 ? tPopup('updateSingular', 'update') : tPopup('updatePlural', 'updates')
+                    updates: pPopup('updateNoun', count, 'update', 'updates')
                 }));
             }
         } catch (_error) {

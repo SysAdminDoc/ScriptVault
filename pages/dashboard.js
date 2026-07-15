@@ -669,7 +669,7 @@
 
     function getBulkDeleteDialogCopy(count) {
         const formattedCount = numberFormatter.format(count);
-        const plural = count === 1 ? 'script' : 'scripts';
+        const plural = getDashboardCountLabel('scriptNoun', count, 'script', 'scripts');
         const retentionLabel = formatTrashRetention(state.settings?.trashMode || '30');
         const isPermanent = isTrashDisabled();
 
@@ -701,7 +701,7 @@
         const successCount = result.successCount || 0;
         const failureCount = result.failureCount || 0;
         const skippedCount = result.skippedCount || 0;
-        const plural = count => count === 1 ? 'script' : 'scripts';
+        const plural = count => getDashboardCountLabel('scriptNoun', count, 'script', 'scripts');
         const formattedTotal = numberFormatter.format(totalCount);
         const formattedSuccess = numberFormatter.format(successCount);
         const formattedSkipped = numberFormatter.format(skippedCount);
@@ -2400,6 +2400,29 @@
         return translated && translated !== key ? translated : fallback;
     }
 
+    const DASHBOARD_PLURAL_FAMILIES = Object.freeze({
+        editorTargetSingular: 'targetNoun',
+        scriptSingular: 'scriptNoun',
+        trashDaySingular: 'dayNoun',
+    });
+
+    function getDashboardCountLabel(family, count, singularFallback, pluralFallback) {
+        const i18n = getDashboardI18n();
+        const translated = i18n?.getPluralMessage?.(family, count);
+        if (translated && !translated.startsWith(`${family}.`)) return translated;
+        return count === 1 ? singularFallback : pluralFallback;
+    }
+
+    function getDashboardPluralMessage(family, count, placeholders, singularFallback, pluralFallback) {
+        const i18n = getDashboardI18n();
+        const translated = i18n?.getPluralMessage?.(family, count, placeholders);
+        if (translated && !translated.startsWith(`${family}.`)) return translated;
+        const fallback = count === 1 ? singularFallback : pluralFallback;
+        return String(fallback).replace(/\{(\w+)\}/g, (_, name) =>
+            Object.prototype.hasOwnProperty.call(placeholders, name) ? String(placeholders[name]) : `{${name}}`
+        );
+    }
+
     function getSettingsFilterLabel(filter) {
         const labelKey = SETTINGS_FILTER_LABEL_KEYS[filter] || SETTINGS_FILTER_LABEL_KEYS.all;
         return tDashboard(labelKey, SETTINGS_FILTER_LABELS[filter] || SETTINGS_FILTER_LABELS.all);
@@ -2436,7 +2459,10 @@
     }
 
     function getDashboardPluralLabel(count, singularKey, pluralKey, singularFallback, pluralFallback) {
-        return tDashboard(count === 1 ? singularKey : pluralKey, count === 1 ? singularFallback : pluralFallback);
+        const family = DASHBOARD_PLURAL_FAMILIES[singularKey];
+        return family
+            ? getDashboardCountLabel(family, count, singularFallback, pluralFallback)
+            : tDashboard(count === 1 ? singularKey : pluralKey, count === 1 ? singularFallback : pluralFallback);
     }
 
     function setLabelPreservingDecor(el, label) {
@@ -5659,10 +5685,12 @@
         }
         if (elements.settingsVisibleSummary) {
             const count = numberFormatter.format(visibleCount);
-            elements.settingsVisibleSummary.textContent = tDashboard(
-                'settingsSectionsCount',
-                `${count} section${visibleCount === 1 ? '' : 's'}`,
-                { count, plural: visibleCount === 1 ? '' : 's' }
+            elements.settingsVisibleSummary.textContent = getDashboardPluralMessage(
+                'settingsSectionCount',
+                visibleCount,
+                { count },
+                '{count} section',
+                '{count} sections'
             );
         }
         if (elements.settingsAdvancedSummary) {
@@ -5683,14 +5711,12 @@
         if (elements.settingsFilterStatus) {
             if (query) {
                 const count = numberFormatter.format(visibleCount);
-                elements.settingsFilterStatus.textContent = tDashboard(
-                    'settingsShowingResults',
-                    `Showing ${count} result${visibleCount === 1 ? '' : 's'} for "${elements.settingsQuickFilter?.value?.trim() || ''}".`,
-                    {
-                        count,
-                        plural: visibleCount === 1 ? '' : 's',
-                        query: elements.settingsQuickFilter?.value?.trim() || ''
-                    }
+                elements.settingsFilterStatus.textContent = getDashboardPluralMessage(
+                    'settingsResultCount',
+                    visibleCount,
+                    { count, query: elements.settingsQuickFilter?.value?.trim() || '' },
+                    'Showing {count} result for "{query}".',
+                    'Showing {count} results for "{query}".'
                 );
             } else {
                 elements.settingsFilterStatus.textContent = tDashboard(
@@ -6410,7 +6436,7 @@
             const count = Object.keys(keys).length;
             if (elements.signingTrustSummary) {
                 elements.signingTrustSummary.textContent = count
-                    ? `${numberFormatter.format(count)} trusted signing key${count === 1 ? '' : 's'} configured.`
+                    ? `${numberFormatter.format(count)} trusted signing ${(getDashboardI18n()?.getPluralCategory?.(count) ?? (count === 1 ? 'one' : 'other')) === 'one' ? 'key' : 'keys'} configured.`
                     : 'No trusted signing keys saved.';
             }
             renderSigningTrustList(keys);
@@ -11770,11 +11796,7 @@
             metadata.version ? tDashboard('editorVersionSummary', 'v{version}', { version: metadata.version }) : null,
             metadata.author ? tDashboard('editorByAuthor', 'by {author}', { author: metadata.author }) : null,
             targetCount > 0
-                ? tDashboard(
-                    targetCount === 1 ? 'editorTargetSingular' : 'editorTargetPlural',
-                    targetCount === 1 ? '{count} target' : '{count} targets',
-                    { count: formattedTargetCount }
-                )
+                ? `${formattedTargetCount} ${getDashboardPluralLabel(targetCount, 'editorTargetSingular', 'editorTargetPlural', 'target', 'targets')}`
                 : tDashboard('editorNoMatchRules', 'No match rules'),
             metadata.runAt ? metadata.runAt.replace(/^document-/, '') : null
         ].filter(Boolean);
@@ -13466,7 +13488,7 @@
     }
 
     function buildStructuredImportConfirmationMessage(files = [], transfer = getTransferPreferences()) {
-        return `Import ${files.length} file${files.length === 1 ? '' : 's'}? Matching scripts may be overwritten. Imported archive scripts stay disabled for review. ${
+        return `Import ${files.length} ${getDashboardCountLabel('fileNoun', files.length, 'file', 'files')}? Matching scripts may be overwritten. Imported archive scripts stay disabled for review. ${
             transfer.includeSettingsCredentials
                 ? 'Archived sync credentials restore only when archive metadata proves they were intentionally included.'
                 : 'Archived sync credentials stay local-only.'
@@ -13491,7 +13513,7 @@
         const total = results.length;
         const successes = results.filter(result => result.success);
         const failures = results.filter(result => !result.success);
-        const fileLabel = count => count === 1 ? 'file' : 'files';
+        const fileLabel = count => getDashboardCountLabel('fileNoun', count, 'file', 'files');
         const failureNames = summarizeNames(failures.map(result => result.file), 2);
 
         if (total === 0) {
