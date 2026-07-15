@@ -67,6 +67,127 @@ const UserStylesEngine = (() => {
       console.error("[UserStylesEngine] Failed to save variables:", e);
     }
   }
+  function _stripQuotedValue(value) {
+    const trimmed = value.trim();
+    if (trimmed.length >= 2 && (trimmed.startsWith('"') && trimmed.endsWith('"') || trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+      return trimmed.slice(1, -1);
+    }
+    return trimmed;
+  }
+  function _splitTopLevel(value, separator = ",") {
+    const parts = [];
+    let depth = 0;
+    let quote = "";
+    let start = 0;
+    for (let index = 0; index < value.length; index++) {
+      const char = value[index] ?? "";
+      if (quote) {
+        if (char === quote && value[index - 1] !== "\\") quote = "";
+        continue;
+      }
+      if (char === '"' || char === "'") {
+        quote = char;
+      } else if (char === "(") {
+        depth++;
+      } else if (char === ")") {
+        depth--;
+      } else if (char === separator && depth === 0) {
+        parts.push(value.slice(start, index).trim());
+        start = index + 1;
+      }
+    }
+    parts.push(value.slice(start).trim());
+    return parts;
+  }
+  function _detectColorSpace(value) {
+    const normalized = _stripQuotedValue(value).toLowerCase();
+    if (/^#[0-9a-f]+$/i.test(normalized)) return "hex";
+    if (/^rgba?\(/.test(normalized)) return "rgb";
+    if (/^hsla?\(/.test(normalized)) return "hsl";
+    if (/^oklch\(/.test(normalized)) return "oklch";
+    if (/^oklab\(/.test(normalized)) return "oklab";
+    if (/^[a-z][a-z0-9-]*$/i.test(normalized)) return "named";
+    return "css";
+  }
+  function _validateColorValue(value, label = "Color") {
+    if (typeof value !== "string") return `${label} must be a CSS color string.`;
+    const color = _stripQuotedValue(value);
+    if (!color) return `${label} cannot be empty.`;
+    if (color.length > 256) return `${label} must be 256 characters or fewer.`;
+    if (/[;{}\x00-\x1f\x7f]/.test(color)) return `${label} contains unsafe CSS characters.`;
+    if (/^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(color)) return "";
+    if (/^(?:transparent|currentcolor|canvas|canvastext|accentcolor|accentcolortext|[a-z]+)$/i.test(color)) return "";
+    const functional = color.match(/^([a-z][a-z0-9-]*)\(([\s\S]*)\)$/i);
+    if (!functional) return `${label} is not a supported CSS color.`;
+    const functionName = (functional[1] ?? "").toLowerCase();
+    const body = functional[2] ?? "";
+    const supported = /* @__PURE__ */ new Set([
+      "rgb",
+      "rgba",
+      "hsl",
+      "hsla",
+      "hwb",
+      "lab",
+      "lch",
+      "oklab",
+      "oklch",
+      "color",
+      "color-mix",
+      "light-dark",
+      "var"
+    ]);
+    if (!supported.has(functionName)) return `${label} uses unsupported ${functionName}() syntax.`;
+    let depth = 0;
+    for (const char of body) {
+      if (char === "(") depth++;
+      if (char === ")") depth--;
+      if (depth < 0) return `${label} has unbalanced parentheses.`;
+    }
+    if (depth !== 0) return `${label} has unbalanced parentheses.`;
+    if (functionName === "light-dark") {
+      const choices = _splitTopLevel(body);
+      if (choices.length !== 2) return `${label} light-dark() requires light and dark colors.`;
+      return _validateColorValue(choices[0], `${label} light value`) || _validateColorValue(choices[1], `${label} dark value`);
+    }
+    if (functionName === "oklab" || functionName === "oklch") {
+      const components = body.split("/")[0]?.trim().split(/\s+/).filter(Boolean) ?? [];
+      if (components.length !== 3) return `${label} ${functionName}() requires three components.`;
+    }
+    if (functionName === "hsl" || functionName === "hsla") {
+      const components = body.includes(",") ? _splitTopLevel(body) : body.split("/")[0]?.trim().split(/\s+/).filter(Boolean) ?? [];
+      if (components.length < 3) return `${label} ${functionName}() requires hue, saturation, and lightness.`;
+    }
+    return "";
+  }
+  function _parseAdvancedColorValue(rawValue) {
+    const annotations = [];
+    const annotationRegex = /\s+@(group|light|dark)\s+/gi;
+    let match;
+    while ((match = annotationRegex.exec(rawValue)) !== null) {
+      annotations.push({
+        name: (match[1] ?? "").toLowerCase(),
+        start: match.index,
+        valueStart: annotationRegex.lastIndex
+      });
+    }
+    const base = _stripQuotedValue(rawValue.slice(0, annotations[0]?.start ?? rawValue.length));
+    let group = "";
+    let light = "";
+    let dark = "";
+    annotations.forEach((annotation, index) => {
+      const end = annotations[index + 1]?.start ?? rawValue.length;
+      const annotationValue = _stripQuotedValue(rawValue.slice(annotation.valueStart, end));
+      if (annotation.name === "group") group = annotationValue.replace(/^#/, "");
+      if (annotation.name === "light") light = annotationValue;
+      if (annotation.name === "dark") dark = annotationValue;
+    });
+    const colorSchemes = light || dark ? { light: light || base, dark: dark || base } : void 0;
+    return {
+      value: base,
+      ...group ? { group } : {},
+      ...colorSchemes ? { colorSchemes } : {}
+    };
+  }
   function _parseVarDirective(type, rest) {
     const nameMatch = rest.match(/^(\S+)\s+"([^"]*?)"\s+([\s\S]*)$/);
     if (!nameMatch) {
@@ -84,8 +205,18 @@ const UserStylesEngine = (() => {
     const label = nameMatch[2] ?? "";
     let defaultVal = (nameMatch[3] ?? "").trim();
     let options = null;
+    let group;
+    let colorSpace;
+    let colorSchemes;
     switch (type) {
       case "color":
+        {
+          const advanced = _parseAdvancedColorValue(String(defaultVal));
+          defaultVal = advanced.value;
+          group = advanced.group;
+          colorSchemes = advanced.colorSchemes;
+          colorSpace = _detectColorSpace(advanced.value);
+        }
         break;
       case "text":
         if (/^".*"$/.test(defaultVal)) {
@@ -142,7 +273,16 @@ const UserStylesEngine = (() => {
         break;
       }
     }
-    return { type, name: varName, label, default: defaultVal, options };
+    return {
+      type,
+      name: varName,
+      label,
+      default: defaultVal,
+      options,
+      ...group ? { group } : {},
+      ...colorSpace ? { colorSpace } : {},
+      ...colorSchemes ? { colorSchemes } : {}
+    };
   }
   function parseUserCSS(code) {
     const metaMatch = code.match(META_REGEX);
@@ -190,6 +330,10 @@ const UserStylesEngine = (() => {
     if (afterMeta !== -1) {
       css = code.substring(afterMeta + 2).trim();
     }
+    const validation = validateUserCSSVariables(variables);
+    if (!validation.valid) {
+      return { error: validation.errors.join(" ") };
+    }
     return {
       meta,
       variables,
@@ -197,10 +341,82 @@ const UserStylesEngine = (() => {
       css
     };
   }
-  function _substituteVariables(css, variables, customValues) {
+  function _isColorSchemeValue(value) {
+    return !!value && typeof value === "object" && !Array.isArray(value) && typeof value.light === "string" && typeof value.dark === "string";
+  }
+  function _validateVariableValue(variable, value) {
+    if (variable.type === "color") {
+      if (_isColorSchemeValue(value)) {
+        return _validateColorValue(value.light, `${variable.label} light color`) || _validateColorValue(value.dark, `${variable.label} dark color`);
+      }
+      return _validateColorValue(value, variable.label || variable.name);
+    }
+    if (variable.type === "checkbox" && typeof value !== "boolean") {
+      return `${variable.label || variable.name} must be true or false.`;
+    }
+    if ((variable.type === "number" || variable.type === "range") && (typeof value !== "number" || !Number.isFinite(value))) {
+      return `${variable.label || variable.name} must be a finite number.`;
+    }
+    if (variable.type === "select" && variable.options && !Object.prototype.hasOwnProperty.call(variable.options, String(value))) {
+      return `${variable.label || variable.name} must use a configured option.`;
+    }
+    if (typeof value === "object") return `${variable.label || variable.name} has an invalid value.`;
+    return "";
+  }
+  function validateUserCSSVariables(variables, values = {}) {
+    const errors = [];
+    const names = /* @__PURE__ */ new Set();
+    const reservedNames = /* @__PURE__ */ new Set(["__proto__", "prototype", "constructor"]);
+    for (const variable of variables) {
+      if (!/^-?[_a-z][\w-]*$/i.test(variable.name) || reservedNames.has(variable.name.toLowerCase())) {
+        errors.push("UserCSS variable names must be non-empty CSS identifiers.");
+        continue;
+      }
+      if (names.has(variable.name)) {
+        errors.push(`Duplicate UserCSS variable: ${variable.name}.`);
+        continue;
+      }
+      names.add(variable.name);
+      if (variable.group && !/^[a-z0-9_-]{1,64}$/i.test(variable.group)) {
+        errors.push(`${variable.label || variable.name} has an invalid color group.`);
+      }
+      const defaultError = _validateVariableValue(variable, variable.colorSchemes ?? variable.default);
+      if (defaultError) errors.push(defaultError);
+    }
+    for (const [name, value] of Object.entries(values)) {
+      const variable = variables.find((candidate) => candidate.name === name);
+      if (!variable) {
+        errors.push(`Unknown UserCSS variable: ${name}.`);
+        continue;
+      }
+      const valueError = _validateVariableValue(variable, value);
+      if (valueError) errors.push(valueError);
+    }
+    return { valid: errors.length === 0, errors };
+  }
+  function _expandLinkedGroupValues(variables, values) {
+    const expanded = { ...values };
+    for (const [name, value] of Object.entries(values)) {
+      const source = variables.find((variable) => variable.name === name);
+      if (!source?.group || source.type !== "color") continue;
+      for (const linked of variables) {
+        if (linked.type === "color" && linked.group === source.group) {
+          expanded[linked.name] = value;
+        }
+      }
+    }
+    return expanded;
+  }
+  function _substituteVariables(css, variables, customValues, colorScheme = "auto") {
     let result = css;
     for (const v of variables) {
-      const val = customValues && customValues[v.name] !== void 0 ? customValues[v.name] : v.default;
+      const configured = customValues && customValues[v.name] !== void 0 ? customValues[v.name] : v.colorSchemes ?? v.default;
+      let val;
+      if (_isColorSchemeValue(configured)) {
+        val = colorScheme === "light" ? configured.light : colorScheme === "dark" ? configured.dark : `light-dark(${configured.light}, ${configured.dark})`;
+      } else {
+        val = configured;
+      }
       const placeholder = new RegExp(
         "/\\*\\[\\[" + _escapeRegex(v.name) + "\\]\\]\\*/",
         "g"
@@ -211,6 +427,11 @@ const UserStylesEngine = (() => {
         "g"
       );
       result = result.replace(anglePlaceholder, String(val));
+      const cssVariable = new RegExp(
+        "var\\(\\s*--" + _escapeRegex(v.name) + "\\s*(?:,[^)]*)?\\)",
+        "g"
+      );
+      result = result.replace(cssVariable, String(val));
     }
     return result;
   }
@@ -224,15 +445,24 @@ const UserStylesEngine = (() => {
     const custom = _customVars[styleId] ?? {};
     return _substituteVariables(style.css, vars, custom);
   }
-  function _buildDraftPreviewCSS(usercssCode) {
+  function _buildDraftPreviewCSS(usercssCode, options = {}) {
     const parsed = parseUserCSS(usercssCode);
     if (parsed.error) return { error: parsed.error };
     const variables = parsed.variables ?? [];
     const defaults = {};
     for (const variable of variables) {
-      defaults[variable.name] = variable.default;
+      defaults[variable.name] = variable.colorSchemes ?? variable.default;
     }
-    const css = _substituteVariables(parsed.css ?? "", variables, defaults).trim();
+    const providedValues = options.values ?? {};
+    const validation = validateUserCSSVariables(variables, providedValues);
+    if (!validation.valid) return { error: validation.errors.join(" ") };
+    const values = { ...defaults, ..._expandLinkedGroupValues(variables, providedValues) };
+    const css = _substituteVariables(
+      parsed.css ?? "",
+      variables,
+      values,
+      options.colorScheme ?? "auto"
+    ).trim();
     if (!css) return { error: "UserCSS draft has no CSS to preview." };
     return {
       css,
@@ -276,7 +506,7 @@ const UserStylesEngine = (() => {
     return { success: true, cleared };
   }
   async function previewDraft(usercssCode, options = {}) {
-    const built = _buildDraftPreviewCSS(usercssCode);
+    const built = _buildDraftPreviewCSS(usercssCode, options);
     if (built.error || !built.css || !built.match) return { error: built.error || "Unable to preview UserCSS draft." };
     const tab = await _getPreviewTab(options.tabId);
     if (tab?.id == null) return { error: "No active tab is available for preview." };
@@ -305,6 +535,8 @@ const UserStylesEngine = (() => {
   }
   async function registerStyle(style) {
     if (!_initialized) await _loadState();
+    const variableValidation = validateUserCSSVariables(style.variables ?? []);
+    if (!variableValidation.valid) throw new Error(variableValidation.errors.join(" "));
     const id = style.id ?? `usercss_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const entry = {
       id,
@@ -451,15 +683,18 @@ const UserStylesEngine = (() => {
     const custom = _customVars[styleId] ?? {};
     return (style.variables ?? []).map((v) => ({
       ...v,
-      current: custom[v.name] !== void 0 ? custom[v.name] : v.default
+      current: custom[v.name] !== void 0 ? custom[v.name] : v.colorSchemes ?? v.default
     }));
   }
   async function setVariables(styleId, values) {
     if (!_initialized) await _loadState();
     const style = _styles[styleId];
     if (!style) return;
+    const validation = validateUserCSSVariables(style.variables ?? [], values);
+    if (!validation.valid) throw new Error(validation.errors.join(" "));
+    const expandedValues = _expandLinkedGroupValues(style.variables ?? [], values);
     if (!_customVars[styleId]) _customVars[styleId] = {};
-    for (const [key, val] of Object.entries(values)) {
+    for (const [key, val] of Object.entries(expandedValues)) {
       _customVars[styleId][key] = val;
     }
     await _saveVars();
@@ -467,6 +702,95 @@ const UserStylesEngine = (() => {
       await _removeStyleFromAllTabs(styleId);
       await _injectStyleToMatchingTabs(styleId);
     }
+  }
+  function _serializeStyleVariable(variable, value) {
+    let serialized = "";
+    if (variable.type === "color") {
+      if (_isColorSchemeValue(value)) {
+        serialized = `${value.light} @light ${value.light} @dark ${value.dark}`;
+      } else {
+        serialized = String(value);
+      }
+      if (variable.group) serialized += ` @group ${variable.group}`;
+    } else if (variable.type === "checkbox") {
+      serialized = value ? "1" : "0";
+    } else if (variable.type === "range") {
+      const range = variable.options && "min" in variable.options ? variable.options : null;
+      serialized = range ? `[${range.min}, ${range.max}, ${range.step}, ${Number(value)}]` : String(value);
+    } else if (variable.type === "select" && variable.options && !("min" in variable.options)) {
+      const selected = String(value);
+      const entries = Object.entries(variable.options);
+      entries.sort(([left]) => left === selected ? -1 : left.localeCompare(selected));
+      serialized = `{${entries.map(([key, optionValue]) => `${JSON.stringify(key)}:${JSON.stringify(optionValue)}`).join("|")}}`;
+    } else if (variable.type === "text") {
+      serialized = JSON.stringify(String(value));
+    } else {
+      serialized = String(value);
+    }
+    return `@var ${variable.type} ${variable.name} ${JSON.stringify(variable.label)} ${serialized}`;
+  }
+  function applyVariableDefaults(usercssCode, values) {
+    const parsed = parseUserCSS(usercssCode);
+    if (parsed.error || !parsed.variables) return { error: parsed.error || "Unable to parse UserCSS." };
+    const expanded = _expandLinkedGroupValues(parsed.variables, values);
+    const validation = validateUserCSSVariables(parsed.variables, expanded);
+    if (!validation.valid) return { error: validation.errors.join(" ") };
+    let code = usercssCode;
+    for (const variable of parsed.variables) {
+      if (!Object.prototype.hasOwnProperty.call(expanded, variable.name)) continue;
+      const directive = _serializeStyleVariable(variable, expanded[variable.name]);
+      const line = new RegExp(
+        "^(\\s*\\*?\\s*)@var\\s+\\S+\\s+" + _escapeRegex(variable.name) + "\\s+.*$",
+        "m"
+      );
+      code = code.replace(line, (_match, prefix) => `${prefix}${directive}`);
+    }
+    return { code };
+  }
+  function _serializeUserCSS(style, values) {
+    const meta = style.meta || {};
+    const metadataLines = [
+      `@name ${meta.name || "Unnamed Style"}`,
+      `@namespace ${meta.namespace || "scriptvault"}`,
+      `@version ${meta.version || "1.0.0"}`
+    ];
+    for (const key of ["description", "author", "license", "preprocessor", "homepageURL", "supportURL", "updateURL"]) {
+      if (meta[key]) metadataLines.push(`@${key} ${meta[key]}`);
+    }
+    for (const pattern of style.match || ["*://*/*"]) metadataLines.push(`@match ${pattern}`);
+    for (const variable of style.variables || []) {
+      const value = values[variable.name] ?? variable.colorSchemes ?? variable.default;
+      metadataLines.push(_serializeStyleVariable(variable, value));
+    }
+    return `/* ==UserStyle==
+  ${metadataLines.join("\n")}
+  ==/UserStyle== */
+
+  ${style.css || ""}`;
+  }
+  function exportUserCSS(styleId) {
+    const style = _styles[styleId];
+    if (!style) return { error: "UserCSS style not found." };
+    const values = _customVars[styleId] ?? {};
+    if (style.rawCode && META_REGEX.test(style.rawCode)) {
+      return applyVariableDefaults(style.rawCode, values);
+    }
+    return { code: _serializeUserCSS(style, values) };
+  }
+  async function importUserCSS(usercssCode, values = {}) {
+    const parsed = parseUserCSS(usercssCode);
+    if (parsed.error) return { error: parsed.error };
+    const validation = validateUserCSSVariables(parsed.variables ?? [], values);
+    if (!validation.valid) return { error: validation.errors.join(" ") };
+    const styleId = await registerStyle({
+      meta: parsed.meta,
+      variables: parsed.variables,
+      css: parsed.css,
+      rawCode: usercssCode,
+      match: parsed.match
+    });
+    if (Object.keys(values).length > 0) await setVariables(styleId, values);
+    return { styleId };
   }
   function convertToUserscript(usercssCode) {
     const parsed = parseUserCSS(usercssCode);
@@ -477,7 +801,7 @@ const UserStylesEngine = (() => {
     const css = parsed.css;
     const defaults = {};
     for (const v of variables) {
-      defaults[v.name] = v.default;
+      defaults[v.name] = v.colorSchemes ?? v.default;
     }
     const finalCSS = _substituteVariables(css, variables, defaults);
     const escapedCSS = finalCSS.replace(/\\/g, "\\\\").replace(/`/g, "\\`").replace(/\$/g, "\\$");
@@ -699,11 +1023,15 @@ const UserStylesEngine = (() => {
   var UserStylesEngine = {
     init,
     parseUserCSS,
+    validateUserCSSVariables,
     registerStyle,
     unregisterStyle,
     toggleStyle,
     getVariables,
     setVariables,
+    applyVariableDefaults,
+    exportUserCSS,
+    importUserCSS,
     getStyles,
     getStyle,
     updateCSS,

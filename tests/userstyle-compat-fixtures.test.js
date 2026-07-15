@@ -103,6 +103,39 @@ section.footer { background: /*[[bg]]*/; opacity: 0.9; }
 
 body { color: /*[[accent]]*/; }
 blockquote::before { content: /*[[quote]]*/; }
+`,
+
+  modernColors: `/* ==UserStyle==
+@name           Modern Color Spaces
+@namespace      example.com
+@version        1.0.0
+@var color      hslAccent "HSL accent" "hsl(260 75% 60%)"
+@var color      oklchAccent "OKLCH accent" oklch(72% 0.18 255)
+@var color      oklabAccent "OKLab accent" oklab(72% -0.03 -0.12)
+==/UserStyle== */
+
+body { color: /*[[hslAccent]]*/; background: var(--oklchAccent); border-color: <<oklabAccent>>; }
+`,
+
+  linkedPalette: `/* ==UserStyle==
+@name           Linked Palette
+@namespace      example.com
+@version        1.0.0
+@var color      accent "Accent" #336699 @group brand
+@var color      accentAlias "Accent alias" #336699 @group brand
+==/UserStyle== */
+
+body { color: /*[[accent]]*/; border-color: var(--accentAlias); }
+`,
+
+  colorScheme: `/* ==UserStyle==
+@name           Scheme Palette
+@namespace      example.com
+@version        1.0.0
+@var color      surface "Surface" #ffffff @light hsl(0 0% 100%) @dark oklch(24% 0.02 255)
+==/UserStyle== */
+
+body { background: /*[[surface]]*/; }
 `
 };
 
@@ -204,6 +237,46 @@ describe('parseUserCSS — unicode labels', () => {
     const quote = r.variables.find(v => v.name === 'quote');
     expect(quote.label).toBe('引用テキスト');
     expect(quote.default).toBe('こんにちは');
+  });
+});
+
+describe('parseUserCSS — advanced color configuration', () => {
+  it('recognizes HSL, OKLCH, and OKLab color defaults', () => {
+    const r = parseUserCSS(fixture('modernColors'));
+    expect(r.error).toBeUndefined();
+    expect(r.variables.map(variable => [variable.name, variable.colorSpace, variable.default])).toEqual([
+      ['hslAccent', 'hsl', 'hsl(260 75% 60%)'],
+      ['oklchAccent', 'oklch', 'oklch(72% 0.18 255)'],
+      ['oklabAccent', 'oklab', 'oklab(72% -0.03 -0.12)'],
+    ]);
+  });
+
+  it('links color aliases through explicit palette metadata', () => {
+    const r = parseUserCSS(fixture('linkedPalette'));
+    expect(r.error).toBeUndefined();
+    expect(r.variables).toHaveLength(2);
+    expect(r.variables.every(variable => variable.group === 'brand')).toBe(true);
+  });
+
+  it('parses light and dark conditional color defaults', () => {
+    const r = parseUserCSS(fixture('colorScheme'));
+    expect(r.error).toBeUndefined();
+    expect(r.variables[0]).toMatchObject({
+      name: 'surface',
+      colorSchemes: {
+        light: 'hsl(0 0% 100%)',
+        dark: 'oklch(24% 0.02 255)',
+      },
+    });
+  });
+
+  it('rejects unsafe and malformed modern color values', () => {
+    const unsafe = fixture('modernColors').replace('oklch(72% 0.18 255)', 'oklch(72% 0.18 255);body{}');
+    const malformed = fixture('modernColors').replace('oklab(72% -0.03 -0.12)', 'oklab(72% -0.03)');
+    const reservedName = fixture('modernColors').replace('hslAccent', '__proto__');
+    expect(parseUserCSS(unsafe).error).toContain('unsafe CSS characters');
+    expect(parseUserCSS(malformed).error).toContain('requires three components');
+    expect(parseUserCSS(reservedName).error).toContain('CSS identifiers');
   });
 });
 

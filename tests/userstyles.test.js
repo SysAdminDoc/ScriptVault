@@ -39,6 +39,19 @@ function createUserCSSDraft(match = 'https://example.com/*') {
 body { color: /*[[accent]]*/; }`;
 }
 
+function createAdvancedUserCSSDraft() {
+  return `/* ==UserStyle==
+@name Advanced palette
+@namespace scriptvault
+@version 1.0.0
+@match https://example.com/*
+@var color accent "Accent" hsl(260 75% 60%) @group brand
+@var color accentAlias "Accent alias" hsl(260 75% 60%) @group brand
+@var color surface "Surface" #ffffff @light #ffffff @dark oklch(24% 0.02 255)
+==/UserStyle== */
+body { color: /*[[accent]]*/; border-color: var(--accentAlias); background: /*[[surface]]*/; }`;
+}
+
 let UserStylesEngine;
 
 describe('UserStylesEngine runtime module', () => {
@@ -110,6 +123,20 @@ body { color: tomato; }`;
       css: 'body { color: #123456; }',
     });
     expect(chrome.storage.local.set).not.toHaveBeenCalled();
+  });
+
+  it('renders linked palettes and forced color-scheme values in the generated runtime', async () => {
+    const result = await UserStylesEngine.previewDraft(createAdvancedUserCSSDraft(), {
+      tabId: 1,
+      colorScheme: 'dark',
+      values: { accent: 'oklch(68% 0.2 250)' },
+    });
+
+    expect(result.success).toBe(true);
+    expect(chrome.scripting.insertCSS).toHaveBeenLastCalledWith({
+      target: { tabId: 1 },
+      css: 'body { color: oklch(68% 0.2 250); border-color: oklch(68% 0.2 250); background: oklch(24% 0.02 255); }',
+    });
   });
 
   it('refreshes stored match patterns when full UserCSS metadata is edited', async () => {

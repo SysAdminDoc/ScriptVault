@@ -33,6 +33,19 @@ function createUserCSSDraft(match = 'https://example.com/*') {
 body { color: /*[[accent]]*/; }`;
 }
 
+function createAdvancedUserCSSDraft() {
+  return `/* ==UserStyle==
+@name Advanced palette
+@namespace scriptvault
+@version 1.0.0
+@match https://example.com/*
+@var color accent "Accent" hsl(260 75% 60%) @group brand
+@var color accentAlias "Accent alias" hsl(260 75% 60%) @group brand
+@var color surface "Surface" #ffffff @light hsl(0 0% 100%) @dark oklch(24% 0.02 255)
+==/UserStyle== */
+body { color: /*[[accent]]*/; border-color: var(--accentAlias); background: /*[[surface]]*/; }`;
+}
+
 describe('source userstyles module', () => {
   beforeEach(() => {
     globalThis.__resetStorageMock();
@@ -161,6 +174,74 @@ describe('source userstyles module', () => {
       css: 'body { color: #123456; }',
     });
     expect(chrome.storage.local.set).not.toHaveBeenCalled();
+  });
+
+  it.each(['Chrome', 'Firefox'])('renders advanced draft values identically for %s fixtures', async () => {
+    const { UserStylesEngine } = await loadFreshUserStyles();
+
+    const result = await UserStylesEngine.previewDraft(createAdvancedUserCSSDraft(), {
+      tabId: 1,
+      colorScheme: 'dark',
+      values: { accent: 'oklab(70% -0.04 -0.12)' },
+    });
+
+    expect(result).toMatchObject({ success: true, styleName: 'Advanced palette' });
+    expect(chrome.scripting.insertCSS).toHaveBeenLastCalledWith({
+      target: { tabId: 1 },
+      css: 'body { color: oklab(70% -0.04 -0.12); border-color: oklab(70% -0.04 -0.12); background: oklch(24% 0.02 255); }',
+    });
+  });
+
+  it('persists linked palettes and round-trips conditional colors through UserCSS export', async () => {
+    const { UserStylesEngine } = await loadFreshUserStyles();
+    const imported = await UserStylesEngine.importUserCSS(createAdvancedUserCSSDraft());
+    expect(imported.error).toBeUndefined();
+
+    await UserStylesEngine.setVariables(imported.styleId, {
+      accent: 'oklch(68% 0.2 250)',
+      surface: { light: 'hsl(45 100% 96%)', dark: 'oklab(22% 0 -0.03)' },
+    });
+    expect(chrome.storage.local.set).toHaveBeenCalledWith({
+      sv_userstyle_vars: expect.objectContaining({
+        [imported.styleId]: expect.objectContaining({
+          accent: 'oklch(68% 0.2 250)',
+          accentAlias: 'oklch(68% 0.2 250)',
+        }),
+      }),
+    });
+    const configured = UserStylesEngine.getVariables(imported.styleId);
+    expect(configured.find(variable => variable.name === 'accentAlias')?.current).toBe('oklch(68% 0.2 250)');
+    expect(configured.find(variable => variable.name === 'surface')?.current).toEqual({
+      light: 'hsl(45 100% 96%)',
+      dark: 'oklab(22% 0 -0.03)',
+    });
+
+    const exported = UserStylesEngine.exportUserCSS(imported.styleId);
+    expect(exported.error).toBeUndefined();
+    expect(exported.code).toContain('@var color accent "Accent" oklch(68% 0.2 250) @group brand');
+    expect(exported.code).toContain('@light hsl(45 100% 96%) @dark oklab(22% 0 -0.03)');
+
+    const reimported = await UserStylesEngine.importUserCSS(exported.code);
+    expect(reimported.error).toBeUndefined();
+    const reparsed = UserStylesEngine.getStyle(reimported.styleId);
+    expect(reparsed.variables.find(variable => variable.name === 'accent')?.group).toBe('brand');
+    expect(reparsed.variables.find(variable => variable.name === 'surface')?.colorSchemes).toEqual({
+      light: 'hsl(45 100% 96%)',
+      dark: 'oklab(22% 0 -0.03)',
+    });
+  });
+
+  it('rejects invalid persisted and preview color values before injection', async () => {
+    const { UserStylesEngine } = await loadFreshUserStyles();
+    const imported = await UserStylesEngine.importUserCSS(createAdvancedUserCSSDraft());
+
+    await expect(UserStylesEngine.setVariables(imported.styleId, { accent: 'oklch(70% 0.2);body{}' }))
+      .rejects.toThrow('unsafe CSS characters');
+    const preview = await UserStylesEngine.previewDraft(createAdvancedUserCSSDraft(), {
+      tabId: 1,
+      values: { surface: { light: '#fff', dark: 'oklab(20% 0)' } },
+    });
+    expect(preview.error).toContain('requires three components');
   });
 
   it('removes an old UserCSS preview before applying a new draft', async () => {

@@ -98,7 +98,9 @@
             tabId: null,
             active: false,
             pending: false,
-            timer: null
+            timer: null,
+            values: {},
+            colorScheme: 'auto'
         }
     };
 
@@ -1945,6 +1947,7 @@
         elements.btnEditorRunNow = document.getElementById('btnEditorRunNow');
         elements.btnEditorPreviewUserCSS = document.getElementById('btnEditorPreviewUserCSS');
         elements.btnEditorPreviewUserCSSLabel = document.getElementById('btnEditorPreviewUserCSSLabel');
+        elements.btnEditorConfigureUserCSS = document.getElementById('btnEditorConfigureUserCSS');
         elements.btnEditorToggle = document.getElementById('btnEditorToggle');
         elements.btnEditorToggleLabel = document.getElementById('btnEditorToggleLabel');
         elements.btnEditorDuplicate = document.getElementById('btnEditorDuplicate');
@@ -13108,6 +13111,12 @@
         return /\/\*\s*==UserStyle==[\s\S]*?==\/UserStyle==\s*\*\//.test(String(code || ''));
     }
 
+    function parseUserCssDraft(code = getCurrentEditorCode()) {
+        if (!isUserCSSDraft(code) || typeof UserStylesEngine === 'undefined') return null;
+        const parsed = UserStylesEngine.parseUserCSS(code);
+        return parsed?.error ? null : parsed;
+    }
+
     async function getRunNowTargetTab() {
         const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
         if (activeTab?.id && isRunnableTabUrl(activeTab.url)) return activeTab;
@@ -13133,7 +13142,9 @@
             tabId: null,
             active: false,
             pending: false,
-            timer: null
+            timer: null,
+            values: {},
+            colorScheme: 'auto'
         };
         updateUserCssPreviewButton();
     }
@@ -13143,6 +13154,11 @@
         if (!button) return;
         const code = getCurrentEditorCode();
         const isUserCss = isUserCSSDraft(code);
+        const parsed = isUserCss ? parseUserCssDraft(code) : null;
+        const variableNames = new Set((parsed?.variables || []).map(variable => variable.name));
+        for (const name of Object.keys(state.userCssPreview.values || {})) {
+            if (!variableNames.has(name)) delete state.userCssPreview.values[name];
+        }
         const isCurrentPreview = state.userCssPreview.active && state.userCssPreview.scriptId === state.currentScriptId;
         const pending = state.userCssPreview.pending && state.userCssPreview.scriptId === state.currentScriptId;
         button.hidden = !isUserCss;
@@ -13156,6 +13172,10 @@
             elements.btnEditorPreviewUserCSSLabel.textContent = pending
                 ? tDashboard('previewingEllipsis', 'Previewing...')
                 : isCurrentPreview ? tDashboard('clearPreview', 'Clear Preview') : tDashboard('previewCss', 'Preview CSS');
+        }
+        if (elements.btnEditorConfigureUserCSS) {
+            elements.btnEditorConfigureUserCSS.hidden = !isUserCss || !(parsed?.variables?.length);
+            elements.btnEditorConfigureUserCSS.disabled = !script || pending;
         }
     }
 
@@ -13201,7 +13221,9 @@
             const result = await chrome.runtime.sendMessage({
                 action: 'userStylePreviewDraft',
                 code,
-                tabId: targetTab.id
+                tabId: targetTab.id,
+                values: state.userCssPreview.values || {},
+                colorScheme: state.userCssPreview.colorScheme || 'auto'
             });
             if (result?.error) throw new Error(result.error);
             state.userCssPreview = {
@@ -13209,7 +13231,9 @@
                 tabId: result?.tabId || targetTab.id,
                 active: true,
                 pending: false,
-                timer: null
+                timer: null,
+                values: state.userCssPreview.values || {},
+                colorScheme: state.userCssPreview.colorScheme || 'auto'
             };
             updateEditorHeader(getCurrentScript());
             if (!options.silent) showToast(tDashboard('userCssPreviewActiveToast', 'Previewing unsaved UserCSS on this tab'), 'success');
@@ -13232,7 +13256,166 @@
                 return;
             }
             void applyUserCssPreview({ silent: true });
-        }, 450);
+        }, 180);
+    }
+
+    function getUserCssVariableValue(variable) {
+        if (Object.prototype.hasOwnProperty.call(state.userCssPreview.values || {}, variable.name)) {
+            return state.userCssPreview.values[variable.name];
+        }
+        return variable.colorSchemes || variable.default;
+    }
+
+    function renderUserCssVariableControl(variable, linkedVariables = [variable]) {
+        const names = linkedVariables.map(item => item.name).join(',');
+        const label = variable.group
+            ? `${variable.group} palette · ${linkedVariables.map(item => item.label).join(', ')}`
+            : variable.label;
+        const value = getUserCssVariableValue(variable);
+        const safeNames = escapeHtml(names);
+        const inputBase = `data-usercss-control data-usercss-names="${safeNames}" aria-label="${escapeHtml(label)}"`;
+        let control = '';
+        if (variable.type === 'color' && value && typeof value === 'object') {
+            control = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                <label>Light<input class="input-field" type="text" value="${escapeHtml(value.light)}" ${inputBase} data-usercss-scheme="light"></label>
+                <label>Dark<input class="input-field" type="text" value="${escapeHtml(value.dark)}" ${inputBase} data-usercss-scheme="dark"></label>
+            </div>`;
+        } else if (variable.type === 'color') {
+            const textId = `usercss-color-${variable.name.replace(/[^a-z0-9_-]/gi, '-')}`;
+            const picker = /^#[0-9a-f]{6}$/i.test(String(value))
+                ? `<input type="color" value="${escapeHtml(String(value))}" data-usercss-picker-for="${escapeHtml(textId)}" aria-label="${escapeHtml(label)} color picker">`
+                : '';
+            control = `<div style="display:flex;gap:8px;align-items:center">${picker}<input class="input-field" id="${escapeHtml(textId)}" type="text" value="${escapeHtml(String(value))}" ${inputBase}></div>`;
+        } else if (variable.type === 'checkbox') {
+            control = `<input type="checkbox" ${value ? 'checked' : ''} ${inputBase}>`;
+        } else if (variable.type === 'range') {
+            const range = variable.options || { min: 0, max: 100, step: 1 };
+            control = `<input type="range" value="${escapeHtml(String(value))}" min="${escapeHtml(String(range.min))}" max="${escapeHtml(String(range.max))}" step="${escapeHtml(String(range.step))}" ${inputBase}><output>${escapeHtml(String(value))}</output>`;
+        } else if (variable.type === 'number') {
+            control = `<input class="input-field" type="number" value="${escapeHtml(String(value))}" ${inputBase}>`;
+        } else if (variable.type === 'select') {
+            const options = Object.entries(variable.options || {}).map(([key, optionValue]) => `<option value="${escapeHtml(key)}" ${String(value) === key ? 'selected' : ''}>${escapeHtml(String(optionValue))}</option>`).join('');
+            control = `<select class="input-field" ${inputBase}>${options}</select>`;
+        } else {
+            control = `<input class="input-field" type="text" value="${escapeHtml(String(value ?? ''))}" ${inputBase}>`;
+        }
+        const groupNote = variable.group ? '<span class="utility-inline-status">Linked color aliases share this value.</span>' : '';
+        return `<div class="setting-row" style="display:grid;grid-template-columns:minmax(150px,0.8fr) minmax(220px,1.2fr);gap:12px;align-items:center">
+            <div><span class="label-text">${escapeHtml(label)}</span>${groupNote}</div><div>${control}</div>
+        </div>`;
+    }
+
+    function collectUserCssConfigurationValues(container) {
+        const values = {};
+        container.querySelectorAll('[data-usercss-control]').forEach(input => {
+            const names = String(input.dataset.usercssNames || '').split(',').filter(Boolean);
+            let value = input.type === 'checkbox' ? input.checked
+                : input.type === 'number' || input.type === 'range' ? Number(input.value)
+                    : input.value;
+            for (const name of names) {
+                if (input.dataset.usercssScheme) {
+                    const existing = values[name] && typeof values[name] === 'object'
+                        ? values[name]
+                        : { light: '', dark: '' };
+                    existing[input.dataset.usercssScheme] = value;
+                    values[name] = existing;
+                } else {
+                    values[name] = value;
+                }
+            }
+        });
+        return values;
+    }
+
+    function openUserCssConfiguration() {
+        const code = getCurrentEditorCode();
+        const parsed = parseUserCssDraft(code);
+        if (!parsed?.variables?.length) {
+            showToast(tDashboard('userCssNoVariables', 'This UserCSS draft has no configurable variables'), 'info');
+            return;
+        }
+
+        const renderedGroups = new Set();
+        const controls = [];
+        for (const variable of parsed.variables) {
+            if (variable.group) {
+                if (renderedGroups.has(variable.group)) continue;
+                renderedGroups.add(variable.group);
+                controls.push(renderUserCssVariableControl(
+                    variable,
+                    parsed.variables.filter(candidate => candidate.type === 'color' && candidate.group === variable.group)
+                ));
+            } else {
+                controls.push(renderUserCssVariableControl(variable));
+            }
+        }
+
+        const body = `<div id="userCssConfiguration" style="display:grid;gap:10px">
+            <p class="utility-note">Changes preview immediately on the active matching tab. Applying writes the selected defaults into the UserCSS metadata; save the script to persist them.</p>
+            <label class="setting-row" style="display:flex;gap:12px;align-items:center"><span class="label-text">Preview color scheme</span>
+                <select class="input-field" id="userCssPreviewScheme"><option value="auto">System preference</option><option value="light">Light</option><option value="dark">Dark</option></select>
+            </label>
+            ${controls.join('')}
+            <div id="userCssConfigurationStatus" class="utility-inline-status" role="status" aria-live="polite">Ready for live preview.</div>
+        </div>`;
+        showModal(tDashboard('configureUserCssTitle', 'Configure UserCSS variables'), body, [
+            { label: tDashboard('cancel', 'Cancel'), callback: hideModal },
+            {
+                label: tDashboard('applyToDraft', 'Apply to Draft'),
+                class: 'btn-primary',
+                callback: () => {
+                    const container = document.getElementById('userCssConfiguration');
+                    const values = collectUserCssConfigurationValues(container);
+                    const result = UserStylesEngine.applyVariableDefaults(getCurrentEditorCode(), values);
+                    if (result?.error) throw new Error(result.error);
+                    state.editor?.setValue(result.code);
+                    markCurrentEditorDirty();
+                    updateLineCount();
+                    updateUserCssPreviewButton();
+                    hideModal();
+                    showToast(tDashboard('userCssDefaultsApplied', 'UserCSS defaults applied to the draft'), 'success');
+                }
+            }
+        ]);
+
+        const container = document.getElementById('userCssConfiguration');
+        const scheme = document.getElementById('userCssPreviewScheme');
+        if (!container || !scheme) return;
+        scheme.value = state.userCssPreview.colorScheme || 'auto';
+        container.querySelectorAll('[data-usercss-picker-for]').forEach(picker => {
+            picker.addEventListener('input', () => {
+                const textInput = document.getElementById(picker.dataset.usercssPickerFor);
+                if (textInput) {
+                    textInput.value = picker.value;
+                    textInput.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            });
+        });
+        container.addEventListener('input', event => {
+            if (event.target.matches('input[type="range"]')) {
+                const output = event.target.parentElement?.querySelector('output');
+                if (output?.tagName === 'OUTPUT') output.value = event.target.value;
+            }
+            const values = collectUserCssConfigurationValues(container);
+            const validation = UserStylesEngine.validateUserCSSVariables(parsed.variables, values);
+            const status = document.getElementById('userCssConfigurationStatus');
+            if (!validation.valid) {
+                if (status) status.textContent = validation.errors[0];
+                return;
+            }
+            state.userCssPreview.values = values;
+            state.userCssPreview.colorScheme = scheme.value;
+            if (status) status.textContent = tDashboard('userCssPreviewUpdating', 'Updating live preview…');
+            if (state.userCssPreview.active) {
+                scheduleUserCssPreviewRefresh();
+            } else {
+                void applyUserCssPreview({ silent: true });
+            }
+        });
+        scheme.addEventListener('change', () => {
+            state.userCssPreview.colorScheme = scheme.value;
+            if (state.userCssPreview.active) scheduleUserCssPreviewRefresh();
+        });
     }
 
     async function toggleUserCssPreview() {
@@ -15982,6 +16165,7 @@
         elements.btnEditorPreviewUserCSS?.addEventListener('click', event => {
             runButtonTask(event.currentTarget, toggleUserCssPreview, { busyLabel: tDashboard('previewingEllipsis', 'Previewing...') });
         });
+        elements.btnEditorConfigureUserCSS?.addEventListener('click', openUserCssConfiguration);
         elements.btnEditorToggle?.addEventListener('click', async () => {
             const script = state.scripts.find(s => s.id === state.currentScriptId);
             if (script) {

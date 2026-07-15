@@ -118,6 +118,8 @@ interface UserStylePreviewDraft {
   action: 'userStylePreviewDraft';
   code: string;
   tabId?: number;
+  values?: Record<string, string | number | boolean | { light: string; dark: string }>;
+  colorScheme?: 'auto' | 'light' | 'dark';
 }
 
 interface UserStyleClearPreview {

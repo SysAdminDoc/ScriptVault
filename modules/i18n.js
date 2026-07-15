@@ -1551,6 +1551,8 @@ const I18n = (() => {
       "runOnTabOpenWebPage": "Open a web page tab in this window, then run again",
       "runningEllipsis": "Running...",
       "previewCss": "Preview CSS",
+      "configureCss": "Configure CSS",
+      "configureUserCssTitle": "Configure UserCSS variables",
       "clearPreview": "Clear Preview",
       "previewCssTitle": "Preview UserCSS on the active tab",
       "clearPreviewTitle": "Clear the temporary UserCSS preview",
@@ -1562,6 +1564,10 @@ const I18n = (() => {
       "userCssPreviewActiveToast": "Previewing unsaved UserCSS on this tab",
       "userCssPreviewFailed": "UserCSS preview failed",
       "userCssPreviewCleared": "UserCSS preview cleared",
+      "userCssNoVariables": "This UserCSS draft has no configurable variables",
+      "applyToDraft": "Apply to Draft",
+      "userCssDefaultsApplied": "UserCSS defaults applied to the draft",
+      "userCssPreviewUpdating": "Updating live preview...",
       "duplicateAction": "Duplicate",
       "closeAction": "Close",
       "closeEditorTitle": "Close editor (Esc)",
@@ -2315,15 +2321,15 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 43,
       "translatedRuntimeMessages": 43,
-      "totalRuntimeMessages": 1789
+      "totalRuntimeMessages": 1795
     },
     "en": {
       "name": "English",
       "direction": "ltr",
       "translationStatus": "complete",
-      "runtimeCoverageBaseline": 1789,
-      "translatedRuntimeMessages": 1789,
-      "totalRuntimeMessages": 1789
+      "runtimeCoverageBaseline": 1795,
+      "translatedRuntimeMessages": 1795,
+      "totalRuntimeMessages": 1795
     },
     "es": {
       "name": "Espa\xF1ol",
@@ -2331,7 +2337,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 45,
       "translatedRuntimeMessages": 45,
-      "totalRuntimeMessages": 1789
+      "totalRuntimeMessages": 1795
     },
     "fr": {
       "name": "Fran\xE7ais",
@@ -2339,7 +2345,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 43,
       "translatedRuntimeMessages": 43,
-      "totalRuntimeMessages": 1789
+      "totalRuntimeMessages": 1795
     },
     "he": {
       "name": "\u05E2\u05D1\u05E8\u05D9\u05EA",
@@ -2347,7 +2353,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 58,
       "translatedRuntimeMessages": 58,
-      "totalRuntimeMessages": 1789
+      "totalRuntimeMessages": 1795
     },
     "ja": {
       "name": "\u65E5\u672C\u8A9E",
@@ -2355,7 +2361,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 71,
       "translatedRuntimeMessages": 71,
-      "totalRuntimeMessages": 1789
+      "totalRuntimeMessages": 1795
     },
     "pt": {
       "name": "Portugu\xEAs",
@@ -2363,7 +2369,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 42,
       "translatedRuntimeMessages": 42,
-      "totalRuntimeMessages": 1789
+      "totalRuntimeMessages": 1795
     },
     "ru": {
       "name": "\u0420\u0443\u0441\u0441\u043A\u0438\u0439",
@@ -2371,7 +2377,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 117,
       "translatedRuntimeMessages": 117,
-      "totalRuntimeMessages": 1789
+      "totalRuntimeMessages": 1795
     },
     "zh": {
       "name": "\u4E2D\u6587",
@@ -2379,7 +2385,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 46,
       "translatedRuntimeMessages": 46,
-      "totalRuntimeMessages": 1789
+      "totalRuntimeMessages": 1795
     }
   };
 

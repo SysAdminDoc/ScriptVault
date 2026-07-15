@@ -83,7 +83,12 @@ const RuntimeActionHandler = (() => {
         message.url || "",
         sender
       ),
-      userStylePreviewDraft: ({ message }) => dependencies.previewUserStyle(message.code || "", message.tabId),
+      userStylePreviewDraft: ({ message }) => dependencies.previewUserStyle(
+        message.code || "",
+        message.tabId,
+        message.values,
+        message.colorScheme
+      ),
       userStyleClearPreview: ({ message }) => dependencies.clearUserStylePreview(message.tabId),
       getExtensionInfo: () => dependencies.getExtensionInfo(),
       openDashboard: ({ message }) => dependencies.openDashboard(message),

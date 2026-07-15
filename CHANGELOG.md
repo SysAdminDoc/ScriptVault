@@ -4,6 +4,12 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Completed advanced UserCSS configuration and live preview.** HSL, OKLCH,
+  and OKLab colors now validate in the generated runtime; color aliases can
+  share a linked palette; light/dark defaults render through the selected
+  preview scheme; and the dashboard can live-preview then write configured
+  values back to the draft. Export/re-import preserves advanced metadata and
+  current values across Chrome and Firefox fixtures.
 - **Extracted dashboard workflow controllers behind typed, testable boundaries.**
   Tampermonkey import review, per-setting serialized persistence, and utilities
   diagnostics now use generated TypeScript controllers with thin DOM adapters,

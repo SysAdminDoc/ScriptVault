@@ -314,7 +314,7 @@ drift, and any drop below the recorded per-language coverage baseline.
 - **Violentmonkey/Greasemonkey Import** &mdash; Import from VM JSON and GM4 backup formats
 
 #### Platform & Architecture
-- **UserStyles/CSS Support** &mdash; `.user.css` files with variable editor, Stylus import, and draft live preview
+- **UserStyles/CSS Support** &mdash; `.user.css` files with HSL/OKLCH/OKLab validation, linked palettes, light/dark variable defaults, Stylus import, metadata round-tripping, and live draft preview
 - **Script Chaining** &mdash; Visual pipeline builder for sequential script execution
 - **npm Package Resolution** &mdash; `@require npm:lodash` with CDN fallback chain
 - **Script Scheduling** &mdash; Time/day/date-based execution with visual picker

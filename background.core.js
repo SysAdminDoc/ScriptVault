@@ -7279,8 +7279,8 @@ backgroundActionRegistry.registerHandlers(RuntimeActionHandler.createRuntimeActi
     const triggered = await triggerChainsForDomEvent(eventType, effectiveUrl, tabId);
     return { success: true, triggered };
   },
-  previewUserStyle: (code, tabId) => typeof UserStylesEngine !== 'undefined'
-    ? UserStylesEngine.previewDraft(String(code || ''), { tabId })
+  previewUserStyle: (code, tabId, values, colorScheme) => typeof UserStylesEngine !== 'undefined'
+    ? UserStylesEngine.previewDraft(String(code || ''), { tabId, values, colorScheme })
     : Promise.resolve({ success: false, error: 'UserCSS tools unavailable' }),
   clearUserStylePreview: tabId => typeof UserStylesEngine !== 'undefined'
     ? UserStylesEngine.clearDraftPreview({ tabId })

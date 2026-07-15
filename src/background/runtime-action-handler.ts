@@ -45,7 +45,12 @@ export interface RuntimeActionDependencies {
   runChainNow(chainId: string, reason: string, tabId?: number): Promise<ResponseMap['runChainNow']>;
   getChainDomEventTriggers(): Promise<ResponseMap['getChainDomEventTriggers']>;
   chainDomEvent(eventType: string, url: string, sender: unknown): Promise<ResponseMap['chainDomEvent']>;
-  previewUserStyle(code: string, tabId?: number): Promise<ResponseMap['userStylePreviewDraft']>;
+  previewUserStyle(
+    code: string,
+    tabId?: number,
+    values?: BackgroundMessageFor<'userStylePreviewDraft'>['values'],
+    colorScheme?: BackgroundMessageFor<'userStylePreviewDraft'>['colorScheme'],
+  ): Promise<ResponseMap['userStylePreviewDraft']>;
   clearUserStylePreview(tabId?: number): Promise<ResponseMap['userStyleClearPreview']>;
   getExtensionInfo(): ResponseMap['getExtensionInfo'];
   openDashboard(message: BackgroundMessageFor<'openDashboard'>): Promise<ResponseMap['openDashboard']>;
@@ -82,7 +87,12 @@ export function createRuntimeActionHandlers(
       message.url || '',
       sender,
     ),
-    userStylePreviewDraft: ({ message }) => dependencies.previewUserStyle(message.code || '', message.tabId),
+    userStylePreviewDraft: ({ message }) => dependencies.previewUserStyle(
+      message.code || '',
+      message.tabId,
+      message.values,
+      message.colorScheme,
+    ),
     userStyleClearPreview: ({ message }) => dependencies.clearUserStylePreview(message.tabId),
     getExtensionInfo: () => dependencies.getExtensionInfo(),
     openDashboard: ({ message }) => dependencies.openDashboard(message),
