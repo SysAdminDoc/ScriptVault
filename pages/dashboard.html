@@ -7669,6 +7669,34 @@
             </div>
         </aside>
         <main class="tm-content sv-workbench-main" role="main" id="mainContent" tabindex="-1">
+        <header class="sv-workbench-topbar" aria-label="Workspace command bar">
+            <div class="sv-workbench-breadcrumb" aria-label="Current dashboard section">
+                <span>ScriptVault</span>
+                <span aria-hidden="true">/</span>
+                <strong id="svWorkbenchSectionTitle">Scripts</strong>
+            </div>
+            <button type="button" class="sv-command-trigger" id="btnWorkbenchCommand" aria-label="Search or run a command" aria-keyshortcuts="Control+K">
+                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+                <span>Search or run command...</span>
+                <kbd>Ctrl K</kbd>
+            </button>
+            <div class="sv-workbench-topbar-actions">
+                <div class="scripts-shell-health" id="svCommandHealth" role="status" aria-live="polite">
+                    <span class="sv-status-dot good" id="svCommandHealthMark" aria-hidden="true"></span>
+                    <div class="scripts-shell-health-copy"><strong id="svCommandHealthTitle">Local vault ready</strong><small id="svCommandHealthDetail">Sync not configured</small></div>
+                </div>
+                <button type="button" class="sv-topbar-icon" id="btnWorkbenchHelp" title="Open Help" aria-label="Open Help">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M9.8 9a2.3 2.3 0 1 1 3.7 1.8c-.9.6-1.5 1.1-1.5 2.2"/><path d="M12 17h.01"/></svg>
+                </button>
+                <button type="button" class="sv-topbar-icon" id="btnWorkbenchSettings" title="Open Settings" aria-label="Open Settings">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.8 1.8 0 0 0 .4 2l.1.1-2.8 2.8-.1-.1a1.8 1.8 0 0 0-2-.4 1.8 1.8 0 0 0-1.1 1.6v.2h-4V21A1.8 1.8 0 0 0 8.8 19.4a1.8 1.8 0 0 0-2 .4l-.1.1-2.8-2.8.1-.1a1.8 1.8 0 0 0 .4-2A1.8 1.8 0 0 0 2.8 14h-.2v-4h.2A1.8 1.8 0 0 0 4.4 8.9a1.8 1.8 0 0 0-.4-2l-.1-.1L6.7 4l.1.1a1.8 1.8 0 0 0 2 .4A1.8 1.8 0 0 0 9.9 3v-.2h4V3a1.8 1.8 0 0 0 1.1 1.6 1.8 1.8 0 0 0 2-.4l.1-.1 2.8 2.8-.1.1a1.8 1.8 0 0 0-.4 2 1.8 1.8 0 0 0 1.6 1.1h.2v4H21a1.8 1.8 0 0 0-1.6.9Z"/></svg>
+                </button>
+                <button type="button" class="toolbar-btn primary" id="btnNewScript">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    New script
+                </button>
+            </div>
+        </header>
         <!-- Scripts Panel -->
         <div id="scriptsPanel" class="tm-panel active" role="tabpanel" aria-labelledby="workbenchTabScripts">
             <div class="scripts-shell-header">
@@ -7677,37 +7705,19 @@
                     <h2 data-i18n="tabScripts">Scripts</h2>
                     <p data-i18n="scriptsWorkspaceDescription">Manage, review, and run your userscripts from one trusted workspace.</p>
                 </div>
-                <div class="scripts-shell-actions" role="group" aria-label="Primary script actions">
-                    <button type="button" class="toolbar-btn primary" id="btnNewScript">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                        New script
-                    </button>
-                    <button type="button" class="toolbar-btn" id="btnImportScript">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                        Import
-                    </button>
-                    <button type="button" class="toolbar-btn" id="btnWorkbenchSyncNow">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 01-14.9 6.8"/><path d="M3 12a9 9 0 0114.9-6.8"/><path d="M7 19H3v-4"/><path d="M17 5h4v4"/></svg>
-                        Sync
-                    </button>
-                </div>
-            </div>
-            <div class="scripts-shell-stats" aria-label="Workspace stats" data-i18n-aria-label="workspaceStats">
-                <div class="scripts-shell-stat">
-                    <span class="scripts-shell-stat-mark" aria-hidden="true">S</span>
-                    <div class="scripts-shell-stat-copy"><strong id="workspaceInstalledStat">0</strong><span data-i18n="installed">Scripts</span></div>
-                </div>
-                <div class="scripts-shell-stat" data-tone="good">
-                    <span class="scripts-shell-stat-mark" aria-hidden="true">ON</span>
-                    <div class="scripts-shell-stat-copy"><strong id="workspaceActiveStat">0</strong><span data-i18n="active">Enabled</span></div>
-                </div>
-                <div class="scripts-shell-stat" data-tone="info">
-                    <span class="scripts-shell-stat-mark" aria-hidden="true">UP</span>
-                    <div class="scripts-shell-stat-copy"><strong id="workspaceUpdatesStat">0</strong><span data-i18n="tabUpdates">Updates</span></div>
-                </div>
-                <div class="scripts-shell-health" id="svCommandHealth" role="status" aria-live="polite">
-                    <span class="scripts-shell-stat-mark" id="svCommandHealthMark" aria-hidden="true">L</span>
-                    <div class="scripts-shell-health-copy"><strong id="svCommandHealthTitle">Local vault ready</strong><small id="svCommandHealthDetail">Sync not configured</small></div>
+                <div class="scripts-shell-stats" aria-label="Workspace stats" data-i18n-aria-label="workspaceStats">
+                    <div class="scripts-shell-stat">
+                        <span class="scripts-shell-stat-mark" aria-hidden="true">S</span>
+                        <div class="scripts-shell-stat-copy"><strong id="workspaceInstalledStat">0</strong><span data-i18n="installed">Scripts</span></div>
+                    </div>
+                    <div class="scripts-shell-stat" data-tone="good">
+                        <span class="scripts-shell-stat-mark" aria-hidden="true">ON</span>
+                        <div class="scripts-shell-stat-copy"><strong id="workspaceActiveStat">0</strong><span data-i18n="active">Enabled</span></div>
+                    </div>
+                    <div class="scripts-shell-stat" data-tone="info">
+                        <span class="scripts-shell-stat-mark" aria-hidden="true">UP</span>
+                        <div class="scripts-shell-stat-copy"><strong id="workspaceUpdatesStat">0</strong><span data-i18n="tabUpdates">Updates</span></div>
+                    </div>
                 </div>
             </div>
             <!-- Combined Toolbar -->
@@ -7747,8 +7757,8 @@
                         <button type="button" class="btn bulk-btn" id="btnBulkApply" data-i18n="apply" disabled>Apply</button>
                     </div>
                     <div class="toolbar-divider"></div>
-                    <select id="filterSelect" class="select-field bulk-select" title="Filter scripts" aria-label="Filter scripts" data-i18n-title="filterScripts" data-i18n-aria-label="filterScripts">
-                        <option value="all" data-i18n="scriptFilterAll">All</option>
+                    <select id="filterSelect" class="select-field bulk-select" title="Filter scripts by status" aria-label="Filter scripts by status">
+                        <option value="all">All status</option>
                         <option value="enabled" data-i18n="enabled">Enabled</option>
                         <option value="disabled" data-i18n="disabled">Disabled</option>
                         <option disabled data-i18n="scriptFilterStatusGroup">--- Status ---</option>
@@ -7768,7 +7778,15 @@
                         <option value="scope:broad" data-i18n="scriptFilterBroadMatch">Broad Match (*)</option>
                         <option value="scope:single" data-i18n="scriptFilterSingleSite">Single Site</option>
                     </select>
-                    <span class="script-counter" id="scriptCounter" data-i18n="scriptCounterInitial">0 scripts</span>
+                    <select id="siteFilterSelect" class="select-field bulk-select" title="Filter scripts by site" aria-label="Filter scripts by site">
+                        <option value="all">All sites</option>
+                    </select>
+                    <select id="savedViewSelect" class="select-field bulk-select" title="Apply a saved library view" aria-label="Apply a saved library view">
+                        <option value="default">Saved views</option>
+                        <option value="enabled">Active scripts</option>
+                        <option value="attention">Needs review</option>
+                        <option value="recent">Recently updated</option>
+                    </select>
                     <div class="search-box" role="search" aria-label="Search installed scripts" data-i18n-aria-label="searchScripts">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                         <input type="text" id="scriptSearch" name="script_search" placeholder="Search scripts or code:fetch" title="Search by script name, domain, tag, or code:fetch" aria-label="Search scripts by name, domain, tag, or code:fetch" data-i18n-placeholder="searchScriptsCode" data-i18n-title="searchScriptsCodeTitle" data-i18n-aria-label="searchScriptsCodeAria" aria-describedby="scriptCounter" autocomplete="off" spellcheck="false">
@@ -7781,7 +7799,18 @@
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M12 3v18M3 12h18M3 6h18M3 18h18"/></svg>
                     </button>
                 </div>
+                <div class="scripts-shell-actions" role="group" aria-label="Primary script actions">
+                    <button type="button" class="toolbar-btn" id="btnImportScript">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        Import
+                    </button>
+                    <button type="button" class="toolbar-btn" id="btnWorkbenchSyncNow">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 01-14.9 6.8"/><path d="M3 12a9 9 0 0114.9-6.8"/><path d="M7 19H3v-4"/><path d="M17 5h4v4"/></svg>
+                        Sync
+                    </button>
+                </div>
             </div>
+            <span class="script-counter" id="scriptCounter" data-i18n="scriptCounterInitial">0 scripts</span>
             <div class="scripts-workbench-grid">
                 <section class="scripts-list-stage" aria-label="Installed script table">
             <div class="scripts-table-container">
@@ -7868,6 +7897,11 @@
                         <strong id="scriptInspectorTitle">No script selected</strong>
                         <span id="scriptInspectorSubtitle">Select a row to inspect trust, access, and runtime details.</span>
                     </div>
+                    <div class="script-inspector-empty" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5z"/><path d="M8 9h8M8 12h5M8 15h7"/></svg>
+                        <strong>Inspect before you run</strong>
+                        <span>Choose a script to review its permissions, trust signals, and recent activity.</span>
+                    </div>
                     <div class="script-inspector-actions">
                         <button type="button" class="btn btn-primary script-inspector-action-tile" id="scriptInspectorEdit" data-i18n="edit" disabled><span aria-hidden="true">&lt;/&gt;</span>Edit</button>
                         <button type="button" class="btn script-inspector-action-tile" id="scriptInspectorConfig" disabled><span aria-hidden="true">*</span>Config</button>
@@ -7875,52 +7909,62 @@
                         <button type="button" class="btn script-inspector-action-tile" id="scriptInspectorUpdate" data-i18n="popupCheckForUpdate" disabled><span aria-hidden="true">...</span>Update</button>
                     </div>
                     <div class="script-inspector-tabs" role="tablist" aria-label="Inspector views">
-                        <button type="button" class="active" data-inspector-tab="overview" role="tab" aria-selected="true">Overview</button>
-                        <button type="button" data-inspector-tab="access" role="tab" aria-selected="false">Access</button>
-                        <button type="button" data-inspector-tab="grants" role="tab" aria-selected="false">Grants</button>
-                        <button type="button" data-inspector-tab="history" role="tab" aria-selected="false">History</button>
+                        <button type="button" class="active" data-inspector-tab="overview" role="tab" aria-controls="scriptInspectorOverview" aria-selected="true">Overview</button>
+                        <button type="button" data-inspector-tab="access" role="tab" aria-controls="scriptInspectorAccessView" aria-selected="false">Access</button>
+                        <button type="button" data-inspector-tab="activity" role="tab" aria-controls="scriptInspectorActivity" aria-selected="false">Activity</button>
                     </div>
-                    <div class="script-inspector-score" id="scriptInspectorScore" data-tone="neutral">
-                        <div>
-                            <span>Trust Score</span>
-                            <strong id="scriptInspectorTrustScore">--</strong>
+                    <div class="script-inspector-view" id="scriptInspectorOverview" data-inspector-view="overview" role="tabpanel">
+                        <div class="script-inspector-score" id="scriptInspectorScore" data-tone="neutral">
+                            <div>
+                                <span>Trust Score</span>
+                                <strong id="scriptInspectorTrustScore">--</strong>
+                            </div>
+                            <small id="scriptInspectorTrustSummary">Waiting for script data</small>
                         </div>
-                        <small id="scriptInspectorTrustSummary">Waiting for script data</small>
-                    </div>
-                    <div class="script-inspector-section">
-                        <h3>Overview</h3>
-                        <dl class="script-inspector-meta">
-                            <div><dt>Status</dt><dd id="scriptInspectorStatus">--</dd></div>
-                            <div><dt>Version</dt><dd id="scriptInspectorVersion">--</dd></div>
-                            <div><dt>Author</dt><dd id="scriptInspectorAuthor">--</dd></div>
-                            <div><dt>Source</dt><dd id="scriptInspectorSource">--</dd></div>
-                            <div><dt>License</dt><dd id="scriptInspectorLicense">--</dd></div>
-                            <div><dt>Runs at</dt><dd id="scriptInspectorRunAt">--</dd></div>
-                            <div><dt>Updated</dt><dd id="scriptInspectorUpdated">--</dd></div>
-                            <div><dt>Installed</dt><dd id="scriptInspectorInstalled">--</dd></div>
-                            <div><dt>Size</dt><dd id="scriptInspectorSize">--</dd></div>
-                            <div><dt>Runtime</dt><dd id="scriptInspectorRuntime">--</dd></div>
-                        </dl>
-                    </div>
-                    <div class="script-inspector-section">
-                        <h3>Trust &amp; Security</h3>
-                        <div class="script-inspector-checks" id="scriptInspectorTrustRows">
-                            <div><span>Code signature</span><strong>--</strong></div>
-                            <div><span>Known vulnerabilities</span><strong>--</strong></div>
-                            <div><span>Permissions</span><strong>--</strong></div>
+                        <div class="script-inspector-section">
+                            <h3>Overview</h3>
+                            <dl class="script-inspector-meta">
+                                <div><dt>Status</dt><dd id="scriptInspectorStatus">--</dd></div>
+                                <div><dt>Version</dt><dd id="scriptInspectorVersion">--</dd></div>
+                                <div><dt>Author</dt><dd id="scriptInspectorAuthor">--</dd></div>
+                                <div><dt>Source</dt><dd id="scriptInspectorSource">--</dd></div>
+                                <div><dt>License</dt><dd id="scriptInspectorLicense">--</dd></div>
+                                <div><dt>Runs at</dt><dd id="scriptInspectorRunAt">--</dd></div>
+                                <div><dt>Size</dt><dd id="scriptInspectorSize">--</dd></div>
+                            </dl>
+                        </div>
+                        <div class="script-inspector-section">
+                            <h3>Trust &amp; Security</h3>
+                            <div class="script-inspector-checks" id="scriptInspectorTrustRows">
+                                <div><span>Code signature</span><strong>--</strong></div>
+                                <div><span>Known vulnerabilities</span><strong>--</strong></div>
+                                <div><span>Permissions</span><strong>--</strong></div>
+                            </div>
                         </div>
                     </div>
-                    <div class="script-inspector-section">
-                        <h3>Access</h3>
-                        <div class="script-inspector-list" id="scriptInspectorDomains">No domains</div>
+                    <div class="script-inspector-view" id="scriptInspectorAccessView" data-inspector-view="access" role="tabpanel" hidden>
+                        <div class="script-inspector-section">
+                            <h3>Site Access</h3>
+                            <div class="script-inspector-list" id="scriptInspectorDomains">No domains</div>
+                        </div>
+                        <div class="script-inspector-section">
+                            <h3>Grants</h3>
+                            <div class="script-inspector-list" id="scriptInspectorGrants">No grants</div>
+                        </div>
+                        <div class="script-inspector-section">
+                            <h3>Domain Access</h3>
+                            <div class="script-inspector-domain-access" id="scriptInspectorDomainAccess">No domains</div>
+                        </div>
                     </div>
-                    <div class="script-inspector-section">
-                        <h3>Grants</h3>
-                        <div class="script-inspector-list" id="scriptInspectorGrants">No grants</div>
-                    </div>
-                    <div class="script-inspector-section">
-                        <h3>Domain Access</h3>
-                        <div class="script-inspector-domain-access" id="scriptInspectorDomainAccess">No domains</div>
+                    <div class="script-inspector-view" id="scriptInspectorActivity" data-inspector-view="activity" role="tabpanel" hidden>
+                        <div class="script-inspector-section">
+                            <h3>Recent Activity</h3>
+                            <dl class="script-inspector-meta script-inspector-activity-meta">
+                                <div><dt>Latest run</dt><dd id="scriptInspectorRuntime">--</dd></div>
+                                <div><dt>Updated</dt><dd id="scriptInspectorUpdated">--</dd></div>
+                                <div><dt>Installed</dt><dd id="scriptInspectorInstalled">--</dd></div>
+                            </dl>
+                        </div>
                     </div>
                 </aside>
             </div>
@@ -9430,7 +9474,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 <div class="trash-hero">
                     <div class="trash-hero-copy">
                         <div class="trash-eyebrow" data-i18n="trashRecovery">Recovery</div>
-                        <h2 data-i18n="trashHeroTitle">Restore deleted scripts without guesswork.</h2>
+                        <h2 data-i18n="trashHeroTitle">Trash</h2>
                         <p data-i18n="trashHeroDescription">Everything removed from the vault lands here first, with clear retention policy, quick search, and permanent-delete actions that stay explicit.</p>
                     </div>
                     <div class="trash-overview" aria-label="Trash overview" data-i18n-aria-label="trashOverviewAria">
@@ -9486,7 +9530,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                 <div class="help-hero">
                     <div class="help-hero-copy">
                         <div class="help-eyebrow" data-i18n="helpReferenceEyebrow">Reference</div>
-                        <h2 data-i18n="helpHeroTitle">Command desk for the whole vault.</h2>
+                        <h2 data-i18n="helpHeroTitle">Help &amp; commands</h2>
                         <p data-i18n="helpHeroDescription">Search the control surface, launch common flows, and keep API or shortcut details one step away while you work.</p>
                     </div>
                     <div class="help-overview">

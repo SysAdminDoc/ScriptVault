@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 
 const installHtml = readFileSync(resolve(process.cwd(), "pages/install.html"), "utf8");
@@ -143,6 +143,41 @@ describe("cross-surface UX audit", () => {
     expect(dashboardSmoke).toContain("const workbenchDestinations = [");
     expect(dashboardSmoke).toContain("document.activeElement === targetElement");
     expect(dashboardSmoke).toContain("destructiveDialog.focusedLabel !== 'Cancel'");
+  });
+
+  test("image-guided workbench v3 keeps commands, filters, inspection, and row actions progressive", () => {
+    const doc = parseHtml(dashboardHtml);
+    const topbar = doc.querySelector(".sv-workbench-topbar");
+    const stats = doc.querySelectorAll(".scripts-shell-stats > .scripts-shell-stat");
+    const inspectorTabs = Array.from(doc.querySelectorAll("[data-inspector-tab]"));
+    const inspectorViews = Array.from(doc.querySelectorAll("[data-inspector-view]"));
+
+    expect(existsSync(resolve(process.cwd(), "assets/scriptvault-workbench-concept-v3.png"))).toBe(true);
+    expect(topbar?.querySelector("#btnWorkbenchCommand")?.getAttribute("aria-keyshortcuts")).toBe("Control+K");
+    expect(topbar?.querySelector("#btnNewScript")).not.toBeNull();
+    expect(topbar?.querySelector("#svCommandHealth[role='status']")).not.toBeNull();
+    expect(stats).toHaveLength(3);
+    expect(doc.querySelectorAll("#btnNewScript")).toHaveLength(1);
+    expect(doc.querySelector("#siteFilterSelect option")?.textContent).toBe("All sites");
+    expect(doc.querySelector("#savedViewSelect option")?.textContent).toBe("Saved views");
+    expect(inspectorTabs.map(tab => tab.textContent?.trim())).toEqual(["Overview", "Access", "Activity"]);
+    expect(inspectorViews.map(view => view.dataset.inspectorView)).toEqual(["overview", "access", "activity"]);
+    expect(inspectorViews.slice(1).every(view => view.hidden)).toBe(true);
+    expect(doc.querySelector("#scriptInspectorPanel[data-state='empty'] .script-inspector-empty")).not.toBeNull();
+    expect(dashboardJs).toContain("function updateSiteFilterOptions()");
+    expect(dashboardJs).toContain("const matchesSite = siteFilter === 'all'");
+    expect(dashboardJs).toContain("elements.scriptInspectorViews?.forEach(view =>");
+    expect(dashboardJs).toContain('popover="auto" role="menu"');
+    expect(dashboardJs).toContain("rowMenu?.addEventListener('beforetoggle'");
+    expect(dashboardWorkbenchCss).toContain("Workbench concept v3");
+    expect(dashboardWorkbenchCss).toContain("Visual system simplification v4");
+    expect(dashboardWorkbenchCss).toContain("v5 final precedence");
+    expect(dashboardWorkbenchCss).toContain("#settingsEmptyState[hidden]");
+    expect(dashboardWorkbenchCss).toContain("#helpPanel .help-step");
+    expect(dashboardWorkbenchCss).toContain(".scripts-toolbar.has-selection .bulk-action-cluster");
+    expect(dashboardWorkbenchCss).toContain(".script-health-badge::before");
+    expect(dashboardWorkbenchCss).toContain(".script-inspector-view[hidden]");
+    expect(dashboardWorkbenchCss).toContain('.script-inspector-panel[data-state="empty"] .script-inspector-empty');
   });
 
   test("settings autosave and update empty states communicate progress and recovery", () => {

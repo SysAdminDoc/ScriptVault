@@ -39,8 +39,9 @@ Project planning is kept in local-only markdown files in the working checkout.
 ### Professional Security Workbench
 
 ScriptVault uses a focused desktop workbench with a persistent navigation rail,
-live vault health metrics, dense script controls, and a contextual trust/access
-inspector. The popup, side panel, install review, DevTools diagnostics, and
+command search, live vault health metrics, site and saved-view filters,
+progressive row actions, and a contextual trust/access/activity inspector. The
+popup, side panel, install review, DevTools diagnostics, and
 full-screen editor share the same accessible four-theme surface system. Dark,
 light, Catppuccin, and OLED dashboard layouts are protected by browser-rendered
 visual regression baselines.

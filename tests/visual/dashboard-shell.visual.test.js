@@ -80,30 +80,35 @@ function renderDashboardShell(theme = "dark") {
           <div class="sv-rail-footer"><span class="sv-sync-dot"></span><span>Local-first vault</span></div>
         </aside>
         <section class="tm-content sv-workbench-main">
+          <header class="sv-workbench-topbar" aria-label="Workspace command bar">
+            <div class="sv-workbench-breadcrumb"><span>ScriptVault</span><span>/</span><strong>Scripts</strong></div>
+            <button class="sv-command-trigger" type="button" aria-label="Search or run a command"><span aria-hidden="true">⌕</span><span>Search or run command...</span><kbd>Ctrl K</kbd></button>
+            <div class="sv-workbench-topbar-actions">
+              <div class="scripts-shell-health" id="svCommandHealth"><span class="sv-status-dot good"></span><div class="scripts-shell-health-copy"><strong>Local vault ready</strong><small>Last synced 2m ago</small></div></div>
+              <button class="sv-topbar-icon" type="button" aria-label="Help">?</button>
+              <button class="sv-topbar-icon" type="button" aria-label="Settings">⚙</button>
+              <button class="toolbar-btn primary" id="btnNewScript" type="button">New script</button>
+            </div>
+          </header>
           <div id="scriptsPanel" class="tm-panel active">
             <div class="scripts-shell-header">
               <div class="scripts-shell-copy"><h2>Scripts</h2><p>Manage, review, and run your userscripts from one trusted workspace.</p></div>
-              <div class="scripts-shell-actions" role="group" aria-label="Primary script actions">
-                <button class="toolbar-btn primary" id="btnNewScript" type="button">New script</button>
-                <button class="toolbar-btn" id="btnImportScript" type="button">Import</button>
-                <button class="toolbar-btn" id="btnWorkbenchSyncNow" type="button">Sync</button>
+              <div class="scripts-shell-stats" aria-label="Workspace stats">
+                <div class="scripts-shell-stat"><span class="scripts-shell-stat-mark">S</span><div class="scripts-shell-stat-copy"><strong>12</strong><span>Scripts</span></div></div>
+                <div class="scripts-shell-stat" data-tone="good"><span class="scripts-shell-stat-mark">ON</span><div class="scripts-shell-stat-copy"><strong>9</strong><span>Enabled</span></div></div>
+                <div class="scripts-shell-stat" data-tone="info"><span class="scripts-shell-stat-mark">UP</span><div class="scripts-shell-stat-copy"><strong>2</strong><span>Updates</span></div></div>
               </div>
-            </div>
-            <div class="scripts-shell-stats" aria-label="Workspace stats">
-              <div class="scripts-shell-stat"><span class="scripts-shell-stat-mark">S</span><div class="scripts-shell-stat-copy"><strong>12</strong><span>Scripts</span></div></div>
-              <div class="scripts-shell-stat" data-tone="good"><span class="scripts-shell-stat-mark">ON</span><div class="scripts-shell-stat-copy"><strong>9</strong><span>Enabled</span></div></div>
-              <div class="scripts-shell-stat" data-tone="info"><span class="scripts-shell-stat-mark">UP</span><div class="scripts-shell-stat-copy"><strong>2</strong><span>Updates</span></div></div>
-              <div class="scripts-shell-health" id="svCommandHealth"><span class="scripts-shell-stat-mark">LV</span><div class="scripts-shell-health-copy"><strong>Local vault</strong><small>Sync is not configured</small></div></div>
             </div>
             <div class="scripts-toolbar" role="toolbar" aria-label="Script controls">
               <div class="scripts-toolbar-left toolbar-section">
                 <button class="toolbar-btn" id="btnExportAll" type="button">Backup</button>
                 <button class="toolbar-btn" id="btnCheckUpdates" type="button">Check updates</button>
-                <button class="toolbar-btn" id="btnNewFolder" type="button">Folder</button>
-                <button class="toolbar-btn" id="btnFindScripts" type="button">Find</button>
+                <button class="toolbar-btn" id="btnNewFolder" type="button"><svg viewBox="0 0 24 24"><path d="M3 6h7l2 2h9v11H3z"></path></svg>Folder</button>
+                <button class="toolbar-btn" id="btnFindScripts" type="button"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>Find</button>
                 <div class="toolbar-divider"></div>
-                <select id="filterSelect" class="select-field bulk-select" aria-label="Filter scripts"><option>All scripts</option></select>
-                <span class="script-counter" id="scriptCounter">1-5 of 12</span>
+                <select id="filterSelect" class="select-field bulk-select" aria-label="Filter scripts"><option>All status</option></select>
+                <select id="siteFilterSelect" class="select-field bulk-select" aria-label="Filter by site"><option>All sites</option></select>
+                <select id="savedViewSelect" class="select-field bulk-select" aria-label="Saved views"><option>Saved views</option></select>
                 <div class="bulk-action-cluster"><label class="bulk-toggle"><input type="checkbox"> <span>Select Shown</span></label><select class="select-field"><option>Choose Action</option></select><button class="btn">Apply</button></div>
                 <label class="search-box" aria-label="Search scripts">
                   <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><path d="M21 21 16.65 16.65"></path></svg>
@@ -112,7 +117,12 @@ function renderDashboardShell(theme = "dark") {
                 <button class="toolbar-btn compact active" id="btnViewToggle" type="button">List</button>
                 <button class="toolbar-btn compact" id="btnColumnToggle" type="button">Cols</button>
               </div>
+              <div class="scripts-shell-actions" role="group" aria-label="Primary script actions">
+                <button class="toolbar-btn" id="btnImportScript" type="button">Import</button>
+                <button class="toolbar-btn" id="btnWorkbenchSyncNow" type="button">Sync</button>
+              </div>
             </div>
+            <span class="script-counter" id="scriptCounter">1-5 of 12</span>
             <div class="scripts-workbench-grid">
               <section class="scripts-list-stage">
                 <div class="scripts-table-container table-wrapper">
@@ -132,12 +142,12 @@ function renderDashboardShell(theme = "dark") {
               <aside class="script-inspector-panel" aria-label="Selected script inspector">
                 <div class="script-inspector-header"><span class="script-inspector-eyebrow">Selected Script</span><strong>GitHub Workflow Kit</strong><span>Streamline reviews, diffs, and repository navigation with a focused local workflow.</span></div>
                 <div class="script-inspector-actions">
-                  <button class="btn btn-primary script-inspector-action-tile" type="button"><span>&lt;/&gt;</span>Edit</button>
-                  <button class="btn script-inspector-action-tile" type="button"><span>*</span>Config</button>
-                  <button class="btn script-inspector-action-tile" type="button"><span>@</span>Site access</button>
-                  <button class="btn script-inspector-action-tile" type="button"><span>...</span>Update</button>
+                  <button class="btn btn-primary script-inspector-action-tile" id="scriptInspectorEdit" type="button"><span>&lt;/&gt;</span>Edit</button>
+                  <button class="btn script-inspector-action-tile" id="scriptInspectorConfig" type="button"><span>*</span>Config</button>
+                  <button class="btn script-inspector-action-tile" id="scriptInspectorAccess" type="button"><span>@</span>Site access</button>
+                  <button class="btn script-inspector-action-tile" id="scriptInspectorUpdate" type="button"><span>...</span>Update</button>
                 </div>
-                <div class="script-inspector-tabs"><button class="active">Overview</button><button>Access</button><button>Grants</button><button>History</button></div>
+                <div class="script-inspector-tabs"><button class="active">Overview</button><button>Access</button><button>Activity</button></div>
                 <div class="script-inspector-score" data-tone="good"><div><span>Trust Score</span><strong>96%</strong></div><small>No review flags</small></div>
                 <div class="script-inspector-section"><h3>Overview</h3><dl class="script-inspector-meta"><div><dt>Status</dt><dd>Enabled</dd></div><div><dt>Version</dt><dd>3.6.1</dd></div><div><dt>Author</dt><dd>Local workspace</dd></div><div><dt>Source</dt><dd>Signed</dd></div><div><dt>License</dt><dd>MIT</dd></div><div><dt>Runs at</dt><dd>document-end</dd></div><div><dt>Updated</dt><dd>1 hour ago</dd></div><div><dt>Installed</dt><dd>28 days ago</dd></div><div><dt>Size</dt><dd>42 KB</dd></div></dl></div>
                 <div class="script-inspector-section"><h3>Trust &amp; Security</h3><div class="script-inspector-checks"><div class="script-inspector-check good"><span>Code signature</span><strong>Valid</strong></div><div class="script-inspector-check good"><span>Known vulnerabilities</span><strong>Clear</strong></div><div class="script-inspector-check good"><span>Permissions</span><strong>5 granted</strong></div></div></div>
@@ -192,7 +202,7 @@ function renderDashboardShell(theme = "dark") {
 
     .visual-frame .sv-workbench-statusbar {
       position: absolute;
-      left: 248px;
+      left: 232px;
       right: 0;
       bottom: 0;
     }

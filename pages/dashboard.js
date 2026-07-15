@@ -1218,6 +1218,17 @@
     }
 
     function syncWorkbenchNavigation(activeTab) {
+        const labels = {
+            scripts: 'Scripts',
+            updates: 'Updates',
+            settings: 'Settings',
+            utilities: 'Utilities',
+            trash: 'Trash',
+            help: 'Help'
+        };
+        if (elements.svWorkbenchSectionTitle) {
+            elements.svWorkbenchSectionTitle.textContent = labels[activeTab] || labels.scripts;
+        }
         Array.from(elements.workbenchNavButtons || []).forEach(button => {
             const isActive = button.dataset.workbenchTab === activeTab && !button.classList.contains('sv-rail-subitem');
             button.classList.toggle('active', isActive);
@@ -1825,6 +1836,10 @@
             help: document.getElementById('helpPanel')
         };
         elements.workbenchNavButtons = document.querySelectorAll('[data-workbench-tab]');
+        elements.svWorkbenchSectionTitle = document.getElementById('svWorkbenchSectionTitle');
+        elements.btnWorkbenchCommand = document.getElementById('btnWorkbenchCommand');
+        elements.btnWorkbenchHelp = document.getElementById('btnWorkbenchHelp');
+        elements.btnWorkbenchSettings = document.getElementById('btnWorkbenchSettings');
 
         // Scripts tab
         elements.scriptSearch = document.getElementById('scriptSearch');
@@ -1874,6 +1889,7 @@
         elements.scriptInspectorAccess = document.getElementById('scriptInspectorAccess');
         elements.scriptInspectorUpdate = document.getElementById('scriptInspectorUpdate');
         elements.scriptInspectorTabs = document.querySelectorAll('[data-inspector-tab]');
+        elements.scriptInspectorViews = document.querySelectorAll('[data-inspector-view]');
         elements.scriptInspectorScore = document.getElementById('scriptInspectorScore');
         elements.scriptInspectorTrustScore = document.getElementById('scriptInspectorTrustScore');
         elements.scriptInspectorTrustSummary = document.getElementById('scriptInspectorTrustSummary');
@@ -1906,6 +1922,8 @@
         elements.bulkActionSelect = document.getElementById('bulkActionSelect');
         elements.btnBulkApply = document.getElementById('btnBulkApply');
         elements.filterSelect = document.getElementById('filterSelect');
+        elements.siteFilterSelect = document.getElementById('siteFilterSelect');
+        elements.savedViewSelect = document.getElementById('savedViewSelect');
         elements.scriptCounter = document.getElementById('scriptCounter');
 
         // Help button (header icon)
@@ -3866,7 +3884,7 @@
                     : localState === 'unsupported-browser' ? 'Unsupported browser'
                     : '',
                 setupMessage: localState === 'allow-user-scripts-disabled'
-                    ? 'Open Extension Details, enable "Allow User Scripts" for ScriptVault, then refresh status; reload the extension if this banner remains.'
+                    ? 'Enable "Allow User Scripts" in Extension Details, then refresh.'
                     : localState === 'developer-mode-disabled'
                         ? 'Open chrome://extensions and enable Developer Mode to run userscripts.'
                         : localState === 'unsupported-browser'
@@ -7738,6 +7756,7 @@
             state.scripts = response.scripts;
             reconcileOpenEditorTabs();
             updateTagFilterOptions();
+            updateSiteFilterOptions();
             renderScriptTable();
             refreshStandaloneScriptSelect();
             refreshDashboardModuleSurfaces();
@@ -7778,6 +7797,33 @@
                 elements.filterSelect.appendChild(opt);
             }
         }
+    }
+
+    function updateSiteFilterOptions() {
+        if (!elements.siteFilterSelect) return;
+        const current = elements.siteFilterSelect.value || 'all';
+        const domains = new Set();
+        for (const script of state.scripts) {
+            const metadata = script.metadata || {};
+            const patterns = [
+                ...normalizeMetadataList(metadata.match),
+                ...normalizeMetadataList(metadata.include)
+            ];
+            extractDomainsFromPatterns(patterns).forEach(domain => domains.add(domain));
+        }
+
+        elements.siteFilterSelect.replaceChildren();
+        const allOption = document.createElement('option');
+        allOption.value = 'all';
+        allOption.textContent = 'All sites';
+        elements.siteFilterSelect.appendChild(allOption);
+        [...domains].sort((a, b) => a.localeCompare(b)).forEach(domain => {
+            const option = document.createElement('option');
+            option.value = domain;
+            option.textContent = domain;
+            elements.siteFilterSelect.appendChild(option);
+        });
+        elements.siteFilterSelect.value = domains.has(current) ? current : 'all';
     }
 
     // Phase 38.2 — Parse regex shapes for the dashboard search input. Both
@@ -7882,6 +7928,7 @@
     function getFilteredScripts() {
         const rawSearch = (elements.scriptSearch?.value || '').trim();
         const statusFilter = elements.filterSelect?.value || 'all';
+        const siteFilter = elements.siteFilterSelect?.value || 'all';
 
         // Invert filter: a leading `!` or `not:` prefix negates the match.
         // `!enabled-tag` / `not:fetch` / `not:re:foo` all flip the search
@@ -8014,7 +8061,10 @@
                 matchesStatus = tags.includes(tag);
             }
 
-            return matchesSearch && matchesStatus;
+            const matchesSite = siteFilter === 'all'
+                || extractDomainsFromPatterns(patterns).includes(siteFilter);
+
+            return matchesSearch && matchesStatus && matchesSite;
         });
 
         // Apply sorting
@@ -8194,6 +8244,11 @@
         // Update select all checkbox
         const filteredCount = filtered.length;
         const totalSelectedCount = state.selectedScripts.size;
+        const scriptsToolbar = document.querySelector('.scripts-toolbar');
+        if (scriptsToolbar) {
+            scriptsToolbar.dataset.selectionCount = String(totalSelectedCount);
+            scriptsToolbar.classList.toggle('has-selection', totalSelectedCount > 0);
+        }
         const hiddenSelectedCount = Math.max(0, totalSelectedCount - visibleSelectedCount);
         const allVisibleSelected = filteredCount > 0 && visibleSelectedCount === filteredCount;
         const someVisibleSelected = visibleSelectedCount > 0 && visibleSelectedCount < filteredCount;
@@ -8347,8 +8402,9 @@
         const hasScripts = state.scripts.length > 0;
         const searchQuery = elements.scriptSearch?.value?.trim() || '';
         const filterValue = elements.filterSelect?.value || 'all';
+        const siteFilterValue = elements.siteFilterSelect?.value || 'all';
         const hasSearch = searchQuery.length > 0;
-        const hasFilter = filterValue !== 'all';
+        const hasFilter = filterValue !== 'all' || siteFilterValue !== 'all';
 
         if (state.scriptLoadError && !hasScripts) {
             if (elements.emptyStateTitle) elements.emptyStateTitle.textContent = tDashboard('scriptsUnavailableTitle', 'Scripts unavailable');
@@ -8406,7 +8462,11 @@
             if (elements.emptyStateTitle) elements.emptyStateTitle.textContent = tDashboard('emptyNoMatchesTitle', 'No scripts match this view');
             if (elements.emptyStateDescription) {
                 const searchDetail = hasSearch ? ` for "${searchQuery}"` : '';
-                const filterDetail = hasFilter ? ` under the "${filterValue}" filter` : '';
+                const activeFilters = [
+                    filterValue !== 'all' ? filterValue : '',
+                    siteFilterValue !== 'all' ? siteFilterValue : ''
+                ].filter(Boolean).join(' + ');
+                const filterDetail = hasFilter ? ` under the "${activeFilters}" filter` : '';
                 const details = `${searchDetail}${filterDetail}`;
                 elements.emptyStateDescription.textContent = tDashboard(
                     'emptyNoMatchesDescription',
@@ -8424,6 +8484,8 @@
                 elements.emptyStatePrimaryAction.onclick = () => {
                     if (elements.scriptSearch) elements.scriptSearch.value = '';
                     if (elements.filterSelect) elements.filterSelect.value = 'all';
+                    if (elements.siteFilterSelect) elements.siteFilterSelect.value = 'all';
+                    if (elements.savedViewSelect) elements.savedViewSelect.value = 'default';
                     renderScriptTable();
                 };
             }
@@ -8447,6 +8509,8 @@
             elements.emptyStatePrimaryAction.onclick = () => {
                 if (elements.scriptSearch) elements.scriptSearch.value = '';
                 if (elements.filterSelect) elements.filterSelect.value = 'all';
+                if (elements.siteFilterSelect) elements.siteFilterSelect.value = 'all';
+                if (elements.savedViewSelect) elements.savedViewSelect.value = 'default';
                 renderScriptTable();
             };
         }
@@ -9079,6 +9143,7 @@
         if (overBudget) tr.classList.add('row-over-budget');
 
         const scriptIdAttr = escapeHtml(String(script.id));
+        const rowMenuId = escapeHtml(`script-row-menu-${index}-${String(script.id).replace(/[^a-z0-9_-]/gi, '-').slice(0, 32)}`);
         tr.draggable = false;
         tr.dataset.scriptId = script.id;
         safeSetHtml(tr, `
@@ -9110,6 +9175,7 @@
                             <button type="button" class="script-name-button" data-id="${scriptIdAttr}" title="${escapeHtml(metadata.description || '')}" aria-label="Open ${escapeHtml(name)} in the editor">
                                 <span class="script-name-button-text">${escapeHtml(name)}${isBroadMatch(matches) ? ' <span title="Runs on all or most sites" style="opacity:0.58">🌐</span>' : ''}</span>
                             </button>
+                            <span class="script-version-inline">v${escapeHtml(String(version).replace(/^v/i, ''))}</span>
                             ${metadata.author ? `<span class="script-author">by ${escapeHtml(metadata.author)}</span>` : ''}
                         </div>
                         <div class="script-name-badges">
@@ -9140,11 +9206,15 @@
             <td class="center">${statsHtml}</td>
             <td class="center">
                 <div class="action-icons" role="toolbar" aria-label="${escapeHtml(name)} actions">
+                    <button type="button" class="action-icon script-row-primary-action" title="Edit" aria-label="Edit ${escapeHtml(name)}" data-action="edit" data-id="${scriptIdAttr}">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
+                    <button type="button" class="action-icon script-row-menu-trigger" title="More actions" aria-label="More actions for ${escapeHtml(name)}" aria-haspopup="menu" aria-expanded="false" popovertarget="${rowMenuId}">
+                        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>
+                    </button>
+                    <div class="script-row-menu" id="${rowMenuId}" popover="auto" role="menu" aria-label="More actions for ${escapeHtml(name)}">
                     <button type="button" class="action-icon ${script.settings?.pinned ? 'pinned' : ''}" title="${script.settings?.pinned ? 'Unpin' : 'Pin to top'}" aria-label="${script.settings?.pinned ? 'Unpin' : 'Pin'} ${escapeHtml(name)}" data-action="pin" data-id="${scriptIdAttr}">
                         <svg viewBox="0 0 24 24" fill="${script.settings?.pinned ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M12 2L9.1 8.6 2 9.2l5.5 4.8L5.8 21 12 17.3 18.2 21l-1.7-7 5.5-4.8-7.1-.6z"/></svg>
-                    </button>
-                    <button type="button" class="action-icon" title="Edit" aria-label="Edit ${escapeHtml(name)}" data-action="edit" data-id="${scriptIdAttr}">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                     </button>
                     ${supportsOneShotRunNow() ? `<button type="button" class="action-icon" title="Run on this tab" aria-label="Run ${escapeHtml(name)} on this tab" data-action="runNow" data-id="${scriptIdAttr}">
                         <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 5v14l11-7z"/></svg>
@@ -9164,9 +9234,47 @@
                     <button type="button" class="action-icon" title="Delete" aria-label="Delete ${escapeHtml(name)}" data-action="delete" data-id="${scriptIdAttr}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3,6 5,6 21,6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
                     </button>
+                    </div>
                 </div>
             </td>
         `);
+
+        const rowMenu = tr.querySelector('.script-row-menu');
+        const rowMenuTrigger = tr.querySelector('.script-row-menu-trigger');
+        rowMenu?.querySelectorAll('button').forEach(button => button.setAttribute('role', 'menuitem'));
+        rowMenu?.addEventListener('beforetoggle', event => {
+            if (event.newState !== 'open' || !rowMenuTrigger) return;
+            const rect = rowMenuTrigger.getBoundingClientRect();
+            const estimatedWidth = 210;
+            const estimatedHeight = Math.min(320, 46 + rowMenu.querySelectorAll('button').length * 36);
+            const left = Math.max(8, Math.min(window.innerWidth - estimatedWidth - 8, rect.right - estimatedWidth));
+            const top = rect.bottom + estimatedHeight + 8 <= window.innerHeight
+                ? rect.bottom + 6
+                : Math.max(8, rect.top - estimatedHeight - 6);
+            rowMenu.style.left = `${left}px`;
+            rowMenu.style.top = `${top}px`;
+        });
+        rowMenu?.addEventListener('toggle', event => {
+            const open = event.newState === 'open';
+            rowMenuTrigger?.setAttribute('aria-expanded', String(open));
+            if (open) rowMenu.querySelector('button')?.focus();
+        });
+        rowMenu?.addEventListener('keydown', event => {
+            const items = [...rowMenu.querySelectorAll('button')];
+            const index = items.indexOf(document.activeElement);
+            let nextIndex = -1;
+            if (event.key === 'ArrowDown') nextIndex = (index + 1) % items.length;
+            else if (event.key === 'ArrowUp') nextIndex = (index - 1 + items.length) % items.length;
+            else if (event.key === 'Home') nextIndex = 0;
+            else if (event.key === 'End') nextIndex = items.length - 1;
+            else return;
+            event.preventDefault();
+            items[nextIndex]?.focus();
+        });
+        rowMenu?.addEventListener('click', event => {
+            if (!event.target.closest('button')) return;
+            queueMicrotask(() => rowMenu.hidePopover?.());
+        });
 
         tr.querySelector('.script-toggle')?.addEventListener('change', e => {
             toggleScriptEnabled(script.id, e.target.checked, { control: e.target });
@@ -9296,11 +9404,11 @@
 
         const toolbar = tr.querySelector('.action-icons[role="toolbar"]');
         if (toolbar) {
-            const btns = toolbar.querySelectorAll('button');
+            const btns = toolbar.querySelectorAll(':scope > button');
             btns.forEach((btn, i) => { btn.setAttribute('tabindex', i === 0 ? '0' : '-1'); });
             toolbar.addEventListener('keydown', (e) => {
                 if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft' && e.key !== 'Home' && e.key !== 'End') return;
-                const items = [...toolbar.querySelectorAll('button')];
+                const items = [...toolbar.querySelectorAll(':scope > button')];
                 const cur = items.indexOf(document.activeElement);
                 if (cur === -1) return;
                 e.preventDefault();
@@ -14322,7 +14430,9 @@
                     : configured ? 'Sync configured' : 'Local vault ready';
             }
             if (elements.svCommandHealthMark) {
-                elements.svCommandHealthMark.textContent = hasSynced ? 'OK' : configured ? 'SYNC' : 'L';
+                elements.svCommandHealthMark.textContent = '';
+                elements.svCommandHealthMark.classList.toggle('good', configured || hasSynced);
+                elements.svCommandHealthMark.classList.toggle('neutral', !configured);
             }
             elements.svCommandHealthDetail.textContent = hasSynced
                 ? `Last synced ${formatSyncTimestamp(state.settings.lastSync)}`
@@ -15870,6 +15980,10 @@
             if (elements.settingsLayout) elements.settingsLayout.value = next;
         });
 
+        elements.btnWorkbenchCommand?.addEventListener('click', openCommandPalette);
+        elements.btnWorkbenchHelp?.addEventListener('click', () => switchTab('help', { focusControl: true }));
+        elements.btnWorkbenchSettings?.addEventListener('click', () => switchTab('settings', { focusControl: true }));
+
         elements.scriptInspectorEdit?.addEventListener('click', () => {
             const scriptId = elements.scriptInspectorPanel?.dataset.scriptId;
             if (scriptId) openEditorForScript(scriptId);
@@ -15890,22 +16004,35 @@
             const scriptId = elements.scriptInspectorPanel?.dataset.scriptId;
             if (scriptId) await interactiveCheckAndConfirmUpdate(scriptId, event.currentTarget);
         });
+        const activateInspectorTab = tab => {
+            if (!tab) return;
+            const target = tab.dataset.inspectorTab;
+            elements.scriptInspectorTabs?.forEach(candidate => {
+                const active = candidate === tab;
+                candidate.classList.toggle('active', active);
+                candidate.setAttribute('aria-selected', String(active));
+                candidate.tabIndex = active ? 0 : -1;
+            });
+            elements.scriptInspectorViews?.forEach(view => {
+                const active = view.dataset.inspectorView === target;
+                view.hidden = !active;
+                view.setAttribute('aria-hidden', String(!active));
+            });
+        };
         elements.scriptInspectorTabs?.forEach(tab => {
-            tab.addEventListener('click', () => {
-                elements.scriptInspectorTabs?.forEach(candidate => {
-                    const active = candidate === tab;
-                    candidate.classList.toggle('active', active);
-                    candidate.setAttribute('aria-selected', String(active));
-                });
-                const target = tab.dataset.inspectorTab;
-                const section = target === 'access'
-                    ? elements.scriptInspectorDomains
-                    : target === 'grants'
-                        ? elements.scriptInspectorGrants
-                        : target === 'history'
-                            ? elements.scriptInspectorRuntime
-                            : elements.scriptInspectorScore;
-                section?.closest?.('.script-inspector-section')?.scrollIntoView?.({ block: 'nearest' });
+            tab.addEventListener('click', () => activateInspectorTab(tab));
+            tab.addEventListener('keydown', event => {
+                const tabs = [...(elements.scriptInspectorTabs || [])];
+                const index = tabs.indexOf(tab);
+                let nextIndex = -1;
+                if (event.key === 'ArrowRight') nextIndex = (index + 1) % tabs.length;
+                else if (event.key === 'ArrowLeft') nextIndex = (index - 1 + tabs.length) % tabs.length;
+                else if (event.key === 'Home') nextIndex = 0;
+                else if (event.key === 'End') nextIndex = tabs.length - 1;
+                else return;
+                event.preventDefault();
+                activateInspectorTab(tabs[nextIndex]);
+                tabs[nextIndex]?.focus();
             });
         });
         elements.scriptsQueueReviewAll?.addEventListener('click', () => switchTab('updates', { focusControl: true }));
@@ -16115,6 +16242,31 @@
         });
 
         elements.filterSelect?.addEventListener('change', () => {
+            if (elements.savedViewSelect) elements.savedViewSelect.value = 'default';
+            renderScriptTable(elements.scriptSearch?.value || '');
+        });
+        elements.siteFilterSelect?.addEventListener('change', () => {
+            if (elements.savedViewSelect) elements.savedViewSelect.value = 'default';
+            renderScriptTable(elements.scriptSearch?.value || '');
+        });
+        elements.savedViewSelect?.addEventListener('change', () => {
+            const view = elements.savedViewSelect?.value || 'default';
+            if (elements.siteFilterSelect) elements.siteFilterSelect.value = 'all';
+            if (elements.filterSelect) {
+                elements.filterSelect.value = view === 'enabled'
+                    ? 'enabled'
+                    : view === 'attention'
+                        ? 'attention'
+                        : 'all';
+            }
+            if (view === 'recent') {
+                state.sortColumn = 'updated';
+                state.sortDirection = 'desc';
+            } else if (view === 'default') {
+                state.sortColumn = 'order';
+                state.sortDirection = 'asc';
+            }
+            updateSortIndicators();
             renderScriptTable(elements.scriptSearch?.value || '');
         });
         

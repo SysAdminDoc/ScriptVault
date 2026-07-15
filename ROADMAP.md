@@ -76,43 +76,9 @@ items below are the remaining unfixed findings.
   where a harness exists). Commit in logical batches with conventional messages;
   no AI authorship in commits.
 
-### Cloud sync & storage (data-safety)
-
-- [ ] P1 — Storage breakdown scans obsolete chrome.storage.local keys post-v3
-  Why: `QuotaManager.getBreakdown()` categorizes only chrome.storage.local keys (`userscripts`, `values_`, `script_`), but scripts/GM values moved to IndexedDB in v3, so the scripts/scriptValues categories report ~0 bytes. Currently no UI consumes `getStorageBreakdown`, so low user impact, but the message API is misleading. Fix by reading counts/bytes from ScriptStorage/ScriptValues/BackupsDAO in IDB.
-  Where: `src/modules/quota-manager.ts` getBreakdown
-
-- [ ] P3 — S3 SigV4 canonical-query sort is order-incorrect (currently unexercised)
-  Why: The SigV4 canonical query builder does not sort params correctly; ScriptVault's S3 object URLs carry no query params today so it is never hit, but any future query-param URL would produce a bad signature.
-  Where: `src/modules/sync-providers.ts` S3 signing
-
 ### Background core & security
 
-- [ ] P2 — GM value cross-script auth gap on Chrome 130 and Firefox
-  Why: `sender.userScriptId` is undefined on Chrome 130 (no `onUserScriptMessage`) and Firefox, so the `ownedScriptId = sender.userScriptId || data.scriptId` pattern falls back to trusting the caller. Residual from the 2026-07-01 fix.
-  Where: `src/background/gm-values-handler.ts`, `modules/gm-values-handler.js`
-
-- [ ] P3 — `_localSaveReceiptCoalescing` Map has no TTL sweep
-  Why: Entries carry `expiresAt` but are only evicted on re-save or delete. Stale entries for rarely-saved scripts accumulate until SW restart.
-  Where: `src/background/core.ts:~1238`
-
-### Dashboard modules — dead/broken feature surfaces
-
-### Editor sandbox (pages/editor-sandbox.html)
-
-- [ ] P3 — Editor sandbox has no theme awareness
-  Why: `pages/editor-sandbox.html` uses hardcoded dark colors (`#1e1e1e`) and never receives the dashboard theme. Users in light/catppuccin see a permanently dark editor iframe.
-  Where: `pages/editor-sandbox.html`
-
 ### Non-dashboard UI (popup / install / sidepanel / devtools)
-
-- [ ] P3 — `.user.js` interception uses a single shared `pendingInstall` slot
-  Why: Two concurrent `.user.js` navigations both write the one `pendingInstall` key (last-write-wins) and both tabs redirect to install.html, so a user who opened URL A can be shown/consent to script B. The install UI shows the actual winning script before consent, so it cannot install unseen — confusing-UX, not silent install. Fix with a per-tab keyed slot (`pendingInstall_<tabId>`) or URL in the install-page hash.
-  Where: `src/background/install-handler.ts`, `src/background/core.ts` interceptor, `pages/install.js`
-
-- [ ] P3 — DevTools panel `matchMedia` listener never removed
-  Why: `applyTheme()` adds a `prefers-color-scheme` change listener without removal. Currently called once, but if ever called again, listeners would stack.
-  Where: `pages/devtools-panel.js:~283`
 
 ## Later
 
@@ -669,10 +635,6 @@ _Net-new from the 2026-07-02 pass (v3.16.0). Verified as not already implemented
 
 ### P2
 
-- [ ] P2 — Repair Edge sideload smoke userscript execution
-  Why: `npm run smoke:edge` reaches the Edge dashboard/popup in a temporary profile but times out waiting for the local target page marker, so Edge userscript execution lacks current live evidence.
-  Where: `scripts/smoke-edge-sideload.mjs`, `src/background/registration.ts`, `src/modules/user-scripts.ts`, `tests/edge-smoke.test.js`
-
 ### P3
 
 ### Appendix: Research-Driven Sources (2026-07-02)
@@ -706,65 +668,7 @@ _Net-new from the 2026-07-09 pass. Deduped against ROADMAP.md, Roadmap_Blocked.m
 
 ### P1
 
-- [ ] P1 — Retire the `not-yet-implemented` trust receipt state
-  Why: Install/update provenance must not present incomplete verification as a normal trust state now that Sigstore verification modules exist.
-  Evidence: `src/background/trust-receipt.ts:129`, `src/background/core.ts:1361`, `src/modules/sigstore-bundle-verifier.ts`, RD29-21, RD29-22.
-  Touches: `src/background/trust-receipt.ts`, `src/background/core.ts`, `src/types/script.ts`, install/update review UI, trust-receipt tests.
-  Acceptance: No reachable receipt path emits `verification: 'not-yet-implemented'`; unsupported bundles and unavailable verification are explicit UI states with regression tests.
-  Complexity: M
-
-- [ ] P1 — Add Chromium-derivative smoke evidence
-  Why: README lists Brave, Vivaldi, Opera, and Arc as unverified even though Chromium-derivative behavior is a competitive expectation and store/UI chrome differences can break extension flows.
-  Evidence: `README.md` Browser Support Matrix, RD29-14, RD29-15, RD29-16, RD29-17.
-  Touches: `scripts/`, `tests/e2e/`, `docs/cross-browser-pipeline.md`, `README.md`, derivative browser artifact directory.
-  Acceptance: A local smoke command discovers configured derivative browser executables, validates dashboard/popup/install/userScripts execution on each available browser, writes per-browser JSON evidence, and feeds the generated support matrix.
-  Complexity: L
-
-### P2
-
-- [ ] P2 — Add configurable Find Scripts source registry
-  Why: ScriptVault hardcodes Greasy Fork/OpenUserJS/GitHub while userscript-manager users ask for customizable catalog sources and community catalog aggregators already exist.
-  Evidence: `pages/dashboard.js` Find Scripts source switch, RD29-04, RD29-06, RD29-07.
-  Touches: `pages/dashboard.js`, `pages/dashboard.html`, `src/modules/i18n.ts`, settings schema, Find Scripts tests.
-  Acceptance: Users can enable built-in sources and add allowlisted URL-template sources with validation; source failures show actionable inline errors; no duplicate of existing Greasy Fork/OpenUserJS behavior regresses.
-  Complexity: M
-
-- [ ] P2 — Add a local shared-library workflow for userscripts
-  Why: Existing local workspace handles and File System Observer support script hot-reload, but there is no safe equivalent to the requested `@require-local` workflow for reusable utility scripts.
-  Evidence: `pages/dashboard.js` local workspace support, `tests/e2e/local-workspace.spec.js`, RD29-03, RD29-08, RD29-24.
-  Touches: local workspace UI, parser/resource loader, install/update review, export/import redaction, local workspace tests.
-  Acceptance: A user can attach a reviewed local `.js` helper as a script-scoped library, refresh it via File System Observer or manual review, see portability/security warnings, and export/import without leaking local paths.
-  Complexity: L
-
-- [ ] P2 — Group diagnostics by browser `documentId`
-  Why: Firefox 153 and Chromium expose document identity that can separate SPA/frame navigations; ScriptVault currently uses documentId for host access requests but not as the primary diagnostics grouping key.
-  Evidence: `src/background/core.ts` documentId host request paths, `src/types/messages.ts`, RD29-18, RD29-19.
-  Touches: content bridge messages, run diagnostics, DevTools trace export, side panel/popup status views, diagnostics tests.
-  Acceptance: Per-tab diagnostics and DevTools trace export show document/frame identity where available and keep stale-frame events separate from the current document after same-tab navigation.
-  Complexity: M
-
-- [ ] P2 — Capture browser-mode trace artifacts for visual failures
-  Why: Visual/browser tests currently save screenshots but not Vitest 4.1 trace timelines, making secondary UI failures harder to debug.
-  Evidence: `vitest.visual.config.mjs`, RD29-23.
-  Touches: `vitest.visual.config.mjs`, visual test helpers, `tests/visual/`, test-results artifact docs in existing scripts.
-  Acceptance: `npm run test:visual` writes a Playwright/Vitest browser trace for failing tests and includes useful marks around dashboard load, theme switch, modal/popover open, and assertion points.
-  Complexity: S
-
-- [ ] P2 — Budget Firefox web-ext lint warnings
-  Why: Firefox packaging reports 53 warnings with no threshold, so warning drift can accumulate while AMO credentials remain blocked.
-  Evidence: `README.md` Firefox Desktop support row, `firefox-artifacts/web-ext-lint.json`, RD29-20.
-  Touches: Firefox packaging scripts, release check, support matrix generator, tests for lint summary parsing.
-  Acceptance: Firefox package/check commands record the warning count, fail on new warning growth unless explicitly baselined, and keep the support matrix count in sync.
-  Complexity: S
-
 ### P3
-
-- [ ] P3 — Evaluate Monaco native LSP for userscript intelligence
-  Why: Monaco's native LSP support can move ScriptVault beyond static snippets toward metadata, GM API, and `@require` diagnostics without replacing the editor.
-  Evidence: `pages/monaco-adapter.js`, `pages/editor-sandbox.html`, RD29-25.
-  Touches: Monaco sandbox, GM type declarations, linter worker boundary, editor settings, browser package size checks.
-  Acceptance: A small spike proves or rejects a local userscript language server for metadata completions, GM API signatures, and warning diagnostics without breaking Firefox editor fallback or package-size gates.
-  Complexity: L
 
 ### Appendix: Research-Driven Sources (2026-07-09)
 
@@ -795,3 +699,11 @@ _Net-new from the 2026-07-09 pass. Deduped against ROADMAP.md, Roadmap_Blocked.m
 | RD29-23 | Vitest 4.1 browser trace view | https://vitest.dev/blog/vitest-4-1.html |
 | RD29-24 | File System Observer API | https://developer.chrome.com/blog/file-system-observer |
 | RD29-25 | Monaco editor changelog | https://github.com/microsoft/monaco-editor/blob/main/CHANGELOG.md |
+
+## Research-Driven Additions
+
+### P0
+
+### P1
+
+### P3

@@ -4,6 +4,17 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Reimagined the dashboard as a focused script operations workbench.** A
+  persistent command bar, compact three-metric summary, site and saved-view
+  filters, progressive row-action menus, and keyboard-navigable inspector
+  views reduce visual noise while preserving every script workflow. Larger
+  working type, rhythmic spacing, plain status marks, grouped controls, and
+  separator-led surfaces replace the previous stack of outlined cards and
+  pills. A tool-first density pass removes duplicated page heroes, puts sticky
+  search and action bars first, and compresses settings, utilities, recovery,
+  update, and help sections without shrinking control text. Responsive table
+  actions, an intentional empty inspector, four-theme visual baselines, and a
+  real-extension interaction test cover the new shell.
 - **Completed advanced UserCSS configuration and live preview.** HSL, OKLCH,
   and OKLab colors now validate in the generated runtime; color aliases can
   share a linked palette; light/dark defaults render through the selected

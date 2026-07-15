@@ -20,7 +20,7 @@ describe('Chrome userScripts onboarding diagnostics', () => {
     expect(backgroundCore).toContain("setupState = 'developer-mode-disabled';");
     expect(backgroundCore).toContain("setupState = 'unsupported-browser';");
     expect(backgroundCore).toContain('Grant ScriptVault the optional Firefox userScripts permission, then refresh runtime status.');
-    expect(backgroundCore).toContain('Open Extension Details, enable "Allow User Scripts" for ScriptVault, then refresh status; reload the extension if this banner remains.');
+    expect(backgroundCore).toContain('Enable "Allow User Scripts" in Extension Details, then refresh.');
     expect(backgroundCore).toContain('Open chrome://extensions and enable Developer Mode to run userscripts.');
   });
 
