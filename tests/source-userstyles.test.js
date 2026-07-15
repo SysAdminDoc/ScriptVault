@@ -359,3 +359,162 @@ body { color: royalblue; }`;
     expect(UserStylesEngine.getStyle(styleId)?.match).toEqual(['https://docs.example.com/*']);
   });
 });
+
+describe('UserCSS audit hardening 2026-07-15', () => {
+  beforeEach(() => {
+    globalThis.__resetStorageMock();
+    vi.clearAllMocks();
+    chrome.tabs.query.mockResolvedValue([
+      { id: 1, url: 'https://example.com/page' },
+    ]);
+    chrome.tabs.get.mockResolvedValue({ id: 1, url: 'https://example.com/page' });
+  });
+
+  it('does not expand $-replacement patterns from variable values into surrounding CSS', async () => {
+    const { UserStylesEngine } = await loadFreshUserStyles();
+
+    const styleId = await UserStylesEngine.registerStyle({
+      meta: { name: 'Dollar guard' },
+      css: 'body { color: /*[[accent]]*/; } .x { margin: 0; }',
+      variables: [
+        { type: 'color', name: 'accent', label: 'Accent', default: '#111111', options: null },
+      ],
+      match: ['*://example.com/*'],
+    });
+
+    vi.clearAllMocks();
+    chrome.tabs.query.mockResolvedValue([{ id: 1, url: 'https://example.com/page' }]);
+    await UserStylesEngine.setVariables(styleId, { accent: "rgb($')" });
+
+    const injected = chrome.scripting.insertCSS.mock.calls.at(-1)?.[0]?.css;
+    expect(injected).toBe("body { color: rgb($'); } .x { margin: 0; }");
+  });
+
+  it('replaces var(--name, fallback) references whose fallback contains nested parentheses', async () => {
+    const { UserStylesEngine } = await loadFreshUserStyles();
+
+    await UserStylesEngine.registerStyle({
+      meta: { name: 'Nested fallback' },
+      css: 'a { color: var(--accent, rgb(1, 2, 3)); text-decoration: none; }',
+      variables: [
+        { type: 'color', name: 'accent', label: 'Accent', default: '#222222', options: null },
+      ],
+      match: ['*://example.com/*'],
+    });
+
+    const injected = chrome.scripting.insertCSS.mock.calls.at(-1)?.[0]?.css;
+    expect(injected).toBe('a { color: #222222; text-decoration: none; }');
+  });
+
+  it('parses label-less number and checkbox @var directives with coerced defaults', async () => {
+    const { UserStylesEngine } = await loadFreshUserStyles();
+
+    const parsed = UserStylesEngine.parseUserCSS(`/* ==UserStyle==
+@name Label-less vars
+@namespace scriptvault
+@version 1.0.0
+@match https://example.com/*
+@var checkbox bold 1
+@var number radius 4
+==/UserStyle== */
+body { font-weight: /*[[bold]]*/; border-radius: /*[[radius]]*/px; }`);
+
+    expect(parsed.error).toBeUndefined();
+    const bold = parsed.variables.find((entry) => entry.name === 'bold');
+    const radius = parsed.variables.find((entry) => entry.name === 'radius');
+    expect(bold?.default).toBe(true);
+    expect(radius?.default).toBe(4);
+  });
+
+  it('keeps the selected select option first when applying variable defaults', async () => {
+    const { UserStylesEngine } = await loadFreshUserStyles();
+
+    const source = `/* ==UserStyle==
+@name Select round trip
+@namespace scriptvault
+@version 1.0.0
+@match https://example.com/*
+@var select font "Font" {"mono":"monospace"|"sans":"sans-serif"|"serif":"serif"}
+==/UserStyle== */
+body { font-family: /*[[font]]*/; }`;
+
+    const applied = UserStylesEngine.applyVariableDefaults(source, { font: 'serif' });
+    expect(applied.error).toBeUndefined();
+    const reparsed = UserStylesEngine.parseUserCSS(applied.code);
+    const font = reparsed.variables.find((entry) => entry.name === 'font');
+    expect(font?.default).toBe('serif');
+    expect(Object.keys(font?.options ?? {})).toEqual(['serif', 'mono', 'sans']);
+  });
+
+  it('round-trips text values containing quotes and backslashes', async () => {
+    const { UserStylesEngine } = await loadFreshUserStyles();
+
+    const source = `/* ==UserStyle==
+@name Text round trip
+@namespace scriptvault
+@version 1.0.0
+@match https://example.com/*
+@var text quote "Quote" "plain"
+==/UserStyle== */
+body::after { content: "/*[[quote]]*/"; }`;
+
+    const value = 'he said "hi" and used a \ backslash';
+    const applied = UserStylesEngine.applyVariableDefaults(source, { quote: value });
+    expect(applied.error).toBeUndefined();
+    const reparsed = UserStylesEngine.parseUserCSS(applied.code);
+    expect(reparsed.variables.find((entry) => entry.name === 'quote')?.default).toBe(value);
+  });
+
+  it('rejects text values that inject CSS structure or control characters', async () => {
+    const { UserStylesEngine } = await loadFreshUserStyles();
+
+    const variables = [
+      { type: 'text', name: 'quote', label: 'Quote', default: 'plain', options: null },
+    ];
+    const braceAttack = UserStylesEngine.validateUserCSSVariables(variables, {
+      quote: 'x} * { display: none !important } .y{',
+    });
+    expect(braceAttack.valid).toBe(false);
+
+    const controlAttack = UserStylesEngine.validateUserCSSVariables(variables, {
+      quote: 'ok bad',
+    });
+    expect(controlAttack.valid).toBe(false);
+
+    const benign = UserStylesEngine.validateUserCSSVariables(variables, {
+      quote: 'url("data:image/svg+xml;base64,abcd")',
+    });
+    expect(benign.valid).toBe(true);
+  });
+
+  it('serializes overlapping draft previews so earlier preview CSS is always removed', async () => {
+    const { UserStylesEngine } = await loadFreshUserStyles();
+
+    let releaseFirstInsert;
+    chrome.scripting.insertCSS.mockImplementationOnce(
+      () => new Promise((resolve) => { releaseFirstInsert = resolve; }),
+    );
+
+    const first = UserStylesEngine.previewDraft(createUserCSSDraft());
+    const second = UserStylesEngine.previewDraft(
+      createUserCSSDraft().replace('#123456', '#654321'),
+    );
+
+    await vi.waitFor(() => {
+      if (typeof releaseFirstInsert !== 'function') throw new Error('first insert not started');
+    });
+    releaseFirstInsert();
+    await first;
+    await second;
+
+    const inserted = chrome.scripting.insertCSS.mock.calls.map((call) => call[0].css);
+    expect(inserted).toHaveLength(2);
+    // The second preview must remove the first preview's CSS before inserting.
+    const removed = chrome.scripting.removeCSS.mock.calls.map((call) => call[0].css);
+    expect(removed).toContain(inserted[0]);
+
+    await UserStylesEngine.clearDraftPreview({});
+    const removedAfterClear = chrome.scripting.removeCSS.mock.calls.map((call) => call[0].css);
+    expect(removedAfterClear).toContain(inserted[1]);
+  });
+});

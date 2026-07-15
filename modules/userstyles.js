@@ -42,6 +42,7 @@ const UserStylesEngine = (() => {
   var _registeredTabs = /* @__PURE__ */ new Map();
   var _draftPreviewTabs = /* @__PURE__ */ new Map();
   var _injectingTabs = /* @__PURE__ */ new Set();
+  var _draftPreviewChain = Promise.resolve();
   async function _loadState() {
     try {
       const data = await chrome.storage.local.get([STORAGE_KEY, VARS_STORAGE_KEY]);
@@ -190,20 +191,20 @@ const UserStylesEngine = (() => {
   }
   function _parseVarDirective(type, rest) {
     const nameMatch = rest.match(/^(\S+)\s+"([^"]*?)"\s+([\s\S]*)$/);
-    if (!nameMatch) {
+    let varName;
+    let label;
+    let defaultVal;
+    if (nameMatch) {
+      varName = nameMatch[1] ?? "";
+      label = nameMatch[2] ?? "";
+      defaultVal = (nameMatch[3] ?? "").trim();
+    } else {
       const simpleMatch = rest.match(/^(\S+)\s+(.*)$/);
       if (!simpleMatch) return null;
-      return {
-        type,
-        name: simpleMatch[1] ?? "",
-        label: simpleMatch[1] ?? "",
-        default: (simpleMatch[2] ?? "").trim(),
-        options: null
-      };
+      varName = simpleMatch[1] ?? "";
+      label = varName;
+      defaultVal = (simpleMatch[2] ?? "").trim();
     }
-    const varName = nameMatch[1] ?? "";
-    const label = nameMatch[2] ?? "";
-    let defaultVal = (nameMatch[3] ?? "").trim();
     let options = null;
     let group;
     let colorSpace;
@@ -219,8 +220,12 @@ const UserStylesEngine = (() => {
         }
         break;
       case "text":
-        if (/^".*"$/.test(defaultVal)) {
-          defaultVal = defaultVal.slice(1, -1);
+        if (/^"[\s\S]*"$/.test(defaultVal)) {
+          try {
+            defaultVal = JSON.parse(defaultVal);
+          } catch {
+            defaultVal = defaultVal.slice(1, -1);
+          }
         }
         break;
       case "number":
@@ -360,6 +365,14 @@ const UserStylesEngine = (() => {
     if (variable.type === "select" && variable.options && !Object.prototype.hasOwnProperty.call(variable.options, String(value))) {
       return `${variable.label || variable.name} must use a configured option.`;
     }
+    if (variable.type === "text" && typeof value === "string") {
+      if (value.length > 8192) {
+        return `${variable.label || variable.name} must be 8192 characters or fewer.`;
+      }
+      if (/[{}\x00-\x1f\x7f]/.test(value)) {
+        return `${variable.label || variable.name} contains unsafe CSS characters.`;
+      }
+    }
     if (typeof value === "object") return `${variable.label || variable.name} has an invalid value.`;
     return "";
   }
@@ -417,23 +430,41 @@ const UserStylesEngine = (() => {
       } else {
         val = configured;
       }
+      const replacement = String(val);
       const placeholder = new RegExp(
         "/\\*\\[\\[" + _escapeRegex(v.name) + "\\]\\]\\*/",
         "g"
       );
-      result = result.replace(placeholder, String(val));
+      result = result.replace(placeholder, () => replacement);
       const anglePlaceholder = new RegExp(
         "<<" + _escapeRegex(v.name) + ">>",
         "g"
       );
-      result = result.replace(anglePlaceholder, String(val));
-      const cssVariable = new RegExp(
-        "var\\(\\s*--" + _escapeRegex(v.name) + "\\s*(?:,[^)]*)?\\)",
-        "g"
-      );
-      result = result.replace(cssVariable, String(val));
+      result = result.replace(anglePlaceholder, () => replacement);
+      result = _replaceCssVarAliases(result, v.name, replacement);
     }
     return result;
+  }
+  function _replaceCssVarAliases(css, name, replacement) {
+    const open = new RegExp("var\\(\\s*--" + _escapeRegex(name) + "\\s*(?=[,)])", "g");
+    let result = "";
+    let lastIndex = 0;
+    let match;
+    while ((match = open.exec(css)) !== null) {
+      let depth = 1;
+      let end = match.index + match[0].length;
+      while (end < css.length && depth > 0) {
+        const char = css[end] ?? "";
+        if (char === "(") depth++;
+        else if (char === ")") depth--;
+        end++;
+      }
+      if (depth !== 0) break;
+      result += css.slice(lastIndex, match.index) + replacement;
+      lastIndex = end;
+      open.lastIndex = end;
+    }
+    return result + css.slice(lastIndex);
   }
   function _escapeRegex(str) {
     return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -494,7 +525,15 @@ const UserStylesEngine = (() => {
     _draftPreviewTabs.delete(tabId);
     return true;
   }
-  async function clearDraftPreview(options = {}) {
+  function _enqueueDraftPreviewTask(task) {
+    const queued = _draftPreviewChain.then(task, task);
+    _draftPreviewChain = queued.catch(() => void 0);
+    return queued;
+  }
+  function clearDraftPreview(options = {}) {
+    return _enqueueDraftPreviewTask(() => _clearDraftPreviewNow(options));
+  }
+  async function _clearDraftPreviewNow(options = {}) {
     if (typeof options.tabId === "number") {
       const cleared2 = await _removeDraftPreviewFromTab(options.tabId);
       return { success: true, cleared: cleared2 ? 1 : 0 };
@@ -505,7 +544,10 @@ const UserStylesEngine = (() => {
     }
     return { success: true, cleared };
   }
-  async function previewDraft(usercssCode, options = {}) {
+  function previewDraft(usercssCode, options = {}) {
+    return _enqueueDraftPreviewTask(() => _previewDraftNow(usercssCode, options));
+  }
+  async function _previewDraftNow(usercssCode, options = {}) {
     const built = _buildDraftPreviewCSS(usercssCode, options);
     if (built.error || !built.css || !built.match) return { error: built.error || "Unable to preview UserCSS draft." };
     const tab = await _getPreviewTab(options.tabId);
@@ -720,7 +762,7 @@ const UserStylesEngine = (() => {
     } else if (variable.type === "select" && variable.options && !("min" in variable.options)) {
       const selected = String(value);
       const entries = Object.entries(variable.options);
-      entries.sort(([left]) => left === selected ? -1 : left.localeCompare(selected));
+      entries.sort(([left], [right]) => left === selected ? -1 : right === selected ? 1 : left.localeCompare(right));
       serialized = `{${entries.map(([key, optionValue]) => `${JSON.stringify(key)}:${JSON.stringify(optionValue)}`).join("|")}}`;
     } else if (variable.type === "text") {
       serialized = JSON.stringify(String(value));

@@ -169,6 +169,10 @@ let _initialized = false;
 const _registeredTabs: Map<number, Map<string, string>> = new Map();
 const _draftPreviewTabs: Map<number, string> = new Map();
 const _injectingTabs: Set<number> = new Set();
+// Serializes previewDraft/clearDraftPreview: overlapping calls would both
+// insert CSS while _draftPreviewTabs remembers only the last, orphaning the
+// earlier sheet on the page until navigation.
+let _draftPreviewChain: Promise<unknown> = Promise.resolve();
 
 /* ------------------------------------------------------------------ */
 /*  Storage helpers                                                    */
@@ -349,21 +353,23 @@ function _parseAdvancedColorValue(rawValue: string): {
 function _parseVarDirective(type: VarType, rest: string): StyleVariable | null {
   // Extract: varName "Label" defaultValue
   const nameMatch: RegExpMatchArray | null = rest.match(/^(\S+)\s+"([^"]*?)"\s+([\s\S]*)$/);
-  if (!nameMatch) {
+  let varName: string;
+  let label: string;
+  let defaultVal: string | number | boolean;
+  if (nameMatch) {
+    varName = nameMatch[1] ?? '';
+    label = nameMatch[2] ?? '';
+    defaultVal = (nameMatch[3] ?? '').trim();
+  } else {
+    // Label-less form: `@var type name default`. Must run the same per-type
+    // coercion below — a string default for number/checkbox would otherwise
+    // fail validateUserCSSVariables and reject the whole style.
     const simpleMatch: RegExpMatchArray | null = rest.match(/^(\S+)\s+(.*)$/);
     if (!simpleMatch) return null;
-    return {
-      type,
-      name: simpleMatch[1] ?? '',
-      label: simpleMatch[1] ?? '',
-      default: (simpleMatch[2] ?? '').trim(),
-      options: null,
-    };
+    varName = simpleMatch[1] ?? '';
+    label = varName;
+    defaultVal = (simpleMatch[2] ?? '').trim();
   }
-
-  const varName: string = nameMatch[1] ?? '';
-  const label: string = nameMatch[2] ?? '';
-  let defaultVal: string | number | boolean = (nameMatch[3] ?? '').trim();
   let options: StyleVariable['options'] = null;
   let group: string | undefined;
   let colorSpace: ColorSpace | undefined;
@@ -385,9 +391,14 @@ function _parseVarDirective(type: VarType, rest: string): StyleVariable | null {
       break;
 
     case 'text':
-      // Strip surrounding quotes if present
-      if (/^".*"$/.test(defaultVal as string)) {
-        defaultVal = (defaultVal as string).slice(1, -1);
+      // Strip surrounding quotes if present. JSON-decode so escaped
+      // quotes/backslashes written by _serializeStyleVariable round-trip.
+      if (/^"[\s\S]*"$/.test(defaultVal as string)) {
+        try {
+          defaultVal = JSON.parse(defaultVal as string) as string;
+        } catch {
+          defaultVal = (defaultVal as string).slice(1, -1);
+        }
       }
       break;
 
@@ -562,6 +573,16 @@ function _validateVariableValue(variable: StyleVariable, value: StyleVariableVal
       && !Object.prototype.hasOwnProperty.call(variable.options, String(value))) {
     return `${variable.label || variable.name} must use a configured option.`;
   }
+  if (variable.type === 'text' && typeof value === 'string') {
+    // Text values are spliced into page CSS: block rule/selector injection
+    // (`{}`) and control characters. `;` stays allowed for data: URIs.
+    if (value.length > 8192) {
+      return `${variable.label || variable.name} must be 8192 characters or fewer.`;
+    }
+    if (/[{}\x00-\x1f\x7f]/.test(value)) {
+      return `${variable.label || variable.name} contains unsafe CSS characters.`;
+    }
+  }
   if (typeof value === 'object') return `${variable.label || variable.name} has an invalid value.`;
   return '';
 }
@@ -652,28 +673,57 @@ function _substituteVariables(
       val = configured;
     }
 
+    // Function replacements throughout: a string replacement would expand
+    // `$'`/`$&` patterns in the value, splicing surrounding stylesheet text
+    // past the structural validation.
+    const replacement: string = String(val);
+
     // Replace /*[[varName]]*/ placeholders
     const placeholder: RegExp = new RegExp(
       '/\\*\\[\\[' + _escapeRegex(v.name) + '\\]\\]\\*/', 'g',
     );
-    result = result.replace(placeholder, String(val));
+    result = result.replace(placeholder, () => replacement);
 
     // Replace <<varName>> placeholders (less-style)
     const anglePlaceholder: RegExp = new RegExp(
       '<<' + _escapeRegex(v.name) + '>>', 'g',
     );
-    result = result.replace(anglePlaceholder, String(val));
+    result = result.replace(anglePlaceholder, () => replacement);
 
     // CSS-native UserCSS variables are aliases, not declarations in the
     // source file. Resolve them to the same configured value so placeholder
     // and var(--name) forms render identically.
-    const cssVariable: RegExp = new RegExp(
-      'var\\(\\s*--' + _escapeRegex(v.name) + '\\s*(?:,[^)]*)?\\)', 'g',
-    );
-    result = result.replace(cssVariable, String(val));
+    result = _replaceCssVarAliases(result, v.name, replacement);
   }
 
   return result;
+}
+
+/**
+ * Replace `var(--name)` / `var(--name, fallback)` references with a value.
+ * Fallback arguments may contain nested parentheses (rgb(), hsl(), …), so
+ * the closing paren is found by depth scan rather than `[^)]*`.
+ */
+function _replaceCssVarAliases(css: string, name: string, replacement: string): string {
+  const open: RegExp = new RegExp('var\\(\\s*--' + _escapeRegex(name) + '\\s*(?=[,)])', 'g');
+  let result = '';
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = open.exec(css)) !== null) {
+    let depth = 1;
+    let end: number = match.index + match[0].length;
+    while (end < css.length && depth > 0) {
+      const char: string = css[end] ?? '';
+      if (char === '(') depth++;
+      else if (char === ')') depth--;
+      end++;
+    }
+    if (depth !== 0) break;
+    result += css.slice(lastIndex, match.index) + replacement;
+    lastIndex = end;
+    open.lastIndex = end;
+  }
+  return result + css.slice(lastIndex);
 }
 
 function _escapeRegex(str: string): string {
@@ -756,7 +806,17 @@ async function _removeDraftPreviewFromTab(tabId: number): Promise<boolean> {
   return true;
 }
 
-async function clearDraftPreview(options: DraftPreviewOptions = {}): Promise<DraftPreviewClearResult> {
+function _enqueueDraftPreviewTask<T>(task: () => Promise<T>): Promise<T> {
+  const queued: Promise<T> = _draftPreviewChain.then(task, task);
+  _draftPreviewChain = queued.catch(() => undefined);
+  return queued;
+}
+
+function clearDraftPreview(options: DraftPreviewOptions = {}): Promise<DraftPreviewClearResult> {
+  return _enqueueDraftPreviewTask(() => _clearDraftPreviewNow(options));
+}
+
+async function _clearDraftPreviewNow(options: DraftPreviewOptions = {}): Promise<DraftPreviewClearResult> {
   if (typeof options.tabId === 'number') {
     const cleared: boolean = await _removeDraftPreviewFromTab(options.tabId);
     return { success: true, cleared: cleared ? 1 : 0 };
@@ -769,7 +829,11 @@ async function clearDraftPreview(options: DraftPreviewOptions = {}): Promise<Dra
   return { success: true, cleared };
 }
 
-async function previewDraft(usercssCode: string, options: DraftPreviewOptions = {}): Promise<DraftPreviewResult> {
+function previewDraft(usercssCode: string, options: DraftPreviewOptions = {}): Promise<DraftPreviewResult> {
+  return _enqueueDraftPreviewTask(() => _previewDraftNow(usercssCode, options));
+}
+
+async function _previewDraftNow(usercssCode: string, options: DraftPreviewOptions = {}): Promise<DraftPreviewResult> {
   const built = _buildDraftPreviewCSS(usercssCode, options);
   if (built.error || !built.css || !built.match) return { error: built.error || 'Unable to preview UserCSS draft.' };
 
@@ -1064,7 +1128,11 @@ function _serializeStyleVariable(variable: StyleVariable, value: StyleVariableVa
   } else if (variable.type === 'select' && variable.options && !('min' in variable.options)) {
     const selected = String(value);
     const entries = Object.entries(variable.options);
-    entries.sort(([left]) => left === selected ? -1 : left.localeCompare(selected));
+    // The selected option is encoded as the FIRST key (parse convention),
+    // so the comparator must be a consistent two-argument ordering.
+    entries.sort(([left], [right]) => (
+      left === selected ? -1 : right === selected ? 1 : left.localeCompare(right)
+    ));
     serialized = `{${entries.map(([key, optionValue]) => `${JSON.stringify(key)}:${JSON.stringify(optionValue)}`).join('|')}}`;
   } else if (variable.type === 'text') {
     serialized = JSON.stringify(String(value));
