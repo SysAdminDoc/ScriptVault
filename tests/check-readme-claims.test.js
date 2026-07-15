@@ -26,6 +26,15 @@ describe('check-readme-claims.mjs', () => {
     expect(parsed.registryProviders).toContain('webdav');
     expect(parsed.registryProviders).toContain('google drive');
     expect(parsed.registryProviders).toContain('s3-compatible');
+    expect(parsed.projectFacts.toolchain).toEqual({ node: '24.16.0', npm: '11.13.0' });
+    expect(parsed.projectFacts.tools).toEqual({
+      typescript: '7.0.2',
+      monaco: '0.55.1',
+      cwsCli: '4.0.1',
+    });
+    expect(parsed.projectFacts.runtime.promotedEntries).toBe(56);
+    expect(parsed.projectFacts.storage.stores).toContain('publicationReceipts');
+    expect(parsed.projectFacts.delivery).toEqual({ policy: 'local-only', workflowPaths: [] });
   });
 
   it('pins the shipped-feature checklist rows', () => {
@@ -84,6 +93,24 @@ describe('check-readme-claims.mjs', () => {
       const triggered = parsed.failures.find((f) => f.filename === fakeName);
       expect(triggered).toBeTruthy();
       expect(triggered.check).toBe('missing-dashboard-module');
+    } finally {
+      writeFileSync(readmePath, backup, 'utf8');
+    }
+  });
+
+  it('flags a stale canonical tool version in active documentation', () => {
+    const readmePath = join(repoRoot, 'README.md');
+    const backup = readFileSync(readmePath, 'utf8');
+    expect(backup).toContain('TypeScript 7.0.2');
+    try {
+      writeFileSync(readmePath, backup.replace(
+        'TypeScript 7.0.2',
+        'TypeScript 7.0.1',
+      ), 'utf8');
+      const result = spawnSync(process.execPath, [script, '--json'], { encoding: 'utf8' });
+      expect(result.status).toBe(1);
+      const parsed = JSON.parse(result.stdout);
+      expect(parsed.failures.some((failure) => failure.fact === 'TypeScript version')).toBe(true);
     } finally {
       writeFileSync(readmePath, backup, 'utf8');
     }

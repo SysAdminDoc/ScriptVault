@@ -4,6 +4,12 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Gated active documentation against canonical project facts.** The local
+  validation derives toolchain and browser versions, promoted-runtime counts,
+  IndexedDB stores, and local-only delivery policy from manifests, lock data,
+  source maps, and storage code. Stale versions, deleted workflow claims,
+  brittle source line counts, and the outdated Violentmonkey MV2-only claim
+  were corrected; `npm run check` now fails on future drift.
 - **Adopted TypeScript 7 as the primary compiler.** Development and release
   typechecking now pin TypeScript 7.0.2, while the generated-runtime AST
   transform is isolated on a documented TypeScript 6.0.3 compatibility alias

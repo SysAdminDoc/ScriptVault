@@ -381,7 +381,7 @@ _Last generated: 2026-07-14 with `npm run support:matrix`. Version source: `mani
 | Browser | Support level | Tested version / target | Last successful verification | Verification evidence | Unsupported or deferred APIs |
 |---|---|---|---|---|---|
 | Chrome / Chromium | Tier 1 published target | Chrome 130+ MV3 | 2026-07-14 | `npm run smoke:dashboard`, `npm run cws:check`, local Chrome ZIP packaging with `npm run build:prod` then `bash build.sh` | Chrome 138+ requires per-extension Allow User Scripts; current-site recovery uses Chrome 133+ `permissions.addHostAccessRequest` when available and falls back to `permissions.request({ origins })`; per-script `worldId` is Chrome 133+ and feature-gated |
-| Microsoft Edge | Tier 1 compatible package; Partner Center publication manual | Edge 130+ Chromium MV3 package | 2026-07-14 Edge sideload smoke passed; package/report generated | `npm run build:edge:check`, `edge-artifacts/scriptvault-edge-v3.20.0.zip`, `edge-artifacts/edge-build-3.20.0.json`, `npm run smoke:edge`, `edge-artifacts/edge-smoke-3.20.0.json`; local release attaches `edge-artifacts/*` manually | Manual Partner Center upload remains required until a live Edge Add-ons listing exists; Microsoft Edge Add-ons REST update automation is deferred until listing identifiers and publisher credentials are provisioned; Dedicated local Edge sideload smoke passed on Edg/150.0.4078.65; dashboard, popup, userScripts toggle, save/toggle, and local target execution were verified |
+| Microsoft Edge | Tier 1 compatible package; Partner Center publication manual | Edge 130+ Chromium MV3 package | 2026-07-14 generated package/report; local Edge smoke command is available but has no current evidence | `npm run build:edge:check`, `edge-artifacts/scriptvault-edge-v3.20.0.zip`, `edge-artifacts/edge-build-3.20.0.json`, `npm run smoke:edge`, `edge-artifacts/edge-smoke-3.20.0.json`; local release attaches `edge-artifacts/*` manually | Manual Partner Center upload remains required until a live Edge Add-ons listing exists; Microsoft Edge Add-ons REST update automation is deferred until listing identifiers and publisher credentials are provisioned; Dedicated local Edge sideload smoke is wired via npm run smoke:edge; release readiness requires a maintainer to run that command on Microsoft Edge |
 | Firefox Desktop | AMO validation target, not a published listing | Firefox 140.0+ MV3 | 2026-07-14 | `npm run firefox:package`, `npm run smoke:firefox`; web-ext lint 0 errors / 0 notices / 53 warnings | `sidePanel`, `offscreen`, `identity` OAuth, and some `userScripts.execute` flows are unsupported/deferred; host grant/revoke diagnostics listen to permissions events; Firefox package omits Monaco until the Firefox editor-loading pass |
 | Firefox for Android | Deferred; not an AMO compatibility target | No current `gecko_android` manifest target | 2026-07-14 | `manifest-firefox.json` intentionally omits `gecko_android` until an Android smoke gate exists | Android UI/runtime, extension-action overlay, host-permission, import/export, and WebDAV paths are unverified |
 | Brave / Vivaldi / Opera / Arc | Chromium derivative local-smoke targets | Chrome 130+ compatible package | 2026-07-14 local smoke passed: Brave | `npm run smoke:derivatives`, `chromium-derivative-artifacts/summary-3.20.0.json`, `chromium-derivative-artifacts/brave-3.20.0.json` | Vivaldi, Opera, Arc were not installed for the latest local run; store policy, shields/sidebar behavior, and extension UI chrome remain browser-specific |
@@ -516,7 +516,7 @@ that script in the dashboard editor.
 
 | Feature | ScriptVault | Tampermonkey | ViolentMonkey |
 |---------|:-----------:|:------------:|:-------------:|
-| Manifest V3 | Yes | Yes | Yes |
+| Manifest V3 | Yes | Yes | Beta/test builds |
 | Full GM API (35+) | Yes | Yes | Yes |
 | Monaco Editor (VS Code) | Yes | No | No |
 | DevTools Panel | Yes | No | No |
@@ -576,7 +576,7 @@ ScriptVault/
 ├── playwright.config.mjs      # Playwright E2E flow suite
 ├── .env.example               # Safe template for Chrome Web Store publishing credentials
 ├── background.js              # Service worker (built from source modules)
-├── background.core.js         # Main service worker logic (~5500 lines)
+├── background.core.js         # Generated main service worker logic
 ├── content.js                 # Content script bridge (USER_SCRIPT <-> background)
 ├── offscreen.html/js          # Offscreen document (AST analysis, 3-way merge)
 ├── build.sh                   # Packages CWS-ready ZIP
@@ -596,7 +596,7 @@ ScriptVault/
 ├── shared/
 │   └── utils.js               # escapeHtml, generateId, sanitizeUrl, formatBytes
 ├── pages/
-│   ├── dashboard.html/js      # Main dashboard + Monaco editor (~5000 lines)
+│   ├── dashboard.html/js      # Main dashboard + Monaco editor
 │   ├── popup.html/js          # Toolbar popup
 │   ├── install.html/js        # Script installation page
 │   ├── sidepanel.html/js      # Persistent side panel (Chrome 114+)
@@ -622,7 +622,8 @@ ScriptVault/
 
 ### From Violentmonkey
 
-Violentmonkey is MV2-only and disabled on Chrome 139+. To migrate:
+ScriptVault accepts Violentmonkey ZIP exports, including exports created by
+the current MV3 beta/test builds:
 
 1. Open Violentmonkey &rarr; Settings &rarr; **Export to zip**
 2. Open ScriptVault dashboard &rarr; Utilities tab

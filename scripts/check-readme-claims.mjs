@@ -33,6 +33,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, join } from 'node:path';
+import { collectProjectFacts } from './project-facts.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -45,6 +46,14 @@ const quiet = args.has('--quiet');
 const README_PATH = join(repoRoot, 'README.md');
 const SYNC_PROVIDERS_PATH = join(repoRoot, 'modules', 'sync-providers.js');
 const PAGES_DIR = join(repoRoot, 'pages');
+const ACTIVE_DOC_PATHS = [
+  'README.md',
+  'CONTRIBUTING.md',
+  'PRIVACY.md',
+  'docs/release-runbook.md',
+  'docs/dependency-audit-policy.md',
+];
+const REQUIRED_DOC_PATHS = new Set(['README.md']);
 
 // Modules deleted in v2.0.0 per the project working notes. Catching their names in README
 // marketing copy prevents the regression PASS2 NF-3 caught (README marketed
@@ -149,9 +158,86 @@ function findClaimedProviders(readme) {
   return claimed;
 }
 
+function checkCanonicalProjectFacts(failures) {
+  const facts = collectProjectFacts(repoRoot);
+  const docs = Object.fromEntries(ACTIVE_DOC_PATHS
+    .filter((path) => existsSync(join(repoRoot, path)))
+    .map((path) => [path, readFileSync(join(repoRoot, path), 'utf8')]));
+
+  for (const why of facts.sourceErrors) {
+    failures.push({ check: 'canonical-source-drift', why });
+  }
+
+  const requireClaim = (path, needle, fact) => {
+    if (!docs[path]) {
+      if (REQUIRED_DOC_PATHS.has(path)) {
+        failures.push({ check: 'missing-active-doc', path, fact, why: `${path} is required for canonical claim validation` });
+      }
+      return;
+    }
+    if (!docs[path].includes(needle)) {
+      failures.push({
+        check: 'missing-canonical-doc-claim',
+        path,
+        fact,
+        why: `${path} must contain the canonical ${fact}: ${needle}`,
+      });
+    }
+  };
+
+  requireClaim('README.md', `Chrome ${facts.browsers.chrome.minimumVersion}+ MV${facts.browsers.chrome.manifestVersion}`, 'Chrome target');
+  requireClaim('README.md', `Firefox ${facts.browsers.firefox.minimumVersion}+ MV${facts.browsers.firefox.manifestVersion}`, 'Firefox target');
+  requireClaim('README.md', `TypeScript ${facts.tools.typescript}`, 'TypeScript version');
+
+  requireClaim('CONTRIBUTING.md', `currently ${facts.toolchain.node}`, 'Node version');
+  requireClaim('CONTRIBUTING.md', `npm ${facts.toolchain.npm}+`, 'npm version');
+  requireClaim('CONTRIBUTING.md', `${facts.runtime.promotedEntries} TypeScript-authored runtime entries`, 'promoted runtime count');
+  requireClaim('CONTRIBUTING.md', `TypeScript ${facts.tools.typescript}`, 'TypeScript version');
+  requireClaim('CONTRIBUTING.md', `Monaco ${facts.tools.monaco}`, 'Monaco version');
+  requireClaim('CONTRIBUTING.md', `chrome-webstore-upload-cli ${facts.tools.cwsCli}`, 'CWS CLI version');
+
+  requireClaim('PRIVACY.md', `IndexedDB \`${facts.storage.databaseName}\` schema v${facts.storage.schemaVersion}`, 'IndexedDB schema');
+  for (const store of facts.storage.stores) {
+    requireClaim('PRIVACY.md', `\`${store}\``, `IndexedDB object store ${store}`);
+  }
+  requireClaim('PRIVACY.md', '`chrome.storage.local`', 'persistent extension storage');
+  requireClaim('PRIVACY.md', '`chrome.storage.session`', 'session extension storage');
+
+  requireClaim('docs/release-runbook.md', `chrome-webstore-upload-cli@${facts.tools.cwsCli}`, 'CWS CLI version');
+  requireClaim('docs/release-runbook.md', `Node ${facts.toolchain.node}+ / npm ${facts.toolchain.npm}+`, 'release toolchain');
+  requireClaim('docs/release-runbook.md', 'npm run local-build-policy:check', 'local-only build policy gate');
+  requireClaim('docs/dependency-audit-policy.md', 'local release gate', 'local-only release policy');
+  requireClaim('docs/dependency-audit-policy.md', 'npm run local-build-policy:check', 'local-only build policy gate');
+
+  const forbidden = [
+    ['README.md', /Violentmonkey is MV2-only/i, 'Violentmonkey is no longer accurately described as MV2-only'],
+    ['README.md', /dashboard\.html\/js[^\n]*~\d+ lines/i, 'dashboard line-count claims drift with every extraction'],
+    ['README.md', /background\.core\.js[^\n]*~\d+ lines/i, 'background line-count claims drift with every extraction'],
+    ['docs/dependency-audit-policy.md', /\.github\/workflows\/ci\.yml/i, 'GitHub Actions workflows are forbidden by local build policy'],
+    ['docs/dependency-audit-policy.md', /\.github\/dependabot\.yml/i, 'the claimed Dependabot configuration does not exist'],
+    ['docs/dependency-audit-policy.md', /tests\/dependabot-config\.test\.js/i, 'the claimed Dependabot contract test does not exist'],
+  ];
+  for (const [path, pattern, why] of forbidden) {
+    if (docs[path] && pattern.test(docs[path])) failures.push({ check: 'stale-active-doc-claim', path, why });
+  }
+
+  for (const match of (docs['docs/release-runbook.md'] || '').matchAll(/chrome-webstore-upload-cli@(\d+\.\d+\.\d+)/g)) {
+    if (match[1] !== facts.tools.cwsCli) {
+      failures.push({
+        check: 'stale-tool-version',
+        path: 'docs/release-runbook.md',
+        why: `CWS CLI claim ${match[1]} does not match package-lock ${facts.tools.cwsCli}`,
+      });
+    }
+  }
+
+  return facts;
+}
+
 function check() {
   const readme = readReadme();
   const failures = [];
+  const projectFacts = checkCanonicalProjectFacts(failures);
 
   // 1) Deleted-module marketing.
   for (const entry of DELETED_MODULE_MARKETING) {
@@ -233,13 +319,13 @@ function check() {
     }
   }
 
-  return { failures, registryProviders: [...registry], claimedProviders: [...claimed] };
+  return { failures, registryProviders: [...registry], claimedProviders: [...claimed], projectFacts };
 }
 
-const { failures, registryProviders, claimedProviders } = check();
+const { failures, registryProviders, claimedProviders, projectFacts } = check();
 
 if (wantJson) {
-  process.stdout.write(JSON.stringify({ failures, registryProviders, claimedProviders }, null, 2) + '\n');
+  process.stdout.write(JSON.stringify({ failures, registryProviders, claimedProviders, projectFacts }, null, 2) + '\n');
 } else if (failures.length === 0) {
   if (!quiet) {
     process.stdout.write(`README claim check: OK (${claimedProviders.length} provider claims, ${registryProviders.length} registry entries).\n`);
@@ -251,6 +337,7 @@ if (wantJson) {
     if (f.needle) process.stdout.write(`    needle: ${f.needle}\n`);
     if (f.name) process.stdout.write(`    name: ${f.name}\n`);
     if (f.filename) process.stdout.write(`    file: ${f.filename}\n`);
+    if (f.path) process.stdout.write(`    path: ${f.path}\n`);
     if (f.snippet) process.stdout.write(`    near: ...${f.snippet}...\n`);
   }
 }
