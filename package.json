@@ -108,7 +108,8 @@
     "jsdom": "^29.1.1",
     "monaco-editor": "^0.55.1",
     "puppeteer-core": "^25.2.1",
-    "typescript": "^6.0.3",
+    "typescript": "7.0.2",
+    "typescript-6": "npm:typescript@6.0.3",
     "vitest": "^4.1.9",
     "web-ext": "^10.3.0"
   },

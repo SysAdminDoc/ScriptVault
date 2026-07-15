@@ -4,6 +4,12 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Adopted TypeScript 7 as the primary compiler.** Development and release
+  typechecking now pin TypeScript 7.0.2, while the generated-runtime AST
+  transform is isolated on a documented TypeScript 6.0.3 compatibility alias
+  until its byte-for-byte output contract can migrate safely. Clean install,
+  production build, runtime drift, unit, and headless release suites cover the
+  split toolchain.
 - **Unified runtime and manifest localization behind generated catalogs.** One
   canonical source per locale now emits typed runtime data, shipped
   `modules/i18n.js`, and `_locales` messages with deterministic drift checks.

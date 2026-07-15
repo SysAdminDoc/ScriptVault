@@ -6,7 +6,11 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
-import ts from 'typescript';
+// Keep the compiler-API transform on the TypeScript 6 compatibility alias;
+// the project CLI/typecheck uses TypeScript 7. This transform depends on AST
+// node positions and should move only after its generated-output suite proves
+// byte-for-byte compatibility with the newer compiler API.
+import ts from 'typescript-6';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_ROOT = resolve(SCRIPT_DIR, '..');

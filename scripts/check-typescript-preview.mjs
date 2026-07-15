@@ -12,7 +12,7 @@
  *   default: fail on unexpected new diagnostics beyond the known set
  *
  * This is non-release-blocking — it runs as a report/advisory step, not a gate
- * that blocks CI. Use it to get early signal on TypeScript 7 migration work.
+ * that blocks CI. Use it to get early signal on the next TypeScript release.
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';

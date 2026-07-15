@@ -672,6 +672,11 @@ Contributions are welcome. Feel free to open a Pull Request.
 4. Push to the branch (`git push origin feature/my-feature`)
 5. Open a Pull Request
 
+The development typecheck is pinned to TypeScript 7.0.2. The
+`typescript-6` package alias is intentionally limited to
+`scripts/generate-ts-runtime-modules.mjs`, whose compiler-API AST transform is
+kept on 6.0.3 until its byte-for-byte generated-output contract is migrated.
+
 ---
 
 ## License
