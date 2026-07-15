@@ -4,6 +4,27 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Deep audit hardening (2026-07-15).** Six-agent audit over the workbench
+  redesign, typed action dispatch, recent security commits, the UserCSS engine
+  and language service, workflow controllers, and secondary surfaces. Fixed:
+  UserCSS variable substitution no longer expands `$`-replacement patterns from
+  values into the surrounding stylesheet, `var(--name, fallback)` resolves
+  fallbacks with nested parentheses, label-less `@var` number/checkbox
+  directives coerce correctly, select/text values round-trip, text values are
+  screened for CSS-structure injection, and draft previews are serialized so
+  overlapping refreshes cannot orphan injected CSS. Script source-map
+  finalization uses function replacements (a `@require` URL with `$'`/`$&` no
+  longer breaks the wrapped script), and error attribution picks the topmost
+  stack frame. Execution-URL retention now also governs the error log and the
+  diagnostics panel, matching the documented privacy promise. The workbench
+  topbar health indicator, column-visibility dialog, inspector accessibility,
+  row-action keyboard handling, site filter, and localized breadcrumb are
+  repaired; the diagnostics controller distinguishes empty from unavailable and
+  the settings controller no longer falsely rolls back on a live-apply failure.
+  Popup light-theme theming, the install-page Enter guard, What's New copy, and
+  the accessibility e2e theme gate are fixed, and the table container scrolls
+  horizontally so far-right controls stay reachable. The `.test.ts` workflow
+  controller suite (previously never executed by the vitest glob) now runs.
 - **Reimagined the dashboard as a focused script operations workbench.** A
   persistent command bar, compact three-metric summary, site and saved-view
   filters, progressive row-action menus, and keyboard-navigable inspector

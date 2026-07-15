@@ -48,6 +48,7 @@ coverage/
 .nyc_output/
 test-results/
 playwright-report/
+.vitest-attachments/
 
 # Local-only agent / autonomous-loop runtime state
 CLAUDE.md

@@ -40,6 +40,68 @@ _(All Now-tier items are credential/compliance blocked — see `Roadmap_Blocked.
 
 ## Next
 
+## Deep Audit Backlog (2026-07-15)
+
+Findings from a six-agent deep audit (workbench redesign UI, typed action
+dispatch, recent security commits, UserCSS/language service, locale/controllers,
+secondary surfaces). ~30 confirmed items were fixed across commits `c62c19e`
+(UserCSS engine), `c02e26d` (source maps), `c13f7f8` (UserCSS UI + LSP),
+`780c837` (error-log URL retention), `b419671` (workbench UI), `e230d54`
+(secondary surfaces), and `259536b` (controllers + a11y gate). The items below
+are lower-priority findings deferred for a later pass.
+
+- [ ] P2 — Workbench + secondary-surface i18n gaps
+  Why: new workbench strings (site/saved-view filter options, inspector empty
+  state, command bar, health copy) and popup diagnostics summaries are
+  hardcoded English, bypassing the unified locale catalogs; `data-i18n="disable"`
+  references a key absent from every catalog. Workflow-controller state messages
+  ('Saved', 'Needs attention', 'Save failed', diagnostics degraded copy) are
+  also untranslatable literals.
+  Where: `pages/dashboard.html` (filter/inspector/topbar), `pages/dashboard.js`
+  (`syncWorkbenchNavigation` fallback map, `updateSiteFilterOptions`), `pages/popup.js:756-767`,
+  `src/pages/dashboard-workflow-controllers.ts` (all `message:` literals).
+  Note: any UI-literal change trips `i18n:copy:gate` — run with `--update-baseline`
+  and update `tests/gui-ux-audit.test.js` which pins the English option text.
+
+- [ ] P3 — UserCSS `auto` color scheme emits `light-dark()` which follows the
+  page's `color-scheme`, not `prefers-color-scheme`
+  Why: on pages that never declare `color-scheme: light dark`, `@dark` defaults
+  never apply in `auto` mode. Wrap in `@media (prefers-color-scheme: dark)`
+  duplicated rules or scope `color-scheme` — or document the limitation.
+  Where: `src/modules/userstyles.ts` (`_substituteVariables` auto branch ~line 650).
+
+- [ ] P3 — `neutralizeSourceDirectives` alters CRLF/template-literal script bodies
+  Why: applied to script + require bodies, it rewrites `sourceURL`/`sourceMappingURL`
+  lookalike lines even inside multiline template literals and normalizes CRLF→LF,
+  silently changing runtime strings for CRLF-authored scripts.
+  Where: `src/background/script-source-maps.ts:57-66`.
+
+- [ ] P3 — Wrapper `window` error/rejection listeners map locations but dead-letter
+  Why: the uncaught-error mapping in `wrapper-builder.ts` posts through
+  `logError`/`scriptConsoleCapture`, which the USER_SCRIPT message gate rejects
+  (not in the allowlist / no `GM_` prefix), so mapped payloads never land; only
+  the authenticated `reportExecError` path delivers. Route the window listeners
+  through `reportExecError` or delete the unreachable sends.
+  Where: `src/background/wrapper-builder.ts:274,284`, `src/background/user-script-message-policy.ts`.
+
+- [ ] P3 — `readSyncJsonBounded` bypasses the size cap when the body has no reader
+  Why: a test-only escape hatch (`!response.body?.getReader` → unbounded
+  `response.json()`) sits in security-relevant download code. Have test adapters
+  provide a mock `getReader` instead of special-casing the production path.
+  Where: `src/modules/sync-providers.ts` (`readSyncJsonBounded`).
+
+- [ ] P3 — Full `parseUserCSS` runs on every editor keystroke for UserCSS drafts
+  Why: `META_REGEX` over the whole document plus directive parsing/validation on
+  the main thread causes jank on large styles; reuse the parse from
+  `scheduleUserCssPreviewRefresh` or debounce.
+  Where: `pages/dashboard.js:13260-13269` wired to the editor change event.
+
+- [ ] P3 — MV3 SW-death leaves orphaned UserCSS preview/registered-tab maps
+  Why: `_registeredTabs`/`_draftPreviewTabs` are in-memory; if the worker is
+  killed between injection and a later disable/clear, `removeCSS` has no record
+  and stale CSS persists until navigation. Persist tab→css bookkeeping.
+  Where: `src/modules/userstyles.ts:169-170`.
+
 ## Deep Audit Backlog (2026-07-07)
 
 Findings from a six-agent deep audit (correctness, security, cloud-sync/storage,
