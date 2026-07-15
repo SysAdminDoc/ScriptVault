@@ -9110,6 +9110,10 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                         <button type="button" class="btn" id="btnImportTampermonkey" data-i18n="importTxtExport">Import .txt Export</button>
                         <span class="utility-inline-status" style="margin-inline-start:8px" data-i18n="tampermonkeyImportDescription">Import from Tampermonkey's text backup format</span>
                     </div>
+                    <div class="setting-row" style="gap:8px">
+                        <span class="utility-inline-status" id="importWorkflowStatus" role="status" aria-live="polite" data-state="idle" data-i18n="ready">Ready</span>
+                        <button type="button" class="btn" id="btnRetryImport" hidden data-i18n="retryImport">Retry Import</button>
+                    </div>
                 </div>
             </div>
 
@@ -9325,6 +9329,10 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                         <button type="button" class="btn" id="btnGrantCurrentHostAccess" hidden data-i18n="grantSiteAccess">Grant Site Access</button>
                         <button type="button" class="btn" id="btnRepairRuntime" data-i18n="repairRuntime">Repair Runtime</button>
                         <button type="button" class="btn" id="btnShowSetupGuide" data-i18n="setupGuide">Setup Guide</button>
+                    </div>
+                    <div class="setting-row" style="gap:8px">
+                        <span class="utility-inline-status" id="diagnosticsWorkflowStatus" role="status" aria-live="polite" data-state="idle" data-i18n="runtimeStatusLoading">Loading runtime diagnostics...</span>
+                        <button type="button" class="btn" id="btnRetryDiagnostics" hidden data-i18n="retryDiagnostics">Retry Diagnostics</button>
                     </div>
                 </div>
             </div>
@@ -10418,6 +10426,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
     <script src="dashboard-keyboard.js"></script>
     <script src="monaco-adapter.js"></script>
     <script src="dashboard-virtual-rows.js"></script>
+    <script src="dashboard-workflow-controllers.js"></script>
     <script src="dashboard.js"></script>
 
     <!-- All other v2.0 modules are loaded lazily by dashboard-lazy-loader.js -->

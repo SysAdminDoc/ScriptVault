@@ -6154,6 +6154,8 @@ const I18n = (() => {
       "supportSnapshotSummaryDefault": "Bundle includes runtime status, backup inventory, and counts by default. Sensitive categories are off until you explicitly tick them.",
       "exportSnapshot": "Export Snapshot...",
       "ready": "Ready",
+      "retryImport": "Retry Import",
+      "retryDiagnostics": "Retry Diagnostics",
       "publicApiTrustTitle": "Public API Trust",
       "publicApiTrustNote": "Review which web origins and extensions are trusted to call the public API. Unknown extensions are denied by default. Inspect the recent external audit trail below.",
       "trustedWebOrigins": "Trusted web origins",
@@ -7222,15 +7224,15 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 43,
       "translatedRuntimeMessages": 43,
-      "totalRuntimeMessages": 1787
+      "totalRuntimeMessages": 1789
     },
     "en": {
       "name": "English",
       "direction": "ltr",
       "translationStatus": "complete",
-      "runtimeCoverageBaseline": 1787,
-      "translatedRuntimeMessages": 1787,
-      "totalRuntimeMessages": 1787
+      "runtimeCoverageBaseline": 1789,
+      "translatedRuntimeMessages": 1789,
+      "totalRuntimeMessages": 1789
     },
     "es": {
       "name": "Espa\xF1ol",
@@ -7238,7 +7240,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 45,
       "translatedRuntimeMessages": 45,
-      "totalRuntimeMessages": 1787
+      "totalRuntimeMessages": 1789
     },
     "fr": {
       "name": "Fran\xE7ais",
@@ -7246,7 +7248,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 43,
       "translatedRuntimeMessages": 43,
-      "totalRuntimeMessages": 1787
+      "totalRuntimeMessages": 1789
     },
     "he": {
       "name": "\u05E2\u05D1\u05E8\u05D9\u05EA",
@@ -7254,7 +7256,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 58,
       "translatedRuntimeMessages": 58,
-      "totalRuntimeMessages": 1787
+      "totalRuntimeMessages": 1789
     },
     "ja": {
       "name": "\u65E5\u672C\u8A9E",
@@ -7262,7 +7264,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 71,
       "translatedRuntimeMessages": 71,
-      "totalRuntimeMessages": 1787
+      "totalRuntimeMessages": 1789
     },
     "pt": {
       "name": "Portugu\xEAs",
@@ -7270,7 +7272,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 42,
       "translatedRuntimeMessages": 42,
-      "totalRuntimeMessages": 1787
+      "totalRuntimeMessages": 1789
     },
     "ru": {
       "name": "\u0420\u0443\u0441\u0441\u043A\u0438\u0439",
@@ -7278,7 +7280,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 117,
       "translatedRuntimeMessages": 117,
-      "totalRuntimeMessages": 1787
+      "totalRuntimeMessages": 1789
     },
     "zh": {
       "name": "\u4E2D\u6587",
@@ -7286,7 +7288,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 46,
       "translatedRuntimeMessages": 46,
-      "totalRuntimeMessages": 1787
+      "totalRuntimeMessages": 1789
     }
   };
 

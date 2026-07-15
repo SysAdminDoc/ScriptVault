@@ -394,6 +394,7 @@
         'dashboard-theme-editor.js': { surface: 'settings', initializer: 'ThemeEditor.init', mount: 'themeEditorContainer' },
         'dashboard-viewsettings.js': { surface: 'html-self-init', initializer: 'dashboard-viewsettings.js' },
         'dashboard-virtual-rows.js': { surface: 'scripts-helper', initializer: 'DashboardVirtualRows.render' },
+        'dashboard-workflow-controllers.js': { surface: 'eager', initializer: 'DashboardWorkflowControllers' },
         'dashboard-whatsnew.js': { surface: 'startup-on-demand', initializer: 'WhatsNew.show' },
     });
     const SCRIPT_SEARCH_DEBOUNCE_MS = 90;
@@ -420,9 +421,6 @@
     const dashboardTelemetryConsoleSeen = new Map();
     const dashboardTelemetryErrorsSeen = new Set();
     const dashboardTelemetryGistSyncing = new Set();
-    const settingsSaveQueues = new Map();
-    let settingsSavePendingCount = 0;
-    let settingsSaveLastState = { kind: 'saved', message: 'Saved' };
     const PROGRESS_BACKGROUND_SELECTORS = ['.skip-link', '.tm-header', '#viewSettingsBar', '#setupWarning', '#mainContent', '#editorOverlay', '#findScriptsOverlay', '#modal', '#commandPalette'];
     const EDITOR_BACKGROUND_SELECTORS = ['.skip-link', '.tm-header', '#viewSettingsBar', '#setupWarning', '#mainContent'];
     const FIND_SCRIPTS_BACKGROUND_SELECTORS = ['.skip-link', '.tm-header', '#mainContent'];
@@ -1670,6 +1668,64 @@
         return 'success';
     }
 
+    function renderImportWorkflowState(workflowState) {
+        if (elements.importWorkflowStatus) {
+            elements.importWorkflowStatus.dataset.state = workflowState.kind;
+            elements.importWorkflowStatus.textContent = workflowState.message;
+            elements.importWorkflowStatus.setAttribute('aria-busy', workflowState.kind === 'loading' ? 'true' : 'false');
+        }
+        if (elements.btnRetryImport) {
+            elements.btnRetryImport.hidden = !workflowState.retryAvailable;
+        }
+        if (workflowState.kind === 'loading' && workflowState.phase === 'apply') {
+            showProgress('Importing Tampermonkey backup…');
+            updateProgress(0, 1, 'Parsing scripts…');
+        } else if (workflowState.phase === 'complete' || workflowState.kind === 'failure') {
+            hideProgress();
+        }
+    }
+
+    let importReviewController = null;
+    function getImportReviewController() {
+        if (importReviewController) return importReviewController;
+        importReviewController = DashboardWorkflowControllers.createImportReviewController({
+            prepare: async file => {
+                const text = await file.text();
+                const scriptCount = (text.match(/==UserScript==/g) || []).length;
+                return scriptCount ? { file, text, scriptCount } : null;
+            },
+            isEmpty: review => !review?.scriptCount,
+            confirm: review => showConfirmModal(
+                `Import ${numberFormatter.format(review.scriptCount)} script${review.scriptCount === 1 ? '' : 's'}?`,
+                'Enabled scripts in this backup will be imported disabled and quarantined until you review and enable them. Scripts already disabled in the backup will stay disabled.',
+                { confirmLabel: 'Import and Quarantine' }
+            ),
+            apply: review => chrome.runtime.sendMessage({
+                action: 'importTampermonkeyBackup',
+                text: review.text,
+                overwrite: true,
+                trustImportedScripts: false,
+                sourceLabel: `Tampermonkey backup: ${review.file.name}`
+            }),
+            resultError: result => result?.error || '',
+            refresh: async () => {
+                await loadScripts();
+                updateStats();
+            },
+            describeResult: result => `Import complete: ${formatImportSummary(result)}`,
+            render: renderImportWorkflowState,
+            notify: workflowState => {
+                const tone = workflowState.kind === 'failure' ? 'error' : workflowState.kind === 'empty' ? 'warning' : 'success';
+                showToast(workflowState.message, tone);
+            }
+        });
+        return importReviewController;
+    }
+
+    function importTampermonkeyFile(file) {
+        return getImportReviewController().start(file);
+    }
+
     function formatBackupRestoreSummary(result) {
         const restoredScripts = Number(result?.restoredScripts || 0);
         const skippedScripts = Number(result?.skippedScripts || 0);
@@ -2191,6 +2247,8 @@
         elements.btnRefreshBackups = document.getElementById('btnRefreshBackups');
         elements.backupArchiveInput = document.getElementById('backupArchiveInput');
         elements.btnChooseFile = document.getElementById('btnChooseFile');
+        elements.importWorkflowStatus = document.getElementById('importWorkflowStatus');
+        elements.btnRetryImport = document.getElementById('btnRetryImport');
         elements.importFileInput = document.getElementById('importFileInput');
         elements.importFileName = document.getElementById('importFileName');
         elements.importUrlInput = document.getElementById('importUrlInput');
@@ -2262,6 +2320,8 @@
         elements.signingTrustSummary = document.getElementById('signingTrustSummary');
         elements.signingKeysList = document.getElementById('signingKeysList');
         elements.btnRefreshRuntimeStatus = document.getElementById('btnRefreshRuntimeStatus');
+        elements.diagnosticsWorkflowStatus = document.getElementById('diagnosticsWorkflowStatus');
+        elements.btnRetryDiagnostics = document.getElementById('btnRetryDiagnostics');
         elements.btnGrantCurrentHostAccess = document.getElementById('btnGrantCurrentHostAccess');
         elements.btnRepairRuntime = document.getElementById('btnRepairRuntime');
         elements.btnShowSetupGuide = document.getElementById('btnShowSetupGuide');
@@ -4647,79 +4707,56 @@
         }
     }
 
-    async function saveSettingNow(key, value, options = {}) {
-        const input = options.input || getSettingsInputForKey(key);
-        const validation = validateSettingsValue(key, value);
-        if (!validation.ok) {
-            setSettingsFieldError(input, validation.error);
-            settingsSaveLastState = { kind: 'invalid', message: 'Needs attention' };
-            if (!options.quiet) showToast(validation.error, 'error');
-            return false;
+    async function applySavedSetting(key, value) {
+        if (state.editor) {
+            switch (key) {
+                case 'editorTheme': state.editor.setOption('theme', value); break;
+                case 'editorFontSize': { if (state.editor?.isMonaco) { state.editor.setFontSize(parseInt(value) || 100); } else { const cm = document.querySelector('.CodeMirror'); if (cm) cm.style.fontSize = value + '%'; } } break;
+                case 'wordWrap': state.editor.setOption('lineWrapping', value); break;
+                case 'tabSize': state.editor.setOption('tabSize', parseInt(value) || 4); break;
+                case 'indentWidth': state.editor.setOption('indentUnit', parseInt(value) || 4); break;
+                case 'indentWith': state.editor.setOption('indentWithTabs', value !== 'spaces'); break;
+                case 'lintOnType': if (!state.editor?.isMonaco) { state.editor.setOption('lint', value ? { getAnnotations: window.lintUserscript, delay: 300, tooltips: true, highlightLines: true } : false); } break;
+            }
         }
-        setSettingsFieldError(input, '');
-        value = validation.value;
-        const previousValue = state.settings[key];
-        try {
-            state.settings[key] = value;
-            const response = await chrome.runtime.sendMessage({ action: 'setSettings', settings: { [key]: value } });
-            if (response?.error) throw new Error(response.error);
-            // Live-apply editor settings
-            if (state.editor) {
-                switch (key) {
-                    case 'editorTheme': state.editor.setOption('theme', value); break;
-                    case 'editorFontSize': { if (state.editor?.isMonaco) { state.editor.setFontSize(parseInt(value) || 100); } else { const cm = document.querySelector('.CodeMirror'); if (cm) cm.style.fontSize = value + '%'; } } break;
-                    case 'wordWrap': state.editor.setOption('lineWrapping', value); break;
-                    case 'tabSize': state.editor.setOption('tabSize', parseInt(value) || 4); break;
-                    case 'indentWidth': state.editor.setOption('indentUnit', parseInt(value) || 4); break;
-                    case 'indentWith': state.editor.setOption('indentWithTabs', value !== 'spaces'); break;
-                    case 'lintOnType': if (!state.editor?.isMonaco) { state.editor.setOption('lint', value ? { getAnnotations: window.lintUserscript, delay: 300, tooltips: true, highlightLines: true } : false); } break;
-                }
-            }
-            if (key === 'layout') applyTheme();
-            if (key === 'keyMapping') applyKeyMapping(value);
-            if (key === 'configMode') applyConfigMode();
-            if (key === 'customCss') applySettingsToUI();
-            if (key === 'onDeviceAiEnabled') refreshOnDeviceAiControls();
-            if (key === 'layout') updateHelpOverview();
-            if (key === 'syncProvider') {
-                syncSettingsProviderSelection(value);
-                syncCloudProviderSelection(value);
-            }
-            if (key === 'syncEnabled' || key === 'syncProvider') {
-                loadSyncProviderStatus();
-            }
-            // The persistent autosave summary is the confirmation; avoid a toast on every change.
-            settingsSaveLastState = {
-                kind: 'saved',
-                message: key === 'layout' || key === 'editorTheme' ? 'Theme applied' : 'Saved'
-            };
-            return true;
-        } catch (e) {
-            state.settings[key] = previousValue;
-            restoreSettingsInputValue(input, previousValue);
-            settingsSaveLastState = { kind: 'error', message: 'Save failed' };
-            if (!options.quiet) showToast('Couldn’t save this setting. Your previous value is still active.', 'error');
-            return false;
+        if (key === 'layout') applyTheme();
+        if (key === 'keyMapping') applyKeyMapping(value);
+        if (key === 'configMode') applyConfigMode();
+        if (key === 'customCss') applySettingsToUI();
+        if (key === 'onDeviceAiEnabled') refreshOnDeviceAiControls();
+        if (key === 'layout') updateHelpOverview();
+        if (key === 'syncProvider') {
+            syncSettingsProviderSelection(value);
+            syncCloudProviderSelection(value);
+        }
+        if (key === 'syncEnabled' || key === 'syncProvider') {
+            loadSyncProviderStatus();
         }
     }
 
-    function saveSetting(key, value, options = {}) {
-        settingsSavePendingCount += 1;
-        setSettingsSaveState('saving', 'Saving…');
-
-        const previous = settingsSaveQueues.get(key) || Promise.resolve();
-        const queued = previous.catch(() => {}).then(() => saveSettingNow(key, value, options));
-        settingsSaveQueues.set(key, queued);
-
-        return queued.finally(() => {
-            if (settingsSaveQueues.get(key) === queued) settingsSaveQueues.delete(key);
-            settingsSavePendingCount = Math.max(0, settingsSavePendingCount - 1);
-            if (settingsSavePendingCount > 0) {
-                setSettingsSaveState('saving', 'Saving…');
-            } else {
-                setSettingsSaveState(settingsSaveLastState.kind, settingsSaveLastState.message);
-            }
+    let settingsPersistenceController = null;
+    function getSettingsPersistenceController() {
+        if (settingsPersistenceController) return settingsPersistenceController;
+        settingsPersistenceController = DashboardWorkflowControllers.createSerializedSettingsController({
+            validate: (key, value) => validateSettingsValue(key, value),
+            read: key => state.settings[key],
+            write: (key, value) => { state.settings[key] = value; },
+            persist: async (key, value) => {
+                const response = await chrome.runtime.sendMessage({ action: 'setSettings', settings: { [key]: value } });
+                if (response?.error) throw new Error(response.error);
+            },
+            apply: applySavedSetting,
+            restoreInput: (key, value, context) => restoreSettingsInputValue(context.input || getSettingsInputForKey(key), value),
+            setFieldError: (key, message, context) => setSettingsFieldError(context.input || getSettingsInputForKey(key), message),
+            render: saveState => setSettingsSaveState(saveState.kind, saveState.message),
+            notify: (message, tone) => showToast(message, tone),
+            savedMessage: key => key === 'layout' || key === 'editorTheme' ? 'Theme applied' : 'Saved'
         });
+        return settingsPersistenceController;
+    }
+
+    function saveSetting(key, value, options = {}) {
+        return getSettingsPersistenceController().save(key, value, options);
     }
 
     async function saveSettingOrThrow(key, value) {
@@ -6470,15 +6507,38 @@
         }
     }
 
-    async function refreshUtilitiesDiagnostics(options = {}) {
-        const { announce = false } = options;
-        await Promise.all([
-            loadRuntimeStatus(),
-            loadLocalHealthReport(),
-            loadPublicApiTrustState(),
-            loadSigningTrustState()
-        ]);
-        if (announce) showToast('Diagnostics refreshed', 'success');
+    function renderDiagnosticsWorkflowState(workflowState) {
+        if (elements.diagnosticsWorkflowStatus) {
+            elements.diagnosticsWorkflowStatus.dataset.state = workflowState.kind;
+            elements.diagnosticsWorkflowStatus.textContent = workflowState.message;
+            elements.diagnosticsWorkflowStatus.setAttribute('aria-busy', workflowState.kind === 'loading' ? 'true' : 'false');
+        }
+        if (elements.btnRetryDiagnostics) {
+            elements.btnRetryDiagnostics.hidden = !workflowState.retryAvailable;
+        }
+    }
+
+    let utilitiesDiagnosticsController = null;
+    function getUtilitiesDiagnosticsController() {
+        if (utilitiesDiagnosticsController) return utilitiesDiagnosticsController;
+        utilitiesDiagnosticsController = DashboardWorkflowControllers.createDiagnosticsController({
+            loaders: {
+                runtime: () => loadRuntimeStatus(),
+                localHealth: () => loadLocalHealthReport(),
+                publicApiTrust: () => loadPublicApiTrustState(),
+                signingTrust: () => loadSigningTrustState()
+            },
+            render: renderDiagnosticsWorkflowState,
+            notify: workflowState => showToast(
+                workflowState.message,
+                workflowState.kind === 'success' ? 'success' : workflowState.kind === 'failure' ? 'error' : 'warning'
+            )
+        });
+        return utilitiesDiagnosticsController;
+    }
+
+    function refreshUtilitiesDiagnostics(options = {}) {
+        return getUtilitiesDiagnosticsController().refresh(options);
     }
 
     function getRecentActivityEntries(limit = 15) {
@@ -15117,6 +15177,11 @@
         toast: showToast,
         safeSetHtml: safeSetHtml,
         setUntrustedHtml: setUntrustedHtml,
+        controllers: {
+            get importReview() { return getImportReviewController(); },
+            get settings() { return getSettingsPersistenceController(); },
+            get diagnostics() { return getUtilitiesDiagnosticsController(); }
+        },
         // Exposed for the Monaco sandbox bridge (monaco-adapter.js) so the
         // editor's Ctrl+S / Escape keybindings can reach the IIFE-scoped
         // handlers. Without these, the sandbox's save/close postMessages hit a
@@ -16950,40 +17015,11 @@
             input.onchange = async (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
-                const text = await file.text();
-                if (!text.includes('==UserScript==')) {
-                    showToast('Not a valid Tampermonkey backup file', 'error');
-                    return;
-                }
-                if (!await showConfirmModal(
-                    'Import Tampermonkey Backup?',
-                    'Enabled scripts in this backup will be imported disabled and quarantined until you review and enable them. Scripts already disabled in the backup will stay disabled.',
-                    { confirmLabel: 'Import and Quarantine' }
-                )) return;
-                showProgress('Importing Tampermonkey backup…');
-                updateProgress(0, 1, 'Parsing scripts…');
-                try {
-                    const res = await chrome.runtime.sendMessage({
-                        action: 'importTampermonkeyBackup',
-                        text,
-                        overwrite: true,
-                        trustImportedScripts: false,
-                        sourceLabel: `Tampermonkey backup: ${file.name}`
-                    });
-                    if (res?.error) {
-                        showToast(res.error, 'error');
-                    } else {
-                        showToast(`Imported ${res?.imported || 0} scripts${res?.quarantinedScripts ? `, ${res.quarantinedScripts} quarantined` : ''}${res?.preservedDisabledScripts ? `, ${res.preservedDisabledScripts} kept disabled` : ''}${res?.skipped ? `, ${res.skipped} skipped` : ''}${res?.errors?.length ? `, ${res.errors.length} errors` : ''}`, 'success');
-                        await loadScripts();
-                        updateStats();
-                    }
-                } catch (err) {
-                    showToast('Import failed: ' + err.message, 'error');
-                }
-                hideProgress();
+                await importTampermonkeyFile(file);
             };
             input.click();
         });
+        elements.btnRetryImport?.addEventListener('click', () => getImportReviewController().retry());
 
         document.getElementById('btnClearLog')?.addEventListener('click', () => {
             const logEl = document.getElementById('activityLog');
@@ -16996,6 +17032,7 @@
         elements.btnRefreshRuntimeStatus?.addEventListener('click', async event => {
             await runButtonTask(event.currentTarget, () => loadRuntimeStatus({ announce: true }), { busyLabel: 'Refreshing…', errorMessage: 'Failed to refresh runtime status' });
         });
+        elements.btnRetryDiagnostics?.addEventListener('click', () => getUtilitiesDiagnosticsController().retry({ announce: true }));
         elements.btnGrantCurrentHostAccess?.addEventListener('click', async event => {
             await runButtonTask(event.currentTarget, requestCurrentHostAccessFromDashboard, { busyLabel: 'Requesting…', errorMessage: 'Failed to request site access' });
         });

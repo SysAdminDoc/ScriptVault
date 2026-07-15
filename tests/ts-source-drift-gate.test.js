@@ -89,12 +89,13 @@ describe('TS source drift gate', () => {
     const report = analyzeSourceDrift(map, []);
     const text = formatTextReport(report, { reportMode: true });
 
-    expect(report.totals.promoted).toBe(56);
+    expect(report.totals.promoted).toBe(57);
     expect(report.totals.candidate).toBe(0);
     expect(report.totals.mirrored).toBe(0);
     expect(report.totals['intentionally-divergent']).toBe(0);
     expect(text).toContain('modules/error-log.js -> src/modules/error-log.ts');
     expect(text).toContain('modules/message-router.js -> src/background/message-router.ts');
+    expect(text).toContain('pages/dashboard-workflow-controllers.js -> src/pages/dashboard-workflow-controllers.ts');
     expect(text).toContain('modules/import-action-handler.js -> src/background/import-action-handler.ts');
     expect(text).toContain('modules/telemetry-action-handler.js -> src/background/telemetry-action-handler.ts');
     expect(text).toContain('modules/update-action-handler.js -> src/background/update-action-handler.ts');

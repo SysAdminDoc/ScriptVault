@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 
 const dashboardHtml = readFileSync(resolve(process.cwd(), "pages/dashboard.html"), "utf8");
 const dashboardJs = readFileSync(resolve(process.cwd(), "pages/dashboard.js"), "utf8");
+const dashboardWorkflowControllers = readFileSync(resolve(process.cwd(), "src/pages/dashboard-workflow-controllers.ts"), "utf8");
 const cardViewJs = readFileSync(resolve(process.cwd(), "pages/dashboard-cardview.js"), "utf8");
 const chainsJs = readFileSync(resolve(process.cwd(), "pages/dashboard-chains.js"), "utf8");
 const viewSettingsController = readFileSync(resolve(process.cwd(), "pages/dashboard-viewsettings.js"), "utf8");
@@ -647,7 +648,8 @@ describe("dashboard accessibility markup", () => {
     expect(dashboardJs).toContain('Page pattern');
     expect(dashboardJs).toContain('Blacklist pattern');
     expect(dashboardJs).toContain('Download pattern');
-    expect(dashboardJs).toMatch(/if \(!validation\.ok\) \{\s*setSettingsFieldError\(input, validation\.error\);/);
+    expect(dashboardJs).toContain("setFieldError: (key, message, context) => setSettingsFieldError");
+    expect(dashboardWorkflowControllers).toMatch(/if \(!validation\.ok\) \{[\s\S]*adapter\.setFieldError\?\.\(key, message, context\);/);
     expect(dashboardJs).toMatch(/elements\.settingsCheckInterval\.value = s\.checkInterval \?\? '24'/);
     expect(dashboardJs).toMatch(/settingsCheckInterval: \['checkInterval', 'value'\]/);
     expect(dashboardJs).toMatch(/settingsExternalsInterval: \['externalsInterval', 'value'\]/);

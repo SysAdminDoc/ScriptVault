@@ -125,6 +125,10 @@ const wiringChecks = [
   ['dashboard-theme-editor.js', htmlSource, 'themeEditorContainer', 'pages/dashboard.html'],
   ['dashboard-viewsettings.js', htmlSource, 'dashboard-viewsettings.js', 'pages/dashboard.html'],
   ['dashboard-virtual-rows.js', dashboardSource, 'DashboardVirtualRows', 'pages/dashboard.js'],
+  ['dashboard-workflow-controllers.js', dashboardSource, 'DashboardWorkflowControllers.createImportReviewController', 'pages/dashboard.js'],
+  ['dashboard-workflow-controllers.js', dashboardSource, 'DashboardWorkflowControllers.createSerializedSettingsController', 'pages/dashboard.js'],
+  ['dashboard-workflow-controllers.js', dashboardSource, 'DashboardWorkflowControllers.createDiagnosticsController', 'pages/dashboard.js'],
+  ['dashboard-workflow-controllers.js', htmlSource, 'dashboard-workflow-controllers.js', 'pages/dashboard.html'],
   ['dashboard-whatsnew.js', dashboardSource, 'WhatsNew.shouldShow', 'pages/dashboard.js'],
 ];
 

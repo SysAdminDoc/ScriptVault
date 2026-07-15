@@ -3,7 +3,7 @@
   "name": "English",
   "direction": "ltr",
   "translationStatus": "complete",
-  "runtimeCoverageBaseline": 1787,
+  "runtimeCoverageBaseline": 1789,
   "runtime": {
     "appName": "ScriptVault",
     "dashboardTitle": "ScriptVault Dashboard",
@@ -1169,6 +1169,8 @@
     "supportSnapshotSummaryDefault": "Bundle includes runtime status, backup inventory, and counts by default. Sensitive categories are off until you explicitly tick them.",
     "exportSnapshot": "Export Snapshot...",
     "ready": "Ready",
+    "retryImport": "Retry Import",
+    "retryDiagnostics": "Retry Diagnostics",
     "publicApiTrustTitle": "Public API Trust",
     "publicApiTrustNote": "Review which web origins and extensions are trusted to call the public API. Unknown extensions are denied by default. Inspect the recent external audit trail below.",
     "trustedWebOrigins": "Trusted web origins",

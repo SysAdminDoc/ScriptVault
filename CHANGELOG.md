@@ -4,6 +4,11 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Extracted dashboard workflow controllers behind typed, testable boundaries.**
+  Tampermonkey import review, per-setting serialized persistence, and utilities
+  diagnostics now use generated TypeScript controllers with thin DOM adapters,
+  explicit loading/empty/failure/recovery states, retry controls, and headless
+  real-extension coverage while retaining the existing dashboard globals.
 - **Unified the credential-free release preflight.** One command now runs 12
   source, test, audit, locale, privacy, headless browser, packaging, and parity
   gates; builds only the requested-version Chrome ZIP in an isolated artifact

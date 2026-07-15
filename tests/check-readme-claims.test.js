@@ -32,7 +32,7 @@ describe('check-readme-claims.mjs', () => {
       monaco: '0.55.1',
       cwsCli: '4.0.1',
     });
-    expect(parsed.projectFacts.runtime.promotedEntries).toBe(56);
+    expect(parsed.projectFacts.runtime.promotedEntries).toBe(57);
     expect(parsed.projectFacts.storage.stores).toContain('publicationReceipts');
     expect(parsed.projectFacts.delivery).toEqual({ policy: 'local-only', workflowPaths: [] });
   });

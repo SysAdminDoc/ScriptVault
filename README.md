@@ -606,10 +606,12 @@ ScriptVault/
 │   └── i18n.js                # Generated locale/plural runtime
 ├── src/locales/               # Canonical per-language runtime + manifest sources
 ├── src/generated/             # Generated typed locale catalog
+├── src/pages/                 # Typed dashboard workflow controllers
 ├── shared/
 │   └── utils.js               # escapeHtml, generateId, sanitizeUrl, formatBytes
 ├── pages/
 │   ├── dashboard.html/js      # Main dashboard + Monaco editor
+│   ├── dashboard-workflow-controllers.js # Generated import/settings/diagnostics state controllers
 │   ├── popup.html/js          # Toolbar popup
 │   ├── install.html/js        # Script installation page
 │   ├── sidepanel.html/js      # Persistent side panel (Chrome 114+)

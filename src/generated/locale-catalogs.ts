@@ -1214,6 +1214,8 @@ export const localeCatalogs = {
     "supportSnapshotSummaryDefault": "Bundle includes runtime status, backup inventory, and counts by default. Sensitive categories are off until you explicitly tick them.",
     "exportSnapshot": "Export Snapshot...",
     "ready": "Ready",
+    "retryImport": "Retry Import",
+    "retryDiagnostics": "Retry Diagnostics",
     "publicApiTrustTitle": "Public API Trust",
     "publicApiTrustNote": "Review which web origins and extensions are trusted to call the public API. Unknown extensions are denied by default. Inspect the recent external audit trail below.",
     "trustedWebOrigins": "Trusted web origins",
@@ -3039,15 +3041,15 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 43,
     "translatedRuntimeMessages": 43,
-    "totalRuntimeMessages": 1787
+    "totalRuntimeMessages": 1789
   },
   "en": {
     "name": "English",
     "direction": "ltr",
     "translationStatus": "complete",
-    "runtimeCoverageBaseline": 1787,
-    "translatedRuntimeMessages": 1787,
-    "totalRuntimeMessages": 1787
+    "runtimeCoverageBaseline": 1789,
+    "translatedRuntimeMessages": 1789,
+    "totalRuntimeMessages": 1789
   },
   "es": {
     "name": "Español",
@@ -3055,7 +3057,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 45,
     "translatedRuntimeMessages": 45,
-    "totalRuntimeMessages": 1787
+    "totalRuntimeMessages": 1789
   },
   "fr": {
     "name": "Français",
@@ -3063,7 +3065,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 43,
     "translatedRuntimeMessages": 43,
-    "totalRuntimeMessages": 1787
+    "totalRuntimeMessages": 1789
   },
   "he": {
     "name": "עברית",
@@ -3071,7 +3073,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 58,
     "translatedRuntimeMessages": 58,
-    "totalRuntimeMessages": 1787
+    "totalRuntimeMessages": 1789
   },
   "ja": {
     "name": "日本語",
@@ -3079,7 +3081,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 71,
     "translatedRuntimeMessages": 71,
-    "totalRuntimeMessages": 1787
+    "totalRuntimeMessages": 1789
   },
   "pt": {
     "name": "Português",
@@ -3087,7 +3089,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 42,
     "translatedRuntimeMessages": 42,
-    "totalRuntimeMessages": 1787
+    "totalRuntimeMessages": 1789
   },
   "ru": {
     "name": "Русский",
@@ -3095,7 +3097,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 117,
     "translatedRuntimeMessages": 117,
-    "totalRuntimeMessages": 1787
+    "totalRuntimeMessages": 1789
   },
   "zh": {
     "name": "中文",
@@ -3103,7 +3105,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 46,
     "translatedRuntimeMessages": 46,
-    "totalRuntimeMessages": 1787
+    "totalRuntimeMessages": 1789
   }
 } as const;
 

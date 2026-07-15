@@ -133,6 +133,13 @@ export const TS_RUNTIME_MODULES = [
     selfExportName: 'UserScriptsSetupDoctor',
   },
   {
+    id: 'dashboard-workflow-controllers',
+    source: 'src/pages/dashboard-workflow-controllers.ts',
+    output: 'pages/dashboard-workflow-controllers.js',
+    exportName: 'DashboardWorkflowControllers',
+    selfExportName: 'DashboardWorkflowControllers',
+  },
+  {
     id: 'userstyles',
     source: 'src/modules/userstyles.ts',
     output: 'modules/userstyles.js',

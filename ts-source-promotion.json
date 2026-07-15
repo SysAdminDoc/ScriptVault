@@ -360,6 +360,14 @@
       "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs."
     },
     {
+      "runtime": "pages/dashboard-workflow-controllers.js",
+      "sources": [
+        "src/pages/dashboard-workflow-controllers.ts"
+      ],
+      "status": "promoted",
+      "notes": "Generated typed controllers for import review, serialized settings persistence, and diagnostic state orchestration."
+    },
+    {
       "runtime": "modules/public-api.js",
       "sources": [
         "src/modules/public-api.ts"
