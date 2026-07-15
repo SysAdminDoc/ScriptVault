@@ -144,6 +144,34 @@ export async function _save(): Promise<void> {
   await flush();
 }
 
+/**
+ * Rewrite persisted execution URLs to the given retention mode so the
+ * error log honors the same privacy envelope as script stats
+ * ('origin' keeps only the origin, 'none' removes the URL entirely).
+ */
+export async function rewriteUrls(mode: 'origin' | 'none'): Promise<number> {
+  const entries = await _load();
+  let changed = 0;
+  for (const record of entries) {
+    if (typeof record.url !== 'string' || !record.url) continue;
+    let retained: string | null = null;
+    if (mode === 'origin') {
+      try {
+        const origin = new URL(record.url).origin;
+        retained = origin === 'null' ? null : origin;
+      } catch (_) {
+        retained = null;
+      }
+    }
+    if (retained !== record.url) {
+      record.url = retained;
+      changed += 1;
+    }
+  }
+  if (changed > 0) await _save();
+  return changed;
+}
+
 // ---------------------------------------------------------------------------
 // Core Operations
 // ---------------------------------------------------------------------------
@@ -536,6 +564,7 @@ const ErrorLog = {
   logGMError,
   flush,
   _save,
+  rewriteUrls,
 };
 
 export default ErrorLog;

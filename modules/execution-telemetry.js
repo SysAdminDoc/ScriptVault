@@ -185,6 +185,10 @@ const ExecutionTelemetry = (() => {
       }
       return true;
     }
+    function retainEventUrl(url) {
+      if (!url) return "";
+      return dependencies.retainStatsUrl(url, dependencies.getStatsUrlRetention()) || "";
+    }
     async function handleBridgeTelemetry(value, sender) {
       const data = normalizeBridgeTelemetry(value);
       if (!data) return { error: "Invalid page telemetry payload", trusted: false };
@@ -204,13 +208,13 @@ const ExecutionTelemetry = (() => {
         dependencies.recordDiagnostic(sender, {
           type: "run",
           duration: data.duration,
-          url: cleanString(sender?.tab?.url, 2048)
+          url: retainEventUrl(cleanString(sender?.tab?.url, 2048))
         });
       } else {
         dependencies.recordDiagnostic(sender, {
           type: "error",
           error: data.error,
-          url: cleanString(sender?.tab?.url, 2048)
+          url: retainEventUrl(cleanString(sender?.tab?.url, 2048))
         });
       }
       return { success: true, trusted: false };
@@ -247,17 +251,17 @@ const ExecutionTelemetry = (() => {
         return { success: true, trusted: true, duplicate: true };
       }
       const eventUrl = cleanString(data.url, 4096) || cleanString(sender?.tab?.url, 4096);
+      const retainedUrl = retainEventUrl(eventUrl);
       const stats = script.stats || (script.stats = defaultStats());
       if (action === "reportExecTime") {
         stats.runs += 1;
         stats.totalTime += duration;
         stats.avgTime = stats.runs > 0 ? Math.round(stats.totalTime / stats.runs * 100) / 100 : 0;
         stats.lastRun = now();
-        const retainedUrl = dependencies.retainStatsUrl(eventUrl, dependencies.getStatsUrlRetention());
         if (retainedUrl) stats.lastUrl = retainedUrl;
         else delete stats.lastUrl;
         setSenderContext(stats, sender);
-        dependencies.recordDiagnostic(sender, { type: "run", scriptId, duration, url: eventUrl });
+        dependencies.recordDiagnostic(sender, { type: "run", scriptId, duration, url: retainedUrl });
         dependencies.scheduleStatsSave();
         try {
           const triggerResult = dependencies.triggerAfterScript(scriptId, {
@@ -275,14 +279,14 @@ const ExecutionTelemetry = (() => {
       stats.lastError = error;
       stats.lastErrorTime = now();
       setSenderContext(stats, sender);
-      dependencies.recordDiagnostic(sender, { type: "error", scriptId, error, url: eventUrl });
+      dependencies.recordDiagnostic(sender, { type: "error", scriptId, error, url: retainedUrl });
       if (dependencies.logExecutionError) {
         await dependencies.logExecutionError({
           scriptId,
           scriptName: cleanString(script.meta?.name || script.name, 256) || scriptId,
           error,
           stack: cleanString(data.stack, 8e3) || null,
-          url: eventUrl || null,
+          url: retainedUrl || null,
           source: cleanString(data.source, 4096) || null,
           line: cleanInteger(data.line, 1, 1e7) ?? null,
           col: cleanInteger(data.col, 1, 1e7) ?? null,

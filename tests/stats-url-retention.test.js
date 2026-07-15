@@ -69,8 +69,9 @@ describe('execution-stats URL retention wiring', () => {
       expect(src, `${label} reads the retention setting`).toContain('SettingsManager.cache.statsUrlRetention');
     }
     for (const [label, src] of [['execution-telemetry.ts', executionTelemetryTs], ['execution-telemetry.js', executionTelemetryJs]]) {
-      expect(src, `${label} applies retention before storing lastUrl`).toContain('dependencies.retainStatsUrl(eventUrl, dependencies.getStatsUrlRetention())');
+      expect(src, `${label} applies retention before storing lastUrl`).toContain('const retainedUrl = retainEventUrl(eventUrl)');
       expect(src, `${label} deletes lastUrl in none mode`).toMatch(/else delete stats\.lastUrl/);
+      expect(src, `${label} routes the error log through the retained URL`).toContain('url: retainedUrl || null');
     }
   });
 

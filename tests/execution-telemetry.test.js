@@ -60,11 +60,39 @@ describe('execution telemetry trust boundary', () => {
         event: {
           type: 'run',
           duration: 12.5,
-          url: 'https://page.example/private?token=secret',
+          // The URL retention setting ('origin' in this harness) governs
+          // diagnostics too — the full path/query must not be recorded.
+          url: 'https://page.example',
         },
       }),
     ]);
     expect(harness.diagnostics[0].event).not.toHaveProperty('scriptId');
+  });
+
+  it('applies the URL retention setting to error diagnostics and the persisted error log', async () => {
+    const harness = createHarness();
+    const sender = {
+      userScriptId: 'victim',
+      tab: { id: 11, url: 'https://page.example/account/settings?session=abc123' },
+      documentId: 'document-9',
+    };
+
+    const response = await harness.handler.handleTrustedTelemetry('reportExecError', {
+      error: 'boom',
+      completionId: 'completion-retention-1',
+      url: 'https://page.example/account/settings?session=abc123',
+    }, sender);
+
+    expect(response).toEqual({ success: true, trusted: true });
+    const diagnostic = harness.diagnostics.find(entry => entry.event.type === 'error');
+    expect(diagnostic?.event.url).toBe('https://page.example');
+    expect(harness.errorLog).toEqual([
+      expect.objectContaining({
+        scriptId: 'victim',
+        url: 'https://page.example',
+      }),
+    ]);
+    expect(JSON.stringify(harness.errorLog)).not.toContain('session=abc123');
   });
 
   it('uses authenticated sender identity and processes each completion stage once', async () => {

@@ -151,9 +151,50 @@ function applyStatsUrlRewritesToCache(changed: StatsUrlRewriteResult[]): void {
   }
 }
 
-async function finishStatsUrlRewrite(mode: StatsUrlRetentionMode): Promise<void> {
+// ErrorLog is a global in the service-worker context (concatenated build).
+// Declared for the runtime `typeof` check; unit tests exercising this module
+// alone fall back to the direct chrome.storage rewrite.
+declare const ErrorLog: { rewriteUrls(mode: StatsUrlRetentionMode): Promise<number> } | undefined;
+
+async function rewriteErrorLogUrls(mode: StatsUrlRetentionMode, preloadedEntries?: unknown): Promise<void> {
+  try {
+    if (typeof ErrorLog !== 'undefined' && ErrorLog?.rewriteUrls) {
+      await ErrorLog.rewriteUrls(mode);
+      return;
+    }
+    const entries = (Array.isArray(preloadedEntries)
+      ? preloadedEntries
+      : (await chrome.storage.local.get('errorLog'))['errorLog']) as Array<{ url?: string | null }> | undefined;
+    if (!Array.isArray(entries) || entries.length === 0) return;
+    let changed = false;
+    for (const entry of entries) {
+      if (!entry || typeof entry !== 'object' || typeof entry.url !== 'string' || !entry.url) continue;
+      let retained: string | null = null;
+      if (mode === 'origin') {
+        try {
+          const origin = new URL(entry.url).origin;
+          retained = origin === 'null' ? null : origin;
+        } catch (_) {
+          retained = null;
+        }
+      }
+      if (retained !== entry.url) {
+        entry.url = retained;
+        changed = true;
+      }
+    }
+    if (changed) await chrome.storage.local.set({ errorLog: entries });
+  } catch (error) {
+    console.warn('[ScriptVault] Could not rewrite error-log URLs:', error);
+  }
+}
+
+async function finishStatsUrlRewrite(mode: StatsUrlRetentionMode, preloadedErrorLog?: unknown): Promise<void> {
   const changed = await ScriptsDAO.rewriteStatsUrls(mode);
   applyStatsUrlRewritesToCache(changed);
+  // The error log persists the same execution URLs as script stats and must
+  // honor the same retention envelope.
+  await rewriteErrorLogUrls(mode, preloadedErrorLog);
   try {
     await chrome.storage.local.remove(STATS_URL_RETENTION_PENDING_KEY);
   } catch (error) {
@@ -230,6 +271,7 @@ export const SettingsManager = {
       _settingsInitPromise = (async () => {
         const data = await chrome.storage.local.get([
           'settings',
+          'errorLog',
           STATS_URL_RETENTION_MIGRATION_KEY,
           STATS_URL_RETENTION_PENDING_KEY,
         ]);
@@ -248,7 +290,7 @@ export const SettingsManager = {
             settings: cloneSettingsState(settings),
             [STATS_URL_RETENTION_PENDING_KEY]: rewriteMode,
           });
-          await finishStatsUrlRewrite(rewriteMode);
+          await finishStatsUrlRewrite(rewriteMode, data['errorLog'] ?? []);
           await chrome.storage.local.set({ [STATS_URL_RETENTION_MIGRATION_KEY]: true });
         }
 

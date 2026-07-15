@@ -8483,9 +8483,40 @@ const StorageModule = (() => {
       else delete script.stats.lastUrl;
     }
   }
-  async function finishStatsUrlRewrite(mode) {
+  async function rewriteErrorLogUrls(mode, preloadedEntries) {
+    try {
+      if (typeof ErrorLog !== "undefined" && ErrorLog?.rewriteUrls) {
+        await ErrorLog.rewriteUrls(mode);
+        return;
+      }
+      const entries = Array.isArray(preloadedEntries) ? preloadedEntries : (await chrome.storage.local.get("errorLog"))["errorLog"];
+      if (!Array.isArray(entries) || entries.length === 0) return;
+      let changed = false;
+      for (const entry of entries) {
+        if (!entry || typeof entry !== "object" || typeof entry.url !== "string" || !entry.url) continue;
+        let retained = null;
+        if (mode === "origin") {
+          try {
+            const origin = new URL(entry.url).origin;
+            retained = origin === "null" ? null : origin;
+          } catch (_) {
+            retained = null;
+          }
+        }
+        if (retained !== entry.url) {
+          entry.url = retained;
+          changed = true;
+        }
+      }
+      if (changed) await chrome.storage.local.set({ errorLog: entries });
+    } catch (error) {
+      console.warn("[ScriptVault] Could not rewrite error-log URLs:", error);
+    }
+  }
+  async function finishStatsUrlRewrite(mode, preloadedErrorLog) {
     const changed = await ScriptsDAO.rewriteStatsUrls(mode);
     applyStatsUrlRewritesToCache(changed);
+    await rewriteErrorLogUrls(mode, preloadedErrorLog);
     try {
       await chrome.storage.local.remove(STATS_URL_RETENTION_PENDING_KEY);
     } catch (error) {
@@ -8548,6 +8579,7 @@ const StorageModule = (() => {
         _settingsInitPromise = (async () => {
           const data = await chrome.storage.local.get([
             "settings",
+            "errorLog",
             STATS_URL_RETENTION_MIGRATION_KEY,
             STATS_URL_RETENTION_PENDING_KEY
           ]);
@@ -8561,7 +8593,7 @@ const StorageModule = (() => {
               settings: cloneSettingsState(settings),
               [STATS_URL_RETENTION_PENDING_KEY]: rewriteMode
             });
-            await finishStatsUrlRewrite(rewriteMode);
+            await finishStatsUrlRewrite(rewriteMode, data["errorLog"] ?? []);
             await chrome.storage.local.set({ [STATS_URL_RETENTION_MIGRATION_KEY]: true });
           }
           this.cache = settings;
@@ -9986,6 +10018,10 @@ const ExecutionTelemetry = (() => {
       }
       return true;
     }
+    function retainEventUrl(url) {
+      if (!url) return "";
+      return dependencies.retainStatsUrl(url, dependencies.getStatsUrlRetention()) || "";
+    }
     async function handleBridgeTelemetry(value, sender) {
       const data = normalizeBridgeTelemetry(value);
       if (!data) return { error: "Invalid page telemetry payload", trusted: false };
@@ -10005,13 +10041,13 @@ const ExecutionTelemetry = (() => {
         dependencies.recordDiagnostic(sender, {
           type: "run",
           duration: data.duration,
-          url: cleanString(sender?.tab?.url, 2048)
+          url: retainEventUrl(cleanString(sender?.tab?.url, 2048))
         });
       } else {
         dependencies.recordDiagnostic(sender, {
           type: "error",
           error: data.error,
-          url: cleanString(sender?.tab?.url, 2048)
+          url: retainEventUrl(cleanString(sender?.tab?.url, 2048))
         });
       }
       return { success: true, trusted: false };
@@ -10048,17 +10084,17 @@ const ExecutionTelemetry = (() => {
         return { success: true, trusted: true, duplicate: true };
       }
       const eventUrl = cleanString(data.url, 4096) || cleanString(sender?.tab?.url, 4096);
+      const retainedUrl = retainEventUrl(eventUrl);
       const stats = script.stats || (script.stats = defaultStats());
       if (action === "reportExecTime") {
         stats.runs += 1;
         stats.totalTime += duration;
         stats.avgTime = stats.runs > 0 ? Math.round(stats.totalTime / stats.runs * 100) / 100 : 0;
         stats.lastRun = now();
-        const retainedUrl = dependencies.retainStatsUrl(eventUrl, dependencies.getStatsUrlRetention());
         if (retainedUrl) stats.lastUrl = retainedUrl;
         else delete stats.lastUrl;
         setSenderContext(stats, sender);
-        dependencies.recordDiagnostic(sender, { type: "run", scriptId, duration, url: eventUrl });
+        dependencies.recordDiagnostic(sender, { type: "run", scriptId, duration, url: retainedUrl });
         dependencies.scheduleStatsSave();
         try {
           const triggerResult = dependencies.triggerAfterScript(scriptId, {
@@ -10076,14 +10112,14 @@ const ExecutionTelemetry = (() => {
       stats.lastError = error;
       stats.lastErrorTime = now();
       setSenderContext(stats, sender);
-      dependencies.recordDiagnostic(sender, { type: "error", scriptId, error, url: eventUrl });
+      dependencies.recordDiagnostic(sender, { type: "error", scriptId, error, url: retainedUrl });
       if (dependencies.logExecutionError) {
         await dependencies.logExecutionError({
           scriptId,
           scriptName: cleanString(script.meta?.name || script.name, 256) || scriptId,
           error,
           stack: cleanString(data.stack, 8e3) || null,
-          url: eventUrl || null,
+          url: retainedUrl || null,
           source: cleanString(data.source, 4096) || null,
           line: cleanInteger(data.line, 1, 1e7) ?? null,
           col: cleanInteger(data.col, 1, 1e7) ?? null,
@@ -15337,7 +15373,8 @@ const ErrorLog = (() => {
     log: () => log,
     logGMError: () => logGMError,
     logScriptError: () => logScriptError,
-    registerGlobalHandlers: () => registerGlobalHandlers
+    registerGlobalHandlers: () => registerGlobalHandlers,
+    rewriteUrls: () => rewriteUrls
   });
   module.exports = __toCommonJS(error_log_exports);
   var STORAGE_KEY = "errorLog";
@@ -15379,6 +15416,28 @@ const ErrorLog = (() => {
   }
   async function _save() {
     await flush();
+  }
+  async function rewriteUrls(mode) {
+    const entries = await _load();
+    let changed = 0;
+    for (const record of entries) {
+      if (typeof record.url !== "string" || !record.url) continue;
+      let retained = null;
+      if (mode === "origin") {
+        try {
+          const origin = new URL(record.url).origin;
+          retained = origin === "null" ? null : origin;
+        } catch (_) {
+          retained = null;
+        }
+      }
+      if (retained !== record.url) {
+        record.url = retained;
+        changed += 1;
+      }
+    }
+    if (changed > 0) await _save();
+    return changed;
   }
   async function log(entry) {
     let entries = await _load();
@@ -15658,7 +15717,8 @@ const ErrorLog = (() => {
     logScriptError,
     logGMError,
     flush,
-    _save
+    _save,
+    rewriteUrls
   };
   var error_log_default = ErrorLog;
   return module.exports.default || module.exports.ErrorLog || module.exports;

@@ -1057,9 +1057,40 @@ const StorageModule = (() => {
       else delete script.stats.lastUrl;
     }
   }
-  async function finishStatsUrlRewrite(mode) {
+  async function rewriteErrorLogUrls(mode, preloadedEntries) {
+    try {
+      if (typeof ErrorLog !== "undefined" && ErrorLog?.rewriteUrls) {
+        await ErrorLog.rewriteUrls(mode);
+        return;
+      }
+      const entries = Array.isArray(preloadedEntries) ? preloadedEntries : (await chrome.storage.local.get("errorLog"))["errorLog"];
+      if (!Array.isArray(entries) || entries.length === 0) return;
+      let changed = false;
+      for (const entry of entries) {
+        if (!entry || typeof entry !== "object" || typeof entry.url !== "string" || !entry.url) continue;
+        let retained = null;
+        if (mode === "origin") {
+          try {
+            const origin = new URL(entry.url).origin;
+            retained = origin === "null" ? null : origin;
+          } catch (_) {
+            retained = null;
+          }
+        }
+        if (retained !== entry.url) {
+          entry.url = retained;
+          changed = true;
+        }
+      }
+      if (changed) await chrome.storage.local.set({ errorLog: entries });
+    } catch (error) {
+      console.warn("[ScriptVault] Could not rewrite error-log URLs:", error);
+    }
+  }
+  async function finishStatsUrlRewrite(mode, preloadedErrorLog) {
     const changed = await ScriptsDAO.rewriteStatsUrls(mode);
     applyStatsUrlRewritesToCache(changed);
+    await rewriteErrorLogUrls(mode, preloadedErrorLog);
     try {
       await chrome.storage.local.remove(STATS_URL_RETENTION_PENDING_KEY);
     } catch (error) {
@@ -1122,6 +1153,7 @@ const StorageModule = (() => {
         _settingsInitPromise = (async () => {
           const data = await chrome.storage.local.get([
             "settings",
+            "errorLog",
             STATS_URL_RETENTION_MIGRATION_KEY,
             STATS_URL_RETENTION_PENDING_KEY
           ]);
@@ -1135,7 +1167,7 @@ const StorageModule = (() => {
               settings: cloneSettingsState(settings),
               [STATS_URL_RETENTION_PENDING_KEY]: rewriteMode
             });
-            await finishStatsUrlRewrite(rewriteMode);
+            await finishStatsUrlRewrite(rewriteMode, data["errorLog"] ?? []);
             await chrome.storage.local.set({ [STATS_URL_RETENTION_MIGRATION_KEY]: true });
           }
           this.cache = settings;

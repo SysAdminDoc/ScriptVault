@@ -220,7 +220,8 @@ const ScriptSourceMaps = (() => {
       mappings: sourceMapMappings(mappings)
     };
     const runtimeSegments = JSON.stringify(runtimeRanges).replace(/</gu, "\\u003c");
-    const finalized = outputLines.join("\n").replaceAll(RUNTIME_SEGMENTS_PLACEHOLDER, runtimeSegments).replaceAll(GENERATED_URL_PLACEHOLDER, JSON.stringify(generatedUrl));
+    const generatedUrlLiteral = JSON.stringify(generatedUrl);
+    const finalized = outputLines.join("\n").replaceAll(RUNTIME_SEGMENTS_PLACEHOLDER, () => runtimeSegments).replaceAll(GENERATED_URL_PLACEHOLDER, () => generatedUrlLiteral);
     return [
       finalized,
       `//# sourceURL=${generatedUrl}`,
@@ -232,23 +233,31 @@ const ScriptSourceMaps = (() => {
     const escaped = url.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
     const match = stack.match(new RegExp(`${escaped}:(\\d+):(\\d+)`, "u"));
     if (!match) return null;
-    return { line: Number.parseInt(match[1], 10), column: Number.parseInt(match[2], 10) };
+    return {
+      line: Number.parseInt(match[1], 10),
+      column: Number.parseInt(match[2], 10),
+      offset: match.index ?? 0
+    };
   }
   function resolveGeneratedLocation(ranges, generatedUrl, input = {}) {
     const stack = String(input.stack || "");
+    const generatedStackLocation = parseLocationForUrl(stack, generatedUrl);
+    let best = null;
     for (const range2 of ranges) {
       const original = parseLocationForUrl(stack, range2[2]);
-      if (original) {
-        return {
-          source: range2[2],
-          line: original.line,
-          column: original.column,
-          generatedLine: Number(input.line || 0),
-          generatedColumn: Number(input.column || 0)
-        };
+      if (original && (!best || original.offset < best.offset)) {
+        best = { range: range2, line: original.line, column: original.column, offset: original.offset };
       }
     }
-    const generatedStackLocation = parseLocationForUrl(stack, generatedUrl);
+    if (best && (!generatedStackLocation || best.offset < generatedStackLocation.offset)) {
+      return {
+        source: best.range[2],
+        line: best.line,
+        column: best.column,
+        generatedLine: Number(input.line || 0),
+        generatedColumn: Number(input.column || 0)
+      };
+    }
     const generatedLine = generatedStackLocation?.line || Number(input.line || 0);
     const generatedColumn = generatedStackLocation?.column || Number(input.column || 0);
     const range = ranges.find((item) => generatedLine >= item[0] && generatedLine <= item[1]);

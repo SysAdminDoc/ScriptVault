@@ -285,6 +285,11 @@ export function createExecutionTelemetryHandler(
     return true;
   }
 
+  function retainEventUrl(url: string): string {
+    if (!url) return '';
+    return dependencies.retainStatsUrl(url, dependencies.getStatsUrlRetention()) || '';
+  }
+
   async function handleBridgeTelemetry(
     value: unknown,
     sender: ExecutionTelemetrySender,
@@ -308,13 +313,13 @@ export function createExecutionTelemetryHandler(
       dependencies.recordDiagnostic(sender, {
         type: 'run',
         duration: data.duration,
-        url: cleanString(sender?.tab?.url, 2048),
+        url: retainEventUrl(cleanString(sender?.tab?.url, 2048)),
       });
     } else {
       dependencies.recordDiagnostic(sender, {
         type: 'error',
         error: data.error,
-        url: cleanString(sender?.tab?.url, 2048),
+        url: retainEventUrl(cleanString(sender?.tab?.url, 2048)),
       });
     }
     return { success: true, trusted: false };
@@ -363,17 +368,21 @@ export function createExecutionTelemetryHandler(
     }
 
     const eventUrl = cleanString(data.url, 4096) || cleanString(sender?.tab?.url, 4096);
+    // The retention setting governs every persisted/visible copy of the
+    // execution URL (stats, diagnostics panel, error log). Only the
+    // transient afterScript chain trigger keeps the full URL, which it
+    // needs for @match evaluation.
+    const retainedUrl = retainEventUrl(eventUrl);
     const stats = script.stats || (script.stats = defaultStats());
     if (action === 'reportExecTime') {
       stats.runs += 1;
       stats.totalTime += duration!;
       stats.avgTime = stats.runs > 0 ? Math.round((stats.totalTime / stats.runs) * 100) / 100 : 0;
       stats.lastRun = now();
-      const retainedUrl = dependencies.retainStatsUrl(eventUrl, dependencies.getStatsUrlRetention());
       if (retainedUrl) stats.lastUrl = retainedUrl;
       else delete stats.lastUrl;
       setSenderContext(stats, sender);
-      dependencies.recordDiagnostic(sender, { type: 'run', scriptId, duration: duration!, url: eventUrl });
+      dependencies.recordDiagnostic(sender, { type: 'run', scriptId, duration: duration!, url: retainedUrl });
       dependencies.scheduleStatsSave();
       try {
         const triggerResult = dependencies.triggerAfterScript(scriptId, {
@@ -392,14 +401,14 @@ export function createExecutionTelemetryHandler(
     stats.lastError = error;
     stats.lastErrorTime = now();
     setSenderContext(stats, sender);
-    dependencies.recordDiagnostic(sender, { type: 'error', scriptId, error, url: eventUrl });
+    dependencies.recordDiagnostic(sender, { type: 'error', scriptId, error, url: retainedUrl });
     if (dependencies.logExecutionError) {
       await dependencies.logExecutionError({
         scriptId,
         scriptName: cleanString(script.meta?.name || script.name, 256) || scriptId,
         error,
         stack: cleanString(data.stack, 8000) || null,
-        url: eventUrl || null,
+        url: retainedUrl || null,
         source: cleanString(data.source, 4096) || null,
         line: cleanInteger(data.line, 1, 10_000_000) ?? null,
         col: cleanInteger(data.col, 1, 10_000_000) ?? null,

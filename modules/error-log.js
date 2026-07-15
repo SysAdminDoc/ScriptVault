@@ -41,7 +41,8 @@ const ErrorLog = (() => {
     log: () => log,
     logGMError: () => logGMError,
     logScriptError: () => logScriptError,
-    registerGlobalHandlers: () => registerGlobalHandlers
+    registerGlobalHandlers: () => registerGlobalHandlers,
+    rewriteUrls: () => rewriteUrls
   });
   module.exports = __toCommonJS(error_log_exports);
   var STORAGE_KEY = "errorLog";
@@ -83,6 +84,28 @@ const ErrorLog = (() => {
   }
   async function _save() {
     await flush();
+  }
+  async function rewriteUrls(mode) {
+    const entries = await _load();
+    let changed = 0;
+    for (const record of entries) {
+      if (typeof record.url !== "string" || !record.url) continue;
+      let retained = null;
+      if (mode === "origin") {
+        try {
+          const origin = new URL(record.url).origin;
+          retained = origin === "null" ? null : origin;
+        } catch (_) {
+          retained = null;
+        }
+      }
+      if (retained !== record.url) {
+        record.url = retained;
+        changed += 1;
+      }
+    }
+    if (changed > 0) await _save();
+    return changed;
   }
   async function log(entry) {
     let entries = await _load();
@@ -362,7 +385,8 @@ const ErrorLog = (() => {
     logScriptError,
     logGMError,
     flush,
-    _save
+    _save,
+    rewriteUrls
   };
   var error_log_default = ErrorLog;
   return module.exports.default || module.exports.ErrorLog || module.exports;

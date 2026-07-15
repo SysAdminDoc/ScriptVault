@@ -239,4 +239,23 @@ describe('ErrorLog', () => {
       expect(csv).toContain('"\'=A1,B1"');
     });
   });
+
+  it('rewrites persisted URLs to the retention mode (origin keeps origin, none removes)', async () => {
+    ErrorLog._cache = null;
+    await ErrorLog.log({ scriptId: 's1', error: 'boom', url: 'https://example.test/account?session=abc' });
+    await ErrorLog.log({ scriptId: 's2', error: 'boom2', url: 'not a url' });
+    await ErrorLog._save();
+
+    const changedToOrigin = await ErrorLog.rewriteUrls('origin');
+    expect(changedToOrigin).toBe(2);
+    let entries = await ErrorLog.getAll();
+    expect(entries.find(entry => entry.scriptId === 's1')?.url).toBe('https://example.test');
+    expect(entries.find(entry => entry.scriptId === 's2')?.url).toBeNull();
+
+    const changedToNone = await ErrorLog.rewriteUrls('none');
+    expect(changedToNone).toBe(1);
+    entries = await ErrorLog.getAll();
+    expect(entries.every(entry => !entry.url)).toBe(true);
+    expect(JSON.stringify(await chrome.storage.local.get(ErrorLog.STORAGE_KEY))).not.toContain('session=abc');
+  });
 });
