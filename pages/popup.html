@@ -28,6 +28,18 @@
             --popup-focus: var(--sv-focus-ring);
             --popup-radius-panel: var(--sv-radius-panel);
             --popup-radius-control: var(--sv-radius-control);
+            /* Legacy dashboard token aliases so the diagnostics panel and
+               world badges theme correctly (were dark-only fallbacks in every
+               theme, invisible in light — same class as the v3.18.1 fix). */
+            --text-primary: var(--sv-text);
+            --text-secondary: var(--sv-text-muted);
+            --text-muted: var(--sv-text-dim);
+            --border-color: var(--sv-border);
+            --accent-green: var(--sv-accent);
+            --accent-yellow: var(--sv-warning);
+            --accent-red: var(--sv-danger);
+            --accent-blue: var(--sv-info);
+            --accent-orange: var(--sv-warning);
         }
 
         * {

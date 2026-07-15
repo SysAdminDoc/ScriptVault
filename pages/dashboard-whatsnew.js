@@ -14,6 +14,7 @@ const WhatsNew = (() => {
     '3.20.0': {
       title: 'ScriptVault 3.20.0 — Premium Interaction Polish',
       date: '2026-07-14',
+      summary: 'This release reimagines the dashboard as a focused script operations workbench and hardens the UserCSS engine, execution privacy, and workbench interactions.',
       highlights: [
         { icon: 'VIEW', title: 'One Intentional Interface System', desc: 'Every dashboard destination, compact surface, editor state, dialog, and injected tool now shares a disciplined corner, contrast, focus, elevation, and motion system across all four themes.' },
         { icon: 'EDIT', title: 'Editor Themes That Stay in Sync', desc: 'The editor follows dark, light, Catppuccin, or OLED from its loading shell through Monaco startup, and keeps pace when you change the interface theme.' },
@@ -54,7 +55,7 @@ const WhatsNew = (() => {
       ],
     },
     '3.19.0': {
-      title: 'ScriptVault 3.19.0 â€” Professional Workbench',
+      title: 'ScriptVault 3.19.0 — Professional Workbench',
       date: '2026-07-09',
       highlights: [
         { icon: 'WORK', title: 'Focused Script Workspace', desc: 'Scripts now open into a clear page header, primary action group, live vault metrics, dense filter controls, and a contextual trust/access inspector that stays useful without competing with the table.' },
@@ -408,7 +409,7 @@ const WhatsNew = (() => {
               <span class="sv-wn-version">v${escapeHtml(CURRENT_VERSION)}</span>
               <span class="sv-wn-date">${escapeHtml(entry.date)}</span>
             </div>
-            <p class="sv-wn-summary" id="svWnSummary">This release focuses on safer persistence, clearer script review, and runtime compatibility work that reduces surprise during everyday script management.</p>
+            <p class="sv-wn-summary" id="svWnSummary">${escapeHtml(entry.summary || 'This release focuses on safer persistence, clearer script review, and runtime compatibility work that reduces surprise during everyday script management.')}</p>
           </div>
           <div class="sv-wn-body">
             <div class="sv-wn-highlights">${highlightsHtml}</div>

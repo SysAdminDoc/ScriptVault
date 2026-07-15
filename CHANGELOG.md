@@ -226,7 +226,7 @@ All notable changes to ScriptVault will be documented in this file.
   and DevTools, with cached-theme bootstrap and final-paint waits preventing
   mixed-theme captures.
 
-## [v3.19.0] â€” Professional workbench redesign (2026-07-09)
+## [v3.19.0] — Professional workbench redesign (2026-07-09)
 
 - **Recomposed the Scripts workspace around the primary workflow.** A clear
   page title and action group, four live vault-health metrics, a focused

@@ -2073,12 +2073,10 @@ function renderInstallUI(sourceUrl) {
     if (!installButton && !cancelButton) return;
 
     if (e.key === 'Enter' && !e.defaultPrevented) {
-      const active = document.activeElement;
-      const safeFocus = !active
-        || active === document.body
-        || active === document.documentElement
-        || active === installButton;
-      if (safeFocus && installButton && !installButton.disabled) {
+      // Only the focused install button triggers install — matching the
+      // on-screen hint and the documented guard. A stray Enter with nothing
+      // focused must not complete a trust decision the user hasn't reached.
+      if (document.activeElement === installButton && installButton && !installButton.disabled) {
         e.preventDefault();
         installButton.click();
       }
