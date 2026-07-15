@@ -371,7 +371,7 @@ describe('Dashboard telemetry/event bus wiring (2026-07 P1 regression)', () => {
 });
 
 describe('Easy Cloud reacts to real script mutations (2026-07 P2 regression)', () => {
-  const core = read('src/background/core.ts');
+  const core = read('background.core.js');
 
   function expectNotifyAfter(block, write, notify) {
     expect(block).toContain(write);
@@ -754,7 +754,7 @@ describe('Import and toast microcopy polish (2026-07 regression)', () => {
 
 describe('Script chains use the real background API (2026-07 regression)', () => {
   const src = read('pages/dashboard-chains.js');
-  const background = read('src/background/core.ts');
+  const background = read('background.core.js');
   const content = read('content.js');
 
   it('runs steps via runScriptNow, not the non-existent executeScript action', () => {

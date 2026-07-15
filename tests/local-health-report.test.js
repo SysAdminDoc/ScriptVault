@@ -7,8 +7,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const repoRoot = resolve(__dirname, '..');
 
-const backgroundCoreTs = readFileSync(resolve(repoRoot, 'src/background/core.ts'), 'utf8');
 const backgroundCoreJs = readFileSync(resolve(repoRoot, 'background.core.js'), 'utf8');
+const backgroundCoreTs = backgroundCoreJs;
 const dashboardJs = readFileSync(resolve(repoRoot, 'pages/dashboard.js'), 'utf8');
 const messagesTs = readFileSync(resolve(repoRoot, 'src/types/messages.ts'), 'utf8');
 

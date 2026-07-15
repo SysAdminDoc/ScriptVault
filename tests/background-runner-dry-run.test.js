@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const ROOT = process.cwd();
-const coreTs = readFileSync(resolve(ROOT, 'src/background/core.ts'), 'utf8');
+const coreTs = readFileSync(resolve(ROOT, 'background.core.js'), 'utf8');
 const messagesTs = readFileSync(resolve(ROOT, 'src/types/messages.ts'), 'utf8');
 
 describe('background runner dry-run action', () => {

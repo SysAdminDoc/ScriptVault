@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -81,6 +81,7 @@ describe('TS source drift gate', () => {
     expect(map.entries.some((entry) => entry.runtime === 'bg/signing.js' && entry.status === 'promoted')).toBe(true);
     expect(map.entries.some((entry) => entry.runtime === 'bg/workspaces.js' && entry.status === 'promoted')).toBe(true);
     expect(map.entries.some((entry) => entry.runtime === 'background.core.js' && entry.status === 'promoted')).toBe(true);
+    expect(readFileSync(resolve(ROOT, 'src/background/core.ts'), 'utf8')).not.toContain('@ts-nocheck');
   });
 
   it('reports the status inventory in report mode', async () => {

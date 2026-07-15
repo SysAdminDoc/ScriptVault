@@ -7,7 +7,7 @@ describe('install @require provenance preview wiring', () => {
   const dashboardPage = readFileSync(resolve(process.cwd(), 'pages/dashboard.js'), 'utf8');
   const receiptSource = readFileSync(resolve(process.cwd(), 'src/background/trust-receipt.ts'), 'utf8');
   const scriptTypes = readFileSync(resolve(process.cwd(), 'src/types/script.ts'), 'utf8');
-  const backgroundCore = readFileSync(resolve(process.cwd(), 'src/background/core.ts'), 'utf8');
+  const backgroundCore = readFileSync(resolve(process.cwd(), 'background.core.js'), 'utf8');
 
   it('renders an install-dialog provenance badge and per-require labels', () => {
     expect(installPage).toContain('decisionProvenanceState');

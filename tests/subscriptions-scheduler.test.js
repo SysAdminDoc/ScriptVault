@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 const ROOT = process.cwd();
 
 describe('subscription refresh scheduler', () => {
-  const core = readFileSync(resolve(ROOT, 'src/background/core.ts'), 'utf8');
+  const core = readFileSync(resolve(ROOT, 'background.core.js'), 'utf8');
   const settingsType = readFileSync(resolve(ROOT, 'src/types/settings.ts'), 'utf8');
   const defaults = JSON.parse(readFileSync(resolve(ROOT, 'src/config/settings-defaults.json'), 'utf8'));
   const schema = JSON.parse(readFileSync(resolve(ROOT, 'src/config/settings-schema.json'), 'utf8'));

@@ -496,7 +496,10 @@ describe('TS runtime module generator', () => {
 
     expect(text).toContain('Generated from src/background/core.ts');
     expect(text).toContain('function parseUserscript(code)');
+    expect(text).toContain('restoreFromTrash: async scriptId');
     expect(text).toContain('chrome.runtime.onMessage.addListener');
+    expect(text).not.toContain('new Set<string>');
+    expect(() => new Function(text)).not.toThrow();
     expect(text).not.toContain('const BackgroundCore = (() => {');
   });
 

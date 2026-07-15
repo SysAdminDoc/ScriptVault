@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { fetchTextBounded } from '../src/background/fetch-bounded.ts';
 
 function source(path) {
+  if (path === 'src/background/core.ts') path = 'background.core.js';
   return readFileSync(resolve(process.cwd(), path), 'utf8');
 }
 

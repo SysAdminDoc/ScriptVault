@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 
 function read(path) {
+  if (path === 'src/background/core.ts') path = 'background.core.js';
   return readFileSync(path, 'utf8');
 }
 

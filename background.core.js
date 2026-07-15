@@ -3,7 +3,6 @@
 // Run `node scripts/generate-ts-runtime-modules.mjs` or `npm run build:bg`.
 // ============================================================================
 
-// @ts-nocheck
 console.log('[ScriptVault] Service worker starting...');
 
 // Firefox exposes the same API surface as `menus`; keep the shared runtime
@@ -315,7 +314,8 @@ function selectApplicableRemoteValueBundles(remote, targetScripts = []) {
       lastValueUpdatedAt: getValueBundleLastUpdatedAt(bundle),
       keyMetadata: getValueBundleKeyMetadata(bundle)
     });
-    result.warnings += Object.values(rebuilt.warningCounts).reduce((sum, count) => sum + (Number(count) || 0), 0);
+    result.warnings += (Object.values(rebuilt.warningCounts))
+      .reduce((sum, count) => sum + (Number(count) || 0), 0);
     if (rebuilt.bundle) {
       result.valueBundles[scriptId] = rebuilt.bundle;
     } else {
@@ -2657,7 +2657,10 @@ function buildGmValueSyncRetryResolutionRecord(history, record = {}) {
   const entries = sanitizeGmValueSyncRetryHistoryEntries(history, { limit: false });
   const retryReadyEntries = entries.filter(entry => entry.status === 'retry-ready');
   if (retryReadyEntries.length === 0) return null;
-  const priorRetryReadyWrites = retryReadyEntries.reduce((sum, entry) => sum + entry.writeFailureRetryReady, 0);
+  const priorRetryReadyWrites = retryReadyEntries.reduce(
+    (sum, entry) => sum + (entry?.writeFailureRetryReady || 0),
+    0
+  );
   const timestamp = Number.isFinite(Number(record.timestamp)) ? Math.max(0, Math.floor(Number(record.timestamp))) : null;
   if (!timestamp || priorRetryReadyWrites <= 0) return null;
   let latestRetryTimestamp = retryReadyEntries[0]?.timestamp || null;
@@ -3195,7 +3198,8 @@ async function buildValueBundlesForScripts(scripts = []) {
       lastValueUpdatedAt: metadata?.lastUpdatedAt ?? null,
       keyMetadata
     });
-    warnings += Object.values(result.warningCounts).reduce((sum, count) => sum + (Number(count) || 0), 0);
+    warnings += (Object.values(result.warningCounts))
+      .reduce((sum, count) => sum + (Number(count) || 0), 0);
     if (result.bundle) valueBundles[script.id] = result.bundle;
   }
 
@@ -3390,7 +3394,8 @@ async function buildGmValueSyncHealthSummary(scripts = []) {
     summary.totalKeys += readiness.keyCount;
     summary.totalBytes += readiness.bytes;
 
-    const warningTotal = Object.values(readiness.warningCounts).reduce((sum, count) => sum + (Number(count) || 0), 0);
+    const warningTotal = (Object.values(readiness.warningCounts))
+      .reduce((sum, count) => sum + (Number(count) || 0), 0);
     if (warningTotal > 0) summary.scriptsWithWarnings++;
     for (const [id, count] of Object.entries(readiness.warningCounts)) {
       summary.warningCounts[id] = (summary.warningCounts[id] || 0) + (Number(count) || 0);
@@ -3614,7 +3619,8 @@ function buildLocalHealthWarningList({ runtime, storage, scripts, updates, callb
   if (localWorkspace?.permissionStates?.denied > 0) {
     push('localWorkspacePermissionDenied', 'warning', `${localWorkspace.permissionStates.denied} local workspace binding${localWorkspace.permissionStates.denied === 1 ? '' : 's'} need file permission`);
   }
-  const localWorkspaceErrorCount = Object.values(localWorkspace?.errorStates || {}).reduce((sum, count) => sum + (Number(count) || 0), 0);
+  const localWorkspaceErrorCount = (Object.values(localWorkspace?.errorStates || {}))
+    .reduce((sum, count) => sum + (Number(count) || 0), 0);
   if (localWorkspaceErrorCount > 0) {
     push('localWorkspaceRefreshErrors', 'warning', `${localWorkspaceErrorCount} local workspace binding${localWorkspaceErrorCount === 1 ? '' : 's'} have refresh errors`);
   }
@@ -7239,9 +7245,9 @@ backgroundActionRegistry.registerHandlers(RuntimeActionHandler.createRuntimeActi
         await chrome.scripting.executeScript({
           target: { tabId: targetTabId },
           world: 'MAIN',
-          func: code => {
+          func: (code => {
             try { (0, eval)(code); } catch (error) { console.error('[ScriptVault Run Now]', error); }
-          },
+          }),
           args: [wrappedCode],
           ...(wantsDocumentStart ? { injectImmediately: true } : {})
         });
@@ -8085,7 +8091,7 @@ async function updateBadge(tabId = null) {
 // Update badge for a specific tab based on its URL.
 // Accepts optional pre-fetched settings/scripts to avoid redundant cache reads when
 // called from updateBadge() in a loop over many tabs.
-async function updateBadgeForTab(tabId, url, settings, scripts) {
+async function updateBadgeForTab(tabId, url, settings = null, scripts = null) {
   if (!settings) settings = await SettingsManager.get();
 
   if (!settings.showBadge || settings.enabled === false) {
@@ -8360,6 +8366,10 @@ function _getEffectivePatterns(script) {
 }
 
 class MatchSet {
+  universal;
+  byHost;
+  size;
+
   constructor(scripts) {
     this.universal = [];
     this.byHost = new Map();
@@ -8983,6 +8993,7 @@ function parseCronField(field, min, max, options = {}) {
   for (const part of text.split(',')) {
     if (!part) return { ok: false, error: `empty list item in "${field}"` };
     const [rangePart, stepPart] = part.split('/');
+    if (!rangePart) return { ok: false, error: `invalid range in "${part}"` };
     if (part.split('/').length > 2) return { ok: false, error: `invalid step in "${part}"` };
     const step = stepPart == null ? 1 : parseInt(stepPart, 10);
     if (!Number.isInteger(step) || step < 1) return { ok: false, error: `invalid step in "${part}"` };
@@ -9170,9 +9181,9 @@ async function executeWrappedScriptInTab(tabId, wrappedCode, wantsPageContext) {
   await chrome.scripting.executeScript({
     target: { tabId },
     world: 'MAIN',
-    func: (code) => {
+    func: (code => {
       try { (0, eval)(code); } catch (err) { console.error('[ScriptVault]', err); }
-    },
+    }),
     args: [wrappedCode]
   });
   return 'scripting.executeScript';
@@ -9904,8 +9915,8 @@ async function _storePendingInstall(storageKey, payload) {
   }
   const timestamp = Number(payload?.timestamp) || Date.now();
   try {
-    const stored = await chrome.storage.local.get(null);
-    const candidates = Object.entries(stored || {})
+    const stored = await chrome.storage.local.get();
+    const candidates = (Object.entries(stored || {}))
       .filter(([key]) => key === _PENDING_INSTALL_LEGACY_KEY || key.startsWith(_PENDING_INSTALL_STORAGE_PREFIX))
       .filter(([key]) => key !== storageKey);
     const expiredKeys = candidates
@@ -10652,7 +10663,7 @@ if (chrome.storage?.onChanged) {
 // cleanup tick.
 async function cleanupStaleCaches() {
   try {
-    const all = await chrome.storage.local.get(null);
+    const all = await chrome.storage.local.get();
     const now = Date.now();
     const maxRequireAge = 7 * 24 * 60 * 60 * 1000; // 7 days
     const maxResourceAge = ResourceCache.maxAge; // 24 hours
@@ -10708,7 +10719,9 @@ async function cleanupStaleCaches() {
     const tombstoneData = await chrome.storage.local.get('syncTombstones');
     const tombstones = tombstoneData.syncTombstones || {};
     const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    const pruned = Object.fromEntries(Object.entries(tombstones).filter(([, ts]) => ts > cutoff));
+    const pruned = Object.fromEntries(
+      (Object.entries(tombstones)).filter(([, timestamp]) => timestamp > cutoff)
+    );
     if (Object.keys(pruned).length !== Object.keys(tombstones).length) {
       await chrome.storage.local.set({ syncTombstones: pruned });
     }
@@ -12641,7 +12654,7 @@ async function unregisterScript(scriptId) {
     // Chrome 133+: reset the per-script world configuration to free resources
     if (_supportsUserScriptsWorldId()) {
       try {
-        await chrome.userScripts.resetWorldConfiguration({ worldId: scriptId });
+        await (chrome.userScripts.resetWorldConfiguration)({ worldId: scriptId });
       } catch (e) {
         // Chrome <133 doesn't support resetWorldConfiguration — ignore
       }
@@ -12792,7 +12805,7 @@ ${req.code}
     // Build a runtime matcher that handles both glob (@match-style) and
     // regex (`/.../flags`) patterns. Keep the matcher inside the wrapper
     // so it doesn't depend on the background's matchPattern helper.
-    const patternsToLiteral = (arr) => arr.map(p => {
+    const patternsToLiteral = arr => arr.map(p => {
       const m = p.match(/^\/(.+)\/([gimsuy]*)$/);
       if (m) return `{re: new RegExp(${JSON.stringify(m[1])}, ${JSON.stringify(m[2])})}`;
       return `{glob: ${JSON.stringify(p)}}`;

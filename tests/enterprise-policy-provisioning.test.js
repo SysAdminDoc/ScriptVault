@@ -41,7 +41,7 @@ describe('enterprise policy provisioning manifest contract', () => {
 });
 
 describe('enterprise policy provisioning runtime contract', () => {
-  const coreSource = readText('src/background/core.ts');
+  const coreSource = readText('background.core.js');
   const dashboardSource = readText('pages/dashboard.js');
   const docs = readText('docs/enterprise-policy-provisioning.md');
 

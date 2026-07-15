@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const root = process.cwd();
-const backgroundCore = readFileSync(resolve(root, 'src/background/core.ts'), 'utf8');
+const backgroundCore = readFileSync(resolve(root, 'background.core.js'), 'utf8');
 const registrationTs = readFileSync(resolve(root, 'src/background/registration.ts'), 'utf8');
 const dashboardHtml = readFileSync(resolve(root, 'pages/dashboard.html'), 'utf8');
 const dashboardJs = readFileSync(resolve(root, 'pages/dashboard.js'), 'utf8');

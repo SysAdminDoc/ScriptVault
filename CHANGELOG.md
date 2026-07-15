@@ -4,6 +4,10 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Removed the background core's blanket type-check suppression.** Strict
+  TypeScript now checks the full concatenated core; classic-script globals are
+  isolated in an explicit declaration boundary and legacy dynamic parameters
+  are annotated instead of hiding the entire runtime from the compiler.
 - **Completed typed background action routing.** Install review, resource
   loading, URL diagnostics, one-shot execution, chains, UserCSS preview,
   dashboard launch, and privacy-complete factory reset now use generated

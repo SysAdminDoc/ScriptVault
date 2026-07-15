@@ -6,6 +6,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
+import ts from 'typescript';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_ROOT = resolve(SCRIPT_DIR, '..');
@@ -430,19 +431,119 @@ function normalizeNewlines(text) {
   return text.replace(/\r\n/g, '\n');
 }
 
+function stripTypeScriptSyntaxPreservingText(source, sourcePath) {
+  const sourceFile = ts.createSourceFile(
+    sourcePath,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  if (sourceFile.parseDiagnostics.length > 0) {
+    const diagnostic = sourceFile.parseDiagnostics[0];
+    throw new Error(`Unable to parse ${sourcePath}: ${ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')}`);
+  }
+
+  const removals = [];
+  const remove = (start, end) => {
+    if (Number.isInteger(start) && Number.isInteger(end) && start < end) {
+      removals.push({ start, end });
+    }
+  };
+  const visit = (node) => {
+    if (
+      ts.isArrowFunction(node) &&
+      node.parameters.length === 1 &&
+      node.parameters[0].type &&
+      ts.isIdentifier(node.parameters[0].name) &&
+      !node.parameters[0].dotDotDotToken &&
+      !node.parameters[0].questionToken &&
+      !node.parameters[0].initializer
+    ) {
+      const parameter = node.parameters[0];
+      const open = source.lastIndexOf('(', parameter.getStart(sourceFile));
+      const close = source.lastIndexOf(')', node.equalsGreaterThanToken.getStart(sourceFile));
+      if (open >= node.getStart(sourceFile) && close >= parameter.end) {
+        remove(open, open + 1);
+        remove(close, close + 1);
+      }
+    }
+    if (ts.isParameter(node) && node.name.getText(sourceFile) === 'this') {
+      let end = node.end;
+      while (/\s/.test(source[end] || '')) end++;
+      if (source[end] === ',') {
+        end++;
+        while (/\s/.test(source[end] || '')) end++;
+      }
+      remove(node.getStart(sourceFile), end);
+      return;
+    }
+    if (ts.isAsExpression(node) || ts.isSatisfiesExpression(node)) {
+      remove(node.expression.end, node.end);
+      visit(node.expression);
+      return;
+    }
+    if (ts.isTypeAssertionExpression(node)) {
+      remove(node.getStart(sourceFile), node.expression.getStart(sourceFile));
+      visit(node.expression);
+      return;
+    }
+
+    for (const parameters of [node.typeParameters, node.typeArguments]) {
+      if (!parameters?.length) continue;
+      const first = parameters[0].getStart(sourceFile);
+      const start = source.lastIndexOf('<', first);
+      const end = source.indexOf('>', parameters.at(-1).end);
+      if (start >= node.getStart(sourceFile) && end >= parameters.at(-1).end) {
+        remove(start, end + 1);
+      }
+    }
+
+    if (node.type) {
+      const typeStart = node.type.getStart(sourceFile);
+      const colon = source.lastIndexOf(':', typeStart);
+      if (colon >= node.getStart(sourceFile) && colon < typeStart) {
+        remove(colon, node.type.end);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+
+  removals.sort((left, right) => left.start - right.start || right.end - left.end);
+  const merged = [];
+  for (const removal of removals) {
+    const previous = merged.at(-1);
+    if (previous && removal.start <= previous.end) {
+      previous.end = Math.max(previous.end, removal.end);
+    } else {
+      merged.push({ ...removal });
+    }
+  }
+
+  let cursor = 0;
+  let output = '';
+  for (const removal of merged) {
+    output += source.slice(cursor, removal.start);
+    cursor = removal.end;
+  }
+  return output + source.slice(cursor);
+}
+
 export async function buildTsRuntimeModuleText(definition, options = {}) {
   const rootDir = options.rootDir || DEFAULT_ROOT;
   const sourcePath = join(rootDir, definition.source);
 
   if (definition.copySource) {
     const source = normalizeNewlines(await readFile(sourcePath, 'utf8')).trimEnd();
+    const compiled = stripTypeScriptSyntaxPreservingText(source, sourcePath).trimEnd();
     return [
       '// ============================================================================',
       `// Generated from ${definition.source}; do not edit by hand.`,
       '// Run `node scripts/generate-ts-runtime-modules.mjs` or `npm run build:bg`.',
       '// ============================================================================',
       '',
-      source,
+      compiled,
       '',
     ].join('\n');
   }
