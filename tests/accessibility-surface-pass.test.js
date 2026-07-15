@@ -85,7 +85,7 @@ describe("accessibility surface pass", () => {
     expect(findTagById(popupHtml, "menuSection")).toBeTruthy();
 
     expect(hasClassLink(sidepanelHtml, "sp-skip-link", "#pageScriptList")).toBe(true);
-    expect(getAttr(findTagById(sidepanelHtml, "pageScriptList"), "role")).toBe("list");
+    expect(getAttr(findTagById(sidepanelHtml, "pageScriptList"), "role")).toBe("region");
 
     expect(hasClassLink(installHtml, "install-skip-link", "#content")).toBe(true);
     expect(findTagById(installHtml, "content")).toBeTruthy();

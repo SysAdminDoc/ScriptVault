@@ -33,7 +33,7 @@
     "test:visual": "vitest run --config vitest.visual.config.mjs",
     "test:e2e": "node scripts/run-e2e.mjs capability",
     "test:e2e:release": "node scripts/run-e2e.mjs release",
-    "test:a11y": "node scripts/check-readability.mjs --check && vitest run tests/dashboard-a11y.test.js tests/popup-a11y.test.js tests/gui-ux-audit.test.js tests/accessibility-surface-pass.test.js",
+    "test:a11y": "node scripts/check-readability.mjs --check && vitest run tests/dashboard-a11y.test.js tests/popup-a11y.test.js tests/gui-ux-audit.test.js tests/accessibility-surface-pass.test.js && node scripts/run-e2e.mjs release tests/e2e/accessibility.spec.js",
     "smoke:dashboard": "node scripts/smoke-dashboard.mjs",
     "smoke:editor": "node scripts/smoke-editor.mjs",
     "smoke:edge": "node scripts/smoke-edge-sideload.mjs",
@@ -92,6 +92,7 @@
     "cws:setup": "bash cws-setup.sh"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
     "@playwright/test": "^1.61.1",
     "@vitest/browser": "^4.1.9",
     "@vitest/browser-playwright": "^4.1.9",

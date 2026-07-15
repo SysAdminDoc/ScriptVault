@@ -4,6 +4,15 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Release-gated real extension accessibility against WCAG 2.2 AA.** Headless
+  Chromium now scans the dashboard, popup, side panel, install review, and
+  DevTools panel across dark, light, Catppuccin, and OLED themes at compact and
+  large viewports. The gate also exercises empty/loading/error/dialog states,
+  keyboard focus trapping and restoration, unobscured focus, visible focus
+  indicators, and 24px targets with an explicit reviewed-exception contract.
+  The pass fixed invalid tab state, initial list semantics, theme contrast,
+  undersized controls, compact table clipping, and sticky chrome that could
+  cover focused controls.
 - **Mapped runtime failures to original userscript sources.** Every registered
   wrapper now carries a deterministic local source identity and inline Source
   Map v3 data across `@require`, top-level-await, delay, unwrap, and bundled ESM

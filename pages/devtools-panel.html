@@ -51,7 +51,8 @@
         .toolbar-tabs { display: inline-flex; align-items: center; gap: 4px; }
         .tab-btn { background: none; border: 1px solid transparent; color: var(--text-muted); cursor: pointer; padding: 4px 9px; border-radius: var(--radius-control); font-size: 0.75rem; transition: color 0.15s, background-color 0.15s, border-color 0.15s, transform 0.15s; }
         .tab-btn:hover { color: var(--text); background: var(--bg-hover); border-color: var(--border); transform: translateY(-1px); }
-        .tab-btn.active { color: var(--accent); background: var(--accent-bg); border-color: var(--accent-border); }
+        .tab-btn.active { color: var(--sv-success-text); background: var(--accent-bg); border-color: var(--accent-border); }
+        html[data-theme="light"] .tab-btn.active { color: #166534; }
         .spacer { flex: 1; }
         .toolbar-btn { min-height: 26px; background: var(--sv-overlay-faint); border: 1px solid var(--border); color: var(--text-muted); cursor: pointer; padding: 3px 9px; border-radius: var(--radius-control); font-size: 0.6875rem; font-weight: 600; white-space: nowrap; transition: border-color 0.15s, color 0.15s, background-color 0.15s, transform 0.15s; }
         .toolbar-btn:hover { color: var(--text); border-color: var(--text-muted); background: var(--bg-hover); transform: translateY(-1px); }

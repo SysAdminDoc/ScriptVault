@@ -1953,11 +1953,11 @@ function renderInstallUI(sourceUrl) {
 
             <div class="option-row">
               <div class="option-info">
-                <span class="option-label">${escapeHtml(tInstall('installEnableOnInstall', 'Enable on install'))}</span>
+                <span class="option-label" id="enableInstallLabel">${escapeHtml(tInstall('installEnableOnInstall', 'Enable on install'))}</span>
                 <span class="option-description">${escapeHtml(tInstall('installEnableOnInstallDescription', 'Start running the script immediately after installation.'))}</span>
               </div>
               <label class="toggle">
-                <input type="checkbox" id="enable-install" checked>
+                <input type="checkbox" id="enable-install" aria-labelledby="enableInstallLabel" checked>
                 <span class="toggle-slider"></span>
               </label>
             </div>
@@ -1965,11 +1965,11 @@ function renderInstallUI(sourceUrl) {
             ${hasUpdater ? `
               <div class="option-row">
                 <div class="option-info">
-                  <span class="option-label">${escapeHtml(tInstall('installAutoUpdate', 'Auto-update'))}</span>
+                <span class="option-label" id="autoUpdateLabel">${escapeHtml(tInstall('installAutoUpdate', 'Auto-update'))}</span>
                   <span class="option-description">${escapeHtml(tInstall('installAutoUpdateDescription', 'Keep checking the published source for newer versions.'))}</span>
                 </div>
                 <label class="toggle">
-                  <input type="checkbox" id="auto-update" checked>
+                <input type="checkbox" id="auto-update" aria-labelledby="autoUpdateLabel" checked>
                   <span class="toggle-slider"></span>
                 </label>
             </div>

@@ -1221,10 +1221,12 @@
         Array.from(elements.workbenchNavButtons || []).forEach(button => {
             const isActive = button.dataset.workbenchTab === activeTab && !button.classList.contains('sv-rail-subitem');
             button.classList.toggle('active', isActive);
-            button.setAttribute('aria-pressed', String(isActive));
             if (button.getAttribute('role') === 'tab') {
+                button.removeAttribute('aria-pressed');
                 button.setAttribute('aria-selected', String(isActive));
                 button.tabIndex = isActive ? 0 : -1;
+            } else {
+                button.setAttribute('aria-pressed', String(isActive));
             }
         });
     }

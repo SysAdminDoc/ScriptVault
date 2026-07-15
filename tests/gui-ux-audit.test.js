@@ -287,8 +287,8 @@ describe("cross-surface UX audit", () => {
     expect(searchStatus?.getAttribute("aria-live")).toBe("polite");
     expect(allSectionHeader?.getAttribute("aria-controls")).toBe("allScriptList");
     expect(allSectionHeader?.getAttribute("aria-expanded")).toBe("true");
-    expect(doc.getElementById("pageScriptList")?.getAttribute("role")).toBe("list");
-    expect(allScriptList?.getAttribute("role")).toBe("list");
+    expect(doc.getElementById("pageScriptList")?.getAttribute("role")).toBe("region");
+    expect(allScriptList?.getAttribute("role")).toBe("region");
     expect(allScriptList?.getAttribute("aria-labelledby")).toBe("allSectionHeader");
 
     expect(sidepanelJs).toContain("function updateSearchSummary");
@@ -301,6 +301,7 @@ describe("cross-surface UX audit", () => {
     expect(sidepanelJs).not.toContain("chrome.runtime.sendMessage({ action: 'openDashboard' }).catch(() => {})");
     expect(sidepanelJs).toContain("const pendingScriptActions = new Set();");
     expect(sidepanelJs).toContain("function setScriptRowsBusy(scriptId, isBusy)");
+    expect(sidepanelJs).toContain("list.setAttribute('role', 'list');");
     expect(sidepanelJs).toContain("function getScriptToggleLabel(script, enabled = script.enabled !== false)");
     expect(sidepanelJs).toContain("function focusWithinScriptList(control, selector, direction)");
     expect(sidepanelJs).toContain("function getSidepanelFocusDescriptor(control = document.activeElement)");

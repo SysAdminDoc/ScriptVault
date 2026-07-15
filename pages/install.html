@@ -30,6 +30,7 @@
       --text-secondary: var(--sv-text-muted);
       --text-muted: var(--sv-text-dim);
       --accent: var(--sv-accent);
+      --success-text: var(--sv-success-text);
       --accent-hover: var(--sv-accent);
       --accent-bg: color-mix(in srgb, var(--sv-accent) 12%, transparent);
       --blue: var(--sv-info);
@@ -453,6 +454,9 @@
     }
     
     .meta-value a {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
       color: var(--blue);
       text-decoration: none;
     }
@@ -525,7 +529,7 @@
     
     .tag.safe {
       background: var(--accent-bg);
-      color: var(--accent);
+      color: var(--success-text);
     }
 
     .tag.neutral {
@@ -784,6 +788,7 @@
     }
     
     .code-preview-toggle {
+      min-height: 24px;
       font-size: 0.8125rem;
       color: var(--blue);
       cursor: pointer;
@@ -825,7 +830,7 @@
       font-weight: 700;
       letter-spacing: 0.1em;
       text-transform: uppercase;
-      color: var(--accent);
+      color: var(--success-text);
     }
 
     .decision-title {
@@ -898,7 +903,7 @@
 
     .decision-hero[data-tone="good"] .decision-hero-badge {
       background: var(--accent-bg);
-      color: var(--accent);
+      color: var(--success-text);
     }
 
     .decision-hero[data-tone="warn"] .decision-hero-badge {
@@ -909,6 +914,14 @@
     .decision-hero[data-tone="neutral"] .decision-hero-badge {
       background: var(--blue-bg);
       color: var(--blue);
+    }
+
+    html[data-theme="light"] .decision-hero[data-tone="neutral"] .decision-hero-badge {
+      color: #1d4ed8;
+    }
+
+    .review-nav-status {
+      color: var(--text-secondary);
     }
 
     .decision-hero-title {
@@ -1004,6 +1017,9 @@
 
     .trust-link,
     .trust-link a {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
       color: var(--blue);
       font-size: 0.75rem;
       text-decoration: none;

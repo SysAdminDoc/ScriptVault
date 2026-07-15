@@ -536,6 +536,7 @@
       const list = $('pageScriptList');
       if (list) {
         list.dataset.empty = 'true';
+        list.setAttribute('role', 'region');
         list.replaceChildren();
         const err = document.createElement('div');
         err.className = 'sp-empty';
@@ -633,6 +634,7 @@
     if (pageCountEl) pageCountEl.textContent = numberFormatter.format(pageScripts.length);
 
     if (!currentPageCanRunScripts) {
+      list.setAttribute('role', 'region');
       list.dataset.empty = 'true';
       list.replaceChildren();
       const empty = document.createElement('div');
@@ -657,6 +659,7 @@
     }
 
     if (!pageScripts.length) {
+      list.setAttribute('role', 'region');
       list.dataset.empty = 'true';
       const url = currentTab?.url || '';
       let hostname = '';
@@ -695,6 +698,7 @@
     }
 
     list.dataset.empty = 'false';
+    list.setAttribute('role', 'list');
     const fragment = document.createDocumentFragment();
     for (const script of pageScripts) {
       fragment.appendChild(buildScriptItem(script, true));
@@ -746,6 +750,7 @@
     });
 
     if (!sorted.length) {
+      list.setAttribute('role', 'region');
       const empty = document.createElement('div');
       empty.className = 'sp-empty';
       const icon = document.createElement('div');
@@ -787,6 +792,7 @@
       return;
     }
 
+    list.setAttribute('role', 'list');
     const fragment = document.createDocumentFragment();
     for (const script of sorted) {
       fragment.appendChild(buildScriptItem(script, false));

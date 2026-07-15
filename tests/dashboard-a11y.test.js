@@ -134,6 +134,7 @@ describe("dashboard accessibility markup", () => {
       expect(tab.getAttribute("aria-controls")).toBeTruthy();
       expect(tab.getAttribute("data-i18n-aria-label")).toBe(`tab${tab.getAttribute("aria-label")}`);
       expect(tab.getAttribute("tabindex")).toMatch(/^(-1|0)$/);
+      expect(tab.hasAttribute("aria-pressed")).toBe(false);
 
       const panel = doc.getElementById(tab.getAttribute("aria-controls"));
       expect(panel).not.toBeNull();
