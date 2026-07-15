@@ -424,10 +424,6 @@ html,
   white-space: nowrap;
 }
 
-.scripts-shell-health .sv-status-dot {
-  display: none;
-}
-
 .scripts-shell-health[data-tone="neutral"] .scripts-shell-stat-mark {
   border-color: var(--sv-border-strong);
   background: var(--sv-overlay-medium);
@@ -2127,7 +2123,9 @@ html[data-theme="light"] .script-inspector-eyebrow {
   align-items: center;
   gap: 8px;
   min-width: 124px;
+  min-height: 0;
   padding: 0 8px;
+  border-inline-end: 0;
 }
 
 .sv-workbench-topbar .scripts-shell-health-copy strong,
@@ -2324,16 +2322,12 @@ html[data-theme="light"] .script-inspector-eyebrow {
   box-shadow: none;
 }
 
+/* The reorder column stays hidden in the workbench shell; row ordering
+   lives in the row-action menu. Version/Size/Lines/Homepage density
+   defaults are owned by DEFAULT_HIDDEN_COLUMNS in dashboard.js so the
+   Column Visibility dialog stays authoritative. */
 .scripts-table th:nth-child(2),
-.scripts-table td:nth-child(2),
-.scripts-table th:nth-child(5),
-.scripts-table td:nth-child(5),
-.scripts-table th:nth-child(6),
-.scripts-table td:nth-child(6),
-.scripts-table th:nth-child(7),
-.scripts-table td:nth-child(7),
-.scripts-table th:nth-child(10),
-.scripts-table td:nth-child(10) {
+.scripts-table td:nth-child(2) {
   display: none;
 }
 

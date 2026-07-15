@@ -7897,7 +7897,7 @@
                         <strong id="scriptInspectorTitle">No script selected</strong>
                         <span id="scriptInspectorSubtitle">Select a row to inspect trust, access, and runtime details.</span>
                     </div>
-                    <div class="script-inspector-empty" aria-hidden="true">
+                    <div class="script-inspector-empty">
                         <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5z"/><path d="M8 9h8M8 12h5M8 15h7"/></svg>
                         <strong>Inspect before you run</strong>
                         <span>Choose a script to review its permissions, trust signals, and recent activity.</span>
@@ -7909,11 +7909,11 @@
                         <button type="button" class="btn script-inspector-action-tile" id="scriptInspectorUpdate" data-i18n="popupCheckForUpdate" disabled><span aria-hidden="true">...</span>Update</button>
                     </div>
                     <div class="script-inspector-tabs" role="tablist" aria-label="Inspector views">
-                        <button type="button" class="active" data-inspector-tab="overview" role="tab" aria-controls="scriptInspectorOverview" aria-selected="true">Overview</button>
-                        <button type="button" data-inspector-tab="access" role="tab" aria-controls="scriptInspectorAccessView" aria-selected="false">Access</button>
-                        <button type="button" data-inspector-tab="activity" role="tab" aria-controls="scriptInspectorActivity" aria-selected="false">Activity</button>
+                        <button type="button" class="active" id="scriptInspectorTabOverview" data-inspector-tab="overview" role="tab" aria-controls="scriptInspectorOverview" aria-selected="true" tabindex="0">Overview</button>
+                        <button type="button" id="scriptInspectorTabAccess" data-inspector-tab="access" role="tab" aria-controls="scriptInspectorAccessView" aria-selected="false" tabindex="-1">Access</button>
+                        <button type="button" id="scriptInspectorTabActivity" data-inspector-tab="activity" role="tab" aria-controls="scriptInspectorActivity" aria-selected="false" tabindex="-1">Activity</button>
                     </div>
-                    <div class="script-inspector-view" id="scriptInspectorOverview" data-inspector-view="overview" role="tabpanel">
+                    <div class="script-inspector-view" id="scriptInspectorOverview" data-inspector-view="overview" role="tabpanel" aria-labelledby="scriptInspectorTabOverview" tabindex="0">
                         <div class="script-inspector-score" id="scriptInspectorScore" data-tone="neutral">
                             <div>
                                 <span>Trust Score</span>
@@ -7942,7 +7942,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="script-inspector-view" id="scriptInspectorAccessView" data-inspector-view="access" role="tabpanel" hidden>
+                    <div class="script-inspector-view" id="scriptInspectorAccessView" data-inspector-view="access" role="tabpanel" aria-labelledby="scriptInspectorTabAccess" tabindex="0" hidden>
                         <div class="script-inspector-section">
                             <h3>Site Access</h3>
                             <div class="script-inspector-list" id="scriptInspectorDomains">No domains</div>
@@ -7956,7 +7956,7 @@
                             <div class="script-inspector-domain-access" id="scriptInspectorDomainAccess">No domains</div>
                         </div>
                     </div>
-                    <div class="script-inspector-view" id="scriptInspectorActivity" data-inspector-view="activity" role="tabpanel" hidden>
+                    <div class="script-inspector-view" id="scriptInspectorActivity" data-inspector-view="activity" role="tabpanel" aria-labelledby="scriptInspectorTabActivity" tabindex="0" hidden>
                         <div class="script-inspector-section">
                             <h3>Recent Activity</h3>
                             <dl class="script-inspector-meta script-inspector-activity-meta">

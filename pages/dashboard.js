@@ -1227,7 +1227,13 @@
             help: 'Help'
         };
         if (elements.svWorkbenchSectionTitle) {
-            elements.svWorkbenchSectionTitle.textContent = labels[activeTab] || labels.scripts;
+            // Mirror the active rail item's translated label so the breadcrumb
+            // stays localized in the 8 non-English locales (the rail item's
+            // aria-label is localized by applyToDOM via data-i18n-aria-label).
+            const activeRailButton = getActiveWorkbenchTab(activeTab);
+            const translatedLabel = activeRailButton?.querySelector('span[data-i18n]')?.textContent?.trim()
+                || activeRailButton?.getAttribute('aria-label')?.trim();
+            elements.svWorkbenchSectionTitle.textContent = translatedLabel || labels[activeTab] || labels.scripts;
         }
         Array.from(elements.workbenchNavButtons || []).forEach(button => {
             const isActive = button.dataset.workbenchTab === activeTab && !button.classList.contains('sv-rail-subitem');
@@ -8005,7 +8011,13 @@
             let matchesStatus = true;
             const m = s.metadata || {};
             const grants = m.grant || [];
-            const patterns = [...(m.match || []), ...(m.include || [])];
+            // normalizeMetadataList mirrors updateSiteFilterOptions so a
+            // string-valued m.match (legacy/imported record) is not spread
+            // into single characters, which would drop it from the site filter.
+            const patterns = [
+                ...normalizeMetadataList(m.match),
+                ...normalizeMetadataList(m.include)
+            ];
 
             if (statusFilter === 'enabled') {
                 matchesStatus = s.enabled !== false;
@@ -8244,9 +8256,9 @@
         // Update select all checkbox
         const filteredCount = filtered.length;
         const totalSelectedCount = state.selectedScripts.size;
-        const scriptsToolbar = document.querySelector('.scripts-toolbar');
+        const scriptsToolbar = elements.scriptsToolbar
+            || (elements.scriptsToolbar = document.querySelector('.scripts-toolbar'));
         if (scriptsToolbar) {
-            scriptsToolbar.dataset.selectionCount = String(totalSelectedCount);
             scriptsToolbar.classList.toggle('has-selection', totalSelectedCount > 0);
         }
         const hiddenSelectedCount = Math.max(0, totalSelectedCount - visibleSelectedCount);
@@ -9216,6 +9228,12 @@
                     <button type="button" class="action-icon ${script.settings?.pinned ? 'pinned' : ''}" title="${script.settings?.pinned ? 'Unpin' : 'Pin to top'}" aria-label="${script.settings?.pinned ? 'Unpin' : 'Pin'} ${escapeHtml(name)}" data-action="pin" data-id="${scriptIdAttr}">
                         <svg viewBox="0 0 24 24" fill="${script.settings?.pinned ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M12 2L9.1 8.6 2 9.2l5.5 4.8L5.8 21 12 17.3 18.2 21l-1.7-7 5.5-4.8-7.1-.6z"/></svg>
                     </button>
+                    <button type="button" class="action-icon" title="Move up" aria-label="Move ${escapeHtml(name)} up" data-action="moveScriptUp" data-id="${scriptIdAttr}">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 15l-6-6-6 6"/></svg>
+                    </button>
+                    <button type="button" class="action-icon" title="Move down" aria-label="Move ${escapeHtml(name)} down" data-action="moveScriptDown" data-id="${scriptIdAttr}">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+                    </button>
                     ${supportsOneShotRunNow() ? `<button type="button" class="action-icon" title="Run on this tab" aria-label="Run ${escapeHtml(name)} on this tab" data-action="runNow" data-id="${scriptIdAttr}">
                         <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 5v14l11-7z"/></svg>
                     </button>` : ''}
@@ -9231,6 +9249,10 @@
                     <button type="button" class="action-icon" title="Move to folder" aria-label="Move ${escapeHtml(name)} to folder" data-action="moveFolder" data-id="${scriptIdAttr}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
                     </button>
+                    <button type="button" class="action-icon" title="Move up in run order" aria-label="Move ${escapeHtml(name)} up in run order" data-action="moveScriptUp" data-id="${scriptIdAttr}">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 15l-6-6-6 6"/></svg>
+                    </button>
+                    <button type="button" class="action-icon" title="Move down in run order"
                     <button type="button" class="action-icon" title="Delete" aria-label="Delete ${escapeHtml(name)}" data-action="delete" data-id="${scriptIdAttr}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3,6 5,6 21,6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
                     </button>
@@ -9260,6 +9282,14 @@
             if (open) rowMenu.querySelector('button')?.focus();
         });
         rowMenu?.addEventListener('keydown', event => {
+            // Tab closes the menu and returns focus to its trigger, per the
+            // WAI-ARIA menu pattern — otherwise focus escapes to the page
+            // while the popover stays open with aria-expanded="true".
+            if (event.key === 'Tab') {
+                rowMenu.hidePopover?.();
+                rowMenuTrigger?.focus();
+                return;
+            }
             const items = [...rowMenu.querySelectorAll('button')];
             const index = items.indexOf(document.activeElement);
             let nextIndex = -1;
@@ -16128,7 +16158,7 @@
                 { id: 'updated', label: 'Updated' },
                 { id: 'perf', label: 'Perf' }
             ];
-            const hidden = state.settings._hiddenColumns || [];
+            const hidden = state.settings._hiddenColumns || DEFAULT_HIDDEN_COLUMNS;
             const html = columns.map(c => {
                 const visible = !hidden.includes(c.id);
                 return `<label class="column-toggle-item"><input type="checkbox" data-col-id="${c.id}" ${visible ? 'checked' : ''}> ${c.label}</label>`;
@@ -18194,8 +18224,13 @@
         });
     }
 
+    // Workbench density default: these columns stay hidden until the user
+    // opts in via the Column Visibility dialog. An explicitly saved [] means
+    // "show everything"; only a missing setting falls back to this list.
+    const DEFAULT_HIDDEN_COLUMNS = ['version', 'size', 'lines', 'home'];
+
     function applyColumnVisibility() {
-        const hidden = state.settings._hiddenColumns || [];
+        const hidden = state.settings._hiddenColumns || DEFAULT_HIDDEN_COLUMNS;
         // Column index mapping: version=4, size=5, lines=6, sites=7, features=8, home=9, updated=10, perf=11
         const colMap = { version: 4, size: 5, lines: 6, sites: 7, features: 8, home: 9, updated: 10, perf: 11 };
         const table = document.querySelector('.scripts-table');
