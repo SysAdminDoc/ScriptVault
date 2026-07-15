@@ -28,6 +28,17 @@ async function markWhatsNewSeen(page) {
   }));
 }
 
+// Seed the stored theme so each surface's async applyTheme (which reads
+// settings after a getSettings roundtrip) applies the SAME theme this spec
+// injects — otherwise the stored default overwrites the injected attribute
+// and the light/catppuccin/oled passes silently re-test the default theme.
+async function seedTheme(page, theme) {
+  await page.evaluate(async nextTheme => {
+    const current = (await chrome.storage.local.get('settings')).settings || {};
+    await chrome.storage.local.set({ settings: { ...current, layout: nextTheme, theme: nextTheme } });
+  }, theme);
+}
+
 async function settle(page) {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.waitForTimeout(150);
@@ -53,10 +64,18 @@ test('real extension surfaces meet WCAG 2.2 AA across themes and viewports', asy
         for (const viewport of surface.viewports) {
           await page.setViewportSize(viewport);
           for (const theme of THEMES) {
+            await seedTheme(page, theme);
             await page.reload({ waitUntil: 'domcontentloaded' });
             await page.evaluate(nextTheme => document.documentElement.setAttribute('data-theme', nextTheme), theme);
             await page.locator(surface.ready).first().waitFor({ state: 'attached', timeout: 15_000 });
             await settle(page);
+            // Fail loudly if a surface's async theme apply overwrote the
+            // injected theme — otherwise the pass would silently test the
+            // wrong theme.
+            const appliedTheme = await page.evaluate(() => document.documentElement.getAttribute('data-theme'));
+            if (appliedTheme !== theme) {
+              throw new Error(`${surface.name}: expected data-theme="${theme}" but found "${appliedTheme}"`);
+            }
             const label = `${surface.name}/${theme}/${viewport.width}x${viewport.height}`;
             failures.push(...await analyzeAccessibility(page, label));
             const geometry = await inspectInteractiveGeometry(page);

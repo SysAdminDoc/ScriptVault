@@ -181,22 +181,18 @@ describe('userscript source maps', () => {
       'const __svLocationSegments = __SV_RUNTIME_LOCATION_SEGMENTS__;',
       'const __svGeneratedSourceUrl = __SV_GENERATED_SOURCE_URL__;',
       markSourceSegment(0, userCode),
-    ].join('
-');
+    ].join('\n');
     const finalized = finalizeWrappedSource(generated, {
       scriptId,
       scriptName: 'Dollar',
       segments: [{ url: hostileUrl, content: userCode }],
     });
-    const segmentsLine = finalized.split('
-')[0];
+    const segmentsLine = finalized.split('\n')[0];
     expect(segmentsLine).toContain("lib$'.js");
     // A string replacement would have spliced the rest of the file here.
     expect(segmentsLine).not.toContain('__svGeneratedSourceUrl');
     // The executable portion must still be valid JavaScript.
-    const executable = finalized.split('
-').slice(0, -2).join('
-');
+    const executable = finalized.split('\n').slice(0, -2).join('\n');
     expect(() => new Function(executable.replace('__SV_GENERATED_SOURCE_URL__', '"x"'))).not.toThrow();
   });
 
@@ -210,8 +206,7 @@ describe('userscript source maps', () => {
       'Error: boom',
       '    at run (https://cdn.example/second.js:4:7)',
       '    at init (https://cdn.example/first.js:2:3)',
-    ].join('
-');
+    ].join('\n');
     const resolved = resolveGeneratedLocation(ranges, generatedUrl, { stack });
     expect(resolved?.source).toBe('https://cdn.example/second.js');
     expect(resolved?.line).toBe(4);
@@ -225,8 +220,7 @@ describe('userscript source maps', () => {
       'Error: boom',
       `    at user (${generatedUrl}:5:2)`,
       '    at page (https://cdn.example/lib.js:9:1)',
-    ].join('
-');
+    ].join('\n');
     const resolved = resolveGeneratedLocation(ranges, generatedUrl, { stack });
     expect(resolved?.source).toBe('https://cdn.example/lib.js');
     expect(resolved?.line).toBe(3);

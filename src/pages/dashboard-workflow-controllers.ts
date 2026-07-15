@@ -222,21 +222,32 @@ export function createSerializedSettingsController(adapter: SerializedSettingsAd
     adapter.write(key, value);
     try {
       await adapter.persist(key, value);
-      await adapter.apply?.(key, value);
-      lastState = {
-        kind: 'saved',
-        message: adapter.savedMessage?.(key, value) || 'Saved',
-        pending,
-        key,
-      };
-      return true;
     } catch (_error) {
+      // Persist failed: the new value was never committed, so roll back the
+      // in-memory value and the input, and tell the user their prior value
+      // is still active.
       adapter.write(key, previousValue);
       adapter.restoreInput?.(key, previousValue, context);
       lastState = { kind: 'error', message: 'Save failed', pending, key };
       if (!context.quiet) adapter.notify?.('Couldn’t save this setting. Your previous value is still active.', 'error');
       return false;
     }
+    try {
+      // Persist succeeded — the value is committed. If applying it live
+      // fails, do NOT roll back (that would desync the input from storage);
+      // report success since a reload will pick up the saved value.
+      await adapter.apply?.(key, value);
+    } catch (_error) {
+      lastState = { kind: 'saved', message: adapter.savedMessage?.(key, value) || 'Saved', pending, key };
+      return true;
+    }
+    lastState = {
+      kind: 'saved',
+      message: adapter.savedMessage?.(key, value) || 'Saved',
+      pending,
+      key,
+    };
+    return true;
   };
 
   const save = (
@@ -299,7 +310,9 @@ export function createDiagnosticsController(adapter: DiagnosticsAdapter): Diagno
   ): WorkflowState<Record<string, unknown>> => {
     state = { ...next, data: next.data ? { ...next.data } : undefined };
     adapter.render?.(state);
-    if (announce && (state.kind === 'success' || state.kind === 'failure' || state.kind === 'recovery')) {
+    // 'empty' announces too: an explicit retry that still finds nothing
+    // available must give feedback rather than fail silently.
+    if (announce && (state.kind === 'success' || state.kind === 'failure' || state.kind === 'recovery' || state.kind === 'empty')) {
       adapter.notify?.(state);
     }
     return state;
@@ -314,7 +327,11 @@ export function createDiagnosticsController(adapter: DiagnosticsAdapter): Diagno
       retryAvailable: false,
     });
     const entries = Object.entries(adapter.loaders);
-    const settled = await Promise.allSettled(entries.map(([, loader]) => loader()));
+    // Wrap each loader so a synchronous throw becomes a rejected promise
+    // rather than breaking out of the whole refresh.
+    const settled = await Promise.allSettled(
+      entries.map(([, loader]) => (async () => loader())()),
+    );
     const data: Record<string, unknown> = {};
     const failures: string[] = [];
     let emptyCount = 0;

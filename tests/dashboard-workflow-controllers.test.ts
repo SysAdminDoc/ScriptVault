@@ -106,6 +106,45 @@ describe('dashboard workflow controllers', () => {
     expect(controller.getState()).toMatchObject({ kind: 'error', message: 'Save failed' });
   });
 
+  test('a persisted setting that fails to apply live stays saved (no rollback)', async () => {
+    const values: Record<string, unknown> = { editorTheme: 'dark' };
+    const restoreInput = vi.fn();
+    const controller = createSerializedSettingsController({
+      validate: (_key, value) => ({ ok: true, value }),
+      read: key => values[key],
+      write: (key, value) => { values[key] = value; },
+      persist: async () => {},
+      apply: async () => { throw new Error('monaco setOption failed'); },
+      restoreInput,
+    });
+
+    await expect(controller.save('editorTheme', 'light')).resolves.toBe(true);
+    // Persist committed the new value; apply failure must not roll it back.
+    expect(values.editorTheme).toBe('light');
+    expect(restoreInput).not.toHaveBeenCalled();
+    expect(controller.getState()).toMatchObject({ kind: 'saved' });
+  });
+
+  test('diagnostics treats an empty object as available and announces empty on retry', async () => {
+    const notify = vi.fn();
+    let available = true;
+    const controller = createDiagnosticsController({
+      loaders: {
+        // A successful load that returns an empty object (e.g. zero signing
+        // keys) is NOT an unavailable source.
+        signing: () => (available ? {} : null),
+        runtime: () => (available ? { ready: true } : null),
+      },
+      isEmpty: value => value == null,
+      notify,
+    });
+
+    expect(await controller.refresh({ announce: true })).toMatchObject({ kind: 'success' });
+    available = false;
+    expect(await controller.retry({ announce: true })).toMatchObject({ kind: 'empty', retryAvailable: true });
+    expect(notify).toHaveBeenCalledWith(expect.objectContaining({ kind: 'empty' }));
+  });
+
   test('diagnostics distinguishes success, empty, failure, and degraded recovery', async () => {
     let mode: 'success' | 'empty' | 'failure' | 'recovery' = 'success';
     const states: WorkflowStateKind[] = [];

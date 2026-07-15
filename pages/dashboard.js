@@ -6555,6 +6555,10 @@
                 publicApiTrust: () => loadPublicApiTrustState(),
                 signingTrust: () => loadSigningTrustState()
             },
+            // Loaders return their data or null on failure/absence. An empty
+            // object (e.g. zero signing keys) is a VALID answer, not an
+            // unavailable source — only null/undefined marks a source down.
+            isEmpty: value => value == null,
             render: renderDiagnosticsWorkflowState,
             notify: workflowState => showToast(
                 workflowState.message,

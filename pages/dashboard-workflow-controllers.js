@@ -176,14 +176,6 @@ const DashboardWorkflowControllers = (() => {
       adapter.write(key, value);
       try {
         await adapter.persist(key, value);
-        await adapter.apply?.(key, value);
-        lastState = {
-          kind: "saved",
-          message: adapter.savedMessage?.(key, value) || "Saved",
-          pending,
-          key
-        };
-        return true;
       } catch (_error) {
         adapter.write(key, previousValue);
         adapter.restoreInput?.(key, previousValue, context);
@@ -191,6 +183,19 @@ const DashboardWorkflowControllers = (() => {
         if (!context.quiet) adapter.notify?.("Couldn\u2019t save this setting. Your previous value is still active.", "error");
         return false;
       }
+      try {
+        await adapter.apply?.(key, value);
+      } catch (_error) {
+        lastState = { kind: "saved", message: adapter.savedMessage?.(key, value) || "Saved", pending, key };
+        return true;
+      }
+      lastState = {
+        kind: "saved",
+        message: adapter.savedMessage?.(key, value) || "Saved",
+        pending,
+        key
+      };
+      return true;
     };
     const save = (key, value, context = {}) => {
       pending += 1;
@@ -229,7 +234,7 @@ const DashboardWorkflowControllers = (() => {
     const emit = (next, announce = false) => {
       state = { ...next, data: next.data ? { ...next.data } : void 0 };
       adapter.render?.(state);
-      if (announce && (state.kind === "success" || state.kind === "failure" || state.kind === "recovery")) {
+      if (announce && (state.kind === "success" || state.kind === "failure" || state.kind === "recovery" || state.kind === "empty")) {
         adapter.notify?.(state);
       }
       return state;
@@ -243,7 +248,9 @@ const DashboardWorkflowControllers = (() => {
         retryAvailable: false
       });
       const entries = Object.entries(adapter.loaders);
-      const settled = await Promise.allSettled(entries.map(([, loader]) => loader()));
+      const settled = await Promise.allSettled(
+        entries.map(([, loader]) => (async () => loader())())
+      );
       const data = {};
       const failures = [];
       let emptyCount = 0;

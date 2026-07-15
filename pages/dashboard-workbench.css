@@ -1478,7 +1478,11 @@ html,
 
 .scripts-table-container {
   border-top: 1px solid var(--sv-border-strong);
-  overflow: clip;
+  /* Horizontal scroll (not clip): the 650px-min table exceeds its grid cell
+     on narrow viewports, and clipping would hide far-right controls (sort
+     buttons) with no way to reach them. */
+  overflow-x: auto;
+  overflow-y: clip;
 }
 
 .scripts-workbench-grid .scripts-table {
@@ -2914,7 +2918,11 @@ html[data-theme="light"] #scriptsPanel .script-inspector-panel {
 
 .scripts-table-container {
   border-top: 1px solid var(--sv-border-strong);
-  overflow: clip;
+  /* Horizontal scroll (not clip): the 650px-min table exceeds its grid cell
+     on narrow viewports, and clipping would hide far-right controls (sort
+     buttons) with no way to reach them. */
+  overflow-x: auto;
+  overflow-y: clip;
 }
 
 .scripts-workbench-grid .scripts-table {
