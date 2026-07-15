@@ -10472,7 +10472,8 @@ const ScriptSourceMaps = (() => {
       mappings: sourceMapMappings(mappings)
     };
     const runtimeSegments = JSON.stringify(runtimeRanges).replace(/</gu, "\\u003c");
-    const finalized = outputLines.join("\n").replaceAll(RUNTIME_SEGMENTS_PLACEHOLDER, runtimeSegments).replaceAll(GENERATED_URL_PLACEHOLDER, JSON.stringify(generatedUrl));
+    const generatedUrlLiteral = JSON.stringify(generatedUrl);
+    const finalized = outputLines.join("\n").replaceAll(RUNTIME_SEGMENTS_PLACEHOLDER, () => runtimeSegments).replaceAll(GENERATED_URL_PLACEHOLDER, () => generatedUrlLiteral);
     return [
       finalized,
       `//# sourceURL=${generatedUrl}`,
@@ -10484,23 +10485,31 @@ const ScriptSourceMaps = (() => {
     const escaped = url.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
     const match = stack.match(new RegExp(`${escaped}:(\\d+):(\\d+)`, "u"));
     if (!match) return null;
-    return { line: Number.parseInt(match[1], 10), column: Number.parseInt(match[2], 10) };
+    return {
+      line: Number.parseInt(match[1], 10),
+      column: Number.parseInt(match[2], 10),
+      offset: match.index ?? 0
+    };
   }
   function resolveGeneratedLocation(ranges, generatedUrl, input = {}) {
     const stack = String(input.stack || "");
+    const generatedStackLocation = parseLocationForUrl(stack, generatedUrl);
+    let best = null;
     for (const range2 of ranges) {
       const original = parseLocationForUrl(stack, range2[2]);
-      if (original) {
-        return {
-          source: range2[2],
-          line: original.line,
-          column: original.column,
-          generatedLine: Number(input.line || 0),
-          generatedColumn: Number(input.column || 0)
-        };
+      if (original && (!best || original.offset < best.offset)) {
+        best = { range: range2, line: original.line, column: original.column, offset: original.offset };
       }
     }
-    const generatedStackLocation = parseLocationForUrl(stack, generatedUrl);
+    if (best && (!generatedStackLocation || best.offset < generatedStackLocation.offset)) {
+      return {
+        source: best.range[2],
+        line: best.line,
+        column: best.column,
+        generatedLine: Number(input.line || 0),
+        generatedColumn: Number(input.column || 0)
+      };
+    }
     const generatedLine = generatedStackLocation?.line || Number(input.line || 0);
     const generatedColumn = generatedStackLocation?.column || Number(input.column || 0);
     const range = ranges.find((item) => generatedLine >= item[0] && generatedLine <= item[1]);
@@ -40741,16 +40750,22 @@ ${mappedCode}
     const offset = String(stack || '').indexOf(marker);
     if (offset < 0) return null;
     const match = String(stack).slice(offset + marker.length).match(/^(\\d+):(\\d+)/);
-    return match ? { line: Number(match[1]), column: Number(match[2]) } : null;
+    return match ? { line: Number(match[1]), column: Number(match[2]), offset } : null;
   }
   function __svResolveErrorLocation(line, column, filename, stack) {
+    // The topmost stack frame wins: pick the segment whose URL appears
+    // earliest, and only when it precedes the generated URL's own frame.
+    const generatedStack = __svStackLocation(stack, __svGeneratedSourceUrl);
+    let best = null;
     for (const segment of __svLocationSegments) {
       const original = __svStackLocation(stack, segment[2]);
-      if (original) {
-        return { source: segment[2], line: original.line, column: original.column, generatedLine: Number(line || 0), generatedColumn: Number(column || 0) };
+      if (original && (!best || original.offset < best.offset)) {
+        best = { source: segment[2], line: original.line, column: original.column, offset: original.offset };
       }
     }
-    const generatedStack = __svStackLocation(stack, __svGeneratedSourceUrl);
+    if (best && (!generatedStack || best.offset < generatedStack.offset)) {
+      return { source: best.source, line: best.line, column: best.column, generatedLine: Number(line || 0), generatedColumn: Number(column || 0) };
+    }
     const generatedLine = generatedStack?.line || Number(line || 0);
     const generatedColumn = generatedStack?.column || Number(column || 0);
     const segment = __svLocationSegments.find(item => generatedLine >= item[0] && generatedLine <= item[1]);

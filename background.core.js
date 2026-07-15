@@ -12740,16 +12740,22 @@ ${mappedCode}
     const offset = String(stack || '').indexOf(marker);
     if (offset < 0) return null;
     const match = String(stack).slice(offset + marker.length).match(/^(\\d+):(\\d+)/);
-    return match ? { line: Number(match[1]), column: Number(match[2]) } : null;
+    return match ? { line: Number(match[1]), column: Number(match[2]), offset } : null;
   }
   function __svResolveErrorLocation(line, column, filename, stack) {
+    // The topmost stack frame wins: pick the segment whose URL appears
+    // earliest, and only when it precedes the generated URL's own frame.
+    const generatedStack = __svStackLocation(stack, __svGeneratedSourceUrl);
+    let best = null;
     for (const segment of __svLocationSegments) {
       const original = __svStackLocation(stack, segment[2]);
-      if (original) {
-        return { source: segment[2], line: original.line, column: original.column, generatedLine: Number(line || 0), generatedColumn: Number(column || 0) };
+      if (original && (!best || original.offset < best.offset)) {
+        best = { source: segment[2], line: original.line, column: original.column, offset: original.offset };
       }
     }
-    const generatedStack = __svStackLocation(stack, __svGeneratedSourceUrl);
+    if (best && (!generatedStack || best.offset < generatedStack.offset)) {
+      return { source: best.source, line: best.line, column: best.column, generatedLine: Number(line || 0), generatedColumn: Number(column || 0) };
+    }
     const generatedLine = generatedStack?.line || Number(line || 0);
     const generatedColumn = generatedStack?.column || Number(column || 0);
     const segment = __svLocationSegments.find(item => generatedLine >= item[0] && generatedLine <= item[1]);

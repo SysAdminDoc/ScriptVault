@@ -172,4 +172,64 @@ describe('userscript source maps', () => {
     expect(finalized.match(/\/\/# sourceMappingURL=/gu)).toHaveLength(1);
     expect(() => new Function(finalized)).not.toThrow();
   });
+
+  it('does not expand $-replacement patterns from segment URLs into the wrapped source', () => {
+    const scriptId = 'script/dollar';
+    const hostileUrl = "https://cdn.example/lib$'.js";
+    const userCode = 'const ok = true;';
+    const generated = [
+      'const __svLocationSegments = __SV_RUNTIME_LOCATION_SEGMENTS__;',
+      'const __svGeneratedSourceUrl = __SV_GENERATED_SOURCE_URL__;',
+      markSourceSegment(0, userCode),
+    ].join('
+');
+    const finalized = finalizeWrappedSource(generated, {
+      scriptId,
+      scriptName: 'Dollar',
+      segments: [{ url: hostileUrl, content: userCode }],
+    });
+    const segmentsLine = finalized.split('
+')[0];
+    expect(segmentsLine).toContain("lib$'.js");
+    // A string replacement would have spliced the rest of the file here.
+    expect(segmentsLine).not.toContain('__svGeneratedSourceUrl');
+    // The executable portion must still be valid JavaScript.
+    const executable = finalized.split('
+').slice(0, -2).join('
+');
+    expect(() => new Function(executable.replace('__SV_GENERATED_SOURCE_URL__', '"x"'))).not.toThrow();
+  });
+
+  it('resolves error locations from the topmost stack frame, not segment declaration order', () => {
+    const generatedUrl = deterministicGeneratedSourceUrl('script/order');
+    const ranges = [
+      [1, 5, 'https://cdn.example/first.js', 1],
+      [6, 10, 'https://cdn.example/second.js', 1],
+    ];
+    const stack = [
+      'Error: boom',
+      '    at run (https://cdn.example/second.js:4:7)',
+      '    at init (https://cdn.example/first.js:2:3)',
+    ].join('
+');
+    const resolved = resolveGeneratedLocation(ranges, generatedUrl, { stack });
+    expect(resolved?.source).toBe('https://cdn.example/second.js');
+    expect(resolved?.line).toBe(4);
+    expect(resolved?.column).toBe(7);
+  });
+
+  it('prefers the generated frame when it precedes any segment frame in the stack', () => {
+    const generatedUrl = deterministicGeneratedSourceUrl('script/topmost');
+    const ranges = [[3, 8, 'https://cdn.example/lib.js', 1]];
+    const stack = [
+      'Error: boom',
+      `    at user (${generatedUrl}:5:2)`,
+      '    at page (https://cdn.example/lib.js:9:1)',
+    ].join('
+');
+    const resolved = resolveGeneratedLocation(ranges, generatedUrl, { stack });
+    expect(resolved?.source).toBe('https://cdn.example/lib.js');
+    expect(resolved?.line).toBe(3);
+    expect(resolved?.generatedLine).toBe(5);
+  });
 });

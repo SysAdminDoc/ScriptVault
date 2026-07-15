@@ -270,9 +270,13 @@ export function finalizeWrappedSource(
     mappings: sourceMapMappings(mappings),
   };
   const runtimeSegments = JSON.stringify(runtimeRanges).replace(/</gu, '\\u003c');
+  const generatedUrlLiteral = JSON.stringify(generatedUrl);
+  // Function replacements: a string replacement would expand $-patterns
+  // ($', $&, $$) occurring in @require URLs embedded in the segment JSON,
+  // silently corrupting the wrapped script into a SyntaxError.
   const finalized = outputLines.join('\n')
-    .replaceAll(RUNTIME_SEGMENTS_PLACEHOLDER, runtimeSegments)
-    .replaceAll(GENERATED_URL_PLACEHOLDER, JSON.stringify(generatedUrl));
+    .replaceAll(RUNTIME_SEGMENTS_PLACEHOLDER, () => runtimeSegments)
+    .replaceAll(GENERATED_URL_PLACEHOLDER, () => generatedUrlLiteral);
   return [
     finalized,
     `//# sourceURL=${generatedUrl}`,
@@ -280,12 +284,19 @@ export function finalizeWrappedSource(
   ].join('\n');
 }
 
-function parseLocationForUrl(stack: string, url: string): { line: number; column: number } | null {
+function parseLocationForUrl(
+  stack: string,
+  url: string,
+): { line: number; column: number; offset: number } | null {
   if (!stack || !url) return null;
   const escaped = url.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
   const match = stack.match(new RegExp(`${escaped}:(\\d+):(\\d+)`, 'u'));
   if (!match) return null;
-  return { line: Number.parseInt(match[1]!, 10), column: Number.parseInt(match[2]!, 10) };
+  return {
+    line: Number.parseInt(match[1]!, 10),
+    column: Number.parseInt(match[2]!, 10),
+    offset: match.index ?? 0,
+  };
 }
 
 export function resolveGeneratedLocation(
@@ -294,19 +305,27 @@ export function resolveGeneratedLocation(
   input: { line?: number; column?: number; filename?: string; stack?: string } = {},
 ): ResolvedGeneratedLocation | null {
   const stack = String(input.stack || '');
+  const generatedStackLocation = parseLocationForUrl(stack, generatedUrl);
+  // The topmost stack frame wins: pick the segment whose URL appears
+  // earliest in the stack, and only when it precedes the generated URL's
+  // own frame — declaration order would attribute errors to a lower
+  // library frame instead of the faulting frame.
+  let best: { range: [number, number, string, number]; line: number; column: number; offset: number } | null = null;
   for (const range of ranges) {
     const original = parseLocationForUrl(stack, range[2]);
-    if (original) {
-      return {
-        source: range[2],
-        line: original.line,
-        column: original.column,
-        generatedLine: Number(input.line || 0),
-        generatedColumn: Number(input.column || 0),
-      };
+    if (original && (!best || original.offset < best.offset)) {
+      best = { range, line: original.line, column: original.column, offset: original.offset };
     }
   }
-  const generatedStackLocation = parseLocationForUrl(stack, generatedUrl);
+  if (best && (!generatedStackLocation || best.offset < generatedStackLocation.offset)) {
+    return {
+      source: best.range[2],
+      line: best.line,
+      column: best.column,
+      generatedLine: Number(input.line || 0),
+      generatedColumn: Number(input.column || 0),
+    };
+  }
   const generatedLine = generatedStackLocation?.line || Number(input.line || 0);
   const generatedColumn = generatedStackLocation?.column || Number(input.column || 0);
   const range = ranges.find((item) => generatedLine >= item[0] && generatedLine <= item[1]);

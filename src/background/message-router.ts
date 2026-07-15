@@ -349,6 +349,11 @@ function normalizeBackgroundMessage(
   message: Record<string, unknown>,
   action: BackgroundAction,
 ): BackgroundMessage {
+  // CONTRACT: when a message carries an object `data`, only the nested
+  // payload survives normalization — sibling top-level fields (other than
+  // `action`) are discarded. Callers must send either all-flat or
+  // all-nested payloads; mixing `{ action, scriptId, data: {...} }` would
+  // silently lose `scriptId`.
   const nested = message.data;
   if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
     return { ...(nested as Record<string, unknown>), action } as BackgroundMessage;
