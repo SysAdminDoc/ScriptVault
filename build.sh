@@ -5,8 +5,10 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-BUILD_DIR="$SCRIPT_DIR/build"
+BUILD_DIR="${SCRIPTVAULT_BUILD_ROOT:-$SCRIPT_DIR/build}"
+ARTIFACT_ROOT="${SCRIPTVAULT_ARTIFACT_ROOT:-$SCRIPT_DIR}"
 ZIP_NAME="ScriptVault-v$(grep -o '"version": "[^"]*"' "$SCRIPT_DIR/manifest.json" | cut -d'"' -f4).zip"
+ZIP_PATH="$ARTIFACT_ROOT/$ZIP_NAME"
 
 echo "Building ScriptVault..."
 
@@ -21,7 +23,7 @@ fi
 
 # Clean previous build
 rm -rf "$BUILD_DIR"
-mkdir -p "$BUILD_DIR"
+mkdir -p "$BUILD_DIR" "$ARTIFACT_ROOT"
 
 # Files/folders to include in the CWS package
 INCLUDE=(
@@ -66,15 +68,15 @@ done
 
 # Build the zip
 cd "$BUILD_DIR"
-rm -f "$SCRIPT_DIR/$ZIP_NAME"
+rm -f "$ZIP_PATH"
 
 if command -v zip &> /dev/null; then
-  zip -r "$SCRIPT_DIR/$ZIP_NAME" . -x "*.DS_Store" "*Thumbs.db"
+  zip -r "$ZIP_PATH" . -x "*.DS_Store" "*Thumbs.db"
 elif [ -x "/c/Windows/System32/tar.exe" ]; then
   # Windows 10/11 ships bsdtar as tar.exe — produces POSIX-style entries
   # (forward slashes). PowerShell Compress-Archive writes Windows-style
   # backslash entries which Chrome cannot match against manifest paths.
-  /c/Windows/System32/tar.exe -a -c -f "$SCRIPT_DIR/$ZIP_NAME" *
+  /c/Windows/System32/tar.exe -a -c -f "$ZIP_PATH" *
 else
   echo "ERROR: no zip or bsdtar available"
   exit 1
@@ -82,7 +84,8 @@ fi
 
 echo ""
 echo "Build complete: $ZIP_NAME"
-echo "Size: $(du -h "$SCRIPT_DIR/$ZIP_NAME" | cut -f1)"
+echo "Artifact: $ZIP_PATH"
+echo "Size: $(du -h "$ZIP_PATH" | cut -f1)"
 echo ""
 echo "Ready for Chrome Web Store upload."
 

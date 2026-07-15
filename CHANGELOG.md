@@ -4,6 +4,12 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Unified the credential-free release preflight.** One command now runs 12
+  source, test, audit, locale, privacy, headless browser, packaging, and parity
+  gates; builds only the requested-version Chrome ZIP in an isolated artifact
+  root; and emits timestamped JSON results with per-check logs and SHA-256
+  evidence. Credentialed CWS status, public release parity, and store review
+  remain explicitly separated as external checks.
 - **Gated active documentation against canonical project facts.** The local
   validation derives toolchain and browser versions, promoted-runtime counts,
   IndexedDB stores, and local-only delivery policy from manifests, lock data,

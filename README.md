@@ -564,6 +564,19 @@ Both commands use an isolated temporary headless Chromium profile. The release
 lane must execute local-workspace apply, service-worker rehydration, cross-tab
 value changes, and GM XHR FormData; it never treats a capability skip as proof.
 
+### Credential-free release preflight
+
+```bash
+npm run release:preflight -- --version 3.20.0
+```
+
+This single local command runs source/runtime drift, static and unit gates,
+dependency audit, locale and store-copy checks, fail-closed E2E, visual and
+WCAG 2.2 AA coverage, an isolated Chrome package, and release parity. It writes
+a timestamped JSON result, per-check logs, and only the requested-version ZIP
+under `release-artifacts/`. Credentialed CWS status, public GitHub release
+parity, and store review remain explicitly listed as external checks.
+
 ---
 
 ## Project Structure

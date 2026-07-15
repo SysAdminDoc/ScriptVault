@@ -13,6 +13,11 @@ function readJson(path) {
   return JSON.parse(readFileSync(join(projectRoot, path), 'utf8'));
 }
 
+function argValue(argv, name) {
+  const index = argv.indexOf(name);
+  return index >= 0 ? argv[index + 1] : undefined;
+}
+
 function commandErrorText(error) {
   return String(error?.stderr || error?.stdout || error?.message || error || '')
     .split(/\r?\n/)
@@ -193,14 +198,22 @@ export async function checkPublicGitHubRelease({
 
 export async function runReleaseArtifactCheck(argv = process.argv, options = {}) {
   const checkPublic = argv.includes('--public');
+  const allowUnreleased = options.allowUnreleased ?? argv.includes('--allow-unreleased');
+  const requireArtifact = options.requireArtifact ?? argv.includes('--require-artifact');
   const failures = [];
   const warnings = [];
 
   const pkg = readJson('package.json');
   const manifest = readJson('manifest.json');
   const firefoxManifest = readJson('manifest-firefox.json');
-  const version = pkg.version;
+  const requestedVersion = options.version || argValue(argv, '--version') || pkg.version;
+  const artifactRoot = resolve(options.artifactRoot || argValue(argv, '--artifact-root') || projectRoot);
+  const version = requestedVersion;
   const tag = `v${version}`;
+
+  if (pkg.version !== version) {
+    fail(failures, `requested version ${version} does not match package.json ${pkg.version}`);
+  }
 
   if (manifest.version !== version) {
     fail(failures, `manifest.json version ${manifest.version} does not match package.json ${version}`);
@@ -215,16 +228,23 @@ export async function runReleaseArtifactCheck(argv = process.argv, options = {})
   }
 
   const changelog = readFileSync(join(projectRoot, 'CHANGELOG.md'), 'utf8');
-  if (!changelog.includes(`## [v${version}]`) && !changelog.includes(`## [${version}]`)) {
+  const hasVersionSection = changelog.includes(`## [v${version}]`) || changelog.includes(`## [${version}]`);
+  if (!hasVersionSection && !(allowUnreleased && changelog.includes('## [Unreleased]'))) {
     fail(failures, `CHANGELOG.md has no section for ${tag}`);
   }
 
-  const rootArtifacts = readdirSync(projectRoot)
-    .filter((name) => /\.(zip|crx|xpi)$/i.test(name))
-    .filter((name) => !name.includes(`v${version}`));
+  const targetArtifactName = `ScriptVault-v${version}.zip`;
+  const archiveNames = existsSync(artifactRoot)
+    ? readdirSync(artifactRoot).filter((name) => /\.(zip|crx|xpi)$/i.test(name))
+    : [];
+  const rootArtifacts = archiveNames.filter((name) => name !== targetArtifactName);
 
   for (const artifact of rootArtifacts) {
-    fail(failures, `stale root artifact ${artifact} is not labeled for ${tag}`);
+    fail(failures, `unexpected artifact ${artifact} in ${artifactRoot}; isolated selection accepts only ${targetArtifactName}`);
+  }
+  const artifactPath = join(artifactRoot, targetArtifactName);
+  if (requireArtifact && !existsSync(artifactPath)) {
+    fail(failures, `requested release artifact is missing: ${artifactPath}`);
   }
 
   const tagStatus = verifyReleaseTag({ tag, checkPublic });
@@ -253,7 +273,14 @@ export async function runReleaseArtifactCheck(argv = process.argv, options = {})
     fail(failures, 'build-firefox.sh is missing');
   }
 
-  return { ok: failures.length === 0, failures, warnings, tag };
+  return {
+    ok: failures.length === 0,
+    failures,
+    warnings,
+    tag,
+    artifactRoot,
+    artifact: existsSync(artifactPath) ? artifactPath : null,
+  };
 }
 
 export function printReleaseArtifactCheck(result) {
@@ -268,6 +295,7 @@ export function printReleaseArtifactCheck(result) {
   }
 
   console.log(`Release artifact check passed for ${result.tag}.`);
+  if (result.artifact) console.log(`Selected artifact: ${result.artifact}`);
   if (result.warnings.length > 0) {
     console.log('Warnings:');
     for (const item of result.warnings) console.log(`- ${item}`);

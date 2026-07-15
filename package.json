@@ -76,6 +76,7 @@
     "build:edge:check": "node scripts/build-edge.mjs --check",
     "build:edge:stage": "node scripts/build-edge.mjs --no-zip",
     "release:rollback-drill": "vitest run tests/storage-rollback-drill.test.js",
+    "release:preflight": "node scripts/release-preflight.mjs",
     "release:trust": "node scripts/release-trust-gate.mjs",
     "release:trust:strict": "node scripts/release-trust-gate.mjs --require-signature",
     "release:trust:cra": "node scripts/check-cra-sbom.mjs",
