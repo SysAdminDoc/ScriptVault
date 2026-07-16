@@ -13384,6 +13384,16 @@
             return false;
         }
 
+        // If a preview is already live on a different tab (the active target tab
+        // changed since the last refresh), clear that tab first so its injected
+        // sheet is not orphaned when we re-point the preview at the new tab.
+        const previousTabId = state.userCssPreview.active ? state.userCssPreview.tabId : null;
+        if (previousTabId && previousTabId !== targetTab.id) {
+            try {
+                await chrome.runtime.sendMessage({ action: 'userStyleClearPreview', tabId: previousTabId });
+            } catch (_) { /* best effort — the old tab may already be gone */ }
+        }
+
         state.userCssPreview.pending = true;
         state.userCssPreview.scriptId = scriptId;
         updateUserCssPreviewButton();
@@ -18152,6 +18162,20 @@
         window.addEventListener('beforeunload', e => {
             const anyUnsaved = state.unsavedChanges || Object.values(state.openTabs).some(t => t.unsaved);
             if (anyUnsaved) { e.preventDefault(); e.returnValue = ''; }
+        });
+
+        // Best-effort UserCSS preview teardown when the dashboard unloads. The
+        // normal clearUserCssPreview() call sites only fire on explicit in-page
+        // actions, so closing/navigating the dashboard would otherwise leave the
+        // previewed sheet injected on the target page with no way to clear it.
+        // pagehide (not visibilitychange) is the correct signal: the user often
+        // switches to the target tab to view the preview, which must not clear it.
+        window.addEventListener('pagehide', () => {
+            if (state.userCssPreview?.active && state.userCssPreview.tabId) {
+                try {
+                    chrome.runtime.sendMessage({ action: 'userStyleClearPreview', tabId: state.userCssPreview.tabId });
+                } catch (_) { /* best effort during teardown */ }
+            }
         });
 
         // Surface unhandled promise rejections to the activity log so they're visible

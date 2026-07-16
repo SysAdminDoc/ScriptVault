@@ -775,13 +775,6 @@ CLAUDE.md audit history, and RESEARCH.md rejected ideas._
 
 ### P2
 
-- [ ] P2 — Fix the UserCSS preview lifecycle (three leaks)
-  Why: Closing/navigating the dashboard leaves injected preview CSS on the target page (only a `beforeunload` unsaved-guard exists, no `pagehide`/`visibilitychange` teardown — the DevTools panel does it right); `onTabUpdated` re-runs `insertCSS` even when CSS is unchanged (duplicate stacking); switching the active target tab during preview orphans the prior tab's sheet.
-  Evidence: code audit — `pages/dashboard.js:18152-18155` (only teardown), cf. `devtools-panel.js:376`; `src/modules/userstyles.ts:1453-1474` (unconditional `insertCSS`); `pages/dashboard.js:13373-13417` + `src/modules/userstyles.ts:843-872` (active-tab-switch orphan).
-  Touches: `pages/dashboard.js` (single `userCssPreview` teardown owner + `pagehide`/`visibilitychange`), `src/modules/userstyles.ts` (`onTabUpdated` no-op guard when `previousCss === css`; clear prior tab before injecting into a newly-resolved tab).
-  Acceptance: closing the dashboard mid-preview clears preview CSS from the target tab; repeated `onUpdated` events do not stack duplicate sheets; switching target tabs clears the previous tab's preview; regression tests cover all three.
-  Complexity: M
-
 - [ ] P2 — Add a manifest permission-drift gate to the test suite
   Why: Nothing fails the build if `permissions`/`host_permissions` grow beyond the intended set — the exact vector abused by 2026 CWS ownership-transfer/permission-creep attacks (QuickLens, ShotBird). `store-copy:check` verifies disclosure coverage, not growth.
   Evidence: security research — https://pluto.security/blog/chrome-extension-supply-chain-attacks-permission-creep/ ; `manifest.json` permissions set.

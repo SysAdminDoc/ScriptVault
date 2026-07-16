@@ -4,6 +4,10 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Fixed UserCSS live-preview leaks.** Closing or navigating away from the
+  dashboard while a UserCSS preview is active now clears the injected preview
+  CSS from the target page (via `pagehide`), and switching the active target tab
+  during a preview no longer orphans the previous tab's injected sheet.
 - **Re-scan update bodies for newly introduced high-risk code.** When an update
   is queued, ScriptVault re-runs the AST risk analyzer on the incoming code and
   diffs it against the installed version. An update that introduces new
