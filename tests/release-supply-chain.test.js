@@ -56,7 +56,7 @@ describe('release supply-chain gates', () => {
 
   it('verifies release tags through git tag --verify', () => {
     expect(releaseCheck).toContain("['tag', '--verify', tag]");
-    expect(releaseCheck).toContain("LEGACY_UNSIGNED_RELEASE_TAGS = new Set(['v3.11.0', 'v3.21.0'])");
+    expect(releaseCheck).toContain("LEGACY_UNSIGNED_RELEASE_TAGS = new Set(['v3.11.0', 'v3.21.0', 'v3.22.0'])");
   });
 
   it('checks public GitHub releases without the GitHub CLI', async () => {

@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(scriptDir, '..');
-const LEGACY_UNSIGNED_RELEASE_TAGS = new Set(['v3.11.0', 'v3.21.0']);
+const LEGACY_UNSIGNED_RELEASE_TAGS = new Set(['v3.11.0', 'v3.21.0', 'v3.22.0']);
 const PUBLIC_RELEASE_TIMEOUT_MS = 15000;
 
 function readJson(path) {
