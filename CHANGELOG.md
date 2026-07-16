@@ -4,6 +4,8 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+## [v3.22.0] — Persistent UserCSS install and management (2026-07-16)
+
 - **Persistent UserCSS styles.** ScriptVault now installs and manages persistent
   `.user.css` userstyles that inject on matching pages. Navigate to a `.user.css`
   URL for a review-and-install prompt, or use **Install Style** on a UserCSS

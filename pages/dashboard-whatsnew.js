@@ -11,6 +11,20 @@ const WhatsNew = (() => {
     : '2.0.0';
 
   const CHANGELOG = {
+    '3.22.0': {
+      title: 'ScriptVault 3.22.0 — Persistent UserCSS',
+      date: '2026-07-16',
+      summary: 'ScriptVault now installs and manages persistent .user.css userstyles that inject on the pages you choose and re-apply across restarts.',
+      highlights: [
+        { icon: 'EDIT', title: 'Install .user.css Styles', desc: 'Navigate to a .user.css URL for a review-and-install prompt, or open a UserCSS draft in the editor and choose Install Style. Installed styles inject early on matching pages with no flash of unstyled content.' },
+        { icon: 'VIEW', title: 'Manage Your UserStyles', desc: 'A Manage UserStyles command lists every installed style so you can enable/disable, edit the CSS, or remove it — changes apply to open tabs immediately.' },
+        { icon: 'FLOW', title: 'Reliable Injection', desc: 'Styles never stack duplicate sheets on repeated navigations, clean up when a tab closes, and re-apply automatically after the background service worker restarts.' },
+      ],
+      improvements: [
+        'UserCSS variables, light/dark defaults, Stylus import, and live draft preview continue to work alongside persistent install.',
+        'The .user.css install review shows the style name, match patterns, and full source before you commit.',
+      ],
+    },
     '3.21.0': {
       title: 'ScriptVault 3.21.0 — Security & Reliability Hardening',
       date: '2026-07-16',
