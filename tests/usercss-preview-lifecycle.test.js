@@ -32,4 +32,13 @@ describe('UserCSS preview lifecycle (wired preview path)', () => {
     // moment the user switches to the target tab, defeating the feature.
     expect(dashboard).not.toContain("addEventListener('visibilitychange'");
   });
+
+  it('debounces the per-keystroke UserCSS parse on the editor change event', () => {
+    // The full parseUserCSS (via updateUserCssPreviewButton) is too heavy to run
+    // on every keystroke; the change handler must go through the debounced
+    // scheduler, not call the parse directly.
+    const change = sliceFrom(dashboard, "state.editor.on('change'", 700);
+    expect(change).toContain('scheduleUserCssPreviewButtonUpdate()');
+    expect(change).not.toMatch(/[^e]updateUserCssPreviewButton\(/);
+  });
 });

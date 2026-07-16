@@ -50,12 +50,6 @@ secondary surfaces). ~30 confirmed items were fixed across commits `c62c19e`
 (secondary surfaces), and `259536b` (controllers + a11y gate). The items below
 are lower-priority findings deferred for a later pass.
 
-- [ ] P3 — Full `parseUserCSS` runs on every editor keystroke for UserCSS drafts
-  Why: `META_REGEX` over the whole document plus directive parsing/validation on
-  the main thread causes jank on large styles; reuse the parse from
-  `scheduleUserCssPreviewRefresh` or debounce.
-  Where: `pages/dashboard.js:13260-13269` wired to the editor change event.
-
 - [ ] P3 — Editor open logs an `insertBefore` NotFoundError (pre-existing)
   Why: `npm run smoke:editor` reports one console error on editor open —
   "Failed to execute 'insertBefore' on 'Node': the node before which the new
