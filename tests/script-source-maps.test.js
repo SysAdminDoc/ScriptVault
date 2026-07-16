@@ -173,6 +173,43 @@ describe('userscript source maps', () => {
     expect(() => new Function(finalized)).not.toThrow();
   });
 
+  it('preserves CRLF and source-directive lookalikes inside multiline template literals', () => {
+    const source = [
+      'const text = `first',
+      '//# sourceURL=https://content.example/template.js',
+      '/*__SV_SOURCE_END__*/',
+      'last`;',
+      '//# sourceURL=https://attacker.example/real.js',
+    ].join('\r\n');
+    const sanitized = neutralizeSourceDirectives(source);
+
+    expect(sanitized).toContain('`first\r\n//# sourceURL=https://content.example/template.js\r\n/*__SV_SOURCE_END__*/\r\nlast`;');
+    expect(sanitized).not.toContain('attacker.example');
+    expect(sanitized.split('\r\n')).toHaveLength(5);
+
+    const finalized = finalizeWrappedSource(markSourceSegment(0, source), {
+      scriptId: 'template-directive',
+      segments: [{ url: deterministicScriptSourceUrl('template-directive', 'Template'), content: sanitized }],
+    });
+    expect(finalized).toContain('//# sourceURL=https://content.example/template.js\r\n/*__SV_SOURCE_END__*/');
+    expect(() => new Function(finalized)).not.toThrow();
+  });
+
+  it('routes mapped window failures through authenticated execution telemetry', () => {
+    const wrapped = buildWrappedScript(makeScript([
+      '// ==UserScript==',
+      '// @name Error telemetry',
+      '// @match https://example.com/*',
+      '// @grant none',
+      '// ==/UserScript==',
+      'const ready = true;',
+    ].join('\n')));
+
+    expect(wrapped).toContain("sendToBackground('reportExecError', { scriptId, completionId: __svCreateCompletionId()");
+    expect(wrapped).not.toContain("action: 'logError'");
+    expect(wrapped).toContain('const __completionId = __svCreateCompletionId();');
+  });
+
   it('does not expand $-replacement patterns from segment URLs into the wrapped source', () => {
     const scriptId = 'script/dollar';
     const hostileUrl = "https://cdn.example/lib$'.js";

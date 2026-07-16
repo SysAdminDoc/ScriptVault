@@ -270,6 +270,11 @@ ${mappedCode}
   // to prevent them from appearing on chrome://extensions error page.
   // Chrome captures any error/warn/log from USER_SCRIPT world, so we
   // must silently swallow these without any console output.
+  function __svCreateCompletionId() {
+    return (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function')
+      ? globalThis.crypto.randomUUID()
+      : (Date.now().toString(36) + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2));
+  }
   window.addEventListener('error', function(event) {
     event.stopImmediatePropagation();
     event.preventDefault();
@@ -277,7 +282,7 @@ ${mappedCode}
     try {
       const __stack = String(event.error?.stack || '').slice(0, 8000);
       const __location = __svResolveErrorLocation(event.lineno, event.colno, event.filename, __stack);
-      chrome.runtime.sendMessage({ action: 'logError', entry: { scriptId: ${JSON.stringify(script.id)}, scriptName: ${JSON.stringify(meta.name)}, error: event.message || 'Unknown error', stack: __stack, url: location.href, source: __location.source, line: __location.line, col: __location.column, generatedLine: __location.generatedLine, generatedCol: __location.generatedColumn, timestamp: Date.now() } });
+      sendToBackground('reportExecError', { scriptId, completionId: __svCreateCompletionId(), error: (event.message || 'Unknown error').slice(0, 500), stack: __stack, url: location.href, source: __location.source, line: __location.line, col: __location.column, generatedLine: __location.generatedLine, generatedCol: __location.generatedColumn }).catch(() => {});
     } catch {}
     return true;
   }, true);
@@ -287,7 +292,7 @@ ${mappedCode}
     try {
       const __stack = String(event.reason?.stack || '').slice(0, 8000);
       const __location = __svResolveErrorLocation(0, 0, '', __stack);
-      chrome.runtime.sendMessage({ action: 'logError', entry: { scriptId: ${JSON.stringify(script.id)}, scriptName: ${JSON.stringify(meta.name)}, error: event.reason?.message || String(event.reason) || 'Unhandled rejection', stack: __stack, url: location.href, source: __location.source, line: __location.line, col: __location.column, generatedLine: __location.generatedLine, generatedCol: __location.generatedColumn, timestamp: Date.now() } });
+      sendToBackground('reportExecError', { scriptId, completionId: __svCreateCompletionId(), error: (event.reason?.message || String(event.reason) || 'Unhandled rejection').slice(0, 500), stack: __stack, url: location.href, source: __location.source, line: __location.line, col: __location.column, generatedLine: __location.generatedLine, generatedCol: __location.generatedColumn }).catch(() => {});
     } catch {}
   }, true);
   // ============ End Error Suppression ============
@@ -2670,9 +2675,7 @@ ${libraryExports}
   (async function __scriptMonkeyRunner() {
     await _waitForCache();
     const __startTime = performance.now();
-    const __completionId = (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function')
-      ? globalThis.crypto.randomUUID()
-      : (Date.now().toString(36) + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2));
+    const __completionId = __svCreateCompletionId();
     try {
 `;
 

@@ -4,6 +4,11 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Preserved authored script bytes and delivered mapped uncaught errors.**
+  Source-directive hardening now retains CRLF and ignores directive/marker
+  lookalikes inside multiline template literals while still removing executable
+  source overrides. Window errors and unhandled rejections now travel through
+  the authenticated `reportExecError` telemetry path with mapped locations.
 - **Hardened automatic UserCSS theming and bounded sync parsing.** Dual light/dark
   UserCSS values now use an OS-driven `prefers-color-scheme` override even when
   the target page does not declare `color-scheme`. Cloud sync JSON downloads

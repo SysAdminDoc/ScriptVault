@@ -49,6 +49,22 @@ const ScriptSourceMaps = (() => {
   var MAX_BUNDLED_SOURCES = 256;
   var MAX_BUNDLED_LINES = 2e5;
   var MAX_SOURCE_CONTENT_BYTES = 5e6;
+  var REGEX_PREFIX_KEYWORDS = /* @__PURE__ */ new Set([
+    "await",
+    "case",
+    "delete",
+    "do",
+    "else",
+    "in",
+    "instanceof",
+    "new",
+    "of",
+    "return",
+    "throw",
+    "typeof",
+    "void",
+    "yield"
+  ]);
   function safePathSegment(value, fallback) {
     const normalized = String(value || fallback).replace(/[\u0000-\u001f\u007f]/gu, "").trim() || fallback;
     return encodeURIComponent(normalized).slice(0, 240);
@@ -63,15 +79,147 @@ const ScriptSourceMaps = (() => {
     const normalized = typeof url === "string" ? url.replace(/[\u0000-\u001f\u007f]/gu, "").trim() : "";
     return normalized || `scriptvault://require/${safePathSegment(scriptId, "script")}/${index + 1}.js`;
   }
+  function scanJavaScriptLine(line, state) {
+    for (let index = 0; index < line.length; index++) {
+      const char = line[index];
+      const next = line[index + 1] || "";
+      if (state.mode === "block-comment") {
+        if (char === "*" && next === "/") {
+          state.mode = "code";
+          index++;
+        }
+        continue;
+      }
+      if (state.mode === "single-quote" || state.mode === "double-quote") {
+        if (state.escaped) {
+          state.escaped = false;
+        } else if (char === "\\") {
+          state.escaped = true;
+        } else if (state.mode === "single-quote" && char === "'" || state.mode === "double-quote" && char === '"') {
+          state.mode = "code";
+          state.canStartRegex = false;
+        }
+        continue;
+      }
+      if (state.mode === "template") {
+        if (state.escaped) {
+          state.escaped = false;
+        } else if (char === "\\") {
+          state.escaped = true;
+        } else if (char === "`") {
+          state.mode = "code";
+          state.canStartRegex = false;
+        } else if (char === "$" && next === "{") {
+          state.templateExpressionDepths.push(0);
+          state.mode = "code";
+          index++;
+        }
+        continue;
+      }
+      if (char === "/" && next === "/") break;
+      if (char === "/" && next === "*") {
+        state.mode = "block-comment";
+        index++;
+      } else if (char === "'") {
+        state.mode = "single-quote";
+        state.escaped = false;
+        state.canStartRegex = false;
+      } else if (char === '"') {
+        state.mode = "double-quote";
+        state.escaped = false;
+        state.canStartRegex = false;
+      } else if (char === "`") {
+        state.mode = "template";
+        state.escaped = false;
+        state.canStartRegex = false;
+      } else if (/\s/u.test(char)) {
+        continue;
+      } else if (/[$_A-Za-z]/u.test(char)) {
+        let end = index + 1;
+        while (end < line.length && /[$\w]/u.test(line[end])) end++;
+        state.canStartRegex = REGEX_PREFIX_KEYWORDS.has(line.slice(index, end));
+        index = end - 1;
+      } else if (/\d/u.test(char)) {
+        let end = index + 1;
+        while (end < line.length && /[\w.]/u.test(line[end])) end++;
+        state.canStartRegex = false;
+        index = end - 1;
+      } else if (char === "/" && state.canStartRegex) {
+        let end = index + 1;
+        let escaped = false;
+        let inClass = false;
+        for (; end < line.length; end++) {
+          const regexChar = line[end];
+          if (escaped) {
+            escaped = false;
+          } else if (regexChar === "\\") {
+            escaped = true;
+          } else if (regexChar === "[") {
+            inClass = true;
+          } else if (regexChar === "]" && inClass) {
+            inClass = false;
+          } else if (regexChar === "/" && !inClass) {
+            while (/[A-Za-z]/u.test(line[end + 1] || "")) end++;
+            index = end;
+            state.canStartRegex = false;
+            break;
+          }
+        }
+        if (end >= line.length) state.canStartRegex = true;
+      } else if (state.templateExpressionDepths.length > 0 && char === "{") {
+        const top = state.templateExpressionDepths.length - 1;
+        state.templateExpressionDepths[top] = state.templateExpressionDepths[top] + 1;
+        state.canStartRegex = true;
+      } else if (state.templateExpressionDepths.length > 0 && char === "}") {
+        const top = state.templateExpressionDepths.length - 1;
+        if (state.templateExpressionDepths[top] === 0) {
+          state.templateExpressionDepths.pop();
+          state.mode = "template";
+        } else {
+          state.templateExpressionDepths[top] = state.templateExpressionDepths[top] - 1;
+          state.canStartRegex = false;
+        }
+      } else {
+        state.canStartRegex = !/[)\]}]/u.test(char);
+      }
+    }
+    if ((state.mode === "single-quote" || state.mode === "double-quote" || state.mode === "template") && state.escaped) {
+      state.escaped = false;
+    }
+  }
+  function scanJavaScriptSourceLines(code) {
+    const pieces = code.split(/(\r\n|\r|\n)/u);
+    const state = {
+      mode: "code",
+      escaped: false,
+      templateExpressionDepths: [],
+      canStartRegex: true
+    };
+    const lines = [];
+    for (let index = 0; index < pieces.length; index += 2) {
+      const text = pieces[index] || "";
+      const eol = pieces[index + 1] || "";
+      lines.push({ text, eol, isCodeStart: state.mode === "code" });
+      scanJavaScriptLine(text, state);
+    }
+    return lines;
+  }
+  function neutralizedLine(line, marker) {
+    const indentation = line.match(/^\s*/u)?.[0] || "";
+    return `${indentation}// [ScriptVault neutralized source ${marker ? "marker" : "directive"}]`;
+  }
   function neutralizeSourceDirectives(code) {
-    return String(code ?? "").split(/\r?\n/u).map((line) => {
-      if (SOURCE_DIRECTIVE.test(line)) return "// [ScriptVault neutralized source directive]";
-      if (SOURCE_BEGIN.test(line) || SOURCE_END.test(line)) return "// [ScriptVault neutralized source marker]";
-      return line;
-    }).join("\n");
+    return scanJavaScriptSourceLines(String(code ?? "")).map((line) => {
+      if (!line.isCodeStart) return line.text + line.eol;
+      if (SOURCE_DIRECTIVE.test(line.text)) return neutralizedLine(line.text, false) + line.eol;
+      if (SOURCE_BEGIN.test(line.text) || SOURCE_END.test(line.text)) {
+        return neutralizedLine(line.text, true) + line.eol;
+      }
+      return line.text + line.eol;
+    }).join("");
   }
   function neutralizeGeneratedDirectives(code) {
-    return code.split(/\r?\n/u).map((line) => SOURCE_DIRECTIVE.test(line) ? "// [ScriptVault neutralized source directive]" : line).join("\n");
+    return scanJavaScriptSourceLines(code).map((line) => line.isCodeStart && SOURCE_DIRECTIVE.test(line.text) ? neutralizedLine(line.text, false) + line.eol : line.text + line.eol).join("");
   }
   function markSourceSegment(index, code) {
     if (!Number.isInteger(index) || index < 0) throw new Error("Invalid wrapped source segment index");
@@ -173,6 +321,7 @@ const ScriptSourceMaps = (() => {
     const mappings = [];
     const runtimeRanges = [];
     const outputLines = [];
+    const outputEndings = [];
     let activeSegment = null;
     let segmentLine = 0;
     const registerSource = (source) => {
@@ -183,21 +332,23 @@ const ScriptSourceMaps = (() => {
       sources.push(source);
       return index;
     };
-    for (const rawLine of neutralizeGeneratedDirectives(generatedCode).split("\n")) {
-      const begin = rawLine.match(SOURCE_BEGIN);
+    for (const sourceLine of scanJavaScriptSourceLines(neutralizeGeneratedDirectives(generatedCode))) {
+      const rawLine = sourceLine.text;
+      const begin = sourceLine.isCodeStart ? rawLine.match(SOURCE_BEGIN) : null;
       if (begin) {
         const index = Number.parseInt(begin[1], 10);
         activeSegment = options.segments[index] || null;
         segmentLine = 0;
         continue;
       }
-      if (SOURCE_END.test(rawLine)) {
+      if (sourceLine.isCodeStart && SOURCE_END.test(rawLine)) {
         activeSegment = null;
         segmentLine = 0;
         continue;
       }
       const generatedLine = outputLines.length + 1;
       outputLines.push(rawLine);
+      outputEndings.push(sourceLine.eol);
       if (!activeSegment) {
         mappings.push({ source: 0, originalLine: generatedLine - 1 });
         continue;
@@ -221,7 +372,7 @@ const ScriptSourceMaps = (() => {
     };
     const runtimeSegments = JSON.stringify(runtimeRanges).replace(/</gu, "\\u003c");
     const generatedUrlLiteral = JSON.stringify(generatedUrl);
-    const finalized = outputLines.join("\n").replaceAll(RUNTIME_SEGMENTS_PLACEHOLDER, () => runtimeSegments).replaceAll(GENERATED_URL_PLACEHOLDER, () => generatedUrlLiteral);
+    const finalized = outputLines.map((line, index) => line + outputEndings[index]).join("").replaceAll(RUNTIME_SEGMENTS_PLACEHOLDER, () => runtimeSegments).replaceAll(GENERATED_URL_PLACEHOLDER, () => generatedUrlLiteral);
     return [
       finalized,
       `//# sourceURL=${generatedUrl}`,
