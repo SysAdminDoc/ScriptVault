@@ -3530,3 +3530,20 @@ thead {
     left: 0;
   }
 }
+
+/* UserStyles manager modal */
+.usm-list { display: flex; flex-direction: column; gap: 8px; }
+.usm-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-secondary, transparent);
+}
+.usm-toggle { display: inline-flex; align-items: center; margin: 0; }
+.usm-info { flex: 1 1 auto; min-width: 0; }
+.usm-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.usm-match { font-size: 0.8125rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.usm-empty { color: var(--text-secondary); padding: 8px 2px; }

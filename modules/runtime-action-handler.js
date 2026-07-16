@@ -51,6 +51,12 @@ const RuntimeActionHandler = (() => {
     "chainDomEvent",
     "userStylePreviewDraft",
     "userStyleClearPreview",
+    "getUserStyles",
+    "installUserStyle",
+    "toggleUserStyle",
+    "deleteUserStyle",
+    "updateUserStyleCode",
+    "setUserStyleVariables",
     "getExtensionInfo",
     "openDashboard",
     "factoryReset"
@@ -90,6 +96,12 @@ const RuntimeActionHandler = (() => {
         message.colorScheme
       ),
       userStyleClearPreview: ({ message }) => dependencies.clearUserStylePreview(message.tabId),
+      getUserStyles: () => dependencies.getUserStyles(),
+      installUserStyle: ({ message }) => dependencies.installUserStyle(message.code || "", message.enabled),
+      toggleUserStyle: ({ message }) => dependencies.toggleUserStyle(message.id, message.enabled),
+      deleteUserStyle: ({ message }) => dependencies.deleteUserStyle(message.id),
+      updateUserStyleCode: ({ message }) => dependencies.updateUserStyleCode(message.id, message.code || ""),
+      setUserStyleVariables: ({ message }) => dependencies.setUserStyleVariables(message.id, message.values || {}),
       getExtensionInfo: () => dependencies.getExtensionInfo(),
       openDashboard: ({ message }) => dependencies.openDashboard(message),
       factoryReset: () => dependencies.factoryReset()
