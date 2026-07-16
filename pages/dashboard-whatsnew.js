@@ -11,6 +11,22 @@ const WhatsNew = (() => {
     : '2.0.0';
 
   const CHANGELOG = {
+    '3.21.0': {
+      title: 'ScriptVault 3.21.0 — Security & Reliability Hardening',
+      date: '2026-07-16',
+      summary: 'This release hardens script-update safety, locks down the permission surface, adds a coordinated security-disclosure policy, and fixes editor and UserCSS-preview reliability issues.',
+      highlights: [
+        { icon: 'SAFE', title: 'Safer Script Updates', desc: 'Every queued update is re-scanned by the risk analyzer and diffed against the installed version. An update that introduces new high-risk behavior is flagged and routed to the manual review inbox instead of updating silently — closing the account-takeover propagation gap.' },
+        { icon: 'SAFE', title: 'Locked-Down Permissions & Disclosure', desc: 'The manifest permission surface is now pinned by a build gate so a release can never silently widen it, a coordinated SECURITY.md disclosure policy ships with the extension, and dependency install scripts are disabled to block npm supply-chain worms.' },
+        { icon: 'FLOW', title: 'Smoother, Cleaner Editing', desc: 'Fixed a console error when opening the editor and stopped UserCSS live previews from lingering on a page after you close the dashboard or switch the target tab.' },
+      ],
+      improvements: [
+        'Page-controlled tab titles can no longer inject extra metadata lines when creating a script from the current page.',
+        'The esbuild build tool floor was raised to clear a Windows dev-server advisory.',
+        'Privacy disclosures for local storage and sync egress are now guarded against drift.',
+        'The UserStyles engine wiring status is documented so its preview-only surface is not mistaken for persistent install.',
+      ],
+    },
     '3.20.0': {
       title: 'ScriptVault 3.20.0 — Premium Interaction Polish',
       date: '2026-07-14',

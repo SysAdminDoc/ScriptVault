@@ -4,6 +4,8 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+## [v3.21.0] — Security, disclosure, and reliability hardening (2026-07-16)
+
 - **Fixed a console error when opening the editor.** The schedule-icon injector
   matched a delete button nested in a row's overflow menu and tried to insert
   before it, throwing a DOM `NotFoundError` (the reference node was not a direct
