@@ -4,6 +4,14 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Persistent UserCSS styles.** ScriptVault now installs and manages persistent
+  `.user.css` userstyles that inject on matching pages. Navigate to a `.user.css`
+  URL for a review-and-install prompt, or use **Install Style** on a UserCSS
+  draft in the editor. A **Manage UserStyles** surface (command palette) lists
+  installed styles with enable/disable, edit, and delete. Styles inject early on
+  each navigation (no flash), never stack duplicate sheets, clean up when a tab
+  closes, and re-apply across service-worker restarts.
+
 ## [v3.21.0] — Security, disclosure, and reliability hardening (2026-07-16)
 
 - **Fixed a console error when opening the editor.** The schedule-icon injector

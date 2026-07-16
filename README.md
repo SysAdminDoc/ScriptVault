@@ -315,7 +315,7 @@ drift, and any drop below the recorded per-language coverage baseline.
 - **Violentmonkey/Greasemonkey Import** &mdash; Import from VM JSON and GM4 backup formats
 
 #### Platform & Architecture
-- **UserStyles/CSS Support** &mdash; `.user.css` files with HSL/OKLCH/OKLab validation, linked palettes, light/dark variable defaults, Stylus import, metadata round-tripping, and live draft preview
+- **UserStyles/CSS Support** &mdash; Install persistent `.user.css` styles that inject on matching pages (navigate to a `.user.css` URL for a review-and-install prompt, or use **Install Style** on a UserCSS draft in the editor). Manage installed styles from the **Manage UserStyles** command (enable/disable, edit, delete); styles re-apply across service-worker restarts. Plus HSL/OKLCH/OKLab validation, linked palettes, light/dark variable defaults, Stylus import, metadata round-tripping, and live draft preview
 - **Script Chaining** &mdash; Visual pipeline builder for sequential script execution
 - **npm Package Resolution** &mdash; `@require npm:lodash` with CDN fallback chain
 - **Script Scheduling** &mdash; Time/day/date-based execution with visual picker
