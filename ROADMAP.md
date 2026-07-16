@@ -50,46 +50,6 @@ secondary surfaces). ~30 confirmed items were fixed across commits `c62c19e`
 (secondary surfaces), and `259536b` (controllers + a11y gate). The items below
 are lower-priority findings deferred for a later pass.
 
-- [ ] P2 — Workbench + secondary-surface i18n gaps
-  Why: new workbench strings (site/saved-view filter options, inspector empty
-  state, command bar, health copy) and popup diagnostics summaries are
-  hardcoded English, bypassing the unified locale catalogs; `data-i18n="disable"`
-  references a key absent from every catalog. Workflow-controller state messages
-  ('Saved', 'Needs attention', 'Save failed', diagnostics degraded copy) are
-  also untranslatable literals.
-  Where: `pages/dashboard.html` (filter/inspector/topbar), `pages/dashboard.js`
-  (`syncWorkbenchNavigation` fallback map, `updateSiteFilterOptions`), `pages/popup.js:756-767`,
-  `src/pages/dashboard-workflow-controllers.ts` (all `message:` literals).
-  Note: any UI-literal change trips `i18n:copy:gate` — run with `--update-baseline`
-  and update `tests/gui-ux-audit.test.js` which pins the English option text.
-
-- [ ] P3 — UserCSS `auto` color scheme emits `light-dark()` which follows the
-  page's `color-scheme`, not `prefers-color-scheme`
-  Why: on pages that never declare `color-scheme: light dark`, `@dark` defaults
-  never apply in `auto` mode. Wrap in `@media (prefers-color-scheme: dark)`
-  duplicated rules or scope `color-scheme` — or document the limitation.
-  Where: `src/modules/userstyles.ts` (`_substituteVariables` auto branch ~line 650).
-
-- [ ] P3 — `neutralizeSourceDirectives` alters CRLF/template-literal script bodies
-  Why: applied to script + require bodies, it rewrites `sourceURL`/`sourceMappingURL`
-  lookalike lines even inside multiline template literals and normalizes CRLF→LF,
-  silently changing runtime strings for CRLF-authored scripts.
-  Where: `src/background/script-source-maps.ts:57-66`.
-
-- [ ] P3 — Wrapper `window` error/rejection listeners map locations but dead-letter
-  Why: the uncaught-error mapping in `wrapper-builder.ts` posts through
-  `logError`/`scriptConsoleCapture`, which the USER_SCRIPT message gate rejects
-  (not in the allowlist / no `GM_` prefix), so mapped payloads never land; only
-  the authenticated `reportExecError` path delivers. Route the window listeners
-  through `reportExecError` or delete the unreachable sends.
-  Where: `src/background/wrapper-builder.ts:274,284`, `src/background/user-script-message-policy.ts`.
-
-- [ ] P3 — `readSyncJsonBounded` bypasses the size cap when the body has no reader
-  Why: a test-only escape hatch (`!response.body?.getReader` → unbounded
-  `response.json()`) sits in security-relevant download code. Have test adapters
-  provide a mock `getReader` instead of special-casing the production path.
-  Where: `src/modules/sync-providers.ts` (`readSyncJsonBounded`).
-
 - [ ] P3 — Full `parseUserCSS` runs on every editor keystroke for UserCSS drafts
   Why: `META_REGEX` over the whole document plus directive parsing/validation on
   the main thread causes jank on large styles; reuse the parse from
@@ -779,3 +739,98 @@ _Net-new from the 2026-07-09 pass. Deduped against ROADMAP.md, Roadmap_Blocked.m
 ### P1
 
 ### P3
+
+## Research-Driven Additions (2026-07-16)
+
+_Net-new from the 2026-07-16 pass (baseline v3.20.0). The prior RESEARCH.md's 10
+opportunities all shipped (telemetry auth, vendor-import quarantine, URL
+minimization, typed dispatch, source maps, WCAG 2.2 gate, locale/plural catalogs,
+fail-closed smokes, unified release preflight, TS7). A competitive sweep confirmed
+the 2026-H2 GM-API deltas competitors added — `GM_audio`, request-scoped cookie
+partitioning + `anonymous` downloads, `@unwrap`, Navigation-API `onurlchange`,
+`CAT_userConfig`, on-disk auto-reload (`FileSystemObserver`) — are ALREADY shipped
+(verified in `wrapper-builder.ts`/`parser`/`core.ts`/`dashboard.js`), so they are
+not re-added. SBOM (`check-cra-sbom.mjs`) already exists — not re-added. Items
+below are verified against source and deduped against ROADMAP.md, Roadmap_Blocked.md,
+CLAUDE.md audit history, and RESEARCH.md rejected ideas._
+
+### P1
+
+- [ ] P1 — Wire or honestly gate the persistent UserCSS engine
+  Why: `UserStylesEngine.registerStyle/toggleStyle/updateCSS/importUserCSS/importStylusBackup/onTabUpdated/onTabRemoved/isUserCSSUrl` are exported and documented as shipped, but have no message-router action and no `tabs`/`webNavigation` listener wiring; only `userStylePreviewDraft`/`userStyleClearPreview` are reachable. `.user.css` install/persist is non-functional beyond ephemeral editor preview.
+  Evidence: code audit — `src/modules/userstyles.ts` (exports ~1548-1570), unwired in generated `background.js`; reachable actions at `background.js:11843-11883`, `pages/dashboard.js:13364/13392`; README lists `modules/userstyles.js` `.user.css` support as a feature.
+  Touches: `src/background/core.ts` (router + `chrome.tabs.onUpdated`/`onRemoved` or `webNavigation.onCommitted` wiring), `src/modules/userstyles.ts`, `pages/dashboard.js` (install/toggle UI), README.
+  Acceptance: either a user can install and persist a `.user.css` style that injects on navigation to matching tabs (with a regression test proving `onTabUpdated` injection), OR the persistent half is explicitly feature-flagged off and the README/CLAUDE claim corrected to "editor preview only."
+  Complexity: L
+
+- [ ] P1 — Bump esbuild devDependency floor to `^0.28.1`
+  Why: `esbuild ^0.28.0` is below the `0.28.1` fix for GHSA-G7R4-M6W7-QQQR (Windows dev-server path traversal / arbitrary file read, CVSS 7.5); the build runs on Windows.
+  Evidence: security research — https://github.com/advisories/GHSA-g7r4-m6w7-qqqr ; `package.json:107`.
+  Touches: `package.json`, `package-lock.json`.
+  Acceptance: `esbuild` resolves to ≥ 0.28.1; `npm run build:prod` and full suite green; `npm audit` still 0.
+  Complexity: S
+
+- [ ] P1 — Add SECURITY.md and enable GitHub private vulnerability reporting
+  Why: No `SECURITY.md` and no confidential intake exist; CRA vulnerability/incident reporting begins 2026-09-11 and downstream redistributors expect a coordinated-disclosure channel. Cheap, high trust signal; individual MIT maintainer is outside manufacturer duties but the channel is now baseline.
+  Evidence: security research + RESEARCH.md open question; https://digital-strategy.ec.europa.eu/en/policies/cra-open-source ; absent `SECURITY.md`.
+  Touches: `SECURITY.md` (new), repo settings (private vuln reporting), README security section.
+  Acceptance: `SECURITY.md` documents supported versions, disclosure window, and contact; GitHub private vulnerability reporting enabled; a static test pins the file's presence and required sections.
+  Complexity: S
+
+- [ ] P1 — Re-run AST risk analysis on update bodies and diff the risk delta
+  Why: `applyUpdate` gates `@require` TOFU-SRI + provenance and flags cross-registry source changes (`sourceIdentityChanged`), but never calls `ScriptAnalyzer.analyzeAsync` on `newCode`. A malicious update from the SAME author/registry (GreasyFork account-takeover propagation — the dominant real-world userscript kill chain) applies with no risk-delta review.
+  Evidence: code read — `src/background/core.ts:1980-2094` (no analyzer call; `analyzeScript` exists at `core.ts:7346`); security research — https://www.waze.com/discuss/t/urgent-two-scripts-were-compromised-on-feb-1-please-read-if-you-use-scripts/365499
+  Touches: `src/background/core.ts` (`applyUpdate`/`checkForUpdates`), `bg/analyzer.ts`, update-review UI in `pages/dashboard.js`, `tests/core-flows.test.js`.
+  Acceptance: an update that introduces new network/credential/eval sinks vs. the prior version surfaces a risk-delta flag in the update-review inbox before auto-apply (or blocks auto-apply per setting); regression test covers a benign update (no flag) and a sink-adding update (flag).
+  Complexity: M
+
+### P2
+
+- [ ] P2 — Fix the UserCSS preview lifecycle (three leaks)
+  Why: Closing/navigating the dashboard leaves injected preview CSS on the target page (only a `beforeunload` unsaved-guard exists, no `pagehide`/`visibilitychange` teardown — the DevTools panel does it right); `onTabUpdated` re-runs `insertCSS` even when CSS is unchanged (duplicate stacking); switching the active target tab during preview orphans the prior tab's sheet.
+  Evidence: code audit — `pages/dashboard.js:18152-18155` (only teardown), cf. `devtools-panel.js:376`; `src/modules/userstyles.ts:1453-1474` (unconditional `insertCSS`); `pages/dashboard.js:13373-13417` + `src/modules/userstyles.ts:843-872` (active-tab-switch orphan).
+  Touches: `pages/dashboard.js` (single `userCssPreview` teardown owner + `pagehide`/`visibilitychange`), `src/modules/userstyles.ts` (`onTabUpdated` no-op guard when `previousCss === css`; clear prior tab before injecting into a newly-resolved tab).
+  Acceptance: closing the dashboard mid-preview clears preview CSS from the target tab; repeated `onUpdated` events do not stack duplicate sheets; switching target tabs clears the previous tab's preview; regression tests cover all three.
+  Complexity: M
+
+- [ ] P2 — Add a manifest permission-drift gate to the test suite
+  Why: Nothing fails the build if `permissions`/`host_permissions` grow beyond the intended set — the exact vector abused by 2026 CWS ownership-transfer/permission-creep attacks (QuickLens, ShotBird). `store-copy:check` verifies disclosure coverage, not growth.
+  Evidence: security research — https://pluto.security/blog/chrome-extension-supply-chain-attacks-permission-creep/ ; `manifest.json` permissions set.
+  Touches: `scripts/` (new drift check or extend an existing manifest check), `tests/`, `package.json` `check` wiring, README permission statement.
+  Acceptance: a pinned permission/host allowlist; the build fails if `manifest.json`/`manifest-firefox.json` declare any permission or host outside it; README documents the pinned set and the "never `<all_urls>` beyond current" commitment.
+  Complexity: S
+
+- [ ] P2 — Harden the build chain against npm lifecycle-script worms
+  Why: Zero RUNTIME deps does not defend against install-time `preinstall`/`postinstall` payloads (Shai-Hulud / Mini-Shai-Hulud, 2026 H2). A repo `.npmrc` `ignore-scripts=true` with an explicit allowlist for deps that genuinely need a build step (esbuild, puppeteer-core) closes the lifecycle path.
+  Evidence: security research — https://www.microsoft.com/en-us/security/blog/2025/12/09/shai-hulud-2-0-guidance-for-detecting-investigating-and-defending-against-the-supply-chain-attack/
+  Touches: `.npmrc` (new/edit), release docs, CLAUDE.md build notes.
+  Acceptance: `npm ci` succeeds with lifecycle scripts disabled by default and only the allowlisted build steps run; documented publish-token discipline (publish-only scope, 2FA/OIDC); a note pins the policy.
+  Complexity: S
+
+### P3
+
+- [ ] P3 — Sanitize page-controlled template tokens
+  Why: `resolveTemplateTokens` substitutes `activeTab.title` (fully page-controlled) into new-script source via `split/join` with no CR/LF stripping; a crafted multi-line `document.title` can append lines past the `@name` metadata directive. Low impact (user reviews before save) but untrusted page data reaches executable source unsanitized.
+  Evidence: code audit — `pages/dashboard.js:13644-13676`.
+  Touches: `pages/dashboard.js` (`resolveTemplateTokens`), a focused test.
+  Acceptance: token values have control characters (`\r`/`\n`) stripped and length clamped before substitution; regression test with a multi-line malicious title asserts the generated `@name` line is single-line.
+  Complexity: S
+
+- [ ] P3 — Compress backup blobs with the Compression Streams API
+  Why: `BackupScheduler` stores full uncompressed ZIP blobs in `chrome.storage.local` (known inefficiency, CLAUDE.md). The Baseline Compression Streams API (gzip/brotli) shrinks the footprint with no new dependency.
+  Evidence: CLAUDE.md "Known Remaining Issues"; https://developer.mozilla.org/en-US/docs/Web/API/CompressionStream/CompressionStream
+  Touches: `src/modules/backup-scheduler.ts`, restore path, migration for existing uncompressed blobs, focused tests.
+  Acceptance: new backups are stored compressed with transparent decompress-on-restore; existing uncompressed backups still restore; measured storage reduction recorded in a test.
+  Complexity: M
+
+- [ ] P3 — Verify PRIVACY.md and CWS listing disclosures before Limited-Use enforcement (2026-08-01)
+  Why: CWS Limited Use / Disclosure enforcement starts 2026-08-01; disclosures must match the zero-telemetry reality and enumerate all local data classes (Storage Buckets, opt-in sync/backup egress). Prior research flagged PRIVACY.md drift (Storage Buckets omitted, sync/backup egress under-described).
+  Evidence: platform research — https://developer.chrome.com/blog/cws-policy-updates-2026 ; `PRIVACY.md` (12.5K, present).
+  Touches: `PRIVACY.md`, CWS listing copy, `store-copy:check` coverage.
+  Acceptance: PRIVACY.md and the CWS/AMO listing enumerate every local storage surface and every opt-in network egress path; `store-copy:check` asserts the disclosure covers each declared permission; no undisclosed data flow remains.
+  Complexity: S
+
+## Under Consideration (2026-07-16)
+
+- **ScriptCat niche directives** — `CAT_fileStorage` (per-script file storage), `@storageName` (shared cross-script namespace), `@definition` (`.d.ts` editor hints), `@early-start`. Verified absent; low demand and marginal over Chrome's existing `document_start` + shipped `lib/scriptvault.d.ts`. Reconsider on user signal. Source: docs.scriptcat.org/docs/dev/meta.
+- **On-device "explain this script" via Chrome Prompt API (Chrome 148 stable)** — could summarize what an installed/updating script does using the on-device model, strictly opt-in and local. Philosophy tension with any data flow; gate behind explicit per-use consent. Source: https://developer.chrome.com/docs/ai/prompt-api
