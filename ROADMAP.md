@@ -763,13 +763,6 @@ CLAUDE.md audit history, and RESEARCH.md rejected ideas._
   Acceptance: either a user can install and persist a `.user.css` style that injects on navigation to matching tabs (with a regression test proving `onTabUpdated` injection), OR the persistent half is explicitly feature-flagged off and the README/CLAUDE claim corrected to "editor preview only."
   Complexity: L
 
-- [ ] P1 — Bump esbuild devDependency floor to `^0.28.1`
-  Why: `esbuild ^0.28.0` is below the `0.28.1` fix for GHSA-G7R4-M6W7-QQQR (Windows dev-server path traversal / arbitrary file read, CVSS 7.5); the build runs on Windows.
-  Evidence: security research — https://github.com/advisories/GHSA-g7r4-m6w7-qqqr ; `package.json:107`.
-  Touches: `package.json`, `package-lock.json`.
-  Acceptance: `esbuild` resolves to ≥ 0.28.1; `npm run build:prod` and full suite green; `npm audit` still 0.
-  Complexity: S
-
 - [ ] P1 — Add SECURITY.md and enable GitHub private vulnerability reporting
   Why: No `SECURITY.md` and no confidential intake exist; CRA vulnerability/incident reporting begins 2026-09-11 and downstream redistributors expect a coordinated-disclosure channel. Cheap, high trust signal; individual MIT maintainer is outside manufacturer duties but the channel is now baseline.
   Evidence: security research + RESEARCH.md open question; https://digital-strategy.ec.europa.eu/en/policies/cra-open-source ; absent `SECURITY.md`.
