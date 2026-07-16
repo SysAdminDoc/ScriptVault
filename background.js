@@ -3489,8 +3489,8 @@ const CloudSyncProviders = (() => {
     }
   }
   async function readSyncJsonBounded(response, maxBytes, label) {
-    if (!response.body?.getReader && typeof response.json === "function") {
-      return response.json();
+    if (!response.body?.getReader) {
+      throw new Error(`${label} cannot be read safely because the response body is not streamable`);
     }
     const text = await readSyncTextBounded(response, maxBytes, label);
     if (!text.trim()) return {};
@@ -22241,12 +22241,23 @@ const UserStylesEngine = (() => {
     return expanded;
   }
   function _substituteVariables(css, variables, customValues, colorScheme = "auto") {
+    if (colorScheme === "auto" && variables.some((variable) => {
+      const configured = customValues && customValues[variable.name] !== void 0 ? customValues[variable.name] : variable.colorSchemes ?? variable.default;
+      return _isColorSchemeValue(configured);
+    })) {
+      const lightCSS = _substituteVariables(css, variables, customValues, "light");
+      const darkCSS = _substituteVariables(css, variables, customValues, "dark");
+      return `${lightCSS}
+  @media (prefers-color-scheme: dark) {
+  ${darkCSS}
+  }`;
+    }
     let result = css;
     for (const v of variables) {
       const configured = customValues && customValues[v.name] !== void 0 ? customValues[v.name] : v.colorSchemes ?? v.default;
       let val;
       if (_isColorSchemeValue(configured)) {
-        val = colorScheme === "light" ? configured.light : colorScheme === "dark" ? configured.dark : `light-dark(${configured.light}, ${configured.dark})`;
+        val = colorScheme === "dark" ? configured.dark : configured.light;
       } else {
         val = configured;
       }

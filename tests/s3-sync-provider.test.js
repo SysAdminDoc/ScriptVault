@@ -248,12 +248,10 @@ describe('S3 provider — upload/download round trip against a mock server', () 
   });
 
   it('downloads via GET and returns parsed JSON', async () => {
-    const fetchImpl = async () => ({
-      ok: true,
-      status: 200,
-      json: async () => ({ data: { scripts: [], timestamp: 1 } }),
-      text: async () => '',
-    });
+    const fetchImpl = async () => new Response(
+      JSON.stringify({ data: { scripts: [], timestamp: 1 } }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    );
     const { providers } = loadProviders({ fetchImpl });
     const out = await providers.s3.download(validSettings());
     expect(out).toEqual({ data: { scripts: [], timestamp: 1 } });

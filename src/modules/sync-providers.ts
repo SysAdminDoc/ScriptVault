@@ -649,10 +649,8 @@ async function readSyncTextBounded(response: Response, maxBytes: number, label: 
 }
 
 async function readSyncJsonBounded(response: Response, maxBytes: number, label: string): Promise<unknown> {
-  // Lightweight test adapters sometimes expose json() without text(). Real
-  // browser Responses always use the bounded text path.
-  if (!response.body?.getReader && typeof response.json === 'function') {
-    return response.json();
+  if (!response.body?.getReader) {
+    throw new Error(`${label} cannot be read safely because the response body is not streamable`);
   }
   const text = await readSyncTextBounded(response, maxBytes, label);
   if (!text.trim()) return {};

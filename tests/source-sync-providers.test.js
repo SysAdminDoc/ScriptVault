@@ -261,6 +261,27 @@ describe('source sync providers module', () => {
     expect(overrideHeaders).not.toHaveProperty('If-None-Match');
   });
 
+  it('rejects WebDAV JSON responses that cannot enforce the download size limit', async () => {
+    const { CloudSyncProviders } = await loadFreshSyncProviders();
+    const json = vi.fn(async () => ({ scripts: [] }));
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      url: 'https://dav.example.com/backups/scriptvault-backup.json',
+      headers: new Headers({ 'Content-Type': 'application/json' }),
+      body: null,
+      json,
+    });
+    globalThis.fetch = fetchMock;
+
+    await expect(CloudSyncProviders.webdav.download({
+      webdavUrl: 'https://dav.example.com/backups',
+      webdavUsername: 'alice',
+      webdavPassword: 'secret',
+    })).rejects.toThrow('WebDAV sync payload cannot be read safely');
+    expect(json).not.toHaveBeenCalled();
+  });
+
   it('uses explicit object names for cloud backup upload/download without clobbering sync', async () => {
     const { CloudSyncProviders } = await loadFreshSyncProviders();
     const fetchMock = vi.fn().mockResolvedValue(new Response('', { status: 201 }));

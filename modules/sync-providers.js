@@ -507,8 +507,8 @@ const CloudSyncProviders = (() => {
     }
   }
   async function readSyncJsonBounded(response, maxBytes, label) {
-    if (!response.body?.getReader && typeof response.json === "function") {
-      return response.json();
+    if (!response.body?.getReader) {
+      throw new Error(`${label} cannot be read safely because the response body is not streamable`);
     }
     const text = await readSyncTextBounded(response, maxBytes, label);
     if (!text.trim()) return {};

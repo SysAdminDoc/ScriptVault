@@ -655,6 +655,17 @@ function _substituteVariables(
   customValues: Record<string, StyleVariableValue> | undefined,
   colorScheme: PreviewColorScheme = 'auto',
 ): string {
+  if (colorScheme === 'auto' && variables.some((variable) => {
+    const configured = customValues && customValues[variable.name] !== undefined
+      ? customValues[variable.name]
+      : (variable.colorSchemes ?? variable.default);
+    return _isColorSchemeValue(configured);
+  })) {
+    const lightCSS = _substituteVariables(css, variables, customValues, 'light');
+    const darkCSS = _substituteVariables(css, variables, customValues, 'dark');
+    return `${lightCSS}\n@media (prefers-color-scheme: dark) {\n${darkCSS}\n}`;
+  }
+
   let result: string = css;
 
   for (const v of variables) {
@@ -664,11 +675,7 @@ function _substituteVariables(
         : (v.colorSchemes ?? v.default);
     let val: PrimitiveStyleVariableValue;
     if (_isColorSchemeValue(configured)) {
-      val = colorScheme === 'light'
-        ? configured.light
-        : colorScheme === 'dark'
-          ? configured.dark
-          : `light-dark(${configured.light}, ${configured.dark})`;
+      val = colorScheme === 'dark' ? configured.dark : configured.light;
     } else {
       val = configured;
     }

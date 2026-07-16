@@ -4,6 +4,11 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Hardened automatic UserCSS theming and bounded sync parsing.** Dual light/dark
+  UserCSS values now use an OS-driven `prefers-color-scheme` override even when
+  the target page does not declare `color-scheme`. Cloud sync JSON downloads
+  fail closed when a response adapter cannot expose a bounded readable stream,
+  eliminating the production escape hatch to unbounded `response.json()`.
 - **Localized the tool-first workbench and workflow status layer.** Command,
   filter, saved-view, inspector, sync-health, popup diagnostic, import-review,
   settings-save, and utilities-diagnostic copy now resolves through the unified

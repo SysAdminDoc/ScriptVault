@@ -139,6 +139,20 @@ body { color: tomato; }`;
     });
   });
 
+  it('renders automatic color-scheme values from the OS preference without relying on page color-scheme', async () => {
+    const result = await UserStylesEngine.previewDraft(createAdvancedUserCSSDraft(), {
+      tabId: 1,
+      colorScheme: 'auto',
+    });
+
+    expect(result.success).toBe(true);
+    const css = chrome.scripting.insertCSS.mock.calls.at(-1)?.[0]?.css;
+    expect(css).toContain('background: #ffffff;');
+    expect(css).toContain('@media (prefers-color-scheme: dark) {');
+    expect(css).toContain('background: oklch(24% 0.02 255);');
+    expect(css).not.toContain('light-dark(');
+  });
+
   it('refreshes stored match patterns when full UserCSS metadata is edited', async () => {
     chrome.tabs.query.mockResolvedValue([]);
 
