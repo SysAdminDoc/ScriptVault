@@ -1159,8 +1159,12 @@ const ScriptScheduler = (() => {
         showScheduleModal(scriptId);
       });
 
-      // Insert before the delete button
-      const deleteBtn = row.querySelector('[data-action="delete"]');
+      // Insert before the delete button. Scope the lookup to a DIRECT child of
+      // the action row — a plain descendant query can match a delete button
+      // nested in an overflow row menu, and `row.insertBefore(icon, thatBtn)`
+      // then throws NotFoundError because the reference node is not a child of
+      // `row`. When no direct-child delete button exists, append to the row.
+      const deleteBtn = row.querySelector(':scope > [data-action="delete"]');
       if (deleteBtn) {
         row.insertBefore(icon, deleteBtn);
       } else {

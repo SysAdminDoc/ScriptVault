@@ -4,6 +4,11 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Fixed a console error when opening the editor.** The schedule-icon injector
+  matched a delete button nested in a row's overflow menu and tried to insert
+  before it, throwing a DOM `NotFoundError` (the reference node was not a direct
+  child of the action row). The lookup is now scoped to a direct-child delete
+  button, falling back to appending the icon.
 - **Sanitized page-controlled "new script from this page" template tokens.** The
   active tab's title and favicon URL are stripped of control characters (CR/LF
   included) and length-clamped before being substituted into a generated

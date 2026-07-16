@@ -50,15 +50,6 @@ secondary surfaces). ~30 confirmed items were fixed across commits `c62c19e`
 (secondary surfaces), and `259536b` (controllers + a11y gate). The items below
 are lower-priority findings deferred for a later pass.
 
-- [ ] P3 — Editor open logs an `insertBefore` NotFoundError (pre-existing)
-  Why: `npm run smoke:editor` reports one console error on editor open —
-  "Failed to execute 'insertBefore' on 'Node': the node before which the new
-  node is to be inserted is not a child of this node." The editor still works
-  (overlay, code pane, all 14 controls, close), but a DOM insertion path
-  targets a stale/detached reference. Present in the v3.20.0 workbench redesign
-  before the 2026-07-15 audit; trace which render path (likely a tab/toolbar
-  or What's New insertion) holds the stale node.
-  Where: `pages/dashboard.js` editor-open render path.
 
 
 ## Deep Audit Backlog (2026-07-07)

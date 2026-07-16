@@ -186,3 +186,71 @@ describe('background scheduler enforcement (background.core.js)', () => {
     expect(core).toContain('setupScheduleAlarms');
   });
 });
+
+describe('ScriptScheduler.injectScheduleIcons (row action injection)', () => {
+  function loadScheduler() {
+    globalThis.chrome = {
+      storage: { local: {
+        get: vi.fn(() => Promise.resolve({})),
+        set: vi.fn(() => Promise.resolve()),
+      } },
+      alarms: {
+        create: vi.fn(),
+        clear: vi.fn(() => Promise.resolve(true)),
+        getAll: vi.fn(() => Promise.resolve([])),
+      },
+      runtime: { sendMessage: vi.fn(() => Promise.resolve({})) },
+    };
+    globalThis.ScriptVaultDashboardUI = { toast: vi.fn() };
+    const body = schedulerCode + '\nreturn ScriptScheduler;';
+    // eslint-disable-next-line no-new-func
+    return new Function(body)();
+  }
+
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('appends the schedule icon without throwing when the delete button is nested in a row menu', async () => {
+    // Reproduces the editor-open NotFoundError: the delete button lived inside a
+    // nested `.script-row-menu`, so a descendant query matched it and
+    // row.insertBefore(icon, deleteBtn) threw because it was not a direct child.
+    document.body.innerHTML = `
+      <table><tbody id="scriptTableBody">
+        <tr><td>
+          <div class="action-icons">
+            <button data-id="s1" data-action="toggle">t</button>
+            <div class="script-row-menu" id="script-row-menu-1">
+              <button data-action="delete" data-id="s1">del</button>
+            </div>
+          </div>
+        </td></tr>
+      </tbody></table>`;
+    const scheduler = loadScheduler();
+    await expect(scheduler.init()).resolves.not.toThrow();
+    const row = document.querySelector('.action-icons');
+    expect(row.querySelector(':scope > .sv-sched-icon')).not.toBeNull();
+    scheduler.destroy();
+  });
+
+  it('inserts the schedule icon before a direct-child delete button', async () => {
+    document.body.innerHTML = `
+      <table><tbody id="scriptTableBody">
+        <tr><td>
+          <div class="action-icons">
+            <button data-id="s2" data-action="toggle">t</button>
+            <button data-action="delete" data-id="s2">del</button>
+          </div>
+        </td></tr>
+      </tbody></table>`;
+    const scheduler = loadScheduler();
+    await scheduler.init();
+    const row = document.querySelector('.action-icons');
+    const children = [...row.children];
+    const iconIdx = children.findIndex(c => c.classList.contains('sv-sched-icon'));
+    const delIdx = children.findIndex(c => c.getAttribute('data-action') === 'delete');
+    expect(iconIdx).toBeGreaterThanOrEqual(0);
+    expect(iconIdx).toBeLessThan(delIdx);
+    scheduler.destroy();
+  });
+});
