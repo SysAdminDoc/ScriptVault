@@ -4,6 +4,13 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Added a coordinated security-disclosure policy.** A new `SECURITY.md`
+  documents supported versions, private reporting channels (GitHub private
+  vulnerability reporting + email), and the disclosure window; the README links
+  it. GitHub private vulnerability reporting is enabled on the repository.
+- **Bumped the `esbuild` build-tool floor to `^0.28.1`** to clear
+  GHSA-g7r4-m6w7-qqqr (Windows dev-server path traversal).
+
 - **Preserved authored script bytes and delivered mapped uncaught errors.**
   Source-directive hardening now retains CRLF and ignores directive/marker
   lookalikes inside multiline template literals while still removing executable

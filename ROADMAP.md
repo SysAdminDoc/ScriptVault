@@ -763,13 +763,6 @@ CLAUDE.md audit history, and RESEARCH.md rejected ideas._
   Acceptance: either a user can install and persist a `.user.css` style that injects on navigation to matching tabs (with a regression test proving `onTabUpdated` injection), OR the persistent half is explicitly feature-flagged off and the README/CLAUDE claim corrected to "editor preview only."
   Complexity: L
 
-- [ ] P1 — Add SECURITY.md and enable GitHub private vulnerability reporting
-  Why: No `SECURITY.md` and no confidential intake exist; CRA vulnerability/incident reporting begins 2026-09-11 and downstream redistributors expect a coordinated-disclosure channel. Cheap, high trust signal; individual MIT maintainer is outside manufacturer duties but the channel is now baseline.
-  Evidence: security research + RESEARCH.md open question; https://digital-strategy.ec.europa.eu/en/policies/cra-open-source ; absent `SECURITY.md`.
-  Touches: `SECURITY.md` (new), repo settings (private vuln reporting), README security section.
-  Acceptance: `SECURITY.md` documents supported versions, disclosure window, and contact; GitHub private vulnerability reporting enabled; a static test pins the file's presence and required sections.
-  Complexity: S
-
 - [ ] P1 — Re-run AST risk analysis on update bodies and diff the risk delta
   Why: `applyUpdate` gates `@require` TOFU-SRI + provenance and flags cross-registry source changes (`sourceIdentityChanged`), but never calls `ScriptAnalyzer.analyzeAsync` on `newCode`. A malicious update from the SAME author/registry (GreasyFork account-takeover propagation — the dominant real-world userscript kill chain) applies with no risk-delta review.
   Evidence: code read — `src/background/core.ts:1980-2094` (no analyzer call; `analyzeScript` exists at `core.ts:7346`); security research — https://www.waze.com/discuss/t/urgent-two-scripts-were-compromised-on-feb-1-please-read-if-you-use-scripts/365499

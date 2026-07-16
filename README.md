@@ -511,6 +511,13 @@ that script in the dashboard editor.
 | Blacklist protection | Remote + manual blacklists block known malicious scripts |
 | Zero telemetry | No data collection, no phone home &mdash; everything stays local |
 
+### Reporting a Vulnerability
+
+Found a security issue? Please report it privately &mdash; do not open a public
+issue. See [`SECURITY.md`](SECURITY.md) for the coordinated-disclosure process,
+supported versions, and contact channels (GitHub private vulnerability reporting
+or email).
+
 ---
 
 ## Comparison
