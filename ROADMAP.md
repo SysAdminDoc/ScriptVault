@@ -784,13 +784,6 @@ CLAUDE.md audit history, and RESEARCH.md rejected ideas._
   Acceptance: new backups are stored compressed with transparent decompress-on-restore; existing uncompressed backups still restore; measured storage reduction recorded in a test.
   Complexity: M
 
-- [ ] P3 — Verify PRIVACY.md and CWS listing disclosures before Limited-Use enforcement (2026-08-01)
-  Why: CWS Limited Use / Disclosure enforcement starts 2026-08-01; disclosures must match the zero-telemetry reality and enumerate all local data classes (Storage Buckets, opt-in sync/backup egress). Prior research flagged PRIVACY.md drift (Storage Buckets omitted, sync/backup egress under-described).
-  Evidence: platform research — https://developer.chrome.com/blog/cws-policy-updates-2026 ; `PRIVACY.md` (12.5K, present).
-  Touches: `PRIVACY.md`, CWS listing copy, `store-copy:check` coverage.
-  Acceptance: PRIVACY.md and the CWS/AMO listing enumerate every local storage surface and every opt-in network egress path; `store-copy:check` asserts the disclosure covers each declared permission; no undisclosed data flow remains.
-  Complexity: S
-
 ## Under Consideration (2026-07-16)
 
 - **ScriptCat niche directives** — `CAT_fileStorage` (per-script file storage), `@storageName` (shared cross-script namespace), `@definition` (`.d.ts` editor hints), `@early-start`. Verified absent; low demand and marginal over Chrome's existing `document_start` + shipped `lib/scriptvault.d.ts`. Reconsider on user signal. Source: docs.scriptcat.org/docs/dev/meta.
