@@ -11902,6 +11902,12 @@ const RuntimeActionHandler = (() => {
     "chainDomEvent",
     "userStylePreviewDraft",
     "userStyleClearPreview",
+    "getUserStyles",
+    "installUserStyle",
+    "toggleUserStyle",
+    "deleteUserStyle",
+    "updateUserStyleCode",
+    "setUserStyleVariables",
     "getExtensionInfo",
     "openDashboard",
     "factoryReset"
@@ -11941,6 +11947,12 @@ const RuntimeActionHandler = (() => {
         message.colorScheme
       ),
       userStyleClearPreview: ({ message }) => dependencies.clearUserStylePreview(message.tabId),
+      getUserStyles: () => dependencies.getUserStyles(),
+      installUserStyle: ({ message }) => dependencies.installUserStyle(message.code || "", message.enabled),
+      toggleUserStyle: ({ message }) => dependencies.toggleUserStyle(message.id, message.enabled),
+      deleteUserStyle: ({ message }) => dependencies.deleteUserStyle(message.id),
+      updateUserStyleCode: ({ message }) => dependencies.updateUserStyleCode(message.id, message.code || ""),
+      setUserStyleVariables: ({ message }) => dependencies.setUserStyleVariables(message.id, message.values || {}),
       getExtensionInfo: () => dependencies.getExtensionInfo(),
       openDashboard: ({ message }) => dependencies.openDashboard(message),
       factoryReset: () => dependencies.factoryReset()
@@ -12068,6 +12080,7 @@ const MessageRouter = (() => {
     "deleteProfile",
     "deleteScript",
     "deleteScriptValue",
+    "deleteUserStyle",
     "deleteWorkspace",
     "diagnoseScripts",
     "disconnectSyncProvider",
@@ -12130,6 +12143,7 @@ const MessageRouter = (() => {
     "getSubscriptions",
     "getSyncProviderStatus",
     "getTrash",
+    "getUserStyles",
     "getVersionHistory",
     "getWorkspaces",
     "importAll",
@@ -12142,6 +12156,7 @@ const MessageRouter = (() => {
     "inspectBackup",
     "installFromCode",
     "installFromUrl",
+    "installUserStyle",
     "logError",
     "moveScriptToFolder",
     "netlog_record",
@@ -12205,6 +12220,7 @@ const MessageRouter = (() => {
     "setScriptStorage",
     "setScriptValue",
     "setSettings",
+    "setUserStyleVariables",
     "signing_generateNewKeypair",
     "signing_getPublicKey",
     "signing_getTrustedKeys",
@@ -12220,9 +12236,11 @@ const MessageRouter = (() => {
     "syncProviderHealth",
     "testSync",
     "toggleScript",
+    "toggleUserStyle",
     "unregisterMenuCommand",
     "updateBadgeForTab",
     "updateFolder",
+    "updateUserStyleCode",
     "updateWorkspace",
     "userStyleClearPreview",
     "userStylePreviewDraft",
@@ -22612,8 +22630,9 @@ const UserStylesEngine = (() => {
         if (_urlMatchesPatterns(tab.url, style.match)) {
           const tabStyles = _registeredTabs.get(tab.id) ?? /* @__PURE__ */ new Map();
           const previousCss = tabStyles.get(styleId);
+          if (previousCss === css) continue;
           try {
-            if (previousCss && previousCss !== css) {
+            if (previousCss) {
               try {
                 await chrome.scripting.removeCSS({
                   target: { tabId: tab.id },
@@ -22637,29 +22656,64 @@ const UserStylesEngine = (() => {
     }
   }
   async function _removeStyleFromAllTabs(styleId) {
+    const reconstructedCss = _buildCSS(styleId);
     try {
       const tabs = await chrome.tabs.query({});
       for (const tab of tabs) {
         if (tab.id == null) continue;
         const tabStyles = _registeredTabs.get(tab.id);
-        if (!tabStyles) continue;
-        const registeredCss = tabStyles.get(styleId);
-        if (registeredCss) {
-          try {
-            await chrome.scripting.removeCSS({
-              target: { tabId: tab.id },
-              css: registeredCss
-            });
-            tabStyles.delete(styleId);
-            if (tabStyles.size === 0) {
-              _registeredTabs.delete(tab.id);
-            }
-          } catch {
+        const registeredCss = tabStyles?.get(styleId);
+        const cssToRemove = registeredCss ?? (reconstructedCss || void 0);
+        if (!cssToRemove) continue;
+        try {
+          await chrome.scripting.removeCSS({
+            target: { tabId: tab.id },
+            css: cssToRemove
+          });
+        } catch {
+        }
+        if (tabStyles) {
+          tabStyles.delete(styleId);
+          if (tabStyles.size === 0) {
+            _registeredTabs.delete(tab.id);
           }
         }
       }
     } catch (e) {
       console.error("[UserStylesEngine] Remove failed:", e);
+    }
+  }
+  function onTabNavigated(tabId) {
+    _registeredTabs.delete(tabId);
+  }
+  async function rehydrateOpenTabs() {
+    if (!_initialized) await _loadState();
+    let tabs;
+    try {
+      tabs = await chrome.tabs.query({});
+    } catch {
+      return;
+    }
+    for (const [styleId, style] of Object.entries(_styles)) {
+      if (!style.enabled) continue;
+      const css = _buildCSS(styleId);
+      if (!css) continue;
+      for (const tab of tabs) {
+        if (tab.id == null) continue;
+        if (!_urlMatchesPatterns(tab.url, style.match)) continue;
+        const tabStyles = _registeredTabs.get(tab.id) ?? /* @__PURE__ */ new Map();
+        if (tabStyles.get(styleId) === css) continue;
+        try {
+          try {
+            await chrome.scripting.removeCSS({ target: { tabId: tab.id }, css });
+          } catch {
+          }
+          await chrome.scripting.insertCSS({ target: { tabId: tab.id }, css });
+          tabStyles.set(styleId, css);
+          _registeredTabs.set(tab.id, tabStyles);
+        } catch {
+        }
+      }
     }
   }
   function _urlMatchesPatterns(url, patterns) {
@@ -22984,7 +23038,8 @@ const UserStylesEngine = (() => {
         try {
           const tabStyles = _registeredTabs.get(tabId) ?? /* @__PURE__ */ new Map();
           const previousCss = tabStyles.get(styleId);
-          if (previousCss && previousCss !== css) {
+          if (previousCss === css) continue;
+          if (previousCss) {
             try {
               await chrome.scripting.removeCSS({
                 target: { tabId },
@@ -23065,7 +23120,9 @@ const UserStylesEngine = (() => {
     importStylusBackup,
     isUserCSSUrl,
     onTabUpdated,
-    onTabRemoved
+    onTabNavigated,
+    onTabRemoved,
+    rehydrateOpenTabs
   };
   return module.exports.default || module.exports.UserStylesEngine || module.exports;
 })();
@@ -35685,6 +35742,71 @@ backgroundActionRegistry.registerHandlers(RuntimeActionHandler.createRuntimeActi
   clearUserStylePreview: tabId => typeof UserStylesEngine !== 'undefined'
     ? UserStylesEngine.clearDraftPreview({ tabId })
     : Promise.resolve({ success: true, cleared: 0 }),
+  getUserStyles: async () => {
+    if (typeof UserStylesEngine === 'undefined') return { success: false, styles: [], error: 'UserCSS tools unavailable' };
+    await UserStylesEngine.init();
+    const styles = UserStylesEngine.getStyles();
+    const list = Object.values(styles).map(s => {
+      const vars = UserStylesEngine.getVariables(s.id) || [];
+      const values = {};
+      for (const v of vars) values[v.name] = v.current;
+      return {
+        id: s.id,
+        name: s.meta?.name || s.id,
+        enabled: s.enabled !== false,
+        match: Array.isArray(s.match) ? s.match : [],
+        description: s.meta?.description || '',
+        namespace: s.meta?.namespace || '',
+        version: s.meta?.version || '',
+        homepage: s.meta?.homepageURL || s.meta?.homepage || '',
+        rawCode: s.rawCode || '',
+        css: s.css || '',
+        variables: vars,
+        values,
+        installDate: s.installDate,
+        updateDate: s.updateDate,
+      };
+    });
+    return { success: true, styles: list };
+  },
+  installUserStyle: async (code, enabled) => {
+    if (typeof UserStylesEngine === 'undefined') return { success: false, error: 'UserCSS tools unavailable' };
+    const parsed = UserStylesEngine.parseUserCSS(String(code || ''));
+    if (parsed.error) return { success: false, error: parsed.error };
+    try {
+      const id = await UserStylesEngine.registerStyle({
+        meta: parsed.meta,
+        variables: parsed.variables,
+        css: parsed.css,
+        rawCode: String(code || ''),
+        match: parsed.match,
+        enabled: enabled !== false,
+      });
+      return { success: true, id, name: parsed.meta?.name || id };
+    } catch (e) {
+      return { success: false, error: e?.message || String(e) };
+    }
+  },
+  toggleUserStyle: async (id, enabled) => {
+    if (typeof UserStylesEngine === 'undefined') return { success: false, error: 'UserCSS tools unavailable' };
+    try { await UserStylesEngine.toggleStyle(String(id), enabled !== false); return { success: true, id: String(id) }; }
+    catch (e) { return { success: false, error: e?.message || String(e) }; }
+  },
+  deleteUserStyle: async id => {
+    if (typeof UserStylesEngine === 'undefined') return { success: false, error: 'UserCSS tools unavailable' };
+    try { await UserStylesEngine.unregisterStyle(String(id)); return { success: true, id: String(id) }; }
+    catch (e) { return { success: false, error: e?.message || String(e) }; }
+  },
+  updateUserStyleCode: async (id, code) => {
+    if (typeof UserStylesEngine === 'undefined') return { success: false, error: 'UserCSS tools unavailable' };
+    try { await UserStylesEngine.updateCSS(String(id), String(code || '')); return { success: true, id: String(id) }; }
+    catch (e) { return { success: false, error: e?.message || String(e) }; }
+  },
+  setUserStyleVariables: async (id, values) => {
+    if (typeof UserStylesEngine === 'undefined') return { success: false, error: 'UserCSS tools unavailable' };
+    try { await UserStylesEngine.setVariables(String(id), values || {}); return { success: true, id: String(id) }; }
+    catch (e) { return { success: false, error: e?.message || String(e) }; }
+  },
   getExtensionInfo: () => ({
     name: 'ScriptVault',
     version: chrome.runtime.getManifest().version,
@@ -38213,7 +38335,27 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
   }
   closeGMWebSocketsForTab(tabId);
   executionDiagnosticsStore.clear(tabId);
+  if (typeof UserStylesEngine !== 'undefined') {
+    UserStylesEngine.onTabRemoved(tabId);
+  }
 });
+
+// Persistent UserCSS injection: inject matching enabled styles as each top-level
+// document commits (early, before render, so there is no flash of unstyled
+// content). onTabNavigated first forgets the tab's prior injected-sheet registry
+// because the previous document's injected CSS is gone with it, which keeps the
+// onTabUpdated dedup safe across navigations and reloads.
+if (chrome.webNavigation?.onCommitted?.addListener) {
+  chrome.webNavigation.onCommitted.addListener(async (details) => {
+    if (details.frameId !== 0) return;
+    if (typeof UserStylesEngine === 'undefined') return;
+    if (!details.url || details.url.startsWith('chrome-extension://')) return;
+    try { await ensureInitialized(); } catch (_) { /* logged in init() */ }
+    UserStylesEngine.onTabNavigated(details.tabId);
+    UserStylesEngine.onTabUpdated(details.tabId, details.url)
+      .catch(e => console.error('[ScriptVault] UserCSS inject error:', e));
+  });
+}
 
 // GM_notification onclick/ondone: fire callbacks on notification interaction
 chrome.notifications.onClicked.addListener(async (notifId) => {
@@ -38756,6 +38898,16 @@ async function init() {
   }
   if (typeof EasyCloudSync !== 'undefined') {
     try { await EasyCloudSync.init(); } catch (e) { console.error('[ScriptVault] EasyCloudSync init error:', e); }
+  }
+  // Persistent UserCSS: load installed styles and re-apply enabled ones to any
+  // open matching tabs. After a service-worker restart the in-memory injection
+  // registry is empty but a previously injected sheet may still persist in a
+  // live document, so rehydrateOpenTabs removes any orphan before re-injecting.
+  if (typeof UserStylesEngine !== 'undefined') {
+    try {
+      await UserStylesEngine.init();
+      await UserStylesEngine.rehydrateOpenTabs();
+    } catch (e) { console.error('[ScriptVault] UserStyles init error:', e); }
   }
   await restrictManagedStorageAccess();
 

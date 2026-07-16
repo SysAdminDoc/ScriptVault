@@ -21,6 +21,12 @@ export const RUNTIME_BACKGROUND_ACTIONS = [
   'chainDomEvent',
   'userStylePreviewDraft',
   'userStyleClearPreview',
+  'getUserStyles',
+  'installUserStyle',
+  'toggleUserStyle',
+  'deleteUserStyle',
+  'updateUserStyleCode',
+  'setUserStyleVariables',
   'getExtensionInfo',
   'openDashboard',
   'factoryReset',
@@ -52,6 +58,15 @@ export interface RuntimeActionDependencies {
     colorScheme?: BackgroundMessageFor<'userStylePreviewDraft'>['colorScheme'],
   ): Promise<ResponseMap['userStylePreviewDraft']>;
   clearUserStylePreview(tabId?: number): Promise<ResponseMap['userStyleClearPreview']>;
+  getUserStyles(): Promise<ResponseMap['getUserStyles']>;
+  installUserStyle(code: string, enabled?: boolean): Promise<ResponseMap['installUserStyle']>;
+  toggleUserStyle(id: string, enabled: boolean): Promise<ResponseMap['toggleUserStyle']>;
+  deleteUserStyle(id: string): Promise<ResponseMap['deleteUserStyle']>;
+  updateUserStyleCode(id: string, code: string): Promise<ResponseMap['updateUserStyleCode']>;
+  setUserStyleVariables(
+    id: string,
+    values: BackgroundMessageFor<'setUserStyleVariables'>['values'],
+  ): Promise<ResponseMap['setUserStyleVariables']>;
   getExtensionInfo(): ResponseMap['getExtensionInfo'];
   openDashboard(message: BackgroundMessageFor<'openDashboard'>): Promise<ResponseMap['openDashboard']>;
   factoryReset(): Promise<ResponseMap['factoryReset']>;
@@ -94,6 +109,12 @@ export function createRuntimeActionHandlers(
       message.colorScheme,
     ),
     userStyleClearPreview: ({ message }) => dependencies.clearUserStylePreview(message.tabId),
+    getUserStyles: () => dependencies.getUserStyles(),
+    installUserStyle: ({ message }) => dependencies.installUserStyle(message.code || '', message.enabled),
+    toggleUserStyle: ({ message }) => dependencies.toggleUserStyle(message.id, message.enabled),
+    deleteUserStyle: ({ message }) => dependencies.deleteUserStyle(message.id),
+    updateUserStyleCode: ({ message }) => dependencies.updateUserStyleCode(message.id, message.code || ''),
+    setUserStyleVariables: ({ message }) => dependencies.setUserStyleVariables(message.id, message.values || {}),
     getExtensionInfo: () => dependencies.getExtensionInfo(),
     openDashboard: ({ message }) => dependencies.openDashboard(message),
     factoryReset: () => dependencies.factoryReset(),

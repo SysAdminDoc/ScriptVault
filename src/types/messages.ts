@@ -141,6 +141,69 @@ interface UserStyleClearPreviewResponse {
   cleared: number;
 }
 
+interface GetUserStyles {
+  action: 'getUserStyles';
+}
+
+interface InstallUserStyle {
+  action: 'installUserStyle';
+  code: string;
+  enabled?: boolean;
+}
+
+interface ToggleUserStyle {
+  action: 'toggleUserStyle';
+  id: string;
+  enabled: boolean;
+}
+
+interface DeleteUserStyle {
+  action: 'deleteUserStyle';
+  id: string;
+}
+
+interface UpdateUserStyleCode {
+  action: 'updateUserStyleCode';
+  id: string;
+  code: string;
+}
+
+interface SetUserStyleVariables {
+  action: 'setUserStyleVariables';
+  id: string;
+  values: Record<string, string | number | boolean | { light: string; dark: string }>;
+}
+
+interface UserStyleInfo {
+  id: string;
+  name: string;
+  enabled: boolean;
+  match: string[];
+  description?: string;
+  namespace?: string;
+  version?: string;
+  homepage?: string;
+  rawCode: string;
+  css: string;
+  variables: unknown[];
+  values: Record<string, unknown>;
+  installDate?: number;
+  updateDate?: number;
+}
+
+interface UserStyleListResponse {
+  success: boolean;
+  styles: UserStyleInfo[];
+  error?: string;
+}
+
+interface UserStyleMutationResponse {
+  success: boolean;
+  id?: string;
+  name?: string;
+  error?: string;
+}
+
 interface DuplicateScript {
   action: 'duplicateScript';
   id: string;
@@ -1724,6 +1787,7 @@ export type BackgroundMessage =
   // Script management
   | GetScripts | GetScript | SaveScript | CreateScript | DeleteScript
   | ToggleScript | RunScriptNow | DuplicateScript | UserStylePreviewDraft | UserStyleClearPreview | SearchScripts | ReorderScripts
+  | GetUserStyles | InstallUserStyle | ToggleUserStyle | DeleteUserStyle | UpdateUserStyleCode | SetUserStyleVariables
   | RescheduleChains | RunChainNow | GetChainDomEventTriggers | ChainDomEvent
   | ImportScript | GetHostPermissionStatus | QueueHostAccessRequest | OpenDashboard | FactoryReset
   // Trash
@@ -1887,6 +1951,12 @@ export interface ResponseMap {
   chainDomEvent: SuccessOrError<{ triggered: number }>;
   userStylePreviewDraft: UserStylePreviewResponse | ErrorResponse;
   userStyleClearPreview: UserStyleClearPreviewResponse;
+  getUserStyles: UserStyleListResponse | ErrorResponse;
+  installUserStyle: UserStyleMutationResponse | ErrorResponse;
+  toggleUserStyle: UserStyleMutationResponse | ErrorResponse;
+  deleteUserStyle: UserStyleMutationResponse | ErrorResponse;
+  updateUserStyleCode: UserStyleMutationResponse | ErrorResponse;
+  setUserStyleVariables: UserStyleMutationResponse | ErrorResponse;
   duplicateScript: { success: true; script: Script } | ErrorResponse;
   searchScripts: { scripts: Script[] };
   reorderScripts: SuccessResponse;

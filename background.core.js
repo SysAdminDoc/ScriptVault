@@ -7337,6 +7337,71 @@ backgroundActionRegistry.registerHandlers(RuntimeActionHandler.createRuntimeActi
   clearUserStylePreview: tabId => typeof UserStylesEngine !== 'undefined'
     ? UserStylesEngine.clearDraftPreview({ tabId })
     : Promise.resolve({ success: true, cleared: 0 }),
+  getUserStyles: async () => {
+    if (typeof UserStylesEngine === 'undefined') return { success: false, styles: [], error: 'UserCSS tools unavailable' };
+    await UserStylesEngine.init();
+    const styles = UserStylesEngine.getStyles();
+    const list = Object.values(styles).map(s => {
+      const vars = UserStylesEngine.getVariables(s.id) || [];
+      const values = {};
+      for (const v of vars) values[v.name] = v.current;
+      return {
+        id: s.id,
+        name: s.meta?.name || s.id,
+        enabled: s.enabled !== false,
+        match: Array.isArray(s.match) ? s.match : [],
+        description: s.meta?.description || '',
+        namespace: s.meta?.namespace || '',
+        version: s.meta?.version || '',
+        homepage: s.meta?.homepageURL || s.meta?.homepage || '',
+        rawCode: s.rawCode || '',
+        css: s.css || '',
+        variables: vars,
+        values,
+        installDate: s.installDate,
+        updateDate: s.updateDate,
+      };
+    });
+    return { success: true, styles: list };
+  },
+  installUserStyle: async (code, enabled) => {
+    if (typeof UserStylesEngine === 'undefined') return { success: false, error: 'UserCSS tools unavailable' };
+    const parsed = UserStylesEngine.parseUserCSS(String(code || ''));
+    if (parsed.error) return { success: false, error: parsed.error };
+    try {
+      const id = await UserStylesEngine.registerStyle({
+        meta: parsed.meta,
+        variables: parsed.variables,
+        css: parsed.css,
+        rawCode: String(code || ''),
+        match: parsed.match,
+        enabled: enabled !== false,
+      });
+      return { success: true, id, name: parsed.meta?.name || id };
+    } catch (e) {
+      return { success: false, error: e?.message || String(e) };
+    }
+  },
+  toggleUserStyle: async (id, enabled) => {
+    if (typeof UserStylesEngine === 'undefined') return { success: false, error: 'UserCSS tools unavailable' };
+    try { await UserStylesEngine.toggleStyle(String(id), enabled !== false); return { success: true, id: String(id) }; }
+    catch (e) { return { success: false, error: e?.message || String(e) }; }
+  },
+  deleteUserStyle: async id => {
+    if (typeof UserStylesEngine === 'undefined') return { success: false, error: 'UserCSS tools unavailable' };
+    try { await UserStylesEngine.unregisterStyle(String(id)); return { success: true, id: String(id) }; }
+    catch (e) { return { success: false, error: e?.message || String(e) }; }
+  },
+  updateUserStyleCode: async (id, code) => {
+    if (typeof UserStylesEngine === 'undefined') return { success: false, error: 'UserCSS tools unavailable' };
+    try { await UserStylesEngine.updateCSS(String(id), String(code || '')); return { success: true, id: String(id) }; }
+    catch (e) { return { success: false, error: e?.message || String(e) }; }
+  },
+  setUserStyleVariables: async (id, values) => {
+    if (typeof UserStylesEngine === 'undefined') return { success: false, error: 'UserCSS tools unavailable' };
+    try { await UserStylesEngine.setVariables(String(id), values || {}); return { success: true, id: String(id) }; }
+    catch (e) { return { success: false, error: e?.message || String(e) }; }
+  },
   getExtensionInfo: () => ({
     name: 'ScriptVault',
     version: chrome.runtime.getManifest().version,
@@ -9865,7 +9930,27 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
   }
   closeGMWebSocketsForTab(tabId);
   executionDiagnosticsStore.clear(tabId);
+  if (typeof UserStylesEngine !== 'undefined') {
+    UserStylesEngine.onTabRemoved(tabId);
+  }
 });
+
+// Persistent UserCSS injection: inject matching enabled styles as each top-level
+// document commits (early, before render, so there is no flash of unstyled
+// content). onTabNavigated first forgets the tab's prior injected-sheet registry
+// because the previous document's injected CSS is gone with it, which keeps the
+// onTabUpdated dedup safe across navigations and reloads.
+if (chrome.webNavigation?.onCommitted?.addListener) {
+  chrome.webNavigation.onCommitted.addListener(async (details) => {
+    if (details.frameId !== 0) return;
+    if (typeof UserStylesEngine === 'undefined') return;
+    if (!details.url || details.url.startsWith('chrome-extension://')) return;
+    try { await ensureInitialized(); } catch (_) { /* logged in init() */ }
+    UserStylesEngine.onTabNavigated(details.tabId);
+    UserStylesEngine.onTabUpdated(details.tabId, details.url)
+      .catch(e => console.error('[ScriptVault] UserCSS inject error:', e));
+  });
+}
 
 // GM_notification onclick/ondone: fire callbacks on notification interaction
 chrome.notifications.onClicked.addListener(async (notifId) => {
@@ -10408,6 +10493,16 @@ async function init() {
   }
   if (typeof EasyCloudSync !== 'undefined') {
     try { await EasyCloudSync.init(); } catch (e) { console.error('[ScriptVault] EasyCloudSync init error:', e); }
+  }
+  // Persistent UserCSS: load installed styles and re-apply enabled ones to any
+  // open matching tabs. After a service-worker restart the in-memory injection
+  // registry is empty but a previously injected sheet may still persist in a
+  // live document, so rehydrateOpenTabs removes any orphan before re-injecting.
+  if (typeof UserStylesEngine !== 'undefined') {
+    try {
+      await UserStylesEngine.init();
+      await UserStylesEngine.rehydrateOpenTabs();
+    } catch (e) { console.error('[ScriptVault] UserStyles init error:', e); }
   }
   await restrictManagedStorageAccess();
 

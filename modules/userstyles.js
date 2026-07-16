@@ -641,8 +641,9 @@ const UserStylesEngine = (() => {
         if (_urlMatchesPatterns(tab.url, style.match)) {
           const tabStyles = _registeredTabs.get(tab.id) ?? /* @__PURE__ */ new Map();
           const previousCss = tabStyles.get(styleId);
+          if (previousCss === css) continue;
           try {
-            if (previousCss && previousCss !== css) {
+            if (previousCss) {
               try {
                 await chrome.scripting.removeCSS({
                   target: { tabId: tab.id },
@@ -666,29 +667,64 @@ const UserStylesEngine = (() => {
     }
   }
   async function _removeStyleFromAllTabs(styleId) {
+    const reconstructedCss = _buildCSS(styleId);
     try {
       const tabs = await chrome.tabs.query({});
       for (const tab of tabs) {
         if (tab.id == null) continue;
         const tabStyles = _registeredTabs.get(tab.id);
-        if (!tabStyles) continue;
-        const registeredCss = tabStyles.get(styleId);
-        if (registeredCss) {
-          try {
-            await chrome.scripting.removeCSS({
-              target: { tabId: tab.id },
-              css: registeredCss
-            });
-            tabStyles.delete(styleId);
-            if (tabStyles.size === 0) {
-              _registeredTabs.delete(tab.id);
-            }
-          } catch {
+        const registeredCss = tabStyles?.get(styleId);
+        const cssToRemove = registeredCss ?? (reconstructedCss || void 0);
+        if (!cssToRemove) continue;
+        try {
+          await chrome.scripting.removeCSS({
+            target: { tabId: tab.id },
+            css: cssToRemove
+          });
+        } catch {
+        }
+        if (tabStyles) {
+          tabStyles.delete(styleId);
+          if (tabStyles.size === 0) {
+            _registeredTabs.delete(tab.id);
           }
         }
       }
     } catch (e) {
       console.error("[UserStylesEngine] Remove failed:", e);
+    }
+  }
+  function onTabNavigated(tabId) {
+    _registeredTabs.delete(tabId);
+  }
+  async function rehydrateOpenTabs() {
+    if (!_initialized) await _loadState();
+    let tabs;
+    try {
+      tabs = await chrome.tabs.query({});
+    } catch {
+      return;
+    }
+    for (const [styleId, style] of Object.entries(_styles)) {
+      if (!style.enabled) continue;
+      const css = _buildCSS(styleId);
+      if (!css) continue;
+      for (const tab of tabs) {
+        if (tab.id == null) continue;
+        if (!_urlMatchesPatterns(tab.url, style.match)) continue;
+        const tabStyles = _registeredTabs.get(tab.id) ?? /* @__PURE__ */ new Map();
+        if (tabStyles.get(styleId) === css) continue;
+        try {
+          try {
+            await chrome.scripting.removeCSS({ target: { tabId: tab.id }, css });
+          } catch {
+          }
+          await chrome.scripting.insertCSS({ target: { tabId: tab.id }, css });
+          tabStyles.set(styleId, css);
+          _registeredTabs.set(tab.id, tabStyles);
+        } catch {
+        }
+      }
     }
   }
   function _urlMatchesPatterns(url, patterns) {
@@ -1013,7 +1049,8 @@ const UserStylesEngine = (() => {
         try {
           const tabStyles = _registeredTabs.get(tabId) ?? /* @__PURE__ */ new Map();
           const previousCss = tabStyles.get(styleId);
-          if (previousCss && previousCss !== css) {
+          if (previousCss === css) continue;
+          if (previousCss) {
             try {
               await chrome.scripting.removeCSS({
                 target: { tabId },
@@ -1094,7 +1131,9 @@ const UserStylesEngine = (() => {
     importStylusBackup,
     isUserCSSUrl,
     onTabUpdated,
-    onTabRemoved
+    onTabNavigated,
+    onTabRemoved,
+    rehydrateOpenTabs
   };
   return module.exports.default || module.exports.UserStylesEngine || module.exports;
 })();

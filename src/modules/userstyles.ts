@@ -5,23 +5,17 @@
 // variable substitution, Stylus backup import, and userscript conversion.
 // Runs in service worker context (no DOM).
 //
-// WIRING STATUS (read before assuming a method is live):
-//   WIRED to the background runtime (reachable today):
-//     parseUserCSS, validateUserCSSVariables, getVariables/setVariables,
-//     applyVariableDefaults, exportUserCSS, convertToUserscript, and the live
-//     editor draft preview (previewDraft / clearDraftPreview via the
-//     `previewUserStyle` / `clearUserStylePreview` message handlers).
-//   NOT wired yet (persistent-install surface — complete but no router action
-//   or tab listener drives it): registerStyle, unregisterStyle, toggleStyle,
-//   updateCSS, getStyles/getStyle, importUserCSS, importStylusBackup,
-//   isUserCSSUrl, onTabUpdated, onTabRemoved. These implement persistent
-//   `.user.css` installation and per-tab injection but require background
-//   message actions, `.user.css` navigation interception, `tabs`/
-//   `webNavigation` listeners, and a dashboard management surface before they
-//   do anything at runtime. The shipped UserCSS feature is therefore
-//   parse/validate/configure + live editor preview only — see the "persistent
-//   UserCSS install + management" ROADMAP item. Keep this engine intact; it is
-//   the foundation for that feature, not dead code to delete.
+// WIRING STATUS: the full engine is wired to the background runtime.
+//   Persistent install/management is driven by the userStyle* message actions
+//   (getUserStyles, installUserStyle, toggleUserStyle, deleteUserStyle,
+//   updateUserStyleCode, setUserStyleVariables) in src/background/core.ts, and
+//   per-tab injection runs off `webNavigation.onCommitted` (onTabNavigated →
+//   onTabUpdated), `tabs.onRemoved` (onTabRemoved), a startup `rehydrateOpenTabs`
+//   call, and `.user.css` navigation interception. The live editor draft preview
+//   (previewDraft / clearDraftPreview) remains wired via the `previewUserStyle` /
+//   `clearUserStylePreview` handlers. Keep the injection dedup (onTabUpdated skips
+//   when the identical sheet is already registered) and per-commit registry reset
+//   (onTabNavigated) intact — together they prevent duplicate injected sheets.
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -972,8 +966,11 @@ async function _injectStyleToMatchingTabs(styleId: string): Promise<void> {
       if (_urlMatchesPatterns(tab.url, style.match)) {
         const tabStyles: Map<string, string> = _registeredTabs.get(tab.id) ?? new Map<string, string>();
         const previousCss: string | undefined = tabStyles.get(styleId);
+        // Dedup: identical CSS already injected for this tab — do not stack a
+        // duplicate sheet on a repeated inject pass.
+        if (previousCss === css) continue;
         try {
-          if (previousCss && previousCss !== css) {
+          if (previousCss) {
             try {
               await chrome.scripting.removeCSS({
                 target: { tabId: tab.id },
@@ -1003,30 +1000,88 @@ async function _injectStyleToMatchingTabs(styleId: string): Promise<void> {
  * Remove a style's CSS from all tabs.
  */
 async function _removeStyleFromAllTabs(styleId: string): Promise<void> {
+  // Reconstruct the current CSS so we can also clear an orphaned injection whose
+  // per-tab record was lost when the service worker was torn down and restarted
+  // (the injected sheet persists in the live document even though _registeredTabs
+  // is in-memory). removeCSS matches by exact string, so this only clears the
+  // sheet when the reconstructed CSS still equals what was injected.
+  const reconstructedCss: string = _buildCSS(styleId);
   try {
     const tabs: chrome.tabs.Tab[] = await chrome.tabs.query({});
     for (const tab of tabs) {
       if (tab.id == null) continue;
       const tabStyles: Map<string, string> | undefined = _registeredTabs.get(tab.id);
-      if (!tabStyles) continue;
-      const registeredCss: string | undefined = tabStyles.get(styleId);
-      if (registeredCss) {
-        try {
-          await chrome.scripting.removeCSS({
-            target: { tabId: tab.id },
-            css: registeredCss,
-          });
-          tabStyles.delete(styleId);
-          if (tabStyles.size === 0) {
-            _registeredTabs.delete(tab.id);
-          }
-        } catch {
-          // Tab may have been closed
+      const registeredCss: string | undefined = tabStyles?.get(styleId);
+      const cssToRemove: string | undefined = registeredCss ?? (reconstructedCss || undefined);
+      if (!cssToRemove) continue;
+      try {
+        await chrome.scripting.removeCSS({
+          target: { tabId: tab.id },
+          css: cssToRemove,
+        });
+      } catch {
+        // Tab may have been closed, navigated, or never carried this sheet.
+      }
+      if (tabStyles) {
+        tabStyles.delete(styleId);
+        if (tabStyles.size === 0) {
+          _registeredTabs.delete(tab.id);
         }
       }
     }
   } catch (e: unknown) {
     console.error('[UserStylesEngine] Remove failed:', e);
+  }
+}
+
+/**
+ * Forget the injected-CSS registry for a tab whose document was just replaced
+ * (navigation or reload). The previously injected sheets are gone with the old
+ * document, so the next inject pass must treat the tab as a clean slate — this
+ * is what makes the onTabUpdated dedup safe across navigations.
+ */
+function onTabNavigated(tabId: number): void {
+  _registeredTabs.delete(tabId);
+}
+
+/**
+ * Re-apply every enabled style to all currently open matching tabs. Called once
+ * after the service worker restarts: the in-memory registry is empty but a
+ * previously injected sheet may still persist in a live document, so remove any
+ * reconstructed match first and re-insert exactly one sheet.
+ */
+async function rehydrateOpenTabs(): Promise<void> {
+  if (!_initialized) await _loadState();
+  let tabs: chrome.tabs.Tab[];
+  try {
+    tabs = await chrome.tabs.query({});
+  } catch {
+    return;
+  }
+  for (const [styleId, style] of Object.entries(_styles)) {
+    if (!style.enabled) continue;
+    const css: string = _buildCSS(styleId);
+    if (!css) continue;
+    for (const tab of tabs) {
+      if (tab.id == null) continue;
+      if (!_urlMatchesPatterns(tab.url, style.match)) continue;
+      const tabStyles: Map<string, string> = _registeredTabs.get(tab.id) ?? new Map<string, string>();
+      if (tabStyles.get(styleId) === css) continue;
+      try {
+        // Clear a possible orphaned duplicate from before the restart, then
+        // inject exactly one fresh sheet.
+        try {
+          await chrome.scripting.removeCSS({ target: { tabId: tab.id }, css });
+        } catch {
+          // Nothing to remove.
+        }
+        await chrome.scripting.insertCSS({ target: { tabId: tab.id }, css });
+        tabStyles.set(styleId, css);
+        _registeredTabs.set(tab.id, tabStyles);
+      } catch {
+        // Tab not injectable.
+      }
+    }
   }
 }
 
@@ -1471,7 +1526,13 @@ async function onTabUpdated(tabId: number, url: string | undefined): Promise<voi
         try {
           const tabStyles: Map<string, string> = _registeredTabs.get(tabId) ?? new Map<string, string>();
           const previousCss: string | undefined = tabStyles.get(styleId);
-          if (previousCss && previousCss !== css) {
+          // Dedup: the exact CSS is already injected in this document, so a
+          // repeated onUpdated/onCommitted event must not stack a duplicate
+          // sheet. onTabNavigated() clears this registry per document commit, so
+          // an equal previousCss here means the same live document, not a stale
+          // pre-navigation record.
+          if (previousCss === css) continue;
+          if (previousCss) {
             try {
               await chrome.scripting.removeCSS({
                 target: { tabId },
@@ -1584,7 +1645,9 @@ export const UserStylesEngine = {
   importStylusBackup,
   isUserCSSUrl,
   onTabUpdated,
+  onTabNavigated,
   onTabRemoved,
+  rehydrateOpenTabs,
 } as const;
 
 export type { ColorSpace, PreviewColorScheme, PrimitiveStyleVariableValue, ColorSchemeValue, StyleVariableValue, ColorSchemeDefaults, StyleVariable, StyleVariableWithCurrent, StyleMeta, StyleEntry, StyleRegistration, ParseResult, UserCSSValidationResult, UserCSSExportResult, UserCSSImportResult, ConvertResult, ImportResult, DraftPreviewOptions, DraftPreviewResult, DraftPreviewClearResult, StylusSection, StylusStyle };

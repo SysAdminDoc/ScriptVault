@@ -187,30 +187,23 @@ body { color: royalblue; }`;
   });
 });
 
-describe('UserStyles wiring status (persistent install intentionally not wired)', () => {
+describe('UserStyles wiring status (persistent install wired)', () => {
   const source = readFileSync(resolve(process.cwd(), 'src/modules/userstyles.ts'), 'utf8');
-  const readme = readFileSync(resolve(process.cwd(), 'README.md'), 'utf8');
 
-  it('preserves the complete persistent-install engine surface for the future wire', () => {
+  it('exposes the full persistent-install + injection-lifecycle surface', () => {
     const engine = createFreshUserStylesEngine();
     for (const method of [
       'registerStyle', 'unregisterStyle', 'toggleStyle', 'updateCSS',
       'getStyles', 'getStyle', 'importUserCSS', 'importStylusBackup',
-      'isUserCSSUrl', 'onTabUpdated', 'onTabRemoved',
+      'isUserCSSUrl', 'onTabUpdated', 'onTabNavigated', 'onTabRemoved',
+      'rehydrateOpenTabs',
     ]) {
       expect(typeof engine[method]).toBe('function');
     }
   });
 
-  it('documents the wiring status so the persistent surface is not mistaken for live code', () => {
+  it('documents that the engine is wired to the runtime', () => {
     expect(source).toContain('WIRING STATUS');
-    expect(source).toContain('NOT wired yet (persistent-install surface');
-  });
-
-  it('does not over-claim persistent installation in the README', () => {
-    expect(readme).toContain('live draft preview');
-    // The shipped UserCSS surface is preview + configuration, not persistent
-    // per-tab installation. Guard against a doc claim the runtime cannot back.
-    expect(readme).not.toMatch(/install(ed)? user\s?styles? (that )?persist/i);
+    expect(source).toContain('the full engine is wired to the background runtime');
   });
 });
