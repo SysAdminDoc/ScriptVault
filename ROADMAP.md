@@ -775,13 +775,6 @@ CLAUDE.md audit history, and RESEARCH.md rejected ideas._
 
 ### P2
 
-- [ ] P2 — Harden the build chain against npm lifecycle-script worms
-  Why: Zero RUNTIME deps does not defend against install-time `preinstall`/`postinstall` payloads (Shai-Hulud / Mini-Shai-Hulud, 2026 H2). A repo `.npmrc` `ignore-scripts=true` with an explicit allowlist for deps that genuinely need a build step (esbuild, puppeteer-core) closes the lifecycle path.
-  Evidence: security research — https://www.microsoft.com/en-us/security/blog/2025/12/09/shai-hulud-2-0-guidance-for-detecting-investigating-and-defending-against-the-supply-chain-attack/
-  Touches: `.npmrc` (new/edit), release docs, CLAUDE.md build notes.
-  Acceptance: `npm ci` succeeds with lifecycle scripts disabled by default and only the allowlisted build steps run; documented publish-token discipline (publish-only scope, 2FA/OIDC); a note pins the policy.
-  Complexity: S
-
 ### P3
 
 - [ ] P3 — Sanitize page-controlled template tokens

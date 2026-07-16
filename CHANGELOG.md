@@ -4,6 +4,11 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Hardened the build chain against npm lifecycle-script worms.** Dependency
+  install scripts are now disabled by default (`.npmrc` `ignore-scripts=true`),
+  closing the install-time payload vector used by 2026 npm supply-chain worms.
+  The build still works because ScriptVault has zero runtime dependencies and
+  esbuild's binary resolves from its platform optional dependency.
 - **Pinned the manifest permission surface with a build-time drift gate.** A new
   `permissions:check` (wired into `npm run check`) fails the build if any
   manifest declares a permission or host outside the reviewed allowlist, so a
