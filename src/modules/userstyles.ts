@@ -4,6 +4,24 @@
 // Parses UserCSS (==UserStyle==) format, manages CSS style registration,
 // variable substitution, Stylus backup import, and userscript conversion.
 // Runs in service worker context (no DOM).
+//
+// WIRING STATUS (read before assuming a method is live):
+//   WIRED to the background runtime (reachable today):
+//     parseUserCSS, validateUserCSSVariables, getVariables/setVariables,
+//     applyVariableDefaults, exportUserCSS, convertToUserscript, and the live
+//     editor draft preview (previewDraft / clearDraftPreview via the
+//     `previewUserStyle` / `clearUserStylePreview` message handlers).
+//   NOT wired yet (persistent-install surface — complete but no router action
+//   or tab listener drives it): registerStyle, unregisterStyle, toggleStyle,
+//   updateCSS, getStyles/getStyle, importUserCSS, importStylusBackup,
+//   isUserCSSUrl, onTabUpdated, onTabRemoved. These implement persistent
+//   `.user.css` installation and per-tab injection but require background
+//   message actions, `.user.css` navigation interception, `tabs`/
+//   `webNavigation` listeners, and a dashboard management surface before they
+//   do anything at runtime. The shipped UserCSS feature is therefore
+//   parse/validate/configure + live editor preview only — see the "persistent
+//   UserCSS install + management" ROADMAP item. Keep this engine intact; it is
+//   the foundation for that feature, not dead code to delete.
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */

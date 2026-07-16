@@ -756,12 +756,22 @@ CLAUDE.md audit history, and RESEARCH.md rejected ideas._
 
 ### P1
 
-- [ ] P1 — Wire or honestly gate the persistent UserCSS engine
-  Why: `UserStylesEngine.registerStyle/toggleStyle/updateCSS/importUserCSS/importStylusBackup/onTabUpdated/onTabRemoved/isUserCSSUrl` are exported and documented as shipped, but have no message-router action and no `tabs`/`webNavigation` listener wiring; only `userStylePreviewDraft`/`userStyleClearPreview` are reachable. `.user.css` install/persist is non-functional beyond ephemeral editor preview.
-  Evidence: code audit — `src/modules/userstyles.ts` (exports ~1548-1570), unwired in generated `background.js`; reachable actions at `background.js:11843-11883`, `pages/dashboard.js:13364/13392`; README lists `modules/userstyles.js` `.user.css` support as a feature.
-  Touches: `src/background/core.ts` (router + `chrome.tabs.onUpdated`/`onRemoved` or `webNavigation.onCommitted` wiring), `src/modules/userstyles.ts`, `pages/dashboard.js` (install/toggle UI), README.
-  Acceptance: either a user can install and persist a `.user.css` style that injects on navigation to matching tabs (with a regression test proving `onTabUpdated` injection), OR the persistent half is explicitly feature-flagged off and the README/CLAUDE claim corrected to "editor preview only."
-  Complexity: L
+- [ ] P2 — Ship persistent UserCSS install + management (wire the engine)
+  Why: `UserStylesEngine` is a complete 1572-line subsystem (persistence, per-tab
+  injection, variables, Stylus import, conversion) but only its parse/validate/
+  variable/live-preview surface is wired to the runtime. The persistent-install
+  methods (`registerStyle`/`toggleStyle`/`updateCSS`/`importUserCSS`/
+  `importStylusBackup`/`isUserCSSUrl`/`onTabUpdated`/`onTabRemoved`) have no
+  message-router action, no `.user.css` navigation interception, no `tabs`/
+  `webNavigation` listeners, and no dashboard management surface, so a user
+  cannot install a persistent `.user.css` that injects on navigation. The engine
+  now documents this wiring status in-source (v3.20.0) and the README correctly
+  scopes the feature to preview; this item builds the real feature.
+  Evidence: code audit — `src/modules/userstyles.ts` (WIRING STATUS header),
+  wired handlers `previewUserStyle`/`clearUserStylePreview` in `src/background/core.ts:7329-7333`.
+  Touches: `src/background/core.ts` (router actions + `chrome.tabs.onUpdated`/`onRemoved` + `.user.css` install interception), `src/modules/userstyles.ts`, `pages/dashboard.js` + `pages/dashboard.html` (userstyle list/toggle/delete/variables management surface), README, tests.
+  Acceptance: a user can install a persistent `.user.css`, see it in a management surface, toggle/delete it, and it injects on navigation to matching tabs and re-injects across service-worker restarts; regression tests cover `onTabUpdated` injection, dedup (no duplicate sheet on repeated `onUpdated`), and `onTabRemoved` cleanup. Fold in the two open UserCSS lifecycle items (preview leaks, SW-death orphaning) as part of the same lifecycle.
+  Complexity: XL
 
 ### P2
 
