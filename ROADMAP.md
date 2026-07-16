@@ -60,11 +60,6 @@ are lower-priority findings deferred for a later pass.
   or What's New insertion) holds the stale node.
   Where: `pages/dashboard.js` editor-open render path.
 
-- [ ] P3 — MV3 SW-death leaves orphaned UserCSS preview/registered-tab maps
-  Why: `_registeredTabs`/`_draftPreviewTabs` are in-memory; if the worker is
-  killed between injection and a later disable/clear, `removeCSS` has no record
-  and stale CSS persists until navigation. Persist tab→css bookkeeping.
-  Where: `src/modules/userstyles.ts:169-170`.
 
 ## Deep Audit Backlog (2026-07-07)
 
@@ -770,13 +765,6 @@ CLAUDE.md audit history, and RESEARCH.md rejected ideas._
 ### P2
 
 ### P3
-
-- [ ] P3 — Compress backup blobs with the Compression Streams API
-  Why: `BackupScheduler` stores full uncompressed ZIP blobs in `chrome.storage.local` (known inefficiency, CLAUDE.md). The Baseline Compression Streams API (gzip/brotli) shrinks the footprint with no new dependency.
-  Evidence: CLAUDE.md "Known Remaining Issues"; https://developer.mozilla.org/en-US/docs/Web/API/CompressionStream/CompressionStream
-  Touches: `src/modules/backup-scheduler.ts`, restore path, migration for existing uncompressed blobs, focused tests.
-  Acceptance: new backups are stored compressed with transparent decompress-on-restore; existing uncompressed backups still restore; measured storage reduction recorded in a test.
-  Complexity: M
 
 ## Under Consideration (2026-07-16)
 
