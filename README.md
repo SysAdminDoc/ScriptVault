@@ -510,6 +510,17 @@ that script in the dashboard editor.
 | Network restrictions | `@connect` domains and internal-host guards are enforced before XHR, download, and WebSocket requests run |
 | Blacklist protection | Remote + manual blacklists block known malicious scripts |
 | Zero telemetry | No data collection, no phone home &mdash; everything stays local |
+| Pinned permissions | The manifest permission surface is pinned by a build-time drift gate (`npm run permissions:check`) &mdash; an update can never silently widen it |
+
+### Permission Commitment
+
+ScriptVault's manifest permissions are **pinned to an allowlist** enforced on
+every build (`scripts/check-permission-drift.mjs`). A release can never silently
+add a permission or widen host access &mdash; growth requires a reviewed code
+change to the pinned set. Host access stays exactly `<all_urls>` (required to run
+userscripts on the sites you choose) and is **never widened beyond it**. This
+defends against the ownership-transfer / permission-creep attacks that have hit
+other extensions.
 
 ### Reporting a Vulnerability
 

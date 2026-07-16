@@ -775,13 +775,6 @@ CLAUDE.md audit history, and RESEARCH.md rejected ideas._
 
 ### P2
 
-- [ ] P2 — Add a manifest permission-drift gate to the test suite
-  Why: Nothing fails the build if `permissions`/`host_permissions` grow beyond the intended set — the exact vector abused by 2026 CWS ownership-transfer/permission-creep attacks (QuickLens, ShotBird). `store-copy:check` verifies disclosure coverage, not growth.
-  Evidence: security research — https://pluto.security/blog/chrome-extension-supply-chain-attacks-permission-creep/ ; `manifest.json` permissions set.
-  Touches: `scripts/` (new drift check or extend an existing manifest check), `tests/`, `package.json` `check` wiring, README permission statement.
-  Acceptance: a pinned permission/host allowlist; the build fails if `manifest.json`/`manifest-firefox.json` declare any permission or host outside it; README documents the pinned set and the "never `<all_urls>` beyond current" commitment.
-  Complexity: S
-
 - [ ] P2 — Harden the build chain against npm lifecycle-script worms
   Why: Zero RUNTIME deps does not defend against install-time `preinstall`/`postinstall` payloads (Shai-Hulud / Mini-Shai-Hulud, 2026 H2). A repo `.npmrc` `ignore-scripts=true` with an explicit allowlist for deps that genuinely need a build step (esbuild, puppeteer-core) closes the lifecycle path.
   Evidence: security research — https://www.microsoft.com/en-us/security/blog/2025/12/09/shai-hulud-2-0-guidance-for-detecting-investigating-and-defending-against-the-supply-chain-attack/

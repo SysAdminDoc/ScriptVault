@@ -4,6 +4,12 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Pinned the manifest permission surface with a build-time drift gate.** A new
+  `permissions:check` (wired into `npm run check`) fails the build if any
+  manifest declares a permission or host outside the reviewed allowlist, so a
+  release can never silently widen permissions or host access — a defense against
+  ownership-transfer / permission-creep supply-chain attacks. Host access stays
+  pinned to `<all_urls>` and is never widened beyond it.
 - **Fixed UserCSS live-preview leaks.** Closing or navigating away from the
   dashboard while a UserCSS preview is active now clears the injected preview
   CSS from the target page (via `pagehide`), and switching the active target tab
