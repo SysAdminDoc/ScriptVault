@@ -3,7 +3,7 @@
   "name": "English",
   "direction": "ltr",
   "translationStatus": "complete",
-  "runtimeCoverageBaseline": 1915,
+  "runtimeCoverageBaseline": 1914,
   "runtime": {
     "appName": "ScriptVault",
     "dashboardTitle": "ScriptVault Dashboard",
@@ -1593,7 +1593,6 @@
     "previewCss": "Preview CSS",
     "installUserStyle": "Install Style",
     "installUserStyleTitle": "Install this UserCSS as a persistent userstyle",
-    "updateUserStyleAction": "Update Style",
     "manageUserStyles": "Manage UserStyles",
     "configureCss": "Configure CSS",
     "configureUserCssTitle": "Configure UserCSS variables",

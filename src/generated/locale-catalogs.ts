@@ -1638,7 +1638,6 @@ export const localeCatalogs = {
     "previewCss": "Preview CSS",
     "installUserStyle": "Install Style",
     "installUserStyleTitle": "Install this UserCSS as a persistent userstyle",
-    "updateUserStyleAction": "Update Style",
     "manageUserStyles": "Manage UserStyles",
     "configureCss": "Configure CSS",
     "configureUserCssTitle": "Configure UserCSS variables",
@@ -3167,15 +3166,15 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 43,
     "translatedRuntimeMessages": 43,
-    "totalRuntimeMessages": 1915
+    "totalRuntimeMessages": 1914
   },
   "en": {
     "name": "English",
     "direction": "ltr",
     "translationStatus": "complete",
-    "runtimeCoverageBaseline": 1915,
-    "translatedRuntimeMessages": 1915,
-    "totalRuntimeMessages": 1915
+    "runtimeCoverageBaseline": 1914,
+    "translatedRuntimeMessages": 1914,
+    "totalRuntimeMessages": 1914
   },
   "es": {
     "name": "Español",
@@ -3183,7 +3182,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 45,
     "translatedRuntimeMessages": 45,
-    "totalRuntimeMessages": 1915
+    "totalRuntimeMessages": 1914
   },
   "fr": {
     "name": "Français",
@@ -3191,7 +3190,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 43,
     "translatedRuntimeMessages": 43,
-    "totalRuntimeMessages": 1915
+    "totalRuntimeMessages": 1914
   },
   "he": {
     "name": "עברית",
@@ -3199,7 +3198,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 58,
     "translatedRuntimeMessages": 58,
-    "totalRuntimeMessages": 1915
+    "totalRuntimeMessages": 1914
   },
   "ja": {
     "name": "日本語",
@@ -3207,7 +3206,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 71,
     "translatedRuntimeMessages": 71,
-    "totalRuntimeMessages": 1915
+    "totalRuntimeMessages": 1914
   },
   "pt": {
     "name": "Português",
@@ -3215,7 +3214,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 42,
     "translatedRuntimeMessages": 42,
-    "totalRuntimeMessages": 1915
+    "totalRuntimeMessages": 1914
   },
   "ru": {
     "name": "Русский",
@@ -3223,7 +3222,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 117,
     "translatedRuntimeMessages": 117,
-    "totalRuntimeMessages": 1915
+    "totalRuntimeMessages": 1914
   },
   "zh": {
     "name": "中文",
@@ -3231,7 +3230,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 46,
     "translatedRuntimeMessages": 46,
-    "totalRuntimeMessages": 1915
+    "totalRuntimeMessages": 1914
   }
 } as const;
 

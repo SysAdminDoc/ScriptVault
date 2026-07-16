@@ -6578,7 +6578,6 @@ const I18n = (() => {
       "previewCss": "Preview CSS",
       "installUserStyle": "Install Style",
       "installUserStyleTitle": "Install this UserCSS as a persistent userstyle",
-      "updateUserStyleAction": "Update Style",
       "manageUserStyles": "Manage UserStyles",
       "configureCss": "Configure CSS",
       "configureUserCssTitle": "Configure UserCSS variables",
@@ -7350,15 +7349,15 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 43,
       "translatedRuntimeMessages": 43,
-      "totalRuntimeMessages": 1915
+      "totalRuntimeMessages": 1914
     },
     "en": {
       "name": "English",
       "direction": "ltr",
       "translationStatus": "complete",
-      "runtimeCoverageBaseline": 1915,
-      "translatedRuntimeMessages": 1915,
-      "totalRuntimeMessages": 1915
+      "runtimeCoverageBaseline": 1914,
+      "translatedRuntimeMessages": 1914,
+      "totalRuntimeMessages": 1914
     },
     "es": {
       "name": "Espa\xF1ol",
@@ -7366,7 +7365,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 45,
       "translatedRuntimeMessages": 45,
-      "totalRuntimeMessages": 1915
+      "totalRuntimeMessages": 1914
     },
     "fr": {
       "name": "Fran\xE7ais",
@@ -7374,7 +7373,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 43,
       "translatedRuntimeMessages": 43,
-      "totalRuntimeMessages": 1915
+      "totalRuntimeMessages": 1914
     },
     "he": {
       "name": "\u05E2\u05D1\u05E8\u05D9\u05EA",
@@ -7382,7 +7381,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 58,
       "translatedRuntimeMessages": 58,
-      "totalRuntimeMessages": 1915
+      "totalRuntimeMessages": 1914
     },
     "ja": {
       "name": "\u65E5\u672C\u8A9E",
@@ -7390,7 +7389,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 71,
       "translatedRuntimeMessages": 71,
-      "totalRuntimeMessages": 1915
+      "totalRuntimeMessages": 1914
     },
     "pt": {
       "name": "Portugu\xEAs",
@@ -7398,7 +7397,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 42,
       "translatedRuntimeMessages": 42,
-      "totalRuntimeMessages": 1915
+      "totalRuntimeMessages": 1914
     },
     "ru": {
       "name": "\u0420\u0443\u0441\u0441\u043A\u0438\u0439",
@@ -7406,7 +7405,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 117,
       "translatedRuntimeMessages": 117,
-      "totalRuntimeMessages": 1915
+      "totalRuntimeMessages": 1914
     },
     "zh": {
       "name": "\u4E2D\u6587",
@@ -7414,7 +7413,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 46,
       "translatedRuntimeMessages": 46,
-      "totalRuntimeMessages": 1915
+      "totalRuntimeMessages": 1914
     }
   };
 
@@ -38571,6 +38570,61 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
 }, {
   url: [
     { urlMatches: '.*\\.user\\.js(\\?.*)?$' }
+  ]
+});
+
+// Persistent UserCSS install interception: a navigation to a `.user.css` URL is
+// fetched (bounded, internal-host-guarded), and if it is a UserStyle the tab is
+// redirected into the dashboard editor pre-filled with the source so the user
+// can review it and choose Install Style. Mirrors the `.user.js` interceptor but
+// routes to the editor rather than the userscript install page.
+const _PENDING_USERSTYLE_STORAGE_PREFIX = 'pendingUserStyle_';
+
+async function _fetchPendingUserStyle(url) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
+  try {
+    InternalHostGuard.assertExternalFetchUrl(url, 'UserCSS source', ['http:', 'https:']);
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    const postCheck = InternalHostGuard.classifyResponseUrl(response, ['http:', 'https:']);
+    if (!postCheck.ok) throw new Error('UserCSS source redirected to ' + postCheck.message);
+    const code = await _fetchTextBounded(response, MAX_SCRIPT_SIZE, 'UserCSS');
+    if (!/\/\*\s*==UserStyle==[\s\S]*?==\/UserStyle==\s*\*\//.test(code)) {
+      return { action: 'pass-through' };
+    }
+    return { action: 'install', code };
+  } catch (error) {
+    console.error('[ScriptVault] Failed to fetch UserCSS:', error);
+    return { action: 'pass-through' };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
+  if (details.frameId !== 0) return;
+  const url = details.url;
+  if (!url.match(/\.user\.css(\?.*)?$/i)) return;
+  if (url.startsWith('chrome-extension://')) return;
+  try { await ensureInitialized(); } catch (_) { /* logged in init() */ }
+
+  const result = await _fetchPendingUserStyle(url);
+  if (result.action !== 'install') return;
+
+  const storageKey = `${_PENDING_USERSTYLE_STORAGE_PREFIX}${details.tabId}`;
+  try {
+    await chrome.storage.local.set({ [storageKey]: { url, code: result.code, timestamp: Date.now() } });
+    const dashboardUrl = chrome.runtime.getURL('pages/dashboard.html') + `#usercss=${encodeURIComponent(storageKey)}`;
+    chrome.tabs.update(details.tabId, { url: dashboardUrl }).catch((updateErr) => {
+      debugLog('[ScriptVault] UserCSS tab.update failed (tab likely closed):', updateErr?.message || updateErr);
+    });
+  } catch (e) {
+    console.error('[ScriptVault] UserCSS interception error:', e);
+  }
+}, {
+  url: [
+    { urlMatches: '.*\\.user\\.css(\\?.*)?$' }
   ]
 });
 

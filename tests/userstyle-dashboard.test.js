@@ -13,30 +13,32 @@ describe('UserStyles dashboard management surface', () => {
     expect(html).toContain('data-i18n="installUserStyle"');
     expect(en.runtime.installUserStyle).toBeTruthy();
     expect(en.runtime.installUserStyleTitle).toBeTruthy();
-    expect(en.runtime.updateUserStyleAction).toBeTruthy();
   });
 
-  it('wires the install/update action to the backend', () => {
-    expect(js).toContain('function installOrUpdateUserStyle');
+  it('installs the current UserCSS editor draft via the backend', () => {
+    expect(js).toContain('function installCurrentUserStyle');
     expect(js).toContain("action: 'installUserStyle'");
-    expect(js).toContain("action: 'updateUserStyleCode'");
     expect(js).toContain("elements.btnEditorInstallUserStyle?.addEventListener('click'");
   });
 
-  it('provides a manager surface with list/toggle/delete backed by the runtime', () => {
+  it('provides a manager surface with list/toggle/delete/edit backed by the runtime', () => {
     expect(js).toContain('function showUserStylesManager');
     expect(js).toContain("action: 'getUserStyles'");
     expect(js).toContain("action: 'toggleUserStyle'");
     expect(js).toContain("action: 'deleteUserStyle'");
+    expect(js).toContain("action: 'updateUserStyleCode'");
     // Discoverable from the command palette.
     expect(js).toContain("label: 'Manage UserStyles'");
   });
 
-  it('tracks edit mode so re-saving an installed style updates rather than duplicates', () => {
-    expect(js).toContain('editingUserStyleId');
-    expect(js).toContain('function openUserStyleForEditing');
-    // Opening a real script or a fresh draft must leave edit mode.
-    const createNew = js.slice(js.indexOf('async function createNewScript'), js.indexOf('async function createNewScript') + 400);
-    expect(createNew).toContain('state.editingUserStyleId = null');
+  it('edits and installs userstyles through review/edit modals, not the script editor', () => {
+    expect(js).toContain('function showUserStyleEditModal');
+    expect(js).toContain('function showUserStyleInstallReview');
+    // The .user.css interception routes to the install-review modal.
+    expect(js).toContain('function openPendingUserStyle');
+    expect(js).toContain("hash.startsWith('usercss=')");
+    // No lingering editor-routing that would create junk scripts.
+    expect(js).not.toContain('function loadUserStyleIntoEditor');
+    expect(js).not.toContain('editingUserStyleId');
   });
 });

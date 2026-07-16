@@ -101,10 +101,7 @@
             timer: null,
             values: {},
             colorScheme: 'auto'
-        },
-        // Set to a persistent userstyle id when the editor holds that style's
-        // source for editing — the Install button then becomes "Update Style".
-        editingUserStyleId: null
+        }
     };
 
     // DOM Elements
@@ -604,6 +601,9 @@
         };
         if (!hash) return { type: 'tab', tab: 'scripts' };
         if (hash === 'new_script' || hash === 'new') return { type: 'new' };
+        if (hash.startsWith('usercss=')) {
+            return { type: 'usercss_install', key: decodeRouteValue(hash.slice(8)) };
+        }
         if (hash.startsWith('tab=')) {
             const tab = hash.slice(4);
             return { type: 'tab', tab: DASHBOARD_TABS.includes(tab) ? tab : 'scripts' };
@@ -2710,6 +2710,8 @@
         const route = getDashboardRoute();
         if (route.type === 'new') {
             createNewScript();
+        } else if (route.type === 'usercss_install' && route.key) {
+            await openPendingUserStyle(route.key);
         } else if (route.type === 'script' && route.scriptId) {
             openEditorForScript(route.scriptId, { updateRoute: false });
         } else if (route.type === 'tab' && route.tab && route.tab !== 'scripts') {
@@ -10264,8 +10266,6 @@
 
     // Editor
     function openEditorForScript(scriptId, options = {}) {
-        // Opening a real script leaves any "editing an installed userstyle" mode.
-        state.editingUserStyleId = null;
         const script = state.scripts.find(s => s.id === scriptId);
         if (!script) {
             // A deep link (or a shared/popup link) can point at a script that
@@ -13355,15 +13355,8 @@
             elements.btnEditorConfigureUserCSS.disabled = !script || pending;
         }
         if (elements.btnEditorInstallUserStyle) {
-            const editingStyle = !!state.editingUserStyleId;
             elements.btnEditorInstallUserStyle.hidden = !isUserCss || !parsed;
             elements.btnEditorInstallUserStyle.disabled = !parsed || pending;
-            elements.btnEditorInstallUserStyle.classList.toggle('btn-primary', editingStyle);
-            if (elements.btnEditorInstallUserStyleLabel) {
-                elements.btnEditorInstallUserStyleLabel.textContent = editingStyle
-                    ? tDashboard('updateUserStyleAction', 'Update Style')
-                    : tDashboard('installUserStyle', 'Install Style');
-            }
         }
     }
 
@@ -13444,25 +13437,16 @@
         }
     }
 
-    async function installOrUpdateUserStyle() {
+    async function installCurrentUserStyle() {
         const code = getCurrentEditorCode();
         if (!isUserCSSDraft(code)) {
             showToast(tDashboard('userStyleNotDraft', 'Open a UserCSS (==UserStyle==) draft first'), 'info');
             return;
         }
-        const editingId = state.editingUserStyleId;
         try {
-            const res = editingId
-                ? await chrome.runtime.sendMessage({ action: 'updateUserStyleCode', id: editingId, code })
-                : await chrome.runtime.sendMessage({ action: 'installUserStyle', code });
+            const res = await chrome.runtime.sendMessage({ action: 'installUserStyle', code });
             if (!res || res.success === false || res.error) throw new Error(res?.error || 'UserStyle operation failed');
-            if (editingId) {
-                showToast(tDashboard('userStyleUpdated', 'Userstyle updated'), 'success');
-            } else {
-                state.editingUserStyleId = res.id || null;
-                showToast(tDashboard('userStyleInstalled', 'Userstyle installed and injecting on matching pages'), 'success');
-            }
-            updateUserCssPreviewButton();
+            showToast(tDashboard('userStyleInstalled', 'Userstyle installed and injecting on matching pages'), 'success');
         } catch (e) {
             showToast(e?.message || tDashboard('userStyleFailed', 'UserStyle operation failed'), 'error');
         }
@@ -13503,8 +13487,7 @@
                 if (!res?.success) { ev.target.checked = !enabled; showToast(res?.error || tDashboard('userStyleFailed', 'UserStyle operation failed'), 'error'); }
             });
             row.querySelector('[data-usm-action="edit"]')?.addEventListener('click', () => {
-                hideModal();
-                openUserStyleForEditing(style);
+                showUserStyleEditModal(style);
             });
             row.querySelector('[data-usm-action="delete"]')?.addEventListener('click', async () => {
                 const ok = await showConfirmModal(
@@ -13515,22 +13498,67 @@
                 if (!ok) { showUserStylesManager(); return; }
                 const res = await chrome.runtime.sendMessage({ action: 'deleteUserStyle', id });
                 if (!res?.success) showToast(res?.error || tDashboard('userStyleFailed', 'UserStyle operation failed'), 'error');
-                if (state.editingUserStyleId === id) state.editingUserStyleId = null;
                 showUserStylesManager();
             });
         });
     }
 
-    function openUserStyleForEditing(style) {
+    function showUserStyleEditModal(style) {
         if (!style) return;
         const code = style.rawCode || style.css || '';
-        createNewScript();
-        if (state.editor && typeof state.editor.setValue === 'function') {
-            state.editor.setValue(code);
+        const html = `<textarea id="usmEditArea" class="usm-edit-area" spellcheck="false" aria-label="${escapeHtml(tDashboard('editUserStyleAria', 'UserCSS source'))}">${escapeHtml(code)}</textarea>`;
+        showModal(tDashboard('editUserStyleTitle', 'Edit userstyle'), html, [
+            { label: tDashboard('cancelAction', 'Cancel'), callback: () => { hideModal(); showUserStylesManager(); } },
+            { label: tDashboard('saveAction', 'Save'), class: 'btn-primary', busyLabel: tDashboard('savingEllipsis', 'Saving...'), callback: async () => {
+                const next = elements.modalBody?.querySelector('#usmEditArea')?.value || '';
+                const res = await chrome.runtime.sendMessage({ action: 'updateUserStyleCode', id: style.id, code: next });
+                if (!res?.success) { showToast(res?.error || tDashboard('userStyleFailed', 'UserStyle operation failed'), 'error'); return; }
+                hideModal();
+                showToast(tDashboard('userStyleUpdated', 'Userstyle updated'), 'success');
+                showUserStylesManager();
+            } }
+        ]);
+    }
+
+    async function openPendingUserStyle(key) {
+        if (!key || !key.startsWith('pendingUserStyle_')) return;
+        let code = '';
+        try {
+            const raw = await chrome.storage.local.get(key);
+            code = raw?.[key]?.code || '';
+            await chrome.storage.local.remove(key);
+        } catch (_) { /* ignore — handled by the empty-code guard below */ }
+        // Clear the hash so a refresh does not retry a now-consumed key.
+        try {
+            const nextUrl = getDashboardUrl();
+            nextUrl.hash = '';
+            window.history.replaceState(null, '', nextUrl.toString());
+        } catch (_) { /* ignore */ }
+        if (!code || !isUserCSSDraft(code)) {
+            showToast(tDashboard('userStyleFetchFailed', 'Could not load the UserCSS to install'), 'error');
+            return;
         }
-        state.editingUserStyleId = style.id;
-        updateUserCssPreviewButton();
-        showToast(tDashboard('userStyleEditing', 'Editing installed userstyle — use Update Style to save'), 'info');
+        showUserStyleInstallReview(code);
+    }
+
+    function showUserStyleInstallReview(code) {
+        const parsed = parseUserCssDraft(code) || {};
+        const name = parsed.meta?.name || tDashboard('userCssFallbackName', 'UserCSS');
+        const match = (Array.isArray(parsed.match) && parsed.match.length ? parsed.match : ['*://*/*']).join(', ');
+        const html = `<div class="usm-review">
+            <div class="usm-name">${escapeHtml(name)}</div>
+            <div class="usm-match">${escapeHtml(match)}</div>
+            <pre class="usm-review-code">${escapeHtml(code)}</pre>
+        </div>`;
+        showModal(tDashboard('installUserStyleTitle', 'Install this UserCSS as a persistent userstyle'), html, [
+            { label: tDashboard('cancelAction', 'Cancel'), callback: hideModal },
+            { label: tDashboard('installUserStyle', 'Install Style'), class: 'btn-primary', busyLabel: tDashboard('installingEllipsis', 'Installing...'), callback: async () => {
+                const res = await chrome.runtime.sendMessage({ action: 'installUserStyle', code });
+                if (!res?.success) { showToast(res?.error || tDashboard('userStyleFailed', 'UserStyle operation failed'), 'error'); return; }
+                hideModal();
+                showToast(tDashboard('userStyleInstalled', 'Userstyle installed and injecting on matching pages'), 'success');
+            } }
+        ]);
     }
 
     function scheduleUserCssPreviewRefresh() {
@@ -13829,10 +13857,6 @@
 
     async function createNewScript() {
         if (_creatingScript) return;
-        // A fresh blank editor is not editing an installed userstyle. Callers
-        // that reuse createNewScript to load a style for editing (see
-        // openUserStyleForEditing) set state.editingUserStyleId again afterward.
-        state.editingUserStyleId = null;
 
         // Clear hash to prevent duplicate creation on refresh
         const nextUrl = getDashboardUrl();
@@ -16532,7 +16556,7 @@
         });
         elements.btnEditorConfigureUserCSS?.addEventListener('click', openUserCssConfiguration);
         elements.btnEditorInstallUserStyle?.addEventListener('click', event => {
-            runButtonTask(event.currentTarget, installOrUpdateUserStyle, { busyLabel: tDashboard('installingEllipsis', 'Installing...') });
+            runButtonTask(event.currentTarget, installCurrentUserStyle, { busyLabel: tDashboard('installingEllipsis', 'Installing...') });
         });
         elements.btnEditorToggle?.addEventListener('click', async () => {
             const script = state.scripts.find(s => s.id === state.currentScriptId);

@@ -10165,6 +10165,61 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
   ]
 });
 
+// Persistent UserCSS install interception: a navigation to a `.user.css` URL is
+// fetched (bounded, internal-host-guarded), and if it is a UserStyle the tab is
+// redirected into the dashboard editor pre-filled with the source so the user
+// can review it and choose Install Style. Mirrors the `.user.js` interceptor but
+// routes to the editor rather than the userscript install page.
+const _PENDING_USERSTYLE_STORAGE_PREFIX = 'pendingUserStyle_';
+
+async function _fetchPendingUserStyle(url) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
+  try {
+    InternalHostGuard.assertExternalFetchUrl(url, 'UserCSS source', ['http:', 'https:']);
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    const postCheck = InternalHostGuard.classifyResponseUrl(response, ['http:', 'https:']);
+    if (!postCheck.ok) throw new Error('UserCSS source redirected to ' + postCheck.message);
+    const code = await _fetchTextBounded(response, MAX_SCRIPT_SIZE, 'UserCSS');
+    if (!/\/\*\s*==UserStyle==[\s\S]*?==\/UserStyle==\s*\*\//.test(code)) {
+      return { action: 'pass-through' };
+    }
+    return { action: 'install', code };
+  } catch (error) {
+    console.error('[ScriptVault] Failed to fetch UserCSS:', error);
+    return { action: 'pass-through' };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
+  if (details.frameId !== 0) return;
+  const url = details.url;
+  if (!url.match(/\.user\.css(\?.*)?$/i)) return;
+  if (url.startsWith('chrome-extension://')) return;
+  try { await ensureInitialized(); } catch (_) { /* logged in init() */ }
+
+  const result = await _fetchPendingUserStyle(url);
+  if (result.action !== 'install') return;
+
+  const storageKey = `${_PENDING_USERSTYLE_STORAGE_PREFIX}${details.tabId}`;
+  try {
+    await chrome.storage.local.set({ [storageKey]: { url, code: result.code, timestamp: Date.now() } });
+    const dashboardUrl = chrome.runtime.getURL('pages/dashboard.html') + `#usercss=${encodeURIComponent(storageKey)}`;
+    chrome.tabs.update(details.tabId, { url: dashboardUrl }).catch((updateErr) => {
+      debugLog('[ScriptVault] UserCSS tab.update failed (tab likely closed):', updateErr?.message || updateErr);
+    });
+  } catch (e) {
+    console.error('[ScriptVault] UserCSS interception error:', e);
+  }
+}, {
+  url: [
+    { urlMatches: '.*\\.user\\.css(\\?.*)?$' }
+  ]
+});
+
 // Handle direct script installation from raw source code (file picker, drag/drop)
 async function installFromCode(code, receiptOptions = {}) {
   try {
