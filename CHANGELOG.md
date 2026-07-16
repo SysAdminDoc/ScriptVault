@@ -4,6 +4,14 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Re-scan update bodies for newly introduced high-risk code.** When an update
+  is queued, ScriptVault re-runs the AST risk analyzer on the incoming code and
+  diffs it against the installed version. An update that introduces new
+  high-risk sinks (network, execution, data, hijack, mining, obfuscation) not
+  present before is flagged with an "Introduces new high-risk code patterns"
+  review reason and routed to the manual update-review inbox instead of
+  auto-applying — closing the same-author/same-registry account-takeover
+  propagation vector that the permission/provenance gates do not catch.
 - **Added a coordinated security-disclosure policy.** A new `SECURITY.md`
   documents supported versions, private reporting channels (GitHub private
   vulnerability reporting + email), and the disclosure window; the README links

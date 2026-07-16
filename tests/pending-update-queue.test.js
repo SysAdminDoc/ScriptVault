@@ -219,6 +219,71 @@ describe('pending update queue', () => {
     expect(reasons).toContain('Fails @require provenance verification');
   });
 
+  it('flags a new high-risk sink introduced by an update for review', () => {
+    const reasons = UpdateSystem._getUpdateReviewReasons(
+      { permissionChanges: null, dependencyChanges: { require: [] }, dependencies: { require: [] } },
+      false,
+      { hasNewRiskySinks: true, categories: ['network', 'execution'], introduced: [] }
+    );
+    expect(reasons).toContain('Introduces new high-risk code patterns (network, execution)');
+  });
+
+  it('does not flag an update whose risk-delta introduces no new risky sinks', () => {
+    const reasons = UpdateSystem._getUpdateReviewReasons(
+      { permissionChanges: null, dependencyChanges: { require: [] }, dependencies: { require: [] } },
+      false,
+      { hasNewRiskySinks: false, categories: [], introduced: [] }
+    );
+    expect(reasons).not.toContain('Introduces new high-risk code patterns (network, execution)');
+    expect(reasons).toHaveLength(0);
+  });
+
+  describe('_computeUpdateRiskDelta', () => {
+    const originalAnalyzer = globalThis.ScriptAnalyzer;
+    afterEach(() => { globalThis.ScriptAnalyzer = originalAnalyzer; });
+
+    function stubAnalyzer(map) {
+      globalThis.ScriptAnalyzer = {
+        analyzeAsync: async (code) => map[code] || { findings: [], totalRisk: 0, riskLevel: 'minimal' },
+      };
+    }
+
+    it('reports a new sink when the update adds a network finding', async () => {
+      stubAnalyzer({
+        'OLD': { findings: [{ id: 'eval', category: 'execution', risk: 40 }], totalRisk: 40, riskLevel: 'medium' },
+        'NEW': {
+          findings: [
+            { id: 'eval', category: 'execution', risk: 40 },
+            { id: 'xhr-exfil', label: 'Sends data to a remote host', category: 'network', risk: 50 },
+          ],
+          totalRisk: 90,
+          riskLevel: 'high',
+        },
+      });
+      const delta = await UpdateSystem._computeUpdateRiskDelta('OLD', 'NEW');
+      expect(delta.hasNewRiskySinks).toBe(true);
+      expect(delta.categories).toContain('network');
+      expect(delta.introduced.map(f => f.id)).toEqual(['xhr-exfil']);
+      expect(delta.riskScoreDelta).toBe(50);
+    });
+
+    it('reports no new sink for a benign update with unchanged findings', async () => {
+      stubAnalyzer({
+        'OLD': { findings: [{ id: 'eval', category: 'execution', risk: 40 }], totalRisk: 40, riskLevel: 'medium' },
+        'NEW': { findings: [{ id: 'eval', category: 'execution', risk: 40 }], totalRisk: 40, riskLevel: 'medium' },
+      });
+      const delta = await UpdateSystem._computeUpdateRiskDelta('OLD', 'NEW');
+      expect(delta.hasNewRiskySinks).toBe(false);
+      expect(delta.introduced).toHaveLength(0);
+    });
+
+    it('is non-blocking (returns null) when the analyzer is unavailable', async () => {
+      globalThis.ScriptAnalyzer = undefined;
+      const delta = await UpdateSystem._computeUpdateRiskDelta('OLD', 'NEW');
+      expect(delta).toBeNull();
+    });
+  });
+
   it('applies only safe queued updates and leaves review items queued', async () => {
     const scripts = new Map([
       ['safe', makeScript('safe')],

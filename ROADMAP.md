@@ -763,13 +763,6 @@ CLAUDE.md audit history, and RESEARCH.md rejected ideas._
   Acceptance: either a user can install and persist a `.user.css` style that injects on navigation to matching tabs (with a regression test proving `onTabUpdated` injection), OR the persistent half is explicitly feature-flagged off and the README/CLAUDE claim corrected to "editor preview only."
   Complexity: L
 
-- [ ] P1 — Re-run AST risk analysis on update bodies and diff the risk delta
-  Why: `applyUpdate` gates `@require` TOFU-SRI + provenance and flags cross-registry source changes (`sourceIdentityChanged`), but never calls `ScriptAnalyzer.analyzeAsync` on `newCode`. A malicious update from the SAME author/registry (GreasyFork account-takeover propagation — the dominant real-world userscript kill chain) applies with no risk-delta review.
-  Evidence: code read — `src/background/core.ts:1980-2094` (no analyzer call; `analyzeScript` exists at `core.ts:7346`); security research — https://www.waze.com/discuss/t/urgent-two-scripts-were-compromised-on-feb-1-please-read-if-you-use-scripts/365499
-  Touches: `src/background/core.ts` (`applyUpdate`/`checkForUpdates`), `bg/analyzer.ts`, update-review UI in `pages/dashboard.js`, `tests/core-flows.test.js`.
-  Acceptance: an update that introduces new network/credential/eval sinks vs. the prior version surfaces a risk-delta flag in the update-review inbox before auto-apply (or blocks auto-apply per setting); regression test covers a benign update (no flag) and a sink-adding update (flag).
-  Complexity: M
-
 ### P2
 
 - [ ] P2 — Fix the UserCSS preview lifecycle (three leaks)

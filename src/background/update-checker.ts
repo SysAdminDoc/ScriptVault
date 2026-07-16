@@ -67,6 +67,17 @@ export interface SubscriptionInstallInfo {
   subscriptionName?: string;
 }
 
+export interface UpdateRiskDelta {
+  hasNewRiskySinks: boolean;
+  introduced: Array<{ id: string; label?: string; category: string; risk?: number }>;
+  categories: string[];
+  previousRisk: number;
+  nextRisk: number;
+  riskScoreDelta: number;
+  previousLevel: string;
+  nextLevel: string;
+}
+
 export interface PendingUpdateInfo extends UpdateInfo {
   kind?: 'update' | 'subscription-install';
   source: string;
@@ -75,6 +86,7 @@ export interface PendingUpdateInfo extends UpdateInfo {
   safeToApply: boolean;
   reviewReasons: string[];
   sourceIdentityChanged: boolean;
+  riskDelta?: UpdateRiskDelta | null;
   subscriptionId?: string;
   subscriptionName?: string;
   trustReceipt?: unknown;
@@ -507,7 +519,7 @@ export const UpdateSystem = {
     });
   },
 
-  _getUpdateReviewReasons(receipt: { permissionChanges?: Record<string, { added?: string[] }>; dependencyChanges?: ScriptTrustReceipt['dependencyChanges']; dependencies?: { require?: Array<{ provenance?: { status?: string; verification?: string } }> } }, sourceIdentityChanged: boolean): string[] {
+  _getUpdateReviewReasons(receipt: { permissionChanges?: Record<string, { added?: string[] }>; dependencyChanges?: ScriptTrustReceipt['dependencyChanges']; dependencies?: { require?: Array<{ provenance?: { status?: string; verification?: string } }> } }, sourceIdentityChanged: boolean, riskDelta: UpdateRiskDelta | null = null): string[] {
     const reasons: string[] = [];
     if (this._hasAddedPermission(receipt.permissionChanges)) {
       reasons.push('Adds permissions or host scope');
@@ -523,7 +535,56 @@ export const UpdateSystem = {
     if (sourceIdentityChanged) {
       reasons.push('Changes install source');
     }
+    if (riskDelta && riskDelta.hasNewRiskySinks) {
+      const cats = Array.isArray(riskDelta.categories) && riskDelta.categories.length
+        ? riskDelta.categories.join(', ')
+        : 'code';
+      reasons.push(`Introduces new high-risk code patterns (${cats})`);
+    }
     return reasons;
+  },
+
+  // Re-run the AST risk analysis on the incoming update body and diff it against
+  // the currently installed version. A same-author/same-registry account
+  // takeover passes the trust, permission, and provenance gates untouched, so
+  // any NEW high-risk sink the update introduces is flagged and routed to manual
+  // review. Analysis failure is non-blocking (other gates still apply). The
+  // analyzer is a runtime global inlined into background.js; access it defensively.
+  async _computeUpdateRiskDelta(previousCode: unknown, nextCode: unknown): Promise<UpdateRiskDelta | null> {
+    const SENSITIVE = new Set(['execution', 'network', 'data', 'hijack', 'mining', 'obfuscation']);
+    type AnalyzerFinding = { id: string; label?: string; category: string; risk?: number };
+    type AnalyzerResult = { findings?: AnalyzerFinding[]; totalRisk?: number; riskLevel?: string; parseError?: boolean };
+    const analyzer = (globalThis as { ScriptAnalyzer?: { analyzeAsync?: (code: string) => Promise<AnalyzerResult> } }).ScriptAnalyzer;
+    try {
+      if (!analyzer || typeof analyzer.analyzeAsync !== 'function') return null;
+      const prevSource = typeof previousCode === 'string' ? previousCode : '';
+      const nextSource = typeof nextCode === 'string' ? nextCode : '';
+      const [prev, next] = await Promise.all([
+        analyzer.analyzeAsync(prevSource),
+        analyzer.analyzeAsync(nextSource),
+      ]);
+      if (!next || next.parseError) return null;
+      const prevIds = new Set(Array.isArray(prev?.findings) ? prev.findings.map((f) => f && f.id) : []);
+      const introduced = (Array.isArray(next.findings) ? next.findings : [])
+        .filter((f) => f && !prevIds.has(f.id) && SENSITIVE.has(f.category))
+        .map((f) => ({ id: f.id, label: f.label, category: f.category, risk: f.risk }));
+      const categories = [...new Set(introduced.map((f) => f.category))];
+      const previousRisk = Number(prev?.totalRisk) || 0;
+      const nextRisk = Number(next.totalRisk) || 0;
+      return {
+        hasNewRiskySinks: introduced.length > 0,
+        introduced,
+        categories,
+        previousRisk,
+        nextRisk,
+        riskScoreDelta: nextRisk - previousRisk,
+        previousLevel: prev?.riskLevel || 'unknown',
+        nextLevel: next.riskLevel || 'unknown',
+      };
+    } catch (e) {
+      console.error('[ScriptVault] Update risk-delta analysis failed:', e);
+      return null;
+    }
   },
 
   async _buildPendingUpdate(update: UpdateInfo, source = 'manual-check'): Promise<PendingUpdateInfo | null> {
@@ -547,11 +608,13 @@ export const UpdateSystem = {
       fetchDependencyBody: fetchRequireScriptForTrustReceipt,
       fetchProvenanceBundle,
     });
-    const reviewReasons = this._getUpdateReviewReasons(receipt, sourceIdentityChanged);
+    const riskDelta = await this._computeUpdateRiskDelta(script.code, update.code);
+    const reviewReasons = this._getUpdateReviewReasons(receipt, sourceIdentityChanged, riskDelta);
     const now = Date.now();
 
     return {
       kind: 'update',
+      riskDelta,
       id: update.id,
       name: script.meta?.name || update.name || update.id,
       currentVersion: script.meta?.version || update.currentVersion || '',

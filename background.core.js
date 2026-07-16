@@ -2154,7 +2154,7 @@ const UpdateSystem = {
     });
   },
 
-  _getUpdateReviewReasons(receipt, sourceIdentityChanged) {
+  _getUpdateReviewReasons(receipt, sourceIdentityChanged, riskDelta = null) {
     const reasons = [];
     if (this._hasAddedPermission(receipt.permissionChanges)) {
       reasons.push('Adds permissions or host scope');
@@ -2170,7 +2170,57 @@ const UpdateSystem = {
     if (sourceIdentityChanged) {
       reasons.push('Changes install source');
     }
+    if (riskDelta && riskDelta.hasNewRiskySinks) {
+      const cats = Array.isArray(riskDelta.categories) && riskDelta.categories.length
+        ? riskDelta.categories.join(', ')
+        : 'code';
+      reasons.push(`Introduces new high-risk code patterns (${cats})`);
+    }
     return reasons;
+  },
+
+  // Re-run the AST risk analysis on the incoming update body and diff it against
+  // the currently installed version. A same-author/same-registry account
+  // takeover (the dominant real-world userscript compromise) passes the trust,
+  // permission, and provenance gates untouched, so we independently flag any NEW
+  // high-risk sink the update introduces and route it to manual review. Analysis
+  // failure is deliberately non-blocking: the permission/dependency/provenance
+  // gates still apply, and a flaky offscreen analyzer must not freeze every
+  // auto-update. Returns null when no delta signal is available.
+  async _computeUpdateRiskDelta(previousCode, nextCode) {
+    const SENSITIVE = new Set(['execution', 'network', 'data', 'hijack', 'mining', 'obfuscation']);
+    try {
+      if (typeof ScriptAnalyzer === 'undefined' || typeof ScriptAnalyzer.analyzeAsync !== 'function') {
+        return null;
+      }
+      const prevSource = typeof previousCode === 'string' ? previousCode : '';
+      const nextSource = typeof nextCode === 'string' ? nextCode : '';
+      const [prev, next] = await Promise.all([
+        ScriptAnalyzer.analyzeAsync(prevSource),
+        ScriptAnalyzer.analyzeAsync(nextSource)
+      ]);
+      if (!next || next.parseError) return null;
+      const prevIds = new Set(Array.isArray(prev?.findings) ? prev.findings.map(f => f && f.id) : []);
+      const introduced = (Array.isArray(next.findings) ? next.findings : [])
+        .filter(f => f && !prevIds.has(f.id) && SENSITIVE.has(f.category))
+        .map(f => ({ id: f.id, label: f.label, category: f.category, risk: f.risk }));
+      const categories = [...new Set(introduced.map(f => f.category))];
+      const previousRisk = Number(prev?.totalRisk) || 0;
+      const nextRisk = Number(next.totalRisk) || 0;
+      return {
+        hasNewRiskySinks: introduced.length > 0,
+        introduced,
+        categories,
+        previousRisk,
+        nextRisk,
+        riskScoreDelta: nextRisk - previousRisk,
+        previousLevel: prev?.riskLevel || 'unknown',
+        nextLevel: next.riskLevel || 'unknown'
+      };
+    } catch (e) {
+      console.error('[ScriptVault] Update risk-delta analysis failed:', e);
+      return null;
+    }
   },
 
   async _buildPendingUpdate(update, source = 'manual-check') {
@@ -2196,11 +2246,13 @@ const UpdateSystem = {
       fetchDependencyBody: fetchRequireScriptForTrustReceipt,
       fetchProvenanceBundle
     });
-    const reviewReasons = this._getUpdateReviewReasons(receipt, sourceIdentityChanged);
+    const riskDelta = await this._computeUpdateRiskDelta(script.code, update.code);
+    const reviewReasons = this._getUpdateReviewReasons(receipt, sourceIdentityChanged, riskDelta);
     const now = Date.now();
 
     return {
       kind: 'update',
+      riskDelta,
       id: update.id,
       name: script.meta?.name || update.name || update.id,
       currentVersion: script.meta?.version || update.currentVersion || '',
