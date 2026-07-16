@@ -61,9 +61,10 @@ CODEX_*.md
 # Store listing screenshots (local capture artifacts)
 assets/screenshots/
 
-# Markdown files local-only (except README)
+# Markdown files local-only (except README and the published security policy)
 *.md
 !README.md
+!SECURITY.md
 
 # AI config
 .codex/
