@@ -160,11 +160,22 @@ describe("cross-surface UX audit", () => {
     expect(doc.querySelectorAll("#btnNewScript")).toHaveLength(1);
     expect(doc.querySelector("#siteFilterSelect option")?.textContent).toBe("All sites");
     expect(doc.querySelector("#savedViewSelect option")?.textContent).toBe("Saved views");
+    expect(doc.querySelector("#siteFilterSelect")?.getAttribute("data-i18n-aria-label")).toBe("scriptFilterSiteAria");
+    expect(doc.querySelector("#savedViewSelect")?.getAttribute("data-i18n-aria-label")).toBe("scriptSavedViewAria");
+    expect(doc.querySelector("#btnWorkbenchCommand span[data-i18n]")?.getAttribute("data-i18n")).toBe("workbenchCommandSearch");
+    expect(doc.querySelector("#scriptInspectorPanel")?.getAttribute("data-i18n-aria-label")).toBe("inspectorAria");
+    expect(doc.querySelector("#scriptInspectorEdit span[data-i18n='edit']")).not.toBeNull();
+    expect(doc.querySelector("[data-i18n='disable']")).toBeNull();
+    expect(doc.querySelector("#btnEditorToggleLabel")?.getAttribute("data-i18n")).toBe("disableAction");
     expect(inspectorTabs.map(tab => tab.textContent?.trim())).toEqual(["Overview", "Access", "Activity"]);
     expect(inspectorViews.map(view => view.dataset.inspectorView)).toEqual(["overview", "access", "activity"]);
     expect(inspectorViews.slice(1).every(view => view.hidden)).toBe(true);
     expect(doc.querySelector("#scriptInspectorPanel[data-state='empty'] .script-inspector-empty")).not.toBeNull();
     expect(dashboardJs).toContain("function updateSiteFilterOptions()");
+    expect(dashboardJs).toContain("allOption.textContent = tDashboard('scriptFilterAllSites', 'All sites')");
+    expect(dashboardJs).toContain("translate: tDashboard");
+    expect(dashboardJs).toContain("tDashboard('inspectorNoScriptSelected', 'No script selected')");
+    expect(dashboardJs).toContain("tDashboard('workbenchSyncReady', 'Sync ready')");
     expect(dashboardJs).toContain("const matchesSite = siteFilter === 'all'");
     expect(dashboardJs).toContain("elements.scriptInspectorViews?.forEach(view =>");
     expect(dashboardJs).toContain('popover="auto" role="menu"');
@@ -202,7 +213,7 @@ describe("cross-surface UX audit", () => {
     expect(dashboardJs).toContain("Your scripts are up to date");
     expect(dashboardJs).toContain("data-empty-check-updates");
     expect(dashboardJs).toContain("'Sync not configured'");
-    expect(dashboardHtml).toContain('id="svCommandHealthTitle">Local vault ready');
+    expect(dashboardHtml).toContain('id="svCommandHealthTitle" data-i18n="workbenchLocalVaultReady">Local vault ready');
   });
 
   test("confirmation dialogs name the action and de-emphasize destructive defaults", () => {

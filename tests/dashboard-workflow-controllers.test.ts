@@ -8,6 +8,41 @@ import {
 } from '../src/pages/dashboard-workflow-controllers';
 
 describe('dashboard workflow controllers', () => {
+  test('routes built-in workflow copy through an optional translator', async () => {
+    const translate = vi.fn((key: string, fallback: string, placeholders: Record<string, string | number> = {}) =>
+      `[${key}] ${fallback.replace(/\{(\w+)\}/g, (_match, name: string) => String(placeholders[name] ?? `{${name}}`))}`,
+    );
+    const importController = createImportReviewController({
+      translate,
+      prepare: async () => null as { id: string } | null,
+      confirm: async () => true,
+      apply: async () => ({ imported: 0 }),
+    });
+    expect(importController.getState().message).toContain('[workflowImportReady]');
+    expect((await importController.start('backup')).message).toContain('[workflowImportEmpty]');
+
+    const settingsController = createSerializedSettingsController({
+      translate,
+      validate: () => ({ ok: false }),
+      read: () => undefined,
+      write: () => {},
+      persist: async () => {},
+    });
+    await expect(settingsController.save('theme', '')).resolves.toBe(false);
+    expect(settingsController.getState().message).toContain('[workflowSettingsNeedsAttention]');
+
+    const diagnosticsController = createDiagnosticsController({
+      translate,
+      loaders: { runtime: () => null },
+    });
+    expect((await diagnosticsController.refresh()).message).toContain('[workflowDiagnosticsEmpty]');
+    expect(translate).toHaveBeenCalledWith(
+      'workflowSettingsInvalidValue',
+      'Invalid value for {key}',
+      { key: 'theme' },
+    );
+  });
+
   test('import review exposes loading, review, and success transitions', async () => {
     const states: WorkflowStateKind[] = [];
     const refresh = vi.fn();

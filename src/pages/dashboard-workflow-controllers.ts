@@ -11,6 +11,25 @@ export interface WorkflowState<T = unknown> {
 
 type MaybePromise<T> = T | Promise<T>;
 
+export type WorkflowTranslator = (
+  key: string,
+  fallback: string,
+  placeholders?: Record<string, string | number>,
+) => string;
+
+function translatedMessage(
+  translate: WorkflowTranslator | undefined,
+  key: string,
+  fallback: string,
+  placeholders: Record<string, string | number> = {},
+): string {
+  const translated = translate?.(key, fallback, placeholders);
+  if (translated) return translated;
+  return fallback.replace(/\{(\w+)\}/g, (_match, name: string) =>
+    Object.prototype.hasOwnProperty.call(placeholders, name) ? String(placeholders[name]) : `{${name}}`,
+  );
+}
+
 function errorMessage(error: unknown, fallback: string): string {
   if (error instanceof Error && error.message) return error.message;
   if (typeof error === 'string' && error) return error;
@@ -25,6 +44,7 @@ function defaultEmpty(value: unknown): boolean {
 }
 
 export interface ImportReviewAdapter<Input, Review, Result> {
+  translate?: WorkflowTranslator;
   prepare(input: Input): MaybePromise<Review | null>;
   isEmpty?(review: Review | null): boolean;
   confirm(review: Review): MaybePromise<boolean>;
@@ -45,12 +65,14 @@ export interface ImportReviewController<Input, Review, Result> {
 export function createImportReviewController<Input, Review, Result>(
   adapter: ImportReviewAdapter<Input, Review, Result>,
 ): ImportReviewController<Input, Review, Result> {
+  const t = (key: string, fallback: string, placeholders?: Record<string, string | number>): string =>
+    translatedMessage(adapter.translate, key, fallback, placeholders);
   let lastInput: Input | undefined;
   let hasLastInput = false;
   let state: WorkflowState<Review | Result> = {
     kind: 'idle',
     phase: 'idle',
-    message: 'Ready to review an import.',
+    message: t('workflowImportReady', 'Ready to review an import.'),
     retryAvailable: false,
   };
 
@@ -67,7 +89,7 @@ export function createImportReviewController<Input, Review, Result>(
     emit({
       kind: 'loading',
       phase: 'prepare',
-      message: 'Reading import…',
+      message: t('workflowImportReading', 'Reading import…'),
       retryAvailable: false,
     });
     try {
@@ -76,7 +98,7 @@ export function createImportReviewController<Input, Review, Result>(
         return emit({
           kind: 'empty',
           phase: 'prepare',
-          message: 'No importable scripts were found.',
+          message: t('workflowImportEmpty', 'No importable scripts were found.'),
           data: review ?? undefined,
           retryAvailable: false,
         });
@@ -85,7 +107,7 @@ export function createImportReviewController<Input, Review, Result>(
       emit({
         kind: 'review',
         phase: 'confirm',
-        message: 'Review required before import.',
+        message: t('workflowImportReviewRequired', 'Review required before import.'),
         data: review as Review,
         retryAvailable: false,
       });
@@ -94,7 +116,7 @@ export function createImportReviewController<Input, Review, Result>(
         return emit({
           kind: 'recovery',
           phase: 'cancelled',
-          message: 'Import cancelled. Choose the file again when ready.',
+          message: t('workflowImportCancelled', 'Import cancelled. Choose the file again when ready.'),
           data: review as Review,
           retryAvailable: true,
         });
@@ -103,7 +125,7 @@ export function createImportReviewController<Input, Review, Result>(
       emit({
         kind: 'loading',
         phase: 'apply',
-        message: 'Importing reviewed scripts…',
+        message: t('workflowImportApplying', 'Importing reviewed scripts…'),
         data: review as Review,
         retryAvailable: false,
       });
@@ -114,12 +136,12 @@ export function createImportReviewController<Input, Review, Result>(
       return emit({
         kind: 'success',
         phase: 'complete',
-        message: adapter.describeResult?.(result) || 'Import complete.',
+        message: adapter.describeResult?.(result) || t('workflowImportComplete', 'Import complete.'),
         data: result,
         retryAvailable: false,
       });
     } catch (error) {
-      const message = errorMessage(error, 'Import failed.');
+      const message = errorMessage(error, t('workflowImportFailed', 'Import failed.'));
       return emit({
         kind: 'failure',
         phase: 'failed',
@@ -141,14 +163,14 @@ export function createImportReviewController<Input, Review, Result>(
         return emit({
           kind: 'empty',
           phase: 'retry',
-          message: 'Choose an import before retrying.',
+          message: t('workflowImportChooseBeforeRetry', 'Choose an import before retrying.'),
           retryAvailable: false,
         });
       }
       emit({
         kind: 'recovery',
         phase: 'retry',
-        message: 'Retrying the last import…',
+        message: t('workflowImportRetrying', 'Retrying the last import…'),
         retryAvailable: false,
       });
       return execute(lastInput as Input);
@@ -173,6 +195,7 @@ export interface SettingValidationResult {
 }
 
 export interface SerializedSettingsAdapter {
+  translate?: WorkflowTranslator;
   validate(key: string, value: unknown, context: Record<string, unknown>): SettingValidationResult;
   read(key: string): unknown;
   write(key: string, value: unknown): void;
@@ -193,9 +216,11 @@ export interface SerializedSettingsController {
 }
 
 export function createSerializedSettingsController(adapter: SerializedSettingsAdapter): SerializedSettingsController {
+  const t = (key: string, fallback: string, placeholders?: Record<string, string | number>): string =>
+    translatedMessage(adapter.translate, key, fallback, placeholders);
   const queues = new Map<string, Promise<boolean>>();
   let pending = 0;
-  let lastState: SettingsSaveState = { kind: 'saved', message: 'Saved', pending: 0 };
+  let lastState: SettingsSaveState = { kind: 'saved', message: t('workflowSettingsSaved', 'Saved'), pending: 0 };
 
   const emit = (kind: SettingsSaveStateKind, message: string, key?: string): void => {
     lastState = { kind, message, pending, ...(key ? { key } : {}) };
@@ -209,9 +234,9 @@ export function createSerializedSettingsController(adapter: SerializedSettingsAd
   ): Promise<boolean> => {
     const validation = adapter.validate(key, inputValue, context);
     if (!validation.ok) {
-      const message = validation.error || `Invalid value for ${key}`;
+      const message = validation.error || t('workflowSettingsInvalidValue', 'Invalid value for {key}', { key });
       adapter.setFieldError?.(key, message, context);
-      lastState = { kind: 'invalid', message: 'Needs attention', pending, key };
+      lastState = { kind: 'invalid', message: t('workflowSettingsNeedsAttention', 'Needs attention'), pending, key };
       if (!context.quiet) adapter.notify?.(message, 'error');
       return false;
     }
@@ -228,8 +253,11 @@ export function createSerializedSettingsController(adapter: SerializedSettingsAd
       // is still active.
       adapter.write(key, previousValue);
       adapter.restoreInput?.(key, previousValue, context);
-      lastState = { kind: 'error', message: 'Save failed', pending, key };
-      if (!context.quiet) adapter.notify?.('Couldn’t save this setting. Your previous value is still active.', 'error');
+      lastState = { kind: 'error', message: t('workflowSettingsSaveFailed', 'Save failed'), pending, key };
+      if (!context.quiet) adapter.notify?.(t(
+        'workflowSettingsPreviousValueActive',
+        'Couldn’t save this setting. Your previous value is still active.',
+      ), 'error');
       return false;
     }
     try {
@@ -238,12 +266,12 @@ export function createSerializedSettingsController(adapter: SerializedSettingsAd
       // report success since a reload will pick up the saved value.
       await adapter.apply?.(key, value);
     } catch (_error) {
-      lastState = { kind: 'saved', message: adapter.savedMessage?.(key, value) || 'Saved', pending, key };
+      lastState = { kind: 'saved', message: adapter.savedMessage?.(key, value) || t('workflowSettingsSaved', 'Saved'), pending, key };
       return true;
     }
     lastState = {
       kind: 'saved',
-      message: adapter.savedMessage?.(key, value) || 'Saved',
+      message: adapter.savedMessage?.(key, value) || t('workflowSettingsSaved', 'Saved'),
       pending,
       key,
     };
@@ -256,7 +284,7 @@ export function createSerializedSettingsController(adapter: SerializedSettingsAd
     context: Record<string, unknown> = {},
   ): Promise<boolean> => {
     pending += 1;
-    emit('saving', 'Saving…', key);
+    emit('saving', t('workflowSettingsSaving', 'Saving…'), key);
     const previous = queues.get(key) || Promise.resolve(true);
     const queued = previous.catch(() => false).then(() => saveNow(key, value, context));
     queues.set(key, queued);
@@ -264,7 +292,7 @@ export function createSerializedSettingsController(adapter: SerializedSettingsAd
       if (queues.get(key) === queued) queues.delete(key);
       pending = Math.max(0, pending - 1);
       if (pending > 0) {
-        emit('saving', 'Saving…', key);
+        emit('saving', t('workflowSettingsSaving', 'Saving…'), key);
       } else {
         emit(lastState.kind, lastState.message, lastState.key);
       }
@@ -275,7 +303,7 @@ export function createSerializedSettingsController(adapter: SerializedSettingsAd
     save,
     async saveOrThrow(key, value, context = {}) {
       const saved = await save(key, value, { ...context, quiet: true });
-      if (!saved) throw new Error(`Failed to save ${key}`);
+      if (!saved) throw new Error(t('workflowSettingsSaveKeyFailed', 'Failed to save {key}', { key }));
       return true;
     },
     getState: () => ({ ...lastState, pending }),
@@ -284,6 +312,7 @@ export function createSerializedSettingsController(adapter: SerializedSettingsAd
 }
 
 export interface DiagnosticsAdapter {
+  translate?: WorkflowTranslator;
   loaders: Record<string, () => MaybePromise<unknown>>;
   isEmpty?(value: unknown, key: string): boolean;
   render?(state: WorkflowState<Record<string, unknown>>): void;
@@ -297,10 +326,12 @@ export interface DiagnosticsController {
 }
 
 export function createDiagnosticsController(adapter: DiagnosticsAdapter): DiagnosticsController {
+  const t = (key: string, fallback: string, placeholders?: Record<string, string | number>): string =>
+    translatedMessage(adapter.translate, key, fallback, placeholders);
   let state: WorkflowState<Record<string, unknown>> = {
     kind: 'idle',
     phase: 'idle',
-    message: 'Diagnostics have not been refreshed.',
+    message: t('workflowDiagnosticsNotRefreshed', 'Diagnostics have not been refreshed.'),
     retryAvailable: false,
   };
 
@@ -323,7 +354,7 @@ export function createDiagnosticsController(adapter: DiagnosticsAdapter): Diagno
     emit({
       kind: 'loading',
       phase: 'refresh',
-      message: 'Refreshing diagnostics…',
+      message: t('workflowDiagnosticsRefreshing', 'Refreshing diagnostics…'),
       retryAvailable: false,
     });
     const entries = Object.entries(adapter.loaders);
@@ -339,7 +370,7 @@ export function createDiagnosticsController(adapter: DiagnosticsAdapter): Diagno
     settled.forEach((result, index) => {
       const key = entries[index]?.[0] || `loader-${index}`;
       if (result.status === 'rejected') {
-        failures.push(`${key}: ${errorMessage(result.reason, 'unavailable')}`);
+        failures.push(`${key}: ${errorMessage(result.reason, t('workflowDiagnosticsUnavailable', 'unavailable'))}`);
         return;
       }
       data[key] = result.value;
@@ -361,7 +392,7 @@ export function createDiagnosticsController(adapter: DiagnosticsAdapter): Diagno
       return emit({
         kind: 'empty',
         phase: 'complete',
-        message: 'No diagnostics are available yet.',
+        message: t('workflowDiagnosticsEmpty', 'No diagnostics are available yet.'),
         data,
         retryAvailable: true,
       }, announce);
@@ -371,7 +402,13 @@ export function createDiagnosticsController(adapter: DiagnosticsAdapter): Diagno
       return emit({
         kind: 'recovery',
         phase: 'degraded',
-        message: `${unavailable} diagnostic source${unavailable === 1 ? '' : 's'} unavailable. Showing the last available data.`,
+        message: t(
+          unavailable === 1 ? 'workflowDiagnosticSourceUnavailable' : 'workflowDiagnosticSourcesUnavailable',
+          unavailable === 1
+            ? '{count} diagnostic source unavailable. Showing the last available data.'
+            : '{count} diagnostic sources unavailable. Showing the last available data.',
+          { count: unavailable },
+        ),
         data,
         error: failures.join(' · ') || undefined,
         retryAvailable: true,
@@ -380,7 +417,7 @@ export function createDiagnosticsController(adapter: DiagnosticsAdapter): Diagno
     return emit({
       kind: 'success',
       phase: 'complete',
-      message: 'Diagnostics refreshed.',
+      message: t('workflowDiagnosticsRefreshed', 'Diagnostics refreshed.'),
       data,
       retryAvailable: false,
     }, announce);
@@ -392,7 +429,7 @@ export function createDiagnosticsController(adapter: DiagnosticsAdapter): Diagno
       emit({
         kind: 'recovery',
         phase: 'retry',
-        message: 'Retrying diagnostic sources…',
+        message: t('workflowDiagnosticsRetrying', 'Retrying diagnostic sources…'),
         data: state.data,
         retryAvailable: false,
       });

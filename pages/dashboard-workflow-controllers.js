@@ -35,6 +35,14 @@ const DashboardWorkflowControllers = (() => {
     default: () => dashboard_workflow_controllers_default
   });
   module.exports = __toCommonJS(dashboard_workflow_controllers_exports);
+  function translatedMessage(translate, key, fallback, placeholders = {}) {
+    const translated = translate?.(key, fallback, placeholders);
+    if (translated) return translated;
+    return fallback.replace(
+      /\{(\w+)\}/g,
+      (_match, name) => Object.prototype.hasOwnProperty.call(placeholders, name) ? String(placeholders[name]) : `{${name}}`
+    );
+  }
   function errorMessage(error, fallback) {
     if (error instanceof Error && error.message) return error.message;
     if (typeof error === "string" && error) return error;
@@ -47,12 +55,13 @@ const DashboardWorkflowControllers = (() => {
     return false;
   }
   function createImportReviewController(adapter) {
+    const t = (key, fallback, placeholders) => translatedMessage(adapter.translate, key, fallback, placeholders);
     let lastInput;
     let hasLastInput = false;
     let state = {
       kind: "idle",
       phase: "idle",
-      message: "Ready to review an import.",
+      message: t("workflowImportReady", "Ready to review an import."),
       retryAvailable: false
     };
     const emit = (next) => {
@@ -67,7 +76,7 @@ const DashboardWorkflowControllers = (() => {
       emit({
         kind: "loading",
         phase: "prepare",
-        message: "Reading import\u2026",
+        message: t("workflowImportReading", "Reading import\u2026"),
         retryAvailable: false
       });
       try {
@@ -76,7 +85,7 @@ const DashboardWorkflowControllers = (() => {
           return emit({
             kind: "empty",
             phase: "prepare",
-            message: "No importable scripts were found.",
+            message: t("workflowImportEmpty", "No importable scripts were found."),
             data: review ?? void 0,
             retryAvailable: false
           });
@@ -84,7 +93,7 @@ const DashboardWorkflowControllers = (() => {
         emit({
           kind: "review",
           phase: "confirm",
-          message: "Review required before import.",
+          message: t("workflowImportReviewRequired", "Review required before import."),
           data: review,
           retryAvailable: false
         });
@@ -93,7 +102,7 @@ const DashboardWorkflowControllers = (() => {
           return emit({
             kind: "recovery",
             phase: "cancelled",
-            message: "Import cancelled. Choose the file again when ready.",
+            message: t("workflowImportCancelled", "Import cancelled. Choose the file again when ready."),
             data: review,
             retryAvailable: true
           });
@@ -101,7 +110,7 @@ const DashboardWorkflowControllers = (() => {
         emit({
           kind: "loading",
           phase: "apply",
-          message: "Importing reviewed scripts\u2026",
+          message: t("workflowImportApplying", "Importing reviewed scripts\u2026"),
           data: review,
           retryAvailable: false
         });
@@ -112,12 +121,12 @@ const DashboardWorkflowControllers = (() => {
         return emit({
           kind: "success",
           phase: "complete",
-          message: adapter.describeResult?.(result) || "Import complete.",
+          message: adapter.describeResult?.(result) || t("workflowImportComplete", "Import complete."),
           data: result,
           retryAvailable: false
         });
       } catch (error) {
-        const message = errorMessage(error, "Import failed.");
+        const message = errorMessage(error, t("workflowImportFailed", "Import failed."));
         return emit({
           kind: "failure",
           phase: "failed",
@@ -138,14 +147,14 @@ const DashboardWorkflowControllers = (() => {
           return emit({
             kind: "empty",
             phase: "retry",
-            message: "Choose an import before retrying.",
+            message: t("workflowImportChooseBeforeRetry", "Choose an import before retrying."),
             retryAvailable: false
           });
         }
         emit({
           kind: "recovery",
           phase: "retry",
-          message: "Retrying the last import\u2026",
+          message: t("workflowImportRetrying", "Retrying the last import\u2026"),
           retryAvailable: false
         });
         return execute(lastInput);
@@ -154,9 +163,10 @@ const DashboardWorkflowControllers = (() => {
     };
   }
   function createSerializedSettingsController(adapter) {
+    const t = (key, fallback, placeholders) => translatedMessage(adapter.translate, key, fallback, placeholders);
     const queues = /* @__PURE__ */ new Map();
     let pending = 0;
-    let lastState = { kind: "saved", message: "Saved", pending: 0 };
+    let lastState = { kind: "saved", message: t("workflowSettingsSaved", "Saved"), pending: 0 };
     const emit = (kind, message, key) => {
       lastState = { kind, message, pending, ...key ? { key } : {} };
       adapter.render?.({ ...lastState });
@@ -164,9 +174,9 @@ const DashboardWorkflowControllers = (() => {
     const saveNow = async (key, inputValue, context) => {
       const validation = adapter.validate(key, inputValue, context);
       if (!validation.ok) {
-        const message = validation.error || `Invalid value for ${key}`;
+        const message = validation.error || t("workflowSettingsInvalidValue", "Invalid value for {key}", { key });
         adapter.setFieldError?.(key, message, context);
-        lastState = { kind: "invalid", message: "Needs attention", pending, key };
+        lastState = { kind: "invalid", message: t("workflowSettingsNeedsAttention", "Needs attention"), pending, key };
         if (!context.quiet) adapter.notify?.(message, "error");
         return false;
       }
@@ -179,19 +189,22 @@ const DashboardWorkflowControllers = (() => {
       } catch (_error) {
         adapter.write(key, previousValue);
         adapter.restoreInput?.(key, previousValue, context);
-        lastState = { kind: "error", message: "Save failed", pending, key };
-        if (!context.quiet) adapter.notify?.("Couldn\u2019t save this setting. Your previous value is still active.", "error");
+        lastState = { kind: "error", message: t("workflowSettingsSaveFailed", "Save failed"), pending, key };
+        if (!context.quiet) adapter.notify?.(t(
+          "workflowSettingsPreviousValueActive",
+          "Couldn\u2019t save this setting. Your previous value is still active."
+        ), "error");
         return false;
       }
       try {
         await adapter.apply?.(key, value);
       } catch (_error) {
-        lastState = { kind: "saved", message: adapter.savedMessage?.(key, value) || "Saved", pending, key };
+        lastState = { kind: "saved", message: adapter.savedMessage?.(key, value) || t("workflowSettingsSaved", "Saved"), pending, key };
         return true;
       }
       lastState = {
         kind: "saved",
-        message: adapter.savedMessage?.(key, value) || "Saved",
+        message: adapter.savedMessage?.(key, value) || t("workflowSettingsSaved", "Saved"),
         pending,
         key
       };
@@ -199,7 +212,7 @@ const DashboardWorkflowControllers = (() => {
     };
     const save = (key, value, context = {}) => {
       pending += 1;
-      emit("saving", "Saving\u2026", key);
+      emit("saving", t("workflowSettingsSaving", "Saving\u2026"), key);
       const previous = queues.get(key) || Promise.resolve(true);
       const queued = previous.catch(() => false).then(() => saveNow(key, value, context));
       queues.set(key, queued);
@@ -207,7 +220,7 @@ const DashboardWorkflowControllers = (() => {
         if (queues.get(key) === queued) queues.delete(key);
         pending = Math.max(0, pending - 1);
         if (pending > 0) {
-          emit("saving", "Saving\u2026", key);
+          emit("saving", t("workflowSettingsSaving", "Saving\u2026"), key);
         } else {
           emit(lastState.kind, lastState.message, lastState.key);
         }
@@ -217,7 +230,7 @@ const DashboardWorkflowControllers = (() => {
       save,
       async saveOrThrow(key, value, context = {}) {
         const saved = await save(key, value, { ...context, quiet: true });
-        if (!saved) throw new Error(`Failed to save ${key}`);
+        if (!saved) throw new Error(t("workflowSettingsSaveKeyFailed", "Failed to save {key}", { key }));
         return true;
       },
       getState: () => ({ ...lastState, pending }),
@@ -225,10 +238,11 @@ const DashboardWorkflowControllers = (() => {
     };
   }
   function createDiagnosticsController(adapter) {
+    const t = (key, fallback, placeholders) => translatedMessage(adapter.translate, key, fallback, placeholders);
     let state = {
       kind: "idle",
       phase: "idle",
-      message: "Diagnostics have not been refreshed.",
+      message: t("workflowDiagnosticsNotRefreshed", "Diagnostics have not been refreshed."),
       retryAvailable: false
     };
     const emit = (next, announce = false) => {
@@ -244,7 +258,7 @@ const DashboardWorkflowControllers = (() => {
       emit({
         kind: "loading",
         phase: "refresh",
-        message: "Refreshing diagnostics\u2026",
+        message: t("workflowDiagnosticsRefreshing", "Refreshing diagnostics\u2026"),
         retryAvailable: false
       });
       const entries = Object.entries(adapter.loaders);
@@ -257,7 +271,7 @@ const DashboardWorkflowControllers = (() => {
       settled.forEach((result, index) => {
         const key = entries[index]?.[0] || `loader-${index}`;
         if (result.status === "rejected") {
-          failures.push(`${key}: ${errorMessage(result.reason, "unavailable")}`);
+          failures.push(`${key}: ${errorMessage(result.reason, t("workflowDiagnosticsUnavailable", "unavailable"))}`);
           return;
         }
         data[key] = result.value;
@@ -278,7 +292,7 @@ const DashboardWorkflowControllers = (() => {
         return emit({
           kind: "empty",
           phase: "complete",
-          message: "No diagnostics are available yet.",
+          message: t("workflowDiagnosticsEmpty", "No diagnostics are available yet."),
           data,
           retryAvailable: true
         }, announce);
@@ -288,7 +302,11 @@ const DashboardWorkflowControllers = (() => {
         return emit({
           kind: "recovery",
           phase: "degraded",
-          message: `${unavailable} diagnostic source${unavailable === 1 ? "" : "s"} unavailable. Showing the last available data.`,
+          message: t(
+            unavailable === 1 ? "workflowDiagnosticSourceUnavailable" : "workflowDiagnosticSourcesUnavailable",
+            unavailable === 1 ? "{count} diagnostic source unavailable. Showing the last available data." : "{count} diagnostic sources unavailable. Showing the last available data.",
+            { count: unavailable }
+          ),
           data,
           error: failures.join(" \xB7 ") || void 0,
           retryAvailable: true
@@ -297,7 +315,7 @@ const DashboardWorkflowControllers = (() => {
       return emit({
         kind: "success",
         phase: "complete",
-        message: "Diagnostics refreshed.",
+        message: t("workflowDiagnosticsRefreshed", "Diagnostics refreshed."),
         data,
         retryAvailable: false
       }, announce);
@@ -308,7 +326,7 @@ const DashboardWorkflowControllers = (() => {
         emit({
           kind: "recovery",
           phase: "retry",
-          message: "Retrying diagnostic sources\u2026",
+          message: t("workflowDiagnosticsRetrying", "Retrying diagnostic sources\u2026"),
           data: state.data,
           retryAvailable: false
         });

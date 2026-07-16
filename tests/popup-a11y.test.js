@@ -98,6 +98,14 @@ describe("popup UX markup", () => {
 });
 
 describe("popup UX controller", () => {
+  test("diagnostic summaries use the locale catalog", () => {
+    expect(popupJs).toContain("tPopup('popupAllMatchingScriptsRunning'");
+    expect(popupJs).toContain("'popupScriptsRunningHere'");
+    expect(popupJs).toContain("'popupDocumentActivitySeparated'");
+    expect(popupJs).toContain("'popupCurrentDocumentEvents'");
+    expect(popupJs).not.toContain("? 'All matching scripts are running on this page.'");
+  });
+
   test("popup controller centralizes busy states, focus, and submenu state", () => {
     expect(popupJs).toMatch(/function updatePrimaryActionMenuVisibility\(\)/);
     expect(popupJs).toMatch(/const busyControls = new WeakSet\(\);/);

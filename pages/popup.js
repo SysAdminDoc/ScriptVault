@@ -755,16 +755,30 @@
         });
         let html = `<div class="diagnose-summary">${escapeHtml(
             running === scripts.length
-                ? 'All matching scripts are running on this page.'
-                : `${running} of ${scripts.length} script${scripts.length === 1 ? '' : 's'} running here.`
+                ? tPopup('popupAllMatchingScriptsRunning', 'All matching scripts are running on this page.')
+                : tPopup(
+                    scripts.length === 1 ? 'popupScriptRunningHere' : 'popupScriptsRunningHere',
+                    scripts.length === 1 ? '{running} of {total} script running here.' : '{running} of {total} scripts running here.',
+                    { running, total: scripts.length }
+                )
         )}</div>`;
         const documentSummary = res?.executionDiagnostics?.summary || {};
         const currentEvents = Number(documentSummary.currentEvents || 0);
         const staleEvents = Number(documentSummary.staleEvents || 0);
         if (currentEvents || staleEvents) {
             const activityText = staleEvents
-                ? `${currentEvents} current-document event${currentEvents === 1 ? '' : 's'}; ${staleEvents} earlier-document event${staleEvents === 1 ? '' : 's'} kept separate.`
-                : `${currentEvents} event${currentEvents === 1 ? '' : 's'} recorded for the current document.`;
+                ? tPopup(
+                    'popupDocumentActivitySeparated',
+                    '{current} current-document event(s); {stale} earlier-document event(s) kept separate.',
+                    { current: currentEvents, stale: staleEvents }
+                )
+                : tPopup(
+                    currentEvents === 1 ? 'popupCurrentDocumentEvent' : 'popupCurrentDocumentEvents',
+                    currentEvents === 1
+                        ? '{count} event recorded for the current document.'
+                        : '{count} events recorded for the current document.',
+                    { count: currentEvents }
+                );
             html += `<div class="diagnose-summary">${escapeHtml(activityText)}</div>`;
         }
         for (const s of sorted) {

@@ -4,6 +4,12 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Localized the tool-first workbench and workflow status layer.** Command,
+  filter, saved-view, inspector, sync-health, popup diagnostic, import-review,
+  settings-save, and utilities-diagnostic copy now resolves through the unified
+  generated locale catalog. Dynamic controller states accept a translator,
+  inspector icons survive DOM localization, and the editor toggle no longer
+  points at a nonexistent locale key.
 - **Deep audit hardening (2026-07-15).** Six-agent audit over the workbench
   redesign, typed action dispatch, recent security commits, the UserCSS engine
   and language service, workflow controllers, and secondary surfaces. Fixed:

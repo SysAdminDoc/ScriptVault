@@ -1708,6 +1708,7 @@
     function getImportReviewController() {
         if (importReviewController) return importReviewController;
         importReviewController = DashboardWorkflowControllers.createImportReviewController({
+            translate: tDashboard,
             prepare: async file => {
                 const text = await file.text();
                 const scriptCount = (text.match(/==UserScript==/g) || []).length;
@@ -4765,6 +4766,7 @@
     function getSettingsPersistenceController() {
         if (settingsPersistenceController) return settingsPersistenceController;
         settingsPersistenceController = DashboardWorkflowControllers.createSerializedSettingsController({
+            translate: tDashboard,
             validate: (key, value) => validateSettingsValue(key, value),
             read: key => state.settings[key],
             write: (key, value) => { state.settings[key] = value; },
@@ -4777,7 +4779,9 @@
             setFieldError: (key, message, context) => setSettingsFieldError(context.input || getSettingsInputForKey(key), message),
             render: saveState => setSettingsSaveState(saveState.kind, saveState.message),
             notify: (message, tone) => showToast(message, tone),
-            savedMessage: key => key === 'layout' || key === 'editorTheme' ? 'Theme applied' : 'Saved'
+            savedMessage: key => key === 'layout' || key === 'editorTheme'
+                ? tDashboard('workflowSettingsThemeApplied', 'Theme applied')
+                : tDashboard('workflowSettingsSaved', 'Saved')
         });
         return settingsPersistenceController;
     }
@@ -6549,6 +6553,7 @@
     function getUtilitiesDiagnosticsController() {
         if (utilitiesDiagnosticsController) return utilitiesDiagnosticsController;
         utilitiesDiagnosticsController = DashboardWorkflowControllers.createDiagnosticsController({
+            translate: tDashboard,
             loaders: {
                 runtime: () => loadRuntimeStatus(),
                 localHealth: () => loadLocalHealthReport(),
@@ -7825,7 +7830,7 @@
         elements.siteFilterSelect.replaceChildren();
         const allOption = document.createElement('option');
         allOption.value = 'all';
-        allOption.textContent = 'All sites';
+        allOption.textContent = tDashboard('scriptFilterAllSites', 'All sites');
         elements.siteFilterSelect.appendChild(allOption);
         [...domains].sort((a, b) => a.localeCompare(b)).forEach(domain => {
             const option = document.createElement('option');
@@ -8630,11 +8635,11 @@
     function getScriptSourceLabel(script, metadata = {}) {
         if (script.installSource?.name) return script.installSource.name;
         const url = metadata.downloadURL || metadata.updateURL || metadata.homepageURL || metadata.homepage;
-        if (!url) return 'Local';
+        if (!url) return tDashboard('inspectorSourceLocal', 'Local');
         try {
             return new URL(url).hostname.replace(/^www\./, '');
         } catch (_) {
-            return 'Remote';
+            return tDashboard('inspectorSourceRemote', 'Remote');
         }
     }
 
@@ -8646,12 +8651,12 @@
         if (!elements.scriptInspectorTrustRows) return;
         const hasSignature = !!(script.trustReceipt || script.signature || metadata.signature);
         const permissionLabel = grants.length
-            ? `${numberFormatter.format(grants.length)} granted`
-            : 'none';
+            ? tDashboard('inspectorGrantedCount', '{count} granted', { count: numberFormatter.format(grants.length) })
+            : tDashboard('inspectorNone', 'none');
         const rows = [
-            ['Code signature', hasSignature ? 'Valid' : 'Not signed', hasSignature ? 'good' : 'neutral'],
-            ['Known vulnerabilities', trust.tone === 'alert' ? 'Review' : 'Clear', trust.tone === 'alert' ? 'warn' : 'good'],
-            ['Permissions', permissionLabel, grants.length > 4 ? 'warn' : 'good']
+            [tDashboard('inspectorCodeSignature', 'Code signature'), hasSignature ? tDashboard('inspectorValid', 'Valid') : tDashboard('inspectorNotSigned', 'Not signed'), hasSignature ? 'good' : 'neutral'],
+            [tDashboard('inspectorKnownVulnerabilities', 'Known vulnerabilities'), trust.tone === 'alert' ? tDashboard('inspectorReview', 'Review') : tDashboard('inspectorClear', 'Clear'), trust.tone === 'alert' ? 'warn' : 'good'],
+            [tDashboard('inspectorPermissions', 'Permissions'), permissionLabel, grants.length > 4 ? 'warn' : 'good']
         ];
         const fragment = document.createDocumentFragment();
         rows.forEach(([label, value, tone]) => {
@@ -8672,7 +8677,7 @@
         elements.scriptInspectorDomainAccess.replaceChildren();
         const filtered = domains.map(value => String(value || '').trim()).filter(Boolean);
         if (!filtered.length) {
-            elements.scriptInspectorDomainAccess.textContent = 'No domains';
+            elements.scriptInspectorDomainAccess.textContent = tDashboard('inspectorNoDomains', 'No domains');
             return;
         }
         const fragment = document.createDocumentFragment();
@@ -8682,7 +8687,7 @@
             const name = document.createElement('span');
             name.textContent = domain;
             const access = document.createElement('strong');
-            access.textContent = 'Allow';
+            access.textContent = tDashboard('inspectorAllow', 'Allow');
             row.append(name, access);
             fragment.appendChild(row);
         });
@@ -8690,9 +8695,14 @@
             const row = document.createElement('div');
             row.className = 'script-inspector-domain-row muted';
             const name = document.createElement('span');
-            name.textContent = `${numberFormatter.format(filtered.length - 4)} more domain${filtered.length - 4 === 1 ? '' : 's'}`;
+            const remaining = filtered.length - 4;
+            name.textContent = tDashboard(
+                remaining === 1 ? 'inspectorMoreDomain' : 'inspectorMoreDomains',
+                remaining === 1 ? '{count} more domain' : '{count} more domains',
+                { count: numberFormatter.format(remaining) }
+            );
             const access = document.createElement('strong');
-            access.textContent = 'Allow';
+            access.textContent = tDashboard('inspectorAllow', 'Allow');
             row.append(name, access);
             fragment.appendChild(row);
         }
@@ -8708,35 +8718,35 @@
 
         if (isImportQuarantined(script)) {
             score -= 25;
-            issues.push('Import review');
+            issues.push(tDashboard('inspectorFlagImportReview', 'Import review'));
         }
         if (script.settings?.sourceIdentityChanged) {
             score -= 24;
-            issues.push('Source changed');
+            issues.push(tDashboard('inspectorFlagSourceChanged', 'Source changed'));
         }
         if (isBroadMatch(matches)) {
             score -= 16;
-            issues.push('Broad match');
+            issues.push(tDashboard('inspectorFlagBroadMatch', 'Broad match'));
         }
         if (getDeclaredAntifeatures(script.metadata || {}).length > 0) {
             score -= 14;
-            issues.push('Anti-feature');
+            issues.push(tDashboard('inspectorFlagAntifeature', 'Anti-feature'));
         }
         if (grants.some(grant => /unsafeWindow|xmlhttpRequest/i.test(grant))) {
             score -= 10;
-            issues.push('High-power grant');
+            issues.push(tDashboard('inspectorFlagHighPowerGrant', 'High-power grant'));
         }
         if (Number(stats.errors || 0) > 0) {
             score -= 10;
-            issues.push('Runtime errors');
+            issues.push(tDashboard('inspectorFlagRuntimeErrors', 'Runtime errors'));
         }
         if (Number(stats.avgTime || 0) > perfBudget && Number(stats.runs || 0) > 2) {
             score -= 6;
-            issues.push('Over budget');
+            issues.push(tDashboard('inspectorFlagOverBudget', 'Over budget'));
         }
         if (daysSinceUpdate > 180 && (script.metadata?.updateURL || script.metadata?.downloadURL)) {
             score -= 6;
-            issues.push('Stale source');
+            issues.push(tDashboard('inspectorFlagStaleSource', 'Stale source'));
         }
 
         const clamped = Math.max(0, Math.min(100, score));
@@ -8744,7 +8754,7 @@
         return {
             score: clamped,
             tone,
-            summary: issues.length ? issues.slice(0, 3).join(' | ') : 'No review flags'
+            summary: issues.length ? issues.slice(0, 3).join(' | ') : tDashboard('inspectorNoReviewFlags', 'No review flags')
         };
     }
 
@@ -8754,10 +8764,10 @@
         if (!script) {
             elements.scriptInspectorPanel.dataset.state = 'empty';
             delete elements.scriptInspectorPanel.dataset.scriptId;
-            setInspectorText(elements.scriptInspectorTitle, 'No script selected');
-            setInspectorText(elements.scriptInspectorSubtitle, 'Select a row to inspect trust, access, and runtime details.');
+            setInspectorText(elements.scriptInspectorTitle, tDashboard('inspectorNoScriptSelected', 'No script selected'));
+            setInspectorText(elements.scriptInspectorSubtitle, tDashboard('inspectorSelectRowHint', 'Select a row to inspect trust, access, and runtime details.'));
             setInspectorText(elements.scriptInspectorTrustScore, '--');
-            setInspectorText(elements.scriptInspectorTrustSummary, 'Waiting for script data');
+            setInspectorText(elements.scriptInspectorTrustSummary, tDashboard('inspectorWaitingForData', 'Waiting for script data'));
             setInspectorText(elements.scriptInspectorStatus, '--');
             setInspectorText(elements.scriptInspectorVersion, '--');
             setInspectorText(elements.scriptInspectorAuthor, '--');
@@ -8769,10 +8779,10 @@
             setInspectorText(elements.scriptInspectorSize, '--');
             setInspectorText(elements.scriptInspectorRuntime, '--');
             if (elements.scriptInspectorTrustRows) {
-                safeSetHtml(elements.scriptInspectorTrustRows, '<div><span>Code signature</span><strong>--</strong></div><div><span>Known vulnerabilities</span><strong>--</strong></div><div><span>Permissions</span><strong>--</strong></div>');
+                safeSetHtml(elements.scriptInspectorTrustRows, `<div><span>${escapeHtml(tDashboard('inspectorCodeSignature', 'Code signature'))}</span><strong>--</strong></div><div><span>${escapeHtml(tDashboard('inspectorKnownVulnerabilities', 'Known vulnerabilities'))}</span><strong>--</strong></div><div><span>${escapeHtml(tDashboard('inspectorPermissions', 'Permissions'))}</span><strong>--</strong></div>`);
             }
-            renderInspectorTokens(elements.scriptInspectorDomains, [], 'No domains');
-            renderInspectorTokens(elements.scriptInspectorGrants, [], 'No grants');
+            renderInspectorTokens(elements.scriptInspectorDomains, [], tDashboard('inspectorNoDomains', 'No domains'));
+            renderInspectorTokens(elements.scriptInspectorGrants, [], tDashboard('inspectorNoGrants', 'No grants'));
             renderInspectorDomainAccess([]);
             if (elements.scriptInspectorScore) elements.scriptInspectorScore.dataset.tone = 'neutral';
             if (elements.scriptInspectorEdit) elements.scriptInspectorEdit.disabled = true;
@@ -8790,23 +8800,29 @@
         const grants = normalizeMetadataList(metadata.grant);
         const domains = extractDomainsFromPatterns(matches);
         const stats = script.stats || {};
-        const name = metadata.name || 'Unnamed Script';
+        const name = metadata.name || tDashboard('inspectorUnnamedScript', 'Unnamed Script');
         const version = metadata.version || '1.0';
         const runs = Number(stats.runs || 0);
         const avgTime = Number(stats.avgTime || 0);
         const errors = Number(stats.errors || 0);
         const runtime = runs > 0
-            ? `${numberFormatter.format(runs)} runs | ${numberFormatter.format(avgTime)}ms avg${errors ? ` | ${numberFormatter.format(errors)} errors` : ''}`
-            : 'No execution data';
+            ? tDashboard('inspectorRuntimeSummary', '{runs} runs | {average}ms avg{errors}', {
+                runs: numberFormatter.format(runs),
+                average: numberFormatter.format(avgTime),
+                errors: errors ? tDashboard('inspectorRuntimeErrorsSuffix', ' | {count} errors', { count: numberFormatter.format(errors) }) : ''
+            })
+            : tDashboard('inspectorNoExecutionData', 'No execution data');
         const trust = getInspectorTrust(script, matches, grants);
 
         elements.scriptInspectorPanel.dataset.state = 'ready';
         elements.scriptInspectorPanel.dataset.scriptId = script.id;
         setInspectorText(elements.scriptInspectorTitle, name);
-        setInspectorText(elements.scriptInspectorSubtitle, metadata.description || metadata.author || 'Local userscript');
+        setInspectorText(elements.scriptInspectorSubtitle, metadata.description || metadata.author || tDashboard('inspectorLocalUserscript', 'Local userscript'));
         setInspectorText(elements.scriptInspectorTrustScore, `${trust.score}%`);
         setInspectorText(elements.scriptInspectorTrustSummary, trust.summary);
-        setInspectorText(elements.scriptInspectorStatus, script.enabled !== false ? 'Enabled' : 'Disabled');
+        setInspectorText(elements.scriptInspectorStatus, script.enabled !== false
+            ? tDashboard('enabled', 'Enabled')
+            : tDashboard('disabled', 'Disabled'));
         setInspectorText(elements.scriptInspectorVersion, version);
         setInspectorText(elements.scriptInspectorAuthor, metadata.author || '-');
         setInspectorText(elements.scriptInspectorSource, getScriptSourceLabel(script, metadata));
@@ -8817,8 +8833,8 @@
         setInspectorText(elements.scriptInspectorSize, formatBytes((script.code || '').length));
         setInspectorText(elements.scriptInspectorRuntime, runtime);
         renderInspectorChecks(script, metadata, grants, trust);
-        renderInspectorTokens(elements.scriptInspectorDomains, domains, 'No domains');
-        renderInspectorTokens(elements.scriptInspectorGrants, grants.length ? grants : ['none'], 'No grants');
+        renderInspectorTokens(elements.scriptInspectorDomains, domains, tDashboard('inspectorNoDomains', 'No domains'));
+        renderInspectorTokens(elements.scriptInspectorGrants, grants.length ? grants : [tDashboard('inspectorNone', 'none')], tDashboard('inspectorNoGrants', 'No grants'));
         renderInspectorDomainAccess(domains);
         if (elements.scriptInspectorScore) elements.scriptInspectorScore.dataset.tone = trust.tone;
         if (elements.scriptInspectorEdit) elements.scriptInspectorEdit.disabled = false;
@@ -14487,8 +14503,10 @@
             const hasSynced = configured && Boolean(state.settings?.lastSync);
             if (elements.svCommandHealthTitle) {
                 elements.svCommandHealthTitle.textContent = hasSynced
-                    ? 'Sync ready'
-                    : configured ? 'Sync configured' : 'Local vault ready';
+                    ? tDashboard('workbenchSyncReady', 'Sync ready')
+                    : configured
+                        ? tDashboard('workbenchSyncConfigured', 'Sync configured')
+                        : tDashboard('workbenchLocalVaultReady', 'Local vault ready');
             }
             if (elements.svCommandHealthMark) {
                 elements.svCommandHealthMark.textContent = '';
@@ -14496,8 +14514,10 @@
                 elements.svCommandHealthMark.classList.toggle('neutral', !configured);
             }
             elements.svCommandHealthDetail.textContent = hasSynced
-                ? `Last synced ${formatSyncTimestamp(state.settings.lastSync)}`
-                : configured ? 'Run Sync to create the first snapshot' : 'Sync not configured';
+                ? tDashboard('workbenchLastSynced', 'Last synced {time}', { time: formatSyncTimestamp(state.settings.lastSync) })
+                : configured
+                    ? tDashboard('workbenchSyncFirstSnapshot', 'Run Sync to create the first snapshot')
+                    : tDashboard('workbenchSyncNotConfigured', 'Sync not configured');
             elements.svCommandHealthDetail.closest('.scripts-shell-health')
                 ?.setAttribute('data-tone', configured ? 'good' : 'neutral');
         }
