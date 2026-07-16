@@ -13651,9 +13651,20 @@
             }
         } catch (_) { /* keep empty */ }
 
+        // Token values for {{name}}/{{icon}} come from the active tab's title and
+        // favicon URL, which the visited page fully controls. They are spliced
+        // into userscript metadata directive lines (`// @name`, `// @icon`) that
+        // must stay single-line, so strip control characters (CR/LF included)
+        // and clamp length — a crafted multi-line document.title must not be
+        // able to append lines past the @name directive into the generated body.
+        const sanitizeTemplateTokenValue = (value) => String(value || '')
+            .replace(/[\u0000-\u001F\u007F]+/g, ' ')
+            .trim()
+            .slice(0, 200);
+
         const tokens = {
-            '{{name}}': (activeTab && activeTab.title) || '',
-            '{{icon}}': (activeTab && activeTab.favIconUrl) || '',
+            '{{name}}': sanitizeTemplateTokenValue(activeTab && activeTab.title),
+            '{{icon}}': sanitizeTemplateTokenValue(activeTab && activeTab.favIconUrl),
             '{{match}}': matchPattern,
             '{{namespace}}': namespace,
         };

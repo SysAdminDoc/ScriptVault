@@ -4,6 +4,11 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Sanitized page-controlled "new script from this page" template tokens.** The
+  active tab's title and favicon URL are stripped of control characters (CR/LF
+  included) and length-clamped before being substituted into a generated
+  userscript, so a crafted multi-line `document.title` cannot inject extra
+  metadata directive lines into the new script.
 - **Hardened the build chain against npm lifecycle-script worms.** Dependency
   install scripts are now disabled by default (`.npmrc` `ignore-scripts=true`),
   closing the install-time payload vector used by 2026 npm supply-chain worms.

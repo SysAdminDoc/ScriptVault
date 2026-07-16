@@ -777,13 +777,6 @@ CLAUDE.md audit history, and RESEARCH.md rejected ideas._
 
 ### P3
 
-- [ ] P3 — Sanitize page-controlled template tokens
-  Why: `resolveTemplateTokens` substitutes `activeTab.title` (fully page-controlled) into new-script source via `split/join` with no CR/LF stripping; a crafted multi-line `document.title` can append lines past the `@name` metadata directive. Low impact (user reviews before save) but untrusted page data reaches executable source unsanitized.
-  Evidence: code audit — `pages/dashboard.js:13644-13676`.
-  Touches: `pages/dashboard.js` (`resolveTemplateTokens`), a focused test.
-  Acceptance: token values have control characters (`\r`/`\n`) stripped and length clamped before substitution; regression test with a multi-line malicious title asserts the generated `@name` line is single-line.
-  Complexity: S
-
 - [ ] P3 — Compress backup blobs with the Compression Streams API
   Why: `BackupScheduler` stores full uncompressed ZIP blobs in `chrome.storage.local` (known inefficiency, CLAUDE.md). The Baseline Compression Streams API (gzip/brotli) shrinks the footprint with no new dependency.
   Evidence: CLAUDE.md "Known Remaining Issues"; https://developer.mozilla.org/en-US/docs/Web/API/CompressionStream/CompressionStream
