@@ -299,10 +299,10 @@ function handleAnalyze(code) {
 function analyzeAST(code) {
   let ast;
   try {
-    ast = acorn.parse(code, { ecmaVersion: 2022, sourceType: 'script', allowHashBang: true, locations: true });
+    ast = acorn.parse(code, { ecmaVersion: 'latest', sourceType: 'script', allowHashBang: true, locations: true });
   } catch (e) {
     // Try module mode
-    ast = acorn.parse(code, { ecmaVersion: 2022, sourceType: 'module', allowHashBang: true, locations: true });
+    ast = acorn.parse(code, { ecmaVersion: 'latest', sourceType: 'module', allowHashBang: true, locations: true });
   }
 
   const hits = new Map(); // pattern.id → count
@@ -369,7 +369,7 @@ function analyzeAST(code) {
 
 function handleESMImports(code) {
   try {
-    const ast = acorn.parse(code, { ecmaVersion: 2022, sourceType: 'module', allowHashBang: true, locations: true });
+    const ast = acorn.parse(code, { ecmaVersion: 'latest', sourceType: 'module', allowHashBang: true, locations: true });
     const imports = [];
     const exports = [];
     const dynamicImports = [];

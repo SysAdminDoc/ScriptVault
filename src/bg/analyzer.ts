@@ -710,9 +710,9 @@ function analyzeAST(code: string): AnalysisResult {
   const hasUseStrict = /^(['"])use strict\1/m.test(code);
   let ast: AstNode;
   try {
-    ast = parser.parse(code, { ecmaVersion: 2022, sourceType: 'script', allowHashBang: true, locations: true, ...(hasUseStrict ? { strict: true } : {}) });
+    ast = parser.parse(code, { ecmaVersion: 'latest', sourceType: 'script', allowHashBang: true, locations: true, ...(hasUseStrict ? { strict: true } : {}) });
   } catch {
-    ast = parser.parse(code, { ecmaVersion: 2022, sourceType: 'module', allowHashBang: true, locations: true });
+    ast = parser.parse(code, { ecmaVersion: 'latest', sourceType: 'module', allowHashBang: true, locations: true });
   }
 
   const hits = new Map<string, number>();
@@ -787,7 +787,7 @@ function analyzeAST(code: string): AnalysisResult {
 function parseESMImportsInline(code: string): ESMSyntaxInfo {
   const parser = getAcorn();
   try {
-    const ast = parser.parse(code, { ecmaVersion: 2022, sourceType: 'module', allowHashBang: true, locations: true });
+    const ast = parser.parse(code, { ecmaVersion: 'latest', sourceType: 'module', allowHashBang: true, locations: true });
     const imports: ESMImportInfo[] = [];
     const exports: ESMExportInfo[] = [];
     const dynamicImports: ESMSyntaxInfo['dynamicImports'] = [];

@@ -4,6 +4,13 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Security: the AST risk analyzer now parses modern JavaScript.** Both the
+  offscreen and inline Acorn parse paths were pinned to `ecmaVersion: 2022`, so
+  a userscript using ES2023–2025 syntax (notably `using`/`await using` explicit
+  resource management) threw on parse and silently degraded to the weaker regex
+  fallback, evading the 31-detector AST scan. All parse sites now use
+  `ecmaVersion: 'latest'`, so modern-syntax scripts are fully AST-analyzed.
+
 ## [v3.22.0] — Persistent UserCSS install and management (2026-07-16)
 
 - **Persistent UserCSS styles.** ScriptVault now installs and manages persistent

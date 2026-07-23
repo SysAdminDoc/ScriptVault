@@ -27261,9 +27261,9 @@ const ScriptAnalyzer = (() => {
     const hasUseStrict = /^(['"])use strict\1/m.test(code);
     let ast;
     try {
-      ast = parser.parse(code, { ecmaVersion: 2022, sourceType: "script", allowHashBang: true, locations: true, ...hasUseStrict ? { strict: true } : {} });
+      ast = parser.parse(code, { ecmaVersion: "latest", sourceType: "script", allowHashBang: true, locations: true, ...hasUseStrict ? { strict: true } : {} });
     } catch {
-      ast = parser.parse(code, { ecmaVersion: 2022, sourceType: "module", allowHashBang: true, locations: true });
+      ast = parser.parse(code, { ecmaVersion: "latest", sourceType: "module", allowHashBang: true, locations: true });
     }
     const hits = /* @__PURE__ */ new Map();
     const hitNodes = /* @__PURE__ */ new Map();
@@ -27326,7 +27326,7 @@ const ScriptAnalyzer = (() => {
   function parseESMImportsInline(code) {
     const parser = getAcorn();
     try {
-      const ast = parser.parse(code, { ecmaVersion: 2022, sourceType: "module", allowHashBang: true, locations: true });
+      const ast = parser.parse(code, { ecmaVersion: "latest", sourceType: "module", allowHashBang: true, locations: true });
       const imports = [];
       const exports = [];
       const dynamicImports = [];

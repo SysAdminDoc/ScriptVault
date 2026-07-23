@@ -55,6 +55,23 @@ describe('offscreen AST analysis', () => {
     expect(result.summary).toMatch(/too large/);
   });
 
+  it('AST-analyzes modern ES2025 syntax instead of falling back to a parse error', () => {
+    // `using` / `await using` (Explicit Resource Management) parse only when
+    // ecmaVersion is high enough; a stale pin (e.g. 2022) throws and the caller
+    // silently degrades to weaker regex detection. Prove the AST path runs and
+    // still fires detectors on the modern-syntax body.
+    const usingScript = 'using res = getResource();\neval("x");';
+    const usingResult = handleAnalyze(usingScript);
+    expect(usingResult.parseError).toBeFalsy();
+    expect(usingResult.astAnalyzed).toBe(true);
+    expect(usingResult.findings.some(f => f.id === 'eval')).toBe(true);
+
+    const awaitUsing = 'async function main(){\n  await using res = getResource();\n  document.cookie;\n}';
+    const awaitResult = handleAnalyze(awaitUsing);
+    expect(awaitResult.parseError).toBeFalsy();
+    expect(awaitResult.astAnalyzed).toBe(true);
+  });
+
   it('reports risk level thresholds', () => {
     const clean = handleAnalyze('console.log("safe");');
     expect(clean.riskLevel).toBe('minimal');
