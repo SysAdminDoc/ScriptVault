@@ -152,6 +152,24 @@ describe('GM cookie handler', () => {
     }));
   });
 
+  it('rejects a caller-supplied scriptId that conflicts with the authenticated user-script id', async () => {
+    // A userscript with a real sender.userScriptId must not be able to name a
+    // different script's id to have that script's host-scope policy evaluated.
+    await expect(handleGMCookieMessage(
+      'GM_cookie_list',
+      { scriptId: 'script-2', domain: 'example.com' },
+      { userScriptId: 'script-1', tab: { url: 'https://example.com/page' } },
+    )).resolves.toEqual({ error: 'Script context mismatch' });
+    expect(chrome.cookies.getAll).not.toHaveBeenCalled();
+
+    // A matching (or absent) caller id with an authenticated context still resolves.
+    await expect(handleGMCookieMessage(
+      'GM_cookie_list',
+      { scriptId: 'script-1', domain: 'example.com' },
+      { userScriptId: 'script-1', tab: { url: 'https://example.com/page' } },
+    )).resolves.toEqual({ success: true, cookies: [{ name: 'sid', value: '1' }] });
+  });
+
   it('returns validation and policy errors before Chrome cookie calls', async () => {
     await expect(handleGMCookieMessage('GM_cookie_list', {}))
       .resolves.toEqual({ error: 'Missing script context' });

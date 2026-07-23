@@ -58,6 +58,9 @@ const GMCookieHandler = (() => {
     return String(error);
   }
   async function getCookieScript(data, sender) {
+    if (sender.userScriptId && data.scriptId && data.scriptId !== sender.userScriptId) {
+      return { error: "Script context mismatch" };
+    }
     const scriptId = sender.userScriptId || data.scriptId;
     if (!scriptId) return { error: "Missing script context" };
     const script = await ScriptStorage.get(scriptId);

@@ -1792,6 +1792,11 @@ const UpdateSystem = {
   _MAX_UPDATE_BYTES: 5 * 1024 * 1024,
   _PENDING_UPDATES_KEY: 'pendingUpdates',
   _MAX_PENDING_UPDATES: 50,
+  // Total serialized footprint bound for the single pendingUpdates storage key.
+  // The count cap alone does not bound size — each entry carries the full new
+  // code plus trust-receipt/diff/risk-delta blobs — so keep the store safely
+  // under the default chrome.storage.local 10 MB quota.
+  _MAX_PENDING_TOTAL_BYTES: 8 * 1024 * 1024,
   _pendingUpdates: null,
 
   /** Compute the next-check timestamp for a failure-count value. */
@@ -2017,7 +2022,7 @@ const UpdateSystem = {
       updatedAt: script.updatedAt || Date.now()
     };
 
-    // Store previous version for rollback (keep last 3)
+    // Store previous version for rollback (keep last 5)
     const versionHistory = Array.isArray(script.versionHistory) ? [...script.versionHistory] : [];
     const historyEntry = {
       version: script.meta.version,
@@ -2122,6 +2127,19 @@ const UpdateSystem = {
     const normalized = (Array.isArray(list) ? list : [])
       .filter(item => item && item.id && typeof item.code === 'string')
       .slice(0, this._MAX_PENDING_UPDATES);
+    // Bound the total serialized footprint, not just the entry count. Drop from
+    // the same (tail) end the count cap uses until the store fits the budget.
+    let evicted = 0;
+    while (normalized.length > 1) {
+      let bytes;
+      try { bytes = JSON.stringify(normalized).length; } catch { break; }
+      if (bytes <= this._MAX_PENDING_TOTAL_BYTES) break;
+      normalized.pop();
+      evicted++;
+    }
+    if (evicted > 0) {
+      console.warn(`[ScriptVault] pendingUpdates exceeded ${this._MAX_PENDING_TOTAL_BYTES} bytes; dropped ${evicted} queued update(s) to stay under quota.`);
+    }
     this._pendingUpdates = normalized;
     await chrome.storage.local.set({ [this._PENDING_UPDATES_KEY]: normalized });
     return normalized.slice();

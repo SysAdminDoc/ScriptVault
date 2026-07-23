@@ -11,8 +11,8 @@ from the tagged release.
 
 | Version | Supported |
 | ------- | --------- |
-| 3.20.x  | Yes       |
-| < 3.20  | No — upgrade to the latest release |
+| 3.22.x  | Yes       |
+| < 3.22  | No — upgrade to the latest release |
 
 ## Reporting a Vulnerability
 

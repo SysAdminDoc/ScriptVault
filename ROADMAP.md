@@ -738,3 +738,105 @@ CLAUDE.md audit history, and RESEARCH.md rejected ideas._
 
 - **ScriptCat niche directives** — `CAT_fileStorage` (per-script file storage), `@storageName` (shared cross-script namespace), `@definition` (`.d.ts` editor hints), `@early-start`. Verified absent; low demand and marginal over Chrome's existing `document_start` + shipped `lib/scriptvault.d.ts`. Reconsider on user signal. Source: docs.scriptcat.org/docs/dev/meta.
 - **On-device "explain this script" via Chrome Prompt API (Chrome 148 stable)** — could summarize what an installed/updating script does using the on-device model, strictly opt-in and local. Philosophy tension with any data flow; gate behind explicit per-use consent. Source: https://developer.chrome.com/docs/ai/prompt-api
+
+## Research-Driven Additions (2026-07-22)
+
+_Net-new from the 2026-07-22 research pass (baseline v3.22.0). Verified against
+source and deduped against ROADMAP.md, Roadmap_Blocked.md, and the shipped
+v3.21.0/v3.22.0 work. The prior RESEARCH.md top-10 (persistent UserCSS, esbuild
+CVE bump, SECURITY.md, permission-drift gate, npm-worm hardening, template-token
+sanitization, backup gzip, update-body AST re-scan) all SHIPPED — not re-added.
+Firefox 153 shipped 2026-07-21, unblocking four items previously parked in
+Roadmap_Blocked.md; those are re-surfaced here as actionable (P2 FF153 cluster)._
+
+### P2
+
+- [ ] P2 — Re-match persistent UserCSS on SPA in-page navigations
+  Why: The new UserCSS engine only re-evaluates `@match` on full document commits, so styles bleed onto or miss non-matching client-side routes.
+  Evidence: `src/background/core.ts:9938-9948` wires only `webNavigation.onCommitted` + `tabs.onRemoved`; no `onHistoryStateUpdated`/`onReferenceFragmentUpdated`. Userscripts already get `window.onurlchange` (`wrapper-builder.ts:2274`); UserCSS has no equivalent.
+  Touches: `src/background/core.ts` (UserStyles listener wiring), `src/modules/userstyles.ts` (`onTabNavigated`/re-match path), regenerated `background.js`, new test in `tests/`.
+  Acceptance: Navigating an SPA (pushState/replaceState + hashchange) between a matching and non-matching route applies/removes the injected sheet without a full reload; no duplicate sheet stacking; regression test covers a pushState route change.
+  Complexity: M
+
+- [ ] P2 — Consolidate update security gating at the `applyUpdate` choke point
+  Why: The 31-detector AST risk-delta runs in the queue builder, but the apply primitive re-gates only TOFU-SRI/provenance/source-identity, so a future direct-apply caller could bypass the risk re-scan.
+  Evidence: risk-delta in `_computeUpdateRiskDelta`/`_buildPendingUpdate` (`src/background/core.ts:2185-2260`) vs `applyUpdate` (`core.ts:1980-2101`); direct callers `forceUpdateScript` (`core.ts:6050`) and the `applyUpdate` message action (`core.ts:6453`) skip the delta.
+  Touches: `src/background/core.ts` (move/duplicate the risk-delta assertion into `applyUpdate`), regenerated `background.js`, `tests/`.
+  Acceptance: A same-author/same-registry update that introduces a new sensitive sink cannot be applied through `forceUpdateScript` or the `applyUpdate` action without the risk-delta being computed; test proves the gate fires on the direct path.
+  Complexity: M
+
+- [ ] P2 — FF153: adopt `publicSuffix` API for eTLD+1 domain grouping
+  Why: The current `getDomainRoot()` fallback mis-groups multi-level TLDs (co.uk, com.au); FF153 ships a native, dep-free public-suffix lookup.
+  Evidence: Firefox 153 (bug 1315558) — `browser.publicSuffix.getDomain()/getKnownSuffix()`. Previously parked in Roadmap_Blocked.md ("Firefox 153 publicSuffix API for domain grouping"); FF153 shipped 2026-07-21. No Chrome equivalent — keep the fallback for Chrome.
+  Touches: domain-grouping helper (search `getDomainRoot`), Firefox-compat shim, `tests/`.
+  Acceptance: On Firefox 153+, per-site grouping resolves `example.co.uk` to `example.co.uk` (not `co.uk`); Chrome path unchanged via feature detection.
+  Complexity: S
+
+- [ ] P2 — FF153: gate `file://` userscript matching behind `isAllowedFileSchemeAccess()`
+  Why: FF153 makes file access an explicit opt-in permission and finally makes `extension.isAllowedFileSchemeAccess()` return `true` when granted (previously always `false`), so file-scheme matching can be gated on a real capability check with a user prompt.
+  Evidence: Firefox 153 (bug 2034168). Previously parked in Roadmap_Blocked.md ("Firefox file-URL access setup gate"); unblocked 2026-07-21.
+  Touches: Firefox registration/match path, setup-doctor onboarding card (`pages/dashboard.js` Phase 39.x self-diagnosis), `tests/`.
+  Acceptance: On Firefox 153+, a `file://`-matching script surfaces an "enable local file access" prompt when the permission is off and registers normally when on; Chrome path unchanged.
+  Complexity: M
+
+- [ ] P2 — FF153: inject GM_addStyle / UserCSS via `adoptedStyleSheets` into Shadow DOM
+  Why: `GM_addStyle`/UserCSS cannot reach Shadow DOM via `<style>` injection; FF153 lets content scripts read/write `document.adoptedStyleSheets` and `ShadowRoot.adoptedStyleSheets` without `.wrappedJSObject`, enabling faster, revertible constructable-stylesheet injection.
+  Evidence: Firefox 153 (bug 1751346). Previously parked in Roadmap_Blocked.md ("Firefox 153 adopted stylesheets for Shadow DOM GM_addStyle"); unblocked 2026-07-21. Chrome already supports adopted stylesheets in content scripts.
+  Touches: `src/modules/userstyles.ts` + GM_addStyle wrapper (`wrapper-builder.ts`), regenerated artifacts, `tests/`.
+  Acceptance: A style targeting an element inside an open shadow root applies and cleanly removes on toggle/unbind on both engines; falls back to `<style>` injection where constructable sheets are unavailable.
+  Complexity: M
+
+- [ ] P2 — Bump `monaco-editor` 0.55.1 → 0.56.0 (native DOMPurify 3.4.5)
+  Why: monaco 0.55.1 declares a DOMPurify range vulnerable to CVE-2026-0540 (mXSS); 0.56.0 bundles DOMPurify 3.4.5, making the fix native instead of override-dependent.
+  Evidence: https://github.com/microsoft/monaco-editor/releases ; https://github.com/microsoft/monaco-editor/issues/5248 ; GHSA-v2wj-7wpq-c8vv. Current `package.json:111` `monaco-editor: ^0.55.1`.
+  Touches: `package.json`, `package-lock.json`, monaco ESM bundle contract (`scripts/check-monaco-*`), editor smoke (`scripts/smoke-editor.mjs`).
+  Acceptance: `monaco-editor` resolves to 0.56.0, editor smoke passes, monaco-package/ESM contract checks pass, resolved DOMPurify (including monaco's copy) is >=3.3.2.
+  Complexity: S
+
+- [ ] P2 — Honor the UserCSS `@preprocessor` field (dep-free USO; explicit unsupported for Less/Stylus)
+  Why: `@preprocessor` is parsed and stored but never applied, so an imported Stylus/USO style has its raw, uncompiled source injected — silent wrong behavior.
+  Evidence: `src/modules/userstyles.ts:507,1452` set `preprocessor: 'default'`; no compile path exists for `less`/`stylus`/`uso`. Stylus supports all four (openstyles/stylus wiki). Less/Stylus need a compiler (rejected — violates zero-runtime-dep); USO `/*[[var]]*/` token substitution is dep-free.
+  Touches: `src/modules/userstyles.ts` (USO token substitution + preprocessor dispatch), install/import gate, `tests/`.
+  Acceptance: A `@preprocessor uso` style has its `/*[[var-name]]*/` tokens substituted before injection; a `@preprocessor less`/`stylus` style surfaces a clear "unsupported preprocessor" notice at import instead of silently applying raw source.
+  Complexity: M
+
+- [ ] P2 — CWS Limited-Use disclosure assertion gate (enforcement 2026-08-01)
+  Why: CWS Limited-Use/data-disclosure enforcement begins 2026-08-01; ScriptVault collects nothing, but there is no build check asserting that no telemetry/analytics endpoint was ever introduced.
+  Evidence: https://developer.chrome.com/blog/cws-policy-updates-2026 . Existing `store-copy:check` verifies disclosure copy coverage, not the absence of collection endpoints.
+  Touches: new `scripts/check-no-telemetry.mjs` (grep source for analytics/beacon/external-fetch patterns), wire into `npm run check`, a short in-repo Limited-Use statement (extend `PRIVACY.md`, not a new file).
+  Acceptance: `npm run check` fails if a non-allowlisted outbound-telemetry pattern appears in `src/**`/`pages/**`/`content.js`; PRIVACY.md carries an explicit Limited-Use statement.
+  Complexity: S
+
+### P3
+
+- [ ] P3 — Add CI floor-pins for fixed CVEs (dompurify >=3.3.2, vitest >=4.1.0)
+  Why: Nothing prevents a lockfile regression from reintroducing CVE-2026-0540 (DOMPurify mXSS, incl. monaco's transitive copy) or CVE-2026-47429 (Vitest UI file read/exec, CVSS 9.8).
+  Evidence: GHSA-v2wj-7wpq-c8vv (fixed 3.3.2); GHSA-5xrq-8626-4rwp (fixed 4.1.0). Current overrides pin `dompurify@3.4.11` but assert nothing on the resolved tree.
+  Touches: `scripts/` (extend an existing dependency-audit check, e.g. `check-optional-dep-reach.mjs`, or a new `check-cve-floors.mjs`), wire into `npm run check`.
+  Acceptance: `npm run check` fails if the resolved `dompurify` (any tree position) is <3.3.2 or `vitest` <4.1.0.
+  Complexity: S
+
+- [ ] P3 — Purge legacy uncompressed inline backup blobs
+  Why: Old backup entries still carry the `@deprecated` uncompressed inline `data` field that the gzip path does not retroactively clean up, wasting storage.
+  Evidence: `src/modules/backup-scheduler.ts:123` (`@deprecated ... pending migration`); gzip path at `backup-scheduler.ts:922-953` only compresses new writes.
+  Touches: `src/modules/backup-scheduler.ts` (one-shot migration to gzip-and-drop inline `data` on load), `tests/`.
+  Acceptance: On next scheduler run, existing backups migrate to the compressed blob store and the inline `data` field is removed; a migration test covers a legacy entry.
+  Complexity: S
+
+- [ ] P3 — Surface the GM_webRequest MV3 no-op in the compat matrix
+  Why: `GM_webRequest` accepts a `listener` arg and only `console.info`s (DNR has no MV3 runtime callback), so scripts relying on the callback misbehave without a surfaced warning.
+  Evidence: `src/background/wrapper-builder.ts:2257`.
+  Touches: `README.md` GM-API/compat matrix, `docs/gm-namespace-parity.md`, optionally a one-time in-page console warning.
+  Acceptance: README/compat matrix documents `GM_webRequest` listener callbacks as unsupported under MV3; `readme:check` passes.
+  Complexity: S
+
+- [ ] P3 — HTML Sanitizer API fast-path (`Element.setHTML`) with DOMPurify fallback
+  Why: Chrome 146 + Firefox 148 ship native `Element.setHTML()`; using it as a fast-path for sanitizing script metadata/README HTML reduces reliance on the DOMPurify override where available.
+  Evidence: https://developer.mozilla.org/en-US/docs/Web/API/HTML_Sanitizer_API (limited availability — Safari not yet; keep DOMPurify as the floor).
+  Touches: shared sanitize helper (search DOMPurify call sites), `tests/`.
+  Acceptance: Where `Element.setHTML` exists, metadata/README HTML sanitizes through it; DOMPurify remains the fallback; no behavioral change to sanitized output.
+  Complexity: M
+
+### Delta — focused re-pass (2026-07-22)
+
+_Additional verified findings from a same-day analyzer/storage/scope re-pass. Not duplicates of the items above._

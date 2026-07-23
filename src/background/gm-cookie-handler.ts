@@ -105,6 +105,15 @@ function errorMessage(error: unknown): string {
 }
 
 async function getCookieScript(data: GMCookiePayload, sender: RuntimeMessageSender): Promise<{ error?: string; script?: ScriptRecord; scriptId?: string }> {
+  // Trust the browser-supplied user-script id over any caller-supplied one. When
+  // the message genuinely originates from a registered userscript, `userScriptId`
+  // is set by Chrome; a script must not be able to name a *different* script's id
+  // to have that script's host-scope policy evaluated. A caller-supplied id is
+  // only honored when there is no authenticated user-script context (e.g. an
+  // extension page bridging the request).
+  if (sender.userScriptId && data.scriptId && data.scriptId !== sender.userScriptId) {
+    return { error: 'Script context mismatch' };
+  }
   const scriptId = sender.userScriptId || data.scriptId;
   if (!scriptId) return { error: 'Missing script context' };
   const script = await ScriptStorage.get(scriptId);

@@ -4,6 +4,15 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Hardened GM cookie scope against script-id spoofing.** When a cookie
+  request carries an authenticated `userScriptId`, a mismatched caller-supplied
+  `scriptId` is now rejected with a "Script context mismatch" error, so a
+  userscript can no longer name a different script to have that script's
+  host-scope policy evaluated.
+- **Bounded the pending-updates store footprint.** The `pendingUpdates` storage
+  key was capped by entry count (50) but not by size; it now also enforces an
+  8 MB total-serialized budget, evicting excess queued entries with a warning so
+  the store stays under the `chrome.storage.local` quota.
 - **Security: the AST risk analyzer now parses modern JavaScript.** Both the
   offscreen and inline Acorn parse paths were pinned to `ecmaVersion: 2022`, so
   a userscript using ES2023–2025 syntax (notably `using`/`await using` explicit
