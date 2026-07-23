@@ -6640,6 +6640,7 @@ backgroundActionRegistry.registerHandlers(SettingsActionHandler.createSettingsAc
   getExtensionStatus: async () => {
     let status: any = await probeUserScriptsAvailability();
     if (status.userScriptsAvailable) status = await configureUserScriptsWorld(status);
+    status.fileSchemeAccess = await probeFileSchemeAccess();
     return status;
   },
   getLocalHealthReport: () => buildLocalHealthReport(),
@@ -11104,6 +11105,50 @@ async function persistUserScriptsStatus(status: any) {
   }
 }
 
+// True when a match/include pattern targets the file:// scheme.
+function _isFileSchemePattern(pattern: any): boolean {
+  const raw = String(pattern || '').trim().toLowerCase();
+  return raw.startsWith('file://') || raw.startsWith('file:/*') || raw === 'file:///*';
+}
+
+async function _hasFileScopedScripts(): Promise<boolean> {
+  try {
+    const scripts = await ScriptStorage.getAll();
+    return (Array.isArray(scripts) ? scripts : []).some((s: any) => {
+      const patterns = [
+        ...(Array.isArray(s?.meta?.match) ? s.meta.match : []),
+        ...(Array.isArray(s?.meta?.include) ? s.meta.include : [])
+      ];
+      return patterns.some(_isFileSchemePattern);
+    });
+  } catch (e) {
+    return false;
+  }
+}
+
+// Firefox 153+ makes file access an explicit opt-in permission and fixes
+// extension.isAllowedFileSchemeAccess() to return true once granted (it was
+// previously always false). Chrome has always exposed it. Returns whether the
+// API is present and whether local-file access is currently granted.
+async function probeFileSchemeAccess(): Promise<{ supported: boolean; allowed: boolean; hasFileScripts: boolean }> {
+  let supported = false;
+  let allowed = false;
+  try {
+    const g: any = globalThis as any;
+    const ext: any = (g.browser && g.browser.extension)
+      ? g.browser.extension
+      : ((typeof chrome !== 'undefined' && (chrome as any)?.extension) ? (chrome as any).extension : null);
+    if (ext && typeof ext.isAllowedFileSchemeAccess === 'function') {
+      supported = true;
+      allowed = !!(await ext.isAllowedFileSchemeAccess());
+    }
+  } catch (e) {
+    supported = false;
+  }
+  const hasFileScripts = await _hasFileScopedScripts();
+  return { supported, allowed, hasFileScripts };
+}
+
 async function probeUserScriptsAvailability() {
   const chromeVersion = _getChromeVersion();
   let userScriptsAvailable = false;
@@ -13630,12 +13675,70 @@ ${mappedCode}
     sendToBackground('GM_deleteValues', { scriptId, keys }).catch(() => {});
   }
   
+  // Constructable-stylesheet support (Chrome always; Firefox 153+ exposes
+  // ShadowRoot.adoptedStyleSheets to user scripts without wrappedJSObject).
+  function _supportsConstructableSheets() {
+    try {
+      if (typeof CSSStyleSheet !== 'function') return false;
+      const probe = new CSSStyleSheet();
+      return typeof probe.replaceSync === 'function';
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // A document-level <style> cannot cross shadow boundaries. Apply the CSS as a
+  // constructable stylesheet to every currently-open shadow root so GM_addStyle
+  // reaches components that render into shadow DOM. Bounded DOM walk; a no-op
+  // where constructable stylesheets are unavailable. Returns handles for cleanup.
+  function _addStyleToOpenShadowRoots(css) {
+    if (!_supportsConstructableSheets()) return [];
+    let sheet;
+    try {
+      sheet = new CSSStyleSheet();
+      sheet.replaceSync(css);
+    } catch (e) {
+      return [];
+    }
+    const handles = [];
+    try {
+      const root = document.documentElement || document;
+      if (!root || typeof root.querySelectorAll !== 'function') return handles;
+      const all = root.querySelectorAll('*');
+      const limit = Math.min(all.length, 15000);
+      for (let i = 0; i < limit; i++) {
+        const sr = all[i] && all[i].shadowRoot; // only OPEN shadow roots are reachable
+        const adopted = sr && sr.adoptedStyleSheets;
+        if (adopted && typeof adopted[Symbol.iterator] === 'function') {
+          try {
+            const current = [...adopted];
+            if (!current.includes(sheet)) {
+              sr.adoptedStyleSheets = [...current, sheet];
+              handles.push(sr);
+            }
+          } catch (e) { /* frozen/cross-origin shadow root */ }
+        }
+      }
+    } catch (e) { /* DOM not walkable yet */ }
+    return handles.length ? [{ sheet, roots: handles }] : [];
+  }
+
+  function _removeShadowStyleHandles(entries) {
+    for (const entry of entries || []) {
+      for (const sr of entry.roots || []) {
+        try {
+          sr.adoptedStyleSheets = [...sr.adoptedStyleSheets].filter(s => s !== entry.sheet);
+        } catch (e) { /* root gone */ }
+      }
+    }
+  }
+
   // GM_addStyle - inject CSS with robust DOM handling
   function GM_addStyle(css) {
     const style = document.createElement('style');
     style.textContent = css;
     style.setAttribute('data-scriptvault', scriptId);
-    
+
     // Try to inject immediately
     function inject() {
       const target = document.head || document.documentElement || document.body;
@@ -13678,10 +13781,28 @@ ${mappedCode}
         }, 1000);
       }
     }
-    
+
+    // Also reach open shadow roots (a document <style> cannot). The returned
+    // element stays the document <style> for full GM_addStyle compatibility; we
+    // only extend its removal so unbinding clears the shadow-root sheets too.
+    const shadowHandles = _addStyleToOpenShadowRoots(css);
+    if (shadowHandles.length) {
+      const origRemove = typeof style.remove === 'function' ? style.remove.bind(style) : null;
+      try {
+        Object.defineProperty(style, 'remove', {
+          configurable: true,
+          writable: true,
+          value: function () {
+            _removeShadowStyleHandles(shadowHandles);
+            if (origRemove) return origRemove();
+          }
+        });
+      } catch (e) { /* element sealed; document style still removable normally */ }
+    }
+
     return style;
   }
-  
+
   // GM_xmlhttpRequest - Full implementation with all events (like Violentmonkey)
   function GM_xmlhttpRequest(details, options) {
     const allowFetchGrant = options && options.allowFetchGrant === true;

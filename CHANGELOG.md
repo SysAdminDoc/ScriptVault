@@ -6,6 +6,30 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [v3.23.0] — Security & Reliability Hardening (2026-07-22)
 
+- **GM_addStyle reaches Shadow DOM (Firefox 153+ / Chrome).** A document-level
+  `<style>` cannot cross shadow boundaries. `GM_addStyle` now also applies the
+  CSS as a constructable stylesheet to every currently-open shadow root, so
+  styles reach web components. The return value stays the document `<style>`
+  element for compatibility, and its removal clears the shadow-root sheets too.
+  Feature-detected — a no-op where constructable stylesheets are unavailable.
+- **File:// script setup guidance (Firefox 153+).** When an installed script
+  matches `file://` pages but the browser's local-file access permission is off
+  (an explicit opt-in on Firefox 153+, fixed `isAllowedFileSchemeAccess()`), the
+  dashboard now surfaces a distinct notice explaining how to enable it, instead
+  of the script silently failing to run on local files.
+
+- **GM_addStyle reaches Shadow DOM (Firefox 153+ / Chrome).** A document-level
+  `<style>` cannot cross shadow boundaries. `GM_addStyle` now also applies the
+  CSS as a constructable stylesheet to every currently-open shadow root, so
+  styles reach web components. The return value stays the document `<style>`
+  element for compatibility, and its removal clears the shadow-root sheets too.
+  Feature-detected — a no-op where constructable stylesheets are unavailable.
+- **File:// script setup guidance (Firefox 153+).** When an installed script
+  matches `file://` pages but the browser's local-file access permission is off
+  (an explicit opt-in on Firefox 153+, fixed `isAllowedFileSchemeAccess()`), the
+  dashboard now surfaces a distinct notice explaining how to enable it, instead
+  of the script silently failing to run on local files.
+
 - **Accurate domain-badge roots on Firefox 153+.** The domain-badge helper used
   a second-to-last-label heuristic that mis-grouped multi-level TLDs
   (example.co.uk showed "CO"). On Firefox 153+ it now uses the synchronous

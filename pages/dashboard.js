@@ -3911,6 +3911,19 @@
         }
 
         if (status?.userScriptsAvailable) {
+            // userScripts run, but a script scoped to file:// pages needs the
+            // browser's local-file access permission (an explicit opt-in on
+            // Firefox 153+). Surface a distinct notice rather than hiding the
+            // banner when that permission is missing.
+            const fsa = status.fileSchemeAccess;
+            if (fsa && fsa.supported && fsa.hasFileScripts && !fsa.allowed) {
+                if (text) {
+                    text.textContent = 'A script matches file:// pages, but local-file access is off. Enable "Access your local files" (Firefox: Add-ons Manager, this extension’s permissions; Chrome: Extension Details → Allow access to file URLs), then reload the file.';
+                }
+                banner.style.display = 'block';
+                banner.dataset.setupState = 'file-scheme-access-disabled';
+                return;
+            }
             banner.style.display = 'none';
             return;
         }

@@ -751,20 +751,6 @@ Roadmap_Blocked.md; those are re-surfaced here as actionable (P2 FF153 cluster).
 
 ### P2
 
-- [ ] P2 — FF153: gate `file://` userscript matching behind `isAllowedFileSchemeAccess()`
-  Why: FF153 makes file access an explicit opt-in permission and finally makes `extension.isAllowedFileSchemeAccess()` return `true` when granted (previously always `false`), so file-scheme matching can be gated on a real capability check with a user prompt.
-  Evidence: Firefox 153 (bug 2034168). Previously parked in Roadmap_Blocked.md ("Firefox file-URL access setup gate"); unblocked 2026-07-21.
-  Touches: Firefox registration/match path, setup-doctor onboarding card (`pages/dashboard.js` Phase 39.x self-diagnosis), `tests/`.
-  Acceptance: On Firefox 153+, a `file://`-matching script surfaces an "enable local file access" prompt when the permission is off and registers normally when on; Chrome path unchanged.
-  Complexity: M
-
-- [ ] P2 — FF153: inject GM_addStyle / UserCSS via `adoptedStyleSheets` into Shadow DOM
-  Why: `GM_addStyle`/UserCSS cannot reach Shadow DOM via `<style>` injection; FF153 lets content scripts read/write `document.adoptedStyleSheets` and `ShadowRoot.adoptedStyleSheets` without `.wrappedJSObject`, enabling faster, revertible constructable-stylesheet injection.
-  Evidence: Firefox 153 (bug 1751346). Previously parked in Roadmap_Blocked.md ("Firefox 153 adopted stylesheets for Shadow DOM GM_addStyle"); unblocked 2026-07-21. Chrome already supports adopted stylesheets in content scripts.
-  Touches: `src/modules/userstyles.ts` + GM_addStyle wrapper (`wrapper-builder.ts`), regenerated artifacts, `tests/`.
-  Acceptance: A style targeting an element inside an open shadow root applies and cleanly removes on toggle/unbind on both engines; falls back to `<style>` injection where constructable sheets are unavailable.
-  Complexity: M
-
 - [ ] P2 — Bump `monaco-editor` 0.55.1 → 0.56.0 (native DOMPurify 3.4.5)
   Why: monaco 0.55.1 declares a DOMPurify range vulnerable to CVE-2026-0540 (mXSS); 0.56.0 bundles DOMPurify 3.4.5, making the fix native instead of override-dependent.
   Evidence: https://github.com/microsoft/monaco-editor/releases ; https://github.com/microsoft/monaco-editor/issues/5248 ; GHSA-v2wj-7wpq-c8vv. Current `package.json:111` `monaco-editor: ^0.55.1`.

@@ -25,6 +25,7 @@ const WhatsNew = (() => {
         'Unsupported UserCSS @preprocessor (less/stylus) now warns on install instead of injecting raw uncompiled source.',
         'Domain badges resolve accurate roots for multi-level TLDs (example.co.uk) on Firefox 153+.',
         'The pending-updates store is now bounded by total size, not just entry count.',
+        'GM_addStyle now reaches open shadow roots (Firefox 153+/Chrome), and file:// scripts show setup guidance when local-file access is off.',
       ],
     },
     '3.22.0': {

@@ -867,6 +867,67 @@ ${mappedCode}
     sendToBackground('GM_deleteValues', { scriptId, keys }).catch(() => {});
   }
 
+  // Constructable-stylesheet support check (Chrome always; Firefox 153+ exposes
+  // ShadowRoot.adoptedStyleSheets to content/user scripts without wrappedJSObject).
+  function _supportsConstructableSheets() {
+    try {
+      if (typeof CSSStyleSheet !== 'function') return false;
+      const probe = new CSSStyleSheet();
+      return typeof probe.replaceSync === 'function';
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // A document-level <style> cannot cross shadow boundaries. Apply the CSS as a
+  // constructable stylesheet to every currently-open shadow root so GM_addStyle
+  // reaches components that render into shadow DOM. Bounded DOM walk; a no-op
+  // where constructable stylesheets are unavailable. Returns handles for cleanup.
+  function _addStyleToOpenShadowRoots(css) {
+    if (!_supportsConstructableSheets()) return [];
+    let sheet;
+    try {
+      sheet = new CSSStyleSheet();
+      sheet.replaceSync(css);
+    } catch (e) {
+      return [];
+    }
+    const handles = [];
+    try {
+      const root = document.documentElement || document;
+      if (!root || typeof root.querySelectorAll !== 'function') return handles;
+      // Cap the scan so a huge page can't stall a heavy GM_addStyle caller.
+      const all = root.querySelectorAll('*');
+      const limit = Math.min(all.length, 15000);
+      for (let i = 0; i < limit; i++) {
+        const sr = all[i] && all[i].shadowRoot; // only OPEN shadow roots are reachable
+        // adoptedStyleSheets is a real Array in Chromium and an array-like in
+        // Firefox 153+ — both are iterable and accept an array via the setter.
+        const adopted = sr && sr.adoptedStyleSheets;
+        if (adopted && typeof adopted[Symbol.iterator] === 'function') {
+          try {
+            const current = [...adopted];
+            if (!current.includes(sheet)) {
+              sr.adoptedStyleSheets = [...current, sheet];
+              handles.push(sr);
+            }
+          } catch (e) { /* frozen/cross-origin shadow root */ }
+        }
+      }
+    } catch (e) { /* DOM not walkable yet */ }
+    return handles.length ? [{ sheet, roots: handles }] : [];
+  }
+
+  function _removeShadowStyleHandles(entries) {
+    for (const entry of entries || []) {
+      for (const sr of entry.roots || []) {
+        try {
+          sr.adoptedStyleSheets = [...sr.adoptedStyleSheets].filter(s => s !== entry.sheet);
+        } catch (e) { /* root gone */ }
+      }
+    }
+  }
+
   // GM_addStyle - inject CSS with robust DOM handling
   function GM_addStyle(css) {
     const style = document.createElement('style');
@@ -914,6 +975,24 @@ ${mappedCode}
           }
         }, 1000);
       }
+    }
+
+    // Also reach open shadow roots (a document <style> cannot). The returned
+    // element stays the document <style> for full GM_addStyle compatibility; we
+    // only extend its removal so unbinding clears the shadow-root sheets too.
+    const shadowHandles = _addStyleToOpenShadowRoots(css);
+    if (shadowHandles.length) {
+      const origRemove = typeof style.remove === 'function' ? style.remove.bind(style) : null;
+      try {
+        Object.defineProperty(style, 'remove', {
+          configurable: true,
+          writable: true,
+          value: function () {
+            _removeShadowStyleHandles(shadowHandles);
+            if (origRemove) return origRemove();
+          }
+        });
+      } catch (e) { /* element sealed; document style still removable normally */ }
     }
 
     return style;
