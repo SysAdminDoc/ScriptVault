@@ -64,6 +64,8 @@ Full Greasemonkey/Tampermonkey API compatibility with promise-based `GM.*` async
 
 Plus `GM_getTab`, `GM_saveTab`, `GM_getTabs` for cross-tab state, `window.close`, `window.focus`, `window.onurlchange` grants, `@top-level-await`, `@delay`, and `@nodownload` support.
 
+`GM_webRequest` is backed by declarativeNetRequest, which has no runtime callback under Manifest V3: define static rules via `@webRequest` metadata or the `rules` argument. A `listener` callback passed to `GM_webRequest(...)` will never fire and logs a console warning — it is not supported on MV3.
+
 TypeScript userscripts can reference `lib/scriptvault.d.ts` for generated ambient declarations that match ScriptVault's GM API surface.
 
 `GM.fetch` returns a Fetch-compatible `Response`; modern browser contexts expose `res.body` as a `ReadableStream` so scripts can read cross-origin responses chunk-by-chunk while ScriptVault still applies the script's `@connect` hosts and internal-host guards. Older contexts fall back to the existing `GM_xmlhttpRequest` response path.

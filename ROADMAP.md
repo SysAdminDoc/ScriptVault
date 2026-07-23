@@ -816,13 +816,6 @@ Roadmap_Blocked.md; those are re-surfaced here as actionable (P2 FF153 cluster).
   Acceptance: On next scheduler run, existing backups migrate to the compressed blob store and the inline `data` field is removed; a migration test covers a legacy entry.
   Complexity: S
 
-- [ ] P3 — Surface the GM_webRequest MV3 no-op in the compat matrix
-  Why: `GM_webRequest` accepts a `listener` arg and only `console.info`s (DNR has no MV3 runtime callback), so scripts relying on the callback misbehave without a surfaced warning.
-  Evidence: `src/background/wrapper-builder.ts:2257`.
-  Touches: `README.md` GM-API/compat matrix, `docs/gm-namespace-parity.md`, optionally a one-time in-page console warning.
-  Acceptance: README/compat matrix documents `GM_webRequest` listener callbacks as unsupported under MV3; `readme:check` passes.
-  Complexity: S
-
 - [ ] P3 — HTML Sanitizer API fast-path (`Element.setHTML`) with DOMPurify fallback
   Why: Chrome 146 + Firefox 148 ship native `Element.setHTML()`; using it as a fast-path for sanitizing script metadata/README HTML reduces reliance on the DOMPurify override where available.
   Evidence: https://developer.mozilla.org/en-US/docs/Web/API/HTML_Sanitizer_API (limited availability — Safari not yet; keep DOMPurify as the floor).

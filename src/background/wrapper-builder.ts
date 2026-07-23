@@ -2256,7 +2256,7 @@ ${mappedCode}
     // listener is called with (info, message, details) when a rule matches;
     // declarativeNetRequest doesn't support runtime callbacks, so we no-op this.
     if (typeof listener === 'function') {
-      console.info('[ScriptVault] GM_webRequest: runtime listener not supported in MV3 — use @webRequest metadata for static rules');
+      console.warn('[ScriptVault] GM_webRequest: runtime match callbacks are not supported under Manifest V3 (declarativeNetRequest has no runtime callback). The listener will never fire — use @webRequest / GM_webRequest static rules instead.');
     }
   }
   window.GM_webRequest = GM_webRequest;
