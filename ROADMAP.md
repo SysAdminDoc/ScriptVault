@@ -788,13 +788,6 @@ Roadmap_Blocked.md; those are re-surfaced here as actionable (P2 FF153 cluster).
 
 ### P3
 
-- [ ] P3 — Purge legacy uncompressed inline backup blobs
-  Why: Old backup entries still carry the `@deprecated` uncompressed inline `data` field that the gzip path does not retroactively clean up, wasting storage.
-  Evidence: `src/modules/backup-scheduler.ts:123` (`@deprecated ... pending migration`); gzip path at `backup-scheduler.ts:922-953` only compresses new writes.
-  Touches: `src/modules/backup-scheduler.ts` (one-shot migration to gzip-and-drop inline `data` on load), `tests/`.
-  Acceptance: On next scheduler run, existing backups migrate to the compressed blob store and the inline `data` field is removed; a migration test covers a legacy entry.
-  Complexity: S
-
 - [ ] P3 — HTML Sanitizer API fast-path (`Element.setHTML`) with DOMPurify fallback
   Why: Chrome 146 + Firefox 148 ship native `Element.setHTML()`; using it as a fast-path for sanitizing script metadata/README HTML reduces reliance on the DOMPurify override where available.
   Evidence: https://developer.mozilla.org/en-US/docs/Web/API/HTML_Sanitizer_API (limited availability — Safari not yet; keep DOMPurify as the floor).

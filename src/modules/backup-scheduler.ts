@@ -120,7 +120,7 @@ interface BackupEntry {
   redactedSettingsCredentialKeys?: string[];
   size: number;
   sizeFormatted: string;
-  /** @deprecated Blob data is stored in IndexedDB since v3.12. Only present in legacy entries pending migration. */
+  /** @deprecated Blob data is stored in IndexedDB since v3.12. Only present in legacy entries until `_migrateBackupBlobsToIdb()` (run at scheduler init) moves them into IndexedDB and strips this field. */
   data?: string;
 }
 
