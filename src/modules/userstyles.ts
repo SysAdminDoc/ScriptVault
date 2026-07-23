@@ -97,6 +97,8 @@ interface ParseResult {
   match?: string[];
   css?: string;
   error?: string;
+  /** Non-fatal notice, e.g. an unsupported @preprocessor whose source is not compiled. */
+  warning?: string;
 }
 
 interface UserCSSValidationResult {
@@ -112,7 +114,13 @@ interface UserCSSExportResult {
 interface UserCSSImportResult {
   styleId?: string;
   error?: string;
+  warning?: string;
 }
+
+// UserCSS @preprocessor values that require a Less/Stylus compiler ScriptVault
+// deliberately does not bundle (zero runtime dependencies). `default` and `uso`
+// are variable-substitution-only and are fully handled by _substituteVariables.
+const _UNSUPPORTED_PREPROCESSORS = new Set(['less', 'stylus', 'styl']);
 
 interface ConvertResult {
   script?: string;
@@ -552,12 +560,17 @@ function parseUserCSS(code: string): ParseResult {
     return { error: validation.errors.join(' ') };
   }
 
-  return {
+  const result: ParseResult = {
     meta,
     variables,
     match: matchPatterns.length ? matchPatterns : ['*://*/*'],
     css,
   };
+  const preprocessor = (meta.preprocessor || 'default').toLowerCase();
+  if (_UNSUPPORTED_PREPROCESSORS.has(preprocessor)) {
+    result.warning = `This style declares "@preprocessor ${meta.preprocessor}", which requires a ${preprocessor === 'less' ? 'Less' : 'Stylus'} compiler that ScriptVault does not bundle. Its variables are substituted, but its ${preprocessor} syntax is not compiled and may not render correctly. Convert it to plain CSS (default/uso) for full support.`;
+  }
+  return result;
 }
 
 function _isColorSchemeValue(value: unknown): value is ColorSchemeValue {
@@ -1289,7 +1302,7 @@ async function importUserCSS(
     match: parsed.match,
   });
   if (Object.keys(values).length > 0) await setVariables(styleId, values);
-  return { styleId };
+  return parsed.warning ? { styleId, warning: parsed.warning } : { styleId };
 }
 
 /* ------------------------------------------------------------------ */

@@ -7404,7 +7404,9 @@ backgroundActionRegistry.registerHandlers(RuntimeActionHandler.createRuntimeActi
         match: parsed.match,
         enabled: enabled !== false,
       });
-      return { success: true, id, name: parsed.meta?.name || id };
+      const response: any = { success: true, id, name: parsed.meta?.name || id };
+      if (parsed.warning) response.warning = parsed.warning;
+      return response;
     } catch (e: any) {
       return { success: false, error: e?.message || String(e) };
     }

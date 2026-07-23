@@ -779,13 +779,6 @@ Roadmap_Blocked.md; those are re-surfaced here as actionable (P2 FF153 cluster).
   Acceptance: `monaco-editor` resolves to 0.56.0, editor smoke passes, monaco-package/ESM contract checks pass, resolved DOMPurify (including monaco's copy) is >=3.3.2.
   Complexity: S
 
-- [ ] P2 — Honor the UserCSS `@preprocessor` field (dep-free USO; explicit unsupported for Less/Stylus)
-  Why: `@preprocessor` is parsed and stored but never applied, so an imported Stylus/USO style has its raw, uncompiled source injected — silent wrong behavior.
-  Evidence: `src/modules/userstyles.ts:507,1452` set `preprocessor: 'default'`; no compile path exists for `less`/`stylus`/`uso`. Stylus supports all four (openstyles/stylus wiki). Less/Stylus need a compiler (rejected — violates zero-runtime-dep); USO `/*[[var]]*/` token substitution is dep-free.
-  Touches: `src/modules/userstyles.ts` (USO token substitution + preprocessor dispatch), install/import gate, `tests/`.
-  Acceptance: A `@preprocessor uso` style has its `/*[[var-name]]*/` tokens substituted before injection; a `@preprocessor less`/`stylus` style surfaces a clear "unsupported preprocessor" notice at import instead of silently applying raw source.
-  Complexity: M
-
 ### P3
 
 - [ ] P3 — HTML Sanitizer API fast-path (`Element.setHTML`) with DOMPurify fallback

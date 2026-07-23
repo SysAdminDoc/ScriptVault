@@ -13447,6 +13447,7 @@
             const res = await chrome.runtime.sendMessage({ action: 'installUserStyle', code });
             if (!res || res.success === false || res.error) throw new Error(res?.error || 'UserStyle operation failed');
             showToast(tDashboard('userStyleInstalled', 'Userstyle installed and injecting on matching pages'), 'success');
+            if (res.warning) showToast(res.warning, 'warning');
         } catch (e) {
             showToast(e?.message || tDashboard('userStyleFailed', 'UserStyle operation failed'), 'error');
         }
@@ -13557,6 +13558,7 @@
                 if (!res?.success) { showToast(res?.error || tDashboard('userStyleFailed', 'UserStyle operation failed'), 'error'); return; }
                 hideModal();
                 showToast(tDashboard('userStyleInstalled', 'Userstyle installed and injecting on matching pages'), 'success');
+                if (res.warning) showToast(res.warning, 'warning');
             } }
         ]);
     }

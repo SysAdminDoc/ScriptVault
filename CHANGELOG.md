@@ -4,6 +4,13 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **UserCSS honors the `@preprocessor` field.** `default`/`uso` styles already
+  had their `/*[[var]]*/` and `var(--name)` tokens substituted; a
+  `@preprocessor less` or `@preprocessor stylus` style now surfaces a clear
+  "unsupported preprocessor" warning on install (its Less/Stylus syntax needs a
+  compiler ScriptVault does not bundle) instead of silently injecting raw,
+  uncompiled source.
+
 - **Persistent UserCSS now re-matches on SPA navigations.** Styles were only
   re-evaluated on full document commits (`webNavigation.onCommitted`), so a
   client-side route change (history pushState/replaceState or a hash change)

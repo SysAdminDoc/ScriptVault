@@ -110,6 +110,27 @@ body { color: tomato; }`;
     expect(converted.script).not.toContain('// @match        *://*/*');
   });
 
+  it('warns on an unsupported @preprocessor (less/stylus) but not on default/uso', async () => {
+    const build = (pre) => `/* ==UserStyle==\n@name P\n@namespace scriptvault\n@version 1.0.0\n@preprocessor ${pre}\n@match https://example.com/*\n==/UserStyle== */\nbody { color: red; }`;
+
+    const less = UserStylesEngine.parseUserCSS(build('less'));
+    expect(less.error).toBeUndefined();
+    expect(less.warning).toMatch(/Less compiler/i);
+
+    const stylus = UserStylesEngine.parseUserCSS(build('stylus'));
+    expect(stylus.warning).toMatch(/Stylus compiler/i);
+
+    expect(UserStylesEngine.parseUserCSS(build('default')).warning).toBeUndefined();
+    expect(UserStylesEngine.parseUserCSS(build('uso')).warning).toBeUndefined();
+  });
+
+  it('propagates the unsupported-preprocessor warning through importUserCSS', async () => {
+    const source = `/* ==UserStyle==\n@name Imp\n@namespace scriptvault\n@version 1.0.0\n@preprocessor stylus\n@match https://example.com/*\n==/UserStyle== */\nbody { color: red; }`;
+    const res = await UserStylesEngine.importUserCSS(source);
+    expect(res.styleId).toBeTruthy();
+    expect(res.warning).toMatch(/Stylus compiler/i);
+  });
+
   it('previews a UserCSS draft without persisting it', async () => {
     const result = await UserStylesEngine.previewDraft(createUserCSSDraft(), { tabId: 1 });
 

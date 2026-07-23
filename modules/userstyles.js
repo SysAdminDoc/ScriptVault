@@ -31,6 +31,7 @@ const UserStylesEngine = (() => {
     UserStylesEngine: () => UserStylesEngine
   });
   module.exports = __toCommonJS(userstyles_exports);
+  var _UNSUPPORTED_PREPROCESSORS = /* @__PURE__ */ new Set(["less", "stylus", "styl"]);
   var STORAGE_KEY = "sv_userstyles";
   var VARS_STORAGE_KEY = "sv_userstyle_vars";
   var META_REGEX = /\/\*\s*==UserStyle==\s*([\s\S]*?)==\/UserStyle==\s*\*\//;
@@ -339,12 +340,17 @@ const UserStylesEngine = (() => {
     if (!validation.valid) {
       return { error: validation.errors.join(" ") };
     }
-    return {
+    const result = {
       meta,
       variables,
       match: matchPatterns.length ? matchPatterns : ["*://*/*"],
       css
     };
+    const preprocessor = (meta.preprocessor || "default").toLowerCase();
+    if (_UNSUPPORTED_PREPROCESSORS.has(preprocessor)) {
+      result.warning = `This style declares "@preprocessor ${meta.preprocessor}", which requires a ${preprocessor === "less" ? "Less" : "Stylus"} compiler that ScriptVault does not bundle. Its variables are substituted, but its ${preprocessor} syntax is not compiled and may not render correctly. Convert it to plain CSS (default/uso) for full support.`;
+    }
+    return result;
   }
   function _isColorSchemeValue(value) {
     return !!value && typeof value === "object" && !Array.isArray(value) && typeof value.light === "string" && typeof value.dark === "string";
@@ -879,7 +885,7 @@ const UserStylesEngine = (() => {
       match: parsed.match
     });
     if (Object.keys(values).length > 0) await setVariables(styleId, values);
-    return { styleId };
+    return parsed.warning ? { styleId, warning: parsed.warning } : { styleId };
   }
   function convertToUserscript(usercssCode) {
     const parsed = parseUserCSS(usercssCode);
