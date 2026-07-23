@@ -753,13 +753,6 @@ Roadmap_Blocked.md; those are re-surfaced here as actionable (P2 FF153 cluster).
 
 ### P3
 
-- [ ] P3 — HTML Sanitizer API fast-path (`Element.setHTML`) with DOMPurify fallback
-  Why: Chrome 146 + Firefox 148 ship native `Element.setHTML()`; using it as a fast-path for sanitizing script metadata/README HTML reduces reliance on the DOMPurify override where available.
-  Evidence: https://developer.mozilla.org/en-US/docs/Web/API/HTML_Sanitizer_API (limited availability — Safari not yet; keep DOMPurify as the floor).
-  Touches: shared sanitize helper (search DOMPurify call sites), `tests/`.
-  Acceptance: Where `Element.setHTML` exists, metadata/README HTML sanitizes through it; DOMPurify remains the fallback; no behavioral change to sanitized output.
-  Complexity: M
-
 ### Delta — focused re-pass (2026-07-22)
 
 _Additional verified findings from a same-day analyzer/storage/scope re-pass. Not duplicates of the items above._
