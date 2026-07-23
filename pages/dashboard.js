@@ -9545,10 +9545,20 @@
     }
 
     function getDomainRoot(domain) {
-        const parts = String(domain || '')
-            .replace(/^www\./, '')
-            .split('.')
-            .filter(Boolean);
+        const host = String(domain || '').replace(/^www\./, '');
+        // Firefox 153+ exposes a synchronous public-suffix API, giving an accurate
+        // registrable label for multi-level TLDs (example.co.uk -> "example", not
+        // "co"). Feature-detected and fully guarded: Chrome and any API mismatch
+        // fall through to the label heuristic below with no behavior change.
+        try {
+            const ps = (typeof browser !== 'undefined' && browser && browser.publicSuffix) ? browser.publicSuffix : null;
+            const registrable = ps && typeof ps.getDomain === 'function' ? ps.getDomain(host) : '';
+            if (registrable) {
+                const label = String(registrable).split('.').filter(Boolean)[0];
+                if (label) return label;
+            }
+        } catch (_) { /* fall back to the heuristic */ }
+        const parts = host.split('.').filter(Boolean);
         return parts.length >= 2 ? parts[parts.length - 2] : (parts[0] || '');
     }
 

@@ -751,13 +751,6 @@ Roadmap_Blocked.md; those are re-surfaced here as actionable (P2 FF153 cluster).
 
 ### P2
 
-- [ ] P2 — FF153: adopt `publicSuffix` API for eTLD+1 domain grouping
-  Why: The current `getDomainRoot()` fallback mis-groups multi-level TLDs (co.uk, com.au); FF153 ships a native, dep-free public-suffix lookup.
-  Evidence: Firefox 153 (bug 1315558) — `browser.publicSuffix.getDomain()/getKnownSuffix()`. Previously parked in Roadmap_Blocked.md ("Firefox 153 publicSuffix API for domain grouping"); FF153 shipped 2026-07-21. No Chrome equivalent — keep the fallback for Chrome.
-  Touches: domain-grouping helper (search `getDomainRoot`), Firefox-compat shim, `tests/`.
-  Acceptance: On Firefox 153+, per-site grouping resolves `example.co.uk` to `example.co.uk` (not `co.uk`); Chrome path unchanged via feature detection.
-  Complexity: S
-
 - [ ] P2 — FF153: gate `file://` userscript matching behind `isAllowedFileSchemeAccess()`
   Why: FF153 makes file access an explicit opt-in permission and finally makes `extension.isAllowedFileSchemeAccess()` return `true` when granted (previously always `false`), so file-scheme matching can be gated on a real capability check with a user prompt.
   Evidence: Firefox 153 (bug 2034168). Previously parked in Roadmap_Blocked.md ("Firefox file-URL access setup gate"); unblocked 2026-07-21.

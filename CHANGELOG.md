@@ -4,6 +4,12 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Accurate domain-badge roots on Firefox 153+.** The domain-badge helper used
+  a second-to-last-label heuristic that mis-grouped multi-level TLDs
+  (example.co.uk showed "CO"). On Firefox 153+ it now uses the synchronous
+  `browser.publicSuffix` API for an accurate registrable label ("EX"), with the
+  existing heuristic as a guarded fallback for Chrome and older Firefox.
+
 - **UserCSS honors the `@preprocessor` field.** `default`/`uso` styles already
   had their `/*[[var]]*/` and `var(--name)` tokens substituted; a
   `@preprocessor less` or `@preprocessor stylus` style now surfaces a clear

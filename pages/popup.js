@@ -396,10 +396,18 @@
     }
 
     function getDomainRoot(domain) {
-        const parts = String(domain || '')
-            .replace(/^www\./, '')
-            .split('.')
-            .filter(Boolean);
+        const host = String(domain || '').replace(/^www\./, '');
+        // Firefox 153+ public-suffix API for accurate multi-level-TLD roots
+        // (example.co.uk -> "example"); guarded so Chrome falls back unchanged.
+        try {
+            const ps = (typeof browser !== 'undefined' && browser && browser.publicSuffix) ? browser.publicSuffix : null;
+            const registrable = ps && typeof ps.getDomain === 'function' ? ps.getDomain(host) : '';
+            if (registrable) {
+                const label = String(registrable).split('.').filter(Boolean)[0];
+                if (label) return label;
+            }
+        } catch (_) { /* fall back to the heuristic */ }
+        const parts = host.split('.').filter(Boolean);
         return parts.length >= 2 ? parts[parts.length - 2] : (parts[0] || '');
     }
 
