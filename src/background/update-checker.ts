@@ -147,6 +147,7 @@ export interface RecentUpdateInfo {
 export interface ApplyUpdateSuccess {
   success: true;
   script: Script;
+  riskDelta?: UpdateRiskDelta | null;
   error?: undefined;
   skipped?: undefined;
 }
@@ -426,6 +427,10 @@ export const UpdateSystem = {
     if (tofuSriFailure) {
       return { error: tofuSriFailure.message };
     }
+    // Always re-run the 31-detector AST risk-delta at the apply choke point so
+    // every path that lands new code (including force/direct applies) records
+    // the risk analysis rather than relying on the pending-update queue builder.
+    const updateRiskDelta = await this._computeUpdateRiskDelta(previousScript.code, newCode);
     const previousReceipt = previousScript.trustReceipt;
     const previousSourceUrl = previousReceipt
       ? previousReceipt.source.installUrl
@@ -442,6 +447,9 @@ export const UpdateSystem = {
     script.updatedAt = Date.now();
     script.trustReceipt = trustReceipt;
     script.versionHistory = versionHistory;
+    if (updateRiskDelta) {
+      script.settings = { ...(script.settings || {}), lastUpdateRiskDelta: updateRiskDelta };
+    }
 
     // Re-register the script after updating (persist happens below; registration errors
     // are recorded on the script so the UI can surface them, but don't block save)
@@ -472,7 +480,7 @@ export const UpdateSystem = {
       });
     }
 
-    return { success: true, script };
+    return { success: true, script, riskDelta: updateRiskDelta };
     });
   },
 

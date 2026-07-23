@@ -758,13 +758,6 @@ Roadmap_Blocked.md; those are re-surfaced here as actionable (P2 FF153 cluster).
   Acceptance: Navigating an SPA (pushState/replaceState + hashchange) between a matching and non-matching route applies/removes the injected sheet without a full reload; no duplicate sheet stacking; regression test covers a pushState route change.
   Complexity: M
 
-- [ ] P2 — Consolidate update security gating at the `applyUpdate` choke point
-  Why: The 31-detector AST risk-delta runs in the queue builder, but the apply primitive re-gates only TOFU-SRI/provenance/source-identity, so a future direct-apply caller could bypass the risk re-scan.
-  Evidence: risk-delta in `_computeUpdateRiskDelta`/`_buildPendingUpdate` (`src/background/core.ts:2185-2260`) vs `applyUpdate` (`core.ts:1980-2101`); direct callers `forceUpdateScript` (`core.ts:6050`) and the `applyUpdate` message action (`core.ts:6453`) skip the delta.
-  Touches: `src/background/core.ts` (move/duplicate the risk-delta assertion into `applyUpdate`), regenerated `background.js`, `tests/`.
-  Acceptance: A same-author/same-registry update that introduces a new sensitive sink cannot be applied through `forceUpdateScript` or the `applyUpdate` action without the risk-delta being computed; test proves the gate fires on the direct path.
-  Complexity: M
-
 - [ ] P2 — FF153: adopt `publicSuffix` API for eTLD+1 domain grouping
   Why: The current `getDomainRoot()` fallback mis-groups multi-level TLDs (co.uk, com.au); FF153 ships a native, dep-free public-suffix lookup.
   Evidence: Firefox 153 (bug 1315558) — `browser.publicSuffix.getDomain()/getKnownSuffix()`. Previously parked in Roadmap_Blocked.md ("Firefox 153 publicSuffix API for domain grouping"); FF153 shipped 2026-07-21. No Chrome equivalent — keep the fallback for Chrome.

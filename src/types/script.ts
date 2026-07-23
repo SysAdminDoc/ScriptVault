@@ -142,6 +142,19 @@ export interface ScriptSettings {
   // Local-only sync/editing state. Cloud sync helpers must not upload these.
   userModified?: boolean;
   mergeConflict?: boolean;
+  // Risk-delta evidence recorded at the last update-apply choke point. Mirrors
+  // UpdateRiskDelta structurally (not imported from update-checker.ts) to avoid a
+  // circular type dependency.
+  lastUpdateRiskDelta?: {
+    hasNewRiskySinks: boolean;
+    introduced: Array<{ id: string; label?: string; category: string; risk?: number }>;
+    categories: string[];
+    previousRisk: number;
+    nextRisk: number;
+    riskScoreDelta: number;
+    previousLevel: string;
+    nextLevel: string;
+  } | null;
   _failedRequires?: string[];
   _failedRequireErrors?: Array<{ url: string; message: string }>;
   _registrationError?: string;

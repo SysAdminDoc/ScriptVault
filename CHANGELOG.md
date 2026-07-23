@@ -4,6 +4,14 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Update security: the AST risk-delta is now recorded at the apply choke
+  point.** Previously the 31-detector risk-delta ran only in the pending-update
+  queue builder, so a forced or direct `applyUpdate` produced no risk analysis.
+  `applyUpdate` now always re-runs the risk-delta, returns it, and stores it on
+  the script (`settings.lastUpdateRiskDelta`), guaranteeing every code path that
+  lands new code has recorded risk evidence. (force still overrides the
+  auto-apply gate — the delta is recorded, not blocked.)
+
 - **CWS Limited-Use zero-telemetry gate.** A new `no-telemetry:check` (wired into
   `npm run check`) fails the build if a third-party analytics/telemetry SDK
   enters the dependency tree, if any runtime dependency is declared, or if

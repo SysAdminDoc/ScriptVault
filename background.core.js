@@ -2053,6 +2053,14 @@ const UpdateSystem = {
     if (provenanceFailure) {
       return { error: provenanceFailure.message };
     }
+    // Always re-run the 31-detector AST risk-delta at the apply choke point, not
+    // only in the pending-update queue builder. This guarantees that every code
+    // path that lands new code — including forceUpdateScript and the applyUpdate
+    // message action — produces and records the risk analysis, so a
+    // same-author/same-registry update that introduces a new sensitive sink can
+    // never be applied with no risk evidence at all. force still overrides the
+    // auto-apply gate (the user chose to update), but the delta is recorded.
+    const updateRiskDelta = await this._computeUpdateRiskDelta(previousScript.code, newCode);
     historyEntry.trustReceipt = previousScript.trustReceipt || await createScriptTrustReceipt({
       operation: 'rollback-point',
       code: previousScript.code,
@@ -2065,6 +2073,12 @@ const UpdateSystem = {
     script.updatedAt = Date.now();
     script.trustReceipt = trustReceipt;
     script.versionHistory = versionHistory;
+    // Record the risk-delta evidence on the script so the dashboard/audit can
+    // surface a "this update introduced new high-risk patterns" signal even for
+    // force/direct applies that bypassed the pending-update review queue.
+    if (updateRiskDelta) {
+      script.settings = { ...(script.settings || {}), lastUpdateRiskDelta: updateRiskDelta };
+    }
 
     // Re-classify the install source. If the update came from a different
     // registry than the install, flag it for the dashboard banner.
@@ -2106,7 +2120,7 @@ const UpdateSystem = {
     // an in-app banner. Manual single-script updates (popup "Check for
     // Update", dashboard force-update) get their feedback inline via the
     // returned { success, script } payload.
-    return { success: true, script };
+    return { success: true, script, riskDelta: updateRiskDelta };
     });
   },
 

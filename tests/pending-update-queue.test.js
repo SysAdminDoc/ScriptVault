@@ -282,6 +282,33 @@ describe('pending update queue', () => {
       const delta = await UpdateSystem._computeUpdateRiskDelta('OLD', 'NEW');
       expect(delta).toBeNull();
     });
+
+    it('records the risk-delta at the applyUpdate choke point even on a forced/direct apply', async () => {
+      const scripts = new Map([['s1', makeScript('s1')]]);
+      installStorage(scripts);
+      const oldCode = scripts.get('s1').code;
+      const newCode = makeCode('S1', '2.0.0');
+      stubAnalyzer({
+        [oldCode]: { findings: [{ id: 'eval', category: 'execution', risk: 40 }], totalRisk: 40, riskLevel: 'medium' },
+        [newCode]: {
+          findings: [
+            { id: 'eval', category: 'execution', risk: 40 },
+            { id: 'beacon', label: 'sendBeacon()', category: 'network', risk: 50 },
+          ],
+          totalRisk: 90,
+          riskLevel: 'high',
+        },
+      });
+
+      // A forced/direct apply bypasses the pending-update review queue, but the
+      // choke point must still compute and record the risk-delta.
+      const result = await UpdateSystem.applyUpdate('s1', newCode, { force: true });
+      expect(result.success).toBe(true);
+      expect(result.riskDelta).toBeTruthy();
+      expect(result.riskDelta.hasNewRiskySinks).toBe(true);
+      expect(result.riskDelta.categories).toContain('network');
+      expect(scripts.get('s1').settings?.lastUpdateRiskDelta?.hasNewRiskySinks).toBe(true);
+    });
   });
 
   it('applies only safe queued updates and leaves review items queued', async () => {
