@@ -29,7 +29,7 @@ describe('check-readme-claims.mjs', () => {
     expect(parsed.projectFacts.toolchain).toEqual({ node: '24.16.0', npm: '11.13.0' });
     expect(parsed.projectFacts.tools).toEqual({
       typescript: '7.0.2',
-      monaco: '0.55.1',
+      monaco: '0.56.0',
       cwsCli: '4.0.1',
     });
     expect(parsed.projectFacts.runtime.promotedEntries).toBe(57);

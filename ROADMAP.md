@@ -751,13 +751,6 @@ Roadmap_Blocked.md; those are re-surfaced here as actionable (P2 FF153 cluster).
 
 ### P2
 
-- [ ] P2 — Bump `monaco-editor` 0.55.1 → 0.56.0 (native DOMPurify 3.4.5)
-  Why: monaco 0.55.1 declares a DOMPurify range vulnerable to CVE-2026-0540 (mXSS); 0.56.0 bundles DOMPurify 3.4.5, making the fix native instead of override-dependent.
-  Evidence: https://github.com/microsoft/monaco-editor/releases ; https://github.com/microsoft/monaco-editor/issues/5248 ; GHSA-v2wj-7wpq-c8vv. Current `package.json:111` `monaco-editor: ^0.55.1`.
-  Touches: `package.json`, `package-lock.json`, monaco ESM bundle contract (`scripts/check-monaco-*`), editor smoke (`scripts/smoke-editor.mjs`).
-  Acceptance: `monaco-editor` resolves to 0.56.0, editor smoke passes, monaco-package/ESM contract checks pass, resolved DOMPurify (including monaco's copy) is >=3.3.2.
-  Complexity: S
-
 ### P3
 
 - [ ] P3 — HTML Sanitizer API fast-path (`Element.setHTML`) with DOMPurify fallback

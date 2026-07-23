@@ -18,11 +18,16 @@ const REQUIRED_OUTPUTS = [
   'lib/monaco-esm/workers/userscript-lsp.worker.js',
 ];
 
+// Budgets raised for monaco-editor 0.56.0 (from 0.55.1). The 0.56 bundle brings
+// DOMPurify 3.4.5 natively (closing CVE-2026-0540 without relying on the repo
+// override) at a ~1.3% size cost: total 28.36 MB and editor.js 9.78 MB. Headroom
+// added above the measured values; gzip (4.83 MB) and ts.worker (13.36 MB) stay
+// under their prior budgets.
 export const DEFAULT_SIZE_BUDGETS = Object.freeze({
-  maxTotalBytes: 28_000_000,
+  maxTotalBytes: 29_000_000,
   maxTotalGzipBytes: 5_000_000,
   maxFileBytes: Object.freeze({
-    'lib/monaco-esm/editor.js': 9_600_000,
+    'lib/monaco-esm/editor.js': 10_000_000,
     'lib/monaco-esm/workers/ts.worker.js': 13_500_000,
   }),
 });

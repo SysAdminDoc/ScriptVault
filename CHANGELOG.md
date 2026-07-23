@@ -6,6 +6,12 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [v3.23.0] — Security & Reliability Hardening (2026-07-22)
 
+- **Upgraded Monaco editor 0.55.1 → 0.56.0.** The 0.56 bundle ships DOMPurify
+  3.4.5 natively, closing CVE-2026-0540 (mXSS) at the source rather than relying
+  on the repository's `dompurify` override. The ESM size budgets were raised to
+  the new bundle's measured footprint (~1.3% larger); editor smoke and the
+  Monaco package/ESM contract checks pass.
+
 - **GM_addStyle reaches Shadow DOM (Firefox 153+ / Chrome).** A document-level
   `<style>` cannot cross shadow boundaries. `GM_addStyle` now also applies the
   CSS as a constructable stylesheet to every currently-open shadow root, so
