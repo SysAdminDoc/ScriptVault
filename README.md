@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-3.22.0-22c55e?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/version-3.23.0-22c55e?style=flat-square" alt="Version">
   <img src="https://img.shields.io/badge/manifest-v3-60a5fa?style=flat-square" alt="Manifest V3">
   <img src="https://img.shields.io/badge/license-MIT-orange?style=flat-square" alt="License">
   <img src="https://img.shields.io/badge/chrome-130%2B-blue?style=flat-square" alt="Chrome 130+">
@@ -734,6 +734,6 @@ MIT License &mdash; see [LICENSE](LICENSE) for details.
 ---
 
 <p align="center">
-  <strong>ScriptVault v3.22.0</strong><br>
+  <strong>ScriptVault v3.23.0</strong><br>
   <em>Your scripts, your rules &mdash; locked down and loaded</em>
 </p>

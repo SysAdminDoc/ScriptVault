@@ -4,6 +4,8 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+## [v3.23.0] — Security & Reliability Hardening (2026-07-22)
+
 - **Accurate domain-badge roots on Firefox 153+.** The domain-badge helper used
   a second-to-last-label heuristic that mis-grouped multi-level TLDs
   (example.co.uk showed "CO"). On Firefox 153+ it now uses the synchronous

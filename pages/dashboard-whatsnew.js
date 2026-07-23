@@ -11,6 +11,22 @@ const WhatsNew = (() => {
     : '2.0.0';
 
   const CHANGELOG = {
+    '3.23.0': {
+      title: 'ScriptVault 3.23.0 — Security & Reliability Hardening',
+      date: '2026-07-22',
+      summary: 'This release closes an analyzer evasion gap, hardens the update and cookie paths, makes persistent UserCSS SPA-aware, and adds two supply-chain CI gates.',
+      highlights: [
+        { icon: 'SAFE', title: 'Modern Scripts Are Fully Scanned', desc: 'The risk analyzer now parses modern JavaScript (ES2023–2025, including using / await using). Previously such syntax silently fell back to weaker regex detection, letting modern scripts partly evade the 31-detector AST scan.' },
+        { icon: 'SAFE', title: 'Safer Updates & Cookies', desc: 'The AST risk-delta is now recorded at the update apply choke point for every path, and GM cookie requests reject a caller-supplied script id that conflicts with the authenticated userscript — closing a host-scope spoofing gap.' },
+        { icon: 'FLOW', title: 'UserCSS Follows Single-Page Apps', desc: 'Persistent userstyles now re-match on in-app (pushState / hash) navigations, applying on routes they newly match and clearing off routes they no longer match — no full reload required.' },
+      ],
+      improvements: [
+        'New CI gates fail the build on a CVE-fix dependency regression or any telemetry SDK / invocation entering the codebase (backing the zero-telemetry, Limited-Use posture).',
+        'Unsupported UserCSS @preprocessor (less/stylus) now warns on install instead of injecting raw uncompiled source.',
+        'Domain badges resolve accurate roots for multi-level TLDs (example.co.uk) on Firefox 153+.',
+        'The pending-updates store is now bounded by total size, not just entry count.',
+      ],
+    },
     '3.22.0': {
       title: 'ScriptVault 3.22.0 — Persistent UserCSS',
       date: '2026-07-16',
