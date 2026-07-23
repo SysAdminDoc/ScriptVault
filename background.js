@@ -23036,6 +23036,21 @@ const UserStylesEngine = (() => {
     _injectingTabs.add(tabId);
     try {
       if (!_initialized) await _loadState();
+      const existing = _registeredTabs.get(tabId);
+      if (existing) {
+        for (const [styleId, injectedCss] of [...existing]) {
+          const style = _styles[styleId];
+          const stillApplies = !!style && style.enabled && _urlMatchesPatterns(url, style.match);
+          if (!stillApplies) {
+            try {
+              await chrome.scripting.removeCSS({ target: { tabId }, css: injectedCss });
+            } catch {
+            }
+            existing.delete(styleId);
+          }
+        }
+        if (existing.size === 0) _registeredTabs.delete(tabId);
+      }
       for (const [styleId, style] of Object.entries(_styles)) {
         if (!style.enabled) continue;
         if (!_urlMatchesPatterns(url, style.match)) continue;
@@ -38393,6 +38408,29 @@ if (chrome.webNavigation?.onCommitted?.addListener) {
     UserStylesEngine.onTabUpdated(details.tabId, details.url)
       .catch(e => console.error('[ScriptVault] UserCSS inject error:', e));
   });
+}
+
+// SPA in-page navigations do NOT commit a new document, so onCommitted never
+// fires and @match-scoped UserCSS would go stale (a style bleeds onto a route it
+// no longer matches, or misses a route it now matches). history.pushState /
+// replaceState surface as onHistoryStateUpdated and hash changes as
+// onReferenceFragmentUpdated. Re-run onTabUpdated ONLY (never onTabNavigated) so
+// the still-live document's injected-sheet registry is preserved and the
+// re-match pass can add newly-matching and remove no-longer-matching sheets.
+function _handleUserCssSpaNavigation(details) {
+  if (details.frameId !== 0) return;
+  if (typeof UserStylesEngine === 'undefined') return;
+  if (!details.url || details.url.startsWith('chrome-extension://')) return;
+  ensureInitialized()
+    .catch(() => { /* logged in init() */ })
+    .then(() => UserStylesEngine.onTabUpdated(details.tabId, details.url))
+    .catch(e => console.error('[ScriptVault] UserCSS SPA re-match error:', e));
+}
+if (chrome.webNavigation?.onHistoryStateUpdated?.addListener) {
+  chrome.webNavigation.onHistoryStateUpdated.addListener(_handleUserCssSpaNavigation);
+}
+if (chrome.webNavigation?.onReferenceFragmentUpdated?.addListener) {
+  chrome.webNavigation.onReferenceFragmentUpdated.addListener(_handleUserCssSpaNavigation);
 }
 
 // GM_notification onclick/ondone: fire callbacks on notification interaction

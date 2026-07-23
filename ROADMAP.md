@@ -751,13 +751,6 @@ Roadmap_Blocked.md; those are re-surfaced here as actionable (P2 FF153 cluster).
 
 ### P2
 
-- [ ] P2 — Re-match persistent UserCSS on SPA in-page navigations
-  Why: The new UserCSS engine only re-evaluates `@match` on full document commits, so styles bleed onto or miss non-matching client-side routes.
-  Evidence: `src/background/core.ts:9938-9948` wires only `webNavigation.onCommitted` + `tabs.onRemoved`; no `onHistoryStateUpdated`/`onReferenceFragmentUpdated`. Userscripts already get `window.onurlchange` (`wrapper-builder.ts:2274`); UserCSS has no equivalent.
-  Touches: `src/background/core.ts` (UserStyles listener wiring), `src/modules/userstyles.ts` (`onTabNavigated`/re-match path), regenerated `background.js`, new test in `tests/`.
-  Acceptance: Navigating an SPA (pushState/replaceState + hashchange) between a matching and non-matching route applies/removes the injected sheet without a full reload; no duplicate sheet stacking; regression test covers a pushState route change.
-  Complexity: M
-
 - [ ] P2 — FF153: adopt `publicSuffix` API for eTLD+1 domain grouping
   Why: The current `getDomainRoot()` fallback mis-groups multi-level TLDs (co.uk, com.au); FF153 ships a native, dep-free public-suffix lookup.
   Evidence: Firefox 153 (bug 1315558) — `browser.publicSuffix.getDomain()/getKnownSuffix()`. Previously parked in Roadmap_Blocked.md ("Firefox 153 publicSuffix API for domain grouping"); FF153 shipped 2026-07-21. No Chrome equivalent — keep the fallback for Chrome.

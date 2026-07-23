@@ -1516,6 +1516,26 @@ async function onTabUpdated(tabId: number, url: string | undefined): Promise<voi
 
   try {
     if (!_initialized) await _loadState();
+    // Remove any previously-injected sheet that no longer applies to the current
+    // URL (an SPA route change to a non-matching route), is now disabled, or was
+    // deleted. On a full document commit onTabNavigated() has already cleared the
+    // registry, so this pass only does work for same-document (SPA/hash) updates.
+    const existing: Map<string, string> | undefined = _registeredTabs.get(tabId);
+    if (existing) {
+      for (const [styleId, injectedCss] of [...existing]) {
+        const style = _styles[styleId];
+        const stillApplies = !!style && style.enabled && _urlMatchesPatterns(url, style.match);
+        if (!stillApplies) {
+          try {
+            await chrome.scripting.removeCSS({ target: { tabId }, css: injectedCss });
+          } catch {
+            // Tab/document may already be gone.
+          }
+          existing.delete(styleId);
+        }
+      }
+      if (existing.size === 0) _registeredTabs.delete(tabId);
+    }
     for (const [styleId, style] of Object.entries(_styles)) {
       if (!style.enabled) continue;
       if (!_urlMatchesPatterns(url, style.match)) continue;

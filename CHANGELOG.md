@@ -4,6 +4,14 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Persistent UserCSS now re-matches on SPA navigations.** Styles were only
+  re-evaluated on full document commits (`webNavigation.onCommitted`), so a
+  client-side route change (history pushState/replaceState or a hash change)
+  left a style bleeding onto a route it no longer matches, or failed to apply on
+  a route it now matches. ScriptVault now listens for `onHistoryStateUpdated`
+  and `onReferenceFragmentUpdated` and re-runs the match pass, adding
+  newly-matching sheets and removing no-longer-matching ones without a reload.
+
 - **Update security: the AST risk-delta is now recorded at the apply choke
   point.** Previously the 31-detector risk-delta ran only in the pending-update
   queue builder, so a forced or direct `applyUpdate` produced no risk analysis.

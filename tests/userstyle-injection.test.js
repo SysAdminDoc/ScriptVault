@@ -98,6 +98,23 @@ describe('UserStyles persistent injection lifecycle', () => {
     expect(chrome._sheets(7)).toEqual(['body{color:red}']);
   });
 
+  it('removes a no-longer-matching sheet on an SPA route change (no document reset)', async () => {
+    // Path-scoped style. On an SPA navigation the document is NOT reloaded, so
+    // onTabNavigated is NOT called — onTabUpdated alone must drop the stale sheet.
+    await engine.registerStyle({ ...STYLE, match: ['*://example.com/app/*'] });
+    chrome._setTabs([{ id: 7, url: 'https://example.com/app/home' }]);
+    await engine.onTabUpdated(7, 'https://example.com/app/home');
+    expect(chrome._sheets(7)).toEqual(['body{color:red}']);
+
+    // SPA route change to a non-matching path, same live document (no _clearDocument).
+    await engine.onTabUpdated(7, 'https://example.com/settings/profile');
+    expect(chrome._sheets(7)).toHaveLength(0);
+
+    // Navigating back to a matching route re-injects.
+    await engine.onTabUpdated(7, 'https://example.com/app/other');
+    expect(chrome._sheets(7)).toEqual(['body{color:red}']);
+  });
+
   it('does not inject into a non-matching tab', async () => {
     await engine.registerStyle({ ...STYLE });
     chrome._setTabs([{ id: 9, url: 'https://other.test/x' }]);

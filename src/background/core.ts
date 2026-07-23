@@ -9979,6 +9979,29 @@ if (chrome.webNavigation?.onCommitted?.addListener) {
   });
 }
 
+// SPA in-page navigations do NOT commit a new document, so onCommitted never
+// fires and @match-scoped UserCSS would go stale (a style bleeds onto a route it
+// no longer matches, or misses a route it now matches). history.pushState /
+// replaceState surface as onHistoryStateUpdated and hash changes as
+// onReferenceFragmentUpdated. Re-run onTabUpdated ONLY (never onTabNavigated) so
+// the still-live document's injected-sheet registry is preserved and the
+// re-match pass can add newly-matching and remove no-longer-matching sheets.
+function _handleUserCssSpaNavigation(details: any): void {
+  if (details.frameId !== 0) return;
+  if (typeof UserStylesEngine === 'undefined') return;
+  if (!details.url || details.url.startsWith('chrome-extension://')) return;
+  ensureInitialized()
+    .catch(() => { /* logged in init() */ })
+    .then(() => UserStylesEngine.onTabUpdated(details.tabId, details.url))
+    .catch((e: any) => console.error('[ScriptVault] UserCSS SPA re-match error:', e));
+}
+if (chrome.webNavigation?.onHistoryStateUpdated?.addListener) {
+  chrome.webNavigation.onHistoryStateUpdated.addListener(_handleUserCssSpaNavigation);
+}
+if (chrome.webNavigation?.onReferenceFragmentUpdated?.addListener) {
+  chrome.webNavigation.onReferenceFragmentUpdated.addListener(_handleUserCssSpaNavigation);
+}
+
 // GM_notification onclick/ondone: fire callbacks on notification interaction
 chrome.notifications.onClicked.addListener(async (notifId) => {
   try { await ensureInitialized(); } catch (_) { /* logged in init() */ }
