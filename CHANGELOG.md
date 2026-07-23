@@ -4,6 +4,14 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **CWS Limited-Use zero-telemetry gate.** A new `no-telemetry:check` (wired into
+  `npm run check`) fails the build if a third-party analytics/telemetry SDK
+  enters the dependency tree, if any runtime dependency is declared, or if
+  telemetry-SDK invocation syntax appears in first-party runtime source. It does
+  not flag tracker-blocking userscript templates or the analyzer/netlog code
+  that detects and observes tracking. Backs the existing PRIVACY.md Limited-Use
+  disclosure ahead of Chrome Web Store enforcement (2026-08-01).
+
 - **CI gate against CVE-fix regressions.** A new `cve-floors:check` (wired into
   `npm run check`) scans every resolved `package-lock.json` position and fails
   the build if `dompurify` drops below 3.3.2 (CVE-2026-0540) or `vitest` below

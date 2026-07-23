@@ -800,13 +800,6 @@ Roadmap_Blocked.md; those are re-surfaced here as actionable (P2 FF153 cluster).
   Acceptance: A `@preprocessor uso` style has its `/*[[var-name]]*/` tokens substituted before injection; a `@preprocessor less`/`stylus` style surfaces a clear "unsupported preprocessor" notice at import instead of silently applying raw source.
   Complexity: M
 
-- [ ] P2 — CWS Limited-Use disclosure assertion gate (enforcement 2026-08-01)
-  Why: CWS Limited-Use/data-disclosure enforcement begins 2026-08-01; ScriptVault collects nothing, but there is no build check asserting that no telemetry/analytics endpoint was ever introduced.
-  Evidence: https://developer.chrome.com/blog/cws-policy-updates-2026 . Existing `store-copy:check` verifies disclosure copy coverage, not the absence of collection endpoints.
-  Touches: new `scripts/check-no-telemetry.mjs` (grep source for analytics/beacon/external-fetch patterns), wire into `npm run check`, a short in-repo Limited-Use statement (extend `PRIVACY.md`, not a new file).
-  Acceptance: `npm run check` fails if a non-allowlisted outbound-telemetry pattern appears in `src/**`/`pages/**`/`content.js`; PRIVACY.md carries an explicit Limited-Use statement.
-  Complexity: S
-
 ### P3
 
 - [ ] P3 — Purge legacy uncompressed inline backup blobs
