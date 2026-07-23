@@ -4,6 +4,12 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **CI gate against CVE-fix regressions.** A new `cve-floors:check` (wired into
+  `npm run check`) scans every resolved `package-lock.json` position and fails
+  the build if `dompurify` drops below 3.3.2 (CVE-2026-0540) or `vitest` below
+  4.1.0 (CVE-2026-47429), catching transitive copies (e.g. monaco's bundled
+  DOMPurify), not just the top-level dependency.
+
 - **Hardened GM cookie scope against script-id spoofing.** When a cookie
   request carries an authenticated `userScriptId`, a mismatched caller-supplied
   `scriptId` is now rejected with a "Script context mismatch" error, so a

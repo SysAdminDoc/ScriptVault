@@ -809,13 +809,6 @@ Roadmap_Blocked.md; those are re-surfaced here as actionable (P2 FF153 cluster).
 
 ### P3
 
-- [ ] P3 — Add CI floor-pins for fixed CVEs (dompurify >=3.3.2, vitest >=4.1.0)
-  Why: Nothing prevents a lockfile regression from reintroducing CVE-2026-0540 (DOMPurify mXSS, incl. monaco's transitive copy) or CVE-2026-47429 (Vitest UI file read/exec, CVSS 9.8).
-  Evidence: GHSA-v2wj-7wpq-c8vv (fixed 3.3.2); GHSA-5xrq-8626-4rwp (fixed 4.1.0). Current overrides pin `dompurify@3.4.11` but assert nothing on the resolved tree.
-  Touches: `scripts/` (extend an existing dependency-audit check, e.g. `check-optional-dep-reach.mjs`, or a new `check-cve-floors.mjs`), wire into `npm run check`.
-  Acceptance: `npm run check` fails if the resolved `dompurify` (any tree position) is <3.3.2 or `vitest` <4.1.0.
-  Complexity: S
-
 - [ ] P3 — Purge legacy uncompressed inline backup blobs
   Why: Old backup entries still carry the `@deprecated` uncompressed inline `data` field that the gzip path does not retroactively clean up, wasting storage.
   Evidence: `src/modules/backup-scheduler.ts:123` (`@deprecated ... pending migration`); gzip path at `backup-scheduler.ts:922-953` only compresses new writes.
