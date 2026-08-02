@@ -39466,7 +39466,16 @@ function _isFirefoxRuntime() {
 }
 
 function _supportsUserScriptsWorldId() {
-  return !_isFirefoxRuntime() && _getChromeVersion() >= 133;
+  // Per-script worlds are no longer Chromium-only. Firefox 153 implements
+  // configureWorld({ worldId }) and accepts worldId on register/update; without
+  // it every script for a page shares one sandbox and only the first one runs
+  // (verified against Firefox 154.0b1 — scripts 2..n were silently dead).
+  // Older Firefox rejects the unknown property, which the configureWorld
+  // try/catch below feature-detects.
+  if (_isFirefoxRuntime()) {
+    return typeof chrome.userScripts?.configureWorld === 'function';
+  }
+  return _getChromeVersion() >= 133;
 }
 
 function getExtensionDetailsUrl() {
@@ -40349,9 +40358,9 @@ async function registerScript(script, { useUpdate = false, throwOnError = false 
       world: world
     };
 
-    // Chrome 133+: configure and use a per-script worldId for isolation.
-    // Firefox MV3 exposes userScripts differently and rejects Chrome's
-    // worldId extension, so never send that field outside supported Chromium.
+    // Chrome 133+ / Firefox 153+: configure and use a per-script worldId so
+    // scripts do not collide in one shared sandbox. Engines without support
+    // reject the unknown property and fall through to the default world.
     let worldConfigured = false;
     if (_supportsUserScriptsWorldId()) {
       try {
@@ -40391,11 +40400,16 @@ async function registerScript(script, { useUpdate = false, throwOnError = false 
       if (e.message?.includes('messaging')) {
         // Fallback for older Chrome versions that don't support the messaging property
         await chrome.userScripts.register([registration]);
+      } else if (registration.worldId && e.message?.includes('worldId')) {
+        // configureWorld accepted worldId but register/update did not; drop the
+        // per-script world rather than leaving the script unregistered.
+        delete registration.worldId;
+        await chrome.userScripts.register([{ ...registration, messaging: world === 'USER_SCRIPT' }]);
       } else {
         throw e;
       }
     }
-    
+
     debugLog(`Registered: ${meta.name} (${requires.length} @require, ${Object.keys(storedValues).length} stored values)`);
 
     // Apply @webRequest declarativeNetRequest rules if defined

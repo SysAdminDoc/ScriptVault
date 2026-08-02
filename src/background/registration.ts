@@ -145,7 +145,15 @@ function isFirefoxRuntime(): boolean {
 }
 
 function supportsUserScriptsWorldId(): boolean {
-  return !isFirefoxRuntime() && getChromeMajorVersion() >= 133;
+  // Per-script worlds are no longer Chromium-only. Firefox 153 implements
+  // configureWorld({ worldId }) and accepts worldId on register/update; without
+  // it every script for a page shares one sandbox and only the first one runs.
+  // Older Firefox rejects the unknown property, which the configureWorld
+  // try/catch feature-detects.
+  if (isFirefoxRuntime()) {
+    return typeof chrome?.userScripts?.configureWorld === 'function';
+  }
+  return getChromeMajorVersion() >= 133;
 }
 
 function shouldEnforceScopedHostPermissions(settings: Settings): boolean {
@@ -631,8 +639,9 @@ export async function registerScript(
       world: world
     };
 
-    // Chrome 133+: configure and use a per-script worldId for isolation.
-    // Firefox MV3 rejects Chrome's worldId extension, so guard before sending it.
+    // Chrome 133+ / Firefox 153+: configure and use a per-script worldId so
+    // scripts do not collide in one shared sandbox. Engines without support
+    // reject the unknown property and fall through to the default world.
     let worldConfigured = false;
     if (supportsUserScriptsWorldId()) {
       try {
@@ -675,6 +684,13 @@ export async function registerScript(
       if (errMsg?.includes('messaging')) {
         // Fallback for older Chrome versions that don't support the messaging property
         await chrome.userScripts.register([registration as chrome.userScripts.RegisteredUserScript]);
+      } else if (registration.worldId && errMsg?.includes('worldId')) {
+        // configureWorld accepted worldId but register/update did not; drop the
+        // per-script world rather than leaving the script unregistered.
+        delete registration.worldId;
+        await chrome.userScripts.register([
+          { ...registration, messaging: world === 'USER_SCRIPT' } as chrome.userScripts.RegisteredUserScript,
+        ]);
       } else {
         throw e;
       }

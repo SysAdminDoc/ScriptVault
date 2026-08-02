@@ -4,6 +4,33 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Fixed: on Firefox, only the first userscript matching a page actually ran.**
+  Per-script `worldId` isolation was gated off for Firefox, so every script
+  registered for a page shared one USER_SCRIPT sandbox and scripts 2..n were
+  silently dead — no error, no badge, nothing in the error log. Firefox 153
+  implements `configureWorld({ worldId })` and accepts `worldId` on
+  register/update, so the gate is now a feature probe instead of a
+  user-agent exclusion. Engines without support still fall back to the shared
+  world, and a `worldId`-rejecting register now retries without the field
+  rather than leaving the script unregistered. Verified against Firefox
+  154.0b1: two matching scripts, both now execute (previously one).
+
+- **Added: real-browser SPA navigation verification to the Firefox smoke.** A
+  new scenario installs a `@grant window.onurlchange` script against a
+  client-side-routing page and drives `history.pushState`,
+  `navigation.navigate()`, and a hash change **from the page world**. Because
+  the wrapper's history patch is world-local, this proves the Navigation API
+  path reaches across worlds — the half of the contract the jsdom test cannot
+  cover.
+
+- **Fixed: the Firefox sideload smoke could not start on geckodriver 0.37+**,
+  which rejects `-remote-allow-system-access` via capabilities; the privilege
+  is now granted through the driver's `--allow-system-access` flag. The
+  container-identity assertion also no longer fails on Firefox 154, which
+  ships `privacy.userContext.enabled` defaulted on — it now checks whether the
+  pref carries a *user-set* value, which is the only thing a sideload could
+  have caused.
+
 ## [v3.23.0] — Security & Reliability Hardening (2026-07-22)
 
 - **Upgraded Monaco editor 0.55.1 → 0.56.0.** The 0.56 bundle ships DOMPurify
