@@ -4,6 +4,8 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+## [v3.23.1] — Firefox Script Isolation Fix (2026-08-02)
+
 - **Fixed: on Firefox, only the first userscript matching a page actually ran.**
   Per-script `worldId` isolation was gated off for Firefox, so every script
   registered for a page shared one USER_SCRIPT sandbox and scripts 2..n were

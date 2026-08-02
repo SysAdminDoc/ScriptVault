@@ -11,6 +11,20 @@ const WhatsNew = (() => {
     : '2.0.0';
 
   const CHANGELOG = {
+    '3.23.1': {
+      title: 'ScriptVault 3.23.1 — Firefox Script Isolation Fix',
+      date: '2026-08-02',
+      summary: 'On Firefox, only the first userscript matching a page was actually running. Every script now gets its own world, and the Firefox smoke proves it in a real browser.',
+      highlights: [
+        { icon: 'SAFE', title: 'All Your Scripts Run on Firefox', desc: 'Per-script world isolation was gated off for Firefox, so every script registered for a page shared one sandbox and scripts after the first were silently dead — no error, no badge, nothing in the error log. Firefox 153 supports per-script worlds, so each script now gets its own.' },
+        { icon: 'FLOW', title: 'SPA Navigation Verified in a Real Browser', desc: 'The Firefox smoke now installs a window.onurlchange script against a client-side-routing page and drives pushState, navigation.navigate(), and hash changes from the page itself, proving urlchange fires for real single-page-app routing.' },
+      ],
+      improvements: [
+        'The Firefox smoke now asserts that two userscripts execute on the same page — the coverage gap that let the isolation bug ship.',
+        'A registration that rejects the per-script world now retries without it instead of leaving the script unregistered.',
+        'Repaired the Firefox sideload harness for geckodriver 0.37+ and for Firefox 154, which ships container identities enabled by default.',
+      ],
+    },
     '3.23.0': {
       title: 'ScriptVault 3.23.0 — Security & Reliability Hardening',
       date: '2026-07-22',
