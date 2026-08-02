@@ -90,6 +90,11 @@ describe('Firefox SPA urlchange smoke contract', () => {
   it('reports the SPA result in the smoke summary', () => {
     expect(firefoxSmoke).toMatch(/spaUrlChange:\s*spaResult/);
   });
+
+  it('asserts two userscripts execute on the same page', () => {
+    expect(firefoxSmoke).toContain('dataset.scriptvaultFirefoxSmoke === \'ok\'');
+    expect(firefoxSmoke).toContain('per-script world isolation regressed');
+  });
 });
 
 // Firefox 154 ships privacy.userContext.enabled defaulted ON, so the pref value

@@ -21,7 +21,10 @@ All notable changes to ScriptVault will be documented in this file.
   `navigation.navigate()`, and a hash change **from the page world**. Because
   the wrapper's history patch is world-local, this proves the Navigation API
   path reaches across worlds — the half of the contract the jsdom test cannot
-  cover.
+  cover. The page also asserts that *two* matching userscripts execute on it —
+  the coverage gap that let the world-isolation bug ship, since the smoke had
+  only ever proved a single `@grant none` script ran. Confirmed to fail with a
+  named diagnostic when the isolation is reverted.
 
 - **Fixed: the Firefox sideload smoke could not start on geckodriver 0.37+**,
   which rejects `-remote-allow-system-access` via capabilities; the privilege

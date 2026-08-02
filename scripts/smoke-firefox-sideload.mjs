@@ -885,12 +885,28 @@ async function spaUrlChangeSmoke(baseUrl, sessionId, dashboardUrl) {
   const target = await spaPageServer();
   try {
     await navigate(baseUrl, sessionId, target.url);
-    const ready = await waitFor(baseUrl, sessionId, 'SPA urlchange userscript injection', `
+    // Both this script and the earlier round-trip script match 127.0.0.1, so the
+    // page proves co-resident execution. Without per-script worlds, Firefox ran
+    // only the first registered script and every later one died silently, with
+    // no error anywhere — so a bare timeout here is reported as what it means.
+    const readyProbe = `
       return {
         ok: document.documentElement.dataset.svUrlChangeReady === 'ok',
-        source: document.documentElement.dataset.svUrlChangeSource || ''
+        source: document.documentElement.dataset.svUrlChangeSource || '',
+        coresident: document.documentElement.dataset.scriptvaultFirefoxSmoke === 'ok'
       };
-    `, 20000);
+    `;
+    const ready = await waitFor(baseUrl, sessionId, 'SPA urlchange userscript injection', readyProbe, 20000)
+      .catch(async error => {
+        const snapshot = await execute(baseUrl, sessionId, readyProbe).catch(() => null);
+        if (snapshot?.coresident) {
+          fail('Only one of two matching userscripts executed on the SPA page; per-script world isolation regressed');
+        }
+        throw error;
+      });
+    if (!ready.coresident) {
+      fail('The earlier round-trip userscript did not execute on the SPA page; per-script world isolation regressed');
+    }
     // The wrapper's history/hashchange patches only exist inside the userscript
     // world, so page-world routing is observable solely through the Navigation
     // API. Anything else means Firefox SPA sites would go undetected.
@@ -913,6 +929,7 @@ async function spaUrlChangeSmoke(baseUrl, sessionId, dashboardUrl) {
 
     return {
       source: ready.source,
+      coresidentScripts: ready.coresident,
       pushState: afterPushState.entry?.url || '',
       navigationNavigate: afterNavigate.entry?.url || '',
       hashChange: afterHashChange.entry?.url || '',
