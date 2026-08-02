@@ -159,6 +159,79 @@ async function smokePageServer() {
   };
 }
 
+// Userscript for the SPA smoke. It only listens; every navigation is driven from
+// the page world so the assertion proves cross-world reach, not self-dispatch.
+export const SPA_URL_CHANGE_SCRIPT = [
+  '// ==UserScript==',
+  '// @name ScriptVault Firefox SPA URL Change Smoke',
+  '// @namespace scriptvault/firefox-spa',
+  '// @version 1.0.0',
+  '// @match http://127.0.0.1/*',
+  '// @grant window.onurlchange',
+  '// ==/UserScript==',
+  '',
+  '(function () {',
+  '  var seen = [];',
+  '  window.addEventListener(\'urlchange\', function (detail) {',
+  '    seen.push({',
+  '      url: (detail && detail.url) || location.href,',
+  '      oldUrl: (detail && detail.oldUrl) || \'\'',
+  '    });',
+  '    document.documentElement.dataset.svUrlChanges = JSON.stringify(seen);',
+  '  });',
+  '  document.documentElement.dataset.svUrlChanges = \'[]\';',
+  '  document.documentElement.dataset.svUrlChangeSource =',
+  '    (window.navigation && typeof window.navigation.addEventListener === \'function\')',
+  '      ? \'navigation\' : \'history\';',
+  '  document.documentElement.dataset.svUrlChangeReady = \'ok\';',
+  '})();',
+  '',
+].join('\n');
+
+// Client-side router: the navigate handler intercepts so navigation.navigate()
+// stays same-document instead of reloading the page and wiping the recorder.
+async function spaPageServer() {
+  const server = createServer((request, response) => {
+    response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+    response.end(`<!doctype html>
+      <html>
+        <head><title>ScriptVault Firefox SPA Target</title></head>
+        <body>
+          <main id="route">route: initial</main>
+          <script>
+            function render() {
+              document.getElementById('route').textContent =
+                'route: ' + location.pathname + location.hash;
+            }
+            if (window.navigation && typeof window.navigation.addEventListener === 'function') {
+              window.navigation.addEventListener('navigate', function (event) {
+                if (!event.canIntercept || event.downloadRequest !== null) return;
+                event.intercept({ handler: function () { render(); } });
+              });
+            }
+            window.addEventListener('popstate', render);
+            window.addEventListener('hashchange', render);
+            render();
+          </script>
+        </body>
+      </html>`);
+  });
+  await new Promise((resolveServer, reject) => {
+    server.on('error', reject);
+    server.listen(0, '127.0.0.1', resolveServer);
+  });
+  const address = server.address();
+  const port = address && typeof address === 'object' ? address.port : null;
+  if (!port) {
+    server.close();
+    fail('Could not start local Firefox SPA target server');
+  }
+  return {
+    url: `http://127.0.0.1:${port}/spa-target`,
+    close: () => new Promise(resolveClose => server.close(resolveClose)),
+  };
+}
+
 async function webDavSmokeServer() {
   let remoteData = null;
   const requests = [];
@@ -346,8 +419,8 @@ async function waitForGeckodriver(baseUrl, processHandle) {
 }
 
 async function webdriverSession(baseUrl, firefox, profileDir = null) {
-  const firefoxArgs = ['-remote-allow-system-access'];
-  if (!headed) firefoxArgs.unshift('-headless');
+  const firefoxArgs = [];
+  if (!headed) firefoxArgs.push('-headless');
   if (profileDir) firefoxArgs.push('-profile', profileDir);
   const capabilities = {
     capabilities: {
@@ -502,6 +575,7 @@ async function assertFirefoxContainersNotForced(baseUrl, sessionId) {
         || Components.classes['@mozilla.org/preferences-service;1'].getService(Components.interfaces.nsIPrefBranch);
       done({
         enabled: prefBranch.getBoolPref('privacy.userContext.enabled', false),
+        userSet: prefBranch.prefHasUserValue('privacy.userContext.enabled'),
         permissions: extension.manifest?.permissions || [],
         optionalPermissions: extension.manifest?.optional_permissions || []
       });
@@ -511,7 +585,10 @@ async function assertFirefoxContainersNotForced(baseUrl, sessionId) {
   if (value?.error) {
     fail(`Could not inspect Firefox container pref: ${value.error}`);
   }
-  if (value?.enabled) {
+  // Firefox 154 ships privacy.userContext.enabled defaulted ON, so the value
+  // alone proves nothing. Only a user-set value in this throwaway profile could
+  // have come from the sideload.
+  if (value?.enabled && value?.userSet) {
     fail('Firefox container identities were force-enabled by the ScriptVault sideload');
   }
   const declaredPermissions = [
@@ -521,7 +598,11 @@ async function assertFirefoxContainersNotForced(baseUrl, sessionId) {
   if (declaredPermissions.includes('contextualIdentities')) {
     fail('Firefox manifest declares contextualIdentities, which forces container identities on');
   }
-  return { privacyUserContextEnabled: value.enabled, contextualIdentitiesPermission: false };
+  return {
+    privacyUserContextEnabled: value.enabled,
+    privacyUserContextUserSet: !!value.userSet,
+    contextualIdentitiesPermission: false,
+  };
 }
 
 async function restartFirefoxSession(baseUrl, sessionId, firefox, packagePath, profileDir) {
@@ -779,6 +860,67 @@ async function scriptRoundTripSmoke(baseUrl, sessionId, dashboardUrl) {
     ranOnTargetPage: runResult.ok,
     headlessPermissionGrant: usedHeadlessPermissionGrant,
   };
+}
+
+async function waitForSpaUrlChange(baseUrl, sessionId, label, fragment) {
+  const needle = JSON.stringify(fragment);
+  return waitFor(baseUrl, sessionId, `SPA urlchange dispatch after ${label}`, `
+    let entries = [];
+    try { entries = JSON.parse(document.documentElement.dataset.svUrlChanges || '[]'); }
+    catch (error) { entries = []; }
+    const hit = entries.find(entry => String(entry && entry.url).includes(${needle}));
+    return { ok: !!hit, entry: hit || null, count: entries.length, href: location.href };
+  `, 10000);
+}
+
+async function spaUrlChangeSmoke(baseUrl, sessionId, dashboardUrl) {
+  await navigate(baseUrl, sessionId, dashboardUrl);
+  await runtimeMessage(baseUrl, sessionId, {
+    action: 'saveScript',
+    id: 'scriptvault_firefox_spa_urlchange',
+    code: SPA_URL_CHANGE_SCRIPT,
+    enabled: true,
+  }, 60000);
+
+  const target = await spaPageServer();
+  try {
+    await navigate(baseUrl, sessionId, target.url);
+    const ready = await waitFor(baseUrl, sessionId, 'SPA urlchange userscript injection', `
+      return {
+        ok: document.documentElement.dataset.svUrlChangeReady === 'ok',
+        source: document.documentElement.dataset.svUrlChangeSource || ''
+      };
+    `, 20000);
+    // The wrapper's history/hashchange patches only exist inside the userscript
+    // world, so page-world routing is observable solely through the Navigation
+    // API. Anything else means Firefox SPA sites would go undetected.
+    if (ready.source !== 'navigation') {
+      fail(`Navigation API is not reachable from the Firefox userscript world (source=${ready.source})`);
+    }
+
+    await execute(baseUrl, sessionId, `history.pushState({}, '', '/spa-target/alpha'); return true;`);
+    const afterPushState = await waitForSpaUrlChange(baseUrl, sessionId, 'pushState', '/spa-target/alpha');
+
+    await execute(baseUrl, sessionId, `window.navigation.navigate('/spa-target/beta'); return true;`);
+    const afterNavigate = await waitForSpaUrlChange(baseUrl, sessionId, 'navigation.navigate', '/spa-target/beta');
+
+    await execute(baseUrl, sessionId, `location.hash = 'gamma'; return true;`);
+    const afterHashChange = await waitForSpaUrlChange(baseUrl, sessionId, 'hash change', '#gamma');
+
+    if (!String(afterNavigate.entry?.oldUrl || '').includes('/spa-target/alpha')) {
+      fail(`SPA urlchange detail lost the previous URL: ${JSON.stringify(afterNavigate.entry)}`);
+    }
+
+    return {
+      source: ready.source,
+      pushState: afterPushState.entry?.url || '',
+      navigationNavigate: afterNavigate.entry?.url || '',
+      hashChange: afterHashChange.entry?.url || '',
+      dispatches: afterHashChange.count,
+    };
+  } finally {
+    await target.close();
+  }
 }
 
 async function backupRoundTripSmoke(baseUrl, sessionId, dashboardUrl) {
@@ -1314,7 +1456,9 @@ async function main() {
   console.log(`Firefox: ${firefox.version.output || firefox.version.raw}`);
   console.log(`Package: ${basename(packagePath)}`);
 
-  const gecko = spawn(geckodriver, ['--port', String(port)], {
+  // geckodriver 0.37+ rejects -remote-allow-system-access in capabilities; the
+  // chrome-context steps need it, so it is granted through the driver instead.
+  const gecko = spawn(geckodriver, ['--port', String(port), '--allow-system-access'], {
     cwd: ROOT,
     env: process.env,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -1352,6 +1496,7 @@ async function main() {
     const dashboardResult = await dashboardSmoke(baseUrl, sessionId, dashboard.uri);
     const popupResult = await popupSmoke(baseUrl, sessionId, popup.uri);
     const scriptResult = await scriptRoundTripSmoke(baseUrl, sessionId, dashboard.uri);
+    const spaResult = await spaUrlChangeSmoke(baseUrl, sessionId, dashboard.uri);
     const parityResult = await runtimeParitySmoke(baseUrl, sessionId, dashboard.uri);
     const webDavResult = await webDavSyncSmoke(baseUrl, sessionId, dashboard.uri);
     const backupResult = await backupRoundTripSmoke(baseUrl, sessionId, dashboard.uri);
@@ -1367,6 +1512,7 @@ async function main() {
       dashboard: dashboardResult,
       popup: popupResult,
       script: scriptResult,
+      spaUrlChange: spaResult,
       parity: parityResult,
       webdav: webDavResult,
       backup: backupResult,
