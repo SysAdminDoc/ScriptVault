@@ -4,6 +4,19 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **The Firefox package built differently on different machines.**
+  `pages/install.html` and `pages/dashboard-standalone.js` carried CRLF line
+  endings in the working tree while git stored LF, so a local build copied CRLF
+  into the package while a build from the source archive produced LF — different
+  bytes from identical sources. Git could not show it: with `* text=auto eol=lf`
+  the index is already LF, so `git diff` stays clean. Both files are normalized,
+  and a new test reads `git ls-files --eol` so a CRLF packaged file fails the
+  suite instead of silently making the build machine-dependent. Verified: the
+  Firefox package now rebuilds byte-identically — all 67 entries — from the
+  submitted source ZIP alone in a clean Ubuntu 22.04 / Node 24.19 environment.
+  This matters now because AMO builds submitted extensions from source and
+  compares the result.
+
 - **Dependencies published in the last week can no longer be pulled in.**
   `.npmrc` already refused to run dependency install scripts; it now also
   refuses to resolve any version published less than 7 days ago. That closes the
