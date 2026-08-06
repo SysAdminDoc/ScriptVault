@@ -63,6 +63,45 @@ declare const encodeGMWebSocketPayload: (payload: unknown) => Promise<unknown>;
 declare const decodeGMWebSocketPayload: (payload: unknown) => unknown;
 declare const formatBytes: (bytes: number) => string;
 
+/**
+ * Re-apply the script's `@connect` allowlist to a response's final URL.
+ *
+ * `fetch()` follows redirects transparently and the extension holds broad host
+ * permissions, so the request carries the user's cookies to wherever the chain
+ * ends. Checking only the requested URL let a host the script may reach bounce
+ * it to one it may not — a credentialed cross-origin read whose body is handed
+ * straight back to the script. Throws so the caller's existing catch reports it
+ * as a request error and the body is never delivered.
+ *
+ * Same-URL responses (no redirect) short-circuit: the pre-flight check already
+ * covered them, and re-running the policy on every request would be wasteful.
+ */
+function assertRedirectStayedInConnectScope(
+  script: any,
+  requestedUrl: string,
+  finalUrl: string | undefined,
+  apiName: string,
+): void {
+  if (!finalUrl || finalUrl === requestedUrl) return;
+
+  let redirected = false;
+  try {
+    redirected = new URL(finalUrl).origin !== new URL(requestedUrl).origin;
+  } catch {
+    // Unparseable final URL — treat as a redirect and let the policy decide.
+    redirected = true;
+  }
+  if (!redirected) return;
+
+  const policy = evaluateConnectPolicy(script, finalUrl);
+  if (!policy.allowed) {
+    throw new Error(
+      policy.error
+        || `${apiName} redirect to ${policy.hostname || finalUrl} is not permitted by @connect`,
+    );
+  }
+}
+
 function errorMessage(error: unknown, fallback = 'Unexpected error'): string {
   if (error instanceof Error && error.message) return error.message;
   if (error && typeof error === 'object' && 'message' in error) {
@@ -270,6 +309,12 @@ export async function handleGMNetworkMessage(
             if (!xhrPostCheck.ok && !shouldAllowInternalXhr(xhrScript, response.url || data.url, settings, xhrPostCheck)) {
               throw new Error(internalXhrError('GM_xmlhttpRequest redirected to internal host', xhrPostCheck));
             }
+            // Re-apply @connect to the FINAL url. fetch() follows redirects by
+            // default and the request carries the user's cookies, so without
+            // this a 302 from an allowed host to any other host turned into a
+            // credentialed cross-origin read whose body is handed back to the
+            // script. The pre-flight check above only saw the requested URL.
+            assertRedirectStayedInConnectScope(xhrScript, data.url, response.url, 'GM_xmlhttpRequest');
 
             const responseHeaders = [...response.headers.entries()]
               .map(([key, value]) => `${key}: ${value}`)
@@ -727,6 +772,13 @@ export async function handleGMNetworkMessage(
             const downloadPostCheck = InternalHostGuard.classifyResponseUrl(response, ['http:', 'https:']);
             if (!downloadPostCheck.ok && !shouldAllowInternalXhr(downloadScript, response.url || data.url, downloadSettings, downloadPostCheck)) {
               return { error: internalXhrError('GM_download redirected to internal host', downloadPostCheck) };
+            }
+            // @connect must hold for the final URL too — see
+            // assertRedirectStayedInConnectScope.
+            try {
+              assertRedirectStayedInConnectScope(downloadScript, data.url, response.url, 'GM_download');
+            } catch (redirectError) {
+              return { error: errorMessage(redirectError, 'GM_download redirect blocked by @connect') };
             }
             if (!response.ok) return { error: `HTTP ${response.status}` };
             downloadUrl = await responseToDownloadDataUrl(response);

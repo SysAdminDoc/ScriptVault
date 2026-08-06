@@ -46,6 +46,22 @@ const GMNetworkHandler = (() => {
     "GM_xmlhttpRequest_result"
   ];
   var GM_NETWORK_ACTION_SET = new Set(GM_NETWORK_ACTIONS);
+  function assertRedirectStayedInConnectScope(script, requestedUrl, finalUrl, apiName) {
+    if (!finalUrl || finalUrl === requestedUrl) return;
+    let redirected = false;
+    try {
+      redirected = new URL(finalUrl).origin !== new URL(requestedUrl).origin;
+    } catch {
+      redirected = true;
+    }
+    if (!redirected) return;
+    const policy = evaluateConnectPolicy(script, finalUrl);
+    if (!policy.allowed) {
+      throw new Error(
+        policy.error || `${apiName} redirect to ${policy.hostname || finalUrl} is not permitted by @connect`
+      );
+    }
+  }
   function errorMessage(error, fallback = "Unexpected error") {
     if (error instanceof Error && error.message) return error.message;
     if (error && typeof error === "object" && "message" in error) {
@@ -223,6 +239,7 @@ const GMNetworkHandler = (() => {
               if (!xhrPostCheck.ok && !shouldAllowInternalXhr(xhrScript, response.url || data.url, settings, xhrPostCheck)) {
                 throw new Error(internalXhrError("GM_xmlhttpRequest redirected to internal host", xhrPostCheck));
               }
+              assertRedirectStayedInConnectScope(xhrScript, data.url, response.url, "GM_xmlhttpRequest");
               const responseHeaders = [...response.headers.entries()].map(([key, value]) => `${key}: ${value}`).join("\r\n");
               request.streamMeta = {
                 status: response.status,
@@ -654,6 +671,11 @@ const GMNetworkHandler = (() => {
               const downloadPostCheck = InternalHostGuard.classifyResponseUrl(response, ["http:", "https:"]);
               if (!downloadPostCheck.ok && !shouldAllowInternalXhr(downloadScript, response.url || data.url, downloadSettings, downloadPostCheck)) {
                 return { error: internalXhrError("GM_download redirected to internal host", downloadPostCheck) };
+              }
+              try {
+                assertRedirectStayedInConnectScope(downloadScript, data.url, response.url, "GM_download");
+              } catch (redirectError) {
+                return { error: errorMessage(redirectError, "GM_download redirect blocked by @connect") };
               }
               if (!response.ok) return { error: `HTTP ${response.status}` };
               downloadUrl = await responseToDownloadDataUrl(response);

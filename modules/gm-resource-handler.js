@@ -98,6 +98,20 @@ const GMResourceHandler = (() => {
             if (!postCheck.ok) {
               return { error: "GM_loadScript URL redirected to " + postCheck.message };
             }
+            if (response.url && response.url !== data.url) {
+              let crossOrigin = true;
+              try {
+                crossOrigin = new URL(response.url).origin !== new URL(data.url).origin;
+              } catch {
+                crossOrigin = true;
+              }
+              if (crossOrigin) {
+                const redirectPolicy = evaluateConnectPolicy(script, response.url);
+                if (!redirectPolicy.allowed) {
+                  return { error: redirectPolicy.error || "GM_loadScript redirect blocked by @connect" };
+                }
+              }
+            }
             try {
               code = await _fetchTextBounded(response, MAX_SCRIPT_SIZE, "Script");
             } catch (sizeError) {

@@ -4,6 +4,14 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Security: `@connect` is now re-checked after HTTP redirects.**
+  `GM_xmlhttpRequest`, `GM_download`, and `GM_loadScript` validated the
+  requested URL but not the one the redirect chain actually landed on. Because
+  requests carry the user's cookies and the extension holds broad host access, a
+  host a script was allowed to reach could bounce it to one it was not — a
+  credentialed cross-origin read whose body was returned to the script. A
+  redirect that leaves the allowlist is now rejected and the response discarded.
+
 - **Fixed: re-installing a script without `@namespace` created a duplicate
   instead of updating it.** The install review's metadata parser defaulted the
   name and namespace differently from the background parser that stores the

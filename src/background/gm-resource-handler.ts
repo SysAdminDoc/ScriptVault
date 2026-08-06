@@ -143,6 +143,21 @@ export async function handleGMResourceMessage(
           if (!postCheck.ok) {
             return { error: 'GM_loadScript URL redirected to ' + postCheck.message };
           }
+          // fetch() follows redirects, so @connect must hold for where the
+          // chain actually ended — otherwise an allowed host can bounce the
+          // request to an arbitrary one whose body is then executed.
+          if (response.url && response.url !== data.url) {
+            let crossOrigin = true;
+            try {
+              crossOrigin = new URL(response.url).origin !== new URL(data.url).origin;
+            } catch { crossOrigin = true; }
+            if (crossOrigin) {
+              const redirectPolicy = evaluateConnectPolicy(script, response.url);
+              if (!redirectPolicy.allowed) {
+                return { error: redirectPolicy.error || 'GM_loadScript redirect blocked by @connect' };
+              }
+            }
+          }
           try {
             code = await _fetchTextBounded(response, MAX_SCRIPT_SIZE, 'Script');
           } catch (sizeError) {

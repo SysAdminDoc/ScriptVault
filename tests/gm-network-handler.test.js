@@ -407,4 +407,74 @@ describe('GM network handler', () => {
       code: 'PERMISSION_REQUIRED',
     });
   });
+
+  // fetch() follows redirects transparently and the request carries the user's
+  // cookies (credentials default to 'include'), so checking only the requested
+  // URL let an allowed host bounce the request anywhere — a credentialed
+  // cross-origin read whose body was handed straight back to the script.
+  it('rejects a cross-origin redirect that leaves the @connect allowlist', async () => {
+    globalThis.evaluateConnectPolicy = vi.fn((_script, url) => (
+      url.startsWith('https://api.example.com/')
+        ? { allowed: true }
+        : { allowed: false, error: '@connect does not allow evil.example', hostname: 'evil.example' }
+    ));
+    const redirected = new Response('secret', { status: 200, headers: { 'content-length': '6' } });
+    Object.defineProperty(redirected, 'url', { value: 'https://evil.example/stolen' });
+    globalThis.fetch = vi.fn().mockResolvedValue(redirected);
+
+    await expect(handleGMNetworkMessage('GM_xmlhttpRequest', {
+      scriptId: 'script-1',
+      url: 'https://api.example.com/data',
+    }, { tab: { id: 7 } })).resolves.toEqual({ requestId: 'xhr_1', started: true });
+
+    await flushNetworkTasks();
+    await vi.waitFor(() => {
+      expect(xhrRequests.get('xhr_1')?.finalResult).toMatchObject({ done: true, type: 'error' });
+    });
+
+    // The policy was consulted for the final URL, not just the requested one.
+    expect(globalThis.evaluateConnectPolicy).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'script-1' }),
+      'https://evil.example/stolen',
+    );
+    // And the body never reached the script.
+    const result = xhrRequests.get('xhr_1')?.finalResult;
+    expect(JSON.stringify(result)).not.toContain('secret');
+  });
+
+  it('allows a redirect that stays inside the @connect allowlist', async () => {
+    globalThis.evaluateConnectPolicy = vi.fn().mockReturnValue({ allowed: true });
+    const redirected = new Response('ok', { status: 200, headers: { 'content-length': '2' } });
+    Object.defineProperty(redirected, 'url', { value: 'https://api.example.com/moved' });
+    globalThis.fetch = vi.fn().mockResolvedValue(redirected);
+
+    await handleGMNetworkMessage('GM_xmlhttpRequest', {
+      scriptId: 'script-1',
+      url: 'https://api.example.com/data',
+    }, { tab: { id: 7 } });
+
+    await flushNetworkTasks();
+    await vi.waitFor(() => {
+      expect(xhrRequests.get('xhr_1')?.finalResult).toMatchObject({ done: true, type: 'load' });
+    });
+  });
+
+  it('does not re-run the connect policy when no redirect occurred', async () => {
+    globalThis.evaluateConnectPolicy = vi.fn().mockReturnValue({ allowed: true });
+    const sameUrl = new Response('ok', { status: 200, headers: { 'content-length': '2' } });
+    Object.defineProperty(sameUrl, 'url', { value: 'https://api.example.com/data' });
+    globalThis.fetch = vi.fn().mockResolvedValue(sameUrl);
+
+    await handleGMNetworkMessage('GM_xmlhttpRequest', {
+      scriptId: 'script-1',
+      url: 'https://api.example.com/data',
+    }, { tab: { id: 7 } });
+
+    await flushNetworkTasks();
+    await vi.waitFor(() => {
+      expect(xhrRequests.get('xhr_1')?.finalResult).toMatchObject({ done: true });
+    });
+    expect(globalThis.evaluateConnectPolicy).toHaveBeenCalledTimes(1);
+  });
+
 });
