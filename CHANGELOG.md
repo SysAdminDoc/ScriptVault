@@ -4,6 +4,15 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Security: the dependency floor gate was authorising a vulnerable DOMPurify.**
+  The `overrides` pin sat at exactly 3.4.11 — the top of GHSA-c2j3-45gr-mqc4's
+  affected range — while the floor that exists to prevent that was still set to
+  an older advisory's 3.3.2, so the check reported "ok" and the high-severity
+  audit could not see a low-severity finding. DOMPurify now resolves at 3.4.13,
+  and the gate was hardened at the root cause: every floor must name the
+  advisory it came from, and the `overrides` pins are checked directly rather
+  than only after `npm install` has already written them into the lockfile.
+
 ## [v3.24.0] — Execution, Sync & Permission Hardening (2026-08-06)
 
 - **Fixed: a failing background sync looked healthy.** Only manual syncs

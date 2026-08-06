@@ -118,7 +118,7 @@
     "web-ext": "^10.3.0"
   },
   "overrides": {
-    "dompurify": "3.4.11",
+    "dompurify": "3.4.13",
     "web-ext": {
       "fx-runner": "1.6.0"
     }

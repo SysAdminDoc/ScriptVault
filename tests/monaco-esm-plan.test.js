@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import * as acorn from 'acorn';
 import { describe, expect, it } from 'vitest';
+import { FLOORS, isBelow } from '../scripts/check-cve-floors.mjs';
 
 const ROOT = process.cwd();
 
@@ -45,7 +46,11 @@ describe('Monaco ESM migration plan', () => {
 
     expect(packageJson.devDependencies['monaco-editor']).toBe('^0.56.0');
     expect(packageLock.packages['node_modules/monaco-editor'].version).toBe('0.56.0');
-    expect(packageJson.overrides.dompurify).toBe('3.4.11');
+    // Monaco pins dompurify to an exact version (3.4.8), so the override is the
+    // only lever that keeps its bundled copy off a vulnerable release. Assert
+    // against the CVE floor rather than a literal: a hardcoded version here is
+    // what made the 3.4.11 / GHSA-c2j3-45gr-mqc4 pin look deliberate.
+    expect(isBelow(packageJson.overrides.dompurify, FLOORS.dompurify.floor)).toBe(false);
     expect(editorTypes).toContain('as lsp');
     expect(editorTypes).toContain('as typescript');
     expect(apiTypes).toContain('EditorAutoClosingEditStrategy');
