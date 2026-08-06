@@ -4,6 +4,8 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+## [v3.25.0] — Release integrity, supply chain & Firefox reproducibility (2026-08-06)
+
 - **The Firefox package built differently on different machines.**
   `pages/install.html` and `pages/dashboard-standalone.js` carried CRLF line
   endings in the working tree while git stored LF, so a local build copied CRLF

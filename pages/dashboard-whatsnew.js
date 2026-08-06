@@ -11,6 +11,23 @@ const WhatsNew = (() => {
     : '2.0.0';
 
   const CHANGELOG = {
+    '3.25.0': {
+      title: 'ScriptVault 3.25.0 — Release Integrity, Supply Chain & Firefox Reproducibility',
+      date: '2026-08-06',
+      summary: 'This release is about getting fixes to you and proving what ships. Three finished versions had never been published, a dependency was pinned to a known-vulnerable release, and a Firefox domain-label fix had been deleted by mistake. All are corrected, and each one now has a gate that fails the build rather than passing quietly.',
+      highlights: [
+        { icon: 'SAFE', title: 'Three Released Versions Reached Nobody', desc: 'v3.23.0, v3.23.1 and v3.24.0 were finished and merged but never tagged or published, so four months of security fixes sat unreleased. All three are now published, and a new check fails the build whenever a released version has no tag.' },
+        { icon: 'SAFE', title: 'A Dependency Was Pinned To Its Vulnerable Version', desc: 'The HTML sanitizer bundled with the editor was pinned to exactly the last affected release, while the safeguard meant to prevent that was set to an older advisory and reported everything as fine. The library is updated and the safeguard now checks the pin itself.' },
+        { icon: 'SAFE', title: 'Dependencies Must Be A Week Old', desc: 'Nothing published in the last seven days can be pulled in. That closes the window used by registry account takeovers, where a malicious version is published and picked up within hours.' },
+        { icon: 'FLOW', title: 'Firefox Domain Labels Are Right Again', desc: 'A site on example.co.uk was labelled "co". The accurate lookup had been removed as dead code after a probe missed the permission it needs. It is restored, permission and all, and a live browser test proves it.' },
+      ],
+      improvements: [
+        'The Firefox package now rebuilds byte-for-byte from the submitted source alone, which Mozilla now verifies by building it themselves; two files shipped different bytes depending on which machine built them.',
+        'Files a Firefox reviewer needs to build the extension — including the build instructions themselves — were missing from the submitted source archive, so the build could not complete.',
+        'Removed a build mode that would have overwritten the extension with minified code if anyone had run it, and corrected the documentation that recommended it.',
+        'The comparison table in the README no longer claims a competitor lacks Manifest V3 support it shipped in July, and now expires if it is not re-checked.',
+      ],
+    },
     '3.24.0': {
       title: 'ScriptVault 3.24.0 — Execution, Sync & Permission Hardening',
       date: '2026-08-06',
