@@ -90,6 +90,16 @@ describe('registration fails closed on all-invalid positive patterns', () => {
     expect(regJs).toContain('requestedPositivePatterns');
   });
 
+  it('exempts regex @include, whose scope the wrapper enforces at runtime', () => {
+    // extractMatchPatternsFromRegex returns [] for nearly every real-world
+    // regex, so counting a regex @include as a "requested positive pattern"
+    // made the fail-closed branch reject valid scripts outright. The wrapper's
+    // __regexIncludes guard returns before user code when the URL misses, so
+    // registering broadly does not widen the script's effective scope.
+    expect(regTs).toContain('requestedPositivePatterns > 0 && regexIncludes.length === 0');
+    expect(regJs).toContain('requestedPositivePatterns > 0 && regexIncludes.length === 0');
+  });
+
   it('normalizes ported match patterns before native registration', () => {
     expect(regTs).toContain('nativeMatchPatternForRegistration');
     expect(regTs).toContain('matchPatternToRuntimeRegex');

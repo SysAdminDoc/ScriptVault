@@ -4,6 +4,16 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Fixed: scripts scoped only by a regex `@include` refused to register.** The
+  fail-closed guard that rejects all-malformed match patterns counted a regex
+  `@include` as a positive pattern that had to survive registration — but
+  `extractMatchPatternsFromRegex` returns nothing for nearly every real-world
+  regex, so ordinary Tampermonkey/Violentmonkey scripts using
+  `/^https?:\/\/[^\/]+\/watch/` and friends were unregistered with "No valid
+  match patterns" and never ran. Regex includes are now exempt: the wrapper's
+  runtime URL guard already returns before any user code when the URL doesn't
+  match, so registering broadly does not widen the script's real scope.
+
 - **Fixed: a wildcard-stuffed `@match` in a `.user.css` could freeze the
   extension.** The UserCSS matcher expanded each `*` into its own `.*` group, so
   a crafted stylesheet produced catastrophic backtracking — a 12-wildcard

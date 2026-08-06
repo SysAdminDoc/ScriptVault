@@ -40136,15 +40136,20 @@ async function registerScript(script, { useUpdate = false, throwOnError = false 
     // Process @include (if enabled in settings)
     if (settings.useOriginalIncludes !== false && meta.include && Array.isArray(meta.include)) {
       for (const inc of meta.include) {
-        if (typeof inc === 'string' && inc.trim()) requestedPositivePatterns++;
         if (isRegexPattern(inc)) {
-          // Regex pattern - extract broad match patterns for registration, filter at runtime
+          // Regex pattern - extract broad match patterns for registration, filter at runtime.
+          // Deliberately NOT counted as a requestedPositivePattern: the scope is
+          // enforced by the wrapper's runtime __regexIncludes guard, not by a static
+          // match pattern. extractMatchPatternsFromRegex returns [] for nearly every
+          // real-world regex, so counting it would trip the fail-closed check below
+          // and refuse to register a perfectly valid script.
           regexIncludes.push(inc);
           const broad = extractMatchPatternsFromRegex(inc);
           if (broad.length > 0) {
             matches.push(...broad);
           }
         } else {
+          if (typeof inc === 'string' && inc.trim()) requestedPositivePatterns++;
           const converted = convertIncludeToMatch(inc);
           if (converted && isValidMatchPattern(converted)) {
             addPositiveMatchPattern(converted);
@@ -40231,7 +40236,10 @@ async function registerScript(script, { useUpdate = false, throwOnError = false 
     // malformed. Fail closed — do NOT widen to <all_urls>, which would run the
     // script everywhere and defeat an explicit scope restriction. Unregister any
     // prior registration so it stops running, then surface the error.
-    if (matches.length === 0 && requestedPositivePatterns > 0) {
+    // A regex @include is exempt: the wrapper's runtime __regexIncludes guard
+    // returns before any user code when the URL doesn't match, so registering
+    // broadly does not actually widen the script's effective scope.
+    if (matches.length === 0 && requestedPositivePatterns > 0 && regexIncludes.length === 0) {
       await chrome.userScripts.unregister({ ids: [script.id] }).catch(() => {});
       throw new Error('No valid match patterns — script scope could not be applied');
     }

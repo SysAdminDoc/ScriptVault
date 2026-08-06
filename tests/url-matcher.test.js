@@ -12,6 +12,7 @@ import {
   nativeMatchPatternForRegistration,
   doesScriptMatchUrl,
   isUrlBlockedByGlobalSettings,
+  extractMatchPatternsFromRegex,
   MatchSet,
 } from '../src/background/url-matcher.ts';
 
@@ -695,5 +696,50 @@ describe('MatchSet', () => {
     // Matching a bigco subdomain hits all 25 b-scripts.
     const onBigco = set.getMatching('https://eu.api.bigco.com/v2');
     expect(onBigco).toHaveLength(25);
+  });
+});
+
+// ── extractMatchPatternsFromRegex ───────────────────────────────────────────
+// registerScript() calls this to turn a regex @include into static match
+// patterns for chrome.userScripts.register. It only narrows the alternation
+// shape below; for everything else it legitimately returns [] and the wrapper's
+// runtime __regexIncludes guard is what enforces scope. That distinction is
+// load-bearing — a fail-closed check that reads [] as "all patterns malformed"
+// refuses to register perfectly valid scripts.
+describe('extractMatchPatternsFromRegex', () => {
+  it('extracts every alternative of a domain alternation group', () => {
+    const out = extractMatchPatternsFromRegex(String.raw`/1337x\.(to|st|ws)/`);
+    expect(out).toContain('*://1337x.to/*');
+    expect(out).toContain('*://*.1337x.to/*');
+    expect(out).toContain('*://1337x.st/*');
+    expect(out).toContain('*://1337x.ws/*');
+  });
+
+  it('drops alternatives carrying regex metacharacters but keeps the clean ones', () => {
+    const out = extractMatchPatternsFromRegex(String.raw`/site\.(com|[a-z]+)/`);
+    expect(out).toContain('*://site.com/*');
+    expect(out.some((p) => p.includes('['))).toBe(false);
+  });
+
+  it('deduplicates repeated alternatives', () => {
+    const out = extractMatchPatternsFromRegex(String.raw`/example\.(com|com)/`);
+    expect(new Set(out).size).toBe(out.length);
+    expect(out).toContain('*://example.com/*');
+  });
+
+  it('returns [] for ordinary @include regexes it cannot statically narrow', () => {
+    // Real Tampermonkey/Violentmonkey @include values. Strategy 2's anchor wants
+    // a literal `//`, which an escaped `\/\/` never produces, so even a plain
+    // single-domain regex falls through to []. Every one of these must still
+    // register (<all_urls> + the wrapper runtime guard) rather than fail closed.
+    const unnarrowable = [
+      String.raw`/^https?:\/\/example\.com\/watch/`,
+      String.raw`/^https?:\/\/[^\/]+\/watch/`,
+      String.raw`/^https:\/\/.*\/inbox/`,
+      String.raw`/^https?:\/\/[a-z]+\.wikipedia\.org\//`,
+    ];
+    for (const re of unnarrowable) {
+      expect(extractMatchPatternsFromRegex(re)).toEqual([]);
+    }
   });
 });
