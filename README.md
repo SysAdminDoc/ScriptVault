@@ -535,42 +535,36 @@ or email).
 
 ## Comparison
 
-| Feature | ScriptVault | Tampermonkey | ViolentMonkey |
-|---------|:-----------:|:------------:|:-------------:|
-| Manifest V3 | Yes | Yes | Beta/test builds |
-| Full GM API (35+) | Yes | Yes | Yes |
-| Monaco Editor (VS Code) | Yes | No | No |
-| DevTools Panel | Yes | No | No |
-| Side Panel | Yes | No | No |
-| Script Signing (Ed25519) | Yes | No | No |
-| AST Static Analysis (31 detectors) | Yes | No | No |
-| Cloud Sync (WebDAV, local folder, Google Drive, Dropbox, OneDrive, S3) | Yes&sup1; | Yes | Yes |
-| 3-Way Sync Merge | Yes | No | No |
-| Tabbed Multi-Script Editor | Yes | No | No |
-| Built-in Script Search | Yes | No | No |
-| Script Templates | 6 | No | No |
-| Version Rollback | Yes (3) | No | No |
-| CDN Library Browser | Yes | No | No |
-| Workspaces | Yes | No | No |
-| Script Folders | Yes | No | No |
-| Command Palette (Ctrl+K) | Yes | No | No |
-| Drag-and-Drop Install | Yes | Yes | No |
-| Tag Filtering | Yes | No | No |
-| Script Pinning | Yes | No | No |
-| Pattern Tester | Yes | No | No |
-| Version Diff View | Yes | No | No |
-| Network Request Log + HAR | Yes | No | No |
-| Execution Profiling | Yes | No | No |
-| Performance Budgets | Yes | No | No |
-| Storage Quota Monitor | Yes | No | No |
-| Bulk Operations w/ Progress | Yes | Yes | No |
-| 5 UI Themes | Yes | No | Yes |
-| Session-Only Credentials | Yes | No | No |
-| Bookmarklet Import | Yes | No | No |
-| Open Source | MIT | No | Yes |
-| Free | Yes | Freemium | Yes |
+<!-- competitor-data-verified: 2026-08-06 -->
 
-&sup1; Firefox currently supports WebDAV and import/export sync. OAuth providers (Google Drive, Dropbox, OneDrive) and Easy Cloud require the `identity` permission, which is deferred until a Firefox OAuth validation pass lands. S3-compatible sync works on Firefox (no `identity` dependency).
+Competitor rows below were checked against the upstream releases and issue
+trackers on **2026-08-06**. Only claims verifiable from a public release or an
+open issue are listed; anything that could not be confirmed was left out rather
+than guessed. This ecosystem moves fast — Violentmonkey shipped Manifest V3
+stable three weeks before this table was last checked — so treat an old date as
+a reason to re-verify, not as evidence.
+
+| Capability | ScriptVault | Tampermonkey | Violentmonkey | Evidence |
+|---|:---:|:---:|:---:|---|
+| Manifest V3 | Yes | Yes | Yes | VM shipped MV3 stable in [v2.43.0](https://github.com/violentmonkey/violentmonkey/releases) (2026-07-14); TM stable is MV3 since 5.3 |
+| Open source | Yes (MIT) | No | Yes (MIT) | The [Tampermonkey repo](https://github.com/Tampermonkey/tampermonkey) is an issue tracker; no extension source is published |
+| Free, no paid tier | Yes | Yes | Yes | No paid tier found for any of the three |
+| Zero telemetry, enforced by a build gate | Yes | No | — | `scripts/check-no-telemetry.mjs`; Tampermonkey ships analytics |
+| Cryptographic script signing (Ed25519) | Yes | No | No | Still an open request upstream: [violentmonkey#1558](https://github.com/violentmonkey/violentmonkey/issues/1558) |
+| Update review: check separated from apply | Yes | Yes | No | Open since 2020: [violentmonkey#1023](https://github.com/violentmonkey/violentmonkey/issues/1023) (+37); TM shipped it in 5.5.0 |
+| Diff shown before an update is applied | Yes | — | No | Open since 2019: [violentmonkey#500](https://github.com/violentmonkey/violentmonkey/issues/500) (+30) |
+| AST static analysis of script code (31 detectors) | Yes | No | No | No equivalent in either upstream project |
+| Automated WCAG 2.2 AA gate in CI | Yes | — | — | axe-core across every surface in four themes, zero exceptions; accessibility is an open complaint in both trackers ([violentmonkey#1597](https://github.com/violentmonkey/violentmonkey/issues/1597), [tampermonkey#2676](https://github.com/Tampermonkey/tampermonkey/issues/2676)) |
+
+"—" means not verified either way, not "no".
+
+**Where the others are ahead.** Tampermonkey 5.5.0 added an MCP bridge for AI
+tooling, OS-policy script provisioning, and a local-file development loop.
+Violentmonkey 2.46.0 added an opt-in page mode for stricter `document-start`
+timing and a Firefox CSP bypass. ScriptCat ships background/scheduled scripts
+and a permission-gated MCP bridge with an audit log. Being MV3-native is no
+longer a differentiator; the update-trust surface, signing, analysis, and
+accessibility work are.
 
 ---
 

@@ -4,6 +4,17 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **The README comparison table was making a false claim about a competitor.**
+  It said Violentmonkey had Manifest V3 only in "Beta/test builds"; Violentmonkey
+  shipped MV3 stable in v2.43.0 on 2026-07-14. Nothing could catch it, because
+  the README gate validates ScriptVault's own claims against ScriptVault's own
+  source and this repo holds no source of truth for what another project does.
+  The table is rebuilt from verified releases and open issues, cites its evidence
+  per row, and drops every row that could not be confirmed rather than asserting
+  it. It now carries the date it was last checked, and `npm run readme:check`
+  fails once that date passes 180 days. Being MV3-native is no longer a
+  differentiator, and the section says so.
+
 - **Removed a build mode that would have corrupted the extension if anyone ran
   it.** `npm run build:prod` wrote a *minified* bundle over the repo-root
   `background.js` — the tracked file that `chrome://extensions` loads as the

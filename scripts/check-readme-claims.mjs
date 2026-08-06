@@ -234,10 +234,53 @@ function checkCanonicalProjectFacts(failures) {
   return facts;
 }
 
+
+// The comparison table asserts things about OTHER projects, which this repo
+// cannot re-derive from its own source the way it validates its own claims.
+// It rotted exactly that way once: "ViolentMonkey | Manifest V3 | Beta/test
+// builds" stayed in the shipped README for three weeks after Violentmonkey
+// shipped MV3 stable, and no gate could notice. So the table carries the date
+// it was last checked, and the date is what gets gated.
+export const COMPETITOR_DATA_MARKER = /<!--\s*competitor-data-verified:\s*(\d{4}-\d{2}-\d{2})\s*-->/;
+export const COMPETITOR_DATA_MAX_AGE_DAYS = 180;
+
+export function checkCompetitorDataFreshness(readme, now = new Date()) {
+  const failures = [];
+  if (!/^##\s+Comparison\s*$/m.test(readme)) return failures; // no table, nothing to age out
+
+  const match = readme.match(COMPETITOR_DATA_MARKER);
+  if (!match) {
+    failures.push({
+      check: 'competitor-data-undated',
+      why: 'README has a Comparison section but no `<!-- competitor-data-verified: YYYY-MM-DD -->` marker; competitor claims cannot be re-verified without knowing when they were last checked',
+    });
+    return failures;
+  }
+
+  const verified = new Date(`${match[1]}T00:00:00Z`);
+  if (Number.isNaN(verified.getTime())) {
+    failures.push({ check: 'competitor-data-undated', why: `competitor-data-verified marker "${match[1]}" is not a valid YYYY-MM-DD date` });
+    return failures;
+  }
+
+  const ageDays = Math.floor((now.getTime() - verified.getTime()) / 86400000);
+  if (ageDays > COMPETITOR_DATA_MAX_AGE_DAYS) {
+    failures.push({
+      check: 'stale-competitor-data',
+      why: `README competitor claims were last verified ${match[1]} (${ageDays} days ago, limit ${COMPETITOR_DATA_MAX_AGE_DAYS}). Re-check the upstream releases and issues, then move the marker date.`,
+    });
+  }
+  if (ageDays < 0) {
+    failures.push({ check: 'competitor-data-undated', why: `competitor-data-verified marker ${match[1]} is in the future` });
+  }
+  return failures;
+}
+
 function check() {
   const readme = readReadme();
   const failures = [];
   const projectFacts = checkCanonicalProjectFacts(failures);
+  failures.push(...checkCompetitorDataFreshness(readme));
 
   // 1) Deleted-module marketing.
   for (const entry of DELETED_MODULE_MARKETING) {
@@ -322,24 +365,28 @@ function check() {
   return { failures, registryProviders: [...registry], claimedProviders: [...claimed], projectFacts };
 }
 
-const { failures, registryProviders, claimedProviders, projectFacts } = check();
+// Only run the gate when invoked as a CLI. Importing this module (the tests do)
+// must not execute the check or call process.exit.
+if (process.argv[1]?.endsWith('check-readme-claims.mjs')) {
+  const { failures, registryProviders, claimedProviders, projectFacts } = check();
 
-if (wantJson) {
-  process.stdout.write(JSON.stringify({ failures, registryProviders, claimedProviders, projectFacts }, null, 2) + '\n');
-} else if (failures.length === 0) {
-  if (!quiet) {
-    process.stdout.write(`README claim check: OK (${claimedProviders.length} provider claims, ${registryProviders.length} registry entries).\n`);
+  if (wantJson) {
+    process.stdout.write(JSON.stringify({ failures, registryProviders, claimedProviders, projectFacts }, null, 2) + '\n');
+  } else if (failures.length === 0) {
+    if (!quiet) {
+      process.stdout.write(`README claim check: OK (${claimedProviders.length} provider claims, ${registryProviders.length} registry entries).\n`);
+    }
+  } else {
+    process.stdout.write(`README claim check failed with ${failures.length} issue(s):\n`);
+    for (const f of failures) {
+      process.stdout.write(`  - [${f.check}] ${f.why}\n`);
+      if (f.needle) process.stdout.write(`    needle: ${f.needle}\n`);
+      if (f.name) process.stdout.write(`    name: ${f.name}\n`);
+      if (f.filename) process.stdout.write(`    file: ${f.filename}\n`);
+      if (f.path) process.stdout.write(`    path: ${f.path}\n`);
+      if (f.snippet) process.stdout.write(`    near: ...${f.snippet}...\n`);
+    }
   }
-} else {
-  process.stdout.write(`README claim check failed with ${failures.length} issue(s):\n`);
-  for (const f of failures) {
-    process.stdout.write(`  - [${f.check}] ${f.why}\n`);
-    if (f.needle) process.stdout.write(`    needle: ${f.needle}\n`);
-    if (f.name) process.stdout.write(`    name: ${f.name}\n`);
-    if (f.filename) process.stdout.write(`    file: ${f.filename}\n`);
-    if (f.path) process.stdout.write(`    path: ${f.path}\n`);
-    if (f.snippet) process.stdout.write(`    near: ...${f.snippet}...\n`);
-  }
+
+  process.exit(failures.length === 0 ? 0 : 1);
 }
-
-process.exit(failures.length === 0 ? 0 : 1);
