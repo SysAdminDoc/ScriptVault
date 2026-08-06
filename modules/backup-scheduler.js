@@ -1798,7 +1798,8 @@ const BackupScheduler = (() => {
       };
       const success = errors.length === 0;
       await _updateReceipt(receiptId, {
-        rolledBackAt: Date.now(),
+        ...success ? { rolledBackAt: Date.now() } : {},
+        lastRollbackAttemptAt: Date.now(),
         rollbackError: success ? null : errors.map((error) => `${error.kind}: ${error.error}`).join("; "),
         rollbackResult: { ...rollbackResult, success }
       });

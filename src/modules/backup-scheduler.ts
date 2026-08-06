@@ -228,6 +228,12 @@ interface RestoreReceipt {
   result?: RestoreResult | Record<string, unknown> | null;
   snapshot: RestoreSnapshot;
   rolledBackAt?: number | null;
+  /**
+   * When the last rollback was ATTEMPTED, successful or not. `rolledBackAt` is
+   * the spent marker the retry guard checks, so a failed attempt must not set
+   * it — otherwise a transient IDB error makes the undo permanently unusable.
+   */
+  lastRollbackAttemptAt?: number | null;
   rollbackError?: string | null;
   rollbackResult?: Record<string, unknown> | null;
 }
@@ -2577,8 +2583,13 @@ export const BackupScheduler = {
       removedScriptIds: toDelete,
     };
     const success = errors.length === 0;
+    // Only mark the receipt spent when the rollback actually succeeded. The
+    // entry guard rejects any receipt carrying rolledBackAt, so stamping it on
+    // failure turned a transient IDB/quota error into a permanently unretriable
+    // undo while the snapshot was still sitting in the receipt.
     await _updateReceipt(receiptId, {
-      rolledBackAt: Date.now(),
+      ...(success ? { rolledBackAt: Date.now() } : {}),
+      lastRollbackAttemptAt: Date.now(),
       rollbackError: success
         ? null
         : errors.map((error) => `${error.kind}: ${error.error}`).join('; '),

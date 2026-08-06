@@ -154,3 +154,33 @@ describe('Migration runtime module', () => {
     }
   });
 });
+
+describe('backup scheduler defaults are owned by BackupScheduler', () => {
+  it('does not seed backupSchedulerSettings with a shape the scheduler cannot read', async () => {
+    // migrateToV2 used to write { enabled, type, hour, day, maxBackups,
+    // onChange }. The scheduler's schema is { enabled, scheduleType, hour,
+    // dayOfWeek, ... } merged over DEFAULT_SETTINGS, so type/day/onChange were
+    // dead keys, the intended weekly-Sunday schedule silently became the daily
+    // default, and enabled:true overrode the scheduler's deliberate
+    // enabled:false — on every fresh install, since migrateToV2 runs whenever
+    // the version stamp is absent.
+    globalThis.__resetStorageMock();
+    await chrome.storage.local.set({ userscripts: {} });
+
+    await Migration.run();
+
+    const { backupSchedulerSettings } = await chrome.storage.local.get('backupSchedulerSettings');
+    expect(backupSchedulerSettings).toBeUndefined();
+  });
+
+  it('leaves an existing scheduler configuration untouched', async () => {
+    globalThis.__resetStorageMock();
+    const existing = { enabled: true, scheduleType: 'weekly', hour: 3, dayOfWeek: 0, maxBackups: 5 };
+    await chrome.storage.local.set({ userscripts: {}, backupSchedulerSettings: existing });
+
+    await Migration.run();
+
+    const { backupSchedulerSettings } = await chrome.storage.local.get('backupSchedulerSettings');
+    expect(backupSchedulerSettings).toEqual(existing);
+  });
+});

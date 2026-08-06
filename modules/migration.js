@@ -68,19 +68,6 @@ const Migration = (() => {
       };
       await chrome.storage.local.set({ notificationPrefs: prefs });
     }
-    const backupData = await chrome.storage.local.get("backupSchedulerSettings");
-    if (!backupData.backupSchedulerSettings) {
-      const settings = {
-        enabled: true,
-        type: "weekly",
-        hour: 3,
-        day: 0,
-        // Sunday
-        maxBackups: 5,
-        onChange: true
-      };
-      await chrome.storage.local.set({ backupSchedulerSettings: settings });
-    }
     const scripts = await getAllScripts();
     let migrated = 0;
     for (const [id, script] of Object.entries(scripts)) {

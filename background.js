@@ -22091,7 +22091,8 @@ const BackupScheduler = (() => {
       };
       const success = errors.length === 0;
       await _updateReceipt(receiptId, {
-        rolledBackAt: Date.now(),
+        ...success ? { rolledBackAt: Date.now() } : {},
+        lastRollbackAttemptAt: Date.now(),
         rollbackError: success ? null : errors.map((error) => `${error.kind}: ${error.error}`).join("; "),
         rollbackResult: { ...rollbackResult, success }
       });
@@ -25052,19 +25053,6 @@ const Migration = (() => {
         quietHoursEnd: 7
       };
       await chrome.storage.local.set({ notificationPrefs: prefs });
-    }
-    const backupData = await chrome.storage.local.get("backupSchedulerSettings");
-    if (!backupData.backupSchedulerSettings) {
-      const settings = {
-        enabled: true,
-        type: "weekly",
-        hour: 3,
-        day: 0,
-        // Sunday
-        maxBackups: 5,
-        onChange: true
-      };
-      await chrome.storage.local.set({ backupSchedulerSettings: settings });
     }
     const scripts = await getAllScripts();
     let migrated = 0;
@@ -37634,6 +37622,12 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
       await UpdateSystem.autoUpdate();
     } else if (alarm.name === 'autoSync') {
       const result = await CloudSync.sync();
+      // Persist the scheduled result too. Only the manual path used to record
+      // it, so getLastSyncResult and the sync cockpit reported the last MANUAL
+      // sync: a background sync failing every cycle (expired refresh token,
+      // quota, endpoint down) produced nothing but a console.error while the
+      // UI still showed the last successful manual run.
+      await persistLastSyncResult(result);
       await maybeRegisterScriptsAfterSuccessfulSync(result);
     } else if (alarm.name === SUBSCRIPTION_REFRESH_ALARM) {
       await SubscriptionSystem.refreshSubscriptions();

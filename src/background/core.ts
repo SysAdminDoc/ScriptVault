@@ -9083,6 +9083,12 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
       await UpdateSystem.autoUpdate();
     } else if (alarm.name === 'autoSync') {
       const result = await CloudSync.sync();
+      // Persist the scheduled result too. Only the manual path used to record
+      // it, so getLastSyncResult and the sync cockpit reported the last MANUAL
+      // sync: a background sync failing every cycle (expired refresh token,
+      // quota, endpoint down) produced nothing but a console.error while the
+      // UI still showed the last successful manual run.
+      await persistLastSyncResult(result);
       await maybeRegisterScriptsAfterSuccessfulSync(result);
     } else if (alarm.name === SUBSCRIPTION_REFRESH_ALARM) {
       await SubscriptionSystem.refreshSubscriptions();

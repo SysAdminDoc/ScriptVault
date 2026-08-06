@@ -18,16 +18,6 @@ interface NotificationPrefs {
   quietHoursEnd: number;
 }
 
-/** Backup scheduler settings stored in chrome.storage.local. */
-interface BackupSchedulerSettings {
-  enabled: boolean;
-  type: string;
-  hour: number;
-  day: number;
-  maxBackups: number;
-  onChange: boolean;
-}
-
 /** Gamification state stored in chrome.storage.local. */
 interface GamificationState {
   achievements: Record<string, unknown>;
@@ -112,19 +102,16 @@ async function migrateToV2(): Promise<void> {
     await chrome.storage.local.set({ notificationPrefs: prefs });
   }
 
-  // 3. Initialize backup scheduler defaults
-  const backupData: { backupSchedulerSettings?: unknown } = await chrome.storage.local.get('backupSchedulerSettings');
-  if (!backupData.backupSchedulerSettings) {
-    const settings: BackupSchedulerSettings = {
-      enabled: true,
-      type: 'weekly',
-      hour: 3,
-      day: 0, // Sunday
-      maxBackups: 5,
-      onChange: true,
-    };
-    await chrome.storage.local.set({ backupSchedulerSettings: settings });
-  }
+  // 3. Backup scheduler defaults are owned by BackupScheduler itself.
+  //
+  // This step used to seed { enabled, type, hour, day, maxBackups, onChange },
+  // a shape the scheduler never reads: its schema is
+  // { enabled, scheduleType, hour, dayOfWeek, ... } merged over DEFAULT_SETTINGS.
+  // So `type`/`day`/`onChange` were dead keys, the intended weekly-Sunday
+  // schedule silently became the daily default, and `enabled: true` overrode
+  // the scheduler's deliberate enabled:false default on every fresh install
+  // (migrateToV2 runs whenever the version stamp is absent). Leave the key
+  // unset and let BackupScheduler._loadSettings apply its own defaults.
 
   // 4. Migrate script settings format if needed
   // v1.x stored some settings differently

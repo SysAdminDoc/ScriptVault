@@ -350,6 +350,32 @@ describe('rollbackRestoreReceipt', () => {
     expect(second.alreadyRolledBack).toBe(true);
   });
 
+
+  it('stays retryable when the rollback itself fails', async () => {
+    // rolledBackAt is the spent marker the entry guard checks. Stamping it on
+    // a FAILED rollback turned a transient IDB/quota error into a permanently
+    // unusable undo, with the snapshot still sitting in the receipt.
+    const { BackupScheduler, store, ScriptStorage } = createSchedulerHarness({
+      scripts: [makeScript('alpha', 'Alpha v1', { version: '1.0.0' })],
+    });
+    const created = await BackupScheduler.createBackup('manual');
+    store.set('alpha', { ...store.get('alpha'), code: 'console.log("v2");' });
+    const result = await BackupScheduler.restoreBackup(created.backupId);
+    expect(result.receiptId).toBeTruthy();
+
+    // Make every script write fail for the first rollback attempt.
+    const originalSet = ScriptStorage.set;
+    ScriptStorage.set = vi.fn(async () => { throw new Error('quota exceeded'); });
+    const failed = await BackupScheduler.rollbackRestoreReceipt(result.receiptId);
+    expect(failed.success).toBe(false);
+
+    // The receipt must NOT be marked spent, so a retry is still allowed.
+    ScriptStorage.set = originalSet;
+    const retried = await BackupScheduler.rollbackRestoreReceipt(result.receiptId);
+    expect(retried.alreadyRolledBack).toBeUndefined();
+    expect(retried.success).toBe(true);
+  });
+
   it('returns an error when the receipt is unknown', async () => {
     const { BackupScheduler } = createSchedulerHarness();
     const r = await BackupScheduler.rollbackRestoreReceipt('nope');

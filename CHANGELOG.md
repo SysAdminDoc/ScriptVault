@@ -4,6 +4,19 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Fixed: a failing background sync looked healthy.** Only manual syncs
+  recorded their outcome, so the sync panel kept showing the last successful
+  manual run while a scheduled sync failed every cycle behind it.
+- **Fixed: a failed undo could not be retried.** Rolling back a restore marked
+  the receipt as spent even when the rollback itself errored, so a transient
+  storage failure permanently consumed the undo while its snapshot was still
+  intact. Only a successful rollback marks the receipt now.
+- **Fixed: fresh installs silently got daily 3 AM automatic backups.** The
+  first-run migration wrote a backup-scheduler configuration in a shape the
+  scheduler does not read, which discarded the intended weekly schedule and
+  overrode the off-by-default the scheduler sets for itself. Backup defaults are
+  now owned solely by the scheduler.
+
 - **Accessibility: named the unlabelled Settings and Theme Editor controls.**
   Eight multi-line policy fields — including the denied-hosts, blacklist, and
   download-whitelist lists — announced as "edit text, blank" to a screen reader
