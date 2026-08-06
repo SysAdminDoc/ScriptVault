@@ -61,10 +61,18 @@ CODEX_*.md
 # Store listing screenshots (local capture artifacts)
 assets/screenshots/
 
-# Markdown files local-only (except README and the published security policy)
+# Markdown files local-only (except README, the published security policy, and
+# the vendored-library provenance table. That last one is not optional: it is an
+# AMO disclosure for the minified libraries in the package AND a build input —
+# build-firefox.sh runs check-vendored-library-provenance.mjs, which hard-fails
+# without it. While it was untracked it was missing from the AMO source ZIP, so
+# a reviewer following AMO-SOURCE-README.md could not build the extension at all.
 *.md
 !README.md
 !SECURITY.md
+!docs/amo-vendored-libraries.md
+!AMO-SOURCE-README.md
+!PRIVACY.md
 
 # AI config
 .codex/

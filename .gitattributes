@@ -32,6 +32,7 @@
 docs/research/ export-ignore
 .factory/** export-ignore
 ROADMAP.md export-ignore
+RESEARCH.md export-ignore
 TODO.md export-ignore
 COMPLETED.md export-ignore
 RESEARCH_REPORT.md export-ignore
