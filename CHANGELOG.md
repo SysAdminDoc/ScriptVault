@@ -4,6 +4,18 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Removed a build mode that would have corrupted the extension if anyone ran
+  it.** `npm run build:prod` wrote a *minified* bundle over the repo-root
+  `background.js` — the tracked file that `chrome://extensions` loads as the
+  unpacked extension and that a large part of the test suite reads by symbol
+  name. Nothing invoked it, yet the generated README support matrix told readers
+  the Chrome package was built with it. ScriptVault deliberately ships a readable
+  bundle: it keeps store review fast, and AMO now rebuilds submissions from
+  source and compares the result, so every packaging path must produce the same
+  bytes as a plain build. The mode is gone, the docs now name the command that
+  actually runs, and a test keeps `--prod` from reappearing. Shipped output is
+  byte-identical.
+
 - **Firefox: domain badges are correct for multi-level TLDs again.** A site on
   `example.co.uk` was labelled `co`. The accurate lookup had been implemented and
   then deleted as dead code, because a probe found `browser.publicSuffix`

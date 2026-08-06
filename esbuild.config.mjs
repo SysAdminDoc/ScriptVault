@@ -10,7 +10,6 @@
  *   node esbuild.config.mjs --bg-only  # background.js only
  *   node esbuild.config.mjs --monaco-esm-only  # build Monaco ESM only
  *   node esbuild.config.mjs --watch    # rebuild background.js on changes
- *   node esbuild.config.mjs --prod     # minified production build
  */
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, rmSync } from "node:fs";
@@ -25,7 +24,15 @@ const args = process.argv.slice(2);
 const bgOnly = args.includes("--bg-only");
 const monacoEsmOnly = args.includes("--monaco-esm-only") || args.includes("--monaco-only");
 const watchMode = args.includes("--watch");
-const production = args.includes("--prod");
+// There is deliberately no minified build mode. The repo root IS the unpacked
+// extension and background.js is tracked, so a minifying build would overwrite
+// the readable bundle that chrome://extensions loads and that the test suite
+// greps by symbol name. Readable output also keeps Chrome Web Store and AMO
+// review fast, and AMO now rebuilds submissions from source and compares the
+// result, so every packaging path must produce the same bytes as a plain build.
+// If a smaller service worker is ever wanted, measure the cold-start cost first
+// and emit the minified bundle into the packaging staging directory only —
+// never over the tracked artifact.
 const typeCheck = args.includes("--typecheck");
 
 // ---------------------------------------------------------------------------
@@ -65,7 +72,7 @@ function jsFilesIn(dir) {
 async function buildBackground() {
   const version = readVersion();
   const settingsDefaults = readJson("src/config/settings-defaults.json");
-  console.log(`Building background.js v${version}${production ? " (production)" : ""}...`);
+  console.log(`Building background.js v${version}...`);
   await generateTsRuntimeModules({ rootDir: ROOT });
   await generateGmTypes({ rootDir: ROOT });
 
@@ -152,34 +159,6 @@ async function buildBackground() {
 
   const outPath = join(ROOT, "background.js");
 
-  if (production) {
-    const result = await build({
-      stdin: { contents: code, loader: "ts", sourcefile: "background.js" },
-      write: false,
-      minify: true,
-      sourcemap: true,
-      target: "chrome120",
-      format: "iife",
-    });
-    const paths = result.outputFiles.map((f) => f.path);
-    const jsFile = result.outputFiles.find((f) => !f.path.endsWith(".map"));
-    const mapFile = result.outputFiles.find((f) => f.path.endsWith(".map"));
-    code = jsFile ? jsFile.text : result.outputFiles[0].text;
-    if (mapFile) {
-      writeFileSync(join(ROOT, "background.js.map"), mapFile.text, "utf-8");
-      console.log("Source map: background.js.map");
-    } else if (result.outputFiles.length === 1 && code.includes("//# sourceMappingURL=data:")) {
-      const dataIdx = code.indexOf("//# sourceMappingURL=data:application/json;base64,");
-      if (dataIdx !== -1) {
-        const b64 = code.slice(dataIdx + "//# sourceMappingURL=data:application/json;base64,".length).trim();
-        const mapJson = Buffer.from(b64, "base64").toString("utf-8");
-        writeFileSync(join(ROOT, "background.js.map"), mapJson, "utf-8");
-        code = code.slice(0, dataIdx) + `//# sourceMappingURL=background.js.map\n`;
-        console.log("Source map: background.js.map (extracted from inline)");
-      }
-    }
-  }
-
   writeFileSync(outPath, code, "utf-8");
   const lines = code.split("\n").length;
   console.log(`Done: background.js (${lines} lines)`);
@@ -195,10 +174,10 @@ async function buildMonacoEsm() {
   const commonOptions = {
     bundle: true,
     target: "chrome120",
-    define: { "process.env.NODE_ENV": production ? '"production"' : '"development"' },
+    define: { "process.env.NODE_ENV": '"development"' },
     loader: { ".ttf": "file" },
     assetNames: "assets/[name]-[hash]",
-    minify: production,
+    minify: false,
     logLevel: "silent",
   };
 
