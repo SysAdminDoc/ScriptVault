@@ -32,6 +32,7 @@ const SharedUtils = (() => {
     escapeHtml: () => escapeHtml,
     formatBytes: () => formatBytes,
     generateId: () => generateId,
+    getDomainRoot: () => getDomainRoot,
     installBrowserNamespaceAlias: () => installBrowserNamespaceAlias,
     sanitizeUrl: () => sanitizeUrl
   });
@@ -137,6 +138,11 @@ const SharedUtils = (() => {
       return { id: "tampermonkey", name: "Tampermonkey site", hostname: host, tone: "neutral", url };
     }
     return { id: "other", name: host || "Unknown source", hostname: host, tone: "warn", url };
+  }
+  function getDomainRoot(domain) {
+    const host = String(domain || "").replace(/^www\./, "");
+    const parts = host.split(".").filter(Boolean);
+    return parts.length >= 2 ? parts[parts.length - 2] ?? "" : parts[0] ?? "";
   }
   function formatBytes(bytes) {
     if (!bytes || bytes <= 0) return "0 B";

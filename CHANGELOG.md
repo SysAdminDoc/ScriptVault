@@ -4,6 +4,16 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Removed a domain-badge feature that never actually ran, and withdrew the
+  claim.** v3.23.0 advertised accurate multi-level-TLD roots on Firefox 153+ via
+  `browser.publicSuffix`. That namespace does not exist in any shipping Firefox,
+  so the branch was unreachable and every user kept the old heuristic — while
+  the test suite passed against a hand-written mock of the missing API. The dead
+  code is gone, the What's New and CHANGELOG claims are withdrawn, and
+  `getDomainRoot` now has one shared implementation instead of three
+  byte-identical copies across the dashboard, popup, and side panel. The
+  multi-level-TLD limitation is documented rather than papered over.
+
 - **Fixed: cloud sync produced conflict markers in scripts edited on only one
   device.** A device recorded a new merge base only when it applied someone
   else's change, never when it uploaded its own, so it kept merging against a
@@ -136,11 +146,13 @@ All notable changes to ScriptVault will be documented in this file.
   dashboard now surfaces a distinct notice explaining how to enable it, instead
   of the script silently failing to run on local files.
 
-- **Accurate domain-badge roots on Firefox 153+.** The domain-badge helper used
-  a second-to-last-label heuristic that mis-grouped multi-level TLDs
-  (example.co.uk showed "CO"). On Firefox 153+ it now uses the synchronous
-  `browser.publicSuffix` API for an accurate registrable label ("EX"), with the
-  existing heuristic as a guarded fallback for Chrome and older Firefox.
+- ~~**Accurate domain-badge roots on Firefox 153+.**~~ **WITHDRAWN — this never
+  worked.** The entry claimed the domain badge used a synchronous
+  `browser.publicSuffix` API to resolve multi-level TLDs (example.co.uk showing
+  "EX" instead of "CO"). No such namespace exists in any shipping Firefox
+  (probed absent in 154.0b1), so the branch was unreachable and every user kept
+  the heuristic result. The dead code was removed in a later release; the
+  multi-level-TLD limitation is real and still open.
 
 - **UserCSS honors the `@preprocessor` field.** `default`/`uso` styles already
   had their `/*[[var]]*/` and `var(--name)` tokens substituted; a

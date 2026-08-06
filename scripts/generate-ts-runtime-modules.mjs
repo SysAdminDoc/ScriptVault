@@ -27,6 +27,11 @@ export const TS_RUNTIME_MODULES = [
       'sanitizeUrl',
       'installBrowserNamespaceAlias',
       'classifyInstallSource',
+      // NOTE: getDomainRoot is deliberately NOT aliased to a bare top-level
+      // const. dashboard.js / popup.js / sidepanel.js each declare their own
+      // top-level `function getDomainRoot`, and a `const` here loads first —
+      // the redeclaration is a SyntaxError that kills the whole page script.
+      // Those callers use SharedUtils.getDomainRoot(...) instead.
       'formatBytes',
     ],
     autoInstallBrowserAlias: true,

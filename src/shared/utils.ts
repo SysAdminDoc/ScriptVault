@@ -162,6 +162,26 @@ export function classifyInstallSource(url: string): InstallSourceClassification 
 }
 
 /**
+ * Reduce a hostname to the label a domain badge should show.
+ *
+ * `www.example.com` -> `example`. Multi-level TLDs are a known limitation:
+ * `example.co.uk` yields `co`, because the only correct fix is a public-suffix
+ * list and neither Chrome nor Firefox exposes one to extensions. A previous
+ * attempt called `browser.publicSuffix.getDomain()`; that namespace does not
+ * exist in any shipping Firefox (probed absent in 154.0b1), so the branch was
+ * dead code and has been removed rather than left implying a capability the
+ * product does not have.
+ *
+ * Single implementation shared by the dashboard, popup, and side panel — the
+ * three had byte-identical copies that had to be patched in lockstep.
+ */
+export function getDomainRoot(domain: string): string {
+  const host = String(domain || '').replace(/^www\./, '');
+  const parts = host.split('.').filter(Boolean);
+  return parts.length >= 2 ? (parts[parts.length - 2] ?? '') : (parts[0] ?? '');
+}
+
+/**
  * Format byte count as human-readable string.
  */
 export function formatBytes(bytes: number): string {

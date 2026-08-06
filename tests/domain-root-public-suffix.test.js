@@ -1,60 +1,51 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { getDomainRoot } from '../src/shared/utils.ts';
 
-// Extract the standalone getDomainRoot helper from popup.js (identical copies
-// live in dashboard.js and sidepanel.js) and exercise both the Chrome heuristic
-// fallback and the Firefox 153+ browser.publicSuffix path.
-function extractFn(src, name) {
-  const marker = `function ${name}(`;
-  const start = src.indexOf(marker);
-  if (start === -1) throw new Error(`${name} not found`);
-  const braceStart = src.indexOf('{', start);
-  let depth = 0;
-  for (let i = braceStart; i < src.length; i += 1) {
-    if (src[i] === '{') depth += 1;
-    if (src[i] === '}') { depth -= 1; if (depth === 0) return src.slice(start, i + 1); }
-  }
-  throw new Error(`unterminated ${name}`);
-}
-
-const popupSrc = readFileSync(resolve(process.cwd(), 'pages/popup.js'), 'utf8');
-const fnSource = extractFn(popupSrc, 'getDomainRoot');
-
-function makeGetDomainRoot(browserGlobal) {
-  // Provide `browser` via a wrapping scope; undefined in the Chrome case.
-  return new Function('browser', `${fnSource}; return getDomainRoot;`)(browserGlobal);
-}
-
-describe('getDomainRoot public-suffix awareness', () => {
-  it('uses the label heuristic when no public-suffix API is present (Chrome)', () => {
-    const getDomainRoot = makeGetDomainRoot(undefined);
+// getDomainRoot reduces a hostname to the label the domain badge shows.
+//
+// A previous revision branched on `browser.publicSuffix.getDomain()` to get an
+// accurate registrable label for multi-level TLDs. That namespace does not
+// exist in any shipping Firefox — probed absent in 154.0b1 — so the branch was
+// unreachable in production while this suite passed against a hand-written mock
+// of the API. The mock proved only that the code worked IF the API existed, and
+// a CHANGELOG entry claimed the fix was live. The branch is gone; these tests
+// exercise the real, single implementation.
+describe('getDomainRoot', () => {
+  it('reduces a hostname to its registrable-ish label', () => {
     expect(getDomainRoot('example.com')).toBe('example');
     expect(getDomainRoot('www.example.com')).toBe('example');
+    expect(getDomainRoot('news.api.example.com')).toBe('example');
     expect(getDomainRoot('localhost')).toBe('localhost');
-    // Heuristic limitation on a multi-level TLD (documented; FF153 fixes it):
+  });
+
+  it('handles empty and malformed input without throwing', () => {
+    expect(getDomainRoot('')).toBe('');
+    expect(getDomainRoot(undefined)).toBe('');
+    expect(getDomainRoot(null)).toBe('');
+    expect(getDomainRoot('.')).toBe('');
+  });
+
+  it('documents the multi-level-TLD limitation rather than pretending it is fixed', () => {
+    // No browser exposes a public-suffix list to extensions, so `co.uk` cannot
+    // be distinguished from a real domain label. Bundling the PSL is the only
+    // real fix; until then this is the honest, known-wrong answer.
     expect(getDomainRoot('example.co.uk')).toBe('co');
   });
 
-  it('uses browser.publicSuffix.getDomain for accurate multi-level-TLD roots (Firefox 153+)', () => {
-    const browserGlobal = {
-      publicSuffix: {
-        getDomain: (host) => {
-          if (host.endsWith('example.co.uk')) return 'example.co.uk';
-          if (host.endsWith('example.com')) return 'example.com';
-          return '';
-        },
-      },
-    };
-    const getDomainRoot = makeGetDomainRoot(browserGlobal);
-    expect(getDomainRoot('news.example.co.uk')).toBe('example');
-    expect(getDomainRoot('example.co.uk')).toBe('example');
-    expect(getDomainRoot('www.example.com')).toBe('example');
+  it('is implemented once and delegated to by all three surfaces', () => {
+    // The dashboard, popup, and side panel used to carry byte-identical copies
+    // that had to be patched in lockstep; a prior fix had to touch all three.
+    for (const file of ['pages/dashboard.js', 'pages/popup.js', 'pages/sidepanel.js']) {
+      const src = readFileSync(resolve(process.cwd(), file), 'utf8');
+      expect(src, `${file} should delegate to the shared helper`).toContain('SharedUtils.getDomainRoot(domain)');
+      expect(src, `${file} must not reintroduce the nonexistent publicSuffix API`).not.toContain('publicSuffix');
+    }
   });
 
-  it('falls back to the heuristic if the public-suffix call throws', () => {
-    const browserGlobal = { publicSuffix: { getDomain: () => { throw new Error('boom'); } } };
-    const getDomainRoot = makeGetDomainRoot(browserGlobal);
-    expect(getDomainRoot('example.com')).toBe('example');
+  it('keeps the shared helper free of the nonexistent browser.publicSuffix API', () => {
+    const shared = readFileSync(resolve(process.cwd(), 'shared/utils.js'), 'utf8');
+    expect(shared).not.toContain('publicSuffix');
   });
 });
