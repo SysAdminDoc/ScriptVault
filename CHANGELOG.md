@@ -4,6 +4,19 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Accessibility: named the unlabelled Settings and Theme Editor controls.**
+  Eight multi-line policy fields — including the denied-hosts, blacklist, and
+  download-whitelist lists — announced as "edit text, blank" to a screen reader
+  because their visible caption was never programmatically associated, and the
+  21 generated theme colour pickers all announced as an anonymous "color
+  picker". Every one now carries an accessible name.
+- **Accessibility: the side panel Toggle All button met only 22px.** It and the
+  header icon buttons now render at 28px, clearing the WCAG 2.2 minimum target
+  size for a control that enables or disables every script on the page.
+- **Fixed: the sidebar showed a hardcoded version four releases out of date.**
+  The navigation rail read "v3.20.0" because nothing ever updated the literal;
+  it is now populated from the manifest like the other version strings.
+
 - **Security: on-demand script runs are isolated per script again.** "Run on
   This Tab", script chains, `@crontab`, and context-menu scripts injected into
   the single shared USER_SCRIPT world instead of the per-script world normal

@@ -1002,3 +1002,62 @@ describe("dynamic dashboard module accessibility", () => {
     expect(chainsJs).toContain("moveDownBtn.dataset.stepMove = 'down'");
   });
 });
+
+describe("settings panel accessible names", () => {
+  // A screen-reader user tabbing Settings used to hear "edit text, blank" for
+  // eight multi-line policy fields — including the security-relevant denied
+  // hosts, blacklist, and download-whitelist lists — because the visible text
+  // is a sibling <span class="label-text">, which is not programmatically
+  // associated. The WebDAV inputs were given aria-labels in an earlier pass;
+  // the sweep was never applied to the rest of the panel.
+  const POLICY_FIELDS = [
+    "settingsCustomCss",
+    "syncLog",
+    "settingsLinterConfig",
+    "settingsWhitelistedPages",
+    "settingsBlacklistedPages",
+    "settingsDeniedHosts",
+    "settingsManualBlacklist",
+    "settingsDownloadWhitelist",
+  ];
+
+  it("gives every multi-line policy field an accessible name", () => {
+    const doc = parseDashboard();
+    const missing = [];
+    for (const id of POLICY_FIELDS) {
+      const field = doc.getElementById(id);
+      expect(field, `#${id} should exist`).toBeTruthy();
+      const named = field.getAttribute("aria-label")?.trim()
+        || field.getAttribute("aria-labelledby")
+        || field.closest("label")
+        || doc.querySelector(`label[for="${id}"]`);
+      if (!named) missing.push(id);
+    }
+    expect(missing).toEqual([]);
+  });
+
+  it("names every generated theme-editor color control after its token", () => {
+    // 21 generated <input type="color"> controls announced only as
+    // "color picker", with nothing to say which token each edits.
+    const themeEditorJs = readFileSync(resolve(process.cwd(), "pages/dashboard-theme-editor.js"), "utf8");
+    expect(themeEditorJs).toContain("'aria-label': `${v.label} color`");
+    expect(themeEditorJs).toContain("'aria-label': `${v.label} value`");
+  });
+});
+
+describe("dashboard rail version", () => {
+  it("has no hardcoded version literal in the markup", () => {
+    // The rail version was a literal nothing updated, so it read v3.20.0 while
+    // the product shipped 3.23.1 — the most persistently visible version string
+    // in the app, wrong for four releases.
+    const doc = parseDashboard();
+    const rail = doc.getElementById("svRailVersion");
+    expect(rail, "#svRailVersion should exist").toBeTruthy();
+    expect(rail.textContent.trim()).toBe("");
+  });
+
+  it("is populated at runtime from the manifest", () => {
+    expect(dashboardJs).toContain("document.getElementById('svRailVersion')");
+    expect(dashboardJs).toContain("railVer.textContent = extVersion");
+  });
+});

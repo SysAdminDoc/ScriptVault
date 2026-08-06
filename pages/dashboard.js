@@ -2636,6 +2636,11 @@
         const headerVer = document.getElementById('headerVersion');
         const aboutVer = document.getElementById('aboutVersion');
         const aboutBrowserBuild = document.getElementById('aboutBrowserBuild');
+        // The navigation rail's version is the most persistently visible one in
+        // the app. It used to be a hardcoded literal nothing updated, so it sat
+        // four releases behind and users misreported their version.
+        const railVer = document.getElementById('svRailVersion');
+        if (railVer) railVer.textContent = extVersion;
         if (headerVer) headerVer.textContent = extVersion;
         if (aboutVer) aboutVer.textContent = 'Version ' + manifestVersion;
         if (aboutBrowserBuild) aboutBrowserBuild.textContent = state.runtimeDescriptor.buildIndicator || state.runtimeDescriptor.buildLabel;

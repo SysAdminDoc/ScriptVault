@@ -38,7 +38,7 @@
         .sp-header { background: var(--bg-raised); border: 1px solid var(--border); border-radius: var(--radius-panel); box-shadow: 0 12px 28px rgba(0,0,0,0.16); padding: 8px 10px; display: flex; align-items: center; gap: 7px; flex-shrink: 0; }
         .sp-logo { width: 18px; height: 18px; flex-shrink: 0; }
         .sp-title { font-weight: 700; font-size: 0.8125rem; color: var(--accent); flex: 1; letter-spacing: 0.01em; }
-        .sp-header-btn { min-width: 24px; min-height: 24px; display: inline-flex; align-items: center; justify-content: center; background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 4px 6px; border-radius: 8px; font-size: 0.8125rem; transition: color 0.15s, background 0.15s, transform 0.15s; }
+        .sp-header-btn { min-width: 28px; min-height: 28px; display: inline-flex; align-items: center; justify-content: center; background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 4px 6px; border-radius: 8px; font-size: 0.8125rem; transition: color 0.15s, background 0.15s, transform 0.15s; }
         .sp-header-btn:hover { color: var(--text); background: var(--bg-hover); transform: translateY(-1px); }
         .sp-header-btn svg { width: 15px; height: 15px; stroke-width: 2.1; }
         .sp-update-chip {
@@ -79,7 +79,10 @@
         .sp-section-header { display: flex; align-items: center; justify-content: space-between; padding: 7px 9px; background: var(--bg-raised); }
         .sp-section-title { font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); }
         .sp-section-count { font-size: 0.6875rem; color: var(--text-muted); background: var(--badge-bg); padding: 2px 7px; border-radius: var(--radius-control); font-variant-numeric: tabular-nums; }
-        .sp-toggle-all { font-size: 0.6875rem; color: var(--accent); cursor: pointer; padding: 4px 8px; border: 1px solid rgb(from var(--sv-accent) r g b / 0.32); border-radius: var(--radius-control); background: rgb(from var(--sv-accent) r g b / 0.08); transition: background 0.15s, border-color 0.15s, transform 0.15s; }
+        /* WCAG 2.2 SC 2.5.8 (Target Size, Minimum) requires 24x24 CSS px. This is a
+           bulk action that enables/disables every script on the page, so a mis-tap
+           has a real cost. Matches .sp-header-btn min sizing. */
+        .sp-toggle-all { min-height: 28px; min-width: 28px; display: inline-flex; align-items: center; justify-content: center; font-size: 0.6875rem; color: var(--accent); cursor: pointer; padding: 5px 10px; border: 1px solid rgb(from var(--sv-accent) r g b / 0.32); border-radius: var(--radius-control); background: rgb(from var(--sv-accent) r g b / 0.08); transition: background 0.15s, border-color 0.15s, transform 0.15s; }
         .sp-toggle-all:hover { background: var(--accent-dim); border-color: var(--accent); transform: translateY(-1px); }
         .sp-toggle-all:disabled { opacity: 0.6; cursor: wait; transform: none; }
 

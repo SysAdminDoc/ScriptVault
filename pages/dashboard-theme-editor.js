@@ -981,16 +981,22 @@ const ThemeEditor = (() => {
       const currentVal = _workingVars[v.key] || '';
       const hexVal = colorToHex(currentVal);
 
+      // The sibling <label> carries no `for` and these inputs have no id, so
+      // without an explicit accessible name a screen reader announced 21
+      // identical "color picker" controls with no indication of which token
+      // each one edits. Name both inputs after the token they bind to.
       const colorPicker = el('input', {
         type: 'color',
         value: hexVal,
         'data-var': v.key,
+        'aria-label': `${v.label} color`,
       });
       const textInput = el('input', {
         type: 'text',
         value: currentVal,
         'data-var': v.key,
         placeholder: v.key,
+        'aria-label': `${v.label} value`,
       });
 
       colorPicker.addEventListener('input', () => {

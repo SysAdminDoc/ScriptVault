@@ -7595,7 +7595,7 @@
                 <img src="../images/icon48.png" alt="" width="34" height="34">
                 <div>
                     <strong data-i18n="appName">ScriptVault</strong>
-                    <span id="svRailVersion">v3.20.0</span>
+                    <span id="svRailVersion"></span>
                 </div>
             </div>
             <nav class="sv-rail-nav" aria-label="Dashboard sections" role="tablist" aria-orientation="vertical">
@@ -8115,7 +8115,7 @@
                         <span class="help-icon" title="Add custom CSS to the dashboard" data-i18n-title="settingsCustomCssHelp">?</span>
                     </div>
                     <div class="setting-row">
-                        <textarea class="textarea-field" id="settingsCustomCss" placeholder="/* Custom CSS for the dashboard */" data-i18n-placeholder="settingsCustomCssPlaceholder" style="min-height: 100px;" maxlength="100000" aria-describedby="settingsCustomCssError"></textarea>
+                        <textarea class="textarea-field" id="settingsCustomCss" aria-label="Custom CSS" placeholder="/* Custom CSS for the dashboard */" data-i18n-placeholder="settingsCustomCssPlaceholder" style="min-height: 100px;" maxlength="100000" aria-describedby="settingsCustomCssError"></textarea>
                         <span class="setting-error" id="settingsCustomCssError" hidden></span>
                     </div>
                     <div class="setting-row">
@@ -8445,7 +8445,7 @@
                         <span class="label-text" data-i18n="syncRecentLogLabel">Recent Sync Log:</span>
                     </div>
                     <div class="setting-row">
-                        <textarea class="textarea-field" id="syncLog" readonly style="min-height: 80px; font-family: monospace; font-size: 0.6875rem;"></textarea>
+                        <textarea class="textarea-field" id="syncLog" aria-label="Recent sync log" readonly style="min-height: 80px; font-family: monospace; font-size: 0.6875rem;"></textarea>
                     </div>
                     <div class="setting-row">
                         <button type="button" class="btn" id="btnSaveSync" data-i18n="syncSaveProviderSettings">Save Provider Settings</button>
@@ -8571,7 +8571,7 @@
                         <span class="help-icon" title="ESLint configuration in JSON format" data-i18n-title="settingsCustomLinterConfigHelp">!</span>
                     </div>
                     <div class="setting-row">
-                        <textarea class="textarea-field" id="settingsLinterConfig" placeholder="{}" style="min-height: 80px; font-family: monospace;" aria-describedby="settingsLinterConfigError"></textarea>
+                        <textarea class="textarea-field" id="settingsLinterConfig" aria-label="Custom linter config" placeholder="{}" style="min-height: 80px; font-family: monospace;" aria-describedby="settingsLinterConfigError"></textarea>
                         <span class="setting-error" id="settingsLinterConfigError" hidden></span>
                     </div>
                     <div class="setting-row">
@@ -8728,7 +8728,7 @@
                         <span class="label-text" data-i18n="settingsWhitelistedPagesLabel">Whitelisted Pages:</span>
                     </div>
                     <div class="setting-row">
-                        <textarea class="textarea-field" id="settingsWhitelistedPages" placeholder="/https?:\/\/greasyfork\.org\/.*/" style="min-height: 100px; font-family: monospace;" aria-describedby="settingsWhitelistedPagesError">/https?:\/\/greasyfork\.org\/.*/
+                        <textarea class="textarea-field" id="settingsWhitelistedPages" aria-label="Whitelisted pages" placeholder="/https?:\/\/greasyfork\.org\/.*/" style="min-height: 100px; font-family: monospace;" aria-describedby="settingsWhitelistedPagesError">/https?:\/\/greasyfork\.org\/.*/
 http://xkcd.com/970/
 /https?:\/\/chromewebstore\.google\.com\/.*/</textarea>
                         <span class="setting-error" id="settingsWhitelistedPagesError" hidden></span>
@@ -8737,7 +8737,7 @@ http://xkcd.com/970/
                         <span class="label-text" data-i18n="settingsBlacklistedPagesLabel">Blacklisted Pages:</span>
                     </div>
                     <div class="setting-row">
-                        <textarea class="textarea-field" id="settingsBlacklistedPages" placeholder="*example.org/*" style="min-height: 120px; font-family: monospace;" aria-describedby="settingsBlacklistedPagesError">*example.org/*
+                        <textarea class="textarea-field" id="settingsBlacklistedPages" aria-label="Blacklisted pages" placeholder="*example.org/*" style="min-height: 120px; font-family: monospace;" aria-describedby="settingsBlacklistedPagesError">*example.org/*
 *paypal.tld/*
 *stripe.com/*
 https://*deutsche-bank-24.tld/*
@@ -8762,7 +8762,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                         <span class="label-text" data-i18n="settingsDeniedHostsLabel">Host permissions denied by user:</span>
                     </div>
                     <div class="setting-row">
-                        <textarea class="textarea-field" id="settingsDeniedHosts" readonly placeholder="&lt;No previously denied runtime host permissions found&gt;" data-i18n-placeholder="settingsDeniedHostsPlaceholder" style="min-height: 80px;" aria-describedby="settingsDeniedHostsError"></textarea>
+                        <textarea class="textarea-field" id="settingsDeniedHosts" aria-label="Host permissions denied by user" readonly placeholder="&lt;No previously denied runtime host permissions found&gt;" data-i18n-placeholder="settingsDeniedHostsPlaceholder" style="min-height: 80px;" aria-describedby="settingsDeniedHostsError"></textarea>
                         <span class="setting-error" id="settingsDeniedHostsError" hidden></span>
                     </div>
                     <div class="setting-row">
@@ -8802,7 +8802,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                         <span class="label-text" data-i18n="manualBlacklistLabel">Manual Userscript and @require Blacklist:</span>
                     </div>
                     <div class="setting-row">
-                        <textarea class="textarea-field" id="settingsManualBlacklist" placeholder="/^https?:\/\/example\.com(:[0-9]{1,5})?\/.*/" style="min-height: 100px; font-family: monospace;" aria-describedby="settingsManualBlacklistError">/^https?:\/\/example\.com(:[0-9]{1,5})?\/.*/ </textarea>
+                        <textarea class="textarea-field" id="settingsManualBlacklist" aria-label="Manual userscript and @require blacklist" placeholder="/^https?:\/\/example\.com(:[0-9]{1,5})?\/.*/" style="min-height: 100px; font-family: monospace;" aria-describedby="settingsManualBlacklistError">/^https?:\/\/example\.com(:[0-9]{1,5})?\/.*/ </textarea>
                         <span class="setting-error" id="settingsManualBlacklistError" hidden></span>
                     </div>
                     <div class="setting-row">
@@ -8836,7 +8836,7 @@ https://vscode.dev/?connectTo=tampermonkey</textarea>
                         <span class="help-icon" title="Regex patterns for allowed file extensions" data-i18n-title="downloadWhitelistHelp">?</span>
                     </div>
                     <div class="setting-row">
-                        <textarea class="textarea-field" id="settingsDownloadWhitelist" style="min-height: 180px; font-family: monospace;" aria-describedby="settingsDownloadWhitelistError">/^[^\.].*$/
+                        <textarea class="textarea-field" id="settingsDownloadWhitelist" aria-label="Whitelisted file extensions" style="min-height: 180px; font-family: monospace;" aria-describedby="settingsDownloadWhitelistError">/^[^\.].*$/
 /\.(mp[34a]|m4[ab]|m3u|wma|wav|aac|og[ag]|cda|flac)$/
 /\.(avi|mkv|flv|divx|mpe?g|webm)$/
 /\.(jpe?g|jpe|png|gif|bmp|tiff?|webp|hei[cf]|avif|jxl|svg|eps|ai|ico|dds|psd|xcf|raw|cr2|nef|arw)$/
