@@ -767,9 +767,9 @@ export async function unregisterScript(scriptId: string): Promise<void> {
     if (supportsUserScriptsWorldId()) {
       try {
         // Chrome 133+ API — shape may differ from chrome-types declarations
-        await (chrome.userScripts.resetWorldConfiguration as (arg: unknown) => Promise<void>)({ worldId: scriptId });
+        await chrome.userScripts.resetWorldConfiguration(scriptId);
       } catch (_e: unknown) {
-        // Chrome <133 doesn't support resetWorldConfiguration — ignore
+        // Chrome <133 / Firefox <153 have no resetWorldConfiguration — ignore
       }
     }
   } catch (_e: unknown) {

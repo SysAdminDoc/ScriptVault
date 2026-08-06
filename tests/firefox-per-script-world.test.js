@@ -105,3 +105,45 @@ describe('Firefox container assertion', () => {
     expect(firefoxSmoke).toMatch(/value\?\.enabled\s*&&\s*value\?\.userSet/);
   });
 });
+
+describe('on-demand execution world isolation', () => {
+  const core = readFileSync(resolve(process.cwd(), 'background.core.js'), 'utf8');
+
+  it('configures a per-script world for userScripts.execute paths', () => {
+    // registerScript isolates each script by worldId, but runScriptNow, chains,
+    // @crontab, and context-menu scripts called execute() with no worldId, so
+    // they all shared the single default USER_SCRIPT world. Each wrapped body
+    // embeds that script's scriptAuthToken and sends it via the global
+    // chrome.runtime.sendMessage, so a script reaching that world first could
+    // shadow sendMessage and harvest a co-resident script's identity.
+    expect(core).toContain('function ensureExecutionWorldId(scriptId)');
+    const helper = core.slice(
+      core.indexOf('function ensureExecutionWorldId(scriptId)'),
+      core.indexOf('async function executeWrappedScriptInTab'),
+    );
+    expect(helper).toContain('configureWorld');
+    expect(helper).toContain('worldId: scriptId');
+  });
+
+  it('threads the script id through every execute call site', () => {
+    expect(core).toContain('await ensureExecutionWorldId(script?.id)');
+    expect(core).toContain('const worldId = await ensureExecutionWorldId(scriptId)');
+    // Both execute() calls spread the resolved world id.
+    const executeCalls = core.split('chrome.userScripts.execute({').slice(1);
+    expect(executeCalls.length).toBeGreaterThanOrEqual(2);
+    for (const call of executeCalls) {
+      const body = call.slice(0, call.indexOf('})'));
+      expect(body).toMatch(/worldId/);
+    }
+  });
+
+  it('calls resetWorldConfiguration with a bare world id, not an options object', () => {
+    // The API takes a string. Passing { worldId } threw, and the surrounding
+    // catch — meant for engines without the API — swallowed it, so no
+    // per-script world was ever released and each uninstall leaked one with a
+    // permissive CSP for the life of the profile.
+    expect(core).toContain('resetWorldConfiguration(scriptId)');
+    expect(core).not.toContain('resetWorldConfiguration as (arg: unknown)');
+    expect(core).not.toMatch(/resetWorldConfiguration\(\{\s*worldId/);
+  });
+});

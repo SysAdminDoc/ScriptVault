@@ -783,6 +783,21 @@ describe('Script chains use the real background API (2026-07 regression)', () =>
     expect(content).toContain("action: 'chainDomEvent'");
     expect(content).toContain("message.action === 'chainDomTriggersChanged'");
   });
+
+  it('derives the chain DOM-event URL from the sender, never the caller payload', () => {
+    // chainDomEvent is reachable from any userscript with no script identity,
+    // and its URL is the sole input to the chain pattern filter. Chain steps
+    // then run via runScriptNow with a synthetic extension sender, which does
+    // not re-check that the script matches the tab — so honouring a
+    // caller-supplied url let a script on one origin trigger another origin's
+    // chain inside its own tab.
+    const handler = background.slice(
+      background.indexOf('chainDomEvent: async (eventType, url, sender)'),
+      background.indexOf('previewUserStyle:'),
+    );
+    expect(handler).toContain('sender?.url || sender?.tab?.url');
+    expect(handler).not.toMatch(/const effectiveUrl = url \|\|/);
+  });
 });
 
 describe('Context-menu script execution isolation (2026-07 regression)', () => {

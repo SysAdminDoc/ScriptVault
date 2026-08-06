@@ -7301,11 +7301,15 @@ backgroundActionRegistry.registerHandlers(RuntimeActionHandler.createRuntimeActi
       const wantsDocumentStart = script?.meta?.['run-at'] === 'document-start';
 
       if (typeof chrome.userScripts?.execute === 'function') {
+        // Per-script world — see ensureExecutionWorldId. Without it this shared
+        // the default USER_SCRIPT world with every other on-demand injection.
+        const execWorldId = await ensureExecutionWorldId(script?.id);
         try {
           await chrome.userScripts.execute({
             target: { tabId: targetTabId },
             js: [{ code: wrappedCode }],
             world: 'USER_SCRIPT',
+            ...(execWorldId ? { worldId: execWorldId } : {}),
             ...(wantsDocumentStart ? { injectImmediately: true } : {})
           });
           return { success: true, mode: 'userScripts.execute' };
@@ -7354,7 +7358,15 @@ backgroundActionRegistry.registerHandlers(RuntimeActionHandler.createRuntimeActi
   }),
   chainDomEvent: async (eventType: any, url: any, sender: any) => {
     if (!eventType) return { success: false, error: 'Missing eventType', triggered: 0 };
-    const effectiveUrl = url || sender?.tab?.url || '';
+    // Ignore the caller-supplied url entirely and use the browser-supplied
+    // frame URL. chainDomEvent is reachable from any userscript with no script
+    // identity, and this value is the sole input to the chain's pattern filter.
+    // Chain steps then run through runScriptNow with a synthetic extension
+    // sender, which does not re-check that the script matches the tab — so a
+    // script matching evil.example could pass url:'https://bank.example/' and
+    // force a bank-scoped chain to execute in its own tab.
+    const effectiveUrl = sender?.url || sender?.tab?.url || '';
+    if (!effectiveUrl) return { success: false, error: 'Missing tab context', triggered: 0 };
     const tabId = typeof sender?.tab?.id === 'number' ? sender.tab.id : undefined;
     const triggered = await triggerChainsForDomEvent(eventType, effectiveUrl, tabId);
     return { success: true, triggered };
@@ -8797,7 +8809,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
             const ctxInjectInto = meta['inject-into'] || 'auto';
             const ctxSandbox = meta.sandbox || '';
             const ctxWantsPage = (ctxInjectInto === 'page' || ctxSandbox === 'raw');
-            await executeWrappedScriptInTab(tab.id, wrappedCode, ctxWantsPage);
+            await executeWrappedScriptInTab(tab.id, wrappedCode, ctxWantsPage, script?.id);
             // Feedback notification
             const settings = await SettingsManager.get();
             if (settings.notifyOnError !== false) {
@@ -9309,13 +9321,44 @@ async function scheduleCrontabAlarm(script: any, from: any = new Date()) {
   return next;
 }
 
-async function executeWrappedScriptInTab(tabId: any, wrappedCode: any, wantsPageContext: any) {
+/**
+ * Configure a per-script USER_SCRIPT world and return its id, or '' when the
+ * engine has no worldId support.
+ *
+ * registerScript isolates every script in its own world, but the on-demand
+ * injection paths (Run on This Tab, chains, @crontab, context-menu scripts)
+ * called execute() with no worldId, so they all landed in the single default
+ * world. Each wrapped body embeds that script's scriptAuthToken and sends it
+ * through the global chrome.runtime.sendMessage, so a script reaching the
+ * shared world first could shadow sendMessage and harvest a co-resident
+ * script's token — which authenticateUserScriptSender accepts as proof of
+ * identity, giving access to that script's GM values, @connect allowlist, and
+ * cookie host scope.
+ */
+async function ensureExecutionWorldId(scriptId: any): Promise<string> {
+  if (!scriptId || !_supportsUserScriptsWorldId()) return '';
+  try {
+    await chrome.userScripts.configureWorld({
+      worldId: scriptId,
+      csp: "script-src 'self' 'unsafe-inline' 'unsafe-eval' *",
+      messaging: true
+    });
+    return scriptId;
+  } catch (_e) {
+    // Engine without worldId support — fall back to the default world.
+    return '';
+  }
+}
+
+async function executeWrappedScriptInTab(tabId: any, wrappedCode: any, wantsPageContext: any, scriptId: any = undefined) {
   if (typeof chrome.userScripts?.execute === 'function') {
+    const worldId = await ensureExecutionWorldId(scriptId);
     try {
       await chrome.userScripts.execute({
         target: { tabId },
         js: [{ code: wrappedCode }],
-        world: 'USER_SCRIPT'
+        world: 'USER_SCRIPT',
+        ...(worldId ? { worldId } : {})
       });
       return 'userScripts.execute';
     } catch (e: any) {
@@ -9392,7 +9435,7 @@ async function handleCrontabAlarm(scriptId: any) {
     if (!tab.url || !tab.id) continue;
     if (!doesScriptMatchUrl(script, tab.url)) continue;
     try {
-      const mode = await executeWrappedScriptInTab(tab.id, wrappedCode, crontabWantsPage);
+      const mode = await executeWrappedScriptInTab(tab.id, wrappedCode, crontabWantsPage, script?.id);
       debugLog(`@crontab ${meta.name}: executed in tab ${tab.id} via ${mode}`);
     } catch (e: any) {
       debugLog(`@crontab ${meta.name}: failed in tab ${tab.id}: ${e.message}`);
@@ -9494,7 +9537,7 @@ async function handleScheduleAlarm(scriptId: any) {
       if (!tab.url || !tab.id) continue;
       if (!doesScriptMatchUrl(script, tab.url)) continue;
       try {
-        const mode = await executeWrappedScriptInTab(tab.id, wrappedCode, wantsPage);
+        const mode = await executeWrappedScriptInTab(tab.id, wrappedCode, wantsPage, script?.id);
         debugLog(`sv_sched ${meta.name}: executed in tab ${tab.id} via ${mode}`);
       } catch (e: any) {
         debugLog(`sv_sched ${meta.name}: failed in tab ${tab.id}: ${e.message}`);
@@ -12993,9 +13036,9 @@ async function unregisterScript(scriptId: any) {
     // Chrome 133+: reset the per-script world configuration to free resources
     if (_supportsUserScriptsWorldId()) {
       try {
-        await (chrome.userScripts.resetWorldConfiguration as (arg: unknown) => Promise<void>)({ worldId: scriptId });
+        await chrome.userScripts.resetWorldConfiguration(scriptId);
       } catch (e) {
-        // Chrome <133 doesn't support resetWorldConfiguration — ignore
+        // Chrome <133 / Firefox <153 have no resetWorldConfiguration — ignore
       }
     }
   } catch (e) {

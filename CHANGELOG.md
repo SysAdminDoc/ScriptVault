@@ -4,6 +4,19 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Security: on-demand script runs are isolated per script again.** "Run on
+  This Tab", script chains, `@crontab`, and context-menu scripts injected into
+  the single shared USER_SCRIPT world instead of the per-script world normal
+  registration uses. Because each injected script carries its own messaging
+  token, one script sharing that world could impersonate another and reach its
+  stored values, `@connect` allowlist, and cookie scope. Uninstalling a script
+  also never released its world — the cleanup call passed the wrong argument
+  shape and the error was swallowed as an old-browser fallback.
+- **Security: script chains can no longer be triggered for another site.** The
+  chain DOM-event handler trusted a page-supplied URL when deciding which chains
+  matched, so a script running on one site could make a chain scoped to a
+  different site execute in its tab. The URL now comes from the browser.
+
 - **Security: userscripts can no longer close arbitrary tabs or read each
   other's tab state.** `GM_closeTab` accepted any numeric tab id with no
   ownership check, so a script could walk the (small, sequential) id space and
