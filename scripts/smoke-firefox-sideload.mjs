@@ -559,6 +559,49 @@ async function grantFirefoxUserScriptsPermission(baseUrl, sessionId) {
   return value;
 }
 
+// getDomainRoot uses browser.publicSuffix to label multi-level TLDs correctly.
+// That namespace only exists when the manifest declares the "publicSuffix"
+// permission — an earlier probe that omitted it concluded the API did not exist
+// and the feature was deleted, while a unit test kept passing against its own
+// mock of the API. So this asserts the live grant in a real Firefox: a mock
+// cannot satisfy it, and a dropped permission fails the smoke instead of
+// silently reverting the badge to the wrong label.
+async function assertPublicSuffixPermissionGranted(baseUrl, sessionId) {
+  await switchContext(baseUrl, sessionId, 'chrome');
+  const value = await executeAsync(baseUrl, sessionId, `
+    const done = arguments[arguments.length - 1];
+    (async () => {
+      const { ExtensionParent } = ChromeUtils.importESModule('resource://gre/modules/ExtensionParent.sys.mjs');
+      const extension = ExtensionParent.GlobalManager.extensionMap.get(arguments[0])
+        || ExtensionParent.GlobalManager.getExtension(arguments[0]);
+      if (!extension) {
+        done({ error: 'add-on not found' });
+        return;
+      }
+      done({
+        declared: (extension.manifest?.permissions || []).includes('publicSuffix'),
+        granted: typeof extension.hasPermission === 'function'
+          ? extension.hasPermission('publicSuffix')
+          : null
+      });
+    })().catch(error => done({ error: String(error), stack: error.stack }));
+  `, [EXTENSION_ID], 15000);
+  await switchContext(baseUrl, sessionId, 'content');
+
+  if (value?.error) {
+    fail(`Could not inspect the publicSuffix permission: ${value.error}`);
+  }
+  if (!value?.declared) {
+    fail('manifest-firefox.json no longer declares the publicSuffix permission; browser.publicSuffix would be undefined and getDomainRoot would silently fall back to the wrong label for multi-level TLDs');
+  }
+  // Firefox below 153 has no such permission to grant. Declaring it is still
+  // correct there (the code feature-detects), so only a hard false fails.
+  if (value.granted === false) {
+    fail('Firefox did not grant the declared publicSuffix permission');
+  }
+  return { publicSuffixDeclared: true, publicSuffixGranted: value.granted };
+}
+
 async function assertFirefoxContainersNotForced(baseUrl, sessionId) {
   await switchContext(baseUrl, sessionId, 'chrome');
   const value = await executeAsync(baseUrl, sessionId, `
@@ -1504,6 +1547,7 @@ async function main() {
     }, 60000);
     if (install.value !== EXTENSION_ID) fail(`unexpected installed add-on id: ${install.value}`);
     const containersResult = await assertFirefoxContainersNotForced(baseUrl, sessionId);
+    const publicSuffixResult = await assertPublicSuffixPermissionGranted(baseUrl, sessionId);
 
     const dashboard = await getExtensionResource(baseUrl, sessionId, 'pages/dashboard.html');
     if (dashboard.version !== packageJson.version) {
@@ -1535,6 +1579,7 @@ async function main() {
       backup: backupResult,
       storage: storageResult,
       containers: containersResult,
+      publicSuffix: publicSuffixResult,
     }, null, 2));
   } catch (error) {
     const tail = geckoOutput.join('').split(/\r?\n/).filter(Boolean).slice(-25).join('\n');

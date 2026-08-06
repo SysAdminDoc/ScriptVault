@@ -25,6 +25,8 @@ export const REVIEWED_CODES = {
   DANGEROUS_EVAL: 'Generated wrapper code uses Function constructor for GM API injection into USER_SCRIPT world. This is the core mechanism for userscript execution and cannot be replaced without abandoning the extension purpose. Equivalent to Tampermonkey/Violentmonkey architecture.',
   INLINE_SCRIPT: 'Packaged HTML pages keep minimal inline bootstrap scripts for extension-page startup and sandbox loading. Script execution stays local to packaged extension pages; pages/editor-sandbox.html is declared in manifest.json sandbox section with restricted CSP.',
   KEY_FIREFOX_ANDROID_UNSUPPORTED_BY_MIN_VERSION: 'Firefox Android minimum version warning. gecko_android.strict_min_version is intentionally lower to maximize compatibility; feature detection handles API gaps.',
+  INCOMPATIBLE_API: 'userScripts.execute is Firefox 153+ while strict_min_version stays at 140 to keep the install base wide. Every call site in src/background/core.ts checks the method exists first and refuses with an explicit error rather than silently falling back to a MAIN-world injection that would lose USER_SCRIPT isolation; on 140-152 the on-demand run path is simply unavailable.',
+  ANDROID_INCOMPATIBLE_API: 'Same userScripts.execute gap as INCOMPATIBLE_API, reported against the Firefox for Android minimum. The Android manifest key is intentionally omitted from the AMO package, so this is advisory only.',
 };
 
 export const REVIEWED_WARNING_FILES = new Set([
@@ -63,7 +65,12 @@ export const REVIEWED_WARNING_FILES = new Set([
 // 54 = 53 + one UNSUPPORTED_API probe for userScripts.configureWorld({ worldId }).
 // web-ext's compat data predates Firefox 153, which does implement per-script
 // worlds; the probe is a guarded typeof check with a documented fallback.
-export const WARNING_BUDGET = 54;
+//
+// 58 = 54 + four INCOMPATIBLE_API / ANDROID_INCOMPATIBLE_API pairs for
+// userScripts.execute, which v3.24.0's on-demand execution isolation introduced
+// without re-running this gate. The calls are guarded (see INCOMPATIBLE_API
+// rationale) and the drift is recorded here rather than left silently red.
+export const WARNING_BUDGET = 58;
 
 export function summarizeFirefoxLintReport(report) {
   const warnings = Array.isArray(report?.warnings) ? report.warnings : [];

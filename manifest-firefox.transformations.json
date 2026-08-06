@@ -54,7 +54,8 @@
           "rename": {
             "contextMenus": "menus"
           },
-          "remove": ["userScripts", "sidePanel", "offscreen"]
+          "remove": ["userScripts", "sidePanel", "offscreen"],
+          "append": ["publicSuffix"]
         },
         "optional_permissions": {
           "prepend": ["userScripts"],

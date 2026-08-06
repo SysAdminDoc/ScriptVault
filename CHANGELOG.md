@@ -4,6 +4,18 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Firefox: domain badges are correct for multi-level TLDs again.** A site on
+  `example.co.uk` was labelled `co`. The accurate lookup had been implemented and
+  then deleted as dead code, because a probe found `browser.publicSuffix`
+  missing in Firefox 154 — but that API is gated behind a `"publicSuffix"`
+  permission the Firefox manifest never declared, so it is `undefined` until you
+  ask for it. Re-probed in the same Firefox build with the permission declared,
+  it returns `example.co.uk`. The permission is now declared (Firefox only —
+  Chrome has no equivalent API), the lookup is feature-detected, and Firefox
+  140-152 and Chrome keep the previous heuristic. The permission is a local,
+  read-only lookup against the browser's own public suffix list: no network
+  access, no site access, no page content.
+
 - **Fixed: three released versions had never been tagged or published.** v3.23.0,
   v3.23.1 and v3.24.0 were changelogged and merged while the newest git tag and
   GitHub release both stayed at v3.22.0, so four months of security fixes reached

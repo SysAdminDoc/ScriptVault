@@ -164,21 +164,50 @@ export function classifyInstallSource(url: string): InstallSourceClassification 
 /**
  * Reduce a hostname to the label a domain badge should show.
  *
- * `www.example.com` -> `example`. Multi-level TLDs are a known limitation:
- * `example.co.uk` yields `co`, because the only correct fix is a public-suffix
- * list and neither Chrome nor Firefox exposes one to extensions. A previous
- * attempt called `browser.publicSuffix.getDomain()`; that namespace does not
- * exist in any shipping Firefox (probed absent in 154.0b1), so the branch was
- * dead code and has been removed rather than left implying a capability the
- * product does not have.
+ * `www.example.com` -> `example`. Multi-level TLDs need a real public-suffix
+ * list: the label-count heuristic turns `example.co.uk` into `co`.
+ *
+ * Firefox 153 added `browser.publicSuffix`, which answers this exactly from the
+ * browser's own PSL. It is gated behind the `"publicSuffix"` permission, so the
+ * namespace is `undefined` unless the manifest declares it — an earlier probe
+ * that omitted the permission concluded the API did not exist and the branch was
+ * deleted. It does exist: with the permission declared, Firefox 154.0b1 returns
+ * `example.co.uk` for `www.example.co.uk`. `manifest-firefox.json` now declares
+ * it; Chrome has no equivalent API, and Firefox 140-152 predate it, so both fall
+ * through to the heuristic. Never assume the namespace is present — feature-detect.
  *
  * Single implementation shared by the dashboard, popup, and side panel — the
  * three had byte-identical copies that had to be patched in lockstep.
  */
 export function getDomainRoot(domain: string): string {
   const host = String(domain || '').replace(/^www\./, '');
+  if (!host) return '';
+
+  // With a real PSL the answer is exact: the first label of the eTLD+1.
+  const registrable = getRegistrableDomain(host);
+  if (registrable) return registrable.split('.').filter(Boolean)[0] ?? '';
+
+  // Fallback heuristic, unchanged: second-to-last label. Correct for
+  // `a.b.example.com` -> `example`, wrong for `example.co.uk` -> `co`.
   const parts = host.split('.').filter(Boolean);
   return parts.length >= 2 ? (parts[parts.length - 2] ?? '') : (parts[0] ?? '');
+}
+
+/**
+ * eTLD+1 for a hostname via `browser.publicSuffix`, or `''` where the API is
+ * unavailable (Chrome entirely, Firefox before 153, or the permission ungranted).
+ * Synchronous by design — the API is a local PSL lookup, so badge rendering stays
+ * on its current code path.
+ */
+function getRegistrableDomain(host: string): string {
+  try {
+    const api = (globalThis as { browser?: { publicSuffix?: { getDomain?: (h: string) => string | null } } }).browser;
+    const getDomain = api?.publicSuffix?.getDomain;
+    if (typeof getDomain !== 'function') return '';
+    return getDomain.call(api!.publicSuffix, host) || '';
+  } catch {
+    return '';
+  }
 }
 
 /**

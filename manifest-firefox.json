@@ -36,7 +36,8 @@
     "unlimitedStorage",
     "alarms",
     "declarativeNetRequest",
-    "declarativeNetRequestWithHostAccess"
+    "declarativeNetRequestWithHostAccess",
+    "publicSuffix"
   ],
   "optional_permissions": [
     "userScripts",

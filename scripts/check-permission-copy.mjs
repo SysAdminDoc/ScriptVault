@@ -34,6 +34,7 @@ const copyCatalog = [
   ['optional_permission', 'downloads', ['GM_download', 'export'], ['GM_download', 'export']],
   ['permission', 'declarativeNetRequest', ['per-script network rules', 'webRequest metadata'], ['per-script network rules', 'webRequest metadata']],
   ['permission', 'declarativeNetRequestWithHostAccess', ['host-backed DNR', 'matching sites'], ['host-backed DNR', 'matching sites']],
+  ['permission', 'publicSuffix', ['public suffix', 'domain badge'], ['public suffix', 'domain badge']],
   ['permission', 'sidePanel', ['side panel', 'browser side panel'], ['side panel', 'browser side panel']],
   ['permission', 'offscreen', ['offscreen document', 'background export'], ['offscreen document', 'background export']],
   ['optional_permission', 'clipboardWrite', ['optional clipboard write', 'user-triggered copy'], ['optional clipboard write', 'user-triggered copy']],

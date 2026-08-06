@@ -36,6 +36,11 @@ export const PINNED = {
       'storage', 'tabs', 'notifications', 'menus', 'scripting',
       'webNavigation', 'unlimitedStorage', 'alarms',
       'declarativeNetRequest', 'declarativeNetRequestWithHostAccess',
+      // Firefox 153+ only. Local, synchronous lookup against the browser's own
+      // Public Suffix List; grants no host, network, or data access. Used solely
+      // to label a domain badge correctly for multi-level TLDs (example.co.uk).
+      // Chrome has no equivalent API, so this stays out of the Chrome manifest.
+      'publicSuffix',
     ],
     optional_permissions: ['userScripts', 'clipboardWrite', 'clipboardRead', 'cookies', 'downloads'],
     host_permissions: ['<all_urls>'],
