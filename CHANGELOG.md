@@ -4,6 +4,8 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+## [v3.24.0] — Execution, Sync & Permission Hardening (2026-08-06)
+
 - **Fixed: a failing background sync looked healthy.** Only manual syncs
   recorded their outcome, so the sync panel kept showing the last successful
   manual run while a scheduled sync failed every cycle behind it.

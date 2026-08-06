@@ -11,6 +11,24 @@ const WhatsNew = (() => {
     : '2.0.0';
 
   const CHANGELOG = {
+    '3.24.0': {
+      title: 'ScriptVault 3.24.0 — Execution, Sync & Permission Hardening',
+      date: '2026-08-06',
+      summary: 'This release fixes scripts that silently refused to run, stops a hostile stylesheet from freezing the extension, closes several ways one script could reach another script or your tabs, and repairs sync conflicts on single-device edits.',
+      highlights: [
+        { icon: 'SAFE', title: 'Scripts That Would Not Run Now Do', desc: 'Scripts scoped only by a regular-expression @include were rejected outright with "No valid match patterns", and a single wildcard entry in Denied Hosts stopped every script in your library from registering. Both are fixed.' },
+        { icon: 'SAFE', title: 'Stronger Boundaries Between Scripts', desc: 'GM_closeTab could close any tab in the browser, per-tab storage was shared between scripts, and on-demand runs (Run on This Tab, chains, @crontab) shared one sandbox with each other. Each script is now isolated and limited to its own tabs and data.' },
+        { icon: 'SAFE', title: 'Network and Dependency Integrity', desc: 'GM_xmlhttpRequest now re-checks @connect after a redirect, so an allowed host can no longer bounce a credentialed request somewhere else, and a pinned @require can no longer be served unverified bytes from cache.' },
+        { icon: 'FLOW', title: 'Sync Stops Inventing Conflicts', desc: 'A device now records what it uploaded as its merge base, so editing one script repeatedly on a single machine no longer produces conflict markers in working code.' },
+      ],
+      improvements: [
+        'A crafted .user.css @match no longer freezes the extension — the style matcher collapses repeated wildcards like the userscript matcher already did.',
+        'Re-installing a script without @namespace updates it instead of creating a duplicate that runs twice per page, and comma-separated @match no longer bypasses the broad host access prompt.',
+        'The dependency audit gate blocks high-severity advisories again (Vitest, shell-quote, undici and adm-zip moved to patched releases, each pinned by a floor).',
+        'Screen readers now announce the Settings policy fields and theme colour pickers, the side panel Toggle All button meets the minimum target size, and the sidebar shows the real version instead of a stale literal.',
+        'Removed a domain-badge capability that never actually ran on Firefox, and withdrew the release note that claimed it.',
+      ],
+    },
     '3.23.1': {
       title: 'ScriptVault 3.23.1 — Firefox Script Isolation Fix',
       date: '2026-08-02',
