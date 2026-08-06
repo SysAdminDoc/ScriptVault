@@ -146,8 +146,21 @@ const SharedUtils = (() => {
   }
   function getDomainRoot(domain) {
     const host = String(domain || "").replace(/^www\./, "");
+    if (!host) return "";
+    const registrable = getRegistrableDomain(host);
+    if (registrable) return registrable.split(".").filter(Boolean)[0] ?? "";
     const parts = host.split(".").filter(Boolean);
     return parts.length >= 2 ? parts[parts.length - 2] ?? "" : parts[0] ?? "";
+  }
+  function getRegistrableDomain(host) {
+    try {
+      const api = globalThis.browser;
+      const getDomain = api?.publicSuffix?.getDomain;
+      if (typeof getDomain !== "function") return "";
+      return getDomain.call(api.publicSuffix, host) || "";
+    } catch {
+      return "";
+    }
   }
   function formatBytes(bytes) {
     if (!bytes || bytes <= 0) return "0 B";
