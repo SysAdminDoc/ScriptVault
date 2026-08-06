@@ -4,6 +4,14 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Fixed: a wildcard entry in Denied Hosts stopped every script from
+  registering.** Settings accepts `*.example.com`, a bare `*`, and `host:port`,
+  but registration interpolated those straight into match patterns, producing
+  illegal values like `*://*.*.example.com/*`. Chrome rejects the whole
+  `userScripts.register` call, and because Denied Hosts is a global setting the
+  failure hit every enabled script at once. Denied hosts now go through the same
+  validation and port-normalization as blacklisted pages.
+
 - **Fixed: scripts scoped only by a regex `@include` refused to register.** The
   fail-closed guard that rejects all-malformed match patterns counted a regex
   `@include` as a positive pattern that had to survive registration — but

@@ -11632,7 +11632,7 @@ async function registerScript(script: any, { useUpdate = false, throwOnError = f
     
     // Build match patterns with URL override support
     const matches = [];
-    const excludeMatches = [];
+    const excludeMatches: string[] = [];
     // Count how many positive patterns the script actually requested. If a user
     // scopes a script to a site whose pattern is malformed (IPv6 host, empty
     // file:// host, ported host Chrome rejects), every pattern can resolve
@@ -11774,7 +11774,17 @@ async function registerScript(script: any, { useUpdate = false, throwOnError = f
     const deniedHosts = globalSettings.deniedHosts;
     if (deniedHosts && Array.isArray(deniedHosts)) {
       for (const host of deniedHosts) {
-        if (host) excludeMatches.push(`*://${host}/*`, `*://*.${host}/*`);
+        // Route through addExcludeMatchPattern rather than pushing raw. The
+        // Settings validator accepts `*.example.com`, a bare `*`, and
+        // `host:8080`, and naive interpolation turned those into
+        // `*://*.*.example.com/*`, `*://*.*/*`, and a ported pattern — none of
+        // which are legal match patterns. chrome.userScripts.register rejects
+        // the whole call, so one bad denied-host entry stopped EVERY script
+        // from registering. The helper port-normalizes and drops anything that
+        // still isn't native-legal.
+        for (const pattern of deniedHostExcludePatterns(host)) {
+          addExcludeMatchPattern(pattern);
+        }
       }
     }
     // Add blacklisted pages as exclude patterns
@@ -15587,6 +15597,20 @@ function isValidMatchPattern(pattern: any) {
   // Match pattern validation (allows ports: http://localhost:3000/*)
   const matchRegex = /^(\*|https?|file|ftp):\/\/(\*|\*\.[^/*]+|[^/*:]+(?::\d+)?)\/.*$/;
   return matchRegex.test(pattern);
+}
+
+// Turn one `deniedHosts` entry into candidate exclude match patterns.
+// The Settings field documents "optional wildcard hostname", so entries can be
+// `example.com`, `*.example.com`, a bare `*`, or carry a port. Only a single
+// leading `*.` is legal in a match pattern host, so a `*.`-prefixed entry must
+// NOT be wrapped again — `*://*.*.example.com/*` is rejected by Chrome and
+// takes the whole register() call down with it.
+function deniedHostExcludePatterns(rawHost: any): string[] {
+  const host = typeof rawHost === 'string' ? rawHost.trim() : '';
+  if (!host) return [];
+  if (host === '*' || host === '<all_urls>') return ['*://*/*'];
+  if (host.startsWith('*.')) return [`*://${host}/*`];
+  return [`*://${host}/*`, `*://*.${host}/*`];
 }
 
 function nativeMatchPatternForRegistration(pattern: any) {

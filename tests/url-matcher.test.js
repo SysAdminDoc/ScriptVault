@@ -2,6 +2,7 @@
 // Tests the production matcher in src/background/url-matcher.ts directly so
 // that the JS test file does not drift away from the implementation.
 import { describe, it, expect } from 'vitest';
+import { deniedHostExcludePatterns } from "../src/background/registration.ts";
 import {
   isValidMatchPattern,
   convertIncludeToMatch,
@@ -740,6 +741,52 @@ describe('extractMatchPatternsFromRegex', () => {
     ];
     for (const re of unnarrowable) {
       expect(extractMatchPatternsFromRegex(re)).toEqual([]);
+    }
+  });
+});
+
+// ── deniedHosts -> exclude match patterns ───────────────────────────────────
+// The Settings field advertises "optional wildcard hostname", so users legally
+// enter `*.example.com`, a bare `*`, or a host:port. registerScript used to
+// interpolate those straight into `*://${host}/*` and `*://*.${host}/*`, which
+// produced `*://*.*.example.com/*`, `*://*.*/*`, and ported patterns — all
+// rejected by Chrome's match-pattern grammar. Because deniedHosts is global,
+// chrome.userScripts.register then threw for EVERY enabled script at once.
+describe('deniedHostExcludePatterns', () => {
+  it('wraps a plain host as both apex and subdomain', () => {
+    expect(deniedHostExcludePatterns('example.com')).toEqual([
+      '*://example.com/*',
+      '*://*.example.com/*',
+    ]);
+  });
+
+  it('does not double the wildcard on an already-wildcarded host', () => {
+    const out = deniedHostExcludePatterns('*.example.com');
+    expect(out).toEqual(['*://*.example.com/*']);
+    expect(out.some((p) => p.includes('*.*.'))).toBe(false);
+  });
+
+  it('maps a bare * to the all-hosts pattern rather than *://*.*/*', () => {
+    expect(deniedHostExcludePatterns('*')).toEqual(['*://*/*']);
+  });
+
+  it('ignores empty and non-string entries', () => {
+    expect(deniedHostExcludePatterns('')).toEqual([]);
+    expect(deniedHostExcludePatterns('   ')).toEqual([]);
+    expect(deniedHostExcludePatterns(null)).toEqual([]);
+    expect(deniedHostExcludePatterns(undefined)).toEqual([]);
+  });
+
+  it('emits only patterns registration can actually consume', () => {
+    // Every candidate must either be natively valid or be port-normalizable by
+    // nativeMatchPatternForRegistration. Anything else reaches register() and
+    // throws, which is the failure this guard exists to prevent.
+    for (const entry of ['example.com', '*.example.com', '*', 'example.com:8080', 'localhost:3000']) {
+      for (const pattern of deniedHostExcludePatterns(entry)) {
+        const native = nativeMatchPatternForRegistration(pattern);
+        expect(native, `${entry} -> ${pattern}`).toBeTruthy();
+        expect(isValidMatchPattern(native), `${entry} -> ${native}`).toBe(true);
+      }
     }
   });
 });
