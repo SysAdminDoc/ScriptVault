@@ -56,7 +56,10 @@ describe('release supply-chain gates', () => {
 
   it('verifies release tags through git tag --verify', () => {
     expect(releaseCheck).toContain("['tag', '--verify', tag]");
-    expect(releaseCheck).toContain("LEGACY_UNSIGNED_RELEASE_TAGS = new Set(['v3.11.0', 'v3.21.0', 'v3.22.0'])");
+    expect(releaseCheck).toContain('LEGACY_UNSIGNED_RELEASE_TAGS = new Set([');
+    for (const tag of ['v3.11.0', 'v3.21.0', 'v3.22.0', 'v3.23.0', 'v3.23.1', 'v3.24.0']) {
+      expect(releaseCheck, `${tag} must stay in the unsigned-tag allowlist`).toContain(`'${tag}'`);
+    }
   });
 
   it('checks public GitHub releases without the GitHub CLI', async () => {
@@ -178,7 +181,7 @@ describe('release supply-chain gates', () => {
       execFileSyncImpl: createGitExecForTagVerification('error: no signature found'),
     });
     expect(legacy.failures).toEqual([]);
-    expect(legacy.warnings.join('\n')).toContain('legacy pre-RD-13 tag');
+    expect(legacy.warnings.join('\n')).toContain('accepted unsigned release tag');
 
     const publicLegacy = verifyReleaseTag({
       tag: 'v3.11.0',

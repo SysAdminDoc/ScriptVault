@@ -4,6 +4,16 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Fixed: three released versions had never been tagged or published.** v3.23.0,
+  v3.23.1 and v3.24.0 were changelogged and merged while the newest git tag and
+  GitHub release both stayed at v3.22.0, so four months of security fixes reached
+  no user. All three are now tagged at the commit that carried their manifest
+  version and published. A new `release:tags:check` gate runs as part of
+  `npm run check` and fails when a changelogged version has no tag: exactly one
+  version may be untagged — the one in flight in `manifest.json` — and every
+  older one must be tagged or recorded as a historical gap. The gate immediately
+  found four further untagged v2 releases, now recorded.
+
 - **Security: the dependency floor gate was authorising a vulnerable DOMPurify.**
   The `overrides` pin sat at exactly 3.4.11 — the top of GHSA-c2j3-45gr-mqc4's
   affected range — while the floor that exists to prevent that was still set to

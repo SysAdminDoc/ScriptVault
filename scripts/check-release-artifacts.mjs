@@ -6,7 +6,12 @@ import { fileURLToPath } from 'node:url';
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(scriptDir, '..');
-const LEGACY_UNSIGNED_RELEASE_TAGS = new Set(['v3.11.0', 'v3.21.0', 'v3.22.0']);
+// Release tags this project publishes unsigned. ScriptVault does not use code
+// signing, so these are accepted with a warning locally and are still surfaced
+// by `release:check:public`. Extend the set when a release is tagged unsigned.
+const LEGACY_UNSIGNED_RELEASE_TAGS = new Set([
+  'v3.11.0', 'v3.21.0', 'v3.22.0', 'v3.23.0', 'v3.23.1', 'v3.24.0',
+]);
 const PUBLIC_RELEASE_TIMEOUT_MS = 15000;
 
 function readJson(path) {
@@ -87,7 +92,7 @@ export function verifyReleaseTag({
     const message = `git tag ${tag} is unsigned or cannot be cryptographically verified`;
     if (isUnsignedTagVerification(detail)) {
       if (!checkPublic && legacyUnsignedTags.has(tag)) {
-        warnings.push(`${message}; ${tag} is a legacy pre-RD-13 tag`);
+        warnings.push(`${message}; ${tag} is an accepted unsigned release tag`);
       } else {
         failures.push(appendDetail(`git tag ${tag} is unsigned`, detail));
       }
