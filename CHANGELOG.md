@@ -4,6 +4,17 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Dependencies published in the last week can no longer be pulled in.**
+  `.npmrc` already refused to run dependency install scripts; it now also
+  refuses to resolve any version published less than 7 days ago. That closes the
+  other half of the same attack — a compromised maintainer account publishing a
+  malicious version that lands in a lockfile within hours, which is what the
+  keyv/cacheable compromise of 2026-08-04 did. Verified that `npm ci` is
+  unaffected, since it installs exactly what the lockfile already pins; an AMO
+  reviewer rebuilding from source runs that path. Both supply-chain settings are
+  now asserted by `npm run toolchain:check`, so deleting either fails the build
+  instead of quietly removing a control.
+
 - **The README comparison table was making a false claim about a competitor.**
   It said Violentmonkey had Manifest V3 only in "Beta/test builds"; Violentmonkey
   shipped MV3 stable in v2.43.0 on 2026-07-14. Nothing could catch it, because

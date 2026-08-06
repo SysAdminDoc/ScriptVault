@@ -64,6 +64,10 @@ export function analyzeToolchainContract({ rootDir = process.cwd() } = {}) {
   assertEqual(errors, 'package-lock engines.node', rootPackage.engines?.node, NODE_ENGINE);
   assertEqual(errors, 'package-lock engines.npm', rootPackage.engines?.npm, NPM_ENGINE);
   assertContains(errors, '.npmrc', npmrc, 'engine-strict=true');
+  // Supply-chain controls are only controls if they are still present. Both of
+  // these are one deleted line away from silently doing nothing.
+  assertContains(errors, '.npmrc', npmrc, 'ignore-scripts=true');
+  assertContains(errors, '.npmrc', npmrc, 'min-release-age=7');
   assertContains(errors, 'CONTRIBUTING.md', contributing, `Node.js version in \`.node-version\` (currently ${NODE_VERSION})`);
   assertContains(errors, 'docs/release-runbook.md', runbook, `Node ${NODE_VERSION}+ / npm ${NPM_VERSION}+`);
 
