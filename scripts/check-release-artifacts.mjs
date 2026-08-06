@@ -10,7 +10,7 @@ const projectRoot = resolve(scriptDir, '..');
 // signing, so these are accepted with a warning locally and are still surfaced
 // by `release:check:public`. Extend the set when a release is tagged unsigned.
 const LEGACY_UNSIGNED_RELEASE_TAGS = new Set([
-  'v3.11.0', 'v3.21.0', 'v3.22.0', 'v3.23.0', 'v3.23.1', 'v3.24.0',
+  'v3.11.0', 'v3.21.0', 'v3.22.0', 'v3.23.0', 'v3.23.1', 'v3.24.0', 'v3.25.0',
 ]);
 const PUBLIC_RELEASE_TIMEOUT_MS = 15000;
 

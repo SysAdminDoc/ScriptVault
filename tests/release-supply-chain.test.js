@@ -57,7 +57,7 @@ describe('release supply-chain gates', () => {
   it('verifies release tags through git tag --verify', () => {
     expect(releaseCheck).toContain("['tag', '--verify', tag]");
     expect(releaseCheck).toContain('LEGACY_UNSIGNED_RELEASE_TAGS = new Set([');
-    for (const tag of ['v3.11.0', 'v3.21.0', 'v3.22.0', 'v3.23.0', 'v3.23.1', 'v3.24.0']) {
+    for (const tag of ['v3.11.0', 'v3.21.0', 'v3.22.0', 'v3.23.0', 'v3.23.1', 'v3.24.0', 'v3.25.0']) {
       expect(releaseCheck, `${tag} must stay in the unsigned-tag allowlist`).toContain(`'${tag}'`);
     }
   });
