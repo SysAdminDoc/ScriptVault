@@ -30,6 +30,8 @@ interface RuntimeMessageSender {
     id?: number;
     index?: number;
   };
+  /** Set by Chrome for USER_SCRIPT-world senders; the authenticated identity. */
+  userScriptId?: string;
 }
 
 interface GMTabsPayload {
@@ -61,7 +63,10 @@ interface SessionStateRuntime {
   persistOpenTabTrackers?(): void;
 }
 
-type OpenTabTrackers = Map<number | undefined, { callerTabId: number; scriptId?: string }>;
+type OpenTabTrackers = Map<
+  number | undefined,
+  { callerTabId: number; scriptId?: string; trackClose?: boolean }
+>;
 
 type TabsRuntimeGlobal = typeof globalThis & {
   _openTabTrackers?: OpenTabTrackers;
@@ -76,6 +81,27 @@ function getTabsRuntimeGlobal(): TabsRuntimeGlobal {
   return globalThis as TabsRuntimeGlobal;
 }
 
+/**
+ * Identity to scope per-tab storage and tab ownership by. Prefers the
+ * browser-supplied `sender.userScriptId` and only falls back to the
+ * caller-supplied field, matching gm-values-handler.
+ */
+function ownedScriptKey(data: GMTabsPayload, sender: RuntimeMessageSender): string {
+  return sender.userScriptId || data.scriptId || '__unscoped__';
+}
+
+/**
+ * TabStorage is a single bag per tab. Tampermonkey and Violentmonkey both scope
+ * GM_getTab/GM_saveTab to the calling script; sharing one bag let any script on
+ * the page read and overwrite another's state, and GM_getTabs handed every
+ * open tab's bag to any caller that asked. Nest the per-script records inside
+ * the per-tab entry so the storage module's API is unchanged.
+ */
+function readTabBag(tabId: number): Record<string, unknown> {
+  const bag = TabStorage.get(tabId);
+  return (bag && typeof bag === 'object') ? bag as Record<string, unknown> : {};
+}
+
 export function isGMTabsAction(action: unknown): action is GMTabsAction {
   return typeof action === 'string' && GM_TABS_ACTION_SET.has(action);
 }
@@ -86,17 +112,31 @@ export async function handleGMTabsMessage(
   sender: RuntimeMessageSender = {},
 ): Promise<Record<string, unknown>> {
   switch (action) {
-    case 'GM_getTab':
+    case 'GM_getTab': {
       if (!sender.tab?.id) return {};
-      return TabStorage.get(sender.tab.id) as Record<string, unknown>;
+      const scoped = readTabBag(sender.tab.id)[ownedScriptKey(data, sender)];
+      return (scoped && typeof scoped === 'object') ? scoped as Record<string, unknown> : {};
+    }
 
-    case 'GM_saveTab':
+    case 'GM_saveTab': {
       if (!sender.tab?.id) return { error: 'GM_saveTab requires a tab context' };
-      TabStorage.set(sender.tab.id, data.data);
+      const bag = readTabBag(sender.tab.id);
+      bag[ownedScriptKey(data, sender)] = data.data;
+      TabStorage.set(sender.tab.id, bag);
       return { success: true };
+    }
 
-    case 'GM_getTabs':
-      return TabStorage.getAll();
+    case 'GM_getTabs': {
+      // Only this script's entries — never every tab's full bag.
+      const key = ownedScriptKey(data, sender);
+      const scopedByTab: Record<string, unknown> = {};
+      for (const [tabId, bag] of Object.entries(TabStorage.getAll() || {})) {
+        if (!bag || typeof bag !== 'object') continue;
+        const entry = (bag as Record<string, unknown>)[key];
+        if (entry !== undefined) scopedByTab[tabId] = entry;
+      }
+      return scopedByTab;
+    }
 
     case 'GM_openInTab': {
       const openUrl = String(data.url || '');
@@ -122,14 +162,21 @@ export async function handleGMTabsMessage(
 
       const tab = await chrome.tabs.create(newTabOpts);
       const callerTabId = sender.tab?.id;
-      if (callerTabId && data.trackClose) {
+      // Record ownership unconditionally. It used to be gated on trackClose
+      // (which only drives the onclose callback), so GM_closeTab had no
+      // ownership record to check for the common case.
+      if (callerTabId) {
         const runtime = getTabsRuntimeGlobal();
         if (!runtime._openTabTrackers) runtime._openTabTrackers = new Map();
         if (runtime._openTabTrackers.size > 1000) {
           const oldest = runtime._openTabTrackers.keys().next().value;
           runtime._openTabTrackers.delete(oldest);
         }
-        runtime._openTabTrackers.set(tab.id, { callerTabId, scriptId: data.scriptId });
+        runtime._openTabTrackers.set(tab.id, {
+          callerTabId,
+          scriptId: ownedScriptKey(data, sender),
+          ...(data.trackClose ? { trackClose: true } : {}),
+        });
         runtime.SessionState?.persistOpenTabTrackers?.();
       }
       return { success: true, tabId: tab.id };
@@ -141,11 +188,21 @@ export async function handleGMTabsMessage(
       }
       return { success: true };
 
-    case 'GM_closeTab':
-      if (data.tabId) {
-        try { await chrome.tabs.remove(data.tabId); } catch (_) {}
+    case 'GM_closeTab': {
+      if (!data.tabId) return { success: true };
+      // data.tabId is entirely caller-supplied and tab ids are small sequential
+      // integers, so without an ownership check any userscript could walk the id
+      // space and close every tab in the browser. Permit only the script's own
+      // tab or one it opened via GM_openInTab.
+      const ownTabId = sender.tab?.id;
+      const tracker = getTabsRuntimeGlobal()._openTabTrackers?.get(data.tabId);
+      const ownsTarget = tracker?.scriptId === ownedScriptKey(data, sender);
+      if (data.tabId !== ownTabId && !ownsTarget) {
+        return { error: 'GM_closeTab: tab was not opened by this script' };
       }
+      try { await chrome.tabs.remove(data.tabId); } catch (_) {}
       return { success: true };
+    }
 
     default:
       return { error: `Unsupported GM tabs action: ${action}` };

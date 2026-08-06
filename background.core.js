@@ -9952,10 +9952,15 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
   try { await ensureInitialized(); } catch (_) { /* logged in init() */ }
   const tracker = self._openTabTrackers?.get(tabId);
   if (tracker) {
-    chrome.tabs.sendMessage(tracker.callerTabId, {
-      action: 'openedTabClosed',
-      data: { tabId, scriptId: tracker.scriptId }
-    }).catch(() => {});
+    // Trackers are recorded for every GM_openInTab so GM_closeTab has an
+    // ownership record to check, but only scripts that asked for trackClose
+    // registered an onclose callback — don't message the rest.
+    if (tracker.trackClose) {
+      chrome.tabs.sendMessage(tracker.callerTabId, {
+        action: 'openedTabClosed',
+        data: { tabId, scriptId: tracker.scriptId }
+      }).catch(() => {});
+    }
     self._openTabTrackers.delete(tabId);
     SessionState.persistOpenTabTrackers();
   }

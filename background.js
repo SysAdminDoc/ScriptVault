@@ -12653,20 +12653,40 @@ const GMTabsHandler = (() => {
   function getTabsRuntimeGlobal() {
     return globalThis;
   }
+  function ownedScriptKey(data, sender) {
+    return sender.userScriptId || data.scriptId || "__unscoped__";
+  }
+  function readTabBag(tabId) {
+    const bag = TabStorage.get(tabId);
+    return bag && typeof bag === "object" ? bag : {};
+  }
   function isGMTabsAction(action) {
     return typeof action === "string" && GM_TABS_ACTION_SET.has(action);
   }
   async function handleGMTabsMessage(action, data = {}, sender = {}) {
     switch (action) {
-      case "GM_getTab":
+      case "GM_getTab": {
         if (!sender.tab?.id) return {};
-        return TabStorage.get(sender.tab.id);
-      case "GM_saveTab":
+        const scoped = readTabBag(sender.tab.id)[ownedScriptKey(data, sender)];
+        return scoped && typeof scoped === "object" ? scoped : {};
+      }
+      case "GM_saveTab": {
         if (!sender.tab?.id) return { error: "GM_saveTab requires a tab context" };
-        TabStorage.set(sender.tab.id, data.data);
+        const bag = readTabBag(sender.tab.id);
+        bag[ownedScriptKey(data, sender)] = data.data;
+        TabStorage.set(sender.tab.id, bag);
         return { success: true };
-      case "GM_getTabs":
-        return TabStorage.getAll();
+      }
+      case "GM_getTabs": {
+        const key = ownedScriptKey(data, sender);
+        const scopedByTab = {};
+        for (const [tabId, bag] of Object.entries(TabStorage.getAll() || {})) {
+          if (!bag || typeof bag !== "object") continue;
+          const entry = bag[key];
+          if (entry !== void 0) scopedByTab[tabId] = entry;
+        }
+        return scopedByTab;
+      }
       case "GM_openInTab": {
         const openUrl = String(data.url || "");
         try {
@@ -12689,14 +12709,18 @@ const GMTabsHandler = (() => {
         }
         const tab = await chrome.tabs.create(newTabOpts);
         const callerTabId = sender.tab?.id;
-        if (callerTabId && data.trackClose) {
+        if (callerTabId) {
           const runtime = getTabsRuntimeGlobal();
           if (!runtime._openTabTrackers) runtime._openTabTrackers = /* @__PURE__ */ new Map();
           if (runtime._openTabTrackers.size > 1e3) {
             const oldest = runtime._openTabTrackers.keys().next().value;
             runtime._openTabTrackers.delete(oldest);
           }
-          runtime._openTabTrackers.set(tab.id, { callerTabId, scriptId: data.scriptId });
+          runtime._openTabTrackers.set(tab.id, {
+            callerTabId,
+            scriptId: ownedScriptKey(data, sender),
+            ...data.trackClose ? { trackClose: true } : {}
+          });
           runtime.SessionState?.persistOpenTabTrackers?.();
         }
         return { success: true, tabId: tab.id };
@@ -12706,14 +12730,20 @@ const GMTabsHandler = (() => {
           await chrome.tabs.update(sender.tab.id, { active: true });
         }
         return { success: true };
-      case "GM_closeTab":
-        if (data.tabId) {
-          try {
-            await chrome.tabs.remove(data.tabId);
-          } catch (_) {
-          }
+      case "GM_closeTab": {
+        if (!data.tabId) return { success: true };
+        const ownTabId = sender.tab?.id;
+        const tracker = getTabsRuntimeGlobal()._openTabTrackers?.get(data.tabId);
+        const ownsTarget = tracker?.scriptId === ownedScriptKey(data, sender);
+        if (data.tabId !== ownTabId && !ownsTarget) {
+          return { error: "GM_closeTab: tab was not opened by this script" };
+        }
+        try {
+          await chrome.tabs.remove(data.tabId);
+        } catch (_) {
         }
         return { success: true };
+      }
       default:
         return { error: `Unsupported GM tabs action: ${action}` };
     }
@@ -38468,10 +38498,15 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
   try { await ensureInitialized(); } catch (_) { /* logged in init() */ }
   const tracker = self._openTabTrackers?.get(tabId);
   if (tracker) {
-    chrome.tabs.sendMessage(tracker.callerTabId, {
-      action: 'openedTabClosed',
-      data: { tabId, scriptId: tracker.scriptId }
-    }).catch(() => {});
+    // Trackers are recorded for every GM_openInTab so GM_closeTab has an
+    // ownership record to check, but only scripts that asked for trackClose
+    // registered an onclose callback — don't message the rest.
+    if (tracker.trackClose) {
+      chrome.tabs.sendMessage(tracker.callerTabId, {
+        action: 'openedTabClosed',
+        data: { tabId, scriptId: tracker.scriptId }
+      }).catch(() => {});
+    }
     self._openTabTrackers.delete(tabId);
     SessionState.persistOpenTabTrackers();
   }

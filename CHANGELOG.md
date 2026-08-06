@@ -4,6 +4,15 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Security: userscripts can no longer close arbitrary tabs or read each
+  other's tab state.** `GM_closeTab` accepted any numeric tab id with no
+  ownership check, so a script could walk the (small, sequential) id space and
+  close every tab in the browser. It now only closes the script's own tab or one
+  it opened itself. `GM_getTab`/`GM_saveTab` shared a single bag per tab, letting
+  any script on a page read and overwrite another's state, and `GM_getTabs`
+  returned every open tab's data to any caller; all three are now scoped to the
+  calling script, matching Tampermonkey and Violentmonkey.
+
 - **Removed a domain-badge feature that never actually ran, and withdrew the
   claim.** v3.23.0 advertised accurate multi-level-TLD roots on Firefox 153+ via
   `browser.publicSuffix`. That namespace does not exist in any shipping Firefox,

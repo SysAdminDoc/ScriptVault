@@ -43,21 +43,6 @@ describe('GM tabs handler', () => {
     expect(isGMTabsAction('GM_registerMenuCommand')).toBe(false);
   });
 
-  it('handles tab storage with the legacy no-tab fallbacks', async () => {
-    await expect(handleGMTabsMessage('GM_getTab', {}, {})).resolves.toEqual({});
-    await expect(handleGMTabsMessage('GM_getTab', {}, { tab: { id: 7 } }))
-      .resolves.toEqual({ tabId: 7, open: true });
-
-    await expect(handleGMTabsMessage('GM_saveTab', { data: { count: 1 } }, {}))
-      .resolves.toEqual({ error: 'GM_saveTab requires a tab context' });
-    await expect(handleGMTabsMessage('GM_saveTab', { data: { count: 1 } }, { tab: { id: 7 } }))
-      .resolves.toEqual({ success: true });
-    expect(globalThis.TabStorage.set).toHaveBeenCalledWith(7, { count: 1 });
-
-    await expect(handleGMTabsMessage('GM_getTabs'))
-      .resolves.toEqual({ 7: { open: true } });
-  });
-
   it('validates open-tab URLs before calling chrome.tabs.create', async () => {
     await expect(handleGMTabsMessage('GM_openInTab', { url: 'javascript:alert(1)' }))
       .resolves.toEqual({ error: 'GM_openInTab: scheme "javascript:" is not allowed' });
@@ -91,18 +76,127 @@ describe('GM tabs handler', () => {
     expect(globalThis._openTabTrackers.get(42)).toEqual({
       callerTabId: 7,
       scriptId: 'script-1',
+      trackClose: true,
     });
     expect(globalThis.SessionState.persistOpenTabTrackers).toHaveBeenCalledTimes(1);
   });
 
-  it('focuses the sender tab and tolerates close failures', async () => {
+  it('scopes tab storage per script instead of sharing one bag per tab', async () => {
+    const bags = {};
+    globalThis.TabStorage = {
+      get: vi.fn((tabId) => bags[tabId]),
+      getAll: vi.fn(() => bags),
+      set: vi.fn((tabId, data) => { bags[tabId] = data; }),
+    };
+
+    await expect(handleGMTabsMessage('GM_getTab', {}, {})).resolves.toEqual({});
+
+    // Script A writes its tab state.
+    await expect(handleGMTabsMessage(
+      'GM_saveTab',
+      { data: { count: 1 } },
+      { tab: { id: 7 }, userScriptId: 'script-a' },
+    )).resolves.toEqual({ success: true });
+
+    // Script B on the same tab must neither see nor clobber it.
+    await expect(handleGMTabsMessage(
+      'GM_getTab',
+      {},
+      { tab: { id: 7 }, userScriptId: 'script-b' },
+    )).resolves.toEqual({});
+
+    await handleGMTabsMessage(
+      'GM_saveTab',
+      { data: { count: 99 } },
+      { tab: { id: 7 }, userScriptId: 'script-b' },
+    );
+
+    await expect(handleGMTabsMessage(
+      'GM_getTab',
+      {},
+      { tab: { id: 7 }, userScriptId: 'script-a' },
+    )).resolves.toEqual({ count: 1 });
+
+    await expect(handleGMTabsMessage('GM_saveTab', { data: { count: 1 } }, {}))
+      .resolves.toEqual({ error: 'GM_saveTab requires a tab context' });
+  });
+
+  it("GM_getTabs returns only the calling script's entries, not every tab bag", async () => {
+    const bags = {
+      7: { 'script-a': { page: 'a7' }, 'script-b': { secret: 'b7' } },
+      9: { 'script-b': { secret: 'b9' } },
+    };
+    globalThis.TabStorage = {
+      get: vi.fn((tabId) => bags[tabId]),
+      getAll: vi.fn(() => bags),
+      set: vi.fn(),
+    };
+
+    await expect(handleGMTabsMessage('GM_getTabs', {}, { userScriptId: 'script-a' }))
+      .resolves.toEqual({ 7: { page: 'a7' } });
+
+    // Script A must not receive script B's state from any tab.
+    const asA = await handleGMTabsMessage('GM_getTabs', {}, { userScriptId: 'script-a' });
+    expect(JSON.stringify(asA)).not.toContain('secret');
+  });
+
+  it('prefers the authenticated sender identity over a caller-supplied scriptId', async () => {
+    const bags = { 7: { 'real-script': { mine: true } } };
+    globalThis.TabStorage = {
+      get: vi.fn((tabId) => bags[tabId]),
+      getAll: vi.fn(() => bags),
+      set: vi.fn(),
+    };
+
+    // Forged data.scriptId must not win over sender.userScriptId.
+    await expect(handleGMTabsMessage(
+      'GM_getTab',
+      { scriptId: 'real-script' },
+      { tab: { id: 7 }, userScriptId: 'attacker' },
+    )).resolves.toEqual({});
+  });
+
+  it('refuses to close a tab the script did not open', async () => {
+    chrome.tabs.create.mockResolvedValueOnce({ id: 42 });
+    await handleGMTabsMessage(
+      'GM_openInTab',
+      { url: 'https://example.com/', trackClose: true },
+      { tab: { id: 7 }, userScriptId: 'owner' },
+    );
+
+    // A different script guessing the id gets nothing.
+    await expect(handleGMTabsMessage(
+      'GM_closeTab',
+      { tabId: 42 },
+      { tab: { id: 7 }, userScriptId: 'attacker' },
+    )).resolves.toEqual({ error: 'GM_closeTab: tab was not opened by this script' });
+    expect(chrome.tabs.remove).not.toHaveBeenCalled();
+
+    // An arbitrary unrelated tab id is refused even for the owner.
+    await expect(handleGMTabsMessage(
+      'GM_closeTab',
+      { tabId: 1234 },
+      { tab: { id: 7 }, userScriptId: 'owner' },
+    )).resolves.toEqual({ error: 'GM_closeTab: tab was not opened by this script' });
+    expect(chrome.tabs.remove).not.toHaveBeenCalled();
+
+    // The owner can close the tab it opened.
+    await expect(handleGMTabsMessage(
+      'GM_closeTab',
+      { tabId: 42 },
+      { tab: { id: 7 }, userScriptId: 'owner' },
+    )).resolves.toEqual({ success: true });
+    expect(chrome.tabs.remove).toHaveBeenCalledWith(42);
+  });
+
+  it('lets a script close its own tab and tolerates close failures', async () => {
     await expect(handleGMTabsMessage('GM_focusTab', {}, { tab: { id: 9 } }))
       .resolves.toEqual({ success: true });
     expect(chrome.tabs.update).toHaveBeenCalledWith(9, { active: true });
 
     chrome.tabs.remove.mockRejectedValueOnce(new Error('already closed'));
-    await expect(handleGMTabsMessage('GM_closeTab', { tabId: 42 }))
+    await expect(handleGMTabsMessage('GM_closeTab', { tabId: 9 }, { tab: { id: 9 } }))
       .resolves.toEqual({ success: true });
-    expect(chrome.tabs.remove).toHaveBeenCalledWith(42);
+    expect(chrome.tabs.remove).toHaveBeenCalledWith(9);
   });
 });
