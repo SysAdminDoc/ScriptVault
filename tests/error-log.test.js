@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
@@ -11,7 +11,16 @@ const fn = new Function('chrome', 'console', 'crypto', 'ScriptStorage',
 const mods = fn(globalThis.chrome, console, globalThis.crypto, undefined);
 ErrorLog = mods.ErrorLog;
 
+// A test that fails mid-body never reaches its trailing vi.useRealTimers(),
+// which leaks the fake clock into every sibling test (the stale fake timer id
+// in _pendingSaveTimer then makes the next debounce assertion nondeterministic).
+// Restore unconditionally so one failure cannot cascade.
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 beforeEach(() => {
+  vi.useRealTimers();
   globalThis.__resetStorageMock();
   ErrorLog._cache = null;
   // ERRLOG-PERF — make sure pending debounce timer from a prior test

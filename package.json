@@ -100,9 +100,9 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.12.1",
     "@playwright/test": "^1.61.1",
-    "@vitest/browser": "^4.1.9",
-    "@vitest/browser-playwright": "^4.1.9",
-    "@vitest/coverage-v8": "^4.1.9",
+    "@vitest/browser": "^4.1.10",
+    "@vitest/browser-playwright": "^4.1.10",
+    "@vitest/coverage-v8": "^4.1.10",
     "acorn": "8.17.0",
     "chrome-types": "^0.1.431",
     "chrome-webstore-upload-cli": "4.0.1",
@@ -114,13 +114,13 @@
     "puppeteer-core": "^25.2.1",
     "typescript": "7.0.2",
     "typescript-6": "npm:typescript@6.0.3",
-    "vitest": "^4.1.9",
+    "vitest": "^4.1.10",
     "web-ext": "^10.3.0"
   },
   "overrides": {
     "dompurify": "3.4.11",
     "web-ext": {
-      "fx-runner": "1.5.0"
+      "fx-runner": "1.6.0"
     }
   }
 }

@@ -4,6 +4,15 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Security: restored the blocking high-severity dependency-audit gate.**
+  `npm audit --omit=optional --audit-level=high` exits 0 again. Bumped the
+  Vitest family to 4.1.10 (browser-mode arbitrary file read/exec,
+  GHSA-p63j-vcc4-9vmv) and the `web-ext` → `fx-runner` override to 1.6.0, which
+  ships the fixed `shell-quote` 1.10.0 (GHSA-395f-4hp3-45gv). `undici` and
+  `adm-zip` moved to patched releases in the same pass. All five packages now
+  carry floors in `scripts/check-cve-floors.mjs` so a lockfile regression
+  cannot silently reintroduce them.
+
 ## [v3.23.1] — Firefox Script Isolation Fix (2026-08-02)
 
 - **Fixed: on Firefox, only the first userscript matching a page actually ran.**
