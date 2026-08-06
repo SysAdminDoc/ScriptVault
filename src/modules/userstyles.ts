@@ -1145,12 +1145,22 @@ function _matchPatternToRegex(pattern: string): RegExp {
     }
   }
 
-  const pathRegex = path.split('*').map((segment: string) => _escapeRegex(segment)).join('.*');
+  // Collapse consecutive `*` before conversion. Without this, N adjacent
+  // wildcards become N adjacent `.*` groups — catastrophic backtracking that
+  // freezes the service worker for every evaluated URL (a 12-star @match in a
+  // .user.css measured ~78s per test()). The userscript matcher already does
+  // this in matchPattern/matchIncludePattern; keep the two in step.
+  const pathRegex = path
+    .replace(/\*+/g, '*')
+    .split('*')
+    .map((segment: string) => _escapeRegex(segment))
+    .join('.*');
   return new RegExp(`^${schemeRegex}:\\/\\/${hostRegex}${pathRegex}$`);
 }
 
 function _globMatch(url: string, glob: string): boolean {
   const regex: string = glob
+    .replace(/\*+/g, '*') // collapse first — see _matchPatternToRegex
     .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
     .replace(/\*/g, '.*');
   return new RegExp('^' + regex + '$').test(url);

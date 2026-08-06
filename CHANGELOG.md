@@ -4,6 +4,15 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Fixed: a wildcard-stuffed `@match` in a `.user.css` could freeze the
+  extension.** The UserCSS matcher expanded each `*` into its own `.*` group, so
+  a crafted stylesheet produced catastrophic backtracking — a 12-wildcard
+  pattern took ~78 seconds per evaluated URL, and the matcher runs for every
+  installed style on every navigation, blocking script registration, GM
+  messaging, and the badge along with it. Consecutive wildcards are now
+  collapsed before compiling, matching the guard the userscript matcher has
+  carried since v2.0.4. Previewing an unsaved draft hit the same path.
+
 - **Security: restored the blocking high-severity dependency-audit gate.**
   `npm audit --omit=optional --audit-level=high` exits 0 again. Bumped the
   Vitest family to 4.1.10 (browser-mode arbitrary file read/exec,

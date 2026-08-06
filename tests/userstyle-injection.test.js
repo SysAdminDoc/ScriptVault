@@ -146,6 +146,28 @@ describe('UserStyles persistent injection lifecycle', () => {
     expect(chrome._sheets(7).length).toBeGreaterThan(1);
   });
 
+  // A `.user.css` author controls @match verbatim (parseUserCSS pushes the raw
+  // value). Without collapsing consecutive `*`, N wildcards compile to N
+  // adjacent `.*` groups — catastrophic backtracking that froze the service
+  // worker on every navigation (12 stars measured ~78s per evaluated URL).
+  // onTabUpdated runs this for every style on every commit, so a single hostile
+  // stylesheet was an extension-wide DoS.
+  it('evaluates a wildcard-stuffed @match in bounded time instead of backtracking', async () => {
+    const chrome = makeChrome();
+    const engine = factory(chrome, console);
+    const id = await engine.registerStyle({
+      ...STYLE,
+      match: [`*://*/${'*'.repeat(24)}a`],
+    });
+    expect(id).toBeTruthy();
+
+    chrome._setTabs([{ id: 7, url: `https://example.com/${'a'.repeat(40)}` }]);
+
+    const started = Date.now();
+    await engine.onTabUpdated(7, `https://example.com/${'a'.repeat(40)}`);
+    expect(Date.now() - started).toBeLessThan(500);
+  });
+
   it('rehydrateOpenTabs re-applies enabled styles after a service-worker restart without duplicating an orphan', async () => {
     const store = {};
     const chromeA = makeChrome(store);

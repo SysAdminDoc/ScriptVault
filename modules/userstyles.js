@@ -765,11 +765,11 @@ const UserStylesEngine = (() => {
         hostRegex = _escapeRegex(host);
       }
     }
-    const pathRegex = path.split("*").map((segment) => _escapeRegex(segment)).join(".*");
+    const pathRegex = path.replace(/\*+/g, "*").split("*").map((segment) => _escapeRegex(segment)).join(".*");
     return new RegExp(`^${schemeRegex}:\\/\\/${hostRegex}${pathRegex}$`);
   }
   function _globMatch(url, glob) {
-    const regex = glob.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
+    const regex = glob.replace(/\*+/g, "*").replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
     return new RegExp("^" + regex + "$").test(url);
   }
   function getVariables(styleId) {
