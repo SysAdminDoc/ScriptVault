@@ -800,13 +800,32 @@ async function applySavedTheme() {
   }
 }
 
+// URL-pattern directives the background parser splits on commas. `tag` and
+// `grant` are deliberately excluded — they keep raw values so multi-word tags
+// survive. Keep in step with the `splittable` set in parseUserscript.
+const SPLITTABLE_LIST_DIRECTIVES = new Set([
+  'match',
+  'include',
+  'exclude',
+  'exclude-match',
+  'connect',
+  'requireProvenance',
+  'requireIdentity',
+]);
+
 function parseMetadata(code) {
   const match = code.match(/\/\/\s*==UserScript==([\s\S]*?)\/\/\s*==\/UserScript==/);
   if (!match) return null;
 
+  // Defaults MUST match the background parser (src/background/core.ts
+  // parseUserscript). The install review looks up an already-installed copy by
+  // name + namespace; when the two parsers disagreed on the fallbacks, a script
+  // without @namespace stored 'scriptvault' but parsed here as '', so the lookup
+  // missed and saveScript created a second record instead of updating — the
+  // script then ran twice per page and downgrade detection was skipped.
   const meta = {
-    name: 'Unknown Script',
-    namespace: '',
+    name: 'Unnamed Script',
+    namespace: 'scriptvault',
     version: '1.0.0',
     description: '',
     author: '',
@@ -870,7 +889,21 @@ function parseMetadata(code) {
     } else if (key === 'require-identity') {
       if (val) meta.requireIdentity.push(val);
     } else if (Object.prototype.hasOwnProperty.call(meta, key) && Array.isArray(meta[key])) {
-      meta[key].push(val);
+      // Comma-separated convenience syntax, mirroring the background parser.
+      // Commas are not legal inside a match pattern, so splitting is safe. This
+      // parity matters for security, not just display: the review page derives
+      // requiresBroadHostAccess from these entries, so a script declaring
+      // `@match https://a.com/*,*://*/*` used to read as a single a.com pattern
+      // here while the background registered it for every site — silently
+      // skipping the broad-host approval gate and the all-sites warning.
+      if (SPLITTABLE_LIST_DIRECTIVES.has(key) && val.includes(',')) {
+        for (const part of val.split(',')) {
+          const trimmed = part.trim();
+          if (trimmed) meta[key].push(trimmed);
+        }
+      } else {
+        meta[key].push(val);
+      }
     } else if (Object.prototype.hasOwnProperty.call(meta, key)) {
       meta[key] = val;
     }

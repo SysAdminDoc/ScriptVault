@@ -4,6 +4,20 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Fixed: re-installing a script without `@namespace` created a duplicate
+  instead of updating it.** The install review's metadata parser defaulted the
+  name and namespace differently from the background parser that stores the
+  script, so the "already installed?" lookup never matched. Clicking a script's
+  install link again — the normal way userscripts are updated — added a second
+  copy that also registered, so the script ran twice on every page, and the
+  review showed "Install" instead of detecting a downgrade.
+- **Fixed: comma-separated `@match` bypassed the broad host access prompt.** The
+  background parser splits `@match`/`@connect` on commas but the install review
+  did not, so `@match https://a.example/*,*://*/*` registered for every site
+  while the review page saw one narrow pattern — skipping both the mandatory
+  broad-access approval and the all-sites warning. A parity test now pins the
+  two parsers together.
+
 - **Fixed: a wildcard entry in Denied Hosts stopped every script from
   registering.** Settings accepts `*.example.com`, a bare `*`, and `host:port`,
   but registration interpolated those straight into match patterns, producing
