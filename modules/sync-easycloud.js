@@ -596,6 +596,25 @@ const EasyCloudSync = (() => {
     locks.set(scriptId, operationPromise);
     return await operationPromise;
   }
+  async function _advanceSyncBaseAfterUpload(uploaded) {
+    for (const uploadedScript of uploaded || []) {
+      if (!uploadedScript?.id || typeof uploadedScript.code !== "string") continue;
+      try {
+        await runExclusiveScriptOperation(uploadedScript.id, async () => {
+          const current = await ScriptStorage.get(uploadedScript.id);
+          if (!current) return;
+          if (current.code !== uploadedScript.code) return;
+          if (current.syncBaseCode === uploadedScript.code) return;
+          await ScriptStorage.set(uploadedScript.id, {
+            ...current,
+            syncBaseCode: uploadedScript.code
+          });
+        });
+      } catch (e) {
+        warn("Failed to advance sync base for", uploadedScript.id, e);
+      }
+    }
+  }
   function setStatus(newStatus) {
     if (_status === newStatus) return;
     _status = newStatus;
@@ -993,8 +1012,10 @@ const EasyCloudSync = (() => {
         }
         merged.timestamp = Date.now();
         await uploadSyncEnvelopeToDrive(token, merged);
+        await _advanceSyncBaseAfterUpload(merged.scripts);
       } else {
         await uploadSyncEnvelopeToDrive(token, localData);
+        await _advanceSyncBaseAfterUpload(localData.scripts);
       }
       const now = Date.now();
       await _setStorageValues({ [KEYS.LAST_SYNC]: now });

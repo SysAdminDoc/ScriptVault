@@ -545,6 +545,36 @@ async function runExclusiveScriptOperation<T>(scriptId: string, operation: () =>
   return await operationPromise;
 }
 
+/**
+ * Record the code we just uploaded as this device's new 3-way-merge base.
+ *
+ * Mirrors advanceSyncBaseAfterUpload in cloud-sync.ts. syncBaseCode was only
+ * written when the apply loop actually saved a remote change, so a device that
+ * merely uploaded its own edits kept merging against a stale (or null)
+ * ancestor and eventually produced conflict markers in a script that was only
+ * ever edited on one machine.
+ */
+async function _advanceSyncBaseAfterUpload(uploaded: SyncScript[] | undefined): Promise<void> {
+  for (const uploadedScript of uploaded || []) {
+    if (!uploadedScript?.id || typeof uploadedScript.code !== 'string') continue;
+    try {
+      await runExclusiveScriptOperation(uploadedScript.id, async () => {
+        const current = await ScriptStorage.get(uploadedScript.id);
+        if (!current) return;
+        // Edited while the upload was in flight — leave the base alone.
+        if (current.code !== uploadedScript.code) return;
+        if (current.syncBaseCode === uploadedScript.code) return;
+        await ScriptStorage.set(uploadedScript.id, {
+          ...current,
+          syncBaseCode: uploadedScript.code,
+        } as Script);
+      });
+    } catch (e) {
+      warn('Failed to advance sync base for', uploadedScript.id, e);
+    }
+  }
+}
+
 function setStatus(newStatus: string): void {
   if (_status === newStatus) return;
   _status = newStatus;
@@ -1117,9 +1147,11 @@ async function _performSync(): Promise<SyncResult> {
       // Upload merged data
       merged.timestamp = Date.now();
       await uploadSyncEnvelopeToDrive(token, merged);
+      await _advanceSyncBaseAfterUpload(merged.scripts);
     } else {
       // First sync — upload local data
       await uploadSyncEnvelopeToDrive(token, localData);
+      await _advanceSyncBaseAfterUpload(localData.scripts);
     }
 
     const now = Date.now();

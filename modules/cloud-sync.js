@@ -1144,6 +1144,25 @@ const CloudSync = (() => {
     locks.set(scriptId, operationPromise);
     return await operationPromise;
   }
+  async function advanceSyncBaseAfterUpload(uploaded) {
+    for (const uploadedScript of uploaded) {
+      if (!uploadedScript?.id || typeof uploadedScript.code !== "string") continue;
+      try {
+        await runExclusiveScriptOperation(uploadedScript.id, async () => {
+          const current = await ScriptStorage.get(uploadedScript.id);
+          if (!current) return;
+          if (current.code !== uploadedScript.code) return;
+          if (current.syncBaseCode === uploadedScript.code) return;
+          await ScriptStorage.set(uploadedScript.id, {
+            ...current,
+            syncBaseCode: uploadedScript.code
+          });
+        });
+      } catch (e) {
+        debugLog("[CloudSync] Failed to advance sync base for", uploadedScript.id, e);
+      }
+    }
+  }
   var CloudSync = {
     // Use providers from imported CloudSyncProviders module
     get providers() {
@@ -1600,6 +1619,7 @@ const CloudSync = (() => {
         };
         if (signal?.aborted) throw new Error("Sync aborted");
         await provider.upload(await prepareSyncEnvelopeForRemoteUpload(uploadData, settings), settings, { signal });
+        await advanceSyncBaseAfterUpload(uploadScripts);
       } else {
         if (signal?.aborted) throw new Error("Sync aborted");
         localData.scripts = localData.scripts.map((s) => ({
@@ -1607,6 +1627,7 @@ const CloudSync = (() => {
           syncBaseCode: s.syncBaseCode ?? null
         }));
         await provider.upload(await prepareSyncEnvelopeForRemoteUpload(localData, settings), settings, { signal });
+        await advanceSyncBaseAfterUpload(localData.scripts);
       }
       await markSyncEncryptionEstablished(settings);
       await SettingsManager.set("lastSync", Date.now());

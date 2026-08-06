@@ -2218,4 +2218,123 @@ describe('source cloud sync module', () => {
     expect(secondHarness.ScriptStorage.set).not.toHaveBeenCalled();
     expect(secondHarness.provider.upload).not.toHaveBeenCalled();
   });
+
+  // syncBaseCode used to be written only by the apply loop, and only when a
+  // remote change was actually saved. A device that merely uploaded its own
+  // edits kept a stale (or null) merge ancestor, so a later sync ran diff3 with
+  // the device's OWN earlier edit as the "remote" side and emitted conflict
+  // markers into a script that was only ever edited on one machine.
+  it('advances the local sync base to the code it just uploaded', async () => {
+    await chrome.storage.local.set({ syncTombstones: {} });
+
+    const code = '// ==UserScript==\n// @name Local Only\n// ==/UserScript==\n// v1';
+    const harness = await loadFreshCloudSync(
+      [
+        {
+          id: 'script_local_only',
+          code,
+          enabled: true,
+          position: 0,
+          meta: { name: 'Local Only' },
+          settings: {},
+          syncBaseCode: null,
+          createdAt: 1,
+          updatedAt: 5,
+        },
+      ],
+      null,
+    );
+    const { CloudSync, scriptState } = harness;
+
+    await expect(CloudSync.sync()).resolves.toEqual({ success: true });
+
+    expect(scriptState[0].syncBaseCode).toBe(code);
+  });
+
+  it('advances the base on a local-newer upload so the next merge is not a false conflict', async () => {
+    await chrome.storage.local.set({ syncTombstones: {} });
+
+    const base = '// ==UserScript==\n// @name Drift\n// ==/UserScript==\n// shared';
+    const localEdit = '// ==UserScript==\n// @name Drift\n// ==/UserScript==\n// local edit';
+
+    const harness = await loadFreshCloudSync(
+      [
+        {
+          id: 'script_drift',
+          code: localEdit,
+          enabled: true,
+          position: 0,
+          meta: { name: 'Drift' },
+          settings: {},
+          syncBaseCode: base,
+          createdAt: 1,
+          updatedAt: 20,
+        },
+      ],
+      {
+        version: 1,
+        timestamp: 10,
+        scripts: [
+          {
+            id: 'script_drift',
+            code: base,
+            enabled: true,
+            position: 0,
+            settings: {},
+            updatedAt: 10,
+            syncBaseCode: base,
+          },
+        ],
+        tombstones: {},
+      },
+    );
+    const { CloudSync, scriptState } = harness;
+
+    await expect(CloudSync.sync()).resolves.toEqual({ success: true });
+
+    // Local won and its code was uploaded, so THAT is the new common ancestor.
+    // Leaving the base at `base` is what produced conflict markers on the
+    // device's next edit.
+    expect(scriptState[0].code).toBe(localEdit);
+    expect(scriptState[0].syncBaseCode).toBe(localEdit);
+  });
+
+  it('leaves the base alone when the user edits the script during the sync', async () => {
+    await chrome.storage.local.set({ syncTombstones: {} });
+
+    const uploaded = '// ==UserScript==\n// @name Racy\n// ==/UserScript==\n// uploaded';
+    const harness = await loadFreshCloudSync(
+      [
+        {
+          id: 'script_racy',
+          code: uploaded,
+          enabled: true,
+          position: 0,
+          meta: { name: 'Racy' },
+          settings: {},
+          syncBaseCode: null,
+          createdAt: 1,
+          updatedAt: 5,
+        },
+      ],
+      null,
+    );
+    const { CloudSync, provider, scriptState } = harness;
+
+    // Simulate the user saving a new revision while the upload is in flight.
+    const midSyncEdit = '// ==UserScript==\n// @name Racy\n// ==/UserScript==\n// edited mid-sync';
+    const originalUpload = provider.upload;
+    provider.upload = vi.fn(async (...args) => {
+      scriptState[0].code = midSyncEdit;
+      return originalUpload?.(...args);
+    });
+
+    await expect(CloudSync.sync()).resolves.toEqual({ success: true });
+
+    expect(scriptState[0].code).toBe(midSyncEdit);
+    // Pinning the uploaded bytes as the base here would make the user's newer
+    // edit look like it was already synced.
+    expect(scriptState[0].syncBaseCode).toBeNull();
+  });
+
 });

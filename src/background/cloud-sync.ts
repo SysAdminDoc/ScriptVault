@@ -1316,6 +1316,50 @@ async function runExclusiveScriptOperation<T>(scriptId: string, operation: () =>
   return await operationPromise;
 }
 
+/**
+ * Record the code we just uploaded as this device's new 3-way-merge base.
+ *
+ * Until now `syncBaseCode` was only written in the apply loop, and only when a
+ * remote change was actually written to storage. Every other outcome — a
+ * local-only script, local-newer, or a one-sided local edit — uploaded the new
+ * code but left the base at whatever it was before (often null). The uploading
+ * device therefore kept merging against a stale ancestor:
+ *
+ *   A applies remote (base = X) -> A edits the same region (Y, uploaded, no
+ *   write so base stays X) -> B applies Y (B's base = Y) -> A edits again (Z).
+ *   A's next sync merges (base X, local Z, remote Y) and diff3 sees both sides
+ *   changing the same region, so it emits conflict markers into a script only
+ *   ever edited on one device. With a null base it silently degrades to
+ *   last-write-wins instead, with no mergeConflict flag.
+ *
+ * Runs after a successful upload only. Each script is stamped under its
+ * operation lock and re-read first, so a user edit landing mid-sync is left
+ * alone rather than having a stale base pinned over it.
+ */
+async function advanceSyncBaseAfterUpload(uploaded: SyncScript[]): Promise<void> {
+  for (const uploadedScript of uploaded) {
+    if (!uploadedScript?.id || typeof uploadedScript.code !== 'string') continue;
+    try {
+      await runExclusiveScriptOperation(uploadedScript.id, async () => {
+        const current = await ScriptStorage.get(uploadedScript.id);
+        if (!current) return;
+        // The user changed the script while the upload was in flight; the
+        // uploaded bytes are no longer this device's state.
+        if (current.code !== uploadedScript.code) return;
+        if (current.syncBaseCode === uploadedScript.code) return;
+        await ScriptStorage.set(uploadedScript.id, {
+          ...current,
+          syncBaseCode: uploadedScript.code,
+        } as Script);
+      });
+    } catch (e) {
+      // A failed stamp only costs merge precision on the next sync; never fail
+      // the sync itself over it.
+      debugLog('[CloudSync] Failed to advance sync base for', uploadedScript.id, e);
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // CloudSync object
 // ---------------------------------------------------------------------------
@@ -1876,6 +1920,7 @@ export const CloudSync = {
       };
       if (signal?.aborted) throw new Error('Sync aborted');
       await provider.upload(await prepareSyncEnvelopeForRemoteUpload(uploadData, settings), settings, { signal });
+      await advanceSyncBaseAfterUpload(uploadScripts);
     } else {
       // First sync, just upload (include tombstones and syncBaseCode)
       if (signal?.aborted) throw new Error('Sync aborted');
@@ -1884,6 +1929,7 @@ export const CloudSync = {
         syncBaseCode: s.syncBaseCode ?? null,
       }));
       await provider.upload(await prepareSyncEnvelopeForRemoteUpload(localData, settings), settings, { signal });
+      await advanceSyncBaseAfterUpload(localData.scripts);
     }
 
     // A successful upload with encryption on means the remote is now encrypted,

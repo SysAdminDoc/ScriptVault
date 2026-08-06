@@ -4,6 +4,16 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Fixed: cloud sync produced conflict markers in scripts edited on only one
+  device.** A device recorded a new merge base only when it applied someone
+  else's change, never when it uploaded its own, so it kept merging against a
+  stale ancestor and eventually treated its own earlier edit as a competing
+  remote change — writing `<<<<<<< LOCAL` markers into working code. Where no
+  base had ever been recorded, genuine concurrent edits silently degraded to
+  last-write-wins with no conflict flag. Both the standard and Easy Cloud
+  engines now record the uploaded code as the new base, skipping any script the
+  user changed while the upload was in flight.
+
 - **Security: `@connect` is now re-checked after HTTP redirects.**
   `GM_xmlhttpRequest`, `GM_download`, and `GM_loadScript` validated the
   requested URL but not the one the redirect chain actually landed on. Because
