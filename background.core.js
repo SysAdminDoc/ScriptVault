@@ -12359,10 +12359,15 @@ async function fetchRequireScript(url, options = {}) {
     return null;
   }
 
-  // Check in-memory cache first
-  if (!bypassCache && requireCache.has(fetchUrl)) {
+  // Check in-memory cache first. Keyed on the FULL url including any
+  // #sha256=... integrity fragment, not the stripped fetchUrl: two scripts can
+  // @require the same base URL with different (or absent) pins, and sharing one
+  // entry meant a pinned require got an unpinned require's unverified bytes
+  // straight from cache, skipping verifySRI entirely. The persistent cache
+  // already keys on the full url via buildRequireCacheKey.
+  if (!bypassCache && requireCache.has(url)) {
     debugLog('Using cached @require:', fetchUrl);
-    return requireCache.get(fetchUrl);
+    return requireCache.get(url);
   }
   
   // Check persistent cache in chrome.storage.local
@@ -12379,7 +12384,7 @@ async function fetchRequireScript(url, options = {}) {
         const age = Date.now() - (cached[cacheKey].timestamp || 0);
         if (age < 7 * 24 * 60 * 60 * 1000) {
           debugLog('Using persistent cached @require:', url);
-          requireCacheSet(fetchUrl, cached[cacheKey].code);
+          requireCacheSet(url, cached[cacheKey].code);
           return cached[cacheKey].code;
         }
       }
@@ -12409,7 +12414,7 @@ async function fetchRequireScript(url, options = {}) {
         // Store in both caches unless this is an integrity probe. TOFU receipt
         // checks must not poison the active cache when they reject an update.
         if (cacheResult) {
-          requireCacheSet(fetchUrl, code);
+          requireCacheSet(url, code);
 
           // Store in persistent cache
           try {
@@ -13675,7 +13680,10 @@ ${mappedCode}
   // Synchronous GM_getValue - returns from cache (pre-loaded or refreshed)
   function GM_getValue(key, defaultValue) {
     if (!hasGrant('GM_getValue') && !hasGrant('GM.getValue')) return defaultValue;
-    if (key in _cache) return _cache[key];
+    // hasOwnProperty, not the in-operator: _cache is a plain object literal,
+    // so in is true for every Object.prototype member and
+    // GM_getValue('toString', fallback) returned Function, never the default.
+    if (Object.prototype.hasOwnProperty.call(_cache, key)) return _cache[key];
     return defaultValue;
   }
   
@@ -13715,14 +13723,14 @@ ${mappedCode}
     if (Array.isArray(keysOrDefaults)) {
       // Array of keys - return values or undefined
       for (const key of keysOrDefaults) {
-        if (key in _cache) {
+        if (Object.prototype.hasOwnProperty.call(_cache, key)) {
           result[key] = _cache[key];
         }
       }
     } else if (typeof keysOrDefaults === 'object' && keysOrDefaults !== null) {
       // Object with defaults - return values or defaults
       for (const key of Object.keys(keysOrDefaults)) {
-        result[key] = key in _cache ? _cache[key] : keysOrDefaults[key];
+        result[key] = Object.prototype.hasOwnProperty.call(_cache, key) ? _cache[key] : keysOrDefaults[key];
       }
     }
     return result;
