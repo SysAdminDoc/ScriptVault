@@ -31140,8 +31140,8 @@ const UpdateSystem = {
   _MAX_PENDING_UPDATES: 50,
   // Total serialized footprint bound for the single pendingUpdates storage key.
   // The count cap alone does not bound size — each entry carries the full new
-  // code plus trust-receipt/diff/risk-delta blobs — so keep the store safely
-  // under the default chrome.storage.local 10 MB quota.
+  // code plus trust-receipt/diff/risk-delta blobs — so bound service-worker
+  // memory and storage write cost even when unlimitedStorage is enabled.
   _MAX_PENDING_TOTAL_BYTES: 8 * 1024 * 1024,
   _pendingUpdates: null,
 
@@ -31570,13 +31570,16 @@ const UpdateSystem = {
     let evicted = 0;
     while (normalized.length > 1) {
       let bytes;
-      try { bytes = JSON.stringify(normalized).length; } catch { break; }
+      try {
+        const serialized = JSON.stringify(normalized);
+        bytes = new TextEncoder().encode(serialized).byteLength;
+      } catch { break; }
       if (bytes <= this._MAX_PENDING_TOTAL_BYTES) break;
       normalized.pop();
       evicted++;
     }
     if (evicted > 0) {
-      console.warn(`[ScriptVault] pendingUpdates exceeded ${this._MAX_PENDING_TOTAL_BYTES} bytes; dropped ${evicted} queued update(s) to stay under quota.`);
+      console.warn(`[ScriptVault] pendingUpdates exceeded ${this._MAX_PENDING_TOTAL_BYTES} bytes; dropped ${evicted} queued update(s) to stay within the bounded storage budget.`);
     }
     this._pendingUpdates = normalized;
     await chrome.storage.local.set({ [this._PENDING_UPDATES_KEY]: normalized });
