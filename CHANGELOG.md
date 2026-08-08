@@ -4,6 +4,16 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **The debugger named every script by its internal UUID.** The console and
+  variables selectors, the live-reload row labels and their toggle accessible
+  names all rendered the raw `script_<uuid>`, so picking between
+  `script_3f6a1c2e-…` entries made the debugger unusable past one script and a
+  screen reader read out a UUID. It now takes a name resolver from the dashboard,
+  which already holds the metadata, and keeps the id as the option value and
+  `title` so it stays discoverable. Falls back to the id when the resolver is
+  absent, returns nothing, or throws — so a log from a since-deleted script is
+  still identifiable.
+
 - **A custom or extra-preset theme applied to the dashboard only.** The Theme
   Editor stores its extra presets (nord/dracula/solarized/…) and user-built themes
   as CSS-variable overrides under `sv_active_custom_theme`, deliberately leaving

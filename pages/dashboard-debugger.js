@@ -295,7 +295,7 @@ const ScriptDebugger = (() => {
       const sel = el('select', { class: 'dbg-select' });
       sel.appendChild(el('option', { value: '', text: 'Select Script…' }));
       scriptIds.forEach(id => {
-        const opt = el('option', { value: id, text: id });
+        const opt = el('option', { value: id, text: scriptLabel(id), title: id });
         if (id === _activeScriptId) opt.selected = true;
         sel.appendChild(opt);
       });
@@ -383,7 +383,7 @@ const ScriptDebugger = (() => {
 
     scriptIds.forEach(id => {
       const row = el('div', { class: 'dbg-live-row' });
-      const name = el('span', { class: 'dbg-live-name', text: id });
+      const name = el('span', { class: 'dbg-live-name', text: scriptLabel(id), title: id });
       row.appendChild(name);
 
       if (_liveReload[id]) {
@@ -393,7 +393,7 @@ const ScriptDebugger = (() => {
       const toggle = el('button', {
         class: 'dbg-toggle' + (_liveReload[id] ? ' active' : ''),
         'aria-pressed': String(_liveReload[id]),
-        'aria-label': `${_liveReload[id] ? 'Disable' : 'Enable'} live reload for ${id}`,
+        'aria-label': `${_liveReload[id] ? 'Disable' : 'Enable'} live reload for ${scriptLabel(id)}`,
       });
       toggle.addEventListener('click', () => {
         _liveReload[id] = !_liveReload[id];
@@ -423,7 +423,7 @@ const ScriptDebugger = (() => {
       const sel = el('select', { class: 'dbg-select' });
       sel.appendChild(el('option', { value: '', text: 'Select Script…' }));
       scriptIds.forEach(id => {
-        const opt = el('option', { value: id, text: id });
+        const opt = el('option', { value: id, text: scriptLabel(id), title: id });
         if (id === _activeScriptId) opt.selected = true;
         sel.appendChild(opt);
       });
@@ -738,6 +738,25 @@ const ScriptDebugger = (() => {
   /* ── Background messaging ───────────────────────────────────────── */
 
   let _onJumpToLine = null;
+  let _getScriptName = null;
+
+  /**
+   * Human label for a script id.
+   *
+   * Every surface in the debugger used to render the raw `script_<uuid>`. Falls
+   * back to the id when no resolver was supplied or the script is gone, so a log
+   * from a since-deleted script is still identifiable.
+   */
+  function scriptLabel(id) {
+    if (!id) return '';
+    if (!_getScriptName) return id;
+    try {
+      const name = _getScriptName(id);
+      return (typeof name === 'string' && name.trim()) ? name.trim() : id;
+    } catch (_e) {
+      return id;
+    }
+  }
 
   /* ── Console interception wrapper ───────────────────────────────── */
 
@@ -810,6 +829,10 @@ const ScriptDebugger = (() => {
      * @param {HTMLElement} containerEl
      * @param {Object} [options]
      * @param {Function} [options.onJumpToLine] — callback(scriptId, lineNumber, columnNumber, source)
+     * @param {Function} [options.getScriptName] — callback(scriptId) => display name.
+     *   The debugger only ever receives ids (`script_<uuid>`), so without this the
+     *   selectors and live-reload rows read as UUIDs and screen readers announce
+     *   them — unusable past one script. Falls back to the id.
      */
     init(containerEl, options = {}) {
       // Guard against double-init (prevents duplicate interval timers)
@@ -818,6 +841,7 @@ const ScriptDebugger = (() => {
       }
       _container = containerEl;
       _onJumpToLine = options.onJumpToLine || null;
+      _getScriptName = typeof options.getScriptName === 'function' ? options.getScriptName : null;
       _activeTab = 'console';
       _consoleFilter = 'all';
       _variableSearch = '';

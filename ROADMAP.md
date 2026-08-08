@@ -867,16 +867,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
 
 ### P2
 
-- [ ] P2 — The debugger identifies scripts by raw `script_<uuid>` everywhere a name should appear
-  Category: ux
-  Where: `pages/dashboard-debugger.js:298` (console selector option text = id), `:425` (variables selector), `:386` (live-reload row label), `:396` (toggle `aria-label`)
-  Problem: All four render the internal id (`"script_" + crypto.randomUUID()`), so users pick between `script_3f6a1c2e-…` entries and the debugger is effectively unusable with more than one script; screen-reader users hear a UUID. The module receives only ids and never resolves names, though `dashboard.js:16085` builds the `init` options and holds `state.scripts` with `metadata.name`.
-  Evidence: Verified — traced id origin (`generateId`) and all four render sites.
-  Fix: Pass a `getScriptName(id)` callback in `ScriptDebugger.init` options and use it for option text, live-reload labels, and aria-labels, falling back to the id.
-  Acceptance: The debugger's selectors and rows show names; a test asserts names render when a resolver is provided.
-  Confidence: Verified
-  Effort: S
-
 ### P3
 
 - [ ] P3 — The pending-updates count badge/chip renders `#93c5fd` on a near-white tint = 1.52:1 in light theme

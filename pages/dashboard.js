@@ -16083,6 +16083,12 @@
         const container = showDashboardModuleModal('Script Debugger', 'scriptDebuggerContainer');
         if (!container) return;
         ScriptDebugger.init(container, {
+            // The debugger is handed ids only; resolve them here where
+            // state.scripts already carries the metadata.
+            getScriptName: (scriptId) => {
+                const script = state.scripts?.find(s => s.id === scriptId);
+                return script?.metadata?.name || script?.meta?.name || '';
+            },
             onJumpToLine: (scriptId, lineNumber) => {
                 hideModal();
                 if (scriptId && scriptId !== state.currentScriptId) {
