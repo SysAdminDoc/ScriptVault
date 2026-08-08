@@ -838,16 +838,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
   Confidence: Verified
   Effort: S
 
-- [ ] P3 — Notification ownership check fails open and records an unauthenticated owner
-  Category: security
-  Where: `src/background/gm-notification-handler.ts:138-146` (`callerOwnsNotification` returns true when no `_notifCallbacks` entry exists) and `:176,187-193` (id = caller-chosen `tag`, owner = `data.scriptId`)
-  Problem: `callerOwnsNotification` returns true whenever there is no callback record — true for every fire-and-forget script notification AND ScriptVault's own internal notifications (update-available, error digests; ids like `update-batch-${Date.now()}`/`error-${scriptId}-${Date.now()}`, brute-forceable within a second). Any script can `GM_closeNotification`/`GM_updateNotification` a guessed id to suppress or fully rewrite (arbitrary title/text/image) the extension's own notifications under its identity. The owner is stored as the unauthenticated `data.scriptId`, and a caller-chosen `tag` becomes the Chrome id, so two scripts sharing a tag overwrite each other.
-  Evidence: Verified — the fail-open branch is documented in a comment; owner stored as `data.scriptId`.
-  Fix: Always record an owner (`sender.userScriptId || data.scriptId`) at create time, namespace caller tags per script (`${scriptId}:${tag}`), and fail closed when no owner record exists for a caller-supplied id.
-  Acceptance: A script cannot update/close another script's or the extension's notification; a test covers a forged-id update attempt.
-  Confidence: Verified
-  Effort: S
-
 - [ ] P3 — Cookie-routing DNR session rule is not scoped to the extension's own request
   Category: security
   Where: `src/background/core.ts:4842-4878` (session rule condition `{ regexFilter: <exact url>, resourceTypes: ['xmlhttprequest'] }` — no `tabIds`/`initiatorDomains`)

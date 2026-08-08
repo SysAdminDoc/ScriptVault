@@ -36,6 +36,8 @@ All notable changes to ScriptVault will be documented in this file.
   network-auditing wrapper (`DONE`, `OPENED`, and peers).
 - Protected the userscript GM-value cache from an in-flight refresh overwriting
   local `GM_setValue`/`GM_deleteValue` mutations.
+- Namespaced userscript notification tags per script and failed closed for
+  unowned or unknown update/close requests.
 
 ## [v3.27.0] — Recoverable restores, real isolation & honest errors (2026-08-08)
 

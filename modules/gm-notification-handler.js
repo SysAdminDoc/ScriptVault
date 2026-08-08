@@ -76,14 +76,30 @@ const GMNotificationHandler = (() => {
       persistNotifCallbacks();
     }
   }
-  function callerOwnsNotification(sender, data) {
-    const ownedScriptId = sender.userScriptId || data.scriptId;
+  function ownedScriptId(sender, data) {
+    const candidate = sender.userScriptId || data.scriptId;
+    return typeof candidate === "string" && candidate ? candidate : void 0;
+  }
+  function namespaceNotificationId(scriptId, publicId) {
+    return `${scriptId}:${publicId}`;
+  }
+  function resolveNotification(sender, data) {
+    const scriptId = ownedScriptId(sender, data);
+    const publicId = typeof data.id === "string" && data.id ? data.id : "";
+    if (!scriptId || !publicId) return void 0;
     const runtime = notificationRuntime();
-    const entry = data.id ? runtime._notifCallbacks?.get(data.id) : void 0;
-    if (entry && ownedScriptId && entry.scriptId && entry.scriptId !== ownedScriptId) {
-      return false;
+    const callbacks = runtime._notifCallbacks;
+    if (!callbacks) return void 0;
+    const namespacedId = namespaceNotificationId(scriptId, publicId);
+    const namespacedEntry = callbacks.get(namespacedId);
+    if (namespacedEntry?.scriptId === scriptId) {
+      return { id: namespacedId, entry: namespacedEntry };
     }
-    return true;
+    const directEntry = callbacks.get(publicId);
+    if (directEntry?.scriptId === scriptId) {
+      return { id: publicId, entry: directEntry };
+    }
+    return void 0;
   }
   function isGMNotificationAction(action) {
     return typeof action === "string" && GM_NOTIFICATION_ACTION_SET.has(action);
@@ -107,24 +123,25 @@ const GMNotificationHandler = (() => {
         }
         const buttons = normalizeButtons(data.buttons);
         if (buttons) notifOpts.buttons = buttons;
-        const notifId = data.tag ? await createNotification()(data.tag, notifOpts) : await createNotification()(notifOpts);
-        const tabId = sender.tab?.id;
-        if (tabId && (data.hasOnclick || data.hasOndone || data.hasOnbuttonclick)) {
-          const runtime = notificationRuntime();
-          if (!runtime._notifCallbacks) runtime._notifCallbacks = /* @__PURE__ */ new Map();
-          if (runtime._notifCallbacks.size > 500) {
-            const oldest = runtime._notifCallbacks.keys().next().value;
-            if (oldest !== void 0) runtime._notifCallbacks.delete(oldest);
-          }
-          runtime._notifCallbacks.set(notifId, {
-            tabId,
-            scriptId: data.scriptId,
-            hasOnclick: data.hasOnclick,
-            hasOndone: data.hasOndone,
-            hasOnbuttonclick: data.hasOnbuttonclick
-          });
-          persistNotifCallbacks();
+        const scriptId = ownedScriptId(sender, data);
+        const publicTag = typeof data.tag === "string" && data.tag ? data.tag : void 0;
+        const chromeTag = scriptId && publicTag ? namespaceNotificationId(scriptId, publicTag) : publicTag;
+        const notifId = chromeTag ? await createNotification()(chromeTag, notifOpts) : await createNotification()(notifOpts);
+        const runtime = notificationRuntime();
+        if (!runtime._notifCallbacks) runtime._notifCallbacks = /* @__PURE__ */ new Map();
+        if (runtime._notifCallbacks.size >= 500 && !runtime._notifCallbacks.has(notifId)) {
+          const oldest = runtime._notifCallbacks.keys().next().value;
+          if (oldest !== void 0) runtime._notifCallbacks.delete(oldest);
         }
+        runtime._notifCallbacks.set(notifId, {
+          tabId: typeof sender.tab?.id === "number" ? sender.tab.id : -1,
+          publicId: publicTag || notifId,
+          scriptId,
+          hasOnclick: data.hasOnclick,
+          hasOndone: data.hasOndone,
+          hasOnbuttonclick: data.hasOnbuttonclick
+        });
+        persistNotifCallbacks();
         if (data.timeout && data.timeout > 0) {
           if (data.timeout >= 3e4) {
             const alarmName = `notif_clear_${notifId}`;
@@ -137,11 +154,12 @@ const GMNotificationHandler = (() => {
             }, data.timeout);
           }
         }
-        return { success: true, id: notifId };
+        return { success: true, id: publicTag || notifId };
       }
       case "GM_updateNotification": {
         if (!data.id) return { success: false, error: "Missing notification id" };
-        if (!callerOwnsNotification(sender, data)) {
+        const resolved = resolveNotification(sender, data);
+        if (!resolved) {
           return { success: false, error: "Notification not owned by caller" };
         }
         const updateOpts = {};
@@ -157,7 +175,7 @@ const GMNotificationHandler = (() => {
         if (typeof data.silent === "boolean") updateOpts.silent = data.silent;
         if (typeof data.requireInteraction === "boolean") updateOpts.requireInteraction = data.requireInteraction;
         try {
-          const wasUpdated = await updateNotification()(data.id, updateOpts);
+          const wasUpdated = await updateNotification()(resolved.id, updateOpts);
           return { success: !!wasUpdated };
         } catch (error) {
           return { success: false, error: error instanceof Error ? error.message : "Update failed" };
@@ -165,12 +183,13 @@ const GMNotificationHandler = (() => {
       }
       case "GM_closeNotification": {
         if (!data.id) return { success: false, error: "Missing notification id" };
-        if (!callerOwnsNotification(sender, data)) {
+        const resolved = resolveNotification(sender, data);
+        if (!resolved) {
           return { success: false, error: "Notification not owned by caller" };
         }
         try {
-          await clearNotification()(data.id);
-          removeNotifCallback(data.id);
+          await clearNotification()(resolved.id);
+          removeNotifCallback(resolved.id);
           return { success: true };
         } catch (error) {
           return { success: false, error: error instanceof Error ? error.message : "Close failed" };

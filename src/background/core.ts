@@ -10532,10 +10532,10 @@ if (chrome.webNavigation?.onReferenceFragmentUpdated?.addListener) {
 chrome.notifications.onClicked.addListener(async (notifId) => {
   try { await ensureInitialized(); } catch (_) { /* logged in init() */ }
   const cb = self._notifCallbacks?.get(notifId);
-  if (cb && cb.hasOnclick) {
+  if (cb && cb.tabId >= 0 && cb.hasOnclick) {
     chrome.tabs.sendMessage(cb.tabId, {
       action: 'notificationEvent',
-      data: { notifId, scriptId: cb.scriptId, type: 'click' }
+      data: { notifId: cb.publicId || notifId, scriptId: cb.scriptId, type: 'click' }
     }).catch(() => {});
   }
 });
@@ -10543,10 +10543,10 @@ chrome.notifications.onClicked.addListener(async (notifId) => {
 chrome.notifications.onClosed.addListener(async (notifId, byUser) => {
   try { await ensureInitialized(); } catch (_) { /* logged in init() */ }
   const cb = self._notifCallbacks?.get(notifId);
-  if (cb && cb.hasOndone) {
+  if (cb && cb.tabId >= 0 && cb.hasOndone) {
     chrome.tabs.sendMessage(cb.tabId, {
       action: 'notificationEvent',
-      data: { notifId, scriptId: cb.scriptId, type: 'done', byUser }
+      data: { notifId: cb.publicId || notifId, scriptId: cb.scriptId, type: 'done', byUser }
     }).catch(() => {});
   }
   if (self._notifCallbacks) {
@@ -10562,10 +10562,10 @@ chrome.notifications.onClosed.addListener(async (notifId, byUser) => {
 chrome.notifications.onButtonClicked.addListener(async (notifId, buttonIndex) => {
   try { await ensureInitialized(); } catch (_) { /* logged in init() */ }
   const cb = self._notifCallbacks?.get(notifId);
-  if (cb && cb.hasOnbuttonclick) {
+  if (cb && cb.tabId >= 0 && cb.hasOnbuttonclick) {
     chrome.tabs.sendMessage(cb.tabId, {
       action: 'notificationEvent',
-      data: { notifId, scriptId: cb.scriptId, type: 'buttonClick', buttonIndex }
+      data: { notifId: cb.publicId || notifId, scriptId: cb.scriptId, type: 'buttonClick', buttonIndex }
     }).catch(() => {});
   }
 });

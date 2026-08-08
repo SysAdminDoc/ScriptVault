@@ -74,6 +74,8 @@ interface NotificationCallbackEntry {
   hasOnbuttonclick?: boolean;
   hasOnclick?: boolean;
   hasOndone?: boolean;
+  /** The id exposed to the userscript (before per-script namespacing). */
+  publicId?: string;
   scriptId?: string;
   tabId: number;
 }
@@ -130,19 +132,50 @@ function removeNotifCallback(id: string): void {
   }
 }
 
-// Reject cross-script update/close: if a callback record exists for this
-// notification id and names a different owner than the authenticated caller,
-// the caller does not own it. Notifications with no callback record (fire-and-
-// forget or internal ScriptVault notifications) have no recorded owner, so we
-// can't attribute them and leave existing behaviour unchanged.
-function callerOwnsNotification(sender: RuntimeMessageSender, data: GMNotificationPayload): boolean {
-  const ownedScriptId = sender.userScriptId || data.scriptId;
+function ownedScriptId(sender: RuntimeMessageSender, data: GMNotificationPayload): string | undefined {
+  const candidate = sender.userScriptId || data.scriptId;
+  return typeof candidate === 'string' && candidate ? candidate : undefined;
+}
+
+function namespaceNotificationId(scriptId: string, publicId: string): string {
+  return `${scriptId}:${publicId}`;
+}
+
+interface ResolvedNotification {
+  id: string;
+  entry: NotificationCallbackEntry;
+}
+
+/**
+ * Resolve a userscript-facing tag to the private Chrome notification id.
+ *
+ * Tags are namespaced when created (`scriptId:tag`) so two scripts cannot
+ * overwrite each other's notifications. Updates and closes continue to accept
+ * the public tag that GM_notification returned to the script. An authenticated
+ * owner is mandatory, and an unknown id fails closed even when Chrome happens
+ * to have a notification with that name.
+ */
+function resolveNotification(sender: RuntimeMessageSender, data: GMNotificationPayload): ResolvedNotification | undefined {
+  const scriptId = ownedScriptId(sender, data);
+  const publicId = typeof data.id === 'string' && data.id ? data.id : '';
+  if (!scriptId || !publicId) return undefined;
   const runtime = notificationRuntime();
-  const entry = data.id ? runtime._notifCallbacks?.get(data.id) : undefined;
-  if (entry && ownedScriptId && entry.scriptId && entry.scriptId !== ownedScriptId) {
-    return false;
+  const callbacks = runtime._notifCallbacks;
+  if (!callbacks) return undefined;
+
+  const namespacedId = namespaceNotificationId(scriptId, publicId);
+  const namespacedEntry = callbacks.get(namespacedId);
+  if (namespacedEntry?.scriptId === scriptId) {
+    return { id: namespacedId, entry: namespacedEntry };
   }
-  return true;
+
+  // Notifications created without a caller tag use Chrome's returned id
+  // directly. Keep that path owner-checked as well.
+  const directEntry = callbacks.get(publicId);
+  if (directEntry?.scriptId === scriptId) {
+    return { id: publicId, entry: directEntry };
+  }
+  return undefined;
 }
 
 export function isGMNotificationAction(action: unknown): action is GMNotificationAction {
@@ -173,26 +206,27 @@ export async function handleGMNotificationMessage(
       const buttons = normalizeButtons(data.buttons);
       if (buttons) notifOpts.buttons = buttons;
 
-      const notifId = data.tag
-        ? await createNotification()(data.tag, notifOpts)
+      const scriptId = ownedScriptId(sender, data);
+      const publicTag = typeof data.tag === 'string' && data.tag ? data.tag : undefined;
+      const chromeTag = scriptId && publicTag ? namespaceNotificationId(scriptId, publicTag) : publicTag;
+      const notifId = chromeTag
+        ? await createNotification()(chromeTag, notifOpts)
         : await createNotification()(notifOpts);
-      const tabId = sender.tab?.id;
-      if (tabId && (data.hasOnclick || data.hasOndone || data.hasOnbuttonclick)) {
-        const runtime = notificationRuntime();
-        if (!runtime._notifCallbacks) runtime._notifCallbacks = new Map();
-        if (runtime._notifCallbacks.size > 500) {
-          const oldest = runtime._notifCallbacks.keys().next().value;
-          if (oldest !== undefined) runtime._notifCallbacks.delete(oldest);
-        }
-        runtime._notifCallbacks.set(notifId, {
-          tabId,
-          scriptId: data.scriptId,
-          hasOnclick: data.hasOnclick,
-          hasOndone: data.hasOndone,
-          hasOnbuttonclick: data.hasOnbuttonclick,
-        });
-        persistNotifCallbacks();
+      const runtime = notificationRuntime();
+      if (!runtime._notifCallbacks) runtime._notifCallbacks = new Map();
+      if (runtime._notifCallbacks.size >= 500 && !runtime._notifCallbacks.has(notifId)) {
+        const oldest = runtime._notifCallbacks.keys().next().value;
+        if (oldest !== undefined) runtime._notifCallbacks.delete(oldest);
       }
+      runtime._notifCallbacks.set(notifId, {
+        tabId: typeof sender.tab?.id === 'number' ? sender.tab.id : -1,
+        publicId: publicTag || notifId,
+        scriptId,
+        hasOnclick: data.hasOnclick,
+        hasOndone: data.hasOndone,
+        hasOnbuttonclick: data.hasOnbuttonclick,
+      });
+      persistNotifCallbacks();
 
       if (data.timeout && data.timeout > 0) {
         if (data.timeout >= 30000) {
@@ -205,12 +239,15 @@ export async function handleGMNotificationMessage(
           }, data.timeout);
         }
       }
-      return { success: true, id: notifId };
+      // Keep the public GM tag stable; the namespaced id is an implementation
+      // detail used only for Chrome and the ownership map.
+      return { success: true, id: publicTag || notifId };
     }
 
     case 'GM_updateNotification': {
       if (!data.id) return { success: false, error: 'Missing notification id' };
-      if (!callerOwnsNotification(sender, data)) {
+      const resolved = resolveNotification(sender, data);
+      if (!resolved) {
         return { success: false, error: 'Notification not owned by caller' };
       }
       const updateOpts: NotificationOptions = {};
@@ -226,7 +263,7 @@ export async function handleGMNotificationMessage(
       if (typeof data.silent === 'boolean') updateOpts.silent = data.silent;
       if (typeof data.requireInteraction === 'boolean') updateOpts.requireInteraction = data.requireInteraction;
       try {
-        const wasUpdated = await updateNotification()(data.id, updateOpts);
+        const wasUpdated = await updateNotification()(resolved.id, updateOpts);
         return { success: !!wasUpdated };
       } catch (error) {
         return { success: false, error: error instanceof Error ? error.message : 'Update failed' };
@@ -235,12 +272,13 @@ export async function handleGMNotificationMessage(
 
     case 'GM_closeNotification': {
       if (!data.id) return { success: false, error: 'Missing notification id' };
-      if (!callerOwnsNotification(sender, data)) {
+      const resolved = resolveNotification(sender, data);
+      if (!resolved) {
         return { success: false, error: 'Notification not owned by caller' };
       }
       try {
-        await clearNotification()(data.id);
-        removeNotifCallback(data.id);
+        await clearNotification()(resolved.id);
+        removeNotifCallback(resolved.id);
         return { success: true };
       } catch (error) {
         return { success: false, error: error instanceof Error ? error.message : 'Close failed' };

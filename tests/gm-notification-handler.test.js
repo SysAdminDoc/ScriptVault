@@ -64,7 +64,7 @@ describe('GM notification handler', () => {
           { title: 'Ignored' },
         ],
       },
-      { tab: { id: 7 } },
+      { tab: { id: 7 }, userScriptId: 'script-1' },
     )).resolves.toEqual({ success: true, id: 'status' });
 
     const [, options] = chrome.notifications.create.mock.calls[0];
@@ -80,15 +80,17 @@ describe('GM notification handler', () => {
     expect(options.message).toHaveLength(280);
     expect(options.buttons).toHaveLength(2);
     expect(options.buttons[0].title).toHaveLength(200);
-    expect(globalThis._notifCallbacks.get('status')).toEqual({
+    expect(chrome.notifications.create).toHaveBeenCalledWith('script-1:status', expect.any(Object));
+    expect(globalThis._notifCallbacks.get('script-1:status')).toEqual({
       tabId: 7,
       scriptId: 'script-1',
+      publicId: 'status',
       hasOnclick: true,
       hasOndone: true,
       hasOnbuttonclick: true,
     });
     expect(globalThis.SessionState.persistNotifCallbacks).toHaveBeenCalledTimes(1);
-    expect(chrome.alarms.create).toHaveBeenCalledWith('notif_clear_status', {
+    expect(chrome.alarms.create).toHaveBeenCalledWith('notif_clear_script-1:status', {
       delayInMinutes: 1,
     });
   });
@@ -114,18 +116,23 @@ describe('GM notification handler', () => {
   });
 
   it('updates notifications with partial fields and clear failure messages', async () => {
+    globalThis._notifCallbacks = new Map([
+      ['script-1:status', { tabId: 7, scriptId: 'script-1', publicId: 'status' }],
+      ['script-1:missing', { tabId: 7, scriptId: 'script-1', publicId: 'missing' }],
+    ]);
     await expect(handleGMNotificationMessage('GM_updateNotification', {}))
       .resolves.toEqual({ success: false, error: 'Missing notification id' });
 
     await expect(handleGMNotificationMessage('GM_updateNotification', {
       id: 'status',
+      scriptId: 'script-1',
       text: 'Updated',
       progress: -4.2,
       requireInteraction: false,
       buttons: [{ title: 'Ok' }],
-    })).resolves.toEqual({ success: true });
+    }, { userScriptId: 'script-1' })).resolves.toEqual({ success: true });
 
-    expect(chrome.notifications.update).toHaveBeenCalledWith('status', {
+    expect(chrome.notifications.update).toHaveBeenCalledWith('script-1:status', {
       message: 'Updated',
       type: 'progress',
       progress: 0,
@@ -134,25 +141,45 @@ describe('GM notification handler', () => {
     });
 
     chrome.notifications.update.mockRejectedValueOnce(new Error('gone'));
-    await expect(handleGMNotificationMessage('GM_updateNotification', { id: 'missing' }))
+    await expect(handleGMNotificationMessage('GM_updateNotification', { id: 'missing' }, { userScriptId: 'script-1' }))
       .resolves.toEqual({ success: false, error: 'gone' });
   });
 
   it('closes notifications and removes callback tracking', async () => {
     globalThis._notifCallbacks = new Map([
-      ['status', { tabId: 7, scriptId: 'script-1', hasOnclick: true }],
+      ['script-1:status', { tabId: 7, scriptId: 'script-1', publicId: 'status', hasOnclick: true }],
     ]);
 
     await expect(handleGMNotificationMessage('GM_closeNotification', {}))
       .resolves.toEqual({ success: false, error: 'Missing notification id' });
-    await expect(handleGMNotificationMessage('GM_closeNotification', { id: 'status' }))
+    await expect(handleGMNotificationMessage('GM_closeNotification', { id: 'status' }, { userScriptId: 'script-1' }))
       .resolves.toEqual({ success: true });
 
-    expect(chrome.notifications.clear).toHaveBeenCalledWith('status');
-    expect(globalThis._notifCallbacks.has('status')).toBe(false);
+    expect(chrome.notifications.clear).toHaveBeenCalledWith('script-1:status');
+    expect(globalThis._notifCallbacks.has('script-1:status')).toBe(false);
 
+    globalThis._notifCallbacks.set('script-1:again', { tabId: 7, scriptId: 'script-1', publicId: 'again' });
     chrome.notifications.clear.mockRejectedValueOnce(new Error('close failed'));
-    await expect(handleGMNotificationMessage('GM_closeNotification', { id: 'again' }))
+    await expect(handleGMNotificationMessage('GM_closeNotification', { id: 'again' }, { userScriptId: 'script-1' }))
       .resolves.toEqual({ success: false, error: 'close failed' });
+  });
+
+  it('fails closed for cross-script and untracked update/close ids', async () => {
+    globalThis._notifCallbacks = new Map([
+      ['script-1:owned', { tabId: 7, scriptId: 'script-1', publicId: 'owned' }],
+    ]);
+
+    await expect(handleGMNotificationMessage(
+      'GM_updateNotification',
+      { id: 'owned' },
+      { userScriptId: 'script-2' },
+    )).resolves.toEqual({ success: false, error: 'Notification not owned by caller' });
+    await expect(handleGMNotificationMessage(
+      'GM_closeNotification',
+      { id: 'missing' },
+      { userScriptId: 'script-1' },
+    )).resolves.toEqual({ success: false, error: 'Notification not owned by caller' });
+    expect(chrome.notifications.update).not.toHaveBeenCalled();
+    expect(chrome.notifications.clear).not.toHaveBeenCalled();
   });
 });
