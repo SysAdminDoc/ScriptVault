@@ -47,6 +47,14 @@ const A11y = (() => {
   outline: none;
 }
 
+/* The light theme's blue accent is too pale against --bg-header for normal
+   text. Keep the dark-theme accent treatment, but use the existing primary
+   text token for a light-theme AA-safe foreground. */
+[data-theme="light"] .a11y-skip-link {
+  color: var(--text-primary);
+  border-color: var(--text-primary);
+}
+
 /* Focus visible styles — outline, not box-shadow */
 .a11y-active *:focus-visible:not(#scriptSearch) {
   outline: 2px solid var(--accent-blue) !important;

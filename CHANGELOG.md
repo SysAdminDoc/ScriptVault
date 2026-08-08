@@ -18,6 +18,8 @@ All notable changes to ScriptVault will be documented in this file.
   README gate rejecting stale matrix or artifact references.
 - Corrected pending-update eviction to measure serialized UTF-8 bytes and bound
   service-worker/storage write cost independently of the userscript count cap.
+- Raised the light-theme accessibility skip-link foreground to the existing
+  primary-text token so its focused state clears the 4.5:1 normal-text target.
 
 ## [v3.27.0] — Recoverable restores, real isolation & honest errors (2026-08-08)
 

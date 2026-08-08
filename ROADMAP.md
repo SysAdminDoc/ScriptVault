@@ -776,16 +776,6 @@ no pre-existing failures. Live verification used Firefox Developer Edition
 154.0b1 via geckodriver 0.37.1 and headless Chromium via the repo's
 puppeteer-core. Audit-only: no source file was modified._
 
-- [ ] P3 — Light-theme skip link falls just under AA contrast
-  Category: a11y
-  Where: `pages/dashboard-a11y.js:30-48` — the `.a11y-skip-link` rule inside the injected `STYLES` template (`color: var(--accent-blue)` on `background: var(--bg-header)`); the element itself is created at `pages/dashboard-a11y.js:198`
-  Problem: The "Skip to main content" link renders `rgb(37,99,235)` on `rgb(228,228,228)` for a 4.07:1 ratio at 14px, below the 4.5:1 AA requirement for normal text. This is the first control a keyboard user reaches on the page.
-  Evidence: Computed live in the loaded extension in light theme by walking to the first ancestor with an opaque background and applying the WCAG relative-luminance formula: ratio 4.07, required 4.5, font-size 14px. It was the only genuine failure the sweep found in light theme — the other flagged elements were false positives from gradient-backed buttons whose `backgroundColor` is transparent.
-  Fix: Darken the skip-link foreground in light theme to a blue meeting 4.5:1 against its actual background (or give the link an opaque high-contrast background of its own when focused), using the theme's existing accent tokens rather than a new literal.
-  Acceptance: The focused skip link measures at least 4.5:1 in light theme; the other three themes stay unchanged.
-  Confidence: Verified
-  Effort: S
-
 ### Unaudited — needs a pass
 
 _Scope not covered by the 2026-08-02 pass. Not findings; each needs its own audit._

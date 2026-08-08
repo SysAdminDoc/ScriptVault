@@ -7,6 +7,7 @@ import { runReadabilityCheck } from "../scripts/check-readability.mjs";
 const dashboardHtml = readFileSync(resolve(process.cwd(), "pages/dashboard.html"), "utf8");
 const dashboardCss = readFileSync(resolve(process.cwd(), "pages/dashboard.css"), "utf8");
 const dashboardJs = readFileSync(resolve(process.cwd(), "pages/dashboard.js"), "utf8");
+const dashboardA11y = readFileSync(resolve(process.cwd(), "pages/dashboard-a11y.js"), "utf8");
 const popupHtml = readFileSync(resolve(process.cwd(), "pages/popup.html"), "utf8");
 const popupJs = readFileSync(resolve(process.cwd(), "pages/popup.js"), "utf8");
 const sidepanelHtml = readFileSync(resolve(process.cwd(), "pages/sidepanel.html"), "utf8");
@@ -89,6 +90,21 @@ describe("accessibility surface pass", () => {
 
     expect(hasClassLink(installHtml, "install-skip-link", "#content")).toBe(true);
     expect(findTagById(installHtml, "content")).toBeTruthy();
+  });
+
+  test("light-theme dashboard skip link keeps normal-text AA contrast", () => {
+    expect(dashboardA11y).toMatch(/\[data-theme="light"\]\s+\.a11y-skip-link\s*\{[\s\S]*?color:\s*var\(--text-primary\)[\s\S]*?border-color:\s*var\(--text-primary\)/);
+    const lightTheme = dashboardHtml.match(/\[data-theme="light"\]\s*\{([\s\S]*?)\n\s*\}/)?.[1] || "";
+    expect(lightTheme).toContain("--bg-header: #e4e4e4");
+    expect(lightTheme).toContain("--text-primary: #333");
+
+    const channel = (hex) => {
+      const value = parseInt(hex, 16) / 255;
+      return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+    };
+    const luminance = (hex) => 0.2126 * channel(hex.slice(0, 2)) + 0.7152 * channel(hex.slice(2, 4)) + 0.0722 * channel(hex.slice(4, 6));
+    const ratio = (lighter, darker) => (luminance(lighter) + 0.05) / (luminance(darker) + 0.05);
+    expect(ratio("e4e4e4", "333333")).toBeGreaterThanOrEqual(4.5);
   });
 
   test("major extension surfaces expose a consistent Help deep link", () => {
