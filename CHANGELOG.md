@@ -24,6 +24,10 @@ All notable changes to ScriptVault will be documented in this file.
   components in the CycloneDX SBOM.
 - Routed userscript updates that change the declared `@author` or `@namespace`
   to manual review with a compact old-to-new identity reason.
+- Expanded the accessibility sweep to forced-colors, 320px reflow, and WCAG
+  text-spacing overrides, with stylesheet-driven coverage and compact workbench
+  fallbacks for high-contrast borders, selected rows, and icon controls; the
+  light install surface now keeps muted copy above the normal-text contrast floor.
 - Added a bounded local-file metadata polling fallback with explicit watcher
   health when FileSystemObserver is unavailable or reports an unknown/error
   state; only the active editor polls and changes still go through review.

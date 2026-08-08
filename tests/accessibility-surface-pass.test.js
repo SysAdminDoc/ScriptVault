@@ -1,11 +1,12 @@
 // @vitest-environment node
 
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { runReadabilityCheck } from "../scripts/check-readability.mjs";
 
 const dashboardHtml = readFileSync(resolve(process.cwd(), "pages/dashboard.html"), "utf8");
 const dashboardCss = readFileSync(resolve(process.cwd(), "pages/dashboard.css"), "utf8");
+const accessibilitySpec = readFileSync(resolve(process.cwd(), "tests/e2e/accessibility.spec.js"), "utf8");
 const dashboardJs = readFileSync(resolve(process.cwd(), "pages/dashboard.js"), "utf8");
 const dashboardA11y = readFileSync(resolve(process.cwd(), "pages/dashboard-a11y.js"), "utf8");
 const popupHtml = readFileSync(resolve(process.cwd(), "pages/popup.html"), "utf8");
@@ -18,6 +19,14 @@ const installHtml = readFileSync(resolve(process.cwd(), "pages/install.html"), "
 const installJs = readFileSync(resolve(process.cwd(), "pages/install.js"), "utf8");
 const packageJson = JSON.parse(readFileSync(resolve(process.cwd(), "package.json"), "utf8"));
 
+const SURFACE_HTML = [
+  ["dashboard", "pages/dashboard.html", dashboardHtml],
+  ["popup", "pages/popup.html", popupHtml],
+  ["sidepanel", "pages/sidepanel.html", sidepanelHtml],
+  ["install", "pages/install.html", installHtml],
+  ["devtools", "pages/devtools-panel.html", devtoolsHtml],
+];
+
 function expectForcedColorsSurface(source) {
   expect(source).toContain("@media (forced-colors: active)");
   expect(source).toContain("CanvasText");
@@ -26,6 +35,10 @@ function expectForcedColorsSurface(source) {
   expect(source).toContain("Highlight");
   expect(source).toContain("box-shadow: none !important");
   expect(source).toContain("outline: 2px solid Highlight !important");
+}
+
+function expectForcedColorsMarker(source) {
+  expect(source).toContain("@media (forced-colors: active)");
 }
 
 function findTagById(source, id) {
@@ -72,11 +85,35 @@ describe("accessibility surface pass", () => {
   });
 
   test("major extension surfaces include forced-colors system-color fallbacks", () => {
-    expectForcedColorsSurface(dashboardCss);
-    expectForcedColorsSurface(popupHtml);
-    expectForcedColorsSurface(sidepanelHtml);
-    expectForcedColorsSurface(devtoolsHtml);
-    expectForcedColorsSurface(installHtml);
+    const pagesRoot = resolve(process.cwd(), "pages");
+    const loadedStylesheets = new Set();
+    for (const [name, htmlPath, html] of SURFACE_HTML) {
+      expectForcedColorsMarker(html);
+      const htmlDirectory = dirname(resolve(process.cwd(), htmlPath));
+      for (const match of html.matchAll(/<link\b[^>]*rel=["']stylesheet["'][^>]*href=["']([^"']+)["'][^>]*>/gi)) {
+        const stylesheetPath = resolve(htmlDirectory, match[1]);
+        const relativePath = relative(pagesRoot, stylesheetPath);
+        if (relativePath && !isAbsolute(relativePath) && !relativePath.startsWith("..")) {
+          loadedStylesheets.add(stylesheetPath);
+        }
+      }
+      expect(name).toBeTruthy();
+    }
+
+    // Every project stylesheet actually linked by a tested surface is covered
+    // automatically. Vendor CSS under lib/ is intentionally outside pagesRoot.
+    expect([...loadedStylesheets].some((path) => path.endsWith("dashboard-workbench.css"))).toBe(true);
+    for (const stylesheetPath of loadedStylesheets) {
+      expectForcedColorsSurface(readFileSync(stylesheetPath, "utf8"));
+    }
+  });
+
+  test("the browser sweep exercises forced colors, 320px reflow, and text spacing", () => {
+    expect(accessibilitySpec).toContain("forcedColors: 'active'");
+    expect(accessibilitySpec).toContain("width: 320");
+    expect(accessibilitySpec).toContain("letter-spacing: 0.12em");
+    expect(accessibilitySpec).toContain("word-spacing: 0.16em");
+    expect(accessibilitySpec).toContain("margin-block-end: 2em");
   });
 
   test("major extension surfaces expose skip links or a bypass target", () => {
@@ -228,6 +265,7 @@ describe("accessibility surface pass", () => {
   test("compact popup and side-panel toggles meet 24px touch-target height", () => {
     expect(popupHtml).toContain("width: 40px;");
     expect(popupHtml).toContain("height: 24px;");
+    expect(popupHtml).toContain("@media (max-width: 22.5rem)");
     expect(sidepanelHtml).toContain("width: 40px; height: 24px");
     expect(sidepanelHtml).toContain("width: 18px; height: 18px");
   });

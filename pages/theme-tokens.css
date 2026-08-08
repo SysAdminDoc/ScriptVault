@@ -56,7 +56,7 @@
   --sv-border-subtle: #e3ebe6;
   --sv-text: #17231c;
   --sv-text-muted: #58675e;
-  --sv-text-dim: #66756c;
+  --sv-text-dim: #58675e;
   --sv-accent: #16a34a;
   --sv-accent-dim: #dcfce7;
   --sv-danger: #dc2626;
@@ -235,5 +235,67 @@
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* Keep the shared token layer legible when Windows replaces author colors
+   with the user's high-contrast palette. Page-specific surfaces can add
+   component selectors, but every extension page gets this safe baseline. */
+@media (forced-colors: active) {
+  :root,
+  [data-theme="dark"],
+  [data-theme="light"],
+  [data-theme="catppuccin"],
+  [data-theme="oled"] {
+    --sv-bg: Canvas;
+    --sv-bg-raised: Canvas;
+    --sv-bg-hover: Canvas;
+    --sv-border: CanvasText;
+    --sv-border-subtle: CanvasText;
+    --sv-text: CanvasText;
+    --sv-text-muted: GrayText;
+    --sv-text-dim: GrayText;
+    --sv-accent: Highlight;
+    --sv-accent-dim: Highlight;
+    --sv-danger: CanvasText;
+    --sv-warning: CanvasText;
+    --sv-info: LinkText;
+    --sv-info-on-soft: CanvasText;
+    --sv-badge-bg: Canvas;
+    --sv-scrollbar: CanvasText;
+    --sv-scrollbar-hover: Highlight;
+    --sv-text-on-accent: HighlightText;
+    --sv-text-on-info: LinkText;
+    --sv-text-on-danger: CanvasText;
+    --sv-text-on-warning: CanvasText;
+    --sv-focus-ring: none;
+    --sv-shadow-xs: none;
+    --sv-shadow-sm: none;
+    --sv-shadow-md: none;
+    --sv-shadow-lg: none;
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  :where(button, input, select, textarea, [role="button"], [role="tab"]),
+  :where(button, input, select, textarea, [role="button"], [role="tab"]):disabled {
+    background: ButtonFace !important;
+    border-color: ButtonText !important;
+    color: ButtonText !important;
+  }
+
+  :where(a[href]) {
+    color: LinkText !important;
+  }
+
+  :where(a[href], button, input, select, textarea, summary, [role="button"], [role="tab"]):focus-visible {
+    outline: 2px solid Highlight !important;
+    outline-offset: 2px !important;
+    box-shadow: none !important;
   }
 }

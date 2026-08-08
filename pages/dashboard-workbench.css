@@ -39,6 +39,12 @@ body {
   background: var(--sv-app-bg);
 }
 
+/* Horizontal scrolling belongs to bounded data panes (for example the
+   library table), never to the dashboard document itself. */
+html {
+  overflow-x: clip;
+}
+
 html,
 .sv-nav-rail,
 .script-inspector-panel {
@@ -5280,5 +5286,117 @@ html[data-theme="light"] #scriptsPanel .script-inspector-panel {
   #helpPanel .shortcuts-grid,
   #helpPanel .shortcuts-container .shortcuts-grid {
     grid-template-columns: minmax(66px, auto) minmax(0, 1fr);
+  }
+}
+
+/* The later compact composition resets the statusbar's rail offset; keep
+   that reset after every responsive layer so a 320px viewport cannot acquire
+   a horizontal page scrollbar from the fixed footer contents. */
+@media (max-width: 48rem) {
+  .sv-workbench-statusbar {
+    left: 0;
+    right: 0;
+    padding-inline: 12px;
+  }
+}
+
+/* The workbench is loaded after dashboard.css, so it owns the final
+   forced-colors treatment for the compact shell and its icon-only controls. */
+@media (forced-colors: active) {
+  :root {
+    --sv-app-bg: Canvas;
+    --sv-surface: Canvas;
+    --sv-surface-2: Canvas;
+    --sv-surface-3: Canvas;
+    --sv-text-soft: CanvasText;
+    --sv-text-muted: GrayText;
+    --sv-border: CanvasText;
+    --sv-border-strong: CanvasText;
+    --sv-accent-2: Highlight;
+    --sv-shadow: none;
+    --sv-shadow-soft: none;
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  .sv-workbench-shell,
+  .sv-workbench-topbar,
+  .sv-nav-rail,
+  .sv-workbench-main,
+  .sv-workbench-statusbar,
+  .scripts-shell,
+  .updates-shell,
+  .settings-shell,
+  .utilities-shell,
+  .trash-shell,
+  .help-shell,
+  .dashboard-module-surface,
+  .scripts-shell-header,
+  .scripts-toolbar,
+  .scripts-table-container,
+  .scripts-table,
+  .scripts-table thead,
+  .scripts-table tbody tr,
+  .pending-update-card,
+  .scripts-update-queue-row,
+  .script-inspector-panel,
+  .script-inspector-section,
+  .settings-section,
+  .settings-filter-row,
+  .utilities-filter-row,
+  .trash-filter-row,
+  .help-filter-row,
+  .trash-item,
+  .help-section,
+  .shortcuts-container {
+    background: Canvas !important;
+    border-color: CanvasText !important;
+    color: CanvasText !important;
+  }
+
+  #setupWarningText,
+  .sv-rail-brand strong,
+  #svRailStorageText,
+  #svWorkbenchSectionTitle,
+  #emptyStateTitle,
+  #svFooterUpdateStatus {
+    color: CanvasText !important;
+  }
+
+  :where(button, input, select, textarea, .toolbar-btn, .btn, .action-icon,
+    .script-row-menu-trigger, .sv-topbar-icon, .sv-command-trigger,
+    .sv-rail-item, .sv-rail-subitem) {
+    background: ButtonFace !important;
+    border-color: ButtonText !important;
+    color: ButtonText !important;
+  }
+
+  :where(a[href], .script-name-button, .sv-workbench-breadcrumb a) {
+    color: LinkText !important;
+  }
+
+  .scripts-table tbody tr.selected,
+  .scripts-table tbody tr.row-selected,
+  .sv-rail-item[aria-current="page"],
+  .sv-rail-subitem[aria-current="page"] {
+    background: Highlight !important;
+    border-color: Highlight !important;
+    color: HighlightText !important;
+  }
+
+  :where(a[href], button, input, select, textarea, summary, [role="button"], [role="tab"]):focus-visible,
+  .action-icon:focus-visible,
+  .script-row-menu-trigger:focus-visible,
+  .sv-topbar-icon:focus-visible,
+  .sv-command-trigger:focus-visible,
+  .sv-rail-item:focus-visible {
+    outline: 2px solid Highlight !important;
+    outline-offset: 2px;
+    box-shadow: none !important;
   }
 }

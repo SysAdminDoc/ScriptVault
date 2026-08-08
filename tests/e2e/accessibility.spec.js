@@ -22,6 +22,24 @@ const SURFACES = [
   { name: 'devtools', path: 'pages/devtools-panel.html', ready: 'body', viewports: [{ width: 1100, height: 720 }, { width: 620, height: 700 }] },
 ];
 
+const ADDITIONAL_A11Y_MODES = [
+  { name: 'forced-colors', viewport: { width: 1280, height: 800 }, forcedColors: 'active' },
+  { name: 'reflow-320', viewport: { width: 320, height: 720 }, reflow: true },
+  { name: 'text-spacing', viewport: { width: 1280, height: 800 }, textSpacing: true },
+];
+
+const TEXT_SPACING_STYLE = `
+  body * {
+    line-height: 1.5 !important;
+    letter-spacing: 0.12em !important;
+    word-spacing: 0.16em !important;
+  }
+  body p,
+  body li {
+    margin-block-end: 2em !important;
+  }
+`;
+
 async function markWhatsNewSeen(page) {
   await page.evaluate(() => chrome.storage.local.set({
     lastSeenVersion: chrome.runtime.getManifest().version,
@@ -39,9 +57,19 @@ async function seedTheme(page, theme) {
   }, theme);
 }
 
-async function settle(page) {
-  await page.emulateMedia({ reducedMotion: 'reduce' });
+async function settle(page, { forcedColors = 'none' } = {}) {
+  await page.emulateMedia({ reducedMotion: 'reduce', forcedColors });
   await page.waitForTimeout(150);
+}
+
+async function inspectHorizontalOverflow(page) {
+  return page.evaluate(() => ({
+    viewport: innerWidth,
+    // The root scrolling element is the page-level reflow contract. Body
+    // scrollWidth also counts intentionally clipped descendants such as the
+    // bounded library table and the horizontally scrollable mobile rail.
+    scrollWidth: document.documentElement.scrollWidth,
+  }));
 }
 
 test('real extension surfaces meet WCAG 2.2 AA across themes and viewports', async () => {
@@ -81,6 +109,36 @@ test('real extension surfaces meet WCAG 2.2 AA across themes and viewports', asy
             const geometry = await inspectInteractiveGeometry(page);
             for (const kind of ['undersized', 'focusFailures', 'obscured']) {
               geometryFailures.push(...geometry[kind].map(failure => ({ label, kind, ...failure })));
+            }
+          }
+        }
+
+        for (const mode of ADDITIONAL_A11Y_MODES) {
+          await page.setViewportSize(mode.viewport);
+          await page.emulateMedia({
+            reducedMotion: 'reduce',
+            forcedColors: mode.forcedColors || 'none',
+          });
+          await seedTheme(page, 'dark');
+          await page.reload({ waitUntil: 'domcontentloaded' });
+          await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
+          await page.locator(surface.ready).first().waitFor({ state: 'attached', timeout: 15_000 });
+          await settle(page, mode);
+          if (mode.textSpacing) {
+            await page.addStyleTag({ content: TEXT_SPACING_STYLE });
+          }
+          const label = `${surface.name}/${mode.name}`;
+          failures.push(...await analyzeAccessibility(page, label));
+          if (mode.reflow || mode.textSpacing) {
+            const overflow = await inspectHorizontalOverflow(page);
+            if (overflow.scrollWidth > overflow.viewport + 1) {
+              geometryFailures.push({
+                label,
+                kind: 'horizontal-overflow',
+                target: 'document',
+                viewport: overflow.viewport,
+                scrollWidth: overflow.scrollWidth,
+              });
             }
           }
         }
