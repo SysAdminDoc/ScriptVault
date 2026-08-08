@@ -6,9 +6,28 @@ import { fileURLToPath } from 'node:url';
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(scriptDir, '..');
-// Release tags this project publishes unsigned. ScriptVault does not use code
-// signing, so these are accepted with a warning locally and are still surfaced
-// by `release:check:public`. Extend the set when a release is tagged unsigned.
+/**
+ * Declared release-signing policy for this project.
+ *
+ * ScriptVault ships UNSIGNED, deliberately: there is no code-signing certificate
+ * and no plan to acquire one. That was previously expressed as a hand-maintained
+ * allowlist of tags honoured only when `checkPublic` was false — which made
+ * `release:check:public` unpassable by construction for every release built under
+ * the actual policy (it failed silently for v3.21.0, v3.22.0 and v3.25.0), and
+ * required editing this file on every release. A gate nobody can pass is as
+ * uninformative as one that always passes.
+ *
+ * Under `'unsigned'`, a tag carrying NO signature is expected: it is reported as
+ * a warning in every gate, never a failure. A tag whose signature exists but does
+ * not verify still fails — that is corruption or the wrong key, not policy.
+ *
+ * Set to `'signed'` if the project ever adopts signing; unsigned tags then fail
+ * the public gate.
+ */
+const RELEASE_SIGNING_POLICY = 'unsigned';
+
+// Tags published before the policy above was expressed in code. Kept only so the
+// historical record is explicit; the policy — not this list — is what decides.
 const LEGACY_UNSIGNED_RELEASE_TAGS = new Set([
   'v3.11.0', 'v3.21.0', 'v3.22.0', 'v3.23.0', 'v3.23.1', 'v3.24.0', 'v3.25.0',
 ]);
@@ -60,6 +79,7 @@ export function verifyReleaseTag({
   root = projectRoot,
   execFileSyncImpl = execFileSync,
   legacyUnsignedTags = LEGACY_UNSIGNED_RELEASE_TAGS,
+  signingPolicy = RELEASE_SIGNING_POLICY,
 } = {}) {
   const failures = [];
   const warnings = [];
@@ -91,8 +111,11 @@ export function verifyReleaseTag({
     const detail = commandErrorText(e);
     const message = `git tag ${tag} is unsigned or cannot be cryptographically verified`;
     if (isUnsignedTagVerification(detail)) {
-      if (!checkPublic && legacyUnsignedTags.has(tag)) {
-        warnings.push(`${message}; ${tag} is an accepted unsigned release tag`);
+      if (signingPolicy === 'unsigned') {
+        // Expected under the declared policy, in the public gate too. Reported so
+        // it is never invisible, but it cannot fail a release built to policy.
+        const historical = legacyUnsignedTags.has(tag) ? ' (predates the policy being expressed in code)' : '';
+        warnings.push(`${message}; this project publishes unsigned releases by policy${historical}`);
       } else {
         failures.push(appendDetail(`git tag ${tag} is unsigned`, detail));
       }

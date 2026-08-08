@@ -174,31 +174,63 @@ describe('release supply-chain gates', () => {
     expect(reproducibleBuildCheck).toContain('zipContentDigest(artifactPath)');
   });
 
-  it('allows the existing legacy unsigned tag only outside the public release gate', () => {
-    const legacy = verifyReleaseTag({
-      tag: 'v3.11.0',
-      checkPublic: false,
+  // The project ships UNSIGNED by policy. The gate used to honour its unsigned
+  // allowlist only when checkPublic was false, which made release:check:public
+  // unpassable for every release built to that policy — it failed silently for
+  // v3.21.0, v3.22.0 and v3.25.0 — and required editing the allowlist per release.
+  // These tests name the policy rather than the accident.
+  it('passes an unsigned tag in every gate while the policy is unsigned', () => {
+    for (const checkPublic of [false, true]) {
+      const result = verifyReleaseTag({
+        tag: 'v9.9.9',
+        checkPublic,
+        execFileSyncImpl: createGitExecForTagVerification('error: no signature found'),
+      });
+      expect(result.failures).toEqual([]);
+      expect(result.warnings.join('\n')).toContain('publishes unsigned releases by policy');
+    }
+  });
+
+  it('does not need the allowlist extended for a new release', () => {
+    // A tag nobody has added anywhere passes on the strength of the policy alone.
+    const result = verifyReleaseTag({
+      tag: 'v99.0.0',
+      checkPublic: true,
       execFileSyncImpl: createGitExecForTagVerification('error: no signature found'),
     });
-    expect(legacy.failures).toEqual([]);
-    expect(legacy.warnings.join('\n')).toContain('accepted unsigned release tag');
+    expect(result.failures).toEqual([]);
+  });
 
-    const publicLegacy = verifyReleaseTag({
+  it('marks a pre-policy tag as historical without treating it differently', () => {
+    const result = verifyReleaseTag({
       tag: 'v3.11.0',
       checkPublic: true,
       execFileSyncImpl: createGitExecForTagVerification('error: no signature found'),
     });
-    expect(publicLegacy.failures.join('\n')).toContain('git tag v3.11.0 is unsigned');
+    expect(result.failures).toEqual([]);
+    expect(result.warnings.join('\n')).toContain('predates the policy');
   });
 
-  it('fails future unsigned release tags', () => {
+  it('still fails a signature that exists but does not verify', () => {
+    // Corruption or the wrong key is not policy — it must not be waved through.
     const result = verifyReleaseTag({
-      tag: 'v3.12.0',
-      checkPublic: false,
+      tag: 'v3.26.0',
+      checkPublic: true,
+      execFileSyncImpl: createGitExecForTagVerification('error: BAD signature from key ABC'),
+    });
+    expect(result.failures.join('\n')).toContain('cannot be cryptographically verified');
+  });
+
+  it('fails an unsigned tag once the policy is signed', () => {
+    const result = verifyReleaseTag({
+      tag: 'v3.26.0',
+      checkPublic: true,
+      signingPolicy: 'signed',
       execFileSyncImpl: createGitExecForTagVerification('error: no signature found'),
     });
-    expect(result.failures.join('\n')).toContain('git tag v3.12.0 is unsigned');
+    expect(result.failures.join('\n')).toContain('git tag v3.26.0 is unsigned');
   });
+
 
   it('warns on missing verifier keys before public release and fails in public mode', () => {
     const missingKey = "gpg: Signature made Thu Jun 11 12:00:00 2026 EDT\ngpg: Can't check signature: No public key";

@@ -4,6 +4,17 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **`release:check:public` was unpassable by construction.** The public gate
+  rejected any unsigned tag outright, honouring its accepted-unsigned allowlist
+  only when the public flag was off — while this project ships unsigned on
+  purpose. The gate therefore failed silently for v3.21.0, v3.22.0 and v3.25.0,
+  which makes it exactly as uninformative as one that always passes, and the
+  allowlist needed hand-editing on every release. The policy is now declared in
+  code (`RELEASE_SIGNING_POLICY`): an unsigned tag is reported as a warning in
+  every gate and never fails one, a signature that exists but does not verify
+  still fails, and a new release needs no allowlist edit. The tests name the
+  policy instead of pinning the old accident.
+
 - **The Firefox per-script-world probe tested for a symbol, not for the
   capability.** `supportsUserScriptsWorldId()` returned
   `typeof configureWorld === 'function'`, but Firefox shipped `configureWorld`
