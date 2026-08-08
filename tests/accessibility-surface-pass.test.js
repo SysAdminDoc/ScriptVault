@@ -12,6 +12,7 @@ const popupHtml = readFileSync(resolve(process.cwd(), "pages/popup.html"), "utf8
 const popupJs = readFileSync(resolve(process.cwd(), "pages/popup.js"), "utf8");
 const sidepanelHtml = readFileSync(resolve(process.cwd(), "pages/sidepanel.html"), "utf8");
 const sidepanelJs = readFileSync(resolve(process.cwd(), "pages/sidepanel.js"), "utf8");
+const themeTokensCss = readFileSync(resolve(process.cwd(), "pages/theme-tokens.css"), "utf8");
 const devtoolsHtml = readFileSync(resolve(process.cwd(), "pages/devtools-panel.html"), "utf8");
 const installHtml = readFileSync(resolve(process.cwd(), "pages/install.html"), "utf8");
 const installJs = readFileSync(resolve(process.cwd(), "pages/install.js"), "utf8");
@@ -105,6 +106,21 @@ describe("accessibility surface pass", () => {
     const luminance = (hex) => 0.2126 * channel(hex.slice(0, 2)) + 0.7152 * channel(hex.slice(2, 4)) + 0.0722 * channel(hex.slice(4, 6));
     const ratio = (lighter, darker) => (luminance(lighter) + 0.05) / (luminance(darker) + 0.05);
     expect(ratio("e4e4e4", "333333")).toBeGreaterThanOrEqual(4.5);
+  });
+
+  test("pending-update badges keep light-theme text at normal-text AA contrast", () => {
+    const lightSurface = "e5ecfd";
+    const lightBadgeText = "17231c";
+    expect(popupHtml).toContain("color: var(--sv-info-on-soft);");
+    expect(sidepanelHtml).toContain("color: var(--sv-info-on-soft);");
+    expect(themeTokensCss).toMatch(/\[data-theme="light"\]\s*\{[\s\S]*?--sv-info-on-soft:\s*#17231c;/);
+    const channel = (hex) => {
+      const value = parseInt(hex, 16) / 255;
+      return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+    };
+    const luminance = (hex) => 0.2126 * channel(hex.slice(0, 2)) + 0.7152 * channel(hex.slice(2, 4)) + 0.0722 * channel(hex.slice(4, 6));
+    const ratio = (lighter, darker) => (luminance(lighter) + 0.05) / (luminance(darker) + 0.05);
+    expect(ratio(lightSurface, lightBadgeText)).toBeGreaterThanOrEqual(4.5);
   });
 
   test("major extension surfaces expose a consistent Help deep link", () => {

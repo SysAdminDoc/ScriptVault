@@ -16,6 +16,7 @@
   --sv-danger: #ef4444;
   --sv-warning: #f59e0b;
   --sv-info: #60a5fa;
+  --sv-info-on-soft: #93c5fd;
   --sv-badge-bg: #172019;
   --sv-scrollbar: #324038;
   --sv-scrollbar-hover: #45564c;
@@ -61,6 +62,7 @@
   --sv-danger: #dc2626;
   --sv-warning: #d97706;
   --sv-info: #2563eb;
+  --sv-info-on-soft: #17231c;
   --sv-badge-bg: #edf3ef;
   --sv-scrollbar: #bcc9c0;
   --sv-scrollbar-hover: #9eaea3;
@@ -99,6 +101,7 @@
   --sv-danger: #f38ba8;
   --sv-warning: #f9e2af;
   --sv-info: #89b4fa;
+  --sv-info-on-soft: #93c5fd;
   --sv-badge-bg: #313244;
   --sv-scrollbar: #45475a;
   --sv-scrollbar-hover: #585b70;
@@ -137,6 +140,7 @@
   --sv-danger: #ef4444;
   --sv-warning: #f59e0b;
   --sv-info: #60a5fa;
+  --sv-info-on-soft: #93c5fd;
   --sv-badge-bg: #1a1a1a;
   --sv-scrollbar: #333;
   --sv-scrollbar-hover: #444;

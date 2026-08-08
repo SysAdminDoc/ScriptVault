@@ -28,6 +28,7 @@ describe('shared theme token system', () => {
       '--sv-focus-ring:', '--sv-radius-panel:', '--sv-radius-control:',
       '--sv-surface-sunken:', '--sv-surface-raised:', '--sv-surface-elevated:',
       '--sv-border-strong:', '--sv-accent-soft:', '--sv-accent-border:',
+      '--sv-info-on-soft:',
       '--sv-shadow-xs:', '--sv-shadow-sm:', '--sv-shadow-md:', '--sv-shadow-lg:',
       '--sv-transition-fast:', '--sv-transition-base:',
     ];
