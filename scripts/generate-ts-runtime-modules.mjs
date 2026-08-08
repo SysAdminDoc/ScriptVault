@@ -377,6 +377,13 @@ export const TS_RUNTIME_MODULES = [
     exportName: 'ConnectPolicy',
   },
   {
+    id: 'remote-response-classifier',
+    source: 'src/background/remote-response-classifier.ts',
+    output: 'modules/remote-response-classifier.js',
+    exportName: 'RemoteResponseClassifier',
+    selfExportName: 'RemoteResponseClassifier',
+  },
+  {
     id: 'gm-grant-policy',
     source: 'src/background/gm-grant-policy.ts',
     output: 'modules/gm-grant-policy.js',

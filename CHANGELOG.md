@@ -4,6 +4,19 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **A broken update host was reported as a broken script, and quietly silenced
+  updates.** Greasy Fork — the dominant update host — has served Cloudflare
+  challenge pages and expired-certificate errors; that HTML reached
+  `parseUserscript` and surfaced as a generic “Parse failed”, so users were told
+  their script was broken rather than the host. Worse, the exponential-backoff
+  ring treated a host outage exactly like a corrupt body, so repeated challenges
+  escalated every affected script toward a 24-hour cooldown and updates stopped.
+  Failures are now classified — host-challenge, transport (TLS/DNS/timeout),
+  http-status, not-a-userscript, and genuine parse-error — each with a message
+  naming the host and saying whether the installed script is implicated. Only a
+  real parse error advances that script’s retry ring; host-level failures are
+  recorded and logged without pushing it toward silence.
+
 - **The debugger named every script by its internal UUID.** The console and
   variables selectors, the live-reload row labels and their toggle accessible
   names all rendered the raw `script_<uuid>`, so picking between

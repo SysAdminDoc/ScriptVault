@@ -295,6 +295,14 @@
       "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for GM network and script host-scope policy helpers."
     },
     {
+      "runtime": "modules/remote-response-classifier.js",
+      "sources": [
+        "src/background/remote-response-classifier.ts"
+      ],
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs; classifies why a remote fetch produced no userscript so host outages are not reported as script parse errors."
+    },
+    {
       "runtime": "modules/gm-grant-policy.js",
       "sources": [
         "src/background/gm-grant-policy.ts"

@@ -1856,6 +1856,45 @@ const UpdateSystem: any = {
     }
   },
 
+  /**
+   * Persist a classified update failure on the script.
+   *
+   * The backoff ring exists to stop hammering a dead update URL. A host-level
+   * failure (challenge page, HTTP error, TLS/DNS) is not evidence the script is
+   * broken, so it is recorded for the UI but deliberately does NOT advance the
+   * ring — otherwise a Cloudflare challenge or an expired certificate silently
+   * escalates every affected script to a 24-hour cooldown and updates stop.
+   * A body that IS a userscript but will not parse does count.
+   */
+  async _recordUpdateHostFailure(script: any, failure: any, updateUrl: any) {
+    if (!script) return;
+    const kind = failure?.kind || 'unknown';
+    const message = failure?.message || 'Update check failed';
+    script._updateLastFailure = {
+      kind,
+      message,
+      host: failure?.host || '',
+      url: updateUrl || '',
+      at: Date.now()
+    };
+    if (failure?.hostLevel === false) {
+      script._updateFailureCount = (script._updateFailureCount || 0) + 1;
+      script._updateNextCheck = this._nextRetryAt(script._updateFailureCount);
+    }
+    try { await ScriptStorage.set(script.id, script); } catch (_) { /* best effort */ }
+    try {
+      if (typeof ErrorLog !== 'undefined' && typeof ErrorLog.log === 'function') {
+        await ErrorLog.log({
+          scriptId: script.id,
+          scriptName: script.meta?.name || script.id,
+          error: message,
+          source: 'update-check',
+          context: kind
+        });
+      }
+    } catch (_) { /* best effort */ }
+  },
+
   async checkForUpdates(scriptId: any = null) {
     // A manual single-script check (caller passed scriptId) bypasses backoff —
     // user explicitly asked, so honor it and let them see fresh failure
@@ -1900,10 +1939,17 @@ const UpdateSystem: any = {
           continue;
         }
         if (!response.ok) {
-          // Non-2xx — record failure and bump the cooldown.
-          script._updateFailureCount = (script._updateFailureCount || 0) + 1;
-          script._updateNextCheck = this._nextRetryAt(script._updateFailureCount);
-          await ScriptStorage.set(script.id, script);
+          // Non-2xx is a HOST failure: it says nothing about the installed
+          // script, so it is reported but must not drive that script's backoff
+          // ring toward silence. Only a genuinely bad body counts against it.
+          const failure = RemoteResponseClassifier.classifyRemoteResponse({
+            url: updateUrl,
+            status: response.status,
+            contentType: response.headers?.get?.('content-type'),
+            body: newCode,
+            label: 'Update'
+          });
+          await this._recordUpdateHostFailure(script, failure, updateUrl);
           continue;
         }
 
@@ -1922,7 +1968,25 @@ const UpdateSystem: any = {
           await ScriptStorage.set(script.id, script);
         }
 
+        // A 2xx body is not automatically a userscript. Greasy Fork — the
+        // dominant update host — has served Cloudflare challenge pages
+        // (greasyfork#1553) and expired-certificate error pages (#1561); that
+        // HTML used to reach parseUserscript and surface as a generic
+        // "Parse failed", telling the user their SCRIPT was broken rather than
+        // the host, while quietly driving the backoff ring toward silence.
         const parsed: any = parseUserscript(newCode);
+        const bodyFailure = RemoteResponseClassifier.classifyRemoteResponse({
+          url: updateUrl,
+          status: response.status,
+          contentType: response.headers?.get?.('content-type'),
+          body: newCode,
+          parseError: parsed?.error,
+          label: 'Update'
+        });
+        if (bodyFailure) {
+          await this._recordUpdateHostFailure(script, bodyFailure, updateUrl);
+          continue;
+        }
         if (parsed.error) continue;
 
         if (this.compareVersions(parsed.meta.version, script.meta.version) > 0) {
@@ -1937,10 +2001,10 @@ const UpdateSystem: any = {
         }
       } catch (e) {
         console.error('[ScriptVault] Update check failed for:', script.meta.name, e);
-        // Network error counts as a failure too.
-        script._updateFailureCount = (script._updateFailureCount || 0) + 1;
-        script._updateNextCheck = this._nextRetryAt(script._updateFailureCount);
-        try { await ScriptStorage.set(script.id, script); } catch (_) { /* best effort */ }
+        // Transport failure — also about the host, not the script.
+        const updateUrl = script.meta.updateURL || script.meta.downloadURL;
+        const failure = RemoteResponseClassifier.classifyFetchError(updateUrl, e, 'Update');
+        await this._recordUpdateHostFailure(script, failure, updateUrl);
       }
     }
 

@@ -89,7 +89,7 @@ describe('TS source drift gate', () => {
     const report = analyzeSourceDrift(map, []);
     const text = formatTextReport(report, { reportMode: true });
 
-    expect(report.totals.promoted).toBe(59);
+    expect(report.totals.promoted).toBe(60);
     expect(report.totals.candidate).toBe(0);
     expect(report.totals.mirrored).toBe(0);
     expect(report.totals['intentionally-divergent']).toBe(0);

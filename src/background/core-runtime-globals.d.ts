@@ -48,6 +48,7 @@ declare const OnDeviceAI: any;
 declare const OrganizationActionHandler: any;
 declare const PublicAPI: any;
 declare const QuotaManager: any;
+declare const RemoteResponseClassifier: any;
 declare const ResourceCache: any;
 declare const RuntimeActionHandler: any;
 declare const ScriptActionHandler: any;
