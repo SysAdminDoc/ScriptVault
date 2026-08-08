@@ -47,6 +47,8 @@ All notable changes to ScriptVault will be documented in this file.
   warning when it differs from the requested source.
 - Kept the original queued timestamp and suppressed repeat notifications when
   a validator-less update endpoint returns the same pending version again.
+- Skipped user-modified scripts during scheduled update sweeps while retaining
+  explicit single-script checks for reviewing an available upstream version.
 
 ## [v3.27.0] — Recoverable restores, real isolation & honest errors (2026-08-08)
 

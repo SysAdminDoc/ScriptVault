@@ -2,6 +2,8 @@
 // stale-cache refusal, 304 handling, forced (manual) refresh, and validator
 // persistence. Drives the same UpdateSystem the runtime bridge mirrors.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 import { UpdateSystem } from '../src/background/update-checker.ts';
 
@@ -149,5 +151,22 @@ describe('update check freshness policy', () => {
     await UpdateSystem.checkForUpdates();
 
     expect(scripts.get('s1')._httpEtag).toBe('W/"v1"');
+  });
+
+  it('skips user-modified scripts on scheduled checks but allows an explicit single-script check', async () => {
+    const core = readFileSync(resolve(process.cwd(), 'src/background/core.ts'), 'utf8');
+    expect(core).toContain('if (!isManualSingle && script.settings?.userModified) continue;');
+    scripts.set('s1', makeScript('s1', { settings: { userModified: true } }));
+    stubFetch(() => response(200, {
+      body: '// ==UserScript==\n// @version 2.0.0\n// ==/UserScript==\n',
+    }));
+
+    await expect(UpdateSystem.checkForUpdates()).resolves.toEqual([]);
+    expect(fetchCalls).toHaveLength(0);
+
+    const manual = await UpdateSystem.checkForUpdates('s1');
+    expect(manual).toHaveLength(1);
+    expect(manual[0].newVersion).toBe('2.0.0');
+    expect(fetchCalls).toHaveLength(1);
   });
 });

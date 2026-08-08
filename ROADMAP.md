@@ -828,16 +828,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
 
 ### P3
 
-- [ ] P3 — `checkForUpdates` doesn't skip user-modified scripts, so they are fetched/receipt-built/queued/notified but can never apply and never clear
-  Category: correctness
-  Where: shipped `src/background/core.ts:1859-1866` (skips `@nodownload` but not `settings.userModified`) vs `:2001` (`applyUpdate` refuses non-force applies of user-modified); `applyPendingUpdate` clears the queue entry only on success
-  Problem: A user-modified script with an update URL is fetched every cycle, `_buildPendingUpdate` runs full trust-receipt construction (network-fetching every `@require` body), the item is queued (possibly `safeToApply`), the user is notified, and Apply returns `{skipped:'user-modified'}` without clearing the queue — so it sits there indefinitely. The tested mirror `update-checker.ts:256` DOES have the skip, so the suite pins behavior the runtime lacks.
-  Evidence: Verified — `grep userModified` in shipped `checkForUpdates` returns nothing; mirror has the skip.
-  Fix: Add the `userModified` skip to the live `checkForUpdates` auto path (keep manual single-script checks reporting it), or mark such items un-appliable and exclude them from the "ready" count.
-  Acceptance: A user-modified script is not re-queued/re-notified on auto-update; a test covers the auto path.
-  Confidence: Verified
-  Effort: S
-
 - [ ] P3 — The primary install path (`saveScript`) skips ESM bundling, so ESM scripts install unbundled and bypass the experimental-flag refusal
   Category: correctness
   Where: `src/background/core.ts:6754-6916` (`saveScript` — no `ESMUserscriptBundler.bundleIfNeeded`) vs `installFromCode` (`:10298`) and `applyUpdate` (`:2001`) which call it

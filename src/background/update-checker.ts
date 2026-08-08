@@ -267,8 +267,10 @@ export const UpdateSystem = {
       if (!script.meta.updateURL && !script.meta.downloadURL) continue;
       // Skip scripts flagged @nodownload (auto-updates disabled)
       if ((script.meta as unknown as { nodownload?: boolean }).nodownload) continue;
-      // Skip user-modified scripts so local edits aren't clobbered
-      if (script.settings?.userModified) continue;
+      // Skip user-modified scripts during periodic sweeps so local edits
+      // aren't clobbered; an explicit single-script check still reports the
+      // available upstream version for review.
+      if (!scriptId && script.settings?.userModified) continue;
 
       try {
         const updateUrl: string = script.meta.updateURL || script.meta.downloadURL;

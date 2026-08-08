@@ -1910,6 +1910,7 @@ const UpdateSystem: any = {
 
     for (const script of scripts) {
       if (script.meta.nodownload) continue; // @nodownload prevents auto-updates
+      if (!isManualSingle && script.settings?.userModified) continue;
       if (!script.meta.updateURL && !script.meta.downloadURL) continue;
 
       // Skip scripts in backoff cooldown (auto-update path only).
