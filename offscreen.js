@@ -8,8 +8,10 @@
 'use strict';
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  // Only accept messages from our own extension
-  if (_sender.id !== chrome.runtime.id) return false;
+  // Only accept requests from an extension context in this extension. Content
+  // scripts and USER_SCRIPT-world senders carry their page URL and tab; the
+  // offscreen document must never become a CPU-heavy public endpoint.
+  if (!isTrustedOffscreenSender(_sender)) return false;
   switch (msg.type) {
     case 'offscreen_analyze':
       sendResponse(handleAnalyze(msg.code));
@@ -31,6 +33,18 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
   return false; // synchronous response
 });
+
+const MAX_OFFSCREEN_INPUT_LENGTH = 2_000_000;
+
+function isTrustedOffscreenSender(sender) {
+  if (!sender || sender.id !== chrome.runtime.id || sender.tab) return false;
+  const url = typeof sender.url === 'string' ? sender.url : '';
+  return !url || /^(?:chrome|moz)-extension:\/\//i.test(url);
+}
+
+function isBoundedText(value) {
+  return typeof value === 'string' && value.length <= MAX_OFFSCREEN_INPUT_LENGTH;
+}
 
 // ── AST Analyzer ─────────────────────────────────────────────────────────────
 // Uses Acorn to walk the AST and detect risk patterns with full context awareness.
@@ -286,7 +300,7 @@ function isMember(node, obj, prop) {
 function handleAnalyze(code) {
   try {
     // Skip AST analysis for very large scripts (>2MB) to prevent OOM
-    if (code && code.length > 2000000) {
+    if (code && !isBoundedText(code)) {
       return { totalRisk: 0, riskLevel: 'unknown', findings: [], categories: {}, summary: 'Script too large for AST analysis', skipped: true };
     }
     return analyzeAST(code);
@@ -368,6 +382,7 @@ function analyzeAST(code) {
 }
 
 function handleESMImports(code) {
+  if (!isBoundedText(code)) return { error: 'ESM input too large' };
   try {
     const ast = acorn.parse(code, { ecmaVersion: 'latest', sourceType: 'module', allowHashBang: true, locations: true });
     const imports = [];
@@ -554,6 +569,7 @@ function generateSummary(riskLevel, findings) {
 
 function handleMerge(base, local, remote) {
   if (base == null || local == null || remote == null) return { error: 'Missing merge inputs' };
+  if (![base, local, remote].every(isBoundedText)) return { error: 'Merge input too large' };
   if (local === remote) return { merged: local, conflicts: false };
   if (local === base) return { merged: remote, conflicts: false };
   if (remote === base) return { merged: local, conflicts: false };
@@ -594,6 +610,7 @@ function resolveWithMarkers(base, local, remote) {
 
 // ── Diff ──────────────────────────────────────────────────────────────────────
 function handleDiff(oldCode, newCode) {
+  if (!isBoundedText(oldCode) || !isBoundedText(newCode)) return { error: 'Diff input too large' };
   try {
     const patches = Diff.diffLines(oldCode || '', newCode || '');
     const stats = { added: 0, removed: 0, unchanged: 0 };

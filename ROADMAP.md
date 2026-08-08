@@ -828,16 +828,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
 
 ### P3
 
-- [ ] P3 — Offscreen document accepts analysis/merge work from any extension context (content scripts, userscripts) with no input size bounds
-  Category: security
-  Where: `offscreen.js:10-33` (gate is only `_sender.id !== chrome.runtime.id`); `handleAnalyze`/`handleMerge`/`handleDiff`/`handleESMImports` have no length caps
-  Problem: `chrome.runtime.sendMessage` reaches all extension contexts, so `{type:'offscreen_analyze', code:<pathological>}` from a content-script/userScript-world sender reaches `handleAnalyze` even though the SW's action gate would reject the same message. A full Acorn parse + `walkAST` (or `Diff.structuredPatch`) on multi-MB inputs is CPU/memory abusable.
-  Evidence: Verified — the only gate is the id check; no size caps in the handlers.
-  Fix: Require a nonce or verify `_sender.url` is the SW/extension page (content-script senders carry an http(s) `sender.url` and a `sender.tab`), and cap input lengths before parsing.
-  Acceptance: An oversized/foreign offscreen request is rejected; a test covers a content-script-shaped sender and an oversized input.
-  Confidence: Verified (reachability); Needs-repro (practical impact)
-  Effort: S
-
 - [ ] P3 — Messaging-failure catch branches discard `e.message`, leaving no actionable detail on SW-asleep/port-closed failures
   Category: maintainability
   Where: `pages/dashboard.js:12587,13015,13121,13198,15338,16406` (`catch (e)` toasts a bare fallback like "Rollback failed"/"Update failed")

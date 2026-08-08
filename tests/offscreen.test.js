@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import * as acorn from 'acorn';
@@ -23,6 +23,32 @@ function loadOffscreen() {
   let fn;
   try { const vm = require('node:vm'); fn = vm.compileFunction(_body, ['acorn'], { filename: resolve(ROOT, 'offscreen.js') }); } catch { fn = new Function('acorn', _body); }
   return fn(acorn);
+}
+
+function loadOffscreenListener() {
+  const listeners = [];
+  const chromeMock = {
+    runtime: {
+      id: 'scriptvault-test',
+      onMessage: { addListener: fn => listeners.push(fn) },
+    },
+  };
+  const _body = `
+    var Diff = (function() { var module = { exports: {} }; var exports = module.exports;
+    ${diffJs}
+    return module.exports;
+    })();
+    ${offscreenJs}
+    return listeners;
+  `;
+  let fn;
+  try {
+    const vm = require('node:vm');
+    fn = vm.compileFunction(_body, ['acorn', 'chrome', 'listeners'], { filename: resolve(ROOT, 'offscreen.js') });
+  } catch {
+    fn = new Function('acorn', 'chrome', 'listeners', _body);
+  }
+  return fn(acorn, chromeMock, listeners)[0];
 }
 
 const { handleAnalyze, handleMerge, handleDiff, handleESMImports } = loadOffscreen();
@@ -55,6 +81,13 @@ describe('offscreen AST analysis', () => {
     expect(result.summary).toMatch(/too large/);
   });
 
+  it('bounds merge and ESM inputs before invoking heavy parsers', () => {
+    const oversized = 'x'.repeat(2_000_001);
+    expect(handleMerge('base', oversized, 'remote')).toEqual({ error: 'Merge input too large' });
+    expect(handleDiff(oversized, 'small')).toEqual({ error: 'Diff input too large' });
+    expect(handleESMImports(oversized)).toEqual({ error: 'ESM input too large' });
+  });
+
   it('AST-analyzes modern ES2025 syntax instead of falling back to a parse error', () => {
     // `using` / `await using` (Explicit Resource Management) parse only when
     // ecmaVersion is high enough; a stale pin (e.g. 2022) throws and the caller
@@ -82,6 +115,33 @@ describe('offscreen AST analysis', () => {
       new Function("return 1");
     `);
     expect(['medium', 'high']).toContain(risky.riskLevel);
+  });
+});
+
+describe('offscreen message boundary', () => {
+  it('rejects content-script-shaped senders before analysis', () => {
+    const listener = loadOffscreenListener();
+    const sendResponse = vi.fn();
+    const result = listener(
+      { type: 'offscreen_analyze', code: 'eval("blocked")' },
+      { id: 'scriptvault-test', url: 'https://example.com/page', tab: { id: 7 } },
+      sendResponse,
+    );
+
+    expect(result).toBe(false);
+    expect(sendResponse).not.toHaveBeenCalled();
+  });
+
+  it('accepts a same-extension offscreen sender', () => {
+    const listener = loadOffscreenListener();
+    const sendResponse = vi.fn();
+    listener(
+      { type: 'offscreen_analyze', code: 'eval("allowed")' },
+      { id: 'scriptvault-test', url: 'chrome-extension://scriptvault-test/background.js' },
+      sendResponse,
+    );
+
+    expect(sendResponse).toHaveBeenCalledWith(expect.objectContaining({ astAnalyzed: true }));
   });
 });
 

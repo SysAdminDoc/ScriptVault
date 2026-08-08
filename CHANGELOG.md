@@ -80,6 +80,8 @@ All notable changes to ScriptVault will be documented in this file.
   can stop listening without silencing another script in the same tab.
 - Guarded userscript callback events against cross-frame messages and replaced
   the raw DOM script-id marker with a non-reversible diagnostic marker.
+- Restricted offscreen analysis to same-extension callers and bounded parser
+  inputs before AST, merge, diff, or ESM work begins.
 
 ## [v3.27.0] — Recoverable restores, real isolation & honest errors (2026-08-08)
 
