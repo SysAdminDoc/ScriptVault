@@ -5,10 +5,22 @@
 import type { Script } from '../types/script';
 import type { Settings } from '../types/settings';
 import { SettingsManager, ScriptStorage } from '../modules/storage';
+import { isScriptEligibleForRegistration } from './registration';
 
 // External dependencies not yet migrated to TypeScript
 declare function doesScriptMatchUrl(script: Script, url: string): boolean;
 declare function matchIncludePattern(pattern: string, url: string, urlObj: URL): boolean;
+
+function isBadgeRunnableScript(script: Script): boolean {
+  if (!isScriptEligibleForRegistration(script)) return false;
+  if (script.meta?.background || script.settings?._registrationError) return false;
+
+  const settingsRunAt = (script.settings as Record<string, unknown> | undefined)?.runAt;
+  const effectiveRunAt = typeof settingsRunAt === 'string' && settingsRunAt !== 'default'
+    ? settingsRunAt
+    : script.meta?.['run-at'];
+  return effectiveRunAt !== 'context-menu';
+}
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -86,7 +98,7 @@ export async function updateBadgeForTab(
 
     const scripts: Script[] = prefetchedScripts ?? await ScriptStorage.getAll();
     const matchingScripts = scripts.filter(
-      script => script.enabled && doesScriptMatchUrl(script, url),
+      script => isBadgeRunnableScript(script) && doesScriptMatchUrl(script, url),
     );
 
     const badgeInfo = settings.badgeInfo || 'running';

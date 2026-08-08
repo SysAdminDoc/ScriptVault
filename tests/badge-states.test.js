@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { updateBadgeForTab } from '../src/background/badge.ts';
 
 const badgeTs = readFileSync(resolve(process.cwd(), 'src/background/badge.ts'), 'utf8');
 const settingsDefaults = JSON.parse(readFileSync(resolve(process.cwd(), 'src/config/settings-defaults.json'), 'utf8'));
@@ -39,5 +40,38 @@ describe('Ambient toolbar badge error states', () => {
 
   it('allows disabling error states via setting', () => {
     expect(badgeTs).toContain('badgeErrorStates !== false');
+  });
+
+  it('counts only scripts that can actually auto-run on the page', async () => {
+    vi.clearAllMocks();
+    const originalMatcher = globalThis.doesScriptMatchUrl;
+    globalThis.doesScriptMatchUrl = vi.fn(() => true);
+    const script = (id, overrides = {}) => ({
+      id,
+      enabled: true,
+      meta: { match: ['https://example.com/*'], 'run-at': 'document-idle', background: false },
+      settings: {},
+      ...overrides,
+    });
+    const scripts = [
+      script('normal'),
+      script('background', { meta: { match: ['https://example.com/*'], 'run-at': 'document-idle', background: true } }),
+      script('context-menu', { meta: { match: ['https://example.com/*'], 'run-at': 'context-menu', background: false } }),
+      script('quarantined', { settings: { _importQuarantine: { source: 'test' } } }),
+      script('registration-error', { settings: { _registrationError: 'register failed' } }),
+    ];
+
+    try {
+      await updateBadgeForTab(
+        1,
+        'https://example.com/page',
+        { showBadge: true, enabled: true, badgeInfo: 'running', pageFilterMode: 'blacklist' },
+        scripts,
+      );
+
+      expect(chrome.action.setBadgeText).toHaveBeenCalledWith({ text: '1', tabId: 1 });
+    } finally {
+      globalThis.doesScriptMatchUrl = originalMatcher;
+    }
   });
 });

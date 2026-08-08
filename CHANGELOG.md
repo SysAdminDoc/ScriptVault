@@ -70,6 +70,8 @@ All notable changes to ScriptVault will be documented in this file.
   stale deletions do not return on the next round-trip or inflate payloads.
 - Aligned `@match` wildcard schemes with Chrome's HTTP(S)-only behavior and
   normalized match hosts case-insensitively for accurate page matching.
+- Excluded background, context-menu, quarantined, and failed-registration
+  scripts from the per-page running badge count.
 
 ## [v3.27.0] — Recoverable restores, real isolation & honest errors (2026-08-08)
 

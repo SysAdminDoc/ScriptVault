@@ -828,16 +828,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
 
 ### P3
 
-- [ ] P3 — The badge counts scripts that can never run on the page
-  Category: correctness
-  Where: `src/background/badge.ts:88-98` (`matchingScripts` = `script.enabled && doesScriptMatchUrl(...)`)
-  Problem: The count does not exclude the classes `registerScript` refuses: `meta.background` scripts (`registration.ts:331-337`), `@run-at context-menu` (`:543-548`), `settings._importQuarantine` (`:192-194`), or scripts left with `_registrationError`. A user with a couple of background/context-menu scripts sees a permanently inflated "running here" count.
-  Evidence: Verified — read the counting predicate vs the registration exclusions.
-  Fix: Filter through `isScriptEligibleForRegistration` plus the background/context-menu exclusions before counting.
-  Acceptance: Background/context-menu/quarantined scripts are not counted as running on a page; a test covers the exclusions.
-  Confidence: Verified
-  Effort: S
-
 - [ ] P3 — `key in meta` walks the prototype chain in the UserCSS metadata parser
   Category: correctness
   Where: `src/modules/userstyles.ts:545-547` (`else if (key in meta) { meta[key] = value; }`)

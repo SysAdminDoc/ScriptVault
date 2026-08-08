@@ -8767,6 +8767,16 @@ async function updateBadge(tabId: any = null) {
   }
 }
 
+function isBadgeRunnableScript(script: any) {
+  if (!isScriptEligibleForRegistration(script)) return false;
+  if (script.meta?.background || script.settings?._registrationError) return false;
+  const settingsRunAt = script.settings?.runAt;
+  const effectiveRunAt = typeof settingsRunAt === 'string' && settingsRunAt !== 'default'
+    ? settingsRunAt
+    : script.meta?.['run-at'];
+  return effectiveRunAt !== 'context-menu';
+}
+
 // Update badge for a specific tab based on its URL.
 // Accepts optional pre-fetched settings/scripts to avoid redundant cache reads when
 // called from updateBadge() in a loop over many tabs.
@@ -8791,7 +8801,7 @@ async function updateBadgeForTab(tabId: any, url: any, settings: any = null, scr
     }
 
     if (!scripts) scripts = await ScriptStorage.getAll();
-    const matchingScripts = scripts.filter((script: any) => script.enabled && doesScriptMatchUrl(script, url));
+    const matchingScripts = scripts.filter((script: any) => isBadgeRunnableScript(script) && doesScriptMatchUrl(script, url));
 
     const badgeInfo = settings.badgeInfo || 'running';
     let badgeText = '';
