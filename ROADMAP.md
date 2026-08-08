@@ -867,16 +867,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
 
 ### P2
 
-- [ ] P2 — Custom themes and extra presets apply only to the dashboard; popup, side panel, install, and DevTools ignore them
-  Category: visual
-  Where: `pages/dashboard-theme-editor.js` persists `sv_active_custom_theme`; only `pages/dashboard.js:5667-5695` reads it. `pages/popup.js:709-713`, `pages/sidepanel.js:503-507`, `pages/install.js:786-791`, `pages/devtools-panel.js:295-302` set `data-theme` from `settings.layout` only and never read `sv_active_custom_theme`
-  Problem: The Theme Editor's extra presets (nord/dracula/solarized/etc.) and custom themes are stored as CSS-var overrides under `sv_active_custom_theme` (they leave `settings.layout` a built-in). The dashboard injects those vars; every other surface renders the base built-in theme, so a user's chosen theme applies to the dashboard alone — a cross-surface inconsistency that undercuts cohesion.
-  Evidence: Verified — `grep -rln sv_active_custom_theme pages/` returns only `dashboard.js` + `dashboard-theme-editor.js`; the four secondary surfaces read only `settings.layout`.
-  Fix: Extract a shared `applyTheme()` (e.g. `pages/theme-apply.js`) that sets `data-theme` AND reads+sanitizes `sv_active_custom_theme` (replicate the dashboard's `/^--[\w-]+$/` key regex + `[{};]`-in-value rejection), called from popup/sidepanel/install/devtools. Also removes the 5× duplicated auto/layout logic.
-  Acceptance: Applying a custom/extra-preset theme then opening popup/sidepanel/install/devtools renders the custom vars; a test asserts each surface reads and sanitizes `sv_active_custom_theme`.
-  Confidence: Verified
-  Effort: M
-
 - [ ] P2 — The debugger identifies scripts by raw `script_<uuid>` everywhere a name should appear
   Category: ux
   Where: `pages/dashboard-debugger.js:298` (console selector option text = id), `:425` (variables selector), `:386` (live-reload row label), `:396` (toggle `aria-label`)
@@ -884,16 +874,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
   Evidence: Verified — traced id origin (`generateId`) and all four render sites.
   Fix: Pass a `getScriptName(id)` callback in `ScriptDebugger.init` options and use it for option text, live-reload labels, and aria-labels, falling back to the id.
   Acceptance: The debugger's selectors and rows show names; a test asserts names render when a resolver is provided.
-  Confidence: Verified
-  Effort: S
-
-- [ ] P2 — Deleting a custom theme is a 16px hover-only control with no confirmation and no undo
-  Category: ux
-  Where: `pages/dashboard-theme-editor.js:924-929` (`deleteCustomTheme` deletes+persists+toasts immediately), CSS `:575-593` (`.sv-te-delete-custom { width:16px; height:16px; display:none }` revealed on hover)
-  Problem: A custom theme is 21+ hand-picked tokens; the delete trigger is a 16×16 CSS-px "x" appearing on hover (below the repo-enforced 24×24 WCAG 2.2 SC 2.5.8 minimum), with no `showConfirmModal` (available via `ScriptVaultDashboardUI.confirm`, used by every other module's delete) and no undo. One mis-click destroys the theme permanently.
-  Evidence: Verified — read the delete handler (stopPropagation → `deleteCustomTheme` directly) and the hover-reveal CSS.
-  Fix: Route through `ScriptVaultDashboardUI.confirm('Delete Theme?', …, {tone:'danger'})` like chains/profiles/templates, and raise the button to ≥24px.
-  Acceptance: Deleting a custom theme requires confirmation and the control is ≥24×24; a test asserts the confirm path.
   Confidence: Verified
   Effort: S
 

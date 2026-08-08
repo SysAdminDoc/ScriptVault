@@ -781,22 +781,21 @@ async function init() {
 }
 
 async function applySavedTheme() {
+  // Shared applier: sets data-theme from settings.layout AND injects any active
+  // custom/extra-preset variables. This surface used to read settings.layout
+  // only, so a user's chosen theme applied to the dashboard alone.
+  //
+  // Fail-soft: the install review must render even with no reachable settings,
+  // so an unreadable theme falls back to the page's dark default with a warning
+  // rather than aborting init.
   try {
-    const settings = await chrome.runtime.sendMessage({ action: 'getSettings' });
-    const themeSettings = settings?.settings || settings || {};
-    const layoutPref = themeSettings.layout || 'dark';
-    const theme = layoutPref === 'auto'
-      ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-      : layoutPref;
-    document.documentElement.setAttribute('data-theme', theme);
-    if (layoutPref === 'auto') {
-      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-        document.documentElement.setAttribute('data-theme', e.matches ? 'dark' : 'light');
-      });
-    }
+    if (!window.ScriptVaultTheme) return;
+    await window.ScriptVaultTheme.applyTheme({
+      getSettings: () => chrome.runtime.sendMessage({ action: 'getSettings' }),
+    });
+    window.ScriptVaultTheme.watchCustomTheme();
   } catch (e) {
     console.warn('Theme settings unavailable; defaulting install page to dark theme.', e);
-    document.documentElement.setAttribute('data-theme', 'dark');
   }
 }
 

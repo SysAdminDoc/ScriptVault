@@ -4,6 +4,24 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **A custom or extra-preset theme applied to the dashboard only.** The Theme
+  Editor stores its extra presets (nord/dracula/solarized/…) and user-built themes
+  as CSS-variable overrides under `sv_active_custom_theme`, deliberately leaving
+  `settings.layout` on a built-in so the base palette still resolves — but only
+  the dashboard read that key. The popup, side panel, install review and DevTools
+  panel each read `settings.layout` alone and rendered the base built-in, so one
+  product looked like two. A shared `pages/theme-apply.js` now owns both halves
+  for every surface, and re-applies live when the editor writes a new theme. It
+  also replaces the `auto` / `prefers-color-scheme` resolution that was
+  duplicated in five page scripts.
+- **Deleting a custom theme took one mis-click and could not be undone.** The
+  trigger was a 16×16 CSS-px “x” revealed on hover — below the repo-enforced
+  24×24 minimum (WCAG 2.2 SC 2.5.8) and unreachable by touch — and it deleted
+  immediately, unlike every other delete in the dashboard. A custom theme is 21+
+  hand-picked tokens with no undo. It now confirms through the same danger-tone
+  modal as chains and profiles, and the control is 24×24, always rendered, and
+  fades up on hover or focus.
+
 - **`release:check:public` was unpassable by construction.** The public gate
   rejected any unsigned tag outright, honouring its accepted-unsigned allowlist
   only when the public flag was off — while this project ships unsigned on

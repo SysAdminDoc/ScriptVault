@@ -287,25 +287,17 @@
   }
 
   async function applyTheme() {
-    // The panel HTML hardcodes data-theme="dark"; without this the panel
-    // stayed dark for light/catppuccin/oled users (and its per-theme CSS
-    // overrides were dead). Mirror the popup/install/sidepanel theme logic.
+    // The panel HTML hardcodes data-theme="dark"; without this the panel stayed
+    // dark for light/catppuccin/oled users (and its per-theme CSS overrides were
+    // dead). The shared applier also injects any active custom/extra-preset
+    // theme, which this surface previously ignored entirely.
+    if (!window.ScriptVaultTheme) return;
     try {
-      const settings = await chrome.runtime.sendMessage({ action: 'getSettings' });
-      const themeSettings = settings?.settings || settings || {};
-      const layoutPref = themeSettings.layout || 'dark';
       removeColorSchemeListener();
-      colorSchemeMedia = window.matchMedia('(prefers-color-scheme: dark)');
-      const resolve = () => layoutPref === 'auto'
-        ? (colorSchemeMedia.matches ? 'dark' : 'light')
-        : layoutPref;
-      document.documentElement.setAttribute('data-theme', resolve());
-      if (layoutPref === 'auto') {
-        colorSchemeChangeHandler = () => {
-          document.documentElement.setAttribute('data-theme', resolve());
-        };
-        colorSchemeMedia.addEventListener('change', colorSchemeChangeHandler);
-      }
+      await window.ScriptVaultTheme.applyTheme({
+        getSettings: () => chrome.runtime.sendMessage({ action: 'getSettings' }),
+      });
+      window.ScriptVaultTheme.watchCustomTheme();
     } catch (_e) { /* keep the default dark theme on failure */ }
   }
 

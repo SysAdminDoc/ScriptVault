@@ -572,25 +572,35 @@ const ThemeEditor = (() => {
   color: var(--text-on-accent, #fff);
   margin-inline-start: 4px;
 }
+/* 24x24 is the repo-enforced WCAG 2.2 SC 2.5.8 minimum; this was 16x16. It is
+   also always rendered rather than revealed on hover — a hover-only control is
+   unreachable by touch and invisible to anyone scanning the card — and merely
+   fades up on hover/focus. */
 .sv-te-delete-custom {
   position: absolute;
   top: 2px;
   right: 2px;
-  width: 16px;
-  height: 16px;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  min-height: 24px;
   border: none;
   background: var(--accent-error, #ef4444);
   color: var(--sv-text-on-danger);
   border-radius: 6px;
-  font-size: 0.625rem;
+  font-size: 0.8125rem;
   line-height: 1;
   cursor: pointer;
-  display: none;
+  display: flex;
   align-items: center;
   justify-content: center;
+  opacity: 0.55;
+  transition: opacity 120ms ease;
 }
 .sv-te-preset:hover .sv-te-delete-custom,
-.sv-te-preset:focus-within .sv-te-delete-custom { display: flex; }
+.sv-te-preset:focus-within .sv-te-delete-custom,
+.sv-te-delete-custom:hover,
+.sv-te-delete-custom:focus-visible { opacity: 1; }
 
 /* Hidden file input */
 .sv-te-file-input { display: none; }
@@ -921,9 +931,21 @@ const ThemeEditor = (() => {
     card.appendChild(labelEl);
 
     if (isCustom) {
-      const delBtn = el('button', { className: 'sv-te-delete-custom', textContent: 'x', 'aria-label': `Delete custom theme ${preset.name}`, title: `Delete ${preset.name}` });
-      delBtn.addEventListener('click', (e) => {
+      const delBtn = el('button', { type: 'button', className: 'sv-te-delete-custom', textContent: '\u00d7', 'aria-label': `Delete custom theme ${preset.name}`, title: `Delete ${preset.name}` });
+      delBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
+        // A custom theme is 21+ hand-picked tokens and there is no undo, so this
+        // confirms like every other delete in the dashboard (chains, profiles,
+        // templates) rather than destroying on a single mis-click.
+        const confirmDelete = window.ScriptVaultDashboardUI?.confirm;
+        if (typeof confirmDelete === 'function') {
+          const ok = await confirmDelete(
+            'Delete Theme?',
+            `Delete the custom theme "${preset.name}"? Its colours cannot be recovered.`,
+            { confirmLabel: 'Delete Theme', tone: 'danger' },
+          );
+          if (!ok) return;
+        }
         deleteCustomTheme(key.replace('custom:', ''));
       });
       card.appendChild(delBtn);

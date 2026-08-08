@@ -696,18 +696,13 @@
             console.error('Failed to load settings:', error);
             settings = { enabled: true };
         }
-        // Apply theme from settings
-        const layout = settings.layout || 'dark';
-        const theme = layout === 'auto'
-            ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-            : layout;
-        document.documentElement.setAttribute('data-theme', theme);
-        if (layout === 'auto') {
-            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-                if (settings.layout === 'auto') {
-                    document.documentElement.setAttribute('data-theme', e.matches ? 'dark' : 'light');
-                }
-            });
+        // Apply theme from settings via the shared applier, which also injects any
+        // active custom/extra-preset variables. Reading settings.layout alone
+        // rendered the base built-in theme here while the dashboard showed the
+        // user's actual choice.
+        if (window.ScriptVaultTheme) {
+            await window.ScriptVaultTheme.applyTheme({ layout: settings.layout || 'dark' });
+            window.ScriptVaultTheme.watchCustomTheme();
         }
     }
 

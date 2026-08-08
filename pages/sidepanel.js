@@ -490,12 +490,13 @@
     }
   }
 
+  // Delegates to the shared applier so an active custom/extra-preset theme
+  // reaches this surface too; reading settings.layout alone rendered the base
+  // built-in while the dashboard showed the user's actual choice.
   function applyTheme() {
-    const layout = settings.layout || 'dark';
-    const resolved = layout === 'auto'
-      ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-      : layout;
-    document.documentElement.setAttribute('data-theme', resolved);
+    if (!window.ScriptVaultTheme) return;
+    window.ScriptVaultTheme.applyTheme({ layout: settings.layout || 'dark' });
+    window.ScriptVaultTheme.watchCustomTheme();
   }
 
   async function refresh() {
