@@ -72,21 +72,60 @@ describe('GM_audio handler', () => {
 
     await expect(handleGMAudioMessage(
       'GM_audio_watchState',
-      {},
+      { scriptId: 'script-1' },
       { tab: { id: 11 } },
     )).resolves.toEqual({ success: true });
 
-    expect(globalThis._audioWatchedTabs.has(11)).toBe(true);
+    expect(globalThis._audioWatchedTabs.has('script-1:11')).toBe(true);
     expect(persistAudioWatchedTabs).toHaveBeenCalledTimes(1);
 
     await expect(handleGMAudioMessage(
       'GM_audio_unwatchState',
-      {},
+      { scriptId: 'script-1' },
       { tab: { id: 11 } },
     )).resolves.toEqual({ success: true });
 
-    expect(globalThis._audioWatchedTabs.has(11)).toBe(false);
+    expect(globalThis._audioWatchedTabs.has('script-1:11')).toBe(false);
     expect(persistAudioWatchedTabs).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps watch state independent for two scripts sharing one tab', async () => {
+    const persistAudioWatchedTabs = vi.fn();
+    globalThis.SessionState = { persistAudioWatchedTabs };
+
+    await handleGMAudioMessage('GM_audio_watchState', { scriptId: 'script-a' }, { tab: { id: 11 } });
+    await handleGMAudioMessage('GM_audio_watchState', { scriptId: 'script-b' }, { tab: { id: 11 } });
+    expect([...globalThis._audioWatchedTabs]).toEqual(['script-a:11', 'script-b:11']);
+
+    await expect(handleGMAudioMessage(
+      'GM_audio_unwatchState',
+      { scriptId: 'script-a' },
+      { tab: { id: 11 } },
+    )).resolves.toEqual({ success: true });
+
+    expect(globalThis._audioWatchedTabs.has('script-a:11')).toBe(false);
+    expect(globalThis._audioWatchedTabs.has('script-b:11')).toBe(true);
+    expect(persistAudioWatchedTabs).toHaveBeenCalledTimes(3);
+  });
+
+  it('prefers the authenticated script identity over a forged payload', async () => {
+    await expect(handleGMAudioMessage(
+      'GM_audio_watchState',
+      { scriptId: 'victim' },
+      { tab: { id: 11 }, userScriptId: 'caller' },
+    )).resolves.toEqual({ success: true });
+
+    expect(globalThis._audioWatchedTabs.has('caller:11')).toBe(true);
+    expect(globalThis._audioWatchedTabs.has('victim:11')).toBe(false);
+  });
+
+  it('does not create an ownerless watch entry', async () => {
+    await expect(handleGMAudioMessage(
+      'GM_audio_watchState',
+      {},
+      { tab: { id: 11 } },
+    )).resolves.toEqual({ error: 'Missing script context' });
+    expect(globalThis._audioWatchedTabs).toBeUndefined();
   });
 
   it('returns a clear error without tab context', async () => {

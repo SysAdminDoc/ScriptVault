@@ -12551,6 +12551,13 @@ const GMAudioHandler = (() => {
   function getAudioRuntimeGlobal() {
     return globalThis;
   }
+  function getOwnedScriptId(data, sender) {
+    const scriptId = sender.userScriptId || data.scriptId;
+    return typeof scriptId === "string" && scriptId ? scriptId : null;
+  }
+  function audioWatchKey(scriptId, tabId) {
+    return `${scriptId}:${tabId}`;
+  }
   function persistAudioWatchedTabs() {
     try {
       getAudioRuntimeGlobal().SessionState?.persistAudioWatchedTabs?.();
@@ -12581,15 +12588,18 @@ const GMAudioHandler = (() => {
         }
         case "GM_audio_watchState": {
           if (!tabId) return { error: "No tab context" };
+          const scriptId = getOwnedScriptId(data, sender);
+          if (!scriptId) return { error: "Missing script context" };
           const runtime = getAudioRuntimeGlobal();
           if (!runtime._audioWatchedTabs) runtime._audioWatchedTabs = /* @__PURE__ */ new Set();
-          runtime._audioWatchedTabs.add(tabId);
+          runtime._audioWatchedTabs.add(audioWatchKey(scriptId, tabId));
           persistAudioWatchedTabs();
           return { success: true };
         }
         case "GM_audio_unwatchState": {
+          const scriptId = getOwnedScriptId(data, sender);
           const runtime = getAudioRuntimeGlobal();
-          if (typeof tabId === "number" && runtime._audioWatchedTabs?.delete(tabId)) {
+          if (typeof tabId === "number" && scriptId && runtime._audioWatchedTabs?.delete(audioWatchKey(scriptId, tabId))) {
             persistAudioWatchedTabs();
           }
           return { success: true };
@@ -30660,7 +30670,9 @@ const SessionState = {
       const awt = data[this._AWT_KEY];
       if (Array.isArray(awt)) {
         if (!self._audioWatchedTabs) self._audioWatchedTabs = new Set();
-        for (const id of awt) self._audioWatchedTabs.add(id);
+        for (const key of awt) {
+          if (typeof key === 'string' && key) self._audioWatchedTabs.add(key);
+        }
       }
       const pd = data[this._PD_KEY];
       if (pd && typeof pd === 'object') {
@@ -33559,6 +33571,36 @@ function buildLocalHealthCallbackSummary() {
       level: 'ok'
     }
   };
+}
+
+function audioWatchKeysForTab(tabId) {
+  const watched = self._audioWatchedTabs;
+  if (!(watched instanceof Set)) return [];
+  const scriptIds = [];
+  for (const key of watched) {
+    if (typeof key !== 'string') continue;
+    const separator = key.lastIndexOf(':');
+    if (separator <= 0 || Number(key.slice(separator + 1)) !== tabId) continue;
+    scriptIds.push(key.slice(0, separator));
+  }
+  return scriptIds;
+}
+
+function removeAudioWatchKeysForTab(tabId) {
+  const watched = self._audioWatchedTabs;
+  if (!(watched instanceof Set)) return false;
+  let changed = false;
+  for (const key of [...watched]) {
+    if (typeof key === 'string') {
+      const separator = key.lastIndexOf(':');
+      if (separator <= 0 || Number(key.slice(separator + 1)) !== tabId) continue;
+    } else if (key !== tabId) {
+      continue;
+    }
+    watched.delete(key);
+    changed = true;
+  }
+  return changed;
 }
 
 function normalizeLocalWorkspacePermissionState(state) {
@@ -40429,22 +40471,29 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     }
   }
 
-  // Forward audio state changes to watched tabs
-  if (('audible' in changeInfo || 'mutedInfo' in changeInfo) && self._audioWatchedTabs?.has(tabId)) {
-    try {
-      await chrome.tabs.sendMessage(tabId, {
-        action: 'audioStateChanged',
-        data: {
-          muted: tab.mutedInfo?.muted || false,
-          reason: tab.mutedInfo?.reason || 'user',
-          audible: tab.audible || false
-        }
-      });
-    } catch (e) {
-      // Tab may have been closed
-      self._audioWatchedTabs.delete(tabId);
-      SessionState.persistAudioWatchedTabs();
+  // Forward audio state changes only to scripts watching this tab. Keeping
+  // the script id in the event lets multiple user scripts share a tab without
+  // receiving each other's state notifications.
+  const audioWatchers = audioWatchKeysForTab(tabId);
+  if (('audible' in changeInfo || 'mutedInfo' in changeInfo) && audioWatchers.length > 0) {
+    let changed = false;
+    for (const scriptId of audioWatchers) {
+      try {
+        await chrome.tabs.sendMessage(tabId, {
+          action: 'audioStateChanged',
+          data: {
+            scriptId,
+            muted: tab.mutedInfo?.muted || false,
+            reason: tab.mutedInfo?.reason || 'user',
+            audible: tab.audible || false
+          }
+        });
+      } catch (e) {
+        // Tab may have been closed or the script may have been unregistered.
+        if (self._audioWatchedTabs?.delete(`${scriptId}:${tabId}`)) changed = true;
+      }
     }
+    if (changed) SessionState.persistAudioWatchedTabs();
   }
 });
 
@@ -40485,7 +40534,7 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
     SessionState.persistOpenTabTrackers();
   }
   // Clean up audio watch tracking for closed tabs
-  if (self._audioWatchedTabs?.delete(tabId)) {
+  if (removeAudioWatchKeysForTab(tabId)) {
     SessionState.persistAudioWatchedTabs();
   }
   closeGMWebSocketsForTab(tabId);
@@ -46088,13 +46137,13 @@ ${mappedCode}
   const GM_audio = {
     setMute: (details, callback) => {
       if (!hasGrant('GM_audio')) { if (callback) callback(new Error('Permission denied')); return; }
-      sendToBackground('GM_audio_setMute', { mute: details?.mute ?? details }).then(r => {
+      sendToBackground('GM_audio_setMute', { mute: details?.mute ?? details, scriptId }).then(r => {
         if (callback) callback(r?.error ? new Error(r.error) : undefined);
       }).catch(e => { if (callback) callback(e); });
     },
     getState: (callback) => {
       if (!hasGrant('GM_audio')) { if (callback) callback(null, new Error('Permission denied')); return; }
-      sendToBackground('GM_audio_getState', {}).then(r => {
+      sendToBackground('GM_audio_getState', { scriptId }).then(r => {
         if (callback) callback(r, r?.error ? new Error(r.error) : undefined);
       }).catch(e => { if (callback) callback(null, e); });
     },
@@ -46106,12 +46155,13 @@ ${mappedCode}
       GM_audio._listeners.push(listener);
       if (!GM_audio._watching) {
         GM_audio._watching = true;
-        sendToBackground('GM_audio_watchState', {});
+        sendToBackground('GM_audio_watchState', { scriptId });
         // Listen for audio state change events from content script bridge
         GM_audio._msgHandler = (e) => {
           if (e.source !== window || !e.data || e.data.channel !== CHANNEL_ID) return;
-          if (e.data.type === 'audioStateChanged') {
-            const state = e.data.data;
+          if (e.data.type === 'audioStateChanged' && e.data.data?.scriptId === scriptId) {
+            const state = { ...e.data.data };
+            delete state.scriptId;
             for (const fn of GM_audio._listeners) {
               try { fn(state); } catch (err) { console.error('[GM_audio listener]', err); }
             }
@@ -46130,7 +46180,7 @@ ${mappedCode}
           window.removeEventListener('message', GM_audio._msgHandler);
           GM_audio._msgHandler = null;
         }
-        sendToBackground('GM_audio_unwatchState', {});
+        sendToBackground('GM_audio_unwatchState', { scriptId });
       }
       if (callback) callback();
     }

@@ -19,10 +19,12 @@ interface RuntimeMessageSender {
   tab?: {
     id?: number;
   };
+  userScriptId?: string;
 }
 
 interface GMAudioPayload {
   mute?: boolean | { mute?: boolean };
+  scriptId?: string;
 }
 
 interface SessionStateRuntime {
@@ -30,7 +32,7 @@ interface SessionStateRuntime {
 }
 
 type AudioRuntimeGlobal = typeof globalThis & {
-  _audioWatchedTabs?: Set<number>;
+  _audioWatchedTabs?: Set<string>;
   SessionState?: SessionStateRuntime;
 };
 
@@ -43,6 +45,18 @@ function getSenderTabId(sender: RuntimeMessageSender | null | undefined): number
 
 function getAudioRuntimeGlobal(): AudioRuntimeGlobal {
   return globalThis as AudioRuntimeGlobal;
+}
+
+function getOwnedScriptId(
+  data: GMAudioPayload,
+  sender: RuntimeMessageSender,
+): string | null {
+  const scriptId = sender.userScriptId || data.scriptId;
+  return typeof scriptId === 'string' && scriptId ? scriptId : null;
+}
+
+function audioWatchKey(scriptId: string, tabId: number): string {
+  return `${scriptId}:${tabId}`;
 }
 
 function persistAudioWatchedTabs(): void {
@@ -85,16 +99,19 @@ export async function handleGMAudioMessage(
 
       case 'GM_audio_watchState': {
         if (!tabId) return { error: 'No tab context' };
+        const scriptId = getOwnedScriptId(data, sender);
+        if (!scriptId) return { error: 'Missing script context' };
         const runtime = getAudioRuntimeGlobal();
-        if (!runtime._audioWatchedTabs) runtime._audioWatchedTabs = new Set<number>();
-        runtime._audioWatchedTabs.add(tabId);
+        if (!runtime._audioWatchedTabs) runtime._audioWatchedTabs = new Set<string>();
+        runtime._audioWatchedTabs.add(audioWatchKey(scriptId, tabId));
         persistAudioWatchedTabs();
         return { success: true };
       }
 
       case 'GM_audio_unwatchState': {
+        const scriptId = getOwnedScriptId(data, sender);
         const runtime = getAudioRuntimeGlobal();
-        if (typeof tabId === 'number' && runtime._audioWatchedTabs?.delete(tabId)) {
+        if (typeof tabId === 'number' && scriptId && runtime._audioWatchedTabs?.delete(audioWatchKey(scriptId, tabId))) {
           persistAudioWatchedTabs();
         }
         return { success: true };

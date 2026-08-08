@@ -76,6 +76,8 @@ All notable changes to ScriptVault will be documented in this file.
   persisting directives such as `@toString` or `@constructor`.
 - Bound menu-command execution to the authenticated script owner and serialized
   menu-command storage mutations to prevent cross-script dispatch and lost updates.
+- Scoped GM_audio watch state and notifications by script and tab so one script
+  can stop listening without silencing another script in the same tab.
 
 ## [v3.27.0] — Recoverable restores, real isolation & honest errors (2026-08-08)
 

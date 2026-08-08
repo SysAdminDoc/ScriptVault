@@ -49,6 +49,13 @@ const GMAudioHandler = (() => {
   function getAudioRuntimeGlobal() {
     return globalThis;
   }
+  function getOwnedScriptId(data, sender) {
+    const scriptId = sender.userScriptId || data.scriptId;
+    return typeof scriptId === "string" && scriptId ? scriptId : null;
+  }
+  function audioWatchKey(scriptId, tabId) {
+    return `${scriptId}:${tabId}`;
+  }
   function persistAudioWatchedTabs() {
     try {
       getAudioRuntimeGlobal().SessionState?.persistAudioWatchedTabs?.();
@@ -79,15 +86,18 @@ const GMAudioHandler = (() => {
         }
         case "GM_audio_watchState": {
           if (!tabId) return { error: "No tab context" };
+          const scriptId = getOwnedScriptId(data, sender);
+          if (!scriptId) return { error: "Missing script context" };
           const runtime = getAudioRuntimeGlobal();
           if (!runtime._audioWatchedTabs) runtime._audioWatchedTabs = /* @__PURE__ */ new Set();
-          runtime._audioWatchedTabs.add(tabId);
+          runtime._audioWatchedTabs.add(audioWatchKey(scriptId, tabId));
           persistAudioWatchedTabs();
           return { success: true };
         }
         case "GM_audio_unwatchState": {
+          const scriptId = getOwnedScriptId(data, sender);
           const runtime = getAudioRuntimeGlobal();
-          if (typeof tabId === "number" && runtime._audioWatchedTabs?.delete(tabId)) {
+          if (typeof tabId === "number" && scriptId && runtime._audioWatchedTabs?.delete(audioWatchKey(scriptId, tabId))) {
             persistAudioWatchedTabs();
           }
           return { success: true };

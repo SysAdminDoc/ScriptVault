@@ -2476,13 +2476,13 @@ ${mappedCode}
   const GM_audio = {
     setMute: (details, callback) => {
       if (!hasGrant('GM_audio')) { if (callback) callback(new Error('Permission denied')); return; }
-      sendToBackground('GM_audio_setMute', { mute: details?.mute ?? details }).then(r => {
+      sendToBackground('GM_audio_setMute', { mute: details?.mute ?? details, scriptId }).then(r => {
         if (callback) callback(r?.error ? new Error(r.error) : undefined);
       }).catch(e => { if (callback) callback(e); });
     },
     getState: (callback) => {
       if (!hasGrant('GM_audio')) { if (callback) callback(null, new Error('Permission denied')); return; }
-      sendToBackground('GM_audio_getState', {}).then(r => {
+      sendToBackground('GM_audio_getState', { scriptId }).then(r => {
         if (callback) callback(r, r?.error ? new Error(r.error) : undefined);
       }).catch(e => { if (callback) callback(null, e); });
     },
@@ -2494,12 +2494,13 @@ ${mappedCode}
       GM_audio._listeners.push(listener);
       if (!GM_audio._watching) {
         GM_audio._watching = true;
-        sendToBackground('GM_audio_watchState', {});
+        sendToBackground('GM_audio_watchState', { scriptId });
         // Listen for audio state change events from content script bridge
         GM_audio._msgHandler = (e) => {
           if (e.source !== window || !e.data || e.data.channel !== CHANNEL_ID) return;
-          if (e.data.type === 'audioStateChanged') {
-            const state = e.data.data;
+          if (e.data.type === 'audioStateChanged' && e.data.data?.scriptId === scriptId) {
+            const state = { ...e.data.data };
+            delete state.scriptId;
             for (const fn of GM_audio._listeners) {
               try { fn(state); } catch (err) { console.error('[GM_audio listener]', err); }
             }
@@ -2518,7 +2519,7 @@ ${mappedCode}
           window.removeEventListener('message', GM_audio._msgHandler);
           GM_audio._msgHandler = null;
         }
-        sendToBackground('GM_audio_unwatchState', {});
+        sendToBackground('GM_audio_unwatchState', { scriptId });
       }
       if (callback) callback();
     }

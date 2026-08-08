@@ -828,16 +828,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
 
 ### P3
 
-- [ ] P3 — `GM_audio` watch state is per-tab, not per-script — one script's unwatch stops events for all
-  Category: correctness
-  Where: `src/background/gm-audio-handler.ts:86-101` (`_audioWatchedTabs` is a `Set<number>`)
-  Problem: The first script to call `GM_audio_unwatchState` stops state events for every other script watching that tab.
-  Evidence: Verified — read the handler; watch state keyed by tab only.
-  Fix: Key watch state by `${scriptId}:${tabId}` and emit per-script.
-  Acceptance: Two scripts watching one tab's audio are independent; a test covers isolation.
-  Confidence: Verified
-  Effort: S
-
 - [ ] P3 — `__svEventHandler` accepts cross-frame `postMessage` (missing the `event.source !== window` guard its three siblings have)
   Category: security
   Where: shipped `background.core.js:14910` (`window.addEventListener('message', function __svEventHandler(event) {…}` with no source guard) vs the guarded handlers at `:13347,13483,13556`
