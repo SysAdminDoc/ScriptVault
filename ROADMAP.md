@@ -838,16 +838,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
   Confidence: Verified
   Effort: S
 
-- [ ] P3 — `@require` fallback CDNs silently substitute a different library (jQuery core for a plugin) and cache it for 7 days
-  Category: correctness
-  Where: `src/background/core.ts:12041-12071` (`getFallbackUrls`, substring match `lowerUrl.includes('jquery')`/`'gm_config'`/`'mutation-summary'`) and `:12321` + the cache-store block
-  Problem: A require of `https://mysite.com/jquery-plugin-custom.js` that 5xx's falls through to `https://code.jquery.com/jquery-3.7.1.min.js`, and the bytes are cached under the ORIGINAL URL key (memory + `chrome.storage.local`, 7 days). The script runs jQuery core in place of its plugin with no error. Version sniffing is also wrong (`includes('2.')` routes `jquery-1.12.4.min.js` to the jQuery-2 list).
-  Evidence: Verified — `getFallbackUrls` substring branches and the jQuery CDN fallback arrays read in shipped `core.ts`.
-  Fix: Apply a fallback only when the requested URL host is the known CDN being replaced (not any URL containing the substring), or drop generic-name fallbacks; fix version sniffing to parse the version token.
-  Acceptance: A custom-named script whose URL merely contains "jquery" is not substituted; a test covers a plugin URL that 5xx's.
-  Confidence: Verified
-  Effort: S
-
 - [ ] P3 — `@require`/`GM_loadScript` execute code fetched over plaintext HTTP with optional SRI
   Category: security
   Where: `src/background/core.ts` require/loadScript fetch paths pass `['http:', 'https:']` to `InternalHostGuard` (e.g. `:10139`); `verifySRI` returns true for a missing/`md5-` hash

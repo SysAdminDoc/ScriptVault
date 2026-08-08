@@ -12767,32 +12767,55 @@ const LIBRARY_FALLBACKS = {
 
 // Find fallback URLs for a library
 function getFallbackUrls(url: any) {
-  const lowerUrl = url.toLowerCase();
-  
-  // Check for known libraries
-  if (lowerUrl.includes('gm_config') || lowerUrl.includes('gm-config') || 
-      lowerUrl.includes('gm4_config') || lowerUrl.includes('sizzle/gm_config') ||
-      lowerUrl.includes('1884-gm-config')) {
+  if (typeof url !== 'string') return [];
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch (_) {
+    return [];
+  }
+  const host = parsed.hostname.toLowerCase();
+  const path = parsed.pathname.toLowerCase();
+
+  // Only substitute a library when the URL is a known upstream distribution
+  // path. A random host/path containing "jquery" (or a plugin filename on an
+  // official host) must never receive jQuery core bytes.
+  const isGmConfigUrl =
+    (host === 'cdn.jsdelivr.net' && /\/(?:gm_config|gm-config|gm4_config)(?:[@/._-]|$)/.test(path)) ||
+    (host === 'raw.githubusercontent.com' && /^\/sizzlemctwizzle\/gm_config(?:\/|$)/.test(path)) ||
+    (host === 'greasyfork.org' && /^\/scripts\/1884-gm-config(?:\/|$)/.test(path)) ||
+    (host === 'openuserjs.org' && path === '/src/libs/sizzle/gm_config.js');
+  if (isGmConfigUrl) {
     return LIBRARY_FALLBACKS['gm_config'];
   }
-  if (lowerUrl.includes('mutation-summary') || lowerUrl.includes('mutationsummary')) {
+
+  const isMutationSummaryUrl =
+    (host === 'cdn.jsdelivr.net' && /\/mutation-summary(?:[@/._-]|$)/.test(path)) ||
+    (host === 'cdnjs.cloudflare.com' && /^\/ajax\/libs\/mutation-summary\//.test(path)) ||
+    (host === 'unpkg.com' && /^\/mutation-summary@/.test(path));
+  if (isMutationSummaryUrl) {
     return LIBRARY_FALLBACKS['mutation-summary'];
   }
-  if (lowerUrl.includes('jquery')) {
-    if (lowerUrl.includes('@2') || lowerUrl.includes('2.')) {
-      return LIBRARY_FALLBACKS['jquery@2'];
-    }
-    return LIBRARY_FALLBACKS['jquery'];
+
+  const isJqueryCoreUrl =
+    (host === 'code.jquery.com' && /^\/jquery(?:-(?:\d+(?:\.\d+)*))?(?:\.min)?\.js$/.test(path)) ||
+    ((host === 'cdnjs.cloudflare.com' || host === 'ajax.googleapis.com') &&
+      /^\/ajax\/libs\/jquery\/\d+(?:\.\d+)*\/jquery(?:\.min)?\.js$/.test(path));
+  if (isJqueryCoreUrl) {
+    const majorMatch = path.match(/\/jquery-(\d+)(?:\.|\/|$)/) || path.match(/\/jquery\/(\d+)(?:\.|\/|$)/);
+    const major = majorMatch ? Number(majorMatch[1]) : 3;
+    if (major === 1) return [];
+    return major === 2 ? LIBRARY_FALLBACKS['jquery@2'] : LIBRARY_FALLBACKS['jquery@3'];
   }
-  
+
   // For unpkg URLs, try jsdelivr as fallback
-  if (lowerUrl.includes('unpkg.com')) {
-    const jsdelivrUrl = url.replace('unpkg.com', 'cdn.jsdelivr.net/npm');
+  if (host === 'unpkg.com') {
+    const jsdelivrUrl = `https://cdn.jsdelivr.net/npm${parsed.pathname}${parsed.search}`;
     return [jsdelivrUrl];
   }
-  
+
   // For rawgit/raw.githubusercontent, try jsdelivr gh
-  if (lowerUrl.includes('raw.githubusercontent.com')) {
+  if (host === 'raw.githubusercontent.com') {
     // Convert: https://raw.githubusercontent.com/user/repo/branch/path
     // To: https://cdn.jsdelivr.net/gh/user/repo@branch/path
     const match = url.match(/raw\.githubusercontent\.com\/([^/]+)\/([^/]+)\/([^/]+)\/(.+)/);

@@ -27,6 +27,9 @@ All notable changes to ScriptVault will be documented in this file.
   kept out of SettingsManager unless credentials are explicitly opted in.
 - Recomputed SHA-256 digests for local-library snapshots at JSON import time so
   code carrying a false provenance hash is dropped before it can be wrapped.
+- Restricted @require CDN fallbacks to recognized upstream paths and parsed
+  jQuery major versions, so plugin-like URLs cannot silently receive jQuery
+  core bytes.
 
 ## [v3.27.0] — Recoverable restores, real isolation & honest errors (2026-08-08)
 
