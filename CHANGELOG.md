@@ -13,6 +13,9 @@ All notable changes to ScriptVault will be documented in this file.
 - Added a locale surface ratchet that inventories dashboard, popup, and side
   panel keys and runs deterministic pseudo-locale/RTL checks across editor
   labels, accessible names, overflow, and control order.
+- Made the browser-support matrix and release-preflight documentation derive
+  their version/date from the current manifest and release inputs, with the
+  README gate rejecting stale matrix or artifact references.
 
 ## [v3.27.0] — Recoverable restores, real isolation & honest errors (2026-08-08)
 

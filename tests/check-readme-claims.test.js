@@ -115,4 +115,34 @@ describe('check-readme-claims.mjs', () => {
       writeFileSync(readmePath, backup, 'utf8');
     }
   });
+
+  it('flags stale generated support-matrix version and verification date', () => {
+    const readmePath = join(repoRoot, 'README.md');
+    const backup = readFileSync(readmePath, 'utf8');
+    const currentVersion = JSON.parse(readFileSync(join(repoRoot, 'manifest.json'), 'utf8')).version;
+    const versionNeedle = `Version source: \`manifest.json\` / \`manifest-firefox.json\` ${currentVersion}._`;
+    expect(backup).toContain(versionNeedle);
+    try {
+      const staleVersion = versionNeedle.replace(currentVersion, '0.0.0');
+      writeFileSync(readmePath, backup.replace(versionNeedle, staleVersion), 'utf8');
+      const versionResult = spawnSync(process.execPath, [script, '--json'], { encoding: 'utf8' });
+      expect(versionResult.status).toBe(1);
+      const versionReport = JSON.parse(versionResult.stdout);
+      expect(versionReport.failures.some((failure) => failure.check === 'stale-support-matrix-version')).toBe(true);
+    } finally {
+      writeFileSync(readmePath, backup, 'utf8');
+    }
+
+    const dateMatch = backup.match(/_Last generated:\s*(\d{4}-\d{2}-\d{2})/);
+    expect(dateMatch).toBeTruthy();
+    try {
+      writeFileSync(readmePath, backup.replace(dateMatch[1], '2000-01-01'), 'utf8');
+      const dateResult = spawnSync(process.execPath, [script, '--json'], { encoding: 'utf8' });
+      expect(dateResult.status).toBe(1);
+      const dateReport = JSON.parse(dateResult.stdout);
+      expect(dateReport.failures.some((failure) => failure.check === 'stale-support-matrix-date')).toBe(true);
+    } finally {
+      writeFileSync(readmePath, backup, 'utf8');
+    }
+  });
 });

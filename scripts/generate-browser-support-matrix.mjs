@@ -35,6 +35,18 @@ function existingGeneratedDate() {
   return null;
 }
 
+function currentReleaseDate() {
+  const version = readJson('manifest.json').version;
+  const changelogPath = resolve(root, 'CHANGELOG.md');
+  if (existsSync(changelogPath)) {
+    const changelog = readFileSync(changelogPath, 'utf8');
+    const escapedVersion = version.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const match = changelog.match(new RegExp(`^## \\[v${escapedVersion}\\][^\\n]*\\((\\d{4}-\\d{2}-\\d{2})\\)`, 'm'));
+    if (match) return match[1];
+  }
+  return existingGeneratedDate() || today();
+}
+
 function firefoxLintSummary() {
   const artifact = resolve(root, 'firefox-artifacts/web-ext-lint.json');
   if (!existsSync(artifact)) {
@@ -303,7 +315,7 @@ function writeIfChanged(path, next) {
   return true;
 }
 
-const date = argValue('--date') || (check ? existingGeneratedDate() || today() : today());
+const date = argValue('--date') || currentReleaseDate();
 const block = matrixMarkdown(date);
 
 const readmeNext = replaceOrInsertReadme(readText('README.md'), block);

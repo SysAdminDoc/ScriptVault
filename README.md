@@ -582,7 +582,7 @@ value changes, and GM XHR FormData; it never treats a capability skip as proof.
 ### Credential-free release preflight
 
 ```bash
-npm run release:preflight -- --version 3.27.0
+npm run release:preflight  # defaults to the current manifest version
 ```
 
 This single local command runs source/runtime drift, static and unit gates,

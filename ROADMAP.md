@@ -840,13 +840,6 @@ _Scope not covered by the 2026-08-02 pass. Not findings; each needs its own audi
 
 ### P3
 
-- [ ] P3 — Make browser-support and release-artifact references version-derived
-  Why: README.md’s generated support matrix and release-preflight example still reference version 3.22.0 and 2026-07-16 while the live manifests are 3.23.1; readme:check passes without checking those generated references.
-  Evidence: README.md:382, README.md:387-391, README.md:591, manifest.json, manifest-firefox.json, scripts/generate-browser-support-matrix.mjs, and scripts/check-readme-claims.mjs.
-  Touches: README.md generated block, scripts/generate-browser-support-matrix.mjs, scripts/check-readme-claims.mjs, release preflight/version checks, and focused documentation tests.
-  Acceptance: Regenerating the support matrix derives the version and verification date from the current release inputs, artifact filenames and examples agree with the same version, historical examples are marked as historical or removed, and the documentation gate fails on stale version/date references.
-  Complexity: S
-
 ## Audit Findings — 2026-08-06
 
 _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check` is green (227 files / 2434 tests, `tsc` clean, all gates pass) — no pre-existing failures (an earlier red run was only an empty `node_modules`). `npm audit --omit=optional --audit-level=high` reports 16 vulns (10 high, 4 critical) — see the still-open P0 "Restore the blocking high-severity dependency-audit gate" above; not re-logged. Findings were traced against the SHIPPED source of truth: `src/background/core.ts` (inline, generated into `background.core.js`) and the promoted `src/modules/*.ts` / `src/background/gm-*.ts` handlers. Several `src/background/*.ts` files (`wrapper-builder.ts`, `import-export.ts`, `update-checker.ts`, `install-handler.ts`, `trust-receipt.ts`, `parser.ts`) are UNSHIPPED mirrors — mirror-only issues were dropped or folded into the mirror-drift item (last P3 below)._

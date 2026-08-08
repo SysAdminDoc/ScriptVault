@@ -95,6 +95,8 @@ const KNOWN_PROVIDER_NAMES = [
 
 /** Tokens that the README uses to introduce a provider table. */
 const PROVIDER_TABLE_MARKER = /\|\s*Provider\s*\|\s*Method\s*\|/i;
+const SUPPORT_MATRIX_START = '<!-- SCRIPT_VAULT_BROWSER_SUPPORT_MATRIX:START -->';
+const SUPPORT_MATRIX_END = '<!-- SCRIPT_VAULT_BROWSER_SUPPORT_MATRIX:END -->';
 
 function readReadme() {
   return readFileSync(README_PATH, 'utf8');
@@ -156,6 +158,60 @@ function findClaimedProviders(readme) {
     }
   }
   return claimed;
+}
+
+function checkGeneratedSupportMatrix(readme) {
+  const failures = [];
+  const manifest = JSON.parse(readFileSync(join(repoRoot, 'manifest.json'), 'utf8'));
+  const version = manifest.version;
+  const changelog = existsSync(join(repoRoot, 'CHANGELOG.md'))
+    ? readFileSync(join(repoRoot, 'CHANGELOG.md'), 'utf8')
+    : '';
+  const escapedVersion = version.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const releaseMatch = changelog.match(new RegExp(`^## \\[v${escapedVersion}\\][^\\n]*\\((\\d{4}-\\d{2}-\\d{2})\\)`, 'm'));
+  const releaseDate = releaseMatch?.[1] || null;
+  const startIndex = readme.indexOf(SUPPORT_MATRIX_START);
+  const endIndex = startIndex < 0 ? -1 : readme.indexOf(SUPPORT_MATRIX_END, startIndex + SUPPORT_MATRIX_START.length);
+  if (startIndex < 0 || endIndex < 0) {
+    failures.push({ check: 'missing-support-matrix', why: 'README is missing the generated browser support matrix block' });
+    return failures;
+  }
+
+  const block = readme.slice(startIndex, endIndex + SUPPORT_MATRIX_END.length);
+  const versionMatch = block.match(/Version source:\s*`manifest\.json`\s*\/\s*`manifest-firefox\.json`\s+(\d+\.\d+\.\d+)/);
+  if (!versionMatch) {
+    failures.push({ check: 'support-matrix-version-missing', why: 'generated support matrix must declare its manifest version source' });
+  } else if (versionMatch[1] !== version) {
+    failures.push({ check: 'stale-support-matrix-version', expected: version, actual: versionMatch[1], why: `support matrix version ${versionMatch[1]} does not match manifest ${version}` });
+  }
+
+  const dateMatch = block.match(/_Last generated:\s*(\d{4}-\d{2}-\d{2})/);
+  if (!dateMatch) {
+    failures.push({ check: 'support-matrix-date-missing', why: 'generated support matrix must declare its verification date' });
+  } else if (releaseDate && dateMatch[1] !== releaseDate) {
+    failures.push({ check: 'stale-support-matrix-date', expected: releaseDate, actual: dateMatch[1], why: `support matrix date ${dateMatch[1]} does not match the current release date ${releaseDate}` });
+  }
+
+  const artifactVersionPatterns = [
+    /scriptvault-edge-v(\d+\.\d+\.\d+)/g,
+    /edge-build-(\d+\.\d+\.\d+)/g,
+    /edge-smoke-(\d+\.\d+\.\d+)/g,
+    /summary-(\d+\.\d+\.\d+)/g,
+  ];
+  for (const pattern of artifactVersionPatterns) {
+    for (const match of block.matchAll(pattern)) {
+      if (match[1] !== version) {
+        failures.push({ check: 'stale-support-matrix-artifact', expected: version, actual: match[1], why: `support matrix artifact reference ${match[1]} does not match manifest ${version}` });
+      }
+    }
+  }
+
+  for (const match of readme.matchAll(/npm run release:preflight\s+--\s+--version\s+(\d+\.\d+\.\d+)/g)) {
+    if (match[1] !== version) {
+      failures.push({ check: 'stale-release-preflight-example', expected: version, actual: match[1], why: `release preflight example ${match[1]} does not match manifest ${version}` });
+    }
+  }
+  return failures;
 }
 
 function checkCanonicalProjectFacts(failures) {
@@ -281,6 +337,7 @@ function check() {
   const failures = [];
   const projectFacts = checkCanonicalProjectFacts(failures);
   failures.push(...checkCompetitorDataFreshness(readme));
+  failures.push(...checkGeneratedSupportMatrix(readme));
 
   // 1) Deleted-module marketing.
   for (const entry of DELETED_MODULE_MARKETING) {
