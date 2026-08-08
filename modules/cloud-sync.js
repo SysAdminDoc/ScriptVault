@@ -432,6 +432,18 @@ const CloudSync = (() => {
       }
     };
   }
+  var SYNC_TOMBSTONE_RETENTION_MS = 30 * 24 * 60 * 60 * 1e3;
+  function pruneSyncTombstones(tombstones, now = Date.now()) {
+    const cutoff = now - SYNC_TOMBSTONE_RETENTION_MS;
+    return Object.fromEntries(Object.entries(tombstones).filter(
+      ([, timestamp]) => typeof timestamp !== "number" || !Number.isFinite(timestamp) || timestamp > cutoff
+    ));
+  }
+  function tombstoneMapsDiffer(left, right) {
+    const leftIds = Object.keys(left);
+    const rightIds = Object.keys(right);
+    return leftIds.length !== rightIds.length || leftIds.some((id) => !(id in right)) || rightIds.some((id) => !(id in left));
+  }
   function getRuntimeHooks() {
     return globalThis;
   }
@@ -1397,10 +1409,10 @@ const CloudSync = (() => {
     previewData(local, remote, options = {}) {
       const localScripts = Array.isArray(local?.scripts) ? local.scripts : [];
       const remoteScripts = Array.isArray(remote?.scripts) ? remote.scripts : [];
-      const tombstones = {
+      const tombstones = pruneSyncTombstones({
         ...local?.tombstones ?? {},
         ...remote?.tombstones ?? {}
-      };
+      });
       const localById = new Map(localScripts.map((script) => [script.id, script]));
       const remoteById = new Map(remoteScripts.map((script) => [script.id, script]));
       const remoteValueBundleSelection = remote ? selectApplicableRemoteValueBundles(remote, this.mergeData(local, remote).scripts) : createEmptyRemoteValueBundleSelection();
@@ -1538,7 +1550,11 @@ const CloudSync = (() => {
       }
       let valueBundleSync = null;
       const tombstoneData = await chrome.storage.local.get("syncTombstones");
-      const tombstones = tombstoneData["syncTombstones"] ?? {};
+      const storedTombstones = tombstoneData["syncTombstones"] ?? {};
+      const tombstones = pruneSyncTombstones(storedTombstones);
+      if (tombstoneMapsDiffer(storedTombstones, tombstones)) {
+        await chrome.storage.local.set({ syncTombstones: tombstones });
+      }
       const scripts = await ScriptStorage.getAll();
       const localSyncScripts = scripts.map((s) => ({
         id: s.id,
@@ -1562,7 +1578,10 @@ const CloudSync = (() => {
       const remoteData = await readSyncEnvelopeFromRemote(remoteEnvelope, settings);
       if (signal?.aborted) throw new Error("Sync aborted");
       if (remoteData) {
-        const mergedTombstones = { ...tombstones, ...remoteData.tombstones ?? {} };
+        const mergedTombstones = pruneSyncTombstones({
+          ...tombstones,
+          ...remoteData.tombstones ?? {}
+        });
         const merged = this.mergeData(localData, remoteData);
         const resurrectionUnion = /* @__PURE__ */ new Map();
         for (const s of localData.scripts || []) resurrectionUnion.set(s.id, s);
@@ -1699,9 +1718,7 @@ const CloudSync = (() => {
           });
           if (applied) localMutated = true;
         }
-        const mergedTombstoneIds = Object.keys(mergedTombstones);
-        const localTombstoneIds = Object.keys(tombstones);
-        const tombstonesChanged = mergedTombstoneIds.length !== localTombstoneIds.length || mergedTombstoneIds.some((id) => !(id in tombstones)) || localTombstoneIds.some((id) => !(id in mergedTombstones));
+        const tombstonesChanged = tombstoneMapsDiffer(tombstones, mergedTombstones);
         if (tombstonesChanged) {
           await chrome.storage.local.set({ syncTombstones: mergedTombstones });
         }
@@ -1776,10 +1793,10 @@ const CloudSync = (() => {
           scriptsMap.set(script.id, sanitizeSyncScriptForEnvelope(script));
         }
       }
-      const mergedTombstones = {
+      const mergedTombstones = pruneSyncTombstones({
         ...local.tombstones ?? {},
         ...remote.tombstones ?? {}
-      };
+      });
       const merged = Array.from(scriptsMap.values()).filter(
         (s) => !mergedTombstones[s.id]
       );

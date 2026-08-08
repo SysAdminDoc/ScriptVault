@@ -125,6 +125,23 @@ interface SyncEnvelope {
   valueBundles?: Record<string, GmValueSyncBundle>;
 }
 
+const SYNC_TOMBSTONE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+
+function pruneSyncTombstones(tombstones: Record<string, unknown>, now = Date.now()): Record<string, unknown> {
+  const cutoff = now - SYNC_TOMBSTONE_RETENTION_MS;
+  return Object.fromEntries(Object.entries(tombstones).filter(([, timestamp]) =>
+    typeof timestamp !== 'number' || !Number.isFinite(timestamp) || timestamp > cutoff,
+  ));
+}
+
+function tombstoneMapsDiffer(left: Record<string, unknown>, right: Record<string, unknown>): boolean {
+  const leftIds = Object.keys(left);
+  const rightIds = Object.keys(right);
+  return leftIds.length !== rightIds.length ||
+    leftIds.some((id) => !(id in right)) ||
+    rightIds.some((id) => !(id in left));
+}
+
 interface SyncResult {
   success?: boolean;
   skipped?: boolean;
@@ -1675,10 +1692,10 @@ export const CloudSync = {
   ): SyncPreviewResult {
     const localScripts = Array.isArray(local?.scripts) ? local.scripts : [];
     const remoteScripts = Array.isArray(remote?.scripts) ? remote.scripts : [];
-    const tombstones: Record<string, unknown> = {
+    const tombstones = pruneSyncTombstones({
       ...(local?.tombstones ?? {}),
       ...(remote?.tombstones ?? {}),
-    };
+    });
     const localById = new Map<string, SyncScript>(localScripts.map((script) => [script.id, script]));
     const remoteById = new Map<string, SyncScript>(remoteScripts.map((script) => [script.id, script]));
     const remoteValueBundleSelection = remote
@@ -1829,7 +1846,12 @@ export const CloudSync = {
 
     // Load tombstones (IDs of locally-deleted scripts, to prevent sync re-importing them)
     const tombstoneData = await chrome.storage.local.get('syncTombstones');
-    const tombstones: Record<string, unknown> = (tombstoneData['syncTombstones'] as Record<string, unknown> | undefined) ?? {};
+    const storedTombstones: Record<string, unknown> =
+      (tombstoneData['syncTombstones'] as Record<string, unknown> | undefined) ?? {};
+    const tombstones = pruneSyncTombstones(storedTombstones);
+    if (tombstoneMapsDiffer(storedTombstones, tombstones)) {
+      await chrome.storage.local.set({ syncTombstones: tombstones });
+    }
 
     // Get local data
     const scripts = await ScriptStorage.getAll();
@@ -1864,7 +1886,10 @@ export const CloudSync = {
 
     if (remoteData) {
       // Merge tombstones from remote so deletions propagate across devices
-      const mergedTombstones: Record<string, unknown> = { ...tombstones, ...(remoteData.tombstones ?? {}) };
+      const mergedTombstones = pruneSyncTombstones({
+        ...tombstones,
+        ...(remoteData.tombstones ?? {}),
+      });
 
       // Merge: prefer newer versions
       const merged = this.mergeData(localData, remoteData);
@@ -2057,11 +2082,7 @@ export const CloudSync = {
       // Persist merged tombstones locally whenever the set CHANGED (added or
       // removed), not only when it grew — a resurrection removes a tombstone
       // without growing the count, and that removal must stick locally.
-      const mergedTombstoneIds = Object.keys(mergedTombstones);
-      const localTombstoneIds = Object.keys(tombstones);
-      const tombstonesChanged = mergedTombstoneIds.length !== localTombstoneIds.length ||
-        mergedTombstoneIds.some((id) => !(id in tombstones)) ||
-        localTombstoneIds.some((id) => !(id in mergedTombstones));
+      const tombstonesChanged = tombstoneMapsDiffer(tombstones, mergedTombstones);
       if (tombstonesChanged) {
         await chrome.storage.local.set({ syncTombstones: mergedTombstones });
       }
@@ -2160,10 +2181,10 @@ export const CloudSync = {
     }
 
     // Filter out tombstoned entries so deleted scripts don't resurrect
-    const mergedTombstones: Record<string, unknown> = {
+    const mergedTombstones = pruneSyncTombstones({
       ...(local.tombstones ?? {}),
       ...(remote.tombstones ?? {}),
-    };
+    });
     const merged: SyncScript[] = Array.from(scriptsMap.values()).filter(
       (s) => !mergedTombstones[s.id],
     );

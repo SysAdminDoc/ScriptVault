@@ -828,16 +828,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
 
 ### P3
 
-- [ ] P3 — 30-day tombstone prune is defeated by the remote round-trip; the uploaded tombstone map grows unboundedly
-  Category: maintainability
-  Where: `src/background/cloud-sync.ts:1665` and `src/modules/sync-easycloud.ts:869` (union remote tombstones unconditionally), upload includes the full merged map (`:1872`); local prune `core.ts:10975-10986`
-  Problem: The maintenance prune removes local tombstones >30 days, but the next sync unions the remote envelope's tombstones back in, detects a change, re-persists the pruned entries, and re-uploads them. Nothing prunes tombstones from the uploaded envelope, so the local prune is a no-op and the map grows with every deletion for the account's life (inflating every future encrypted payload).
-  Evidence: Verified — both engines union remote tombstones; upload includes the full map.
-  Fix: Apply the same 30-day age filter to the merged tombstones before persisting/uploading (safe: the resurrection guard is timestamp-based).
-  Acceptance: Tombstones older than 30 days stop reappearing after a sync; a test covers prune survival across a round-trip.
-  Confidence: Verified
-  Effort: S
-
 - [ ] P3 — `matchPattern` diverges from Chrome on scheme wildcard and host case (over-counts, needless reloads, missed matches)
   Category: correctness
   Where: `src/background/url-matcher.ts:191` (`scheme === '*'`) and `:203-212` (case-sensitive host)

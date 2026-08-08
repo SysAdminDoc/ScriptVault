@@ -85,6 +85,23 @@ interface SyncEnvelope {
   tombstones: Record<string, unknown>;
 }
 
+const SYNC_TOMBSTONE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+
+function pruneSyncTombstones(tombstones: Record<string, unknown>, now = Date.now()): Record<string, unknown> {
+  const cutoff = now - SYNC_TOMBSTONE_RETENTION_MS;
+  return Object.fromEntries(Object.entries(tombstones).filter(([, timestamp]) =>
+    typeof timestamp !== 'number' || !Number.isFinite(timestamp) || timestamp > cutoff,
+  ));
+}
+
+function tombstoneMapsDiffer(left: Record<string, unknown>, right: Record<string, unknown>): boolean {
+  const leftIds = Object.keys(left);
+  const rightIds = Object.keys(right);
+  return leftIds.length !== rightIds.length ||
+    leftIds.some((id) => !(id in right)) ||
+    rightIds.some((id) => !(id in left));
+}
+
 interface SyncResult {
   success?: boolean;
   skipped?: boolean;
@@ -959,7 +976,7 @@ async function _mergeData(
   // Merge tombstones — union of all known deletions
   const localTombstones: Record<string, unknown> = localData.tombstones || {};
   const remoteTombstones: Record<string, unknown> = remoteData.tombstones || {};
-  const mergedTombstones: Record<string, unknown> = { ...localTombstones, ...remoteTombstones };
+  const mergedTombstones = pruneSyncTombstones({ ...localTombstones, ...remoteTombstones });
 
   // Collect all script IDs
   const allIds = new Set<string>([...localScripts.keys(), ...remoteScripts.keys()]);
@@ -1110,7 +1127,12 @@ async function _performSync(): Promise<SyncResult> {
 
     // Load tombstones
     const tombstoneData = await _getStorageValues(['syncTombstones']);
-    const tombstones = (tombstoneData['syncTombstones'] as Record<string, unknown> | undefined) || {};
+    const storedTombstones =
+      (tombstoneData['syncTombstones'] as Record<string, unknown> | undefined) || {};
+    const tombstones = pruneSyncTombstones(storedTombstones);
+    if (tombstoneMapsDiffer(storedTombstones, tombstones)) {
+      await _setStorageValues({ syncTombstones: tombstones });
+    }
 
     // Build local data snapshot
     const scripts: Script[] = await ScriptStorage.getAll();
@@ -1137,7 +1159,7 @@ async function _performSync(): Promise<SyncResult> {
     if (remoteData) {
       // Merge
       const merged = await _mergeData(localData, remoteData, deviceId);
-      const mergedTombstones: Record<string, unknown> = merged.tombstones || {};
+      const mergedTombstones = pruneSyncTombstones(merged.tombstones || {});
       let localMutated = false;
 
       for (const localScript of scripts) {
@@ -1203,11 +1225,7 @@ async function _performSync(): Promise<SyncResult> {
       // Persist merged tombstones whenever the set CHANGED (added OR removed) —
       // a resurrection removes a tombstone without growing the count, and that
       // removal must stick locally so it does not re-resurrect-and-redelete.
-      const mergedIds = Object.keys(mergedTombstones);
-      const localIds = Object.keys(tombstones);
-      const tombstonesChanged = mergedIds.length !== localIds.length ||
-        mergedIds.some((id) => !(id in tombstones)) ||
-        localIds.some((id) => !(id in mergedTombstones));
+      const tombstonesChanged = tombstoneMapsDiffer(tombstones, mergedTombstones);
       if (tombstonesChanged) {
         await chrome.storage.local.set({ syncTombstones: mergedTombstones });
       }

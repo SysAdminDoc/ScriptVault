@@ -66,6 +66,8 @@ All notable changes to ScriptVault will be documented in this file.
 - Clamped configured sync-encryption PBKDF2 iterations to the same bounded
   range used by decryption, preventing over-cap settings from creating
   undecryptable envelopes.
+- Pruned sync tombstones older than 30 days after local and remote merges so
+  stale deletions do not return on the next round-trip or inflate payloads.
 
 ## [v3.27.0] — Recoverable restores, real isolation & honest errors (2026-08-08)
 

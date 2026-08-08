@@ -285,6 +285,8 @@ describe('source easycloud sync module', () => {
       syncTombstones: {},
     });
 
+    const tombstoneTimestamp = Date.now() - 1000;
+
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
@@ -300,7 +302,7 @@ describe('source easycloud sync module', () => {
             timestamp: 50,
             deviceId: 'remote-device',
             scripts: [],
-            tombstones: { script_alpha: 12345 },
+            tombstones: { script_alpha: tombstoneTimestamp },
           }),
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         ),
@@ -349,6 +351,8 @@ describe('source easycloud sync module', () => {
       syncTombstones: {},
     });
 
+    const tombstoneTimestamp = Date.now() - 1000;
+
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
@@ -364,7 +368,7 @@ describe('source easycloud sync module', () => {
             timestamp: 50,
             deviceId: 'remote-device',
             scripts: [],
-            tombstones: { script_alpha: 12345 },
+            tombstones: { script_alpha: tombstoneTimestamp },
           }),
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         ),
@@ -379,7 +383,7 @@ describe('source easycloud sync module', () => {
     globalThis.fetch = fetchMock;
 
     // Local script was restored from trash with an updatedAt NEWER than the
-    // remote tombstone (12345), so the restore must win.
+    // recent remote tombstone, so the restore must win.
     const harness = await loadFreshEasyCloud([
       {
         id: 'script_alpha',
@@ -389,7 +393,7 @@ describe('source easycloud sync module', () => {
         position: 0,
         settings: {},
         createdAt: 1,
-        updatedAt: 99999,
+        updatedAt: tombstoneTimestamp + 1000,
       },
     ]);
     const { EasyCloudSync, ScriptStorage, scriptState } = harness;
@@ -402,6 +406,55 @@ describe('source easycloud sync module', () => {
     // The tombstone was cleared locally.
     const persisted = (await chrome.storage.local.get('syncTombstones')).syncTombstones;
     expect(persisted).toEqual({});
+  });
+
+  it('prunes stale remote tombstones before the EasyCloud round-trip upload', async () => {
+    await chrome.storage.local.set({
+      easycloud_connected: true,
+      syncTombstones: {},
+    });
+    const staleTombstone = Date.now() - (31 * 24 * 60 * 60 * 1000);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ files: [{ id: 'drive-file-id' }] }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            version: 1,
+            timestamp: Date.now(),
+            deviceId: 'remote-device',
+            scripts: [],
+            tombstones: { stale_script: staleTombstone },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(new Response('{}', { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ id: 'drive-file-id' }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+    globalThis.fetch = fetchMock;
+
+    const { EasyCloudSync } = await loadFreshEasyCloud([]);
+    await expect(EasyCloudSync.sync()).resolves.toMatchObject({ success: true });
+
+    const uploadCall = fetchMock.mock.calls.find(([url]) =>
+      String(url).includes('/upload/drive/v3/files/') &&
+      String(url).includes('uploadType=multipart'),
+    );
+    expect(uploadCall).toBeTruthy();
+    expect(uploadCall[1].body).toContain('"tombstones":{}');
+    await expect(chrome.storage.local.get('syncTombstones')).resolves.toEqual({
+      syncTombstones: {},
+    });
   });
 
   it('keeps the local-only code edit when EasyCloud remote metadata is newer', async () => {

@@ -503,7 +503,8 @@ describe('source cloud sync module', () => {
     expect(getRemoteData().scripts.map((script) => script.id)).toEqual(['script_alpha']);
 
     await ScriptStorage.delete('script_alpha');
-    await chrome.storage.local.set({ syncTombstones: { script_alpha: 2222 } });
+    const tombstoneTimestamp = Date.now() - 1000;
+    await chrome.storage.local.set({ syncTombstones: { script_alpha: tombstoneTimestamp } });
     vi.clearAllMocks();
 
     await expect(CloudSync.sync()).resolves.toEqual({ success: true });
@@ -511,7 +512,7 @@ describe('source cloud sync module', () => {
     expect(getRemoteData()).toEqual(
       expect.objectContaining({
         scripts: [],
-        tombstones: { script_alpha: 2222 },
+        tombstones: { script_alpha: tombstoneTimestamp },
       }),
     );
 
@@ -524,13 +525,39 @@ describe('source cloud sync module', () => {
     expect(provider.upload).toHaveBeenCalledWith(
       expect.objectContaining({
         scripts: [],
-        tombstones: { script_alpha: 2222 },
+        tombstones: { script_alpha: tombstoneTimestamp },
       }),
       expect.objectContaining({ syncProvider: 'googledrive' }),
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     await expect(chrome.storage.local.get('syncTombstones')).resolves.toEqual({
-      syncTombstones: { script_alpha: 2222 },
+      syncTombstones: { script_alpha: tombstoneTimestamp },
+    });
+  });
+
+  it('prunes stale remote tombstones before the merged round-trip upload', async () => {
+    await chrome.storage.local.set({ syncTombstones: {} });
+    const staleTombstone = Date.now() - (31 * 24 * 60 * 60 * 1000);
+    const harness = await loadFreshCloudSync([], {
+      version: 1,
+      timestamp: Date.now(),
+      scripts: [],
+      tombstones: { stale_script: staleTombstone },
+    });
+
+    await expect(harness.CloudSync.sync()).resolves.toEqual({ success: true });
+
+    expect(harness.getRemoteData()).toEqual(expect.objectContaining({
+      scripts: [],
+      tombstones: {},
+    }));
+    expect(harness.provider.upload).toHaveBeenCalledWith(
+      expect.objectContaining({ tombstones: {} }),
+      expect.objectContaining({ syncProvider: 'googledrive' }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    await expect(chrome.storage.local.get('syncTombstones')).resolves.toEqual({
+      syncTombstones: {},
     });
   });
 
@@ -557,13 +584,14 @@ describe('source cloud sync module', () => {
     // Initial sync, then delete + propagate the tombstone to remote.
     await expect(CloudSync.sync()).resolves.toEqual({ success: true });
     await ScriptStorage.delete('script_alpha');
-    await chrome.storage.local.set({ syncTombstones: { script_alpha: 2222 } });
+    const tombstoneTimestamp = Date.now() - 1000;
+    await chrome.storage.local.set({ syncTombstones: { script_alpha: tombstoneTimestamp } });
     await expect(CloudSync.sync()).resolves.toEqual({ success: true });
-    expect(getRemoteData().tombstones).toEqual({ script_alpha: 2222 });
+    expect(getRemoteData().tombstones).toEqual({ script_alpha: tombstoneTimestamp });
 
     // Restore from trash: re-save with a NEWER updatedAt and clear the local
     // tombstone (mirrors the restoreFromTrash handler). The remote still holds
-    // the tombstone at 2222.
+    // the recent tombstone.
     await ScriptStorage.set('script_alpha', {
       id: 'script_alpha',
       code: '// ==UserScript==\n// @name Alpha\n// ==/UserScript==\nconsole.log("restored");',
@@ -572,7 +600,7 @@ describe('source cloud sync module', () => {
       meta: { name: 'Alpha' },
       settings: {},
       createdAt: 1,
-      updatedAt: 9999,
+      updatedAt: tombstoneTimestamp + 1000,
     });
     await chrome.storage.local.set({ syncTombstones: {} });
     vi.clearAllMocks();
@@ -630,7 +658,7 @@ describe('source cloud sync module', () => {
             updatedAt: 10,
           },
         ],
-        tombstones: { script_alpha: 12345 },
+        tombstones: { script_alpha: Date.now() - 1000 },
       },
     );
     const {
@@ -665,7 +693,7 @@ describe('source cloud sync module', () => {
     expect(updateBadge).toHaveBeenCalledTimes(1);
     expect(provider.upload).toHaveBeenCalledWith(
       expect.objectContaining({
-        tombstones: { script_alpha: 12345 },
+        tombstones: { script_alpha: expect.any(Number) },
         scripts: [
           expect.objectContaining({
             id: 'script_beta',

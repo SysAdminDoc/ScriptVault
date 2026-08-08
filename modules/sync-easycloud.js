@@ -313,6 +313,18 @@ const EasyCloudSync = (() => {
   });
 
   // src/modules/sync-easycloud.ts
+  var SYNC_TOMBSTONE_RETENTION_MS = 30 * 24 * 60 * 60 * 1e3;
+  function pruneSyncTombstones(tombstones, now = Date.now()) {
+    const cutoff = now - SYNC_TOMBSTONE_RETENTION_MS;
+    return Object.fromEntries(Object.entries(tombstones).filter(
+      ([, timestamp]) => typeof timestamp !== "number" || !Number.isFinite(timestamp) || timestamp > cutoff
+    ));
+  }
+  function tombstoneMapsDiffer(left, right) {
+    const leftIds = Object.keys(left);
+    const rightIds = Object.keys(right);
+    return leftIds.length !== rightIds.length || leftIds.some((id) => !(id in right)) || rightIds.some((id) => !(id in left));
+  }
   var TAG = "[EasyCloud]";
   var ALARM_NAME = "easycloud-periodic-sync";
   var DEBOUNCE_ALARM_NAME = "easycloud-debounce-sync";
@@ -899,7 +911,7 @@ const EasyCloudSync = (() => {
     );
     const localTombstones = localData.tombstones || {};
     const remoteTombstones = remoteData.tombstones || {};
-    const mergedTombstones = { ...localTombstones, ...remoteTombstones };
+    const mergedTombstones = pruneSyncTombstones({ ...localTombstones, ...remoteTombstones });
     const allIds = /* @__PURE__ */ new Set([...localScripts.keys(), ...remoteScripts.keys()]);
     const mergedScripts = [];
     for (const id of allIds) {
@@ -1002,7 +1014,11 @@ const EasyCloudSync = (() => {
       }
       const deviceId = await _ensureDeviceId();
       const tombstoneData = await _getStorageValues(["syncTombstones"]);
-      const tombstones = tombstoneData["syncTombstones"] || {};
+      const storedTombstones = tombstoneData["syncTombstones"] || {};
+      const tombstones = pruneSyncTombstones(storedTombstones);
+      if (tombstoneMapsDiffer(storedTombstones, tombstones)) {
+        await _setStorageValues({ syncTombstones: tombstones });
+      }
       const scripts = await ScriptStorage.getAll();
       const localData = {
         version: 1,
@@ -1023,7 +1039,7 @@ const EasyCloudSync = (() => {
       const remoteData = await readSyncEnvelopeFromRemote(remoteEnvelope);
       if (remoteData) {
         const merged = await _mergeData(localData, remoteData, deviceId);
-        const mergedTombstones = merged.tombstones || {};
+        const mergedTombstones = pruneSyncTombstones(merged.tombstones || {});
         let localMutated = false;
         for (const localScript of scripts) {
           if (!mergedTombstones[localScript.id]) continue;
@@ -1064,9 +1080,7 @@ const EasyCloudSync = (() => {
           });
           if (applied) localMutated = true;
         }
-        const mergedIds = Object.keys(mergedTombstones);
-        const localIds = Object.keys(tombstones);
-        const tombstonesChanged = mergedIds.length !== localIds.length || mergedIds.some((id) => !(id in tombstones)) || localIds.some((id) => !(id in mergedTombstones));
+        const tombstonesChanged = tombstoneMapsDiffer(tombstones, mergedTombstones);
         if (tombstonesChanged) {
           await chrome.storage.local.set({ syncTombstones: mergedTombstones });
         }
