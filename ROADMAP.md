@@ -838,16 +838,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
   Confidence: Verified
   Effort: S
 
-- [ ] P3 — `.user.js`/`.user.css` URLs with a fragment bypass install interception
-  Category: correctness
-  Where: `src/background/core.ts:10176,10217` (JS regex `/\.user\.js(\?.*)?$/i` + `urlMatches` filter) and `:10253,10272` (`.user.css`)
-  Problem: `webNavigation` `details.url` includes fragments, so `https://example.com/x.user.js#anything` never matches (the `urlMatches` filter means the listener isn't even invoked) and the raw script renders in the tab instead of the install review. Same for `.user.css`.
-  Evidence: Verified — regex evaluated; the RE2 filter gates listener invocation.
-  Fix: Extend both patterns to `(\?[^#]*)?(#.*)?$` (JS check and the RE2 `urlMatches` filter).
-  Acceptance: A `.user.js#frag` URL is intercepted into the review page; a test covers the fragment case.
-  Confidence: Verified
-  Effort: S
-
 - [ ] P3 — Install trust/provenance records the pre-redirect URL; the final `response.url` is discarded (source-badge laundering)
   Category: security
   Where: `src/background/core.ts:10141-10157` (`_fetchPendingUserscript` stores the navigation URL), `:10428-10451` (`installFromUrl`)

@@ -40,6 +40,8 @@ All notable changes to ScriptVault will be documented in this file.
   unowned or unknown update/close requests.
 - Scoped cookie-routing DNR session rules to extension-originated requests and
   made their exact URL filters case-sensitive.
+- Kept install interception active for `.user.js` and `.user.css` URLs that
+  carry query strings or fragments.
 
 ## [v3.27.0] — Recoverable restores, real isolation & honest errors (2026-08-08)
 

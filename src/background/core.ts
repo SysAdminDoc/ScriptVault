@@ -10706,7 +10706,7 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
   const url = details.url;
 
   // Check if this is a .user.js URL
-  if (!url.match(/\.user\.js(\?.*)?$/i)) return;
+  if (!url.match(/\.user\.js(\?[^#]*)?(#.*)?$/i)) return;
 
   // Don't intercept extension pages
   if (url.startsWith('chrome-extension://')) return;
@@ -10747,7 +10747,7 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
   }
 }, {
   url: [
-    { urlMatches: '.*\\.user\\.js(\\?.*)?$' }
+    { urlMatches: '.*\\.user\\.js(\\?[^#]*)?(#.*)?$' }
   ]
 });
 
@@ -10785,7 +10785,7 @@ async function _fetchPendingUserStyle(url: any) {
 chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
   if (details.frameId !== 0) return;
   const url = details.url;
-  if (!url.match(/\.user\.css(\?.*)?$/i)) return;
+  if (!url.match(/\.user\.css(\?[^#]*)?(#.*)?$/i)) return;
   if (url.startsWith('chrome-extension://')) return;
   try { await ensureInitialized(); } catch (_) { /* logged in init() */ }
 
@@ -10804,7 +10804,7 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
   }
 }, {
   url: [
-    { urlMatches: '.*\\.user\\.css(\\?.*)?$' }
+    { urlMatches: '.*\\.user\\.css(\\?[^#]*)?(#.*)?$' }
   ]
 });
 

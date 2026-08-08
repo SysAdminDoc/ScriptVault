@@ -83,10 +83,26 @@ describe('pending userscript install isolation', () => {
     expect(_pendingFetches.size).toBe(0);
   });
 
+  it('intercepts userscript URLs with query strings and fragments', async () => {
+    const url = 'https://scripts.example/fragment.user.js?channel=stable#review';
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(userscript('Fragment'), { status: 200 })));
+    const listener = installNavigationListener();
+
+    await listener({ tabId: 41, frameId: 0, url });
+
+    const stored = await chrome.storage.local.get(null);
+    expect(stored[pendingInstallKeyForTab(41)].code).toContain('@name Fragment');
+    expect(chrome.tabs.update).toHaveBeenCalledWith(41, {
+      url: 'chrome-extension://test-extension-id/pages/install.html#pendingInstall_tab-41',
+    });
+  });
+
   it('keeps the runtime bridge and install page on the same keyed handoff contract', () => {
     expect(coreSource).toContain("_pendingInstallStorageKey(`tab-${numericTabId}`)");
     expect(coreSource).toContain('await _storePendingInstall(storageKey, result.pendingInstall)');
     expect(coreSource).toContain('url: _pendingInstallPageUrl(storageKey)');
+    expect(coreSource).toContain("urlMatches: '.*\\\\.user\\\\.js(\\\\?[^#]*)?(#.*)?$'");
+    expect(coreSource).toContain("urlMatches: '.*\\\\.user\\\\.css(\\\\?[^#]*)?(#.*)?$'");
     expect(coreSource).toContain("_createPendingInstallStorageKey('context-menu')");
     expect(installPageSource).toContain('pendingInstallStorageKey = resolvePendingInstallStorageKey()');
     expect(installPageSource).toContain('const pendingInstall = data[pendingInstallStorageKey]');

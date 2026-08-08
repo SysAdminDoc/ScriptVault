@@ -153,7 +153,7 @@ export function registerWebNavigationListener(): void {
       const url: string = details.url;
 
       // Check if this is a .user.js URL
-      if (!url.match(/\.user\.js(\?.*)?$/i)) return;
+      if (!url.match(/\.user\.js(\?[^#]*)?(#.*)?$/i)) return;
 
       // Don't intercept extension pages
       if (url.startsWith('chrome-extension://')) return;
@@ -180,7 +180,7 @@ export function registerWebNavigationListener(): void {
       }
     },
     {
-      url: [{ urlMatches: '.*\\.user\\.js(\\?.*)?$' }],
+      url: [{ urlMatches: '.*\\.user\\.js(\\?[^#]*)?(#.*)?$' }],
     },
   );
 }
