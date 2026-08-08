@@ -799,6 +799,111 @@ describe('source sync providers module', () => {
     );
   });
 
+  it('clears Google credentials when the refresh token is definitively rejected', async () => {
+    const { CloudSyncProviders, settingsState, SettingsManager } = await loadFreshSyncProviders();
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: 'invalid_grant' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    }));
+    globalThis.fetch = fetchMock;
+
+    const result = await CloudSyncProviders.googledrive.refreshToken({
+      ...settingsState,
+      googleDriveToken: 'stale-google-token',
+      googleDriveRefreshToken: 'revoked-google-refresh',
+      googleDriveConnected: true,
+      googleDriveUser: { email: 'user@example.com', name: 'Google User' },
+      googleClientId: 'google-client-id',
+    });
+
+    expect(result).toBeNull();
+    expect(SettingsManager.set).toHaveBeenCalledWith({
+      googleDriveToken: '',
+      googleDriveRefreshToken: '',
+      googleDriveConnected: false,
+      googleDriveUser: null,
+    });
+    expect(settingsState.googleDriveToken).toBe('');
+    expect(settingsState.googleDriveRefreshToken).toBe('');
+    expect(settingsState.googleDriveConnected).toBe(false);
+    expect(settingsState.googleDriveUser).toBeNull();
+  });
+
+  it('clears Dropbox credentials when the refresh token is unauthorized', async () => {
+    const { CloudSyncProviders, settingsState, SettingsManager } = await loadFreshSyncProviders();
+    const fetchMock = vi.fn().mockResolvedValue(new Response('', { status: 401 }));
+    globalThis.fetch = fetchMock;
+
+    const result = await CloudSyncProviders.dropbox.refreshToken({
+      ...settingsState,
+      dropboxToken: 'stale-dropbox-token',
+      dropboxRefreshToken: 'revoked-dropbox-refresh',
+      dropboxClientId: 'dropbox-client-id',
+    });
+
+    expect(result).toBeNull();
+    expect(SettingsManager.set).toHaveBeenCalledWith({
+      dropboxToken: '',
+      dropboxRefreshToken: '',
+      dropboxUser: null,
+    });
+    expect(settingsState.dropboxToken).toBe('');
+    expect(settingsState.dropboxRefreshToken).toBe('');
+    expect(settingsState.dropboxUser).toBeNull();
+  });
+
+  it('clears OneDrive credentials when the refresh token is definitively rejected', async () => {
+    const { CloudSyncProviders, settingsState, SettingsManager } = await loadFreshSyncProviders();
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: 'invalid_grant' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    }));
+    globalThis.fetch = fetchMock;
+
+    const result = await CloudSyncProviders.onedrive.refreshToken({
+      ...settingsState,
+      onedriveToken: 'stale-onedrive-token',
+      onedriveRefreshToken: 'revoked-onedrive-refresh',
+      onedriveConnected: true,
+      onedriveUser: { email: 'user@example.com', name: 'OneDrive User' },
+      onedriveClientId: 'onedrive-client-id',
+    });
+
+    expect(result).toBeNull();
+    expect(SettingsManager.set).toHaveBeenCalledWith({
+      onedriveToken: '',
+      onedriveRefreshToken: '',
+      onedriveConnected: false,
+      onedriveUser: null,
+    });
+    expect(settingsState.onedriveToken).toBe('');
+    expect(settingsState.onedriveRefreshToken).toBe('');
+    expect(settingsState.onedriveConnected).toBe(false);
+    expect(settingsState.onedriveUser).toBeNull();
+  });
+
+  it('preserves Google credentials on a transient refresh-service failure', async () => {
+    const { CloudSyncProviders, settingsState, SettingsManager } = await loadFreshSyncProviders();
+    Object.assign(settingsState, {
+      googleDriveToken: 'stale-google-token',
+      googleDriveRefreshToken: 'temporary-google-refresh',
+      googleDriveConnected: true,
+      googleDriveUser: { email: 'user@example.com', name: 'Google User' },
+      googleClientId: 'google-client-id',
+    });
+    const fetchMock = vi.fn().mockResolvedValue(new Response('', { status: 503 }));
+    globalThis.fetch = fetchMock;
+
+    const result = await CloudSyncProviders.googledrive.refreshToken(settingsState);
+
+    expect(result).toBeNull();
+    expect(SettingsManager.set).not.toHaveBeenCalled();
+    expect(settingsState.googleDriveToken).toBe('stale-google-token');
+    expect(settingsState.googleDriveRefreshToken).toBe('temporary-google-refresh');
+    expect(settingsState.googleDriveConnected).toBe(true);
+    expect(settingsState.googleDriveUser).toEqual({ email: 'user@example.com', name: 'Google User' });
+  });
+
   it('reuses an existing Dropbox access token when the validation probe has a transient server failure', async () => {
     const { CloudSyncProviders, SettingsManager } = await loadFreshSyncProviders();
     const fetchMock = vi

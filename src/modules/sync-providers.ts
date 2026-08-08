@@ -584,6 +584,10 @@ async function _oauthFetchWithTimeout(
   }
 }
 
+function isDefinitiveRefreshFailure(response: Response): boolean {
+  return response.status === 400 || response.status === 401;
+}
+
 /**
  * Wraps `fetch` with an AbortController timeout.
  * Prevents service worker hangs caused by slow or unresponsive cloud API endpoints.
@@ -974,6 +978,15 @@ const googledrive = {
 
     if (!resp.ok) {
       console.warn('[CloudSync] Google token refresh failed:', resp.status);
+      if (isDefinitiveRefreshFailure(resp)) {
+        console.warn('[CloudSync] Google refresh token was rejected; clearing credentials and requiring reconnect');
+        await SyncCredentialStore.persistSettingsUpdate({
+          googleDriveToken: '',
+          googleDriveRefreshToken: '',
+          googleDriveConnected: false,
+          googleDriveUser: null,
+        }, currentSettings);
+      }
       return null;
     }
     const data: { access_token?: string; refresh_token?: string } = await resp.json();
@@ -1412,6 +1425,14 @@ const dropbox = {
 
     if (!resp.ok) {
       console.warn('[CloudSync] Dropbox token refresh failed:', resp.status);
+      if (isDefinitiveRefreshFailure(resp)) {
+        console.warn('[CloudSync] Dropbox refresh token was rejected; clearing credentials and requiring reconnect');
+        await SyncCredentialStore.persistSettingsUpdate({
+          dropboxToken: '',
+          dropboxRefreshToken: '',
+          dropboxUser: null,
+        }, effectiveSettings);
+      }
       return null;
     }
     const data: { access_token?: string } = await resp.json();
@@ -1761,7 +1782,18 @@ const onedrive = {
     );
     if (!resp) return null;
 
-    if (!resp.ok) return null;
+    if (!resp.ok) {
+      if (isDefinitiveRefreshFailure(resp)) {
+        console.warn('[CloudSync] OneDrive refresh token was rejected; clearing credentials and requiring reconnect');
+        await SyncCredentialStore.persistSettingsUpdate({
+          onedriveToken: '',
+          onedriveRefreshToken: '',
+          onedriveConnected: false,
+          onedriveUser: null,
+        }, currentSettings);
+      }
+      return null;
+    }
     const data: { access_token?: string; refresh_token?: string } = await resp.json();
     if (data.access_token) {
       await SyncCredentialStore.persistSettingsUpdate({

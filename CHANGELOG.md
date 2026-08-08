@@ -57,6 +57,9 @@ All notable changes to ScriptVault will be documented in this file.
   UserCSS handoffs, preventing abandoned editor payloads from accumulating.
 - Gated EasyCloud's debounce and periodic sync entry points on the durable
   connected flag so a stale alarm cannot resurrect uploads after disconnect.
+- Cleared Google Drive, Dropbox, and OneDrive credentials after definitive
+  400/401 refresh-token rejection while preserving them through transient
+  refresh-service failures, so revoked accounts surface a reconnect state.
 
 ## [v3.27.0] — Recoverable restores, real isolation & honest errors (2026-08-08)
 

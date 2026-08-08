@@ -828,16 +828,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
 
 ### P3
 
-- [ ] P3 — Refresh-token failure no longer clears stale tokens (regression vs the documented v2.0.2 fix)
-  Category: reliability
-  Where: `src/modules/sync-providers.ts:975-978,1413-1416,1764` (Google/Dropbox/OneDrive refresh only log + return null; connected flags stay true)
-  Problem: CLAUDE.md records a v2.0.2 fix "clear stale tokens on 400/401 refresh failure". The current TS source and generated `modules/sync-providers.js` only log and return null; with a revoked refresh token every cycle burns a probe+refresh and fails generically, `googleDriveConnected` etc. stay true, and nothing tells the user to reconnect. With the autoSync-persistence gap above, the failure is fully silent.
-  Evidence: Verified — behavior read in TS + generated runtime; intent regression inferred from the changelog note.
-  Fix: On a definitive `invalid_grant`/400/401 refresh, clear the dead tokens and flip the provider's connected flag to "reconnect required"; keep network-level nulls non-destructive.
-  Acceptance: A revoked refresh token flips the provider to disconnected and surfaces "reconnect"; a test covers `invalid_grant`.
-  Confidence: Verified
-  Effort: S
-
 - [ ] P3 — No 429/Retry-After handling; Drive rate-limit 403 is misread as an auth failure
   Category: reliability
   Where: `src/modules/sync-providers.ts:1009-1011` and all providers
