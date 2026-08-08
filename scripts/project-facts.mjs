@@ -14,6 +14,15 @@ function minimumVersion(range) {
   return String(range || '').match(/\d+(?:\.\d+){1,2}/)?.[0] || '';
 }
 
+function isBelowVersion(actual, floor) {
+  const left = String(actual || '').split('.').map((part) => Number(part) || 0);
+  const right = String(floor || '').split('.').map((part) => Number(part) || 0);
+  for (let index = 0; index < 3; index += 1) {
+    if ((left[index] || 0) !== (right[index] || 0)) return (left[index] || 0) < (right[index] || 0);
+  }
+  return false;
+}
+
 function installedPackageVersion(lock, packageName) {
   return lock.packages?.[`node_modules/${packageName}`]?.version || '';
 }
@@ -40,8 +49,8 @@ export function collectProjectFacts(rootDir = process.cwd()) {
   const idbSource = readText(root, 'src/storage/idb.ts');
   const errors = [];
 
-  const nodeVersion = minimumVersion(packageJson.engines?.node);
-  const npmVersion = minimumVersion(packageJson.engines?.npm);
+  const nodeEngineVersion = minimumVersion(packageJson.engines?.node);
+  const npmEngineVersion = minimumVersion(packageJson.engines?.npm);
   const packageManagerVersion = minimumVersion(packageJson.packageManager);
   const nodeVersionFile = readText(root, '.node-version').trim();
   const nvmVersionFile = readText(root, '.nvmrc').trim().replace(/^v/, '');
@@ -53,8 +62,18 @@ export function collectProjectFacts(rootDir = process.cwd()) {
     chromeManifest.version,
     firefoxManifest.version,
   ]);
-  pushMismatch(errors, 'Node toolchain versions', [nodeVersion, nodeVersionFile, nvmVersionFile]);
-  pushMismatch(errors, 'npm toolchain versions', [npmVersion, packageManagerVersion]);
+  const lockNodeEngineVersion = minimumVersion(packageLock.packages?.['']?.engines?.node);
+  const lockNpmEngineVersion = minimumVersion(packageLock.packages?.['']?.engines?.npm);
+  pushMismatch(errors, 'Node engine floors', [nodeEngineVersion, lockNodeEngineVersion]);
+  pushMismatch(errors, 'npm engine floors', [npmEngineVersion, lockNpmEngineVersion]);
+  pushMismatch(errors, 'Node developer pins', [nodeVersionFile, nvmVersionFile]);
+  pushMismatch(errors, 'npm developer pin', [packageManagerVersion]);
+  if (isBelowVersion(nodeVersionFile, nodeEngineVersion)) {
+    errors.push(`Node developer pin ${nodeVersionFile} is below the ${nodeEngineVersion} engine floor`);
+  }
+  if (isBelowVersion(packageManagerVersion, npmEngineVersion)) {
+    errors.push(`npm developer pin ${packageManagerVersion} is below the ${npmEngineVersion} engine floor`);
+  }
 
   const tools = {
     typescript: installedPackageVersion(packageLock, 'typescript'),
@@ -106,8 +125,8 @@ export function collectProjectFacts(rootDir = process.cwd()) {
       license: packageJson.license,
     },
     toolchain: {
-      node: nodeVersion,
-      npm: npmVersion,
+      node: nodeVersionFile,
+      npm: packageManagerVersion,
     },
     tools,
     browsers: {
