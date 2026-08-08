@@ -568,6 +568,8 @@ export const localeCatalogs = {
     "installAlertCryptoKeywordsBody": "This script mentions wallet, seed phrase, or other crypto-related terms and was loaded from a source that is not a known userscript repository. Active scam campaigns distribute wallet-draining scripts this way — verify the author before installing.",
     "installAlertAntifeatures": "Anti-Features Declared",
     "installAlertLargePayload": "Large Payload",
+    "installAlertSourceRedirected": "Source URL redirected",
+    "installAlertSourceRedirectedBody": "The script bytes came from {resolvedHost} after the requested URL resolved from {requestedHost}. Review the final source before installing.",
     "installAlertLargePayloadBody": "This script is {size} across {lines} lines, so first-run parsing may take longer than usual.",
     "installTitleUpdate": "Update this script",
     "installTitleDowngrade": "Review the downgrade",
@@ -3166,15 +3168,15 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 43,
     "translatedRuntimeMessages": 43,
-    "totalRuntimeMessages": 1914
+    "totalRuntimeMessages": 1916
   },
   "en": {
     "name": "English",
     "direction": "ltr",
     "translationStatus": "complete",
-    "runtimeCoverageBaseline": 1914,
-    "translatedRuntimeMessages": 1914,
-    "totalRuntimeMessages": 1914
+    "runtimeCoverageBaseline": 1916,
+    "translatedRuntimeMessages": 1916,
+    "totalRuntimeMessages": 1916
   },
   "es": {
     "name": "Español",
@@ -3182,7 +3184,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 45,
     "translatedRuntimeMessages": 45,
-    "totalRuntimeMessages": 1914
+    "totalRuntimeMessages": 1916
   },
   "fr": {
     "name": "Français",
@@ -3190,7 +3192,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 43,
     "translatedRuntimeMessages": 43,
-    "totalRuntimeMessages": 1914
+    "totalRuntimeMessages": 1916
   },
   "he": {
     "name": "עברית",
@@ -3198,7 +3200,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 58,
     "translatedRuntimeMessages": 58,
-    "totalRuntimeMessages": 1914
+    "totalRuntimeMessages": 1916
   },
   "ja": {
     "name": "日本語",
@@ -3206,7 +3208,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 71,
     "translatedRuntimeMessages": 71,
-    "totalRuntimeMessages": 1914
+    "totalRuntimeMessages": 1916
   },
   "pt": {
     "name": "Português",
@@ -3214,7 +3216,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 42,
     "translatedRuntimeMessages": 42,
-    "totalRuntimeMessages": 1914
+    "totalRuntimeMessages": 1916
   },
   "ru": {
     "name": "Русский",
@@ -3222,7 +3224,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 117,
     "translatedRuntimeMessages": 117,
-    "totalRuntimeMessages": 1914
+    "totalRuntimeMessages": 1916
   },
   "zh": {
     "name": "中文",
@@ -3230,7 +3232,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 46,
     "translatedRuntimeMessages": 46,
-    "totalRuntimeMessages": 1914
+    "totalRuntimeMessages": 1916
   }
 } as const;
 

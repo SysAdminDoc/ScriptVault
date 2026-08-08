@@ -47,6 +47,7 @@ async function fetchRequireScriptForTrustReceipt(url: string): Promise<string | 
 
 interface PendingInstallData {
   url: string;
+  finalUrl?: string;
   code?: string;
   error?: string;
   timestamp: number;
@@ -134,11 +135,11 @@ async function fetchPendingUserscript(url: string): Promise<PendingInstallFetchR
     if (!postCheck.ok) throw new Error(`Script source redirected to ${postCheck.message}`);
     const code = await fetchTextBounded(response, MAX_SCRIPT_SIZE, 'Script');
     if (!code.includes('==UserScript==')) return { action: 'pass-through' };
-    return { action: 'install', pendingInstall: { url, code, timestamp: Date.now() } };
+    return { action: 'install', pendingInstall: { url, finalUrl: response.url || url, code, timestamp: Date.now() } };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     console.error('[ScriptVault] Failed to fetch script:', error);
-    return { action: 'install', pendingInstall: { url, error: message, timestamp: Date.now() } };
+    return { action: 'install', pendingInstall: { url, finalUrl: '', error: message, timestamp: Date.now() } };
   } finally {
     clearTimeout(timeoutId);
   }
@@ -348,6 +349,7 @@ export async function installFromUrl(url: string): Promise<InstallResult> {
     );
 
     let code: string;
+    let finalUrl = url;
     try {
       const response = await fetch(url, { signal: controller.signal });
       if (!response.ok) {
@@ -360,6 +362,7 @@ export async function installFromUrl(url: string): Promise<InstallResult> {
         throw new Error(`Script source redirected to ${postCheck.message}`);
       }
 
+      finalUrl = response.url || url;
       code = await fetchTextBounded(response, MAX_SCRIPT_SIZE, 'Script');
     } catch (error: unknown) {
       if (error instanceof Error && error.name === 'AbortError') {
@@ -371,7 +374,7 @@ export async function installFromUrl(url: string): Promise<InstallResult> {
       clearTimeout(timeoutId);
     }
 
-    return await installFromCode(code, { sourceUrl: url, operation: 'install' });
+    return await installFromCode(code, { sourceUrl: finalUrl, operation: 'install' });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     return { success: false, error: message };

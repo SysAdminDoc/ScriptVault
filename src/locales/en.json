@@ -3,7 +3,7 @@
   "name": "English",
   "direction": "ltr",
   "translationStatus": "complete",
-  "runtimeCoverageBaseline": 1914,
+  "runtimeCoverageBaseline": 1916,
   "runtime": {
     "appName": "ScriptVault",
     "dashboardTitle": "ScriptVault Dashboard",
@@ -523,6 +523,8 @@
     "installAlertCryptoKeywordsBody": "This script mentions wallet, seed phrase, or other crypto-related terms and was loaded from a source that is not a known userscript repository. Active scam campaigns distribute wallet-draining scripts this way — verify the author before installing.",
     "installAlertAntifeatures": "Anti-Features Declared",
     "installAlertLargePayload": "Large Payload",
+    "installAlertSourceRedirected": "Source URL redirected",
+    "installAlertSourceRedirectedBody": "The script bytes came from {resolvedHost} after the requested URL resolved from {requestedHost}. Review the final source before installing.",
     "installAlertLargePayloadBody": "This script is {size} across {lines} lines, so first-run parsing may take longer than usual.",
     "installTitleUpdate": "Update this script",
     "installTitleDowngrade": "Review the downgrade",

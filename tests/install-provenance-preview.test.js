@@ -44,6 +44,14 @@ describe('install @require provenance preview wiring', () => {
     expect(backgroundCore).toContain('verifyRequireProvenancePreview: message => previewRequireProvenance(message)');
   });
 
+  it('uses the resolved install URL for trust receipts and flags redirects in review', () => {
+    expect(backgroundCore).toContain('pendingInstall: { url, finalUrl: response.url || url, code, timestamp: Date.now() }');
+    expect(backgroundCore).toMatch(/finalUrl = response\.url \|\| url;[\s\S]*installFromCode\(code, \{ sourceUrl: finalUrl, operation: 'install' \}\)/);
+    expect(installPage).toContain('const sourceUrl = pendingInstall.finalUrl || requestedSourceUrl;');
+    expect(installPage).toContain('installAlertSourceRedirected');
+    expect(installPage).toContain('getInstallRedirectInfo(installRequestedUrl, installSourceUrl)');
+  });
+
   it('uses the hardened background dependency and bundle fetchers for preview and saved receipts', () => {
     // Provenance preview/receipt fetches pass allowUnpinned so SRI enforce mode
     // (sri === "require") does not block install-time inspection of a dependency.

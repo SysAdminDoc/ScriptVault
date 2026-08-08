@@ -244,6 +244,51 @@ describe('install/update SSRF gates (TS background modules)', () => {
     }
   });
 
+  it('records the resolved response URL in the install trust receipt', async () => {
+    const mod = await import('../src/background/install-handler.ts');
+    const globals = ['ScriptStorage', 'SettingsManager', 'parseUserscript', 'registerAllScripts', 'updateBadge', 'autoReloadMatchingTabs', 'formatBytes', 'generateId', 'debugLog'];
+    const previous = new Map(globals.map((key) => [key, Object.prototype.hasOwnProperty.call(globalThis, key) ? globalThis[key] : undefined]));
+    const requestedUrl = 'https://greasyfork.org/scripts/123/payload.user.js';
+    const resolvedUrl = 'https://cdn.example.net/payload.user.js';
+    const code = '// ==UserScript==\n// @name Redirected\n// @namespace install-tests\n// @version 1.0.0\n// @match https://example.com/*\n// ==/UserScript==\n';
+    const meta = {
+      name: 'Redirected', namespace: 'install-tests', version: '1.0.0',
+      source: '', downloadURL: '', updateURL: '', homepage: '', homepageURL: '', website: '',
+      match: ['https://example.com/*'], include: [], exclude: [], excludeMatch: [],
+      grant: [], require: [], resource: {}, connect: [], tag: [],
+      'run-at': 'document-idle', 'inject-into': 'auto', noframes: false,
+    };
+    const stored = [];
+    const response = new Response(code, { status: 200 });
+    Object.defineProperty(response, 'url', { value: resolvedUrl, configurable: true });
+    const originalFetch = globalThis.fetch;
+    globalThis.ScriptStorage = {
+      getAll: vi.fn().mockResolvedValue([]),
+      set: vi.fn(async (_id, script) => { stored.push(script); }),
+    };
+    globalThis.SettingsManager = { get: vi.fn().mockResolvedValue({}) };
+    globalThis.parseUserscript = vi.fn(() => ({ meta, code, metaBlock: '' }));
+    globalThis.registerAllScripts = vi.fn().mockResolvedValue();
+    globalThis.updateBadge = vi.fn().mockResolvedValue();
+    globalThis.autoReloadMatchingTabs = vi.fn().mockResolvedValue();
+    globalThis.formatBytes = vi.fn((bytes) => `${bytes} B`);
+    globalThis.generateId = vi.fn(() => 'script_redirected');
+    globalThis.debugLog = vi.fn();
+    globalThis.fetch = vi.fn(async () => response);
+    try {
+      const result = await mod.installFromUrl(requestedUrl);
+      expect(result.success).toBe(true);
+      expect(stored[0]?.trustReceipt?.source?.installUrl).toBe(resolvedUrl);
+    } finally {
+      globalThis.fetch = originalFetch;
+      for (const key of globals) {
+        const value = previous.get(key);
+        if (value === undefined) delete globalThis[key];
+        else globalThis[key] = value;
+      }
+    }
+  });
+
   it('enforces the script limit in UTF-8 bytes rather than UTF-16 characters', async () => {
     const mod = await import('../src/background/install-handler.ts');
     const header = '// ==UserScript==\n// @name Unicode size\n// ==/UserScript==\n';

@@ -10692,12 +10692,15 @@ async function _fetchPendingUserscript(url) {
     if (!code.includes('==UserScript==')) {
       return { action: 'pass-through' };
     }
-    return { action: 'install', pendingInstall: { url, code, timestamp: Date.now() } };
+    return {
+      action: 'install',
+      pendingInstall: { url, finalUrl: response.url || url, code, timestamp: Date.now() }
+    };
   } catch (error) {
     console.error('[ScriptVault] Failed to fetch script:', error);
     return {
       action: 'install',
-      pendingInstall: { url, error: error?.message || String(error), timestamp: Date.now() }
+      pendingInstall: { url, finalUrl: '', error: error?.message || String(error), timestamp: Date.now() }
     };
   } finally {
     clearTimeout(timeoutId);
@@ -10778,7 +10781,7 @@ async function _fetchPendingUserStyle(url) {
     if (!/\/\*\s*==UserStyle==[\s\S]*?==\/UserStyle==\s*\*\//.test(code)) {
       return { action: 'pass-through' };
     }
-    return { action: 'install', code };
+    return { action: 'install', code, finalUrl: response.url || url };
   } catch (error) {
     console.error('[ScriptVault] Failed to fetch UserCSS:', error);
     return { action: 'pass-through' };
@@ -10799,7 +10802,7 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
 
   const storageKey = `${_PENDING_USERSTYLE_STORAGE_PREFIX}${details.tabId}`;
   try {
-    await chrome.storage.local.set({ [storageKey]: { url, code: result.code, timestamp: Date.now() } });
+    await chrome.storage.local.set({ [storageKey]: { url, finalUrl: result.finalUrl || url, code: result.code, timestamp: Date.now() } });
     const dashboardUrl = chrome.runtime.getURL('pages/dashboard.html') + `#usercss=${encodeURIComponent(storageKey)}`;
     chrome.tabs.update(details.tabId, { url: dashboardUrl }).catch((updateErr) => {
       debugLog('[ScriptVault] UserCSS tab.update failed (tab likely closed):', updateErr?.message || updateErr);
@@ -10964,6 +10967,7 @@ async function installFromUrl(url) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000);
     let code;
+    let finalUrl = url;
     try {
       const response = await fetch(url, FetchFreshness.buildFreshnessInit('install', {
         init: { signal: controller.signal }
@@ -10980,6 +10984,7 @@ async function installFromUrl(url) {
 
       // Stream-bounded read (same protection as the webNavigation handler);
       // see _fetchTextBounded for rationale.
+      finalUrl = response.url || url;
       code = await _fetchTextBounded(response, MAX_SCRIPT_SIZE, 'Script');
     } catch (error) {
       if (error?.name === 'AbortError') {
@@ -10990,7 +10995,7 @@ async function installFromUrl(url) {
       clearTimeout(timeoutId);
     }
 
-    return await installFromCode(code, { sourceUrl: url, operation: 'install' });
+    return await installFromCode(code, { sourceUrl: finalUrl, operation: 'install' });
   } catch (error) {
     return { success: false, error: error?.message || String(error) };
   }

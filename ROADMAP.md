@@ -838,16 +838,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
   Confidence: Verified
   Effort: S
 
-- [ ] P3 — Install trust/provenance records the pre-redirect URL; the final `response.url` is discarded (source-badge laundering)
-  Category: security
-  Where: `src/background/core.ts:10141-10157` (`_fetchPendingUserscript` stores the navigation URL), `:10428-10451` (`installFromUrl`)
-  Problem: `classifyResponseUrl` rejects only internal-host redirects; the Source & Trust card, `classifyInstallSource` badge, and the persisted receipt `installUrl` all use the PRE-redirect URL. An open redirect on a "good"-tone registry host would display a trusted source for bytes served by an arbitrary external host. `fetchScriptPreview` already returns `finalUrl`, so the asymmetry is known.
-  Evidence: Verified — traced `pendingInstall.url` → `installSourceUrl` → receipt `source.installUrl`; `response.url` is never captured on this path.
-  Fix: Record `response.url` alongside the requested URL in `pendingInstall`; badge/classify from the final URL and flag a cross-host redirect as a review reason.
-  Acceptance: A cross-host redirect shows the final host (and a warning); a test asserts the receipt records the resolved URL.
-  Confidence: Likely (mechanism verified; end-to-end needs an open redirect on a trusted host)
-  Effort: S
-
 - [ ] P3 — Auto-update re-notifies every cycle for update URLs whose servers send no validators
   Category: ux
   Where: `src/background/core.ts:2506-2541` (`autoUpdate` notification gate), `:1899` (validators stored only if present), `queueUpdates` rebuild

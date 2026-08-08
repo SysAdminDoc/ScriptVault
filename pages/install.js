@@ -406,6 +406,7 @@ let autoUpdate = true;
 let enableOnInstall = true;
 let allowBroadHostAccess = false;
 let installSourceUrl = '';
+let installRequestedUrl = '';
 const LEGACY_PENDING_INSTALL_STORAGE_KEY = 'pendingInstall';
 const PENDING_INSTALL_STORAGE_KEY_PATTERN = /^pendingInstall_[a-z0-9_-]{1,96}$/i;
 let pendingInstallStorageKey = LEGACY_PENDING_INSTALL_STORAGE_KEY;
@@ -741,7 +742,9 @@ async function init() {
     }
 
     scriptCode = pendingInstall.code;
-    const sourceUrl = pendingInstall.url || '';
+    const requestedSourceUrl = pendingInstall.url || '';
+    const sourceUrl = pendingInstall.finalUrl || requestedSourceUrl;
+    installRequestedUrl = requestedSourceUrl;
     installSourceUrl = sourceUrl;
 
     if (!scriptCode) {
@@ -1070,6 +1073,24 @@ function getSourceSummary(sourceUrl) {
       shortLabel: truncateUrl(sourceUrl),
       safeUrl: sanitizeUrl(sourceUrl) || ''
     };
+  }
+}
+
+function getInstallRedirectInfo(requestedUrl, resolvedUrl) {
+  if (!requestedUrl || !resolvedUrl) return null;
+  try {
+    const requested = new URL(requestedUrl);
+    const resolved = new URL(resolvedUrl);
+    requested.hash = '';
+    resolved.hash = '';
+    if (requested.href === resolved.href) return null;
+    return {
+      requestedHost: requested.host,
+      resolvedHost: resolved.host,
+      crossHost: requested.host.toLowerCase() !== resolved.host.toLowerCase(),
+    };
+  } catch {
+    return null;
   }
 }
 
@@ -1498,6 +1519,17 @@ function renderInstallUI(sourceUrl) {
   ];
 
   const alerts = [];
+  const redirectInfo = getInstallRedirectInfo(installRequestedUrl, installSourceUrl);
+  if (redirectInfo) {
+    alerts.push(buildInstallAlert(
+      redirectInfo.crossHost ? 'is-danger' : 'is-warning',
+      tInstall('installAlertSourceRedirected', 'Source URL redirected'),
+      escapeHtml(tInstall('installAlertSourceRedirectedBody', 'The script bytes came from {resolvedHost} after the requested URL resolved from {requestedHost}. Review the final source before installing.', {
+        requestedHost: redirectInfo.requestedHost,
+        resolvedHost: redirectInfo.resolvedHost
+      }))
+    ));
+  }
   if (presentation.isDowngrade) {
     alerts.push(buildInstallAlert(
       'is-warning',

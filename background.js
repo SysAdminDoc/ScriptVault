@@ -5527,6 +5527,8 @@ const I18n = (() => {
       "installAlertCryptoKeywordsBody": "This script mentions wallet, seed phrase, or other crypto-related terms and was loaded from a source that is not a known userscript repository. Active scam campaigns distribute wallet-draining scripts this way \u2014 verify the author before installing.",
       "installAlertAntifeatures": "Anti-Features Declared",
       "installAlertLargePayload": "Large Payload",
+      "installAlertSourceRedirected": "Source URL redirected",
+      "installAlertSourceRedirectedBody": "The script bytes came from {resolvedHost} after the requested URL resolved from {requestedHost}. Review the final source before installing.",
       "installAlertLargePayloadBody": "This script is {size} across {lines} lines, so first-run parsing may take longer than usual.",
       "installTitleUpdate": "Update this script",
       "installTitleDowngrade": "Review the downgrade",
@@ -7368,15 +7370,15 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 43,
       "translatedRuntimeMessages": 43,
-      "totalRuntimeMessages": 1914
+      "totalRuntimeMessages": 1916
     },
     "en": {
       "name": "English",
       "direction": "ltr",
       "translationStatus": "complete",
-      "runtimeCoverageBaseline": 1914,
-      "translatedRuntimeMessages": 1914,
-      "totalRuntimeMessages": 1914
+      "runtimeCoverageBaseline": 1916,
+      "translatedRuntimeMessages": 1916,
+      "totalRuntimeMessages": 1916
     },
     "es": {
       "name": "Espa\xF1ol",
@@ -7384,7 +7386,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 45,
       "translatedRuntimeMessages": 45,
-      "totalRuntimeMessages": 1914
+      "totalRuntimeMessages": 1916
     },
     "fr": {
       "name": "Fran\xE7ais",
@@ -7392,7 +7394,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 43,
       "translatedRuntimeMessages": 43,
-      "totalRuntimeMessages": 1914
+      "totalRuntimeMessages": 1916
     },
     "he": {
       "name": "\u05E2\u05D1\u05E8\u05D9\u05EA",
@@ -7400,7 +7402,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 58,
       "translatedRuntimeMessages": 58,
-      "totalRuntimeMessages": 1914
+      "totalRuntimeMessages": 1916
     },
     "ja": {
       "name": "\u65E5\u672C\u8A9E",
@@ -7408,7 +7410,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 71,
       "translatedRuntimeMessages": 71,
-      "totalRuntimeMessages": 1914
+      "totalRuntimeMessages": 1916
     },
     "pt": {
       "name": "Portugu\xEAs",
@@ -7416,7 +7418,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 42,
       "translatedRuntimeMessages": 42,
-      "totalRuntimeMessages": 1914
+      "totalRuntimeMessages": 1916
     },
     "ru": {
       "name": "\u0420\u0443\u0441\u0441\u043A\u0438\u0439",
@@ -7424,7 +7426,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 117,
       "translatedRuntimeMessages": 117,
-      "totalRuntimeMessages": 1914
+      "totalRuntimeMessages": 1916
     },
     "zh": {
       "name": "\u4E2D\u6587",
@@ -7432,7 +7434,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 46,
       "translatedRuntimeMessages": 46,
-      "totalRuntimeMessages": 1914
+      "totalRuntimeMessages": 1916
     }
   };
 
@@ -40382,12 +40384,15 @@ async function _fetchPendingUserscript(url) {
     if (!code.includes('==UserScript==')) {
       return { action: 'pass-through' };
     }
-    return { action: 'install', pendingInstall: { url, code, timestamp: Date.now() } };
+    return {
+      action: 'install',
+      pendingInstall: { url, finalUrl: response.url || url, code, timestamp: Date.now() }
+    };
   } catch (error) {
     console.error('[ScriptVault] Failed to fetch script:', error);
     return {
       action: 'install',
-      pendingInstall: { url, error: error?.message || String(error), timestamp: Date.now() }
+      pendingInstall: { url, finalUrl: '', error: error?.message || String(error), timestamp: Date.now() }
     };
   } finally {
     clearTimeout(timeoutId);
@@ -40468,7 +40473,7 @@ async function _fetchPendingUserStyle(url) {
     if (!/\/\*\s*==UserStyle==[\s\S]*?==\/UserStyle==\s*\*\//.test(code)) {
       return { action: 'pass-through' };
     }
-    return { action: 'install', code };
+    return { action: 'install', code, finalUrl: response.url || url };
   } catch (error) {
     console.error('[ScriptVault] Failed to fetch UserCSS:', error);
     return { action: 'pass-through' };
@@ -40489,7 +40494,7 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
 
   const storageKey = `${_PENDING_USERSTYLE_STORAGE_PREFIX}${details.tabId}`;
   try {
-    await chrome.storage.local.set({ [storageKey]: { url, code: result.code, timestamp: Date.now() } });
+    await chrome.storage.local.set({ [storageKey]: { url, finalUrl: result.finalUrl || url, code: result.code, timestamp: Date.now() } });
     const dashboardUrl = chrome.runtime.getURL('pages/dashboard.html') + `#usercss=${encodeURIComponent(storageKey)}`;
     chrome.tabs.update(details.tabId, { url: dashboardUrl }).catch((updateErr) => {
       debugLog('[ScriptVault] UserCSS tab.update failed (tab likely closed):', updateErr?.message || updateErr);
@@ -40654,6 +40659,7 @@ async function installFromUrl(url) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000);
     let code;
+    let finalUrl = url;
     try {
       const response = await fetch(url, FetchFreshness.buildFreshnessInit('install', {
         init: { signal: controller.signal }
@@ -40670,6 +40676,7 @@ async function installFromUrl(url) {
 
       // Stream-bounded read (same protection as the webNavigation handler);
       // see _fetchTextBounded for rationale.
+      finalUrl = response.url || url;
       code = await _fetchTextBounded(response, MAX_SCRIPT_SIZE, 'Script');
     } catch (error) {
       if (error?.name === 'AbortError') {
@@ -40680,7 +40687,7 @@ async function installFromUrl(url) {
       clearTimeout(timeoutId);
     }
 
-    return await installFromCode(code, { sourceUrl: url, operation: 'install' });
+    return await installFromCode(code, { sourceUrl: finalUrl, operation: 'install' });
   } catch (error) {
     return { success: false, error: error?.message || String(error) };
   }
