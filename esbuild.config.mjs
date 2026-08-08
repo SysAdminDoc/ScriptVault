@@ -171,6 +171,21 @@ async function buildBackground() {
 // Build Monaco ESM assets
 // ---------------------------------------------------------------------------
 
+// Monaco 0.56.0 ships a pre-bundled DOMPurify copy under its source tree.
+// npm overrides can update the package resolution, but they cannot rewrite
+// that vendored file. Keep the shipped editor artifact on the same audited
+// DOMPurify floor as the rest of the extension by resolving Monaco's private
+// import to the project dependency during bundling.
+const monacoDomPurifyPlugin = {
+  name: "scriptvault-monaco-dompurify",
+  setup(buildApi) {
+    buildApi.onResolve({ filter: /(?:^|[/\\])dompurify[/\\]dompurify\.js$/ }, (args) => {
+      if (!args.importer.includes(`${join("node_modules", "monaco-editor")}`)) return undefined;
+      return { path: join(ROOT, "node_modules", "dompurify", "dist", "purify.es.mjs") };
+    });
+  },
+};
+
 async function buildMonacoEsm() {
   const monacoEsmOutDir = join(ROOT, "lib", "monaco-esm");
   const workersDir = join(monacoEsmOutDir, "workers");
@@ -182,6 +197,7 @@ async function buildMonacoEsm() {
     assetNames: "assets/[name]-[hash]",
     minify: false,
     logLevel: "silent",
+    plugins: [monacoDomPurifyPlugin],
   };
 
   console.log("Building Monaco ESM assets to lib/monaco-esm/...");

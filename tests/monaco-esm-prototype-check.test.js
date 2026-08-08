@@ -2,7 +2,10 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { runMonacoEsmPrototypeCheck } from '../scripts/check-monaco-esm-prototype.mjs';
+import {
+  findArtifactVersionViolations,
+  runMonacoEsmPrototypeCheck,
+} from '../scripts/check-monaco-esm-prototype.mjs';
 
 const REQUIRED_OUTPUTS = [
   'lib/monaco-esm/editor.js',
@@ -29,7 +32,9 @@ function writeFixture(root, sizes = {}) {
     const absolute = join(root, path);
     mkdirSync(dirname(absolute), { recursive: true });
     const size = sizes[path] || 128;
-    writeFileSync(absolute, Buffer.alloc(size, 'a'));
+    const bytes = Buffer.alloc(size, 'a');
+    if (path === 'lib/monaco-esm/editor.js') bytes.write('DOMPurify.version = "3.4.13";');
+    writeFileSync(absolute, bytes);
   }
 }
 
@@ -80,5 +85,15 @@ describe('Monaco ESM prototype checker', () => {
     const messages = result.failures.map((failure) => failure.message);
     expect(messages.some((message) => message.startsWith('Monaco ESM prototype exceeds total uncompressed budget'))).toBe(true);
     expect(messages).toContain('Monaco ESM output exceeds file budget (512 > 128)');
+  });
+
+  it('rejects a vulnerable bundled DOMPurify version before it can ship', () => {
+    const vulnerable = '/*! @license DOMPurify 3.4.8 */\nDOMPurify.version = "3.4.8";';
+    const safe = '/*! @license DOMPurify 3.4.13 */\nDOMPurify.version = "3.4.13";';
+
+    expect(findArtifactVersionViolations(vulnerable)).toEqual([
+      'Monaco ESM artifact embeds DOMPurify 3.4.8, below the 3.4.13 floor (GHSA-55q2-fjhq-7xh7)',
+    ]);
+    expect(findArtifactVersionViolations(safe)).toEqual([]);
   });
 });

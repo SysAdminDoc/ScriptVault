@@ -82,6 +82,16 @@ describe('Monaco package contract check', () => {
     expect(messagesFor(files)).toContain('Chromium build must keep the local Monaco ESM bundle wiring');
   });
 
+  it('rejects a Monaco build that can reintroduce its vendored DOMPurify copy', () => {
+    const files = liveFiles();
+    files['esbuild.config.mjs'] = files['esbuild.config.mjs'].replace(
+      'const monacoDomPurifyPlugin = {',
+      'const missingDomPurifyPlugin = {',
+    );
+
+    expect(messagesFor(files)).toContain('Chromium build must keep the local Monaco ESM bundle wiring');
+  });
+
   it('rejects accidental AMD loader references in the sandbox page', () => {
     const files = liveFiles();
     files['pages/editor-sandbox.html'] += "\n<script src=\"../lib/monaco/vs/loader.js\"></script>\nrequire.config({});\n";

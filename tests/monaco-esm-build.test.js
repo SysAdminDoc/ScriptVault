@@ -40,6 +40,9 @@ describe('Monaco ESM prototype build contract', () => {
     expect(config).toContain('format: "iife"');
     expect(config).toContain('loader: { ".ttf": "file" }');
     expect(config).toContain('assetNames: "assets/[name]-[hash]"');
+    expect(config).toContain('const monacoDomPurifyPlugin = {');
+    expect(config).toContain('node_modules", "dompurify", "dist", "purify.es.mjs"');
+    expect(config).toContain('plugins: [monacoDomPurifyPlugin]');
     for (const worker of [
       '"editor.worker":',
       '"json.worker":',

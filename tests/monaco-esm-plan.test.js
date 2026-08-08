@@ -46,10 +46,9 @@ describe('Monaco ESM migration plan', () => {
 
     expect(packageJson.devDependencies['monaco-editor']).toBe('^0.56.0');
     expect(packageLock.packages['node_modules/monaco-editor'].version).toBe('0.56.0');
-    // Monaco pins dompurify to an exact version (3.4.8), so the override is the
-    // only lever that keeps its bundled copy off a vulnerable release. Assert
-    // against the CVE floor rather than a literal: a hardcoded version here is
-    // what made the 3.4.11 / GHSA-c2j3-45gr-mqc4 pin look deliberate.
+    // Monaco pins dompurify to an exact version (3.4.8), so npm overrides alone
+    // cannot change the bytes it vendors. The ESM build remaps that private
+    // import; keep the package pin at the same audited floor as the artifact.
     expect(isBelow(packageJson.overrides.dompurify, FLOORS.dompurify.floor)).toBe(false);
     expect(editorTypes).toContain('as lsp');
     expect(editorTypes).toContain('as typescript');

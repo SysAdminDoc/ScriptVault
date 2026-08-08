@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from '
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
+import { FLOORS, isBelow } from './check-cve-floors.mjs';
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const defaultProjectRoot = resolve(scriptDir, '..');
@@ -38,6 +39,26 @@ function normalizePath(path) {
 
 function addFailure(failures, path, message) {
   failures.push({ path: normalizePath(path), message });
+}
+
+export function findArtifactVersionViolations(text) {
+  const source = String(text || '');
+  const versions = new Set();
+  for (const pattern of [
+    /@license\s+DOMPurify\s+(\d+\.\d+\.\d+)/gi,
+    /DOMPurify\.version\s*=\s*["'](\d+\.\d+\.\d+)["']/g,
+  ]) {
+    for (const match of source.matchAll(pattern)) versions.add(match[1]);
+  }
+
+  if (versions.size === 0) {
+    return [`Monaco ESM artifact does not expose a DOMPurify version banner; refusing to certify an unidentifiable sanitizer`];
+  }
+
+  const { floor, advisory } = FLOORS.dompurify;
+  return [...versions]
+    .filter((version) => isBelow(version, floor))
+    .map((version) => `Monaco ESM artifact embeds DOMPurify ${version}, below the ${floor} floor (${advisory})`);
 }
 
 function outputInfo(projectRoot, path, failures) {
@@ -93,6 +114,9 @@ function scanOutputText(projectRoot, path, failures) {
   }
   if (/\bnew\s+(?:Shared)?Worker\s*\(\s*["'`](?:blob|data):/i.test(text) || /URL\.createObjectURL\s*\(\s*new\s+Blob/i.test(text)) {
     addFailure(failures, path, 'Monaco ESM prototype output must use file-backed workers');
+  }
+  if (path === 'lib/monaco-esm/editor.js') {
+    for (const message of findArtifactVersionViolations(text)) addFailure(failures, path, message);
   }
 }
 

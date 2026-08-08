@@ -7,6 +7,9 @@ All notable changes to ScriptVault will be documented in this file.
 - Reimagined every dashboard destination with a compact six-route workbench,
   dense update/trash tables, focused settings/utilities grids, restrained
   empty states, and matching dark/light/Catppuccin/OLED visual baselines.
+- Remapped Monaco's pre-vendored DOMPurify import to the audited project
+  dependency and added a built-artifact version-floor gate, so vulnerable
+  sanitizer bytes cannot hide behind a clean lockfile audit.
 - Added a bounded local-file metadata polling fallback with explicit watcher
   health when FileSystemObserver is unavailable or reports an unknown/error
   state; only the active editor polls and changes still go through review.

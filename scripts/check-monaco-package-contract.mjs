@@ -96,6 +96,9 @@ function checkEsbuild(files, failures) {
     '"lib", "monaco-esm"',
     '"src", "editor", "monaco-esm-entry.ts"',
     'outfile: join(monacoEsmOutDir, "editor.js")',
+    'const monacoDomPurifyPlugin = {',
+    '"node_modules", "dompurify", "dist", "purify.es.mjs"',
+    'plugins: [monacoDomPurifyPlugin]',
     'await buildMonacoEsm();',
   ]) {
     if (!hasNeedle(text, needle)) {
