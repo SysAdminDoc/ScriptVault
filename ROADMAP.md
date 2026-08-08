@@ -776,16 +776,6 @@ no pre-existing failures. Live verification used Firefox Developer Edition
 154.0b1 via geckodriver 0.37.1 and headless Chromium via the repo's
 puppeteer-core. Audit-only: no source file was modified._
 
-- [ ] P3 — Pending-updates size cap measures UTF-16 code units, not bytes, and cites a quota that does not apply
-  Category: reliability
-  Where: `src/background/core.ts` (`UpdateSystem._MAX_PENDING_TOTAL_BYTES` and the eviction loop); generated at `background.core.js:1799` and `background.core.js:2149-2155`
-  Problem: The cap added in commit `405a0f6` computes `JSON.stringify(normalized).length`, which counts UTF-16 code units, and compares it against a budget named `_MAX_PENDING_TOTAL_BYTES`. For non-ASCII script bodies the real UTF-8 footprint is up to ~3x the measured value, so a store the code believes is 8 MB can exceed 20 MB on disk — the eviction never fires when it is most needed. The warning string also reports the wrong unit. Separately, the justifying comment says "keep the store safely under the default chrome.storage.local 10 MB quota", but both manifests declare `unlimitedStorage`, so that quota does not apply and the stated rationale is wrong.
-  Evidence: `node -e` on a representative non-ASCII payload: `JSON.stringify` length 101 vs `Buffer.byteLength(...,'utf8')` 281 — a 2.78x undercount. `grep -n unlimitedStorage manifest.json manifest-firefox.json` confirms the permission is declared in both.
-  Fix: Measure real bytes with `new TextEncoder().encode(json).byteLength` (the codebase already uses this in `_scriptSourceByteLength`), and correct the comment to state the actual reason for the bound (bounding service-worker memory and write cost under `unlimitedStorage`), not a quota that is not in force.
-  Acceptance: A test queues pending updates whose UTF-8 size exceeds the budget while their UTF-16 length does not, and asserts eviction occurs.
-  Confidence: Verified
-  Effort: S
-
 - [ ] P3 — Light-theme skip link falls just under AA contrast
   Category: a11y
   Where: `pages/dashboard-a11y.js:30-48` — the `.a11y-skip-link` rule inside the injected `STYLES` template (`color: var(--accent-blue)` on `background: var(--bg-header)`); the element itself is created at `pages/dashboard-a11y.js:198`

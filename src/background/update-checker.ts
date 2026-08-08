@@ -198,6 +198,9 @@ export const UpdateSystem = {
   _MAX_UPDATE_BYTES: 5 * 1024 * 1024,
   _PENDING_UPDATES_KEY: 'pendingUpdates',
   _MAX_PENDING_UPDATES: 50,
+  // Bound the serialized queue so large code/trust-receipt entries cannot
+  // consume unbounded service-worker memory or storage write cost.
+  _MAX_PENDING_TOTAL_BYTES: 8 * 1024 * 1024,
   _pendingUpdates: null as PendingUpdateInfo[] | null,
   _recentUpdates: [] as RecentUpdateInfo[],
 
@@ -504,6 +507,22 @@ export const UpdateSystem = {
   async _savePendingUpdates(list: PendingUpdateInfo[] | null = null): Promise<PendingUpdateInfo[]> {
     const sourceList = list || this._pendingUpdates;
     const normalized = normalizePendingUpdateList(sourceList, this._MAX_PENDING_UPDATES);
+    let evicted = 0;
+    while (normalized.length > 1) {
+      let bytes: number;
+      try {
+        const serialized = JSON.stringify(normalized);
+        bytes = new TextEncoder().encode(serialized).byteLength;
+      } catch {
+        break;
+      }
+      if (bytes <= this._MAX_PENDING_TOTAL_BYTES) break;
+      normalized.pop();
+      evicted += 1;
+    }
+    if (evicted > 0) {
+      console.warn(`[ScriptVault] pendingUpdates exceeded ${this._MAX_PENDING_TOTAL_BYTES} bytes; dropped ${evicted} queued update(s) to stay within the bounded storage budget.`);
+    }
     this._pendingUpdates = normalized;
     await chrome.storage.local.set({ [this._PENDING_UPDATES_KEY]: normalized });
     return normalized.slice();

@@ -16,6 +16,8 @@ All notable changes to ScriptVault will be documented in this file.
 - Made the browser-support matrix and release-preflight documentation derive
   their version/date from the current manifest and release inputs, with the
   README gate rejecting stale matrix or artifact references.
+- Corrected pending-update eviction to measure serialized UTF-8 bytes and bound
+  service-worker/storage write cost independently of the userscript count cap.
 
 ## [v3.27.0] — Recoverable restores, real isolation & honest errors (2026-08-08)
 

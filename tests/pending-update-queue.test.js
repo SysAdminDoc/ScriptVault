@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { webcrypto } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 import { UpdateSystem } from '../src/background/update-checker.ts';
 
@@ -145,6 +147,31 @@ afterEach(() => {
 });
 
 describe('pending update queue', () => {
+  it('evicts by UTF-8 byte size instead of UTF-16 code-unit length', async () => {
+    const shippedCore = readFileSync(resolve(process.cwd(), 'src/background/core.ts'), 'utf8');
+    expect(shippedCore).toContain('new TextEncoder().encode(serialized).byteLength');
+
+    const originalCap = UpdateSystem._MAX_PENDING_TOTAL_BYTES;
+    const queued = [
+      { id: 'wide-a', code: '漢'.repeat(80), name: 'Wide A' },
+      { id: 'wide-b', code: '漢'.repeat(80), name: 'Wide B' },
+    ];
+    const utf16Length = JSON.stringify(queued).length;
+    const utf8Length = new TextEncoder().encode(JSON.stringify(queued)).byteLength;
+    expect(utf8Length).toBeGreaterThan(utf16Length);
+    UpdateSystem._MAX_PENDING_TOTAL_BYTES = Math.floor((utf16Length + utf8Length) / 2);
+    expect(utf16Length).toBeLessThanOrEqual(UpdateSystem._MAX_PENDING_TOTAL_BYTES);
+    expect(utf8Length).toBeGreaterThan(UpdateSystem._MAX_PENDING_TOTAL_BYTES);
+
+    try {
+      const result = await UpdateSystem._savePendingUpdates(queued);
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('wide-a');
+    } finally {
+      UpdateSystem._MAX_PENDING_TOTAL_BYTES = originalCap;
+    }
+  });
+
   it('queues safe updates without applying them', async () => {
     const scripts = new Map([['safe', makeScript('safe')]]);
     installStorage(scripts);
