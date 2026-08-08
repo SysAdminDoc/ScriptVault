@@ -828,16 +828,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
 
 ### P3
 
-- [ ] P3 — `matchPattern` diverges from Chrome on scheme wildcard and host case (over-counts, needless reloads, missed matches)
-  Category: correctness
-  Where: `src/background/url-matcher.ts:191` (`scheme === '*'`) and `:203-212` (case-sensitive host)
-  Problem: Used for badge counts, popup listing, `autoReloadMatchingTabs`, and `MatchSet.getMatching`. (a) `scheme === '*'` accepts ANY protocol, so `@match *://*/*` reports a match on `file://`/`ftp://`/`chrome-extension://`; Chrome's `*` means http/https only → over-counted badges and needless `chrome.tabs.reload` of `file://` tabs on save (`tab-reload.ts:41-45`). (b) Host comparison is case-sensitive against the already-lowercased `urlObj.hostname` while `isValidMatchPattern` accepts uppercase, so `@match *://GitHub.com/*` runs in Chrome (which canonicalizes) but ScriptVault's matcher says "no match" → the popup shows no scripts and auto-reload skips the page.
-  Evidence: Verified — both divergences read in the shipped matcher.
-  Fix: Restrict `*` to http/https (keep `@include`'s broader semantics in `matchIncludePattern`), and lowercase the pattern host before comparison.
-  Acceptance: `@match *://*/*` does not match `file://`; `@match *://GitHub.com/*` matches `github.com`; tests cover both.
-  Confidence: Verified
-  Effort: S
-
 - [ ] P3 — The badge counts scripts that can never run on the page
   Category: correctness
   Where: `src/background/badge.ts:88-98` (`matchingScripts` = `script.enabled && doesScriptMatchUrl(...)`)

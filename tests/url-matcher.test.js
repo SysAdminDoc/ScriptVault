@@ -229,6 +229,17 @@ describe('matchPattern', () => {
     expect(matchPattern('*://example.com/*', httpsUrl, new URL(httpsUrl))).toBe(true);
   });
 
+  it('wildcard scheme does not match non-http(s) URLs', () => {
+    for (const url of ['file:///tmp/page.html', 'ftp://example.com/page', 'chrome-extension://abc/page.html']) {
+      expect(matchPattern('*://*/*', url, new URL(url))).toBe(false);
+    }
+  });
+
+  it('matches host patterns case-insensitively', () => {
+    const url = 'https://github.com/ScriptVault';
+    expect(matchPattern('*://GitHub.com/*', url, new URL(url))).toBe(true);
+  });
+
   it('does not match wrong host', () => {
     const url = 'https://other.com/page';
     const urlObj = new URL(url);

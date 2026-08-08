@@ -185,17 +185,24 @@ export function matchPattern(pattern: string, url: string, urlObj: URL): boolean
     const patternMatch = pattern.match(/^(\*|https?|file|ftp):\/\/([^/]+)(\/.*)$/);
     if (!patternMatch) return false;
 
-    const [, scheme, host, path] = patternMatch as [string, string, string, string];
+    const [, scheme, rawHost, path] = patternMatch as [string, string, string, string];
+    const host = rawHost.toLowerCase();
+    const urlScheme = urlObj.protocol.slice(0, -1);
 
     // Check scheme
-    if (scheme !== '*' && scheme !== urlObj.protocol.slice(0, -1)) {
+    // Chrome's `*` match-pattern scheme is only the HTTP(S) pair. Keep
+    // @include's broader wildcard semantics in matchIncludePattern.
+    if (scheme === '*' && urlScheme !== 'http' && urlScheme !== 'https') {
+      return false;
+    }
+    if (scheme !== '*' && scheme !== urlScheme) {
       return false;
     }
 
     // Check host (use urlObj.host when pattern includes port, urlObj.hostname otherwise)
     if (host !== '*') {
       const hasPort = host.includes(':');
-      const urlHost = hasPort ? urlObj.host : urlObj.hostname;
+      const urlHost = (hasPort ? urlObj.host : urlObj.hostname).toLowerCase();
       if (host.startsWith('*.')) {
         const baseDomain = host.slice(2);
         if (hasPort) {
