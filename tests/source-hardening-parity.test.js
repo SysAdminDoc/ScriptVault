@@ -226,6 +226,32 @@ describe('source hardening parity guards', () => {
     expect(dashboard).toContain('importSettingsCredentials: transfer.includeSettingsCredentials');
   });
 
+  it('keeps the portable settings policy aligned with the classified schema keys', () => {
+    const schema = JSON.parse(readFileSync(resolve(process.cwd(), 'src/config/settings-schema.json'), 'utf8'));
+    const policySource = readFileSync(resolve(process.cwd(), 'src/background/core.ts'), 'utf8');
+    const policyStart = policySource.indexOf('const SETTINGS_IMPORT_TYPE_KEYS');
+    const policyEnd = policySource.indexOf('const SETTINGS_IMPORT_SECURITY_KEYS', policyStart);
+    expect(policyStart).toBeGreaterThanOrEqual(0);
+    expect(policyEnd).toBeGreaterThan(policyStart);
+    const policy = policySource.slice(policyStart, policyEnd);
+    const allowed = new Set([
+      ...schema.classifications.visible,
+      ...schema.classifications.credential,
+    ]);
+    for (const key of allowed) expect(policy).toContain(`'${key}'`);
+    for (const key of [
+      'allowInternalXhr',
+      'allowInternalSyncEndpoints',
+      'allowHighPrivilegeScriptApis',
+      'trustedSigningKeys',
+      'deniedHosts',
+      'blacklist',
+      'scopedHostPermissions',
+    ]) {
+      expect(policySource).toContain(`'${key}'`);
+    }
+  });
+
   it('keeps JSON and backup ZIP intake behind bounded archive guards', () => {
     const core = source('src/background/core.ts');
     const importExport = source('src/background/import-export.ts');

@@ -99,19 +99,174 @@ const BackupScheduler = (() => {
     cloudBackupEnabled: false
   };
   var GLOBAL_SETTINGS_METADATA_FILE = "global-settings.metadata.json";
+  var SETTINGS_IMPORT_TYPE_KEYS = {
+    string: /* @__PURE__ */ new Set([
+      "allowCommunication",
+      "allowCookies",
+      "allowHttpHeaders",
+      "allowLocalFiles",
+      "autoUpdateMode",
+      "badgeColor",
+      "badgeInfo",
+      "blacklistSource",
+      "blacklistedPages",
+      "checkConnect",
+      "configMode",
+      "contentScriptAPI",
+      "customCss",
+      "defaultTabTypes",
+      "downloadMode",
+      "downloadWhitelist",
+      "dropboxClientId",
+      "dropboxRefreshToken",
+      "dropboxToken",
+      "editorKeyMap",
+      "editorTheme",
+      "googleClientId",
+      "googleDriveRefreshToken",
+      "googleDriveToken",
+      "highlightMatches",
+      "includeMode",
+      "incognitoStorage",
+      "indentWith",
+      "keyMapping",
+      "language",
+      "layout",
+      "lintMaxSize",
+      "linterConfig",
+      "loggingLevel",
+      "manualBlacklist",
+      "modifyCSP",
+      "onedriveClientId",
+      "onedriveRefreshToken",
+      "onedriveToken",
+      "pageFilterMode",
+      "s3AccessKeyId",
+      "s3Bucket",
+      "s3Endpoint",
+      "s3ObjectKey",
+      "s3Region",
+      "s3SecretKey",
+      "sandboxMode",
+      "scriptOrder",
+      "searchIntegration",
+      "sri",
+      "statsUrlRetention",
+      "strictMode",
+      "syncEncryptionPassphrase",
+      "syncProvider",
+      "tabMode",
+      "theme",
+      "topLevelAwait",
+      "trashMode",
+      "webdavPassword",
+      "webdavUrl",
+      "webdavUsername",
+      "whitelistedPages"
+    ]),
+    number: /* @__PURE__ */ new Set([
+      "blockSeverity",
+      "checkInterval",
+      "dashboardVirtualizationThreshold",
+      "editorFontSize",
+      "editorTabSize",
+      "externalsInterval",
+      "indentWidth",
+      "notifyHideAfter",
+      "popupColumns",
+      "subscriptionRefreshInterval",
+      "syncEncryptionKdfIterations",
+      "syncInterval",
+      "tabSize",
+      "updateInterval",
+      "xhrTimeout"
+    ]),
+    boolean: /* @__PURE__ */ new Set([
+      "allowHighPrivilegeScriptApis",
+      "allowInternalSyncEndpoints",
+      "allowInternalXhr",
+      "autoReload",
+      "autoSave",
+      "autoUpdate",
+      "badgeErrorStates",
+      "contextMenuCommands",
+      "contextMenuRunAt",
+      "debugMode",
+      "editorAutoCloseBrackets",
+      "editorAutoComplete",
+      "editorHighlightActiveLine",
+      "editorLineWrapping",
+      "editorMatchBrackets",
+      "editorShowInvisibles",
+      "enableContextMenu",
+      "enableEditor",
+      "enableTags",
+      "enabled",
+      "experimentalESMUserscripts",
+      "hideDisabledPopup",
+      "highlightTrailingWhitespace",
+      "injectIntoFrames",
+      "lintOnType",
+      "noSaveConfirm",
+      "notifyOnError",
+      "notifyOnInstall",
+      "notifyOnUpdate",
+      "onDeviceAiEnabled",
+      "reindent",
+      "s3PathStyle",
+      "scopedHostPermissions",
+      "showBadge",
+      "showFixedSource",
+      "subscriptionAutoRefresh",
+      "syncCredentialsSessionOnly",
+      "syncEnabled",
+      "syncEncryptionEnabled",
+      "syncHoldExecutionUntilFirstSync",
+      "trimWhitespace",
+      "updateDisabled",
+      "wordWrap"
+    ]),
+    array: /* @__PURE__ */ new Set(["blacklist", "deniedHosts"]),
+    object: /* @__PURE__ */ new Set(["findScriptsSources", "trustedSigningKeys"])
+  };
+  var SETTINGS_IMPORT_SECURITY_KEYS = /* @__PURE__ */ new Set([
+    "allowInternalXhr",
+    "allowInternalSyncEndpoints",
+    "allowHighPrivilegeScriptApis",
+    "trustedSigningKeys",
+    "deniedHosts",
+    "blacklist",
+    "scopedHostPermissions"
+  ]);
   var SETTINGS_CREDENTIAL_KEYS = [
+    "googleClientId",
     "webdavUsername",
     "webdavPassword",
     "googleDriveToken",
     "googleDriveRefreshToken",
+    "dropboxClientId",
     "dropboxToken",
     "dropboxRefreshToken",
+    "onedriveClientId",
     "onedriveToken",
     "onedriveRefreshToken",
     "syncEncryptionPassphrase",
     "s3AccessKeyId",
-    "s3SecretKey"
+    "s3SecretKey",
+    "trustedSigningKeys"
   ];
+  function getSettingsImportType(key) {
+    for (const [type, keys] of Object.entries(SETTINGS_IMPORT_TYPE_KEYS)) {
+      if (keys.has(key)) return type;
+    }
+    return null;
+  }
+  function isSettingsImportValue(value, type) {
+    if (type === "array") return Array.isArray(value);
+    if (type === "object") return value !== null && typeof value === "object" && !Array.isArray(value);
+    if (type === "number") return typeof value === "number" && Number.isFinite(value);
+    return typeof value === type;
+  }
   var _settings = null;
   var _initialized = false;
   var _settingsLoadPromise = null;
@@ -275,20 +430,39 @@ const BackupScheduler = (() => {
   }
   function _prepareSettingsForRestore(settings, options = {}) {
     const allowCredentials = options.allowCredentials === true;
-    const sanitized = _cloneSettingsForTransfer(settings);
+    const candidate = _cloneSettingsForTransfer(settings);
+    const sanitized = {};
     const skippedSettingsCredentialKeys = [];
-    if (!allowCredentials) {
-      for (const key of SETTINGS_CREDENTIAL_KEYS) {
-        if (Object.prototype.hasOwnProperty.call(sanitized, key)) {
-          delete sanitized[key];
-          skippedSettingsCredentialKeys.push(key);
-        }
+    const skippedSettingsSecurityKeys = [];
+    const skippedSettingsUnknownKeys = [];
+    const skippedSettingsTypeKeys = [];
+    for (const [key, value] of Object.entries(candidate)) {
+      const expectedType = getSettingsImportType(key);
+      if (!expectedType) {
+        skippedSettingsUnknownKeys.push(key);
+        continue;
       }
+      if (SETTINGS_IMPORT_SECURITY_KEYS.has(key)) {
+        skippedSettingsSecurityKeys.push(key);
+        continue;
+      }
+      if (SETTINGS_CREDENTIAL_KEYS.includes(key) && !allowCredentials) {
+        skippedSettingsCredentialKeys.push(key);
+        continue;
+      }
+      if (!isSettingsImportValue(value, expectedType)) {
+        skippedSettingsTypeKeys.push(key);
+        continue;
+      }
+      sanitized[key] = value;
     }
     return {
       settings: sanitized,
       settingsCredentialsRestored: allowCredentials,
-      skippedSettingsCredentialKeys
+      skippedSettingsCredentialKeys,
+      skippedSettingsSecurityKeys,
+      skippedSettingsUnknownKeys,
+      skippedSettingsTypeKeys
     };
   }
   function _readSettingsMetadata(unzipped, backup = {}) {
@@ -1074,6 +1248,9 @@ const BackupScheduler = (() => {
         let restoredWorkspaces = false;
         let settingsCredentialsRestored = false;
         let skippedSettingsCredentialKeys = [];
+        let skippedSettingsSecurityKeys = [];
+        let skippedSettingsUnknownKeys = [];
+        let skippedSettingsTypeKeys = [];
         let quarantinedScripts = 0;
         let preservedDisabledScripts = 0;
         let trustedEnabledScripts = 0;
@@ -1205,6 +1382,9 @@ const BackupScheduler = (() => {
               restoredSettings = true;
               settingsCredentialsRestored = settingsRestore.settingsCredentialsRestored;
               skippedSettingsCredentialKeys = settingsRestore.skippedSettingsCredentialKeys;
+              skippedSettingsSecurityKeys = settingsRestore.skippedSettingsSecurityKeys;
+              skippedSettingsUnknownKeys = settingsRestore.skippedSettingsUnknownKeys;
+              skippedSettingsTypeKeys = settingsRestore.skippedSettingsTypeKeys;
             } catch (settingsErr) {
               errors.push({
                 name: "global-settings.json",
@@ -1265,6 +1445,9 @@ const BackupScheduler = (() => {
           restoredWorkspaces,
           settingsCredentialsRestored,
           skippedSettingsCredentialKeys,
+          skippedSettingsSecurityKeys,
+          skippedSettingsUnknownKeys,
+          skippedSettingsTypeKeys,
           quarantinedScripts,
           preservedDisabledScripts,
           trustedEnabledScripts,

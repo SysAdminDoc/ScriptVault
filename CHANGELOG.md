@@ -22,6 +22,9 @@ All notable changes to ScriptVault will be documented in this file.
   primary-text token so its focused state clears the 4.5:1 normal-text target.
 - Hardened backup restore and storage hydration so malformed folder/workspace
   payloads are rejected before mutation and stale caches fall back safely.
+- Hardened JSON and ZIP settings intake with a schema-derived key/type allowlist;
+  unknown, malformed, credential, and security-posture keys are reported and
+  kept out of SettingsManager unless credentials are explicitly opted in.
 
 ## [v3.27.0] — Recoverable restores, real isolation & honest errors (2026-08-08)
 

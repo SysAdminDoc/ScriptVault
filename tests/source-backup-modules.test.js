@@ -612,6 +612,44 @@ describe('source import/export module', () => {
     );
   });
 
+  it('drops unknown, malformed, and security-sensitive settings during JSON import', async () => {
+    const harness = await loadFreshImportExportHarness();
+    const result = await harness.importScripts({
+      scripts: [],
+      settings: {
+        theme: 'light',
+        enabled: 'yes',
+        allowInternalXhr: true,
+        allowInternalSyncEndpoints: true,
+        allowHighPrivilegeScriptApis: true,
+        scopedHostPermissions: true,
+        trustedSigningKeys: { attacker: { name: 'Attacker', addedAt: 1 } },
+        deniedHosts: ['*.example.com'],
+        blacklist: ['https://blocked.example/*'],
+        unknownSetting: 'ignored',
+      },
+      settingsCredentialsIncluded: true,
+    }, {
+      importSettings: true,
+      importSettingsCredentials: true,
+    });
+
+    expect(result).toMatchObject({
+      skippedSettingsSecurityKeys: expect.arrayContaining([
+        'allowInternalXhr',
+        'allowInternalSyncEndpoints',
+        'allowHighPrivilegeScriptApis',
+        'scopedHostPermissions',
+        'trustedSigningKeys',
+        'deniedHosts',
+        'blacklist',
+      ]),
+      skippedSettingsUnknownKeys: ['unknownSetting'],
+      skippedSettingsTypeKeys: ['enabled'],
+    });
+    expect(harness.SettingsManager.set).toHaveBeenCalledWith({ theme: 'light' });
+  });
+
   it('exports script ids into ScriptVault zip metadata', async () => {
     const script = makeScript('script_exported', 'Exported Script');
     const harness = await loadFreshImportExportHarness(

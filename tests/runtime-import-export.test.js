@@ -555,6 +555,47 @@ describe('runtime import/export archive identity', () => {
     );
   });
 
+  it('drops unknown, malformed, and security-sensitive settings during JSON import', async () => {
+    const harness = createRuntimeHarness();
+    const data = {
+      scripts: [],
+      settings: {
+        theme: 'light',
+        enabled: 'yes',
+        allowInternalXhr: true,
+        allowInternalSyncEndpoints: true,
+        allowHighPrivilegeScriptApis: true,
+        scopedHostPermissions: true,
+        trustedSigningKeys: { attacker: { name: 'Attacker', addedAt: 1 } },
+        deniedHosts: ['*.example.com'],
+        blacklist: ['https://blocked.example/*'],
+        unknownSetting: 'ignored',
+      },
+      settingsCredentialsIncluded: true,
+    };
+
+    const result = await harness.importScripts(data, {
+      importSettings: true,
+      importSettingsCredentials: true,
+    });
+
+    expect(result).toMatchObject({
+      settingsImported: true,
+      skippedSettingsSecurityKeys: expect.arrayContaining([
+        'allowInternalXhr',
+        'allowInternalSyncEndpoints',
+        'allowHighPrivilegeScriptApis',
+        'scopedHostPermissions',
+        'trustedSigningKeys',
+        'deniedHosts',
+        'blacklist',
+      ]),
+      skippedSettingsUnknownKeys: ['unknownSetting'],
+      skippedSettingsTypeKeys: ['enabled'],
+    });
+    expect(harness.SettingsManager.set).toHaveBeenLastCalledWith({ theme: 'light' });
+  });
+
   it('writes stable script IDs into runtime ZIP metadata', async () => {
     const script = makeScript('script_exported', 'Exported Script');
     const harness = createRuntimeHarness([script], { script_exported: { draft: true } });

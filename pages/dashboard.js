@@ -1677,6 +1677,12 @@
         } else if (Array.isArray(result?.skippedSettingsCredentialKeys) && result.skippedSettingsCredentialKeys.length) {
             parts.push('sync credentials kept local');
         }
+        if (Array.isArray(result?.skippedSettingsSecurityKeys) && result.skippedSettingsSecurityKeys.length) {
+            parts.push('security settings kept local');
+        }
+        const skippedSettingsCount = (Array.isArray(result?.skippedSettingsUnknownKeys) ? result.skippedSettingsUnknownKeys.length : 0)
+            + (Array.isArray(result?.skippedSettingsTypeKeys) ? result.skippedSettingsTypeKeys.length : 0);
+        if (skippedSettingsCount) parts.push(`${numberFormatter.format(skippedSettingsCount)} unsupported settings skipped`);
         if (result?.restoredFolders) parts.push('folders restored');
         if (result?.restoredWorkspaces) parts.push('workspaces restored');
         return parts.join(', ');
@@ -1771,6 +1777,12 @@
         } else if (Array.isArray(result?.skippedSettingsCredentialKeys) && result.skippedSettingsCredentialKeys.length) {
             parts.push('sync credentials kept local');
         }
+        if (Array.isArray(result?.skippedSettingsSecurityKeys) && result.skippedSettingsSecurityKeys.length) {
+            parts.push('security settings kept local');
+        }
+        const skippedSettingsCount = (Array.isArray(result?.skippedSettingsUnknownKeys) ? result.skippedSettingsUnknownKeys.length : 0)
+            + (Array.isArray(result?.skippedSettingsTypeKeys) ? result.skippedSettingsTypeKeys.length : 0);
+        if (skippedSettingsCount) parts.push(`${numberFormatter.format(skippedSettingsCount)} unsupported settings skipped`);
         if (result?.restoredFolders) parts.push('folders restored');
         if (result?.restoredWorkspaces) parts.push('workspaces restored');
         if (failed) parts.push(`${numberFormatter.format(failed)} issues`);

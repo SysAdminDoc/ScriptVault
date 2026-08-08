@@ -52,6 +52,9 @@ interface ImportResults {
   settingsImported?: boolean;
   settingsCredentialsImported?: boolean;
   skippedSettingsCredentialKeys?: string[];
+  skippedSettingsSecurityKeys?: string[];
+  skippedSettingsUnknownKeys?: string[];
+  skippedSettingsTypeKeys?: string[];
   quarantinedScripts?: number;
   preservedDisabledScripts?: number;
   trustedEnabledScripts?: number;
@@ -367,19 +370,94 @@ function validateJsonImportBudget(data: ImportData): { error: string } | null {
   return null;
 }
 
+// Portable settings are an untrusted input boundary. Keep this policy aligned
+// with src/config/settings-schema.json: only visible settings and explicitly
+// opted-in credential fields may cross the boundary. Runtime/internal state is
+// intentionally absent, so a backup cannot seed stale caches or trust stores.
+const SETTINGS_IMPORT_TYPE_KEYS = {
+  string: new Set([
+    'allowCommunication', 'allowCookies', 'allowHttpHeaders', 'allowLocalFiles',
+    'autoUpdateMode', 'badgeColor', 'badgeInfo', 'blacklistSource',
+    'blacklistedPages', 'checkConnect', 'configMode', 'contentScriptAPI',
+    'customCss', 'defaultTabTypes', 'downloadMode', 'downloadWhitelist',
+    'dropboxClientId', 'dropboxRefreshToken', 'dropboxToken', 'editorKeyMap',
+    'editorTheme', 'googleClientId', 'googleDriveRefreshToken', 'googleDriveToken',
+    'highlightMatches', 'includeMode', 'incognitoStorage', 'indentWith',
+    'keyMapping', 'language', 'layout', 'lintMaxSize', 'linterConfig',
+    'loggingLevel', 'manualBlacklist', 'modifyCSP', 'onedriveClientId',
+    'onedriveRefreshToken', 'onedriveToken', 'pageFilterMode', 's3AccessKeyId',
+    's3Bucket', 's3Endpoint', 's3ObjectKey', 's3Region', 's3SecretKey',
+    'sandboxMode', 'scriptOrder', 'searchIntegration', 'sri', 'statsUrlRetention',
+    'strictMode', 'syncEncryptionPassphrase', 'syncProvider', 'tabMode', 'theme',
+    'topLevelAwait', 'trashMode', 'webdavPassword', 'webdavUrl', 'webdavUsername',
+    'whitelistedPages',
+  ]),
+  number: new Set([
+    'blockSeverity', 'checkInterval', 'dashboardVirtualizationThreshold',
+    'editorFontSize', 'editorTabSize', 'externalsInterval', 'indentWidth',
+    'notifyHideAfter', 'popupColumns', 'subscriptionRefreshInterval',
+    'syncEncryptionKdfIterations', 'syncInterval', 'tabSize', 'updateInterval',
+    'xhrTimeout',
+  ]),
+  boolean: new Set([
+    'allowHighPrivilegeScriptApis', 'allowInternalSyncEndpoints', 'allowInternalXhr',
+    'autoReload', 'autoSave', 'autoUpdate', 'badgeErrorStates', 'contextMenuCommands',
+    'contextMenuRunAt', 'debugMode', 'editorAutoCloseBrackets', 'editorAutoComplete',
+    'editorHighlightActiveLine', 'editorLineWrapping', 'editorMatchBrackets',
+    'editorShowInvisibles', 'enableContextMenu', 'enableEditor', 'enableTags',
+    'enabled', 'experimentalESMUserscripts', 'hideDisabledPopup',
+    'highlightTrailingWhitespace', 'injectIntoFrames', 'lintOnType', 'noSaveConfirm',
+    'notifyOnError', 'notifyOnInstall', 'notifyOnUpdate', 'onDeviceAiEnabled',
+    'reindent', 's3PathStyle', 'scopedHostPermissions', 'showBadge', 'showFixedSource',
+    'subscriptionAutoRefresh', 'syncCredentialsSessionOnly', 'syncEnabled',
+    'syncEncryptionEnabled', 'syncHoldExecutionUntilFirstSync', 'trimWhitespace',
+    'updateDisabled', 'wordWrap',
+  ]),
+  array: new Set(['blacklist', 'deniedHosts']),
+  object: new Set(['findScriptsSources', 'trustedSigningKeys']),
+};
+
+const SETTINGS_IMPORT_SECURITY_KEYS = new Set([
+  'allowInternalXhr',
+  'allowInternalSyncEndpoints',
+  'allowHighPrivilegeScriptApis',
+  'trustedSigningKeys',
+  'deniedHosts',
+  'blacklist',
+  'scopedHostPermissions',
+]);
+
 const SETTINGS_CREDENTIAL_KEYS: Array<keyof Settings> = [
+  'googleClientId',
   'webdavUsername',
   'webdavPassword',
   'googleDriveToken',
   'googleDriveRefreshToken',
+  'dropboxClientId',
   'dropboxToken',
   'dropboxRefreshToken',
+  'onedriveClientId',
   'onedriveToken',
   'onedriveRefreshToken',
   'syncEncryptionPassphrase',
   's3AccessKeyId',
-  's3SecretKey'
+  's3SecretKey',
+  'trustedSigningKeys',
 ];
+
+function getSettingsImportType(key: string): string | null {
+  for (const [type, keys] of Object.entries(SETTINGS_IMPORT_TYPE_KEYS)) {
+    if (keys.has(key)) return type;
+  }
+  return null;
+}
+
+function isSettingsImportValue(value: unknown, type: string): boolean {
+  if (type === 'array') return Array.isArray(value);
+  if (type === 'object') return value !== null && typeof value === 'object' && !Array.isArray(value);
+  if (type === 'number') return typeof value === 'number' && Number.isFinite(value);
+  return typeof value === type;
+}
 
 function cloneSettingsForTransfer(value: unknown): Partial<Settings> {
   if (!value || typeof value !== 'object') return {};
@@ -430,22 +508,44 @@ function prepareSettingsForPortableImport(
   settings: Partial<Settings>;
   settingsCredentialsImported: boolean;
   skippedSettingsCredentialKeys: string[];
+  skippedSettingsSecurityKeys: string[];
+  skippedSettingsUnknownKeys: string[];
+  skippedSettingsTypeKeys: string[];
 } {
   const allowCredentials = options.allowCredentials === true;
-  const sanitized = cloneSettingsForTransfer(settings);
+  const candidate = cloneSettingsForTransfer(settings) as Record<string, unknown>;
+  const sanitized: Record<string, unknown> = {};
   const skippedSettingsCredentialKeys: string[] = [];
-  if (!allowCredentials) {
-    for (const key of SETTINGS_CREDENTIAL_KEYS) {
-      if (Object.prototype.hasOwnProperty.call(sanitized, key)) {
-        delete sanitized[key];
-        skippedSettingsCredentialKeys.push(key);
-      }
+  const skippedSettingsSecurityKeys: string[] = [];
+  const skippedSettingsUnknownKeys: string[] = [];
+  const skippedSettingsTypeKeys: string[] = [];
+  for (const [key, value] of Object.entries(candidate)) {
+    const expectedType = getSettingsImportType(key);
+    if (!expectedType) {
+      skippedSettingsUnknownKeys.push(key);
+      continue;
     }
+    if (SETTINGS_IMPORT_SECURITY_KEYS.has(key)) {
+      skippedSettingsSecurityKeys.push(key);
+      continue;
+    }
+    if (SETTINGS_CREDENTIAL_KEYS.includes(key as keyof Settings) && !allowCredentials) {
+      skippedSettingsCredentialKeys.push(key);
+      continue;
+    }
+    if (!isSettingsImportValue(value, expectedType)) {
+      skippedSettingsTypeKeys.push(key);
+      continue;
+    }
+    sanitized[key] = value;
   }
   return {
-    settings: sanitized,
+    settings: sanitized as Partial<Settings>,
     settingsCredentialsImported: allowCredentials,
     skippedSettingsCredentialKeys,
+    skippedSettingsSecurityKeys,
+    skippedSettingsUnknownKeys,
+    skippedSettingsTypeKeys,
   };
 }
 
@@ -560,6 +660,9 @@ export async function importScripts(
     settingsImported: false,
     settingsCredentialsImported: false,
     skippedSettingsCredentialKeys: [],
+    skippedSettingsSecurityKeys: [],
+    skippedSettingsUnknownKeys: [],
+    skippedSettingsTypeKeys: [],
     quarantinedScripts: 0,
     preservedDisabledScripts: 0,
     trustedEnabledScripts: 0,
@@ -637,6 +740,9 @@ export async function importScripts(
     results.settingsImported = true;
     results.settingsCredentialsImported = settingsImport.settingsCredentialsImported;
     results.skippedSettingsCredentialKeys = settingsImport.skippedSettingsCredentialKeys;
+    results.skippedSettingsSecurityKeys = settingsImport.skippedSettingsSecurityKeys;
+    results.skippedSettingsUnknownKeys = settingsImport.skippedSettingsUnknownKeys;
+    results.skippedSettingsTypeKeys = settingsImport.skippedSettingsTypeKeys;
   }
 
   // Re-register all scripts after import

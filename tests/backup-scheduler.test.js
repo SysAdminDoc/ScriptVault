@@ -297,6 +297,50 @@ describe('runtime backup scheduler', () => {
     );
   });
 
+  it('drops unknown, malformed, and security-sensitive settings during restore', async () => {
+    const { BackupScheduler, SettingsManager } = createSchedulerHarness([]);
+    const backup = backupRecord('settings-policy', {
+      'global-settings.json': textEntry(JSON.stringify({
+        theme: 'light',
+        enabled: 'yes',
+        allowInternalXhr: true,
+        allowInternalSyncEndpoints: true,
+        allowHighPrivilegeScriptApis: true,
+        scopedHostPermissions: true,
+        trustedSigningKeys: { attacker: { name: 'Attacker', addedAt: 1 } },
+        deniedHosts: ['*.example.com'],
+        blacklist: ['https://blocked.example/*'],
+        unknownSetting: 'ignored',
+      })),
+      'global-settings.metadata.json': textEntry(JSON.stringify({
+        schemaVersion: 1,
+        settingsCredentialsIncluded: true,
+      })),
+    });
+    await chrome.storage.local.set({ autoBackups: [backup] });
+
+    const result = await BackupScheduler.restoreBackup('settings-policy', {
+      importSettingsCredentials: true,
+      recordReceipt: false,
+    });
+
+    expect(result).toMatchObject({
+      restoredSettings: true,
+      skippedSettingsSecurityKeys: expect.arrayContaining([
+        'allowInternalXhr',
+        'allowInternalSyncEndpoints',
+        'allowHighPrivilegeScriptApis',
+        'scopedHostPermissions',
+        'trustedSigningKeys',
+        'deniedHosts',
+        'blacklist',
+      ]),
+      skippedSettingsUnknownKeys: ['unknownSetting'],
+      skippedSettingsTypeKeys: ['enabled'],
+    });
+    expect(SettingsManager.set).toHaveBeenCalledWith({ theme: 'light' });
+  });
+
   it('rejects malformed folders and workspaces before mutating storage', async () => {
     const { BackupScheduler } = createSchedulerHarness([]);
     const malformed = backupRecord('malformed-globals', {

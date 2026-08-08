@@ -1383,8 +1383,8 @@
       }
     },
     "s3PathStyle": {
-      "type": "string",
-      "control": "text",
+      "type": "boolean",
+      "control": "checkbox",
       "label": "S3 Path Style",
       "help": "Controls s3 path style.",
       "defaultSource": "runtime"

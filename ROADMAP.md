@@ -838,16 +838,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
   Confidence: Verified
   Effort: S
 
-- [ ] P3 — Imported/restored settings have no key/type allowlist beyond credential redaction, so a hostile backup can flip security gates
-  Category: security
-  Where: `src/background/core.ts:4512-4520,5462` (`prepareSettingsForPortableImport`) and `src/modules/backup-scheduler.ts:604-620,1653` (`_prepareSettingsForRestore`) — both strip only `SETTINGS_CREDENTIAL_KEYS` then pass the object to `SettingsManager.set`
-  Problem: JSON import and full restore apply the backup's settings after removing only the ~11 credential keys. Security-posture keys — `allowInternalXhr`, `allowInternalSyncEndpoints`, `allowHighPrivilegeScriptApis`, `trustedSigningKeys`, `deniedHosts`, `blacklist`, `scopedHostPermissions` — and arbitrary unknown keys are applied verbatim with no type validation. A shared/hostile backup can silently flip SSRF/privilege gates and seed the signing trust store; malformed types (e.g. `deniedHosts` as a string) flow into consumers. (Prototype pollution is not possible — spread uses CreateDataProperty; verified.)
-  Evidence: Verified — both redaction helpers delete only `SETTINGS_CREDENTIAL_KEYS`; `SettingsManager.set` shallow-merges any object.
-  Fix: Validate imported settings against `src/config/settings-schema.json`: drop unknown keys, type-check known ones, and require explicit confirmation (or always skip) for the security-relevant subset, mirroring the credentials treatment.
-  Acceptance: Importing a backup that sets `allowInternalXhr:true`/`trustedSigningKeys` does not silently apply them; a test asserts unknown/security keys are dropped or gated.
-  Confidence: Verified
-  Effort: M
-
 - [ ] P3 — Local-library `sha256` is format-checked but never re-verified against the code it labels (false provenance on import)
   Category: security
   Where: `src/background/local-libraries.ts:78-114` (`normalizeLocalLibrarySnapshots` accepts any 64-hex `sha256` without recomputing over `code`) + `src/background/core.ts:5386-5388` (JSON import runs settings through it) and `:13012-13024` (`getLocalLibraryRequireScripts` embeds `code` with the stored hash as a `#sha256=` label)
