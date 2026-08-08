@@ -1000,6 +1000,11 @@ const StorageModule = (() => {
   }
 
   // src/modules/storage.ts
+  function isFolderRecord(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+    const folder = value;
+    return typeof folder.id === "string" && folder.id.trim().length > 0 && Array.isArray(folder.scriptIds) && folder.scriptIds.every((id) => typeof id === "string");
+  }
   function makeValueBag(values = {}) {
     const bag = /* @__PURE__ */ Object.create(null);
     for (const [key, value] of Object.entries(values || {})) {
@@ -1599,7 +1604,8 @@ const StorageModule = (() => {
       if (!_foldersInitPromise) {
         _foldersInitPromise = (async () => {
           const data = await chrome.storage.local.get("scriptFolders");
-          this.cache = data["scriptFolders"] || [];
+          const raw = data["scriptFolders"];
+          this.cache = Array.isArray(raw) ? raw.filter(isFolderRecord) : [];
         })();
       }
       try {

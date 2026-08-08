@@ -297,6 +297,27 @@ describe('runtime backup scheduler', () => {
     );
   });
 
+  it('rejects malformed folders and workspaces before mutating storage', async () => {
+    const { BackupScheduler } = createSchedulerHarness([]);
+    const malformed = backupRecord('malformed-globals', {
+      'folders.json': textEntry(JSON.stringify({ not: 'an array' })),
+      'workspaces.json': textEntry(JSON.stringify({ active: 42, list: [{ id: 'broken', snapshot: 'nope' }] })),
+    });
+    await chrome.storage.local.set({ autoBackups: [malformed] });
+
+    const verified = await BackupScheduler.verifyBackup('malformed-globals');
+    expect(verified.valid).toBe(false);
+    expect(verified.issues.map((issue) => issue.kind)).toEqual(expect.arrayContaining(['folders-parse', 'workspaces-parse']));
+
+    const restored = await BackupScheduler.restoreBackup('malformed-globals', { recordReceipt: false });
+    expect(restored.restoredFolders).toBe(false);
+    expect(restored.restoredWorkspaces).toBe(false);
+    expect(restored.errors.map((error) => error.name)).toEqual(expect.arrayContaining(['folders.json', 'workspaces.json']));
+    const stored = await chrome.storage.local.get(['scriptFolders', 'workspaces']);
+    expect(stored).not.toHaveProperty('scriptFolders');
+    expect(stored).not.toHaveProperty('workspaces');
+  });
+
   it('selective restore imports only selected script ID files through the shared zip importer', async () => {
     const { BackupScheduler, fakeFflate, importFromZip, ScriptStorage } = createSchedulerHarness(
       [

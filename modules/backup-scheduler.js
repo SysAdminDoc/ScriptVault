@@ -32,6 +32,41 @@ const BackupScheduler = (() => {
     default: () => backup_scheduler_default
   });
   module.exports = __toCommonJS(backup_scheduler_exports);
+  function isRecord(value) {
+    return !!value && typeof value === "object" && !Array.isArray(value);
+  }
+  function validateFolderPayload(value) {
+    if (!Array.isArray(value)) {
+      throw new Error("folders.json must contain an array");
+    }
+    for (const [index, folder] of value.entries()) {
+      if (!isRecord(folder) || typeof folder.id !== "string" || !folder.id.trim()) {
+        throw new Error(`folders.json entry ${index + 1} is missing a valid id`);
+      }
+      if (!Array.isArray(folder.scriptIds) || !folder.scriptIds.every((id) => typeof id === "string")) {
+        throw new Error(`folders.json entry ${index + 1} has invalid scriptIds`);
+      }
+    }
+    return value;
+  }
+  function validateWorkspacePayload(value) {
+    if (!isRecord(value)) {
+      throw new Error("workspaces.json must contain an object with active and list fields");
+    }
+    const active = value.active === null || typeof value.active === "string" ? value.active : void 0;
+    if (active === void 0 || !Array.isArray(value.list)) {
+      throw new Error("workspaces.json has invalid active or list fields");
+    }
+    for (const [index, workspace] of value.list.entries()) {
+      if (!isRecord(workspace) || typeof workspace.id !== "string" || !workspace.id.trim()) {
+        throw new Error(`workspaces.json entry ${index + 1} is missing a valid id`);
+      }
+      if (!isRecord(workspace.snapshot) || Object.values(workspace.snapshot).some((enabled) => typeof enabled !== "boolean")) {
+        throw new Error(`workspaces.json entry ${index + 1} has an invalid snapshot`);
+      }
+    }
+    return { active, list: value.list };
+  }
   var STORAGE_KEY_BACKUPS = "autoBackups";
   var STORAGE_KEY_SETTINGS = "backupSchedulerSettings";
   var STORAGE_KEY_RECEIPTS = "restoreReceipts";
@@ -1180,11 +1215,11 @@ const BackupScheduler = (() => {
           const foldersFile = unzipped["folders.json"];
           if (foldersFile) {
             try {
-              const folders = parseArchiveJson(
+              const folders = validateFolderPayload(parseArchiveJson(
                 unzipped,
                 "folders.json",
                 ARCHIVE_MAX_JSON_ENTRY_BYTES
-              );
+              ));
               await beginMutations();
               await chrome.storage.local.set({ scriptFolders: folders });
               FolderStorage.cache = null;
@@ -1199,11 +1234,11 @@ const BackupScheduler = (() => {
           const workspacesFile = unzipped["workspaces.json"];
           if (workspacesFile) {
             try {
-              const workspaces = parseArchiveJson(
+              const workspaces = validateWorkspacePayload(parseArchiveJson(
                 unzipped,
                 "workspaces.json",
                 ARCHIVE_MAX_JSON_ENTRY_BYTES
-              );
+              ));
               await beginMutations();
               await chrome.storage.local.set({ workspaces });
               const workspaceManager = globalThis.WorkspaceManager;
@@ -1668,11 +1703,11 @@ const BackupScheduler = (() => {
         }
         if (unzipped["folders.json"]) {
           try {
-            parseArchiveJson(
+            validateFolderPayload(parseArchiveJson(
               unzipped,
               "folders.json",
               ARCHIVE_MAX_JSON_ENTRY_BYTES
-            );
+            ));
           } catch (err) {
             foldersValid = false;
             issues.push({
@@ -1684,11 +1719,11 @@ const BackupScheduler = (() => {
         }
         if (unzipped["workspaces.json"]) {
           try {
-            parseArchiveJson(
+            validateWorkspacePayload(parseArchiveJson(
               unzipped,
               "workspaces.json",
               ARCHIVE_MAX_JSON_ENTRY_BYTES
-            );
+            ));
           } catch (err) {
             workspacesValid = false;
             issues.push({
@@ -1920,8 +1955,9 @@ const BackupScheduler = (() => {
         }
         if (snapshot.folders !== void 0) {
           try {
+            const folders = validateFolderPayload(snapshot.folders);
             await chrome.storage.local.set({
-              scriptFolders: structuredClone(snapshot.folders)
+              scriptFolders: structuredClone(folders)
             });
             if (typeof FolderStorage !== "undefined" && FolderStorage) {
               FolderStorage.cache = null;
@@ -1936,8 +1972,9 @@ const BackupScheduler = (() => {
         }
         if (snapshot.workspaces !== void 0) {
           try {
+            const workspaces = validateWorkspacePayload(snapshot.workspaces);
             await chrome.storage.local.set({
-              workspaces: structuredClone(snapshot.workspaces)
+              workspaces: structuredClone(workspaces)
             });
             if (typeof WorkspaceManager !== "undefined" && WorkspaceManager) {
               WorkspaceManager._cache = null;

@@ -838,16 +838,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
   Confidence: Verified
   Effort: S
 
-- [ ] P3 — Restore writes an unvalidated `folders.json`; a non-array value bricks `FolderStorage` (all folder ops throw)
-  Category: correctness
-  Where: `src/modules/backup-scheduler.ts:1671-1716` (writes parsed archive JSON straight to `chrome.storage.local.set({ scriptFolders: folders })`); `src/modules/storage.ts:872-873` (`this.cache = (data['scriptFolders'] as Folder[]) || []`)
-  Problem: Backups can be arbitrary external files via "import backup ZIP". `restoreBackup` writes `folders.json` with no `Array.isArray` check; `FolderStorage.init` assigns any truthy non-array (object/string/number) to `cache`, and every subsequent `cache.find/push/filter` throws — folder create/update/delete all TypeError until another restore overwrites the key. `verifyBackup` only checks it parses as JSON, and verify is optional. Same gap for `workspaces.json`.
-  Evidence: Verified — read the restore write (no validation) and `FolderStorage.init` (`|| []` guards only falsy).
-  Fix: Validate `Array.isArray(folders)` (and minimally each entry's `id`/`scriptIds`) before writing; harden `FolderStorage.init` to coerce non-arrays to `[]`.
-  Acceptance: Restoring a backup whose `folders.json` is an object leaves folders empty rather than broken; a test asserts a malformed `folders.json` is rejected/coerced.
-  Confidence: Verified
-  Effort: S
-
 - [ ] P3 — Imported/restored settings have no key/type allowlist beyond credential redaction, so a hostile backup can flip security gates
   Category: security
   Where: `src/background/core.ts:4512-4520,5462` (`prepareSettingsForPortableImport`) and `src/modules/backup-scheduler.ts:604-620,1653` (`_prepareSettingsForRestore`) — both strip only `SETTINGS_CREDENTIAL_KEYS` then pass the object to `SettingsManager.set`

@@ -28,6 +28,14 @@ export interface Folder {
   createdAt: number;
 }
 
+function isFolderRecord(value: unknown): value is Folder {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const folder = value as Partial<Folder>;
+  return typeof folder.id === 'string' && folder.id.trim().length > 0
+    && Array.isArray(folder.scriptIds)
+    && folder.scriptIds.every((id) => typeof id === 'string');
+}
+
 // ============================================================================
 // Notification callback info tracked on the ServiceWorkerGlobalScope
 // ============================================================================
@@ -870,7 +878,8 @@ export const FolderStorage = {
     if (!_foldersInitPromise) {
       _foldersInitPromise = (async () => {
         const data = await chrome.storage.local.get('scriptFolders');
-        this.cache = (data['scriptFolders'] as Folder[] | undefined) || [];
+        const raw = data['scriptFolders'];
+        this.cache = Array.isArray(raw) ? raw.filter(isFolderRecord) : [];
       })();
     }
     try {

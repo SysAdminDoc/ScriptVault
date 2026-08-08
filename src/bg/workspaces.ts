@@ -29,6 +29,31 @@ interface WorkspaceUpdates {
   name?: string;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function normalizeWorkspace(value: unknown): Workspace | null {
+  if (!isRecord(value) || typeof value.id !== 'string' || !value.id.trim()) return null;
+  const snapshot = isRecord(value.snapshot) && Object.values(value.snapshot).every((enabled) => typeof enabled === 'boolean')
+    ? value.snapshot as Record<string, boolean>
+    : {};
+  const now = Date.now();
+  return {
+    id: value.id,
+    name: typeof value.name === 'string' ? value.name : value.id,
+    snapshot,
+    createdAt: Number.isFinite(value.createdAt) ? Number(value.createdAt) : now,
+    updatedAt: Number.isFinite(value.updatedAt) ? Number(value.updatedAt) : now,
+  };
+}
+
+function normalizeWorkspacesData(value: unknown): WorkspacesData | null {
+  if (!isRecord(value) || (value.active !== null && typeof value.active !== 'string') || !Array.isArray(value.list)) return null;
+  const list = value.list.map(normalizeWorkspace).filter((workspace): workspace is Workspace => workspace !== null);
+  return { active: value.active as string | null, list };
+}
+
 export const WorkspaceManager = {
   _cache: null as WorkspacesData | null,
   _initPromise: null as Promise<void> | null,
@@ -39,7 +64,7 @@ export const WorkspaceManager = {
       this._initPromise = (async () => {
         const data = await chrome.storage.local.get('workspaces');
         if (this._cache === null) {
-          this._cache = (data['workspaces'] as WorkspacesData | undefined) || { active: null, list: [] };
+          this._cache = normalizeWorkspacesData(data['workspaces']) ?? { active: null, list: [] };
         }
       })();
     }
