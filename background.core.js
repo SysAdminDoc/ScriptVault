@@ -5092,6 +5092,10 @@ async function withCookieHeaderSessionRule(url, cookieHeader, fetcher) {
   const regex = exactDnrRegexForUrl(url);
   if (regex.error) throw new Error(regex.error);
   const ruleId = nextCookieRoutingRuleId();
+  // GM cookie-routed fetches run from the service worker, so Chrome assigns
+  // them TAB_ID_NONE (-1). Restricting the session rule to that origin keeps a
+  // page XHR to the same URL from receiving the extension's cookie header.
+  const tabIdNone = Number.isInteger(chrome.tabs?.TAB_ID_NONE) ? chrome.tabs.TAB_ID_NONE : -1;
   const rule = {
     id: ruleId,
     priority: 1,
@@ -5101,7 +5105,9 @@ async function withCookieHeaderSessionRule(url, cookieHeader, fetcher) {
     },
     condition: {
       regexFilter: regex.regex,
-      resourceTypes: ['xmlhttprequest']
+      isUrlFilterCaseSensitive: true,
+      resourceTypes: ['xmlhttprequest'],
+      tabIds: [tabIdNone]
     }
   };
 

@@ -838,16 +838,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
   Confidence: Verified
   Effort: S
 
-- [ ] P3 — Cookie-routing DNR session rule is not scoped to the extension's own request
-  Category: security
-  Where: `src/background/core.ts:4842-4878` (session rule condition `{ regexFilter: <exact url>, resourceTypes: ['xmlhttprequest'] }` — no `tabIds`/`initiatorDomains`)
-  Problem: For the lifetime of a cookie-routed `GM_xmlhttpRequest`, any XHR from any tab to that exact URL gets its `Cookie` header replaced with the extension-computed value (possibly from a partitioned jar the page cannot otherwise reach). `regexFilter` is case-insensitive by default, widening the match. A page racing a fetch to the same URL can harvest the injected header server-side or strip its own session cookie.
-  Evidence: Verified — rule construction read; the URL lock serializes ids but not applicability.
-  Fix: Add `condition.tabIds: [chrome.tabs.TAB_ID_NONE]` (extension-initiated only) or an extension-scoped `initiatorDomains`, and set `isUrlFilterCaseSensitive: true`.
-  Acceptance: The cookie-routing rule applies only to the extension's own request; a test asserts the condition scoping.
-  Confidence: Likely
-  Effort: S
-
 - [ ] P3 — `.user.js`/`.user.css` URLs with a fragment bypass install interception
   Category: correctness
   Where: `src/background/core.ts:10176,10217` (JS regex `/\.user\.js(\?.*)?$/i` + `urlMatches` filter) and `:10253,10272` (`.user.css`)

@@ -318,6 +318,23 @@ describe('partition-aware network cookie routing helpers', () => {
     }
   });
 
+  it('scopes cookie header rules to extension-originated requests', async () => {
+    const dnr = installDnrSessionRuleMock();
+    try {
+      const withCookieHeaderSessionRule = buildWithCookieHeaderSessionRule();
+      await withCookieHeaderSessionRule('https://example.com/api', 'sid=only-extension', async () => {
+        const activeRule = [...dnr.activeRules.values()][0];
+        expect(activeRule.condition).toMatchObject({
+          isUrlFilterCaseSensitive: true,
+          resourceTypes: ['xmlhttprequest'],
+          tabIds: [-1],
+        });
+      });
+    } finally {
+      dnr.cleanup();
+    }
+  });
+
   it('keeps different cookie-routed URLs concurrent', async () => {
     const dnr = installDnrSessionRuleMock();
     try {

@@ -38,6 +38,8 @@ All notable changes to ScriptVault will be documented in this file.
   local `GM_setValue`/`GM_deleteValue` mutations.
 - Namespaced userscript notification tags per script and failed closed for
   unowned or unknown update/close requests.
+- Scoped cookie-routing DNR session rules to extension-originated requests and
+  made their exact URL filters case-sensitive.
 
 ## [v3.27.0] — Recoverable restores, real isolation & honest errors (2026-08-08)
 
