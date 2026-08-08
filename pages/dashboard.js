@@ -3735,27 +3735,36 @@
             sourceHost ? `Source: ${sourceHost}` : ''
         ].filter(Boolean).join(' · ');
         const statusLabel = tDashboard(safe ? 'safe' : 'review', safe ? 'Safe' : 'Review');
+        const queuedTimestamp = Number(update.queuedAt) || Date.parse(update.queuedAt || '');
+        const checkedLabel = Number.isFinite(queuedTimestamp)
+            ? formatRelativeTimeLabel(queuedTimestamp)
+            : tDashboard('queued', 'Queued');
         return `
             <article class="pending-update-card${safe ? '' : ' review-required'}" data-update-id="${escapeHtml(update.id)}">
-                <div class="pending-update-head">
-                    <div class="pending-update-title">
-                        <strong>${escapeHtml(update.name || update.id || 'Unnamed script')}</strong>
-                        <div class="pending-update-meta">${versionLabel}</div>
-                    </div>
-                    <span class="pending-update-status${safe ? '' : ' review'}">${escapeHtml(statusLabel)}</span>
+                <div class="pending-update-script">
+                    <strong>${escapeHtml(update.name || update.id || 'Unnamed script')}</strong>
+                    <span>${sourceLabel ? escapeHtml(sourceLabel) : 'Source unavailable'}</span>
                 </div>
-                <div class="pending-update-reasons">${escapeHtml(reasons)}</div>
-                <div class="pending-update-source">${sourceLabel ? escapeHtml(sourceLabel) : 'Source unavailable'}</div>
+                <div class="pending-update-version">${versionLabel}</div>
                 <div class="pending-update-diff" aria-label="Update diff summary">
-                    <span>+${numberFormatter.format(diff.addedLines || 0)}</span>
-                    <span>-${numberFormatter.format(diff.removedLines || 0)}</span>
+                    <strong>+${numberFormatter.format(diff.addedLines || 0)} / -${numberFormatter.format(diff.removedLines || 0)}</strong>
                     <span>${numberFormatter.format(diff.nextLines || 0)} lines</span>
                 </div>
+                <div class="pending-update-trust">
+                    <span class="pending-update-status${safe ? '' : ' review'}">${escapeHtml(statusLabel)}</span>
+                    <span title="${escapeHtml(reasons)}">${escapeHtml(safe ? 'Verified source' : reasons)}</span>
+                </div>
+                <div class="pending-update-checked">${escapeHtml(checkedLabel)}</div>
                 <div class="pending-update-actions">
-                    <button type="button" class="toolbar-btn" data-update-action="diff" data-update-id="${escapeHtml(update.id)}">Diff</button>
-                    <button type="button" class="toolbar-btn primary" data-update-action="install" data-update-id="${escapeHtml(update.id)}">Install</button>
-                    <button type="button" class="toolbar-btn" data-update-action="rollback" data-update-id="${escapeHtml(update.id)}" ${!isSubscriptionInstall && update.rollback?.available ? '' : 'disabled'}>Rollback</button>
-                    <button type="button" class="toolbar-btn" data-update-action="remove" data-update-id="${escapeHtml(update.id)}">Remove</button>
+                    <button type="button" class="toolbar-btn" data-update-action="diff" data-update-id="${escapeHtml(update.id)}">Review</button>
+                    <button type="button" class="toolbar-btn primary" data-update-action="install" data-update-id="${escapeHtml(update.id)}">Apply</button>
+                    <details class="pending-update-more">
+                        <summary class="toolbar-btn" aria-label="More update actions" title="More update actions">•••</summary>
+                        <div class="pending-update-more-menu">
+                            <button type="button" class="toolbar-btn" data-update-action="rollback" data-update-id="${escapeHtml(update.id)}" ${!isSubscriptionInstall && update.rollback?.available ? '' : 'disabled'}>Rollback</button>
+                            <button type="button" class="toolbar-btn" data-update-action="remove" data-update-id="${escapeHtml(update.id)}">Remove</button>
+                        </div>
+                    </details>
                 </div>
             </article>
         `;
@@ -7615,18 +7624,17 @@
             const item = document.createElement('article');
             item.className = 'trash-item';
             safeSetHtml(item, `
-                <div class="trash-item-main">
-                    <div class="trash-item-heading">
-                        <div class="trash-item-name">${escapeHtml(metadata.name)}</div>
-                        <span class="trash-item-version">${escapeHtml(metadata.version)}</span>
-                    </div>
-                    ${metadata.description ? `<div class="trash-item-description">${escapeHtml(metadata.description)}</div>` : ''}
-                    <div class="trash-item-meta">
-                        ${metadata.author ? `<span>${escapeHtml(metadata.author)}</span>` : ''}
-                        <span>${escapeHtml(tDashboard('trashDeletedLabel', 'Deleted {time}', { time: deletedLabel }))}</span>
-                        <span>${escapeHtml(tDashboard('trashRemovedLabel', 'Removed {time}', { time: deletedExact }))}</span>
-                        <span class="trash-item-purge">${purgeLabel ? escapeHtml(tDashboard('trashAutoDeleteOn', 'Will auto-delete on {date}', { date: purgeLabel })) : escapeHtml(tDashboard('trashNoAutoDelete', 'No automatic deletion scheduled'))}</span>
-                    </div>
+                <div class="trash-item-script">
+                    <strong>${escapeHtml(metadata.name)}</strong>
+                    <span${metadata.description ? ` title="${escapeHtml(metadata.description)}"` : ''}>${[metadata.author, metadata.version].filter(Boolean).map(escapeHtml).join(' · ')}</span>
+                </div>
+                <div class="trash-item-deleted">
+                    <strong>${escapeHtml(deletedLabel)}</strong>
+                    <span>${escapeHtml(deletedExact)}</span>
+                </div>
+                <div class="trash-item-expires">
+                    <strong>${purgeLabel ? escapeHtml(purgeLabel) : '—'}</strong>
+                    <span class="trash-item-purge">${purgeLabel ? escapeHtml(tDashboard('trashAutoDeleteOn', 'Will auto-delete on {date}', { date: purgeLabel })) : escapeHtml(tDashboard('trashNoAutoDelete', 'No automatic deletion scheduled'))}</span>
                 </div>
                 <div class="trash-item-actions">
                     <button type="button" class="btn" data-trash-restore="${scriptIdAttr}">${escapeHtml(tDashboard('restoreAction', 'Restore'))}</button>

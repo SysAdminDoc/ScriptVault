@@ -2,6 +2,12 @@
 
 All notable changes to ScriptVault will be documented in this file.
 
+## [Unreleased] — Minimal workbench surfaces
+
+- Reimagined every dashboard destination with a compact six-route workbench,
+  dense update/trash tables, focused settings/utilities grids, restrained
+  empty states, and matching dark/light/Catppuccin/OLED visual baselines.
+
 ## [v3.27.0] — Recoverable restores, real isolation & honest errors (2026-08-08)
 
 - **A broken update host was reported as a broken script, and quietly silenced

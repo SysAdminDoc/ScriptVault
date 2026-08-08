@@ -50,7 +50,7 @@ function renderDashboardShell(theme = "dark") {
         <aside class="sv-nav-rail" aria-label="ScriptVault workspace">
           <div class="sv-rail-brand">
             <div class="script-icon-placeholder" aria-hidden="true">SV</div>
-            <div><strong>ScriptVault</strong><span>v3.20.0</span></div>
+            <div><strong>ScriptVault</strong><span>v3.27.0</span></div>
           </div>
           <nav class="sv-rail-nav" aria-label="Dashboard sections">
             <button class="sv-rail-item active" type="button"><span class="sv-rail-icon">#</span><span>Scripts</span><span class="sv-rail-count">12</span></button>
@@ -60,13 +60,13 @@ function renderDashboardShell(theme = "dark") {
             <button class="sv-rail-item" type="button"><span class="sv-rail-icon">T</span><span>Trash</span></button>
             <button class="sv-rail-item" type="button"><span class="sv-rail-icon">?</span><span>Help</span></button>
           </nav>
-          <div class="sv-rail-section">
+          <div class="sv-rail-section" aria-label="System tools">
             <span class="sv-rail-section-title">System</span>
             <button class="sv-rail-item sv-rail-subitem" type="button"><span class="sv-rail-icon">R</span><span>Backup &amp; Restore</span></button>
             <button class="sv-rail-item sv-rail-subitem" type="button"><span class="sv-rail-icon">I</span><span>Import / Export</span></button>
             <button class="sv-rail-item sv-rail-subitem" type="button"><span class="sv-rail-icon">D</span><span>Diagnostics</span></button>
           </div>
-          <div class="sv-rail-section">
+          <div class="sv-rail-section" aria-label="Trust tools">
             <span class="sv-rail-section-title">Trust</span>
             <button class="sv-rail-item sv-rail-subitem" type="button"><span class="sv-rail-icon">T</span><span>Trusted Sources</span><span class="sv-status-dot good"></span></button>
             <button class="sv-rail-item sv-rail-subitem" type="button"><span class="sv-rail-icon">P</span><span>Permissions</span></button>
