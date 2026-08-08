@@ -160,9 +160,17 @@ export interface ScriptSettings {
   _registrationError?: string;
   _importQuarantine?: {
     source: string;
-    sourceLabel: string;
-    importedAt: number;
-    archiveEnabled: boolean;
+    sourceLabel?: string;
+    importedAt?: number;
+    archiveEnabled?: boolean;
+    /** Cloud-sync review: why this synced-in body was held back. */
+    reasons?: string[];
+    /** Analyzer risk level at the time it was held. */
+    riskLevel?: string;
+    /** True when the remote envelope was unauthenticated plaintext. */
+    plaintextRemote?: boolean;
+    /** When the sync apply quarantined it. */
+    quarantinedAt?: number;
   };
   _importTrust?: {
     source: string;

@@ -4,6 +4,25 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **A tampered remote sync blob installed executing scripts with no review, and
+  hard-deleted local ones past trash.** With encryption off — the default — the
+  remote envelope is unauthenticated JSON, so anyone able to write the user's own
+  backend (a shared WebDAV, a leaked S3 key, a compromised Dropbox or Google
+  account) chose what arrived. Synced-in bodies were gated only by
+  `parseUserscript` — no analyzer, no review, no notification — then registered
+  and run on every device; remote tombstones drove a `ScriptStorage.delete` that
+  bypassed trash entirely, making library destruction unrecoverable.
+  Synced-in bodies now go through the analyzer, and against a local copy any
+  medium-or-worse risk or newly-arrived capability (`GM_cookie`,
+  `GM_xmlhttpRequest`, `GM_download`, `GM_webRequest`, `GM_webSocket`, `*`, or a
+  match pattern widened to every site) lands the script **disabled** with the
+  existing `_importQuarantine` marker — which already keeps it out of every
+  registration sweep and blocks the on-demand run path — plus a notification and
+  an event-log entry. Setting up a new device is not punished for this: a first
+  arrival has nothing to compare against, so only an outright high-risk body is
+  held. An analyzer that cannot run counts as a reason to review, not as clean.
+  Tombstone deletions now write a trash record first, honouring `trashMode`.
+
 - **The page-facing Public API and Local MCP bridge had been dead since v3.18.0.**
   `content.js` relays page messages under `publicApi_handleWebMessage`, which is
   not `GM_`-prefixed and was missing from the user-script action allowlist, so

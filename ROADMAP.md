@@ -867,16 +867,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
 
 ### P2
 
-- [ ] P2 — Tampered remote sync blob silently installs executing scripts (no analyzer/review) and hard-deletes local ones (no trash), in the default plaintext mode
-  Category: security
-  Where: `src/background/cloud-sync.ts:1726-1815` (apply loop: `parseUserscript`→`ScriptStorage.set`→`refreshSyncedScriptRuntime`, no analyzer), `:370-380` (`deleteSyncedScript`→`ScriptStorage.delete`, bypasses trash)
-  Problem: With encryption off (default), the remote envelope is unauthenticated JSON. Synced-in bodies are gated only by `parseUserscript` — no 31-detector analyzer, no review, no notification — then registered and run. Remote tombstones drive a hard delete that skips trash (permanent). An attacker with write access to the user's own backend (shared WebDAV, leaked S3 key, compromised Dropbox/Google account) gets silent arbitrary execution on every device plus unrecoverable library destruction. The E2EE latch protects only passphrase users.
-  Evidence: Verified — read the entire apply loop (no analyzer/review); `deleteSyncedScript` calls `ScriptStorage.delete(scriptId)` directly.
-  Fix: Run synced-in bodies through the analyzer and surface a notification/review on high-risk deltas (new `@grant`/`@match`, eval-class findings); route tombstone deletions through trash. Document that plaintext sync trusts the backend.
-  Acceptance: A high-risk synced-in script raises review/notification; a remote tombstone lands the script in trash; tests cover both.
-  Confidence: Verified
-  Effort: M
-
 - [ ] P2 — Restore/import persist their undo receipt only AFTER all mutations, so a service-worker death mid-restore leaves half-restored state with no rollback record
   Category: correctness
   Where: `src/modules/backup-scheduler.ts:1484-1491,1740-1783` (`restoreBackup`); `src/background/core.ts:5353,5497-5533,5853-5889` (`importScripts`/`importFromZip`)

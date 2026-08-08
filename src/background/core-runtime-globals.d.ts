@@ -16,6 +16,7 @@ declare const DataActionHandler: any;
 declare const DiagnosticsActionHandler: any;
 declare const EasyCloudSync: any;
 declare const ErrorLog: any;
+declare const EventLog: any;
 declare const ESMUserscriptBundler: any;
 declare const ExecutionDiagnostics: any;
 declare const ExecutionTelemetry: any;

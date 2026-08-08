@@ -343,7 +343,29 @@ type RuntimeHooks = typeof globalThis & {
   registerScript?: (script: Script) => Promise<void>;
   unregisterScript?: (scriptId: string) => Promise<void>;
   updateBadge?: (tabId?: number | null) => Promise<void>;
+  /** Move a script to trash honouring the user's trashMode. */
+  trashScriptForSync?: (script: Script, reason: string) => Promise<boolean>;
+  /** Analyze a synced-in body for risky patterns. */
+  analyzeSyncedScriptCode?: (code: string) => Promise<SyncedCodeAnalysis | null>;
+  /** Surface a review-required notification for a synced-in script. */
+  notifySyncedScriptReview?: (details: SyncedScriptReviewDetails) => Promise<void>;
 };
+
+interface SyncedCodeAnalysis {
+  riskLevel?: string;
+  totalRisk?: number;
+  findings?: Array<{ id?: string; label?: string; category?: string; risk?: number }>;
+}
+
+export interface SyncedScriptReviewDetails {
+  scriptId: string;
+  name: string;
+  /** Why this apply needs a human look. */
+  reasons: string[];
+  riskLevel: string;
+  /** True when the remote envelope was unauthenticated plaintext. */
+  plaintextRemote: boolean;
+}
 
 function getRuntimeHooks(): RuntimeHooks {
   return globalThis as RuntimeHooks;
@@ -367,13 +389,136 @@ async function refreshSyncedScriptRuntime(script: Script): Promise<void> {
   }
 }
 
+/** Analyzer risk levels that must not start executing without a human look. */
+const SYNC_REVIEW_RISK_LEVELS: ReadonlySet<string> = new Set(['high', 'medium']);
+
+/** The narrower bar for a script arriving on a device that never had it. */
+const SYNC_REVIEW_FIRST_ARRIVAL_RISK_LEVELS: ReadonlySet<string> = new Set(['high']);
+
+/**
+ * Grants whose ARRIVAL via sync is itself worth surfacing, independent of the
+ * analyzer: they widen what the script can reach beyond the page it runs on.
+ */
+const SYNC_REVIEW_GRANTS: ReadonlySet<string> = new Set([
+  'GM_xmlhttpRequest', 'GM.xmlHttpRequest', 'GM_fetch', 'GM.fetch',
+  'GM_cookie', 'GM.cookie',
+  'GM_download', 'GM.download',
+  'GM_webRequest',
+  'GM_webSocket', 'GM.webSocket',
+  '*',
+]);
+
+function asGrantList(meta: unknown): string[] {
+  const grant = (meta as { grant?: unknown } | null)?.grant;
+  return Array.isArray(grant) ? grant.filter((g): g is string => typeof g === 'string') : [];
+}
+
+function asMatchList(meta: unknown): string[] {
+  const record = meta as { match?: unknown; include?: unknown } | null;
+  const match = Array.isArray(record?.match) ? record!.match : [];
+  const include = Array.isArray(record?.include) ? record!.include : [];
+  return [...match, ...include].filter((m): m is string => typeof m === 'string');
+}
+
+/**
+ * Decide whether a synced-in body needs review before it starts running.
+ *
+ * With encryption off — the default — the remote envelope is unauthenticated
+ * JSON, so a backend an attacker can write to is a path to arbitrary code
+ * execution on every device. Bodies arriving this way used to be gated only by
+ * parseUserscript: no analyzer, no review, no notification. This raises the
+ * reasons a human should look, and the caller quarantines rather than executes.
+ */
+async function assessSyncedScriptRisk(
+  scriptId: string,
+  name: string,
+  code: string,
+  nextMeta: unknown,
+  existing: Script | null,
+  plaintextRemote: boolean,
+): Promise<SyncedScriptReviewDetails | null> {
+  const reasons: string[] = [];
+  let riskLevel = 'unknown';
+
+  // Tampering means the remote differs from what this device had. With a local
+  // copy to compare against, any medium-or-worse body and any widened capability
+  // is a tamper signal. A FIRST arrival has nothing to compare and is the normal
+  // "set up my new device" flow — holding an entire library for review there
+  // would be a worse outcome than the risk it addresses, so only an outright
+  // high-risk body qualifies.
+  const comparable = !!existing;
+  const reviewLevels = comparable ? SYNC_REVIEW_RISK_LEVELS : SYNC_REVIEW_FIRST_ARRIVAL_RISK_LEVELS;
+
+  const hooks = getRuntimeHooks();
+  if (typeof hooks.analyzeSyncedScriptCode === 'function') {
+    try {
+      const analysis = await hooks.analyzeSyncedScriptCode(code);
+      if (analysis) {
+        riskLevel = typeof analysis.riskLevel === 'string' ? analysis.riskLevel : 'unknown';
+        if (reviewLevels.has(riskLevel)) {
+          const findings: NonNullable<SyncedCodeAnalysis['findings']> =
+            Array.isArray(analysis.findings) ? analysis.findings : [];
+          const top: string[] = [];
+          for (const finding of findings) {
+            if (typeof finding?.label === 'string' && finding.label) top.push(finding.label);
+            if (top.length === 3) break;
+          }
+          reasons.push(top.length
+            ? `analyzer risk ${riskLevel}: ${top.join(', ')}`
+            : `analyzer risk ${riskLevel}`);
+        }
+      }
+    } catch (e) {
+      // An analyzer that cannot run must not read as "clean".
+      debugLog('[CloudSync] Synced-script analysis failed:', scriptId, e);
+      reasons.push('analyzer unavailable — body not inspected');
+    }
+  }
+
+  // Capability deltas only mean something against a local copy: with no prior
+  // record every grant reads as "new", which would flag an ordinary first sync.
+  if (comparable) {
+    const nextGrants = asGrantList(nextMeta);
+    const priorGrants = new Set(asGrantList(existing?.meta));
+    const newGrants = nextGrants.filter((g) => !priorGrants.has(g) && SYNC_REVIEW_GRANTS.has(g));
+    if (newGrants.length) reasons.push(`new grant: ${newGrants.join(', ')}`);
+
+    const nextMatches = asMatchList(nextMeta);
+    const priorMatches = new Set(asMatchList(existing?.meta));
+    const broadenedMatches = nextMatches.filter((m) => !priorMatches.has(m) && /^\*:\/\/\*\//.test(m));
+    if (broadenedMatches.length) reasons.push(`broadened match: ${broadenedMatches.join(', ')}`);
+  }
+
+  if (!reasons.length) return null;
+  return { scriptId, name, reasons, riskLevel, plaintextRemote };
+}
+
 async function deleteSyncedScript(scriptId: string): Promise<void> {
   const hooks = getRuntimeHooks();
+  // Capture the record BEFORE unregistering: a remote tombstone is the only
+  // delete path in the product that used to skip trash entirely, so an attacker
+  // with write access to the user's own backend (shared WebDAV, leaked S3 key,
+  // compromised Dropbox account) could destroy a library unrecoverably.
+  let script: Script | null = null;
+  try {
+    script = await ScriptStorage.get(scriptId) as Script | null;
+  } catch (e) {
+    debugLog('[CloudSync] Could not read synced script before delete:', scriptId, e);
+  }
   if (typeof hooks.unregisterScript === 'function') {
     try {
       await hooks.unregisterScript(scriptId);
     } catch (e) {
       debugLog('[CloudSync] Failed to unregister deleted synced script:', scriptId, e);
+    }
+  }
+  if (script && typeof hooks.trashScriptForSync === 'function') {
+    try {
+      await hooks.trashScriptForSync(script, 'sync-tombstone');
+    } catch (e) {
+      // A trash failure must not strand the script: the delete still proceeds,
+      // but it is logged rather than silently swallowed.
+      debugLog('[CloudSync] Failed to trash tombstoned script:', scriptId, e);
     }
   }
   await ScriptStorage.delete(scriptId);
@@ -1701,6 +1846,10 @@ export const CloudSync = {
 
     // Get remote data
     const remoteEnvelope = await provider.download(settings, { signal });
+    // With encryption off — the default — the remote envelope is unauthenticated
+    // JSON: whoever can write to the user's own backend chooses what arrives
+    // here. Recorded so a review notification can say so.
+    const plaintextRemote = !SyncCrypto.isEncryptedSyncEnvelope(remoteEnvelope);
     const remoteData = await readSyncEnvelopeFromRemote(remoteEnvelope, settings);
     if (signal?.aborted) throw new Error('Sync aborted');
 
@@ -1844,8 +1993,50 @@ export const CloudSync = {
               createdAt: existing?.createdAt ?? script.updatedAt,
               syncBaseCode: codeToSave // record merged result as new base for future syncs
             } as Script;
+
+            // A synced-in body used to be registered and run on the strength of
+            // parseUserscript alone. Run the analyzer and compare capability
+            // against the local copy; anything worth a human look is stored
+            // DISABLED with a quarantine marker and notified, rather than
+            // starting to execute on every device.
+            const review = await assessSyncedScriptRisk(
+              script.id,
+              parsed.meta.name || script.id,
+              codeToSave,
+              parsed.meta,
+              existing ?? null,
+              plaintextRemote,
+            );
+            if (review) {
+              nextScript.enabled = false;
+              // _importQuarantine is the established marker: it already keeps a
+              // script out of every registration sweep (see
+              // isScriptEligibleForRegistration) and blocks the on-demand run
+              // path, and the dashboard already shows a review affordance for it.
+              nextScript.settings = {
+                ...(nextScript.settings || {}),
+                _importQuarantine: {
+                  source: 'cloud-sync',
+                  reasons: review.reasons,
+                  riskLevel: review.riskLevel,
+                  plaintextRemote: review.plaintextRemote,
+                  quarantinedAt: Date.now(),
+                },
+              } as Script['settings'];
+            }
+
             await ScriptStorage.set(script.id, nextScript);
             await refreshSyncedScriptRuntime(nextScript);
+            if (review) {
+              const hooks = getRuntimeHooks();
+              if (typeof hooks.notifySyncedScriptReview === 'function') {
+                try {
+                  await hooks.notifySyncedScriptReview(review);
+                } catch (e) {
+                  debugLog('[CloudSync] Failed to notify synced-script review:', script.id, e);
+                }
+              }
+            }
             return true;
           }
         }

@@ -8338,6 +8338,90 @@ function _setBadgeBackgroundColor(opts: any) {
   } catch (_e) { /* see above */ }
 }
 
+// ============================================================================
+// Cloud-sync runtime hooks
+//
+// CloudSync (modules/cloud-sync.js) loads before this bridge and reaches these
+// through globalThis at call time. Top-level `function` declarations in a
+// classic script become global properties, which is what makes that work.
+// ============================================================================
+
+/**
+ * Move a script to trash honouring the user's `trashMode`, for a delete driven
+ * by something other than the user pressing Delete — currently a remote sync
+ * tombstone, which used to hard-delete and so could destroy a library
+ * unrecoverably from a backend an attacker could write to.
+ *
+ * Returns true when a trash record was written. `trashMode: 'disabled'` means
+ * the user opted out of trash entirely, so false is a correct outcome there.
+ */
+async function trashScriptForSync(script: any, reason: any = 'sync') {
+  if (!script?.id) return false;
+  try {
+    const settings = await SettingsManager.get();
+    if ((settings.trashMode || '30') === 'disabled') return false;
+    const trashData = await chrome.storage.local.get('trash');
+    const trash = trashData.trash || [];
+    // Don't stack duplicates if the same tombstone arrives on two syncs.
+    if (trash.some((entry: any) => entry?.id === script.id)) return true;
+    trash.push({ ...script, trashedAt: Date.now(), trashedBy: reason });
+    await chrome.storage.local.set({ trash });
+    return true;
+  } catch (e: any) {
+    debugWarn('[ScriptVault] Failed to trash script for sync:', script.id, e?.message || e);
+    return false;
+  }
+}
+
+/** Analyze a synced-in body, or null when no analyzer is reachable. */
+async function analyzeSyncedScriptCode(code: any) {
+  if (typeof ScriptAnalyzer === 'undefined') return null;
+  if (typeof ScriptAnalyzer.analyzeAsync === 'function') {
+    return await ScriptAnalyzer.analyzeAsync(code);
+  }
+  if (typeof ScriptAnalyzer.analyze === 'function') {
+    return ScriptAnalyzer.analyze(code);
+  }
+  return null;
+}
+
+/**
+ * Tell the user a synced-in script was held back for review. Deliberately
+ * unconditional on the update/error notification toggles: this is a security
+ * decision the user has to know about, not a routine update notice.
+ */
+async function notifySyncedScriptReview(details: any) {
+  const reasons = Array.isArray(details?.reasons) ? details.reasons : [];
+  const detail = reasons.length ? reasons.join('; ') : 'needs review';
+  const trust = details?.plaintextRemote
+    ? ' Sync encryption is off, so the remote copy is unauthenticated.'
+    : '';
+  try {
+    await chrome.notifications.create(`sync-review-${details?.scriptId || 'unknown'}`, {
+      type: 'basic',
+      iconUrl: 'images/icon128.png',
+      title: 'Synced script held for review',
+      message: `${details?.name || 'A script'} arrived disabled: ${detail}.${trust}`
+    });
+  } catch (e: any) {
+    debugWarn('[ScriptVault] Could not notify synced-script review:', e?.message || e);
+  }
+  try {
+    if (typeof EventLog !== 'undefined' && typeof EventLog.log === 'function') {
+      await EventLog.log({
+        category: 'sync',
+        severity: 'warning',
+        action: 'sync-script-quarantined',
+        detail: `risk=${details?.riskLevel || 'unknown'}; ${detail}${trust}`,
+        scriptId: details?.scriptId || null,
+        scriptName: details?.name || null,
+      });
+    }
+  } catch (e: any) {
+    debugWarn('[ScriptVault] Could not log synced-script review:', e?.message || e);
+  }
+}
+
 async function updateBadge(tabId: any = null) {
   const settings = await SettingsManager.get();
 

@@ -17714,13 +17714,91 @@ const CloudSync = (() => {
       }
     }
   }
+  var SYNC_REVIEW_RISK_LEVELS = /* @__PURE__ */ new Set(["high", "medium"]);
+  var SYNC_REVIEW_FIRST_ARRIVAL_RISK_LEVELS = /* @__PURE__ */ new Set(["high"]);
+  var SYNC_REVIEW_GRANTS = /* @__PURE__ */ new Set([
+    "GM_xmlhttpRequest",
+    "GM.xmlHttpRequest",
+    "GM_fetch",
+    "GM.fetch",
+    "GM_cookie",
+    "GM.cookie",
+    "GM_download",
+    "GM.download",
+    "GM_webRequest",
+    "GM_webSocket",
+    "GM.webSocket",
+    "*"
+  ]);
+  function asGrantList(meta) {
+    const grant = meta?.grant;
+    return Array.isArray(grant) ? grant.filter((g) => typeof g === "string") : [];
+  }
+  function asMatchList(meta) {
+    const record = meta;
+    const match = Array.isArray(record?.match) ? record.match : [];
+    const include = Array.isArray(record?.include) ? record.include : [];
+    return [...match, ...include].filter((m) => typeof m === "string");
+  }
+  async function assessSyncedScriptRisk(scriptId, name, code, nextMeta, existing, plaintextRemote) {
+    const reasons = [];
+    let riskLevel = "unknown";
+    const comparable = !!existing;
+    const reviewLevels = comparable ? SYNC_REVIEW_RISK_LEVELS : SYNC_REVIEW_FIRST_ARRIVAL_RISK_LEVELS;
+    const hooks = getRuntimeHooks();
+    if (typeof hooks.analyzeSyncedScriptCode === "function") {
+      try {
+        const analysis = await hooks.analyzeSyncedScriptCode(code);
+        if (analysis) {
+          riskLevel = typeof analysis.riskLevel === "string" ? analysis.riskLevel : "unknown";
+          if (reviewLevels.has(riskLevel)) {
+            const findings = Array.isArray(analysis.findings) ? analysis.findings : [];
+            const top = [];
+            for (const finding of findings) {
+              if (typeof finding?.label === "string" && finding.label) top.push(finding.label);
+              if (top.length === 3) break;
+            }
+            reasons.push(top.length ? `analyzer risk ${riskLevel}: ${top.join(", ")}` : `analyzer risk ${riskLevel}`);
+          }
+        }
+      } catch (e) {
+        debugLog("[CloudSync] Synced-script analysis failed:", scriptId, e);
+        reasons.push("analyzer unavailable \u2014 body not inspected");
+      }
+    }
+    if (comparable) {
+      const nextGrants = asGrantList(nextMeta);
+      const priorGrants = new Set(asGrantList(existing?.meta));
+      const newGrants = nextGrants.filter((g) => !priorGrants.has(g) && SYNC_REVIEW_GRANTS.has(g));
+      if (newGrants.length) reasons.push(`new grant: ${newGrants.join(", ")}`);
+      const nextMatches = asMatchList(nextMeta);
+      const priorMatches = new Set(asMatchList(existing?.meta));
+      const broadenedMatches = nextMatches.filter((m) => !priorMatches.has(m) && /^\*:\/\/\*\//.test(m));
+      if (broadenedMatches.length) reasons.push(`broadened match: ${broadenedMatches.join(", ")}`);
+    }
+    if (!reasons.length) return null;
+    return { scriptId, name, reasons, riskLevel, plaintextRemote };
+  }
   async function deleteSyncedScript(scriptId) {
     const hooks = getRuntimeHooks();
+    let script = null;
+    try {
+      script = await ScriptStorage.get(scriptId);
+    } catch (e) {
+      debugLog("[CloudSync] Could not read synced script before delete:", scriptId, e);
+    }
     if (typeof hooks.unregisterScript === "function") {
       try {
         await hooks.unregisterScript(scriptId);
       } catch (e) {
         debugLog("[CloudSync] Failed to unregister deleted synced script:", scriptId, e);
+      }
+    }
+    if (script && typeof hooks.trashScriptForSync === "function") {
+      try {
+        await hooks.trashScriptForSync(script, "sync-tombstone");
+      } catch (e) {
+        debugLog("[CloudSync] Failed to trash tombstoned script:", scriptId, e);
       }
     }
     await ScriptStorage.delete(scriptId);
@@ -18738,6 +18816,7 @@ const CloudSync = (() => {
         ...Object.keys(localValueBundleData.valueBundles).length > 0 ? { valueBundles: localValueBundleData.valueBundles } : {}
       };
       const remoteEnvelope = await provider.download(settings, { signal });
+      const plaintextRemote = !SyncCrypto.isEncryptedSyncEnvelope(remoteEnvelope);
       const remoteData = await readSyncEnvelopeFromRemote(remoteEnvelope, settings);
       if (signal?.aborted) throw new Error("Sync aborted");
       if (remoteData) {
@@ -18838,8 +18917,39 @@ const CloudSync = (() => {
                   syncBaseCode: codeToSave
                   // record merged result as new base for future syncs
                 };
+                const review = await assessSyncedScriptRisk(
+                  script.id,
+                  parsed.meta.name || script.id,
+                  codeToSave,
+                  parsed.meta,
+                  existing ?? null,
+                  plaintextRemote
+                );
+                if (review) {
+                  nextScript.enabled = false;
+                  nextScript.settings = {
+                    ...nextScript.settings || {},
+                    _importQuarantine: {
+                      source: "cloud-sync",
+                      reasons: review.reasons,
+                      riskLevel: review.riskLevel,
+                      plaintextRemote: review.plaintextRemote,
+                      quarantinedAt: Date.now()
+                    }
+                  };
+                }
                 await ScriptStorage.set(script.id, nextScript);
                 await refreshSyncedScriptRuntime(nextScript);
+                if (review) {
+                  const hooks = getRuntimeHooks();
+                  if (typeof hooks.notifySyncedScriptReview === "function") {
+                    try {
+                      await hooks.notifySyncedScriptReview(review);
+                    } catch (e) {
+                      debugLog("[CloudSync] Failed to notify synced-script review:", script.id, e);
+                    }
+                  }
+                }
                 return true;
               }
             }
@@ -37231,6 +37341,90 @@ function _setBadgeBackgroundColor(opts) {
   try {
     chrome.action.setBadgeBackgroundColor(opts).catch(() => {});
   } catch (_e) { /* see above */ }
+}
+
+// ============================================================================
+// Cloud-sync runtime hooks
+//
+// CloudSync (modules/cloud-sync.js) loads before this bridge and reaches these
+// through globalThis at call time. Top-level `function` declarations in a
+// classic script become global properties, which is what makes that work.
+// ============================================================================
+
+/**
+ * Move a script to trash honouring the user's `trashMode`, for a delete driven
+ * by something other than the user pressing Delete — currently a remote sync
+ * tombstone, which used to hard-delete and so could destroy a library
+ * unrecoverably from a backend an attacker could write to.
+ *
+ * Returns true when a trash record was written. `trashMode: 'disabled'` means
+ * the user opted out of trash entirely, so false is a correct outcome there.
+ */
+async function trashScriptForSync(script, reason = 'sync') {
+  if (!script?.id) return false;
+  try {
+    const settings = await SettingsManager.get();
+    if ((settings.trashMode || '30') === 'disabled') return false;
+    const trashData = await chrome.storage.local.get('trash');
+    const trash = trashData.trash || [];
+    // Don't stack duplicates if the same tombstone arrives on two syncs.
+    if (trash.some(entry => entry?.id === script.id)) return true;
+    trash.push({ ...script, trashedAt: Date.now(), trashedBy: reason });
+    await chrome.storage.local.set({ trash });
+    return true;
+  } catch (e) {
+    debugWarn('[ScriptVault] Failed to trash script for sync:', script.id, e?.message || e);
+    return false;
+  }
+}
+
+/** Analyze a synced-in body, or null when no analyzer is reachable. */
+async function analyzeSyncedScriptCode(code) {
+  if (typeof ScriptAnalyzer === 'undefined') return null;
+  if (typeof ScriptAnalyzer.analyzeAsync === 'function') {
+    return await ScriptAnalyzer.analyzeAsync(code);
+  }
+  if (typeof ScriptAnalyzer.analyze === 'function') {
+    return ScriptAnalyzer.analyze(code);
+  }
+  return null;
+}
+
+/**
+ * Tell the user a synced-in script was held back for review. Deliberately
+ * unconditional on the update/error notification toggles: this is a security
+ * decision the user has to know about, not a routine update notice.
+ */
+async function notifySyncedScriptReview(details) {
+  const reasons = Array.isArray(details?.reasons) ? details.reasons : [];
+  const detail = reasons.length ? reasons.join('; ') : 'needs review';
+  const trust = details?.plaintextRemote
+    ? ' Sync encryption is off, so the remote copy is unauthenticated.'
+    : '';
+  try {
+    await chrome.notifications.create(`sync-review-${details?.scriptId || 'unknown'}`, {
+      type: 'basic',
+      iconUrl: 'images/icon128.png',
+      title: 'Synced script held for review',
+      message: `${details?.name || 'A script'} arrived disabled: ${detail}.${trust}`
+    });
+  } catch (e) {
+    debugWarn('[ScriptVault] Could not notify synced-script review:', e?.message || e);
+  }
+  try {
+    if (typeof EventLog !== 'undefined' && typeof EventLog.log === 'function') {
+      await EventLog.log({
+        category: 'sync',
+        severity: 'warning',
+        action: 'sync-script-quarantined',
+        detail: `risk=${details?.riskLevel || 'unknown'}; ${detail}${trust}`,
+        scriptId: details?.scriptId || null,
+        scriptName: details?.name || null,
+      });
+    }
+  } catch (e) {
+    debugWarn('[ScriptVault] Could not log synced-script review:', e?.message || e);
+  }
 }
 
 async function updateBadge(tabId = null) {
