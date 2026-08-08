@@ -1072,6 +1072,62 @@ describe('source sync providers module', () => {
     });
   });
 
+  it('surfaces Google Drive quota 403s as rate limits instead of refreshing the token', async () => {
+    const { CloudSyncProviders, SettingsManager } = await loadFreshSyncProviders();
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      error: {
+        code: 403,
+        errors: [{ reason: 'userRateLimitExceeded' }],
+      },
+    }), {
+      status: 403,
+      headers: {
+        'Content-Type': 'application/json',
+        'Retry-After': '7',
+      },
+    }));
+    globalThis.fetch = fetchMock;
+
+    await expect(CloudSyncProviders.googledrive.getValidToken({
+      googleDriveToken: 'existing-google-token',
+      googleDriveRefreshToken: 'google-refresh-token',
+      googleDriveConnected: true,
+      googleClientId: 'google-client-id',
+    })).rejects.toMatchObject({
+      rateLimited: true,
+      retryAfterMs: 7000,
+      status: 403,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(SettingsManager.set).not.toHaveBeenCalled();
+  });
+
+  it('honors Retry-After on a provider 429 response', async () => {
+    const { CloudSyncProviders, SettingsManager } = await loadFreshSyncProviders();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('{}', { status: 200 }))
+      .mockResolvedValueOnce(new Response('', {
+        status: 429,
+        headers: { 'Retry-After': '3' },
+      }));
+    globalThis.fetch = fetchMock;
+
+    await expect(CloudSyncProviders.dropbox.upload(
+      { scripts: [] },
+      {
+        dropboxToken: 'existing-dropbox-token',
+        dropboxRefreshToken: '',
+        dropboxClientId: 'dropbox-client-id',
+      },
+    )).rejects.toMatchObject({
+      rateLimited: true,
+      retryAfterMs: 3000,
+      status: 429,
+    });
+    expect(SettingsManager.set).not.toHaveBeenCalled();
+  });
+
   it('treats Google Drive as connected when only a refresh token remains and refresh succeeds', async () => {
     const { CloudSyncProviders } = await loadFreshSyncProviders();
     const fetchMock = vi

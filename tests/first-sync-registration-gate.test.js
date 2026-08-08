@@ -104,4 +104,17 @@ describe('first-sync registration gate', () => {
     expect(backgroundCore).toContain('sync: () => runCloudSyncAction()');
     expect(alarmBlock).toContain('await maybeRegisterScriptsAfterSuccessfulSync(result)');
   });
+
+  it('backs off the periodic sync alarm after a provider rate limit', () => {
+    const alarmBlock = backgroundCore.slice(
+      backgroundCore.indexOf("alarm.name === 'autoSync'"),
+      backgroundCore.indexOf("alarm.name === SUBSCRIPTION_REFRESH_ALARM"),
+    );
+
+    expect(backgroundCore).toContain("const SYNC_RATE_LIMIT_BACKOFF_STORAGE_KEY = 'syncRateLimitBackoffUntil'");
+    expect(alarmBlock).toContain('result?.rateLimited === true');
+    expect(alarmBlock).toContain('await _scheduleAutoSyncRateLimitBackoff(result.retryAfterMs)');
+    expect(alarmBlock).toContain('await _restoreAutoSyncAlarm(await SettingsManager.get())');
+    expect(backgroundCore).toContain('periodInMinutes: _syncAlarmPeriodMinutes(settings)');
+  });
 });

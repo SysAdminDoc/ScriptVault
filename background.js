@@ -3442,8 +3442,13 @@ const CloudSyncProviders = (() => {
     const timeoutSignal = AbortSignal.timeout(timeoutMs);
     const signal = externalSignal ? AbortSignal.any([externalSignal, timeoutSignal]) : timeoutSignal;
     try {
-      return await fetch(url, { ...fetchInit, signal });
+      const response = await fetch(url, { ...fetchInit, signal });
+      if (typeof throwIfSyncRateLimited === "function") {
+        await throwIfSyncRateLimited(response, url, providerLabel);
+      }
+      return response;
     } catch (e) {
+      if (e && typeof e === "object" && e.rateLimited === true) throw e;
       const name = e && typeof e === "object" && "name" in e ? String(e.name) : "";
       const message = e instanceof Error ? e.message : String(e);
       if (name === "AbortError" || name === "TimeoutError" || /aborted|timed?\s*out/i.test(message)) {
@@ -3453,6 +3458,50 @@ const CloudSyncProviders = (() => {
       console.warn(`[CloudSync] ${providerLabel} token refresh network error:`, message);
       return null;
     }
+  }
+  var SYNC_RATE_LIMIT_DEFAULT_RETRY_MS = 6e4;
+  var SYNC_RATE_LIMIT_MAX_RETRY_MS = 6 * 60 * 60 * 1e3;
+  function isSyncRateLimitError(error) {
+    return Boolean(error && typeof error === "object" && error.rateLimited === true && Number.isFinite(error.retryAfterMs));
+  }
+  function parseRetryAfterMs(response) {
+    const raw = response.headers?.get?.("Retry-After")?.trim() || "";
+    let requestedMs = SYNC_RATE_LIMIT_DEFAULT_RETRY_MS;
+    if (raw) {
+      const seconds = Number(raw);
+      if (Number.isFinite(seconds) && seconds >= 0) {
+        requestedMs = seconds * 1e3;
+      } else {
+        const retryAt = Date.parse(raw);
+        if (Number.isFinite(retryAt)) requestedMs = retryAt - Date.now();
+      }
+    }
+    return Math.min(
+      SYNC_RATE_LIMIT_MAX_RETRY_MS,
+      Math.max(1e3, Math.round(requestedMs))
+    );
+  }
+  async function isGoogleDriveQuotaResponse(response) {
+    if (response.status !== 403) return false;
+    try {
+      const body = await response.clone().json();
+      const text = JSON.stringify(body).toLowerCase();
+      return text.includes("userratelimitexceeded") || text.includes("ratelimitexceeded") || text.includes("quotaexceeded") || text.includes("rate limit exceeded");
+    } catch (_) {
+      return false;
+    }
+  }
+  async function throwIfSyncRateLimited(response, url, providerLabel) {
+    const googleQuota = response.status === 403 && /googleapis\.com/i.test(url) && await isGoogleDriveQuotaResponse(response);
+    if (response.status !== 429 && !googleQuota) return;
+    const retryAfterMs = parseRetryAfterMs(response);
+    const error = new Error(
+      `${providerLabel} rate limited (${response.status}); retry after ${Math.ceil(retryAfterMs / 1e3)}s`
+    );
+    error.rateLimited = true;
+    error.retryAfterMs = retryAfterMs;
+    error.status = response.status;
+    throw error;
   }
   function isDefinitiveRefreshFailure(response) {
     return response.status === 400 || response.status === 401;
@@ -3465,6 +3514,7 @@ const CloudSyncProviders = (() => {
     const signal = externalSignal ? AbortSignal.any([externalSignal, timeoutSignal]) : timeoutSignal;
     const response = await fetch(url, { ...fetchOptions, signal });
     assertSyncResponseAllowed(response, guardOptions);
+    await throwIfSyncRateLimited(response, url, guardOptions.label);
     return response;
   }
   var SYNC_PAYLOAD_MAX_BYTES = 64 * 1024 * 1024;
@@ -3829,7 +3879,8 @@ const CloudSyncProviders = (() => {
           return await this.refreshToken(currentSettings, opts);
         }
         return token;
-      } catch (_e) {
+      } catch (e) {
+        if (isSyncRateLimitError(e)) throw e;
         return token;
       }
     },
@@ -4188,7 +4239,8 @@ const CloudSyncProviders = (() => {
           if (!test) return effectiveSettings.dropboxToken;
           if (test.ok) return effectiveSettings.dropboxToken;
           if (test.status !== 401 && test.status !== 403) return effectiveSettings.dropboxToken;
-        } catch (_e) {
+        } catch (e) {
+          if (isSyncRateLimitError(e)) throw e;
           return effectiveSettings.dropboxToken;
         }
       }
@@ -4501,7 +4553,8 @@ const CloudSyncProviders = (() => {
           return await this.refreshToken(currentSettings, opts);
         }
         return token;
-      } catch (_e) {
+      } catch (e) {
+        if (isSyncRateLimitError(e)) throw e;
         return token;
       }
     },
@@ -18878,6 +18931,10 @@ const CloudSync = (() => {
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         console.error("[ScriptVault] Sync failed:", e);
+        const retryAfterMs = e && typeof e === "object" && Number.isFinite(e.retryAfterMs) ? Math.max(1e3, Number(e.retryAfterMs)) : 0;
+        if (e && typeof e === "object" && e.rateLimited === true && retryAfterMs > 0) {
+          return { error: msg, rateLimited: true, retryAfterMs };
+        }
         return { error: msg };
       } finally {
         releaseSyncEngineLock?.();
@@ -19680,6 +19737,8 @@ const EasyCloudSync = (() => {
   var DRIVE_UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
   var SYNC_FILE_NAME = "scriptvault-sync.json";
   var STORAGE_KEY_PREFIX = "easycloud_";
+  var EASYCLOUD_RATE_LIMIT_DEFAULT_RETRY_MS = 6e4;
+  var EASYCLOUD_RATE_LIMIT_MAX_RETRY_MS = 6 * 60 * 60 * 1e3;
   var KEYS = {
     CONNECTED: STORAGE_KEY_PREFIX + "connected",
     DEVICE_ID: STORAGE_KEY_PREFIX + "deviceId",
@@ -19719,7 +19778,46 @@ const EasyCloudSync = (() => {
     const { signal: _ignoredSignal, ...fetchOptions } = options;
     const timeoutSignal = AbortSignal.timeout(timeoutMs);
     const signal = externalSignal ? AbortSignal.any([externalSignal, timeoutSignal]) : timeoutSignal;
-    return await fetch(url, { ...fetchOptions, signal });
+    const response = await fetch(url, { ...fetchOptions, signal });
+    await throwIfEasyCloudRateLimited(response, url);
+    return response;
+  }
+  function isEasyCloudRateLimitError(error) {
+    return Boolean(error && typeof error === "object" && error.rateLimited === true && Number.isFinite(error.retryAfterMs));
+  }
+  function parseEasyCloudRetryAfterMs(response) {
+    const raw = response.headers?.get?.("Retry-After")?.trim() || "";
+    let requestedMs = EASYCLOUD_RATE_LIMIT_DEFAULT_RETRY_MS;
+    const seconds = Number(raw);
+    if (raw && Number.isFinite(seconds) && seconds >= 0) {
+      requestedMs = seconds * 1e3;
+    } else if (raw) {
+      const retryAt = Date.parse(raw);
+      if (Number.isFinite(retryAt)) requestedMs = retryAt - Date.now();
+    }
+    return Math.min(EASYCLOUD_RATE_LIMIT_MAX_RETRY_MS, Math.max(1e3, Math.round(requestedMs)));
+  }
+  async function isEasyCloudQuotaResponse(response) {
+    if (response.status !== 403) return false;
+    try {
+      const body = await response.clone().json();
+      const text = JSON.stringify(body).toLowerCase();
+      return text.includes("userratelimitexceeded") || text.includes("ratelimitexceeded") || text.includes("quotaexceeded") || text.includes("rate limit exceeded");
+    } catch (_) {
+      return false;
+    }
+  }
+  async function throwIfEasyCloudRateLimited(response, url) {
+    const quota = response.status === 403 && /googleapis\.com/i.test(url) && await isEasyCloudQuotaResponse(response);
+    if (response.status !== 429 && !quota) return;
+    const retryAfterMs = parseEasyCloudRetryAfterMs(response);
+    const error = new Error(
+      `Google Drive rate limited (${response.status}); retry after ${Math.ceil(retryAfterMs / 1e3)}s`
+    );
+    error.rateLimited = true;
+    error.retryAfterMs = retryAfterMs;
+    error.status = response.status;
+    throw error;
   }
   var EASYCLOUD_SYNC_PAYLOAD_MAX_BYTES = 64 * 1024 * 1024;
   var EASYCLOUD_METADATA_MAX_BYTES = 4 * 1024 * 1024;
@@ -20076,7 +20174,8 @@ const EasyCloudSync = (() => {
       const ok = resp.ok;
       await discardEasyCloudResponse(resp);
       return ok;
-    } catch (_) {
+    } catch (e) {
+      if (isEasyCloudRateLimitError(e)) throw e;
       return false;
     }
   }
@@ -20091,7 +20190,8 @@ const EasyCloudSync = (() => {
         const exists = resp2.ok;
         await discardEasyCloudResponse(resp2);
         if (exists) return _cachedFileId;
-      } catch (_) {
+      } catch (e) {
+        if (isEasyCloudRateLimitError(e)) throw e;
       }
       _cachedFileId = null;
     }
@@ -20408,6 +20508,9 @@ const EasyCloudSync = (() => {
       const msg = e instanceof Error ? e.message : String(e);
       warn("Sync failed:", e);
       setStatus(STATUS.ERROR);
+      if (isEasyCloudRateLimitError(e)) {
+        return { error: msg, rateLimited: true, retryAfterMs: e.retryAfterMs };
+      }
       return { error: msg };
     } finally {
       _syncInProgress = false;
@@ -39199,6 +39302,35 @@ function escapeOmnibox(s) {
 // production (Chrome enforces a 30s floor for non-development extensions); in
 // dev builds the smaller value below applies.
 const STATS_SAVE_ALARM = 'statsSave';
+const AUTO_SYNC_ALARM = 'autoSync';
+const SYNC_RATE_LIMIT_BACKOFF_STORAGE_KEY = 'syncRateLimitBackoffUntil';
+const SYNC_RATE_LIMIT_BACKOFF_MAX_MS = 6 * 60 * 60 * 1000;
+
+function _syncAlarmPeriodMinutes(settings = {}) {
+  const syncMs = Number(settings.syncInterval || 3600000);
+  return Math.max(1, syncMs / 60000);
+}
+
+async function _scheduleAutoSyncRateLimitBackoff(retryAfterMs) {
+  const delayMs = Math.min(
+    SYNC_RATE_LIMIT_BACKOFF_MAX_MS,
+    Math.max(1000, Number(retryAfterMs) || 60000),
+  );
+  const when = Date.now() + delayMs;
+  try { await chrome.storage.local.set({ [SYNC_RATE_LIMIT_BACKOFF_STORAGE_KEY]: when }); } catch (_) {}
+  try { await Promise.resolve(chrome.alarms.clear(AUTO_SYNC_ALARM)); } catch (_) {}
+  try { await Promise.resolve(chrome.alarms.create(AUTO_SYNC_ALARM, { when })); } catch (_) {}
+}
+
+async function _restoreAutoSyncAlarm(settings = {}) {
+  if (settings.syncEnabled && settings.syncProvider !== 'none') {
+    try {
+      await Promise.resolve(chrome.alarms.create(AUTO_SYNC_ALARM, {
+        periodInMinutes: _syncAlarmPeriodMinutes(settings),
+      }));
+    } catch (_) {}
+  }
+}
 
 // Apply the user's execution-stats URL retention setting before a lastUrl is
 // stored. 'full' keeps the whole URL when explicitly selected, 'origin' keeps
@@ -39335,6 +39467,17 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     if (alarm.name === 'autoUpdate') {
       await UpdateSystem.autoUpdate();
     } else if (alarm.name === 'autoSync') {
+      const backoffData = await chrome.storage.local
+        .get(SYNC_RATE_LIMIT_BACKOFF_STORAGE_KEY)
+        .catch(() => ({}));
+      const backoffUntil = Number(backoffData?.[SYNC_RATE_LIMIT_BACKOFF_STORAGE_KEY] || 0);
+      if (backoffUntil > Date.now()) {
+        await _scheduleAutoSyncRateLimitBackoff(backoffUntil - Date.now());
+        return;
+      }
+      if (backoffUntil > 0) {
+        await chrome.storage.local.remove(SYNC_RATE_LIMIT_BACKOFF_STORAGE_KEY).catch(() => {});
+      }
       const result = await CloudSync.sync();
       // Persist the scheduled result too. Only the manual path used to record
       // it, so getLastSyncResult and the sync cockpit reported the last MANUAL
@@ -39343,6 +39486,11 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
       // UI still showed the last successful manual run.
       await persistLastSyncResult(result);
       await maybeRegisterScriptsAfterSuccessfulSync(result);
+      if (result?.rateLimited === true) {
+        await _scheduleAutoSyncRateLimitBackoff(result.retryAfterMs);
+      } else {
+        await _restoreAutoSyncAlarm(await SettingsManager.get());
+      }
     } else if (alarm.name === SUBSCRIPTION_REFRESH_ALARM) {
       await SubscriptionSystem.refreshSubscriptions();
     }
@@ -40138,7 +40286,8 @@ async function setupAlarms() {
   
   // Clear only the alarms we manage here (preserve notification/backup alarms)
   await chrome.alarms.clear('autoUpdate').catch(() => {});
-  await chrome.alarms.clear('autoSync').catch(() => {});
+  await chrome.alarms.clear(AUTO_SYNC_ALARM).catch(() => {});
+  await chrome.storage.local.remove(SYNC_RATE_LIMIT_BACKOFF_STORAGE_KEY).catch(() => {});
   await chrome.alarms.clear(SUBSCRIPTION_REFRESH_ALARM).catch(() => {});
   
   // Setup auto-update alarm
@@ -40154,9 +40303,8 @@ async function setupAlarms() {
   
   // Setup sync alarm
   if (settings.syncEnabled && settings.syncProvider !== 'none') {
-    const syncMs = settings.syncInterval || 3600000; // Default 1 hour
-    chrome.alarms.create('autoSync', {
-      periodInMinutes: Math.max(1, syncMs / 60000)
+    chrome.alarms.create(AUTO_SYNC_ALARM, {
+      periodInMinutes: _syncAlarmPeriodMinutes(settings)
     });
   }
 

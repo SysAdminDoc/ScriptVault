@@ -319,6 +319,8 @@ const EasyCloudSync = (() => {
   var DRIVE_UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
   var SYNC_FILE_NAME = "scriptvault-sync.json";
   var STORAGE_KEY_PREFIX = "easycloud_";
+  var EASYCLOUD_RATE_LIMIT_DEFAULT_RETRY_MS = 6e4;
+  var EASYCLOUD_RATE_LIMIT_MAX_RETRY_MS = 6 * 60 * 60 * 1e3;
   var KEYS = {
     CONNECTED: STORAGE_KEY_PREFIX + "connected",
     DEVICE_ID: STORAGE_KEY_PREFIX + "deviceId",
@@ -358,7 +360,46 @@ const EasyCloudSync = (() => {
     const { signal: _ignoredSignal, ...fetchOptions } = options;
     const timeoutSignal = AbortSignal.timeout(timeoutMs);
     const signal = externalSignal ? AbortSignal.any([externalSignal, timeoutSignal]) : timeoutSignal;
-    return await fetch(url, { ...fetchOptions, signal });
+    const response = await fetch(url, { ...fetchOptions, signal });
+    await throwIfEasyCloudRateLimited(response, url);
+    return response;
+  }
+  function isEasyCloudRateLimitError(error) {
+    return Boolean(error && typeof error === "object" && error.rateLimited === true && Number.isFinite(error.retryAfterMs));
+  }
+  function parseEasyCloudRetryAfterMs(response) {
+    const raw = response.headers?.get?.("Retry-After")?.trim() || "";
+    let requestedMs = EASYCLOUD_RATE_LIMIT_DEFAULT_RETRY_MS;
+    const seconds = Number(raw);
+    if (raw && Number.isFinite(seconds) && seconds >= 0) {
+      requestedMs = seconds * 1e3;
+    } else if (raw) {
+      const retryAt = Date.parse(raw);
+      if (Number.isFinite(retryAt)) requestedMs = retryAt - Date.now();
+    }
+    return Math.min(EASYCLOUD_RATE_LIMIT_MAX_RETRY_MS, Math.max(1e3, Math.round(requestedMs)));
+  }
+  async function isEasyCloudQuotaResponse(response) {
+    if (response.status !== 403) return false;
+    try {
+      const body = await response.clone().json();
+      const text = JSON.stringify(body).toLowerCase();
+      return text.includes("userratelimitexceeded") || text.includes("ratelimitexceeded") || text.includes("quotaexceeded") || text.includes("rate limit exceeded");
+    } catch (_) {
+      return false;
+    }
+  }
+  async function throwIfEasyCloudRateLimited(response, url) {
+    const quota = response.status === 403 && /googleapis\.com/i.test(url) && await isEasyCloudQuotaResponse(response);
+    if (response.status !== 429 && !quota) return;
+    const retryAfterMs = parseEasyCloudRetryAfterMs(response);
+    const error = new Error(
+      `Google Drive rate limited (${response.status}); retry after ${Math.ceil(retryAfterMs / 1e3)}s`
+    );
+    error.rateLimited = true;
+    error.retryAfterMs = retryAfterMs;
+    error.status = response.status;
+    throw error;
   }
   var EASYCLOUD_SYNC_PAYLOAD_MAX_BYTES = 64 * 1024 * 1024;
   var EASYCLOUD_METADATA_MAX_BYTES = 4 * 1024 * 1024;
@@ -715,7 +756,8 @@ const EasyCloudSync = (() => {
       const ok = resp.ok;
       await discardEasyCloudResponse(resp);
       return ok;
-    } catch (_) {
+    } catch (e) {
+      if (isEasyCloudRateLimitError(e)) throw e;
       return false;
     }
   }
@@ -730,7 +772,8 @@ const EasyCloudSync = (() => {
         const exists = resp2.ok;
         await discardEasyCloudResponse(resp2);
         if (exists) return _cachedFileId;
-      } catch (_) {
+      } catch (e) {
+        if (isEasyCloudRateLimitError(e)) throw e;
       }
       _cachedFileId = null;
     }
@@ -1047,6 +1090,9 @@ const EasyCloudSync = (() => {
       const msg = e instanceof Error ? e.message : String(e);
       warn("Sync failed:", e);
       setStatus(STATUS.ERROR);
+      if (isEasyCloudRateLimitError(e)) {
+        return { error: msg, rateLimited: true, retryAfterMs: e.retryAfterMs };
+      }
       return { error: msg };
     } finally {
       _syncInProgress = false;

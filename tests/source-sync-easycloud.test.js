@@ -233,6 +233,31 @@ describe('source easycloud sync module', () => {
     });
   });
 
+  it('returns Drive quota backoff metadata instead of treating quota as an auth failure', async () => {
+    await chrome.storage.local.set({ easycloud_connected: true });
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      error: {
+        code: 403,
+        errors: [{ reason: 'userRateLimitExceeded' }],
+      },
+    }), {
+      status: 403,
+      headers: {
+        'Content-Type': 'application/json',
+        'Retry-After': '5',
+      },
+    }));
+    globalThis.fetch = fetchMock;
+
+    const { EasyCloudSync } = await loadFreshEasyCloud();
+    await expect(EasyCloudSync.sync()).resolves.toMatchObject({
+      rateLimited: true,
+      retryAfterMs: 5000,
+      error: expect.stringContaining('rate limited (403)'),
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('clears pending debounce alarms on disconnect', async () => {
     const { EasyCloudSync } = await loadFreshEasyCloud();
 

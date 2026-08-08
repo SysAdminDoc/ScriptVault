@@ -464,7 +464,7 @@ describe('Cloud provider fetches honor sync abort signals (2026-07 P3 regression
     expect(providers).toContain('interface SyncRequestOptions');
     expect(providers).toContain('const timeoutSignal = AbortSignal.timeout(timeoutMs);');
     expect(providers).toContain('AbortSignal.any([externalSignal, timeoutSignal])');
-    expect(providers).toContain('return await fetch(url, { ...fetchInit, signal });');
+    expect(providers).toContain('const response = await fetch(url, { ...fetchInit, signal });');
   });
 
   it('threads opts.signal through non-S3 provider upload/download paths', () => {

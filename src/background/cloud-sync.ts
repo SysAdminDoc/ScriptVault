@@ -129,6 +129,8 @@ interface SyncResult {
   success?: boolean;
   skipped?: boolean;
   error?: string;
+  rateLimited?: boolean;
+  retryAfterMs?: number;
   valueBundleSync?: ValueBundleSyncSummary;
 }
 
@@ -1571,6 +1573,13 @@ export const CloudSync = {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       console.error('[ScriptVault] Sync failed:', e);
+      const retryAfterMs = e && typeof e === 'object' &&
+        Number.isFinite((e as { retryAfterMs?: unknown }).retryAfterMs)
+        ? Math.max(1000, Number((e as { retryAfterMs: number }).retryAfterMs))
+        : 0;
+      if (e && typeof e === 'object' && (e as { rateLimited?: unknown }).rateLimited === true && retryAfterMs > 0) {
+        return { error: msg, rateLimited: true, retryAfterMs };
+      }
       return { error: msg };
     } finally {
       releaseSyncEngineLock?.();

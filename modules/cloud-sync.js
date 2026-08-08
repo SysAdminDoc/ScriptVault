@@ -1310,6 +1310,10 @@ const CloudSync = (() => {
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         console.error("[ScriptVault] Sync failed:", e);
+        const retryAfterMs = e && typeof e === "object" && Number.isFinite(e.retryAfterMs) ? Math.max(1e3, Number(e.retryAfterMs)) : 0;
+        if (e && typeof e === "object" && e.rateLimited === true && retryAfterMs > 0) {
+          return { error: msg, rateLimited: true, retryAfterMs };
+        }
         return { error: msg };
       } finally {
         releaseSyncEngineLock?.();

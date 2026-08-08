@@ -102,6 +102,12 @@ interface SyncEndpointGuardOptions {
   allowInternalEndpoint?: boolean;
 }
 
+interface SyncRateLimitError extends Error {
+  rateLimited: true;
+  retryAfterMs: number;
+  status: number;
+}
+
 interface GoogleDriveFile {
   id: string;
   name: string;
@@ -571,8 +577,13 @@ async function _oauthFetchWithTimeout(
     ? AbortSignal.any([externalSignal, timeoutSignal])
     : timeoutSignal;
   try {
-    return await fetch(url, { ...fetchInit, signal });
+    const response = await fetch(url, { ...fetchInit, signal });
+    if (typeof throwIfSyncRateLimited === 'function') {
+      await throwIfSyncRateLimited(response, url, providerLabel);
+    }
+    return response;
   } catch (e: unknown) {
+    if (e && typeof e === 'object' && (e as { rateLimited?: unknown }).rateLimited === true) throw e;
     const name = e && typeof e === 'object' && 'name' in e ? String(e.name) : '';
     const message = e instanceof Error ? e.message : String(e);
     if (name === 'AbortError' || name === 'TimeoutError' || /aborted|timed?\s*out/i.test(message)) {
@@ -582,6 +593,66 @@ async function _oauthFetchWithTimeout(
     console.warn(`[CloudSync] ${providerLabel} token refresh network error:`, message);
     return null;
   }
+}
+
+const SYNC_RATE_LIMIT_DEFAULT_RETRY_MS = 60_000;
+const SYNC_RATE_LIMIT_MAX_RETRY_MS = 6 * 60 * 60 * 1000;
+
+function isSyncRateLimitError(error: unknown): error is SyncRateLimitError {
+  return Boolean(error && typeof error === 'object' &&
+    (error as Partial<SyncRateLimitError>).rateLimited === true &&
+    Number.isFinite((error as Partial<SyncRateLimitError>).retryAfterMs));
+}
+
+function parseRetryAfterMs(response: Response): number {
+  const raw = response.headers?.get?.('Retry-After')?.trim() || '';
+  let requestedMs = SYNC_RATE_LIMIT_DEFAULT_RETRY_MS;
+  if (raw) {
+    const seconds = Number(raw);
+    if (Number.isFinite(seconds) && seconds >= 0) {
+      requestedMs = seconds * 1000;
+    } else {
+      const retryAt = Date.parse(raw);
+      if (Number.isFinite(retryAt)) requestedMs = retryAt - Date.now();
+    }
+  }
+  return Math.min(
+    SYNC_RATE_LIMIT_MAX_RETRY_MS,
+    Math.max(1000, Math.round(requestedMs)),
+  );
+}
+
+async function isGoogleDriveQuotaResponse(response: Response): Promise<boolean> {
+  if (response.status !== 403) return false;
+  try {
+    const body = await response.clone().json() as unknown;
+    const text = JSON.stringify(body).toLowerCase();
+    return text.includes('userratelimitexceeded') ||
+      text.includes('ratelimitexceeded') ||
+      text.includes('quotaexceeded') ||
+      text.includes('rate limit exceeded');
+  } catch (_) {
+    return false;
+  }
+}
+
+async function throwIfSyncRateLimited(
+  response: Response,
+  url: string,
+  providerLabel: string,
+): Promise<void> {
+  const googleQuota = response.status === 403 && /googleapis\.com/i.test(url) &&
+    await isGoogleDriveQuotaResponse(response);
+  if (response.status !== 429 && !googleQuota) return;
+
+  const retryAfterMs = parseRetryAfterMs(response);
+  const error = new Error(
+    `${providerLabel} rate limited (${response.status}); retry after ${Math.ceil(retryAfterMs / 1000)}s`,
+  ) as SyncRateLimitError;
+  error.rateLimited = true;
+  error.retryAfterMs = retryAfterMs;
+  error.status = response.status;
+  throw error;
 }
 
 function isDefinitiveRefreshFailure(response: Response): boolean {
@@ -610,6 +681,7 @@ async function fetchWithTimeout(
     : timeoutSignal;
   const response = await fetch(url, { ...fetchOptions, signal });
   assertSyncResponseAllowed(response, guardOptions);
+  await throwIfSyncRateLimited(response, url, guardOptions.label);
   return response;
 }
 
@@ -1023,7 +1095,8 @@ const googledrive = {
         return await this.refreshToken(currentSettings, opts);
       }
       return token;
-    } catch (_e: unknown) {
+    } catch (e: unknown) {
+      if (isSyncRateLimitError(e)) throw e;
       return token;
     }
   },
@@ -1460,7 +1533,8 @@ const dropbox = {
         if (!test) return effectiveSettings.dropboxToken;
         if (test.ok) return effectiveSettings.dropboxToken;
         if (test.status !== 401 && test.status !== 403) return effectiveSettings.dropboxToken;
-      } catch (_e: unknown) {
+      } catch (e: unknown) {
+        if (isSyncRateLimitError(e)) throw e;
         return effectiveSettings.dropboxToken;
       }
     }
@@ -1824,7 +1898,8 @@ const onedrive = {
         return await this.refreshToken(currentSettings, opts);
       }
       return token;
-    } catch (_e: unknown) {
+    } catch (e: unknown) {
+      if (isSyncRateLimitError(e)) throw e;
       return token;
     }
   },

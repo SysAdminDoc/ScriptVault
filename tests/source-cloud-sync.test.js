@@ -233,6 +233,34 @@ describe('source cloud sync module', () => {
     expect(easycloudProvider.upload).not.toHaveBeenCalled();
   });
 
+  it('returns rate-limit metadata so the alarm layer can honor Retry-After', async () => {
+    const rateLimitError = Object.assign(new Error('Google Drive rate limited (403); retry after 7s'), {
+      rateLimited: true,
+      retryAfterMs: 7000,
+      status: 403,
+    });
+    const provider = {
+      name: 'Google Drive',
+      supportsDryRun: true,
+      download: vi.fn().mockRejectedValue(rateLimitError),
+      upload: vi.fn(),
+    };
+    const { CloudSync } = await loadFreshCloudSync(
+      [],
+      null,
+      {},
+      {},
+      null,
+      { googledrive: provider },
+    );
+
+    await expect(CloudSync.sync()).resolves.toEqual({
+      error: 'Google Drive rate limited (403); retry after 7s',
+      rateLimited: true,
+      retryAfterMs: 7000,
+    });
+  });
+
   it('includes syncBaseCode in first-sync upload envelopes', async () => {
     await chrome.storage.local.set({ syncTombstones: {} });
 

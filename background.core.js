@@ -9471,6 +9471,35 @@ function escapeOmnibox(s) {
 // production (Chrome enforces a 30s floor for non-development extensions); in
 // dev builds the smaller value below applies.
 const STATS_SAVE_ALARM = 'statsSave';
+const AUTO_SYNC_ALARM = 'autoSync';
+const SYNC_RATE_LIMIT_BACKOFF_STORAGE_KEY = 'syncRateLimitBackoffUntil';
+const SYNC_RATE_LIMIT_BACKOFF_MAX_MS = 6 * 60 * 60 * 1000;
+
+function _syncAlarmPeriodMinutes(settings = {}) {
+  const syncMs = Number(settings.syncInterval || 3600000);
+  return Math.max(1, syncMs / 60000);
+}
+
+async function _scheduleAutoSyncRateLimitBackoff(retryAfterMs) {
+  const delayMs = Math.min(
+    SYNC_RATE_LIMIT_BACKOFF_MAX_MS,
+    Math.max(1000, Number(retryAfterMs) || 60000),
+  );
+  const when = Date.now() + delayMs;
+  try { await chrome.storage.local.set({ [SYNC_RATE_LIMIT_BACKOFF_STORAGE_KEY]: when }); } catch (_) {}
+  try { await Promise.resolve(chrome.alarms.clear(AUTO_SYNC_ALARM)); } catch (_) {}
+  try { await Promise.resolve(chrome.alarms.create(AUTO_SYNC_ALARM, { when })); } catch (_) {}
+}
+
+async function _restoreAutoSyncAlarm(settings = {}) {
+  if (settings.syncEnabled && settings.syncProvider !== 'none') {
+    try {
+      await Promise.resolve(chrome.alarms.create(AUTO_SYNC_ALARM, {
+        periodInMinutes: _syncAlarmPeriodMinutes(settings),
+      }));
+    } catch (_) {}
+  }
+}
 
 // Apply the user's execution-stats URL retention setting before a lastUrl is
 // stored. 'full' keeps the whole URL when explicitly selected, 'origin' keeps
@@ -9607,6 +9636,17 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     if (alarm.name === 'autoUpdate') {
       await UpdateSystem.autoUpdate();
     } else if (alarm.name === 'autoSync') {
+      const backoffData = await chrome.storage.local
+        .get(SYNC_RATE_LIMIT_BACKOFF_STORAGE_KEY)
+        .catch(() => ({}));
+      const backoffUntil = Number(backoffData?.[SYNC_RATE_LIMIT_BACKOFF_STORAGE_KEY] || 0);
+      if (backoffUntil > Date.now()) {
+        await _scheduleAutoSyncRateLimitBackoff(backoffUntil - Date.now());
+        return;
+      }
+      if (backoffUntil > 0) {
+        await chrome.storage.local.remove(SYNC_RATE_LIMIT_BACKOFF_STORAGE_KEY).catch(() => {});
+      }
       const result = await CloudSync.sync();
       // Persist the scheduled result too. Only the manual path used to record
       // it, so getLastSyncResult and the sync cockpit reported the last MANUAL
@@ -9615,6 +9655,11 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
       // UI still showed the last successful manual run.
       await persistLastSyncResult(result);
       await maybeRegisterScriptsAfterSuccessfulSync(result);
+      if (result?.rateLimited === true) {
+        await _scheduleAutoSyncRateLimitBackoff(result.retryAfterMs);
+      } else {
+        await _restoreAutoSyncAlarm(await SettingsManager.get());
+      }
     } else if (alarm.name === SUBSCRIPTION_REFRESH_ALARM) {
       await SubscriptionSystem.refreshSubscriptions();
     }
@@ -10410,7 +10455,8 @@ async function setupAlarms() {
   
   // Clear only the alarms we manage here (preserve notification/backup alarms)
   await chrome.alarms.clear('autoUpdate').catch(() => {});
-  await chrome.alarms.clear('autoSync').catch(() => {});
+  await chrome.alarms.clear(AUTO_SYNC_ALARM).catch(() => {});
+  await chrome.storage.local.remove(SYNC_RATE_LIMIT_BACKOFF_STORAGE_KEY).catch(() => {});
   await chrome.alarms.clear(SUBSCRIPTION_REFRESH_ALARM).catch(() => {});
   
   // Setup auto-update alarm
@@ -10426,9 +10472,8 @@ async function setupAlarms() {
   
   // Setup sync alarm
   if (settings.syncEnabled && settings.syncProvider !== 'none') {
-    const syncMs = settings.syncInterval || 3600000; // Default 1 hour
-    chrome.alarms.create('autoSync', {
-      periodInMinutes: Math.max(1, syncMs / 60000)
+    chrome.alarms.create(AUTO_SYNC_ALARM, {
+      periodInMinutes: _syncAlarmPeriodMinutes(settings)
     });
   }
 

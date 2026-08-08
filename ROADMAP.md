@@ -828,16 +828,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
 
 ### P3
 
-- [ ] P3 — No 429/Retry-After handling; Drive rate-limit 403 is misread as an auth failure
-  Category: reliability
-  Where: `src/modules/sync-providers.ts:1009-1011` and all providers
-  Problem: No provider inspects 429/`Retry-After`; a rate-limited upload throws generically and the fixed-period `autoSync` alarm retries at the same cadence (no backoff). Google Drive signals rate limiting with HTTP 403 (`userRateLimitExceeded`), and `googledrive.getValidToken` treats 403 as expired-token → a pointless refresh per cycle while rate-limited.
-  Evidence: Verified — code paths read; Drive's 403-for-quota is documented API behavior.
-  Fix: Distinguish 403 rate-limit bodies from auth 403s before refreshing; honor `Retry-After` and back off the autoSync alarm after consecutive failures.
-  Acceptance: A 429/403-quota response backs off rather than refreshing every cycle; a test covers a rate-limit body.
-  Confidence: Verified
-  Effort: M
-
 - [ ] P3 — Encrypt-side sync KDF iterations are uncapped while decrypt caps at 10M, so a large configured value produces undecryptable envelopes
   Category: correctness
   Where: `src/modules/sync-crypto.ts:97-102` (`resolveIterations`, no upper bound) vs `:221-225` (decrypt rejects `> MAX_KDF_ITERATIONS` = 10M); setting at `settings-defaults.json:34` + the `Settings` type (reachable via settings import)
