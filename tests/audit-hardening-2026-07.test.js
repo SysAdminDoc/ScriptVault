@@ -92,6 +92,15 @@ describe('CSP workaround guidance uses userscript APIs (2026-08 regression)', ()
   });
 });
 
+describe('Debugger live-reload empty state is user-actionable (2026-08 regression)', () => {
+  const src = read('pages/dashboard-debugger.js');
+
+  it('describes the editor path instead of exposing the module API', () => {
+    expect(src).toContain("No scripts captured yet. Open the debugger from a script\\'s editor to add one here.");
+    expect(src).not.toContain('Call enableLiveReload(scriptId)');
+  });
+});
+
 describe('Dashboard untrusted HTML sanitizer (2026-07 regression)', () => {
   const src = read('pages/dashboard.js');
 

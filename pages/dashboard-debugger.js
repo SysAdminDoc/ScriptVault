@@ -377,7 +377,7 @@ const ScriptDebugger = (() => {
 
     const scriptIds = Object.keys(_liveReload);
     if (scriptIds.length === 0) {
-      frag.appendChild(el('div', { class: 'dbg-empty', text: 'No scripts registered. Call enableLiveReload(scriptId) to add one.' }));
+      frag.appendChild(el('div', { class: 'dbg-empty', text: 'No scripts captured yet. Open the debugger from a script\'s editor to add one here.' }));
       return frag;
     }
 

@@ -828,16 +828,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
 
 ### P3
 
-- [ ] P3 — Live Reload empty state tells end users to call an internal JS function
-  Category: docs
-  Where: `pages/dashboard-debugger.js:380` (`'No scripts registered. Call enableLiveReload(scriptId) to add one.'`)
-  Problem: `enableLiveReload` is a module API, not a UI action; developer copy leaked into a user-facing empty state, and the real path (open the debugger from a script's editor) is never mentioned.
-  Evidence: Verified — read `renderLiveReloadPanel`; population is via the editor debug button / console ingestion.
-  Fix: Replace with e.g. "No scripts captured yet. Open the debugger from a script's editor to add it here."
-  Acceptance: The empty state describes an in-UI action.
-  Confidence: Verified
-  Effort: S
-
 - [ ] P3 — Dependency graph has no zero-scripts empty state (blank canvas)
   Category: ux
   Where: `pages/dashboard-depgraph.js:576-620` (`render()` has no `nodes.length === 0` path); the only empty copy is the sidebar's "Select a node…"

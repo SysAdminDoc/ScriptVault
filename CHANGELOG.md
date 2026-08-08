@@ -87,6 +87,8 @@ All notable changes to ScriptVault will be documented in this file.
 - Replaced CSP reporter dead-end extension samples with supported userscript
   guidance for `GM_xmlhttpRequest`, `GM_addElement`, `@grant`, `@connect`, and
   `@inject-into`.
+- Updated the debugger Live Reload empty state to direct users to open the
+  debugger from a script editor instead of exposing an internal API call.
 
 ## [v3.27.0] — Recoverable restores, real isolation & honest errors (2026-08-08)
 
