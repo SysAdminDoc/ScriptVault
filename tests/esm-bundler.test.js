@@ -278,4 +278,15 @@ describe('ESM userscript bundler', () => {
       fetchImport: async () => 'export default function helper() {}',
     })).resolves.toMatchObject({ bundled: true });
   });
+
+  it('routes the primary saveScript path through the same ESM gate', () => {
+    const core = readFileSync('background.core.js', 'utf8');
+    const start = core.indexOf('saveScript: async message');
+    const end = core.indexOf('createScript: async code', start);
+    const saveBlock = core.slice(start, end);
+    expect(saveBlock).toContain('bundleResult = await ESMUserscriptBundler.bundleIfNeeded(code, parsed.meta, saveSettings');
+    expect(saveBlock).toContain('if (bundleResult.bundled)');
+    expect(saveBlock).toContain('parsed.meta.esmBundle =');
+    expect(saveBlock).toContain('code,\n        meta: parsed.meta');
+  });
 });

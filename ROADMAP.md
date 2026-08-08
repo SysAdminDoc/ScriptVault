@@ -828,16 +828,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
 
 ### P3
 
-- [ ] P3 — The primary install path (`saveScript`) skips ESM bundling, so ESM scripts install unbundled and bypass the experimental-flag refusal
-  Category: correctness
-  Where: `src/background/core.ts:6754-6916` (`saveScript` — no `ESMUserscriptBundler.bundleIfNeeded`) vs `installFromCode` (`:10298`) and `applyUpdate` (`:2001`) which call it
-  Problem: `saveScript` is the path used by the install-review page and the dashboard editor. An `@module 1`/`@inject-into module` script is accepted raw: with `experimentalESMUserscripts` off it installs where the other paths would refuse it, and either way the raw `import` statements land in the GM wrapper IIFE and fail at injection with no surfaced error.
-  Evidence: Verified — read the full `saveScript` body; no bundler reference.
-  Fix: Run `bundleIfNeeded` in `saveScript` after parse (same pattern as `installFromCode`).
-  Acceptance: An ESM script installed via the review page is bundled or refused per the flag; a test covers both flag states.
-  Confidence: Verified
-  Effort: S
-
 - [ ] P3 — `applyUpdate` registers new code before persisting; a persist failure leaves running and stored code divergent
   Category: correctness
   Where: `src/background/core.ts:2091-2108` (re-register, then `ensurePersistentStorageForScriptWrite`/`ScriptStorage.set`)

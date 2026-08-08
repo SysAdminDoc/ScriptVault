@@ -7108,12 +7108,38 @@ backgroundActionRegistry.registerHandlers(ScriptActionHandler.createScriptAction
     return script ? { ...script, metadata: script.meta } : null;
   },
   saveScript: async message => {
-    const codeBytes = _scriptSourceByteLength(message.code);
+    let code = message.code;
+    const codeBytes = _scriptSourceByteLength(code);
     if (codeBytes > MAX_SCRIPT_SIZE) {
       return { error: `Script too large (${formatBytes(codeBytes)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.` };
     }
-    const parsed = parseUserscript(message.code);
+    let parsed = parseUserscript(code);
     if (parsed.error) return { error: parsed.error };
+    const receiptOptions = message.trust && typeof message.trust === 'object' ? message.trust : null;
+    const saveSettings = await SettingsManager.get();
+    let bundleResult;
+    try {
+      bundleResult = await ESMUserscriptBundler.bundleIfNeeded(code, parsed.meta, saveSettings, {
+        sourceUrl: receiptOptions?.sourceUrl || parsed.meta.downloadURL || parsed.meta.updateURL || ''
+      });
+    } catch (error) {
+      return { error: error?.message || String(error) };
+    }
+    if (bundleResult.bundled) {
+      code = bundleResult.code;
+      const bundledBytes = _scriptSourceByteLength(code);
+      if (bundledBytes > MAX_SCRIPT_SIZE) {
+        return { error: `Script too large (${formatBytes(bundledBytes)}). Maximum is ${formatBytes(MAX_SCRIPT_SIZE)}.` };
+      }
+      parsed = parseUserscript(code);
+      if (parsed.error) return { error: parsed.error };
+      parsed.meta.esmBundle = {
+        entryUrl: bundleResult.entryUrl,
+        imports: bundleResult.imports,
+        bundledAt: Date.now(),
+        sourceMap: bundleResult.sourceMap
+      };
+    }
 
     const id = message.id || message.scriptId || generateId();
     return await _runExclusiveScriptOperation(id, async () => {
@@ -7124,14 +7150,13 @@ backgroundActionRegistry.registerHandlers(ScriptActionHandler.createScriptAction
       if (message.settings && typeof message.settings === 'object' && 'allowBroadHostAccess' in message.settings) {
         scriptSettings.allowBroadHostAccess = message.settings.allowBroadHostAccess === true;
       }
-      const receiptOptions = message.trust && typeof message.trust === 'object' ? message.trust : null;
       const shouldRecordReceipt = !!receiptOptions?.recordReceipt
         || !!receiptOptions?.operation
         || !!receiptOptions?.sourceUrl
         || !!receiptOptions?.sourceKind
         || !!receiptOptions?.sourceLabel
         || receiptOptions?.suppressMetadataSourceFallback === true;
-      let previousScript = existing && existing.code !== message.code
+      let previousScript = existing && existing.code !== code
         ? {
             ...existing,
             meta: { ...existing.meta },
@@ -7196,7 +7221,7 @@ backgroundActionRegistry.registerHandlers(ScriptActionHandler.createScriptAction
       const trustReceipt = shouldRecordReceipt
         ? await createScriptTrustReceipt({
             operation: receiptOptions?.operation || (existing ? 'update' : 'install'),
-            code: message.code,
+            code,
             meta: parsed.meta,
             sourceUrl: receiptOptions?.sourceUrl || '',
             sourceKind: receiptOptions?.sourceKind || '',
@@ -7226,7 +7251,7 @@ backgroundActionRegistry.registerHandlers(ScriptActionHandler.createScriptAction
       const script = {
         ...existing,
         id,
-        code: message.code,
+        code,
         meta: parsed.meta,
         enabled: message.enabled !== undefined ? message.enabled : (existing?.enabled ?? true),
         settings: scriptSettings,

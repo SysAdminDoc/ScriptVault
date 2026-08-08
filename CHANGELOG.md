@@ -49,6 +49,8 @@ All notable changes to ScriptVault will be documented in this file.
   a validator-less update endpoint returns the same pending version again.
 - Skipped user-modified scripts during scheduled update sweeps while retaining
   explicit single-script checks for reviewing an available upstream version.
+- Routed dashboard/editor saves through the ESM bundler gate, preserving bundle
+  metadata and returning a bounded refusal when experimental ESM is disabled.
 
 ## [v3.27.0] — Recoverable restores, real isolation & honest errors (2026-08-08)
 
