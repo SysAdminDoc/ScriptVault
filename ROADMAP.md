@@ -838,16 +838,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
   Confidence: Verified
   Effort: S
 
-- [ ] P3 — Storage-cache refresh clobbers `GM_setValue`/`GM_deleteValue` writes made during the startup window
-  Category: correctness
-  Where: shipped `background.core.js:13593` (`_cache = { ..._cache, ...freshValues }`)
-  Problem: The comment says "merge fresh values with local changes made before refresh completed", but the spread order lets the (possibly pre-write) background snapshot overwrite them. A `GM_setValue` during the startup window is persisted but the local cache reverts to the stale value, so subsequent synchronous `GM_getValue` returns the old value for the page's life; a `GM_deleteValue` is likewise resurrected in the cache.
-  Evidence: Verified — read the merge line in shipped `background.core.js`.
-  Fix: Track keys mutated locally before the refresh lands and exclude them from the `freshValues` overwrite (or spread `freshValues` first then re-apply the local mutation log).
-  Acceptance: A `GM_setValue` during startup is readable synchronously afterward; a test drives a write racing the initial fill.
-  Confidence: Verified
-  Effort: S
-
 - [ ] P3 — Notification ownership check fails open and records an unauthenticated owner
   Category: security
   Where: `src/background/gm-notification-handler.ts:138-146` (`callerOwnsNotification` returns true when no `_notifCallbacks` entry exists) and `:176,187-193` (id = caller-chosen `tag`, owner = `data.scriptId`)

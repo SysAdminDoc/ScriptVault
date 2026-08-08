@@ -55,6 +55,40 @@ describe('GM_getValue does not resolve prototype-chain members', () => {
   });
 });
 
+describe('GM storage refresh preserves writes made during the initial read', () => {
+  it('does not let the stale background snapshot overwrite a local set', async () => {
+    const start = core.indexOf('  // Refresh storage cache from background');
+    const end = core.indexOf('  // Constructable-stylesheet support', start);
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const refreshCode = core.slice(start, end);
+    const factory = new Function(`
+      let _cache = { race: 'preloaded' };
+      const _cacheLocalMutations = new Set();
+      let _cacheReady = false;
+      let _cacheReadyResolve = null;
+      const scriptId = 'script-race';
+      let resolveRefresh;
+      const pendingRefresh = new Promise(resolve => { resolveRefresh = resolve; });
+      function sendToBackground() { return pendingRefresh; }
+      function hasGrant() { return true; }
+      ${refreshCode}
+      return { GM_getValue, GM_setValue, GM_deleteValue, pendingRefresh, resolveRefresh };
+    `)();
+
+    factory.GM_setValue('race', 'local');
+    factory.resolveRefresh({ race: 'stale', fresh: 'background' });
+    await factory.pendingRefresh;
+    await Promise.resolve();
+
+    expect(factory.GM_getValue('race')).toBe('local');
+    expect(factory.GM_getValue('fresh')).toBe('background');
+
+    factory.GM_deleteValue('fresh');
+    expect(factory.GM_getValue('fresh', 'fallback')).toBe('fallback');
+  });
+});
+
 describe('@require in-memory cache is keyed by the integrity fragment', () => {
   // The persistent cache hashes the full URL (buildRequireCacheKey(url)), but
   // the in-memory Map was keyed on fetchUrl — the URL with #sha256=... stripped.

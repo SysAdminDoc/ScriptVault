@@ -14098,6 +14098,10 @@ ${mappedCode}
   // Storage cache - mutable so we can refresh it with fresh values from background
   // Pre-loaded values serve as fallback if background fetch fails
   let _cache = ${JSON.stringify(preloadedStorage)};
+  // Keep writes made while the initial background read is in flight. The
+  // service-worker snapshot may predate those writes, so it must never win the
+  // merge for a locally mutated key (including an explicit deletion).
+  const _cacheLocalMutations = new Set();
   let _cacheReady = false; // Track if we've fetched fresh values
   let _cacheReadyPromise = null;
   let _cacheReadyResolve = null;
@@ -14357,8 +14361,11 @@ ${mappedCode}
     try {
       const freshValues = await sendToBackground('GM_getValues', { scriptId });
       if (freshValues && typeof freshValues === 'object') {
-        // Merge fresh values with any local changes made before refresh completed
-        _cache = { ..._cache, ...freshValues };
+        // Merge only keys that have not been changed locally while the read was
+        // pending. This preserves GM_setValue and GM_deleteValue semantics.
+        for (const [key, value] of Object.entries(freshValues)) {
+          if (!_cacheLocalMutations.has(key)) _cache[key] = value;
+        }
       }
       _cacheReady = true;
       if (_cacheReadyResolve) _cacheReadyResolve();
@@ -14391,6 +14398,7 @@ ${mappedCode}
     }
     // Update local cache IMMEDIATELY - this makes subsequent GM_getValue instant
     _cache[key] = value;
+    _cacheLocalMutations.add(key);
     // Persist async (fire and forget) - background handles debouncing
     sendToBackground('GM_setValue', { scriptId, key, value }).catch(() => {});
     return value;
@@ -14400,6 +14408,7 @@ ${mappedCode}
   function GM_deleteValue(key) {
     if (!hasGrant('GM_deleteValue') && !hasGrant('GM.deleteValue')) return;
     delete _cache[key];
+    _cacheLocalMutations.add(key);
     sendToBackground('GM_deleteValue', { scriptId, key }).catch(() => {});
   }
   
@@ -14444,6 +14453,7 @@ ${mappedCode}
     // Update local cache immediately for all values
     for (const [key, value] of Object.entries(values)) {
       _cache[key] = value;
+      _cacheLocalMutations.add(key);
     }
     // Persist all values to background in one call
     sendToBackground('GM_setValues', { scriptId, values }).catch(() => {});
@@ -14460,6 +14470,7 @@ ${mappedCode}
     // Delete from local cache immediately
     for (const key of keys) {
       delete _cache[key];
+      _cacheLocalMutations.add(key);
     }
     // Persist deletions to background in one call
     sendToBackground('GM_deleteValues', { scriptId, keys }).catch(() => {});
