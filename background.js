@@ -20262,6 +20262,11 @@ const EasyCloudSync = (() => {
       log("Sync already in progress, skipping");
       return { skipped: true };
     }
+    const connectedData = await _getStorageValues([KEYS.CONNECTED]);
+    if (!connectedData[KEYS.CONNECTED]) {
+      log("Sync skipped: EasyCloud is disconnected");
+      return { skipped: true };
+    }
     if (!_isOnline()) {
       setStatus(STATUS.OFFLINE);
       return { offline: true };
