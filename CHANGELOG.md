@@ -2,7 +2,7 @@
 
 All notable changes to ScriptVault will be documented in this file.
 
-## [Unreleased]
+## [v3.26.0] — Enforced permissions, reviewed sync & honest freshness (2026-08-08)
 
 - **Any `GM_xmlhttpRequest` longer than 30 s silently never called back, and a
   `GM.fetch` stream polled forever after a service-worker restart.** Terminal

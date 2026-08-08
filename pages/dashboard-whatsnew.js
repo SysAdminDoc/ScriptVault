@@ -11,6 +11,25 @@ const WhatsNew = (() => {
     : '2.0.0';
 
   const CHANGELOG = {
+    '3.26.0': {
+      title: 'ScriptVault 3.26.0 \u2014 Enforced Permissions, Reviewed Sync & Honest Freshness',
+      date: '2026-08-08',
+      summary: 'This release closes the gap between what the install screen promised and what the extension actually enforced, stops a tampered cloud backup from running code or destroying your library, and makes every check for a newer script version actually reach the server.',
+      highlights: [
+        { icon: 'SAFE', title: 'The Permissions You Were Shown Are Now Enforced', desc: 'A script could ignore the sandbox it is given and talk to the extension directly, reaching your saved values, cookies, downloads, tabs and network even when the install review said it had no permissions at all. Every one of those requests is now checked against what the script actually declared.' },
+        { icon: 'SAFE', title: 'Synced Scripts Are Reviewed, Not Just Trusted', desc: 'Unless you turn on sync encryption, anyone who can write to your own cloud storage chooses what arrives. Incoming scripts are now analyzed and compared against your copy; anything risky or newly more powerful arrives switched off with an explanation, and a deletion from the cloud lands in Trash instead of being permanent.' },
+        { icon: 'FLOW', title: 'Update Checks Reach The Server', desc: 'Installing a script could take a stale copy out of the browser cache, and pressing Check for Updates could be answered without ever contacting the source. Freshness is now decided in one place: the shared cache never answers for us, and an explicit refresh always re-reads the script.' },
+        { icon: 'FLOW', title: 'Slow Requests Finish', desc: 'Any GM_xmlhttpRequest running longer than 30 seconds completed in the background but never called your script back. Requests now run to their own timeout, and a request lost to a service-worker restart fails with a reason instead of hanging.' },
+      ],
+      improvements: [
+        'A userstyle can no longer bleed onto pages it does not match: if removing it fails on a live page, ScriptVault keeps track and retries instead of forgetting the stylesheet forever.',
+        'Rapid in-page navigation on single-page sites no longer leaves the wrong styles applied \u2014 route changes are queued rather than dropped.',
+        'Switching a profile now updates the Scripts list immediately, and a switch that fails tells you so instead of showing the profile as active.',
+        'A huge or endless response to GM_xmlhttpRequest is now refused while it downloads rather than after it has filled memory.',
+        'The page-facing scripting API and local MCP bridge work again after being unreachable since v3.18.0, and a page can no longer claim to be a different site than it is.',
+        'Closing the What\u2019s New dialog returns keyboard focus where it was instead of dropping it.',
+      ],
+    },
     '3.25.0': {
       title: 'ScriptVault 3.25.0 — Release Integrity, Supply Chain & Firefox Reproducibility',
       date: '2026-08-06',
