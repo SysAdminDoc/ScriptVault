@@ -828,16 +828,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
 
 ### P3
 
-- [ ] P3 — `.user.css` pending payloads have no TTL, cap, or dedup — unlike the `.user.js` path — and leak when the tab never loads the dashboard
-  Category: reliability
-  Where: `src/background/core.ts:10249-10262` (writes `pendingUserStyle_<tabId>`, up to `MAX_SCRIPT_SIZE` = 5 MB), consumed at `pages/dashboard.js:13547-13554`; the `_storePendingInstall` TTL/cap sweep (`:10104-10131`) covers only `pendingInstall*`
-  Problem: The `.user.css` interceptor writes the full untrusted CSS under `pendingUserStyle_<tabId>` with no TTL, no cap, and no in-flight dedup. The sibling `.user.js` path has a 5-minute TTL, a 32-entry cap, and a `_fetchPendingUserscript` in-flight map. Close the redirected tab before the dashboard loads and the entry is permanent; two tabs opening the same `.user.css` fetch it twice. (Corroborated by two independent passes.)
-  Evidence: Verified — the pending-install sweep prefix does not include `pendingUserStyle_`; no dedup map on the UserCSS fetch.
-  Fix: Reuse the `_storePendingInstall` TTL/cap eviction for the `pendingUserStyle_` prefix and add the same in-flight dedup as `_fetchPendingUserscript`.
-  Acceptance: An unconsumed `pendingUserStyle_` entry is swept after the TTL and concurrent same-URL opens fetch once; tests cover both.
-  Confidence: Verified
-  Effort: S
-
 - [ ] P3 — EasyCloud debounce/periodic sync paths bypass the connected gate (status churn; possible post-disconnect resurrection)
   Category: correctness
   Where: `src/modules/sync-easycloud.ts:1185-1192` (`notifyScriptSaved`/`notifyScriptDeleted` → `_debouncedSync`), `_handleAlarm` → `_performSync` (`:980-1005`) never checks `KEYS.CONNECTED`; contrast the gated storage listener `:1220-1223`; `disconnect` revoke is fire-and-forget `.catch(()=>{})` (`:1378-1382`)

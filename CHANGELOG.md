@@ -53,6 +53,8 @@ All notable changes to ScriptVault will be documented in this file.
   metadata and returning a bounded refusal when experimental ESM is disabled.
 - Restored the previous userscript registration when update persistence fails,
   preventing the running version from diverging from durable storage.
+- Added TTL/count-bounded storage and same-URL fetch deduplication to pending
+  UserCSS handoffs, preventing abandoned editor payloads from accumulating.
 
 ## [v3.27.0] — Recoverable restores, real isolation & honest errors (2026-08-08)
 

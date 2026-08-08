@@ -40378,24 +40378,28 @@ function _pendingInstallPageUrl(storageKey) {
   return `${chrome.runtime.getURL('pages/install.html')}#${encodeURIComponent(storageKey)}`;
 }
 
-async function _storePendingInstall(storageKey, payload) {
-  if (!storageKey?.startsWith(_PENDING_INSTALL_STORAGE_PREFIX)) {
+async function _storePendingInstall(storageKey, payload, options = {}) {
+  const storagePrefix = options.prefix || _PENDING_INSTALL_STORAGE_PREFIX;
+  const ttlMs = Number(options.ttlMs) || _PENDING_INSTALL_TTL_MS;
+  const maxEntries = Number(options.maxEntries) || _PENDING_INSTALL_MAX_ENTRIES;
+  const includeLegacyKey = options.includeLegacyKey !== false && storagePrefix === _PENDING_INSTALL_STORAGE_PREFIX;
+  if (!storageKey?.startsWith(storagePrefix)) {
     throw new Error('Pending install storage key is invalid');
   }
   const timestamp = Number(payload?.timestamp) || Date.now();
   try {
     const stored = await chrome.storage.local.get();
     const candidates = (Object.entries(stored || {}))
-      .filter(([key]) => key === _PENDING_INSTALL_LEGACY_KEY || key.startsWith(_PENDING_INSTALL_STORAGE_PREFIX))
+      .filter(([key]) => (includeLegacyKey && key === _PENDING_INSTALL_LEGACY_KEY) || key.startsWith(storagePrefix))
       .filter(([key]) => key !== storageKey);
     const expiredKeys = candidates
-      .filter(([, value]) => !Number.isFinite(Number(value?.timestamp)) || timestamp - Number(value.timestamp) > _PENDING_INSTALL_TTL_MS)
+      .filter(([, value]) => !Number.isFinite(Number(value?.timestamp)) || timestamp - Number(value.timestamp) > ttlMs)
       .map(([key]) => key);
     const expiredSet = new Set(expiredKeys);
     const overflowKeys = candidates
       .filter(([key]) => !expiredSet.has(key))
       .sort(([, left], [, right]) => Number(right?.timestamp || 0) - Number(left?.timestamp || 0))
-      .slice(_PENDING_INSTALL_MAX_ENTRIES - 1)
+      .slice(Math.max(0, maxEntries - 1))
       .map(([key]) => key);
     const removableKeys = [...new Set([...expiredKeys, ...overflowKeys])];
     if (removableKeys.length) await chrome.storage.local.remove(removableKeys);
@@ -40508,6 +40512,7 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
 // can review it and choose Install Style. Mirrors the `.user.js` interceptor but
 // routes to the editor rather than the userscript install page.
 const _PENDING_USERSTYLE_STORAGE_PREFIX = 'pendingUserStyle_';
+const _pendingUserStyleFetches = new Map();
 
 async function _fetchPendingUserStyle(url) {
   const controller = new AbortController();
@@ -40540,12 +40545,28 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
   if (url.startsWith('chrome-extension://')) return;
   try { await ensureInitialized(); } catch (_) { /* logged in init() */ }
 
-  const result = await _fetchPendingUserStyle(url);
+  let pending = _pendingUserStyleFetches.get(url);
+  if (!pending) {
+    pending = _fetchPendingUserStyle(url).finally(() => {
+      _pendingUserStyleFetches.delete(url);
+    });
+    _pendingUserStyleFetches.set(url, pending);
+  }
+
+  const result = await pending;
   if (result.action !== 'install') return;
 
   const storageKey = `${_PENDING_USERSTYLE_STORAGE_PREFIX}${details.tabId}`;
   try {
-    await chrome.storage.local.set({ [storageKey]: { url, finalUrl: result.finalUrl || url, code: result.code, timestamp: Date.now() } });
+    await _storePendingInstall(storageKey, {
+      url,
+      finalUrl: result.finalUrl || url,
+      code: result.code,
+      timestamp: Date.now()
+    }, {
+      prefix: _PENDING_USERSTYLE_STORAGE_PREFIX,
+      includeLegacyKey: false
+    });
     const dashboardUrl = chrome.runtime.getURL('pages/dashboard.html') + `#usercss=${encodeURIComponent(storageKey)}`;
     chrome.tabs.update(details.tabId, { url: dashboardUrl }).catch((updateErr) => {
       debugLog('[ScriptVault] UserCSS tab.update failed (tab likely closed):', updateErr?.message || updateErr);

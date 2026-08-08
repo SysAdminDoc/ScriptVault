@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
 import {
   _pendingFetches,
   pendingInstallKeyForTab,
@@ -7,7 +8,23 @@ import {
 } from '../src/background/install-handler.ts';
 
 const coreSource = readFileSync('src/background/core.ts', 'utf8');
+const shippedCoreSource = readFileSync('background.core.js', 'utf8');
 const installPageSource = readFileSync('pages/install.js', 'utf8');
+
+function extractFunction(source, marker) {
+  const start = source.indexOf(marker);
+  if (start < 0) throw new Error(`Missing function marker: ${marker}`);
+  const open = source.indexOf('{', source.indexOf(')', start));
+  let depth = 0;
+  for (let index = open; index < source.length; index += 1) {
+    if (source[index] === '{') depth += 1;
+    else if (source[index] === '}') {
+      depth -= 1;
+      if (depth === 0) return source.slice(start, index + 1);
+    }
+  }
+  throw new Error(`Unclosed function marker: ${marker}`);
+}
 
 function userscript(name) {
   return [
@@ -108,5 +125,41 @@ describe('pending userscript install isolation', () => {
     expect(installPageSource).toContain('const pendingInstall = data[pendingInstallStorageKey]');
     expect(installPageSource).toContain('return chrome.storage.local.remove(pendingInstallStorageKey)');
     expect(installPageSource).toContain("const LEGACY_PENDING_INSTALL_STORAGE_KEY = 'pendingInstall'");
+  });
+
+  it('bounds UserCSS handoffs by TTL and count without touching userscript entries', async () => {
+    expect(shippedCoreSource).toContain('const _pendingUserStyleFetches = new Map();');
+    expect(shippedCoreSource).toContain('pending = _pendingUserStyleFetches.get(url);');
+    expect(shippedCoreSource).toContain('_pendingUserStyleFetches.delete(url);');
+    expect(shippedCoreSource).toContain('prefix: _PENDING_USERSTYLE_STORAGE_PREFIX');
+
+    const storeSource = extractFunction(shippedCoreSource, 'async function _storePendingInstall');
+    const storePending = vm.runInNewContext(`(${storeSource})`, {
+      chrome,
+      debugLog: vi.fn(),
+      _PENDING_INSTALL_STORAGE_PREFIX: 'pendingInstall_',
+      _PENDING_INSTALL_LEGACY_KEY: 'pendingInstall',
+      _PENDING_INSTALL_TTL_MS: 5 * 60 * 1000,
+      _PENDING_INSTALL_MAX_ENTRIES: 32,
+    });
+    const now = Date.now();
+    await chrome.storage.local.set({
+      pendingInstall: { timestamp: now },
+      pendingUserStyle_expired: { timestamp: now - (10 * 60 * 1000) },
+      pendingUserStyle_recent: { timestamp: now - 1000 },
+    });
+
+    await storePending('pendingUserStyle_new', { code: 'new', timestamp: now }, {
+      prefix: 'pendingUserStyle_',
+      includeLegacyKey: false,
+      ttlMs: 5 * 60 * 1000,
+      maxEntries: 2,
+    });
+
+    const stored = await chrome.storage.local.get(null);
+    expect(stored).toHaveProperty('pendingInstall');
+    expect(stored).not.toHaveProperty('pendingUserStyle_expired');
+    expect(stored).toHaveProperty('pendingUserStyle_recent');
+    expect(stored).toHaveProperty('pendingUserStyle_new');
   });
 });
