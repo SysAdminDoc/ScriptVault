@@ -272,6 +272,17 @@ const EasyCloudSync = (() => {
     }
     return normalized;
   }
+  async function verifyLocalLibrarySnapshots(input) {
+    const normalized = normalizeLocalLibrarySnapshots(input);
+    const verified = [];
+    for (const snapshot of normalized) {
+      try {
+        if (await sha256Hex(snapshot.code) === snapshot.sha256) verified.push(snapshot);
+      } catch (_) {
+      }
+    }
+    return verified;
+  }
   function getLocalLibraryRequireScripts(settings) {
     const candidate = settings && typeof settings === "object" ? settings.localLibraries : void 0;
     return normalizeLocalLibrarySnapshots(candidate).map((snapshot) => ({
@@ -294,7 +305,8 @@ const EasyCloudSync = (() => {
     createLocalLibrarySnapshot,
     getLocalLibraryRequireScripts,
     getLocalLibraryReviewSignals,
-    normalizeLocalLibrarySnapshots
+    normalizeLocalLibrarySnapshots,
+    verifyLocalLibrarySnapshots
   });
 
   // src/modules/sync-easycloud.ts
