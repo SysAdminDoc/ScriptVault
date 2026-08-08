@@ -74,6 +74,8 @@ All notable changes to ScriptVault will be documented in this file.
   scripts from the per-page running badge count.
 - Ignored inherited `Object.prototype` names in UserCSS metadata instead of
   persisting directives such as `@toString` or `@constructor`.
+- Bound menu-command execution to the authenticated script owner and serialized
+  menu-command storage mutations to prevent cross-script dispatch and lost updates.
 
 ## [v3.27.0] — Recoverable restores, real isolation & honest errors (2026-08-08)
 

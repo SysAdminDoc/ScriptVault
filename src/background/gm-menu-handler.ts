@@ -64,6 +64,14 @@ declare const ScriptStorage: ScriptStorageRuntime;
 
 const GM_MENU_ACTION_SET: ReadonlySet<string> = new Set(GM_MENU_ACTIONS);
 
+let menuCommandMutationChain: Promise<void> = Promise.resolve();
+
+function enqueueMenuCommandMutation<T>(task: () => Promise<T>): Promise<T> {
+  const queued = menuCommandMutationChain.then(task, task);
+  menuCommandMutationChain = queued.then(() => undefined, () => undefined);
+  return queued;
+}
+
 export function isGMMenuAction(action: unknown): action is GMMenuAction {
   return typeof action === 'string' && GM_MENU_ACTION_SET.has(action);
 }
@@ -81,43 +89,49 @@ export async function handleGMMenuMessage(
     case 'registerMenuCommand':
     case 'GM_registerMenuCommand': {
       const scriptId = ownedScriptId;
-      const commands = await chrome.storage.session.get('menuCommands') || {};
-      if (!commands.menuCommands) commands.menuCommands = {};
-      if (!commands.menuCommands[scriptId]) commands.menuCommands[scriptId] = [];
+      if (!scriptId) return { success: true };
+      await enqueueMenuCommandMutation(async () => {
+        const commands = await chrome.storage.session.get('menuCommands') || {};
+        if (!commands.menuCommands) commands.menuCommands = {};
+        if (!commands.menuCommands[scriptId]) commands.menuCommands[scriptId] = [];
 
-      const existing = commands.menuCommands[scriptId].findIndex(
-        (command: MenuCommandEntry) => command.id === data.commandId,
-      );
-      const cmdEntry: MenuCommandEntry = {
-        id: data.commandId,
-        caption: data.caption,
-        accessKey: data.accessKey || '',
-        autoClose: data.autoClose !== false,
-        title: data.title || '',
-      };
-      if (existing >= 0) {
-        commands.menuCommands[scriptId][existing] = cmdEntry;
-      } else {
-        commands.menuCommands[scriptId].push(cmdEntry);
-      }
+        const existing = commands.menuCommands[scriptId].findIndex(
+          (command: MenuCommandEntry) => command.id === data.commandId,
+        );
+        const cmdEntry: MenuCommandEntry = {
+          id: data.commandId,
+          caption: data.caption,
+          accessKey: data.accessKey || '',
+          autoClose: data.autoClose !== false,
+          title: data.title || '',
+        };
+        if (existing >= 0) {
+          commands.menuCommands[scriptId][existing] = cmdEntry;
+        } else {
+          commands.menuCommands[scriptId].push(cmdEntry);
+        }
 
-      await chrome.storage.session.set(commands);
+        await chrome.storage.session.set(commands);
+      });
       return { success: true };
     }
 
     case 'unregisterMenuCommand':
     case 'GM_unregisterMenuCommand': {
       const scriptId = ownedScriptId;
-      const commands = await chrome.storage.session.get('menuCommands') || {};
-      if (commands.menuCommands?.[scriptId]) {
-        commands.menuCommands[scriptId] = commands.menuCommands[scriptId].filter(
-          (command: MenuCommandEntry) => command.id !== data.commandId,
-        );
-        if (commands.menuCommands[scriptId].length === 0) {
-          delete commands.menuCommands[scriptId];
+      if (!scriptId) return { success: true };
+      await enqueueMenuCommandMutation(async () => {
+        const commands = await chrome.storage.session.get('menuCommands') || {};
+        if (commands.menuCommands?.[scriptId]) {
+          commands.menuCommands[scriptId] = commands.menuCommands[scriptId].filter(
+            (command: MenuCommandEntry) => command.id !== data.commandId,
+          );
+          if (commands.menuCommands[scriptId].length === 0) {
+            delete commands.menuCommands[scriptId];
+          }
+          await chrome.storage.session.set(commands);
         }
-        await chrome.storage.session.set(commands);
-      }
+      });
       return { success: true };
     }
 
@@ -144,10 +158,10 @@ export async function handleGMMenuMessage(
     }
 
     case 'executeMenuCommand': {
-      if (sender.tab?.id) {
+      if (sender.tab?.id && ownedScriptId) {
         await chrome.tabs.sendMessage(sender.tab.id, {
           action: 'executeMenuCommand',
-          data: { scriptId: data.scriptId, commandId: data.commandId },
+          data: { scriptId: ownedScriptId, commandId: data.commandId },
         });
       }
       return { success: true };

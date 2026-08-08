@@ -125,4 +125,64 @@ describe('GM menu handler', () => {
     })).resolves.toEqual({ success: true });
     expect(chrome.tabs.sendMessage).not.toHaveBeenCalled();
   });
+
+  it('binds execute requests to the authenticated script owner', async () => {
+    await expect(handleGMMenuMessage(
+      'executeMenuCommand',
+      { scriptId: 'victim-script', commandId: 'cmd-1' },
+      { tab: { id: 12 }, userScriptId: 'caller-script' },
+    )).resolves.toEqual({ success: true });
+
+    expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(12, {
+      action: 'executeMenuCommand',
+      data: { scriptId: 'caller-script', commandId: 'cmd-1' },
+    });
+  });
+
+  it('does not create an undefined owner bucket or dispatch without an owner', async () => {
+    await expect(handleGMMenuMessage('GM_registerMenuCommand', {
+      commandId: 'cmd-1',
+      caption: 'Orphaned',
+    })).resolves.toEqual({ success: true });
+    await expect(handleGMMenuMessage('GM_unregisterMenuCommand', {
+      commandId: 'cmd-1',
+    })).resolves.toEqual({ success: true });
+    await expect(handleGMMenuMessage('executeMenuCommand', {
+      scriptId: undefined,
+      commandId: 'cmd-1',
+    }, { tab: { id: 12 } })).resolves.toEqual({ success: true });
+
+    const stored = await chrome.storage.session.get('menuCommands');
+    expect(stored).toEqual({});
+    expect(chrome.tabs.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('serializes concurrent register operations so neither command is lost', async () => {
+    const originalGet = chrome.storage.session.get;
+    let releaseFirstGet;
+    const firstGetBlocked = new Promise(resolve => { releaseFirstGet = resolve; });
+    let getCount = 0;
+    chrome.storage.session.get = vi.fn(async (...args) => {
+      getCount += 1;
+      if (getCount === 1) await firstGetBlocked;
+      return originalGet(...args);
+    });
+
+    const first = handleGMMenuMessage('registerMenuCommand', {
+      scriptId: 'script-1', commandId: 'cmd-1', caption: 'One',
+    });
+    const second = handleGMMenuMessage('registerMenuCommand', {
+      scriptId: 'script-1', commandId: 'cmd-2', caption: 'Two',
+    });
+    await Promise.resolve();
+    expect(getCount).toBe(1);
+    releaseFirstGet();
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      { success: true },
+      { success: true },
+    ]);
+
+    const stored = await chrome.storage.session.get('menuCommands');
+    expect(stored.menuCommands['script-1'].map(command => command.id)).toEqual(['cmd-1', 'cmd-2']);
+  });
 });

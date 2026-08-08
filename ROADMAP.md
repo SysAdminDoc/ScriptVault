@@ -828,16 +828,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
 
 ### P3
 
-- [ ] P3 — `executeMenuCommand` forwards a caller-supplied `scriptId`, letting one script trigger another's menu-command callback
-  Category: security
-  Where: `src/background/gm-menu-handler.ts:146-153` (passes `data.scriptId` to `chrome.tabs.sendMessage`; every other branch uses `ownedScriptId`)
-  Problem: Unlike the sibling branches, this trusts `data.scriptId`, so a script can fire another script's registered menu-command callback in the shared tab. (Also: `menuCommands` read-modify-write via `chrome.storage.session` at `:84-119` is unserialized and keys under the literal `"undefined"` when `ownedScriptId` is absent.)
-  Evidence: Verified — read the handler; the asymmetry with `ownedScriptId` is clear.
-  Fix: Use `ownedScriptId`/`sender.userScriptId` for the target; serialize the `menuCommands` read-modify-write and skip when the owner id is undefined.
-  Acceptance: A script cannot trigger another script's menu command; a test asserts owner scoping.
-  Confidence: Verified
-  Effort: S
-
 - [ ] P3 — `GM_audio` watch state is per-tab, not per-script — one script's unwatch stops events for all
   Category: correctness
   Where: `src/background/gm-audio-handler.ts:86-101` (`_audioWatchedTabs` is a `Set<number>`)
