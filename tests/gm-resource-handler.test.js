@@ -143,6 +143,27 @@ describe('GM resource handler', () => {
       .toHaveBeenCalledWith(expect.objectContaining({ ok: true }), 5 * 1024 * 1024, 'Script');
   });
 
+  it('requires a verifiable integrity fragment for plaintext HTTP loads', async () => {
+    await expect(handleGMResourceMessage('GM_loadScript', {
+      scriptId: 'script-1',
+      url: 'http://cdn.example.com/lib.js',
+    })).resolves.toEqual({
+      error: 'GM_loadScript over http requires a verifiable #sha256= integrity fragment',
+    });
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+
+    const code = 'window.loaded = true;';
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(code));
+    const integrity = btoa(String.fromCharCode(...new Uint8Array(digest)));
+    await expect(handleGMResourceMessage('GM_loadScript', {
+      scriptId: 'script-1',
+      url: `http://cdn.example.com/lib.js#sha256-${integrity}`,
+    })).resolves.toEqual({ code });
+    expect(globalThis.fetch).toHaveBeenCalledWith('http://cdn.example.com/lib.js', {
+      signal: expect.any(AbortSignal),
+    });
+  });
+
   it('reports GM_loadScript HTTP, redirect, bounded-read, and empty-body failures', async () => {
     globalThis.fetch.mockResolvedValueOnce({ ok: false, status: 404 });
     await expect(handleGMResourceMessage('GM_loadScript', {

@@ -32,6 +32,7 @@ declare const NpmResolver: {
 export const requireCache: Map<string, string> = new Map();
 export const REQUIRE_CACHE_MAX = 500;
 export const SRI_REQUIRE_UNPINNED_REQUIRE_ERROR = 'blocked: unpinned @require under SRI Require';
+export const HTTP_REQUIRE_UNPINNED_REQUIRE_ERROR = 'blocked: unpinned http @require; add a verifiable #sha256= integrity fragment';
 
 const MAX_REQUIRE_BYTES = 5 * 1024 * 1024;
 const MAX_PROVENANCE_BUNDLE_BYTES = 256 * 1024;
@@ -169,6 +170,14 @@ function parseRequireIntegrity(url: string): { fetchUrl: string; sriHash: string
 export function hasVerifiableRequireIntegrity(url: string): boolean {
   const { sriHash } = parseRequireIntegrity(url);
   return /^(sha256|sha384|sha512)[-=]/i.test(sriHash || '');
+}
+
+function isPlainHttpUrl(url: string): boolean {
+  try {
+    return new URL(url).protocol === 'http:';
+  } catch {
+    return false;
+  }
 }
 
 async function shouldRequirePinnedRequire(options: FetchRequireScriptOptions): Promise<boolean> {
@@ -328,6 +337,10 @@ export async function fetchRequireScript(url: string, options: FetchRequireScrip
 
   // SRI enforcement: in "require" mode, refuse un-pinned remote requires. npm
   // specs are resolved with a computed SRI above and never reach here.
+  if (!options.allowUnpinned && isPlainHttpUrl(fetchUrl) && !hasVerifiableRequireIntegrity(url)) {
+    console.warn(`[ScriptVault] Refusing unpinned http @require: ${fetchUrl}`);
+    throw new Error(HTTP_REQUIRE_UNPINNED_REQUIRE_ERROR);
+  }
   if (await shouldRequirePinnedRequire(options) && !hasVerifiableRequireIntegrity(url)) {
     console.warn(`[ScriptVault] Refusing un-pinned @require (SRI = require): ${fetchUrl}`);
     throw new Error(SRI_REQUIRE_UNPINNED_REQUIRE_ERROR);

@@ -1,5 +1,41 @@
 import type { BackgroundMessage } from '../types/messages';
 
+const HTTP_GM_LOAD_SCRIPT_SRI_ERROR = 'GM_loadScript over http requires a verifiable #sha256= integrity fragment';
+
+function parseScriptIntegrity(url: string): { fetchUrl: string; sriHash: string | null } {
+  const hashIdx = url.indexOf('#');
+  if (hashIdx <= 0) return { fetchUrl: url, sriHash: null };
+  const fragment = url.slice(hashIdx + 1);
+  return /^(sha256|sha384|sha512)[-=]/i.test(fragment)
+    ? { fetchUrl: url.slice(0, hashIdx), sriHash: fragment }
+    : { fetchUrl: url, sriHash: null };
+}
+
+function hasVerifiableScriptIntegrity(hash: string | null): boolean {
+  return /^(sha256|sha384|sha512)[-=]/i.test(hash || '');
+}
+
+function normalizeIntegrityBase64(value: string): string {
+  let normalized = value.replace(/-/g, '+').replace(/_/g, '/').replace(/\s+/g, '');
+  const remainder = normalized.length % 4;
+  if (remainder === 2) normalized += '==';
+  else if (remainder === 3) normalized += '=';
+  return normalized;
+}
+
+async function verifyScriptIntegrity(code: string, hash: string): Promise<boolean> {
+  const match = hash.match(/^(sha256|sha384|sha512)[-=](.+)$/i);
+  if (!match?.[1] || !match[2]) return false;
+  const algorithm = { sha256: 'SHA-256', sha384: 'SHA-384', sha512: 'SHA-512' }[match[1].toLowerCase() as 'sha256' | 'sha384' | 'sha512'];
+  try {
+    const digest = await crypto.subtle.digest(algorithm, new TextEncoder().encode(code));
+    const actual = btoa(String.fromCharCode(...new Uint8Array(digest)));
+    return normalizeIntegrityBase64(actual) === normalizeIntegrityBase64(match[2]);
+  } catch {
+    return false;
+  }
+}
+
 export type GMResourceAction = Extract<
   BackgroundMessage['action'],
   | 'GM_getResourceText'
@@ -125,10 +161,21 @@ export async function handleGMResourceMessage(
         const script = await ScriptStorage.get(ownedScriptId);
         if (!script) return { error: 'Script context not found' };
 
-        const policy = evaluateConnectPolicy(script, data.url);
+        const { fetchUrl, sriHash } = parseScriptIntegrity(data.url);
+        let isPlainHttp = false;
+        try {
+          isPlainHttp = new URL(fetchUrl).protocol === 'http:';
+        } catch {
+          return { error: 'GM_loadScript URL rejected: invalid URL' };
+        }
+        if (isPlainHttp && !hasVerifiableScriptIntegrity(sriHash)) {
+          return { error: HTTP_GM_LOAD_SCRIPT_SRI_ERROR };
+        }
+
+        const policy = evaluateConnectPolicy(script, fetchUrl);
         if (!policy.allowed) return { error: policy.error };
 
-        const preCheck = InternalHostGuard.classifyFetchUrl(data.url, ['http:', 'https:']);
+        const preCheck = InternalHostGuard.classifyFetchUrl(fetchUrl, ['http:', 'https:']);
         if (!preCheck.ok) {
           return { error: 'GM_loadScript URL rejected: ' + preCheck.message };
         }
@@ -137,7 +184,7 @@ export async function handleGMResourceMessage(
         const timeoutId = setTimeout(() => controller.abort(), data.timeout || 30000);
         let code;
         try {
-          const response = await fetch(data.url, { signal: controller.signal });
+          const response = await fetch(fetchUrl, { signal: controller.signal });
           if (!response.ok) return { error: `HTTP ${response.status}` };
           const postCheck = InternalHostGuard.classifyResponseUrl(response, ['http:', 'https:']);
           if (!postCheck.ok) {
@@ -146,10 +193,10 @@ export async function handleGMResourceMessage(
           // fetch() follows redirects, so @connect must hold for where the
           // chain actually ended — otherwise an allowed host can bounce the
           // request to an arbitrary one whose body is then executed.
-          if (response.url && response.url !== data.url) {
+          if (response.url && response.url !== fetchUrl) {
             let crossOrigin = true;
             try {
-              crossOrigin = new URL(response.url).origin !== new URL(data.url).origin;
+              crossOrigin = new URL(response.url).origin !== new URL(fetchUrl).origin;
             } catch { crossOrigin = true; }
             if (crossOrigin) {
               const redirectPolicy = evaluateConnectPolicy(script, response.url);
@@ -167,6 +214,9 @@ export async function handleGMResourceMessage(
           clearTimeout(timeoutId);
         }
         if (!code || code.length === 0) return { error: 'Empty response' };
+        if (sriHash && !(await verifyScriptIntegrity(code, sriHash))) {
+          return { error: 'GM_loadScript integrity hash mismatch' };
+        }
         return { code };
       } catch (error) {
         return { error: errorMessage(error, 'Fetch failed') };

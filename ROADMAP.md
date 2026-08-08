@@ -838,16 +838,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
   Confidence: Verified
   Effort: S
 
-- [ ] P3 — `@require`/`GM_loadScript` execute code fetched over plaintext HTTP with optional SRI
-  Category: security
-  Where: `src/background/core.ts` require/loadScript fetch paths pass `['http:', 'https:']` to `InternalHostGuard` (e.g. `:10139`); `verifySRI` returns true for a missing/`md5-` hash
-  Problem: Because the fetch happens in the service worker, no mixed-content blocking applies and SRI is opt-in. Any on-path attacker can replace an `@require http://…` body or a `GM_loadScript('http://…')` response with arbitrary JS, evaluated in the script's world.
-  Evidence: Verified — require/loadScript/usercss fetch guards pass `['http:', 'https:']`; SRI enforcement is opt-in (`sri === 'require'`).
-  Fix: For `http:` requires/loadScript, require a verifiable SRI hash (reject un-pinned `http:`) or surface an install/update warning; prefer upgrading known https mirrors.
-  Acceptance: An un-pinned `@require http://…` is refused (or warned) at install; a test covers the http-without-SRI case.
-  Confidence: Likely
-  Effort: S
-
 - [ ] P3 — The network XHR proxy drops `XMLHttpRequest`'s static constants (`DONE`/`OPENED`/…)
   Category: correctness
   Where: shipped `background.core.js:15440` (`_WrappedXHR.prototype = _OrigXHR.prototype` only) vs `:15463` (the WebSocket wrapper does `Object.assign(_WrappedWS, {CONNECTING…CLOSED})`)

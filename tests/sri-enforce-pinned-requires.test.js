@@ -8,6 +8,7 @@ import { resolve } from 'node:path';
 import {
   fetchRequireScript,
   hasVerifiableRequireIntegrity,
+  HTTP_REQUIRE_UNPINNED_REQUIRE_ERROR,
   requireCache,
   SRI_REQUIRE_UNPINNED_REQUIRE_ERROR,
 } from '../src/background/resource-loader.ts';
@@ -47,6 +48,21 @@ describe('fetchRequireScript SRI enforcement', () => {
     const code = await fetchRequireScript('https://cdn.example/lib.js');
     expect(code).toBe('remote-code');
     expect(globalThis.fetch).toHaveBeenCalled();
+  });
+
+  it('refuses an unpinned plaintext HTTP require even when general SRI mode is off', async () => {
+    await expect(fetchRequireScript('http://cdn.example/lib.js'))
+      .rejects.toThrow(HTTP_REQUIRE_UNPINNED_REQUIRE_ERROR);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it('allows a plaintext HTTP require only when it carries a verifiable hash', async () => {
+    const code = 'remote-code';
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(code));
+    const integrity = btoa(String.fromCharCode(...new Uint8Array(digest)));
+    await expect(fetchRequireScript(`http://cdn.example/lib.js#sha256-${integrity}`))
+      .resolves.toBe(code);
+    expect(globalThis.fetch).toHaveBeenCalledWith('http://cdn.example/lib.js', expect.any(Object));
   });
 
   it('require mode: refuses an un-pinned require without hitting the network', async () => {

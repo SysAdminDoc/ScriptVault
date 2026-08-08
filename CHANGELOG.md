@@ -30,6 +30,8 @@ All notable changes to ScriptVault will be documented in this file.
 - Restricted @require CDN fallbacks to recognized upstream paths and parsed
   jQuery major versions, so plugin-like URLs cannot silently receive jQuery
   core bytes.
+- Refused unpinned plaintext HTTP @require and GM_loadScript execution while
+  preserving review probes; pinned HTTP loads verify their declared digest.
 
 ## [v3.27.0] — Recoverable restores, real isolation & honest errors (2026-08-08)
 

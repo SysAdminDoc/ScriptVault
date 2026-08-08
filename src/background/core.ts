@@ -73,6 +73,7 @@ const LOCAL_ONLY_SCRIPT_SETTING_KEYS = new Set([
 ]);
 
 const SRI_REQUIRE_UNPINNED_REQUIRE_ERROR = 'blocked: unpinned @require under SRI Require';
+const HTTP_REQUIRE_UNPINNED_REQUIRE_ERROR = 'blocked: unpinned http @require; add a verifiable #sha256= integrity fragment';
 const SYNC_FIRST_RUN_REGISTRATION_HOLD_MS = 90 * 1000;
 const SYNC_FIRST_RUN_REGISTRATION_HOLD_STORAGE_KEY = 'syncFirstRunRegistrationHoldStartedAt';
 const SYNC_FIRST_RUN_REGISTRATION_TIMEOUT_NOTIFICATION_ID = 'sync-first-run-registration-timeout';
@@ -12910,6 +12911,14 @@ function hasVerifiableRequireIntegrity(url: any) {
   return /^(sha256|sha384|sha512)[-=]/i.test(sriHash || '');
 }
 
+function isPlainHttpUrl(url: any) {
+  try {
+    return new URL(url).protocol === 'http:';
+  } catch (_) {
+    return false;
+  }
+}
+
 async function buildRequireCacheKey(url: any) {
   const data = new TextEncoder().encode(url);
   const hash = await crypto.subtle.digest('SHA-256', data);
@@ -13006,6 +13015,14 @@ async function fetchRequireScript(url: any, options: any = {}) {
   }
 
   const { fetchUrl, sriHash } = parseRequireIntegrity(url);
+
+  // Service-worker fetches do not receive page mixed-content protection. A
+  // plaintext dependency is therefore executable network input unless its
+  // bytes are pinned; review probes may still inspect it before execution.
+  if (!options.allowUnpinned && isPlainHttpUrl(fetchUrl) && !hasVerifiableRequireIntegrity(url)) {
+    console.warn(`[ScriptVault] Refusing unpinned http @require: ${fetchUrl}`);
+    throw new Error(HTTP_REQUIRE_UNPINNED_REQUIRE_ERROR);
+  }
 
   // SRI enforcement: the Security > Subresource Integrity setting has a
   // "require" mode that, until now, was surfaced in the UI but never enforced.
