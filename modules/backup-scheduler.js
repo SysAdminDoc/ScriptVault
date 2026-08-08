@@ -35,6 +35,8 @@ const BackupScheduler = (() => {
   var STORAGE_KEY_BACKUPS = "autoBackups";
   var STORAGE_KEY_SETTINGS = "backupSchedulerSettings";
   var STORAGE_KEY_RECEIPTS = "restoreReceipts";
+  var STORAGE_KEY_MUTATION_JOURNAL = "libraryMutationJournal";
+  var MUTATION_JOURNAL_MAX_AGE_MS = 6 * 60 * 60 * 1e3;
   var RECEIPT_RETENTION = 10;
   var RECEIPT_BYTE_BUDGET = 5 * 1024 * 1024;
   var ALARM_NAME = "sv_backup_scheduled";
@@ -593,6 +595,105 @@ const BackupScheduler = (() => {
     await _saveReceipts(receipts);
     return receipt;
   }
+  async function _getMutationJournal() {
+    try {
+      const data = await chrome.storage.local.get(STORAGE_KEY_MUTATION_JOURNAL);
+      const entries = data[STORAGE_KEY_MUTATION_JOURNAL];
+      return Array.isArray(entries) ? entries : [];
+    } catch (_) {
+      return [];
+    }
+  }
+  async function _saveMutationJournal(entries) {
+    await chrome.storage.local.set({ [STORAGE_KEY_MUTATION_JOURNAL]: entries });
+  }
+  async function _openMutationJournal(op, label) {
+    const entry = {
+      id: _generateId(),
+      op,
+      label,
+      startedAt: Date.now()
+    };
+    try {
+      const entries = await _getMutationJournal();
+      const fresh = entries.filter(
+        (item) => Date.now() - Number(item?.startedAt || 0) < MUTATION_JOURNAL_MAX_AGE_MS
+      );
+      fresh.push(entry);
+      await _saveMutationJournal(fresh);
+      return entry.id;
+    } catch (_) {
+      return null;
+    }
+  }
+  async function _closeMutationJournal(entryId) {
+    if (!entryId) return;
+    try {
+      const entries = await _getMutationJournal();
+      await _saveMutationJournal(entries.filter((item) => item?.id !== entryId));
+    } catch (_) {
+    }
+  }
+  async function _reportInterruptedMutations() {
+    const entries = await _getMutationJournal();
+    if (entries.length === 0) return [];
+    const unreported = entries.filter((entry) => !entry?.reportedAt);
+    if (unreported.length > 0) {
+      try {
+        await chrome.notifications?.create?.(`mutation-incomplete-${unreported[0].id}`, {
+          type: "basic",
+          iconUrl: "images/icon128.png",
+          title: "An import did not finish",
+          message: unreported.length === 1 ? `${unreported[0].label || "An import"} was interrupted, so some scripts may not have been written. Re-run it to be sure.` : `${unreported.length} imports were interrupted and may be incomplete. Re-run them to be sure.`
+        });
+      } catch (_) {
+      }
+    }
+    try {
+      await _saveMutationJournal([]);
+    } catch (_) {
+    }
+    return unreported;
+  }
+  async function _reportInterruptedRestores() {
+    let receipts;
+    try {
+      receipts = await _getReceipts();
+    } catch (_) {
+      return [];
+    }
+    const interrupted = receipts.filter(
+      (receipt) => receipt?.status === "pending" && !receipt.rolledBackAt
+    );
+    if (interrupted.length === 0) return [];
+    const unreported = interrupted.filter((receipt) => !receipt.incompleteDetectedAt);
+    for (const receipt of unreported) {
+      try {
+        await _updateReceipt(receipt.id, { incompleteDetectedAt: Date.now() });
+      } catch (_) {
+      }
+    }
+    if (unreported.length > 0) {
+      const label = unreported[0]?.sourceLabel || "a backup";
+      try {
+        await chrome.notifications?.create?.(`restore-incomplete-${unreported[0].id}`, {
+          type: "basic",
+          iconUrl: "images/icon128.png",
+          title: "Restore may be incomplete",
+          message: unreported.length === 1 ? `Restoring ${label} was interrupted, so your scripts and settings may be a mix of old and new. Utilities \u2192 Restore history can roll it back.` : `${unreported.length} restores were interrupted and may be incomplete. Utilities \u2192 Restore history can roll them back.`
+        });
+      } catch (_) {
+      }
+    }
+    return interrupted;
+  }
+  async function _removeReceipt(receiptId) {
+    const receipts = await _getReceipts();
+    const next = receipts.filter((receipt) => receipt?.id !== receiptId);
+    if (next.length === receipts.length) return false;
+    await _saveReceipts(next);
+    return true;
+  }
   async function _updateReceipt(receiptId, patch) {
     const receipts = await _getReceipts();
     const idx = receipts.findIndex((receipt) => receipt?.id === receiptId);
@@ -622,6 +723,9 @@ const BackupScheduler = (() => {
       rollbackResult: receipt.rollbackResult || null,
       snapshotScriptCount: scriptsBefore.length,
       snapshotIdSetSize: Array.isArray(snapshot.scriptIdsBefore) ? snapshot.scriptIdsBefore.length : 0,
+      // A receipt written before `status` existed is a completed restore.
+      status: receipt.status === "pending" ? "pending" : "complete",
+      incomplete: receipt.status === "pending",
       hasGlobalSettings: snapshot.settings !== void 0,
       hasFolders: snapshot.folders !== void 0,
       hasWorkspaces: snapshot.workspaces !== void 0
@@ -761,6 +865,8 @@ const BackupScheduler = (() => {
       await _registerAlarms();
       _migrateBackupBlobsToIdb().then(() => _sweepOrphanedBackupBlobs()).catch(() => {
       });
+      await _reportInterruptedRestores().catch(() => []);
+      await _reportInterruptedMutations().catch(() => []);
       chrome.alarms.onAlarm.addListener(async (alarm) => {
         if (alarm.name === ALARM_NAME) {
           await BackupScheduler.createBackup("scheduled");
@@ -894,6 +1000,33 @@ const BackupScheduler = (() => {
         } catch (_) {
         }
       }
+      const pending = { receipt: null };
+      const beginMutations = async () => {
+        if (!recordReceipt || !snapshot || pending.receipt) return;
+        const receipt = {
+          id: _generateId(),
+          type: "restore",
+          source: "backup-restore",
+          sourceLabel,
+          timestamp: Date.now(),
+          startedAt: Date.now(),
+          status: "pending",
+          backupId,
+          backupTimestamp: backup.timestamp,
+          selective: !!options.selective,
+          result: null,
+          snapshot
+        };
+        try {
+          await _pushReceipt(receipt);
+          pending.receipt = receipt;
+        } catch (receiptErr) {
+          console.warn(
+            "[BackupScheduler] restoreBackup could not persist the pending receipt; this restore will not be undoable:",
+            receiptErr
+          );
+        }
+      };
       try {
         const backupData = backup.data ?? await _getBackupBlob(backup.id);
         if (!backupData) return { success: false, error: "Backup data not found" };
@@ -971,6 +1104,7 @@ const BackupScheduler = (() => {
             };
           }
           const selectiveZip = fflate.zipSync(selectedFiles, { level: 6 });
+          await beginMutations();
           const importResult = await importFromZip(
             _zipBytesToBase64(selectiveZip),
             {
@@ -993,6 +1127,7 @@ const BackupScheduler = (() => {
           }
         } else {
           try {
+            await beginMutations();
             const importResult = await importFromZip(backupData, {
               overwrite: true,
               recordReceipt: false,
@@ -1030,6 +1165,7 @@ const BackupScheduler = (() => {
               const settingsRestore = _prepareSettingsForRestore(restoredSettingsData, {
                 allowCredentials: options.importSettingsCredentials === true && settingsMetadata.settingsCredentialsIncluded === true
               });
+              await beginMutations();
               await SettingsManager.set(settingsRestore.settings);
               restoredSettings = true;
               settingsCredentialsRestored = settingsRestore.settingsCredentialsRestored;
@@ -1049,6 +1185,7 @@ const BackupScheduler = (() => {
                 "folders.json",
                 ARCHIVE_MAX_JSON_ENTRY_BYTES
               );
+              await beginMutations();
               await chrome.storage.local.set({ scriptFolders: folders });
               FolderStorage.cache = null;
               restoredFolders = true;
@@ -1067,6 +1204,7 @@ const BackupScheduler = (() => {
                 "workspaces.json",
                 ARCHIVE_MAX_JSON_ENTRY_BYTES
               );
+              await beginMutations();
               await chrome.storage.local.set({ workspaces });
               const workspaceManager = globalThis.WorkspaceManager;
               if (workspaceManager) {
@@ -1097,38 +1235,45 @@ const BackupScheduler = (() => {
           trustedEnabledScripts,
           errors
         };
-        if (recordReceipt && snapshot && (restoredScripts > 0 || restoredSettings || restoredFolders || restoredWorkspaces)) {
-          try {
-            let scriptIdsAfter = [];
+        const changedSomething = restoredScripts > 0 || restoredSettings || restoredFolders || restoredWorkspaces;
+        if (pending.receipt) {
+          const receiptId = pending.receipt.id;
+          if (!changedSomething && errors.length === 0) {
             try {
-              const after = await ScriptStorage.getAll();
-              scriptIdsAfter = after.map((script) => script.id).filter((id) => typeof id === "string");
-            } catch (_) {
+              await _removeReceipt(receiptId);
+            } catch (receiptErr) {
+              console.warn(
+                "[BackupScheduler] restoreBackup could not drop its no-op receipt:",
+                receiptErr
+              );
             }
-            const beforeSet = new Set(snapshot.scriptIdsBefore || []);
-            const addedScriptIds = scriptIdsAfter.filter((id) => !beforeSet.has(id));
-            const receipt = {
-              id: _generateId(),
-              type: "restore",
-              source: "backup-restore",
-              sourceLabel,
-              timestamp: Date.now(),
-              backupId,
-              backupTimestamp: backup.timestamp,
-              selective: !!options.selective,
-              result,
-              snapshot: {
-                ...snapshot,
-                addedScriptIds
+          } else {
+            try {
+              let scriptIdsAfter = [];
+              try {
+                const after = await ScriptStorage.getAll();
+                scriptIdsAfter = after.map((script) => script.id).filter((id) => typeof id === "string");
+              } catch (_) {
               }
-            };
-            await _pushReceipt(receipt);
-            result.receiptId = receipt.id;
-          } catch (receiptErr) {
-            console.warn(
-              "[BackupScheduler] restoreBackup failed to persist receipt:",
-              receiptErr
-            );
+              const beforeSet = new Set(snapshot?.scriptIdsBefore || []);
+              const addedScriptIds = scriptIdsAfter.filter((id) => !beforeSet.has(id));
+              await _updateReceipt(receiptId, {
+                status: "complete",
+                timestamp: Date.now(),
+                result,
+                snapshot: {
+                  ...snapshot,
+                  addedScriptIds
+                }
+              });
+              result.receiptId = receiptId;
+            } catch (receiptErr) {
+              console.warn(
+                "[BackupScheduler] restoreBackup failed to finalize receipt:",
+                receiptErr
+              );
+              result.receiptId = receiptId;
+            }
           }
         }
         return result;
@@ -1608,6 +1753,29 @@ const BackupScheduler = (() => {
     /**
      * List persisted restore/import receipts (metadata only, no snapshot blob).
      */
+    /**
+     * Bracket a library mutation whose undo snapshot cannot be written up front
+     * (the import paths, which accumulate it as they go). Returns an id to pass to
+     * `endLibraryMutation`, or null if the journal write failed.
+     */
+    async beginLibraryMutation(op, label) {
+      return _openMutationJournal(String(op || "mutation"), String(label || ""));
+    },
+    async endLibraryMutation(entryId) {
+      await _closeMutationJournal(entryId);
+    },
+    /** Journal entries left by an interrupted mutation, for tests and diagnostics. */
+    async listInterruptedMutations() {
+      return _getMutationJournal();
+    },
+    /**
+     * Receipts for restores that began and never finished. Callers use this to
+     * offer a rollback; init() also reports them once via a notification.
+     */
+    async listInterruptedRestores() {
+      const receipts = await _getReceipts();
+      return receipts.filter((receipt) => receipt?.status === "pending" && !receipt.rolledBackAt).map(_snapshotMeta).filter((meta) => !!meta);
+    },
     async listReceipts() {
       const receipts = await _getReceipts();
       return receipts.map(_snapshotMeta).filter((meta) => !!meta);

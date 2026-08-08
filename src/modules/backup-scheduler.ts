@@ -227,6 +227,21 @@ interface RestoreReceipt {
   selective?: boolean;
   result?: RestoreResult | Record<string, unknown> | null;
   snapshot: RestoreSnapshot;
+  /**
+   * Lifecycle of the restore this receipt describes.
+   *
+   * `pending` is written BEFORE the first mutation, so an MV3 service worker
+   * that dies part-way through a restore still leaves the snapshot — the only
+   * undo — on disk. A receipt still `pending` on the next scheduler init means
+   * the restore never finished and the data may be a mix of restored and
+   * pre-restore state. Absent means a receipt written before this field
+   * existed, which is treated as complete.
+   */
+  status?: 'pending' | 'complete';
+  /** When the mutation chain began (the pending write). */
+  startedAt?: number;
+  /** Set when a pending receipt is detected on a later service-worker start. */
+  incompleteDetectedAt?: number | null;
   rolledBackAt?: number | null;
   /**
    * When the last rollback was ATTEMPTED, successful or not. `rolledBackAt` is
@@ -254,6 +269,10 @@ interface RestoreReceiptMeta {
   hasGlobalSettings: boolean;
   hasFolders: boolean;
   hasWorkspaces: boolean;
+  /** `pending` means the restore never finished — see RestoreReceipt.status. */
+  status: 'pending' | 'complete';
+  /** True when a later service-worker start found this receipt still pending. */
+  incomplete: boolean;
 }
 
 interface VerifyIssue {
@@ -329,6 +348,19 @@ interface RollbackRestoreResult {
 const STORAGE_KEY_BACKUPS = 'autoBackups';
 const STORAGE_KEY_SETTINGS = 'backupSchedulerSettings';
 const STORAGE_KEY_RECEIPTS = 'restoreReceipts';
+/**
+ * Open library-mutation operations.
+ *
+ * Import paths build their undo snapshot incrementally as scripts are replaced,
+ * so unlike a restore they cannot write a complete receipt before mutating. This
+ * journal is the cheap half of the same protection: an entry is written before
+ * the first write and cleared after the last, so an MV3 service worker dying
+ * mid-import leaves evidence that the library is in a half-written state instead
+ * of nothing at all.
+ */
+const STORAGE_KEY_MUTATION_JOURNAL = 'libraryMutationJournal';
+/** Journal entries older than this are stale, not in flight. */
+const MUTATION_JOURNAL_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 const RECEIPT_RETENTION = 10;
 const RECEIPT_BYTE_BUDGET: number = 5 * 1024 * 1024; // ~5 MB across retained receipts
 const ALARM_NAME = 'sv_backup_scheduled';
@@ -1102,6 +1134,160 @@ async function _pushReceipt(receipt: RestoreReceipt): Promise<RestoreReceipt> {
   return receipt;
 }
 
+// ---------------------------------------------------------------------------
+// Library-mutation journal
+// ---------------------------------------------------------------------------
+
+interface MutationJournalEntry {
+  id: string;
+  op: string;
+  label: string;
+  startedAt: number;
+  reportedAt?: number | null;
+}
+
+async function _getMutationJournal(): Promise<MutationJournalEntry[]> {
+  try {
+    const data = await chrome.storage.local.get(STORAGE_KEY_MUTATION_JOURNAL);
+    const entries = data[STORAGE_KEY_MUTATION_JOURNAL];
+    return Array.isArray(entries) ? (entries as MutationJournalEntry[]) : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+async function _saveMutationJournal(entries: MutationJournalEntry[]): Promise<void> {
+  await chrome.storage.local.set({ [STORAGE_KEY_MUTATION_JOURNAL]: entries });
+}
+
+/**
+ * Record that a library mutation is starting. Returns the entry id to close it
+ * with, or null when the journal itself could not be written — the caller
+ * proceeds either way, since refusing to import because a bookkeeping write
+ * failed would be worse than the missing evidence.
+ */
+async function _openMutationJournal(op: string, label: string): Promise<string | null> {
+  const entry: MutationJournalEntry = {
+    id: _generateId(),
+    op,
+    label,
+    startedAt: Date.now(),
+  };
+  try {
+    const entries = await _getMutationJournal();
+    // Drop anything too old to be genuinely in flight so a crash long ago cannot
+    // grow this list without bound.
+    const fresh = entries.filter(
+      (item) => Date.now() - Number(item?.startedAt || 0) < MUTATION_JOURNAL_MAX_AGE_MS,
+    );
+    fresh.push(entry);
+    await _saveMutationJournal(fresh);
+    return entry.id;
+  } catch (_) {
+    return null;
+  }
+}
+
+/** Close a journal entry. Safe to call with null (the open failed). */
+async function _closeMutationJournal(entryId: string | null): Promise<void> {
+  if (!entryId) return;
+  try {
+    const entries = await _getMutationJournal();
+    await _saveMutationJournal(entries.filter((item) => item?.id !== entryId));
+  } catch (_) {
+    /* a stale entry is reported once and aged out; not worth failing over */
+  }
+}
+
+/**
+ * Report and clear journal entries left behind by an interrupted mutation.
+ * Unlike a pending restore receipt there is no snapshot to roll back to, so the
+ * message says what is known — the library may be half-written — rather than
+ * offering an undo that does not exist.
+ */
+async function _reportInterruptedMutations(): Promise<MutationJournalEntry[]> {
+  const entries = await _getMutationJournal();
+  if (entries.length === 0) return [];
+  const unreported = entries.filter((entry) => !entry?.reportedAt);
+  if (unreported.length > 0) {
+    try {
+      await chrome.notifications?.create?.(`mutation-incomplete-${unreported[0]!.id}`, {
+        type: 'basic',
+        iconUrl: 'images/icon128.png',
+        title: 'An import did not finish',
+        message: unreported.length === 1
+          ? `${unreported[0]!.label || 'An import'} was interrupted, so some scripts may not have been written. Re-run it to be sure.`
+          : `${unreported.length} imports were interrupted and may be incomplete. Re-run them to be sure.`,
+      });
+    } catch (_) {
+      /* notifications are optional */
+    }
+  }
+  // Clearing here is deliberate: the entry has served its purpose once reported,
+  // and keeping it would re-warn on every service-worker wake.
+  try {
+    await _saveMutationJournal([]);
+  } catch (_) {
+    /* best effort */
+  }
+  return unreported;
+}
+
+/**
+ * Surface any restore that began but never finished.
+ *
+ * Stamps `incompleteDetectedAt` so the notification fires once rather than on
+ * every service-worker wake, and leaves `status: 'pending'` in place so the
+ * dashboard keeps flagging it until the user rolls back or dismisses it.
+ */
+async function _reportInterruptedRestores(): Promise<RestoreReceipt[]> {
+  let receipts: RestoreReceipt[];
+  try {
+    receipts = await _getReceipts();
+  } catch (_) {
+    return [];
+  }
+  const interrupted = receipts.filter(
+    (receipt) => receipt?.status === 'pending' && !receipt.rolledBackAt,
+  );
+  if (interrupted.length === 0) return [];
+
+  const unreported = interrupted.filter((receipt) => !receipt.incompleteDetectedAt);
+  for (const receipt of unreported) {
+    try {
+      await _updateReceipt(receipt.id, { incompleteDetectedAt: Date.now() });
+    } catch (_) {
+      /* the notification below is still worth attempting */
+    }
+  }
+
+  if (unreported.length > 0) {
+    const label = unreported[0]?.sourceLabel || 'a backup';
+    try {
+      await chrome.notifications?.create?.(`restore-incomplete-${unreported[0]!.id}`, {
+        type: 'basic',
+        iconUrl: 'images/icon128.png',
+        title: 'Restore may be incomplete',
+        message: unreported.length === 1
+          ? `Restoring ${label} was interrupted, so your scripts and settings may be a mix of old and new. Utilities \u2192 Restore history can roll it back.`
+          : `${unreported.length} restores were interrupted and may be incomplete. Utilities \u2192 Restore history can roll them back.`,
+      });
+    } catch (_) {
+      /* notifications are optional */
+    }
+  }
+  return interrupted;
+}
+
+/** Drop one receipt from the ledger by id. */
+async function _removeReceipt(receiptId: string): Promise<boolean> {
+  const receipts = await _getReceipts();
+  const next = receipts.filter((receipt) => receipt?.id !== receiptId);
+  if (next.length === receipts.length) return false;
+  await _saveReceipts(next);
+  return true;
+}
+
 async function _updateReceipt(
   receiptId: string,
   patch: Partial<RestoreReceipt>,
@@ -1139,6 +1325,9 @@ function _snapshotMeta(receipt: RestoreReceipt | null): RestoreReceiptMeta | nul
     snapshotIdSetSize: Array.isArray(snapshot.scriptIdsBefore)
       ? snapshot.scriptIdsBefore.length
       : 0,
+    // A receipt written before `status` existed is a completed restore.
+    status: receipt.status === 'pending' ? 'pending' : 'complete',
+    incomplete: receipt.status === 'pending',
     hasGlobalSettings: snapshot.settings !== undefined,
     hasFolders: snapshot.folders !== undefined,
     hasWorkspaces: snapshot.workspaces !== undefined,
@@ -1334,6 +1523,16 @@ export const BackupScheduler = {
     _migrateBackupBlobsToIdb()
       .then(() => _sweepOrphanedBackupBlobs())
       .catch(() => { /* best-effort migration/sweep */ });
+    // A receipt still `pending` here means a restore was interrupted — an MV3
+    // worker can die at any await — so the data on disk is a mix of restored and
+    // pre-restore state. The snapshot is intact, so the undo is available; the
+    // user just has to be told it is worth taking.
+    // Awaited, not fire-and-forget: an interrupted restore is the one thing the
+    // user needs to hear about before they touch the library again, and it is
+    // two storage reads against a cold start that already awaits settings and
+    // alarm registration.
+    await _reportInterruptedRestores().catch(() => []);
+    await _reportInterruptedMutations().catch(() => []);
 
     // Listen for backup-related alarms
     chrome.alarms.onAlarm.addListener(async (alarm: chrome.alarms.Alarm) => {
@@ -1496,6 +1695,45 @@ export const BackupScheduler = {
       }
     }
 
+    // The receipt is persisted BEFORE the first mutation, marked `pending`, and
+    // finalized afterwards. Writing it last — as this did — meant an MV3 service
+    // worker dying at any await left mixed restored/pre-restore data with an
+    // empty receipts ledger, i.e. no undo, which is the exact failure the
+    // receipts feature exists to cover. Called at each mutation site and
+    // idempotent, so a restore that returns before mutating leaves nothing.
+    // Held in an object rather than a bare `let`: the only assignment happens
+    // inside beginMutations(), which the compiler cannot follow, so a plain
+    // variable would be narrowed to `null` at every later read.
+    const pending: { receipt: RestoreReceipt | null } = { receipt: null };
+    const beginMutations = async (): Promise<void> => {
+      if (!recordReceipt || !snapshot || pending.receipt) return;
+      const receipt: RestoreReceipt = {
+        id: _generateId(),
+        type: 'restore',
+        source: 'backup-restore',
+        sourceLabel,
+        timestamp: Date.now(),
+        startedAt: Date.now(),
+        status: 'pending',
+        backupId,
+        backupTimestamp: backup.timestamp,
+        selective: !!options.selective,
+        result: null,
+        snapshot,
+      };
+      try {
+        await _pushReceipt(receipt);
+        pending.receipt = receipt;
+      } catch (receiptErr: unknown) {
+        // A ledger write failure must not block the restore, but it does mean
+        // this run has no undo — say so rather than failing silently.
+        console.warn(
+          '[BackupScheduler] restoreBackup could not persist the pending receipt; this restore will not be undoable:',
+          receiptErr,
+        );
+      }
+    };
+
     try {
       const backupData = backup.data ?? await _getBackupBlob(backup.id);
       if (!backupData) return { success: false, error: 'Backup data not found' };
@@ -1596,6 +1834,7 @@ export const BackupScheduler = {
         }
 
         const selectiveZip = fflate.zipSync(selectedFiles, { level: 6 });
+        await beginMutations();
         const importResult = await importFromZip(
           _zipBytesToBase64(selectiveZip),
           {
@@ -1619,6 +1858,7 @@ export const BackupScheduler = {
       } else {
         // Full restore: use importFromZip for all scripts at once
         try {
+          await beginMutations();
           const importResult = await importFromZip(backupData, {
             overwrite: true,
             recordReceipt: false,
@@ -1661,6 +1901,7 @@ export const BackupScheduler = {
                 options.importSettingsCredentials === true &&
                 settingsMetadata.settingsCredentialsIncluded === true,
             });
+            await beginMutations();
             await SettingsManager.set(settingsRestore.settings as never);
             restoredSettings = true;
             settingsCredentialsRestored = settingsRestore.settingsCredentialsRestored;
@@ -1683,6 +1924,7 @@ export const BackupScheduler = {
               'folders.json',
               ARCHIVE_MAX_JSON_ENTRY_BYTES,
             );
+            await beginMutations();
             await chrome.storage.local.set({ scriptFolders: folders });
             FolderStorage.cache = null;
             restoredFolders = true;
@@ -1704,6 +1946,7 @@ export const BackupScheduler = {
               'workspaces.json',
               ARCHIVE_MAX_JSON_ENTRY_BYTES,
             );
+            await beginMutations();
             await chrome.storage.local.set({ workspaces });
             const workspaceManager = (globalThis as {
               WorkspaceManager?: { _cache?: unknown; _initPromise?: unknown };
@@ -1743,48 +1986,61 @@ export const BackupScheduler = {
         errors,
       };
 
-      if (
-        recordReceipt &&
-        snapshot &&
-        (restoredScripts > 0 ||
-          restoredSettings ||
-          restoredFolders ||
-          restoredWorkspaces)
-      ) {
-        try {
-          let scriptIdsAfter: string[] = [];
+      const changedSomething =
+        restoredScripts > 0 ||
+        restoredSettings ||
+        restoredFolders ||
+        restoredWorkspaces;
+
+      if (pending.receipt) {
+        const receiptId: string = pending.receipt.id;
+        // Only a genuine no-op is dropped. If the mutation phase reported
+        // errors, writes may have partially landed even though no counter moved,
+        // so the snapshot has to stay available for a rollback.
+        if (!changedSomething && errors.length === 0) {
+          // Nothing was written and nothing failed, so there is nothing to undo.
+          // Drop the pending row rather than leaving it to be reported as an
+          // incomplete restore on the next start.
           try {
-            const after = await ScriptStorage.getAll();
-            scriptIdsAfter = after
-              .map((script) => script.id)
-              .filter((id): id is string => typeof id === 'string');
-          } catch (_) {
-            /* empty */
+            await _removeReceipt(receiptId);
+          } catch (receiptErr: unknown) {
+            console.warn(
+              '[BackupScheduler] restoreBackup could not drop its no-op receipt:',
+              receiptErr,
+            );
           }
-          const beforeSet = new Set(snapshot.scriptIdsBefore || []);
-          const addedScriptIds = scriptIdsAfter.filter((id) => !beforeSet.has(id));
-          const receipt: RestoreReceipt = {
-            id: _generateId(),
-            type: 'restore',
-            source: 'backup-restore',
-            sourceLabel,
-            timestamp: Date.now(),
-            backupId,
-            backupTimestamp: backup.timestamp,
-            selective: !!options.selective,
-            result,
-            snapshot: {
-              ...snapshot,
-              addedScriptIds,
-            },
-          };
-          await _pushReceipt(receipt);
-          result.receiptId = receipt.id;
-        } catch (receiptErr: unknown) {
-          console.warn(
-            '[BackupScheduler] restoreBackup failed to persist receipt:',
-            receiptErr,
-          );
+        } else {
+          try {
+            let scriptIdsAfter: string[] = [];
+            try {
+              const after = await ScriptStorage.getAll();
+              scriptIdsAfter = after
+                .map((script) => script.id)
+                .filter((id): id is string => typeof id === 'string');
+            } catch (_) {
+              /* empty */
+            }
+            const beforeSet = new Set(snapshot?.scriptIdsBefore || []);
+            const addedScriptIds = scriptIdsAfter.filter((id) => !beforeSet.has(id));
+            await _updateReceipt(receiptId, {
+              status: 'complete',
+              timestamp: Date.now(),
+              result,
+              snapshot: {
+                ...(snapshot as RestoreSnapshot),
+                addedScriptIds,
+              },
+            });
+            result.receiptId = receiptId;
+          } catch (receiptErr: unknown) {
+            // The pending row is still on disk with the pre-restore snapshot, so
+            // undo remains possible; only the completion metadata is missing.
+            console.warn(
+              '[BackupScheduler] restoreBackup failed to finalize receipt:',
+              receiptErr,
+            );
+            result.receiptId = receiptId;
+          }
         }
       }
 
@@ -2358,6 +2614,36 @@ export const BackupScheduler = {
   /**
    * List persisted restore/import receipts (metadata only, no snapshot blob).
    */
+  /**
+   * Bracket a library mutation whose undo snapshot cannot be written up front
+   * (the import paths, which accumulate it as they go). Returns an id to pass to
+   * `endLibraryMutation`, or null if the journal write failed.
+   */
+  async beginLibraryMutation(op: string, label: string): Promise<string | null> {
+    return _openMutationJournal(String(op || 'mutation'), String(label || ''));
+  },
+
+  async endLibraryMutation(entryId: string | null): Promise<void> {
+    await _closeMutationJournal(entryId);
+  },
+
+  /** Journal entries left by an interrupted mutation, for tests and diagnostics. */
+  async listInterruptedMutations(): Promise<MutationJournalEntry[]> {
+    return _getMutationJournal();
+  },
+
+  /**
+   * Receipts for restores that began and never finished. Callers use this to
+   * offer a rollback; init() also reports them once via a notification.
+   */
+  async listInterruptedRestores(): Promise<RestoreReceiptMeta[]> {
+    const receipts = await _getReceipts();
+    return receipts
+      .filter((receipt) => receipt?.status === 'pending' && !receipt.rolledBackAt)
+      .map(_snapshotMeta)
+      .filter((meta): meta is RestoreReceiptMeta => !!meta);
+  },
+
   async listReceipts(): Promise<RestoreReceiptMeta[]> {
     const receipts = await _getReceipts();
     return receipts.map(_snapshotMeta).filter((meta): meta is RestoreReceiptMeta => !!meta);

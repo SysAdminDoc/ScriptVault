@@ -119,8 +119,19 @@ function createHarness(existingScripts = [], existingValues = {}) {
   const registerAllScripts = vi.fn().mockResolvedValue();
   const updateBadge = vi.fn().mockResolvedValue();
   const generateId = vi.fn(() => `generated_script_${generatedIdCounter++}`);
+  // The import paths bracket their writes with the library-mutation journal:
+  // their undo snapshot accumulates during the loop, so a receipt cannot be
+  // written complete before mutating. Track the bracket so the tests can assert
+  // it opens before the first write and closes after the last.
+  const journal = { open: [], closed: [] };
   const BackupScheduler = {
     recordReceipt: vi.fn(async receipt => ({ id: `receipt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, ...receipt })),
+    beginLibraryMutation: vi.fn(async (op, label) => {
+      const id = `journal_${journal.open.length}`;
+      journal.open.push({ id, op, label });
+      return id;
+    }),
+    endLibraryMutation: vi.fn(async (id) => { journal.closed.push(id); }),
   };
 
   const _body = `${extractRuntimeImportExportCode()}; return { exportToZip, importFromZip, importScripts };`;
@@ -130,6 +141,8 @@ function createHarness(existingScripts = [], existingValues = {}) {
   return {
     ...fn(fakeFflate, ScriptStorage, ScriptValues, SettingsManager, registerAllScripts, updateBadge, generateId, BackupScheduler),
     fakeFflate,
+    BackupScheduler,
+    journal,
     ScriptStorage,
     ScriptValues,
     scriptCache,
@@ -308,5 +321,100 @@ describe('importFromZip overwrite snapshotting', () => {
 
     await harness.importFromZip(bytesToBase64(zipBytes), { overwrite: true, recordReceipt: false });
     expect(harness.BackupScheduler.recordReceipt).not.toHaveBeenCalled();
+  });
+});
+
+// An import's undo snapshot is built AS scripts are replaced, so unlike a restore
+// it cannot be written complete before the first write. The journal is the cheap
+// half of the same protection: an MV3 worker dying mid-import must leave evidence
+// the library is half-written rather than nothing at all.
+describe('the import paths journal their writes', () => {
+  function zipFor(harness, name, id) {
+    const code = [
+      '// ==UserScript==',
+      `// @name ${name}`,
+      '// @namespace scriptvault/journal',
+      '// @version 1.0.0',
+      '// @match https://example.com/*',
+      '// ==/UserScript==',
+      'console.log("journal");',
+    ].join('\n');
+    return harness.fakeFflate.zipSync({
+      [`${name}.user.js`]: harness.fakeFflate.strToU8(code),
+      [`${name}.options.json`]: harness.fakeFflate.strToU8(JSON.stringify({
+        scriptId: id,
+        settings: { enabled: true },
+      })),
+    });
+  }
+
+  it('opens the journal before the first write and closes it after the last (ZIP)', async () => {
+    const harness = createHarness([]);
+    const order = [];
+    harness.BackupScheduler.beginLibraryMutation.mockImplementation(async (op) => {
+      order.push(`begin:${op}`);
+      return 'journal_zip';
+    });
+    harness.BackupScheduler.endLibraryMutation.mockImplementation(async (id) => {
+      order.push(`end:${id}`);
+    });
+    const originalSet = harness.ScriptStorage.set.getMockImplementation();
+    harness.ScriptStorage.set.mockImplementation(async (...args) => {
+      order.push('write');
+      return originalSet?.(...args);
+    });
+
+    await harness.importFromZip(bytesToBase64(zipFor(harness, 'Journalled', 'script_j1')), { overwrite: true });
+
+    expect(order[0]).toBe('begin:import-zip');
+    expect(order).toContain('write');
+    expect(order[order.length - 1]).toBe('end:journal_zip');
+    // Every write is inside the bracket.
+    expect(order.indexOf('write')).toBeGreaterThan(0);
+    expect(order.lastIndexOf('write')).toBeLessThan(order.length - 1);
+  });
+
+  it('opens and closes the journal for a JSON import', async () => {
+    const harness = createHarness([]);
+    await harness.importScripts({
+      scripts: [{
+        code: [
+          '// ==UserScript==',
+          '// @name JsonJournal',
+          '// @namespace scriptvault/journal',
+          '// @version 1.0.0',
+          '// @match https://example.com/*',
+          '// ==/UserScript==',
+          'console.log("json");',
+        ].join('\n'),
+        enabled: true,
+      }],
+    }, { overwrite: true });
+
+    expect(harness.journal.open.map((entry) => entry.op)).toEqual(['import-json']);
+    expect(harness.journal.closed).toEqual(harness.journal.open.map((entry) => entry.id));
+  });
+
+  it('closes the journal even when the ZIP import throws', async () => {
+    const harness = createHarness([]);
+    // An unparseable archive throws inside the try, hitting the finally.
+    await harness.importFromZip('not-a-zip', { overwrite: true });
+
+    expect(harness.journal.open).toHaveLength(1);
+    // A thrown import is a finished attempt, not an interrupted one — the caller
+    // gets the error, so the entry must not be left behind to warn about.
+    expect(harness.journal.closed).toEqual([harness.journal.open[0].id]);
+  });
+
+  it('imports fine against a BackupScheduler with no journal support', async () => {
+    const harness = createHarness([]);
+    delete harness.BackupScheduler.beginLibraryMutation;
+    delete harness.BackupScheduler.endLibraryMutation;
+
+    const result = await harness.importFromZip(
+      bytesToBase64(zipFor(harness, 'NoJournal', 'script_nj')),
+      { overwrite: true },
+    );
+    expect(result.imported).toBe(1);
   });
 });

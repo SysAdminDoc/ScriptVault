@@ -867,16 +867,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
 
 ### P2
 
-- [ ] P2 — Restore/import persist their undo receipt only AFTER all mutations, so a service-worker death mid-restore leaves half-restored state with no rollback record
-  Category: correctness
-  Where: `src/modules/backup-scheduler.ts:1484-1491,1740-1783` (`restoreBackup`); `src/background/core.ts:5353,5497-5533,5853-5889` (`importScripts`/`importFromZip`)
-  Problem: `restoreBackup` snapshots pre-restore state in memory, runs the full mutation chain (`importFromZip` → N IDB writes → settings → folders → workspaces), and calls `_pushReceipt` only at the very end. An MV3 SW can die at any await; on restart the user has mixed restored/pre-restore data and the receipts ledger — the only undo — holds nothing. This is exactly the multi-key-write / SW-died-between-A-and-B class the receipts feature exists to protect against.
-  Evidence: Verified — traced `restoreBackup` end to end; receipt push is the last step.
-  Fix: Persist the receipt (with snapshot) BEFORE the first mutation, marked `pending`, and finalize afterward; on scheduler init surface any still-`pending` receipt as "restore may be incomplete — roll back?". Cheap alt: a `restoreInProgress` journal key written before mutating.
-  Acceptance: Killing the SW mid-restore leaves a recoverable receipt; a failure-injection test asserts a receipt exists before mutations begin.
-  Confidence: Verified
-  Effort: M
-
 - [ ] P2 — Custom themes and extra presets apply only to the dashboard; popup, side panel, install, and DevTools ignore them
   Category: visual
   Where: `pages/dashboard-theme-editor.js` persists `sv_active_custom_theme`; only `pages/dashboard.js:5667-5695` reads it. `pages/popup.js:709-713`, `pages/sidepanel.js:503-507`, `pages/install.js:786-791`, `pages/devtools-panel.js:295-302` set `data-theme` from `settings.layout` only and never read `sv_active_custom_theme`

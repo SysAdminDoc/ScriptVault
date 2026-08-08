@@ -435,3 +435,262 @@ describe('recordReceipt + retention', () => {
     expect(await BackupScheduler.listReceipts()).toEqual([]);
   });
 });
+
+// A restore's receipt is the ONLY undo. It used to be written after the whole
+// mutation chain, so an MV3 service worker dying at any await left mixed
+// restored/pre-restore data and an empty ledger. What follows tests the on-disk
+// state DURING the mutation window, plus the recovery path for a receipt found
+// still pending on a later start.
+//
+// Note on simulating the death: a thrown importFromZip is a HANDLED failure —
+// restoreBackup returns and finalizes. A real interruption is the function never
+// returning, so the honest tests are (a) inspect storage while a mutation is
+// in flight, and (b) seed a pending receipt and drive the recovery.
+describe('an interrupted restore leaves a recoverable receipt', () => {
+  async function readReceipts() {
+    const data = await chrome.storage.local.get('restoreReceipts');
+    // Deep-clone: the storage mock hands back live references, so a later
+    // finalize would retroactively "fix" anything captured by reference.
+    return structuredClone(data.restoreReceipts || []);
+  }
+
+  it('persists the receipt with its snapshot BEFORE the first mutation', async () => {
+    let receiptsAtFirstWrite = null;
+    const harness = createSchedulerHarness({
+      scripts: [makeScript('s1', 'Original')],
+      importFromZipImpl: async () => {
+        receiptsAtFirstWrite = await readReceipts();
+        return { imported: 1, skipped: 0, errors: [] };
+      },
+    });
+    const created = await harness.BackupScheduler.createBackup('manual');
+    expect(created.success).toBe(true);
+
+    await harness.BackupScheduler.restoreBackup(created.backupId ?? created.id);
+
+    expect(receiptsAtFirstWrite).toHaveLength(1);
+    expect(receiptsAtFirstWrite[0].status).toBe('pending');
+    // The snapshot — the thing that makes undo possible — is already on disk.
+    expect(receiptsAtFirstWrite[0].snapshot.scriptsBefore.map((x) => x.id)).toEqual(['s1']);
+    expect(typeof receiptsAtFirstWrite[0].startedAt).toBe('number');
+  });
+
+  it('holds the pending receipt for the whole mutation window', async () => {
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    let duringWindow = null;
+
+    const harness = createSchedulerHarness({
+      scripts: [makeScript('s1', 'Original')],
+      importFromZipImpl: async () => {
+        // The worker could die anywhere in here.
+        duringWindow = await readReceipts();
+        await gate;
+        return { imported: 1, skipped: 0, errors: [] };
+      },
+    });
+    const created = await harness.BackupScheduler.createBackup('manual');
+    const inFlight = harness.BackupScheduler.restoreBackup(created.backupId ?? created.id);
+
+    // Let the importer reach the gate, then inspect what a restart would find.
+    await new Promise((r) => setTimeout(r, 0));
+    const interruptedNow = await harness.BackupScheduler.listInterruptedRestores();
+    expect(interruptedNow).toHaveLength(1);
+    expect(interruptedNow[0].status).toBe('pending');
+    expect(interruptedNow[0].snapshotScriptCount).toBe(1);
+
+    release();
+    await inFlight;
+    expect(duringWindow[0].status).toBe('pending');
+  });
+
+  it('finalizes the receipt to complete when the restore finishes', async () => {
+    const harness = createSchedulerHarness({ scripts: [makeScript('s1', 'Original')] });
+    const created = await harness.BackupScheduler.createBackup('manual');
+
+    const result = await harness.BackupScheduler.restoreBackup(created.backupId ?? created.id);
+    expect(result.receiptId).toBeTruthy();
+
+    const receipts = await harness.BackupScheduler.listReceipts();
+    expect(receipts).toHaveLength(1);
+    expect(receipts[0].status).toBe('complete');
+    expect(receipts[0].incomplete).toBe(false);
+    await expect(harness.BackupScheduler.listInterruptedRestores()).resolves.toEqual([]);
+  });
+
+  // A selective restore whose selection matches nothing returns before touching
+  // anything, so beginMutations() is never reached and no row is written at all.
+  it('writes no receipt when a selective restore never reaches a mutation', async () => {
+    const harness = createSchedulerHarness({
+      scripts: [makeScript('s1', 'Original')],
+      importFromZipImpl: async () => {
+        throw new Error('must not be called: nothing was selected');
+      },
+    });
+    const created = await harness.BackupScheduler.createBackup('manual');
+
+    const result = await harness.BackupScheduler.restoreBackup(created.backupId ?? created.id, {
+      selective: true,
+      scriptIds: ['does-not-exist'],
+    });
+    expect(result.restoredScripts).toBe(0);
+
+    await expect(harness.BackupScheduler.listInterruptedRestores()).resolves.toEqual([]);
+    await expect(harness.BackupScheduler.listReceipts()).resolves.toEqual([]);
+    expect(harness.importFromZip).not.toHaveBeenCalled();
+  });
+
+  // A settings-only restore mutates too, so it must still be undoable.
+  it('records a receipt for a restore that only replaced global settings', async () => {
+    const harness = createSchedulerHarness({
+      scripts: [makeScript('s1', 'Original')],
+      importFromZipImpl: async () => ({ imported: 0, skipped: 0, errors: [] }),
+    });
+    const created = await harness.BackupScheduler.createBackup('manual');
+
+    const result = await harness.BackupScheduler.restoreBackup(created.backupId ?? created.id);
+    expect(result.restoredSettings).toBe(true);
+    expect(result.receiptId).toBeTruthy();
+
+    const receipts = await harness.BackupScheduler.listReceipts();
+    expect(receipts).toHaveLength(1);
+    expect(receipts[0].status).toBe('complete');
+  });
+
+  it('keeps the snapshot when the mutation phase errored, even with no counter moved', async () => {
+    const harness = createSchedulerHarness({
+      scripts: [makeScript('s1', 'Original')],
+      importFromZipImpl: async () => {
+        // Writes may have partially landed before this: "nothing counted" is not
+        // the same as "nothing happened".
+        throw new Error('import blew up part-way');
+      },
+    });
+    const created = await harness.BackupScheduler.createBackup('manual');
+
+    await harness.BackupScheduler.restoreBackup(created.backupId ?? created.id);
+
+    const receipts = await harness.BackupScheduler.listReceipts();
+    expect(receipts).toHaveLength(1);
+    expect(receipts[0].snapshotScriptCount).toBe(1);
+  });
+});
+
+describe('recovering a restore that never returned', () => {
+  function seedPendingReceipt(overrides = {}) {
+    const receipt = {
+      id: 'receipt_pending_1',
+      type: 'restore',
+      source: 'backup-restore',
+      sourceLabel: 'Backup 2026-08-08T00:00:00.000Z',
+      timestamp: Date.now(),
+      startedAt: Date.now(),
+      status: 'pending',
+      backupId: 'backup_1',
+      selective: false,
+      result: null,
+      snapshot: {
+        scriptsBefore: [makeScript('s1', 'Pre-restore')],
+        valuesBefore: {},
+        scriptIdsBefore: ['s1'],
+      },
+      ...overrides,
+    };
+    return chrome.storage.local.set({ restoreReceipts: [receipt] });
+  }
+
+  it('reports it once on init, not on every worker wake', async () => {
+    await seedPendingReceipt();
+    const notify = vi.fn();
+    const previous = chrome.notifications?.create;
+    chrome.notifications = { ...(chrome.notifications || {}), create: notify };
+    try {
+      await createSchedulerHarness({ scripts: [] }).BackupScheduler.init();
+      // A second start must stay quiet — the entry is stamped as reported.
+      await createSchedulerHarness({ scripts: [] }).BackupScheduler.init();
+      expect(notify).toHaveBeenCalledTimes(1);
+      expect(String(notify.mock.calls[0][1]?.title)).toContain('incomplete');
+    } finally {
+      if (previous) chrome.notifications.create = previous;
+    }
+  });
+
+  it('keeps flagging it until it is rolled back', async () => {
+    await seedPendingReceipt();
+    const harness = createSchedulerHarness({ scripts: [] });
+    await harness.BackupScheduler.init();
+
+    const interrupted = await harness.BackupScheduler.listInterruptedRestores();
+    expect(interrupted).toHaveLength(1);
+    expect(interrupted[0].incomplete).toBe(true);
+  });
+
+  it('rolls the half-written library back from the pending snapshot', async () => {
+    await seedPendingReceipt();
+    // The library is mid-restore: the pre-restore copy has been clobbered.
+    const harness = createSchedulerHarness({
+      scripts: [{ ...makeScript('s1', 'Clobbered'), code: '// clobbered' }],
+    });
+
+    const rolledBack = await harness.BackupScheduler.rollbackRestoreReceipt('receipt_pending_1');
+    expect(rolledBack?.success).not.toBe(false);
+    expect(harness.store.get('s1').code).not.toBe('// clobbered');
+
+    // Rolled back, so it is no longer offered.
+    await expect(harness.BackupScheduler.listInterruptedRestores()).resolves.toEqual([]);
+  });
+});
+
+describe('the library-mutation journal covers the import paths', () => {
+  it('records an open mutation and clears it when it closes', async () => {
+    const harness = createSchedulerHarness({ scripts: [] });
+
+    const id = await harness.BackupScheduler.beginLibraryMutation('import-json', 'JSON import');
+    expect(id).toBeTruthy();
+    let open = await harness.BackupScheduler.listInterruptedMutations();
+    expect(open).toHaveLength(1);
+    expect(open[0]).toMatchObject({ op: 'import-json', label: 'JSON import' });
+
+    await harness.BackupScheduler.endLibraryMutation(id);
+    open = await harness.BackupScheduler.listInterruptedMutations();
+    expect(open).toEqual([]);
+  });
+
+  it('reports a journal entry left behind, then clears it so it warns once', async () => {
+    const opener = createSchedulerHarness({ scripts: [] });
+    await opener.BackupScheduler.beginLibraryMutation('import-zip', 'ZIP import (overwrite)');
+
+    const notify = vi.fn();
+    const previous = chrome.notifications?.create;
+    chrome.notifications = { ...(chrome.notifications || {}), create: notify };
+    try {
+      // A fresh scheduler stands in for the next service-worker start.
+      await createSchedulerHarness({ scripts: [] }).BackupScheduler.init();
+      expect(notify).toHaveBeenCalledTimes(1);
+      expect(String(notify.mock.calls[0][1]?.title)).toContain('did not finish');
+    } finally {
+      if (previous) chrome.notifications.create = previous;
+    }
+
+    await expect(opener.BackupScheduler.listInterruptedMutations()).resolves.toEqual([]);
+  });
+
+  it('ages out an entry too old to be genuinely in flight', async () => {
+    await chrome.storage.local.set({
+      libraryMutationJournal: [
+        { id: 'stale', op: 'import-json', label: 'old', startedAt: Date.now() - (7 * 60 * 60 * 1000) },
+      ],
+    });
+    const harness = createSchedulerHarness({ scripts: [] });
+    const id = await harness.BackupScheduler.beginLibraryMutation('import-json', 'new one');
+
+    const open = await harness.BackupScheduler.listInterruptedMutations();
+    expect(open.map((entry) => entry.id)).toEqual([id]);
+  });
+
+  it('tolerates closing an entry that was never opened', async () => {
+    const harness = createSchedulerHarness({ scripts: [] });
+    await expect(harness.BackupScheduler.endLibraryMutation(null)).resolves.toBeUndefined();
+    await expect(harness.BackupScheduler.endLibraryMutation('nope')).resolves.toBeUndefined();
+  });
+});

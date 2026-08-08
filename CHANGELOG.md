@@ -2,6 +2,24 @@
 
 All notable changes to ScriptVault will be documented in this file.
 
+## [Unreleased]
+
+- **An interrupted restore left mixed data and no way back.** `restoreBackup`
+  snapshotted the pre-restore state in memory, ran the whole mutation chain
+  (import → N database writes → settings → folders → workspaces), and wrote its
+  receipt only at the very end. An MV3 service worker can be torn down at any
+  `await`, so a restore killed part-way left the library half-restored with an
+  empty receipts ledger — no undo at all, which is the exact failure the receipts
+  feature exists to cover. The receipt is now written **before the first
+  mutation**, marked `pending`, and finalized afterwards; a receipt still pending
+  on a later start is reported once and stays offered for rollback until taken.
+  A restore whose mutation phase errored keeps its snapshot even when no counter
+  moved, because "nothing counted" is not "nothing happened".
+- The JSON and ZIP import paths build their undo snapshot *as* scripts are
+  replaced, so they cannot write a complete receipt up front. They now bracket
+  their writes with a library-mutation journal instead, so an import killed
+  mid-loop leaves evidence the library is half-written rather than nothing at all.
+
 ## [v3.26.0] — Enforced permissions, reviewed sync & honest freshness (2026-08-08)
 
 - **Any `GM_xmlhttpRequest` longer than 30 s silently never called back, and a

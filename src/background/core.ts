@@ -5489,6 +5489,14 @@ async function importScripts(data: any, options: any = {}) {
   const replacedSnapshots = [];
   const valuesSnapshots: any = {};
 
+  // An import's undo snapshot is built AS scripts are replaced, so unlike a
+  // restore it cannot be written complete before the first write. Journal the
+  // operation instead: an MV3 worker dying mid-loop then leaves evidence that
+  // the library is half-written rather than nothing at all.
+  const mutationJournalId = typeof BackupScheduler !== 'undefined' && typeof BackupScheduler?.beginLibraryMutation === 'function'
+    ? await BackupScheduler.beginLibraryMutation('import-json', sourceLabel || 'JSON import').catch(() => null)
+    : null;
+
   for (const script of data.scripts) {
     const rawScriptId = script && typeof script === 'object' ? script.id : undefined;
     const requestedScriptId = isSafeImportedScriptId(rawScriptId) ? rawScriptId : '';
@@ -5668,6 +5676,12 @@ async function importScripts(data: any, options: any = {}) {
     }
   }
 
+  // Closed only once every write has landed, so a surviving entry means the run
+  // did not reach here.
+  if (mutationJournalId && typeof BackupScheduler !== 'undefined' && typeof BackupScheduler?.endLibraryMutation === 'function') {
+    await BackupScheduler.endLibraryMutation(mutationJournalId).catch(() => {});
+  }
+
   return results;
 }
 
@@ -5773,6 +5787,11 @@ async function importFromZip(zipData: any, options: any = {}) {
   // Pre-import snapshot for replaced scripts so the import is reversible.
   const replacedSnapshots = [];
   const valuesSnapshots: any = {};
+  // See importScripts: the snapshot accumulates during the loop, so the journal
+  // is what marks the library as mid-write.
+  const mutationJournalId = typeof BackupScheduler !== 'undefined' && typeof BackupScheduler?.beginLibraryMutation === 'function'
+    ? await BackupScheduler.beginLibraryMutation('import-zip', sourceLabel).catch(() => null)
+    : null;
 
   try {
     const unzipped = unzipArchiveBounded(zipData);
@@ -6028,6 +6047,12 @@ async function importFromZip(zipData: any, options: any = {}) {
   } catch (e: any) {
     console.error('[ScriptVault] importFromZip error:', e);
     return { ...results, error: e.message };
+  } finally {
+    // A thrown import is a FINISHED attempt, not an interrupted one — the caller
+    // gets the error. Only a process that never returns leaves the entry behind.
+    if (mutationJournalId && typeof BackupScheduler !== 'undefined' && typeof BackupScheduler?.endLibraryMutation === 'function') {
+      await BackupScheduler.endLibraryMutation(mutationJournalId).catch(() => {});
+    }
   }
 }
 
