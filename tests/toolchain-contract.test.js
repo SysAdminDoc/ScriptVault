@@ -20,19 +20,20 @@ function makeFixture({ nodeVersion = '24.16.0', runbookNodeVersion = '24.16.0' }
   writeFileSync(resolve(root, '.npmrc'), 'engine-strict=true\n');
   writeFileSync(resolve(root, 'CONTRIBUTING.md'), 'Install the Node.js version in `.node-version` (currently 24.16.0) with npm 11.13.0 or newer.\n');
   writeFileSync(resolve(root, 'docs/release-runbook.md'), `ScriptVault itself requires Node ${runbookNodeVersion}+ / npm 11.13.0+.\n`);
+  writeFileSync(resolve(root, 'AMO-SOURCE-README.md'), 'Reviewer baseline: Node.js **24.14.0** with **npm 11.9.0**.\n');
   writeFileSync(resolve(root, 'package.json'), JSON.stringify({
     packageManager: 'npm@11.13.0',
     engines: {
-      node: '>=24.16.0',
-      npm: '>=11.13.0',
+      node: '>=24.14.0',
+      npm: '>=11.9.0',
     },
   }, null, 2));
   writeFileSync(resolve(root, 'package-lock.json'), JSON.stringify({
     packages: {
       '': {
         engines: {
-          node: '>=24.16.0',
-          npm: '>=11.13.0',
+          node: '>=24.14.0',
+          npm: '>=11.9.0',
         },
       },
     },

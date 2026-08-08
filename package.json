@@ -10,14 +10,15 @@
   "type": "module",
   "packageManager": "npm@11.13.0",
   "engines": {
-    "node": ">=24.16.0",
-    "npm": ">=11.13.0"
+    "node": ">=24.14.0",
+    "npm": ">=11.9.0"
   },
   "scripts": {
     "build": "node esbuild.config.mjs",
     "build:bg": "node esbuild.config.mjs --bg-only",
     "build:monaco": "node esbuild.config.mjs --monaco-esm-only",
     "build:firefox": "node scripts/run-bash.mjs build-firefox.sh",
+    "build-for-amo": "npm run firefox:package -- --no-source-zip",
     "firefox:lint": "node scripts/run-bash.mjs build-firefox.sh --lint --keep-build --no-source-zip --prepare-only",
     "firefox:package": "node scripts/run-bash.mjs build-firefox.sh --lint",
     "firefox:warnings": "node scripts/check-firefox-lint-warnings.mjs",

@@ -5,8 +5,10 @@ import { fileURLToPath } from 'node:url';
 
 const NODE_VERSION = '24.16.0';
 const NPM_VERSION = '11.13.0';
-const NODE_ENGINE = `>=${NODE_VERSION}`;
-const NPM_ENGINE = `>=${NPM_VERSION}`;
+const AMO_NODE_VERSION = '24.14.0';
+const AMO_NPM_VERSION = '11.9.0';
+const NODE_ENGINE = `>=${AMO_NODE_VERSION}`;
+const NPM_ENGINE = `>=${AMO_NPM_VERSION}`;
 const PACKAGE_MANAGER = `npm@${NPM_VERSION}`;
 
 function readText(path) {
@@ -38,8 +40,9 @@ export function analyzeToolchainContract({ rootDir = process.cwd() } = {}) {
   const npmrcPath = resolve(rootDir, '.npmrc');
   const contributingPath = resolve(rootDir, 'CONTRIBUTING.md');
   const runbookPath = resolve(rootDir, 'docs/release-runbook.md');
+  const amoSourceReadmePath = resolve(rootDir, 'AMO-SOURCE-README.md');
 
-  for (const path of [packageJsonPath, packageLockPath, nodeVersionPath, nvmrcPath, npmrcPath]) {
+  for (const path of [packageJsonPath, packageLockPath, nodeVersionPath, nvmrcPath, npmrcPath, amoSourceReadmePath]) {
     if (!existsSync(path)) {
       errors.push(`Missing required toolchain file: ${path}`);
     }
@@ -55,6 +58,7 @@ export function analyzeToolchainContract({ rootDir = process.cwd() } = {}) {
   const npmrc = readText(npmrcPath);
   const contributing = existsSync(contributingPath) ? readText(contributingPath) : '';
   const runbook = existsSync(runbookPath) ? readText(runbookPath) : '';
+  const amoSourceReadme = readText(amoSourceReadmePath);
 
   assertEqual(errors, '.node-version', readText(nodeVersionPath), NODE_VERSION);
   assertEqual(errors, '.nvmrc', readText(nvmrcPath), NODE_VERSION);
@@ -70,18 +74,21 @@ export function analyzeToolchainContract({ rootDir = process.cwd() } = {}) {
   assertContains(errors, '.npmrc', npmrc, 'min-release-age=7');
   assertContains(errors, 'CONTRIBUTING.md', contributing, `Node.js version in \`.node-version\` (currently ${NODE_VERSION})`);
   assertContains(errors, 'docs/release-runbook.md', runbook, `Node ${NODE_VERSION}+ / npm ${NPM_VERSION}+`);
+  assertContains(errors, 'AMO-SOURCE-README.md', amoSourceReadme, `Node.js **${AMO_NODE_VERSION}** with **npm ${AMO_NPM_VERSION}**`);
 
   return {
     ok: errors.length === 0,
     errors,
     nodeVersion: NODE_VERSION,
     npmVersion: NPM_VERSION,
+    amoNodeVersion: AMO_NODE_VERSION,
+    amoNpmVersion: AMO_NPM_VERSION,
   };
 }
 
 export function formatToolchainReport(report) {
   if (report.ok) {
-    return `[toolchain] OK: Node ${report.nodeVersion}+ and npm ${report.npmVersion}+ contract is aligned.`;
+    return `[toolchain] OK: developer Node ${report.nodeVersion}+ / npm ${report.npmVersion}+ and AMO reviewer Node ${report.amoNodeVersion}+ / npm ${report.amoNpmVersion}+ floors are aligned.`;
   }
 
   return [

@@ -13,6 +13,9 @@ All notable changes to ScriptVault will be documented in this file.
 - Required enterprise-managed scripts to carry a verifiable integrity pin or
   trusted Ed25519 signature before installation, with aggregate verification
   outcomes in the local health report.
+- Added the `build-for-amo` source-review command, aligned the declared engine
+  floor with the AMO reviewer baseline, and kept the secure developer pin
+  separate from reviewer compatibility.
 - Added a bounded local-file metadata polling fallback with explicit watcher
   health when FileSystemObserver is unavailable or reports an unknown/error
   state; only the active editor polls and changes still go through review.

@@ -19,9 +19,10 @@ Official references used for this checklist:
 
 Required tools:
 
-- Node.js **24.16.0** with **npm 11.13.0** (pinned in `.node-version` and
-  `package.json` `engines`). Use `npm ci` so dependency versions match the
-  committed `package-lock.json`.
+- Node.js **24.14.0** with **npm 11.9.0** (the AMO reviewer baseline accepted
+  by `package.json` `engines`). The repository's developer pin remains
+  Node.js 24.16.0 / npm 11.13.0 in `.node-version`; use `npm ci` so dependency
+  versions match the committed `package-lock.json`.
 - `bash` for `build-firefox.sh`. On Windows, the repo wrapper prefers Git Bash.
 - Network access to npm's official registry for dependency installation.
 
@@ -29,16 +30,15 @@ Commands from a clean checkout or unpacked source ZIP:
 
 ```bash
 npm ci
-npm run firefox:package
+npm run build-for-amo
 ```
 
 Expected outputs:
 
 - `firefox-artifacts/scriptvault-firefox-v<version>.zip`
-- `firefox-artifacts/scriptvault-firefox-source-v<version>.zip`
 - `firefox-artifacts/web-ext-lint.json`
 
-`npm run firefox:package` runs these steps:
+`npm run build-for-amo` runs these steps:
 
 1. Checks `manifest-firefox.json` against `manifest-firefox.transformations.json`.
 2. Builds `background.js` through `node esbuild.config.mjs --bg-only`.
@@ -46,7 +46,9 @@ Expected outputs:
    `manifest.json`.
 4. Runs `web-ext lint` and fails on any lint error.
 5. Runs `web-ext build` to produce the AMO upload ZIP.
-6. Writes the source-review ZIP using `git archive HEAD`.
+The source-review ZIP is supplied to AMO separately. `build-for-amo` deliberately
+does not try to create a second source archive, so the same command works from
+an extracted source-review ZIP without requiring a `.git` directory.
 
 ## Source and Dependency Notes
 
@@ -157,7 +159,7 @@ data-collection surfaces remain covered by `PRIVACY.md`,
 ## Manual Submission Steps
 
 1. Confirm the AMO developer account exists under the intended publisher.
-2. Run `npm run firefox:package`.
+2. Run `npm run build-for-amo`.
 3. Upload `firefox-artifacts/scriptvault-firefox-v<version>.zip`.
 4. Attach `firefox-artifacts/scriptvault-firefox-source-v<version>.zip` as the
    source code package.

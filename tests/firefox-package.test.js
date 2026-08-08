@@ -53,6 +53,7 @@ describe('Firefox AMO validation gate', () => {
 
   it('builds, lints, packages, and sources Firefox artifacts through web-ext', () => {
     expect(packageJson.devDependencies['web-ext']).toMatch(/10\.3/);
+    expect(packageJson.scripts['build-for-amo']).toBe('npm run firefox:package -- --no-source-zip');
     expect(packageJson.scripts['firefox:lint']).toBe('node scripts/run-bash.mjs build-firefox.sh --lint --keep-build --no-source-zip --prepare-only');
     expect(packageJson.scripts['firefox:package']).toBe('node scripts/run-bash.mjs build-firefox.sh --lint');
     expect(packageJson.scripts['smoke:firefox']).toBe('node scripts/smoke-firefox-sideload.mjs');
@@ -179,10 +180,11 @@ describe('Firefox AMO validation gate', () => {
 
   it('includes AMO source-review instructions and privacy rationale', () => {
     expect(amoSourceReadme).toContain('Reviewer Build Instructions');
-    expect(amoSourceReadme).toContain('npm run firefox:package');
+    expect(amoSourceReadme).toContain('npm run build-for-amo');
+    expect(amoSourceReadme).toContain('Node.js **24.14.0** with **npm 11.9.0**');
     expect(amoSourceReadme).toContain('docs/amo-vendored-libraries.md');
     expect(amoSourceReadme).toContain('scriptvault-firefox-v<version>.zip');
-    expect(amoSourceReadme).toContain('scriptvault-firefox-source-v<version>.zip');
+    expect(amoSourceReadme).toContain('source-review ZIP is supplied to AMO separately');
     expect(amoSourceReadme).toContain('AMO Data Collection Copy');
     expect(amoSourceReadme).toContain('Required data collection: `none`');
     expect(amoSourceReadme).toContain('Permission Rationale');
