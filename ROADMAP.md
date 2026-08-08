@@ -838,16 +838,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
   Confidence: Verified
   Effort: S
 
-- [ ] P3 — The network XHR proxy drops `XMLHttpRequest`'s static constants (`DONE`/`OPENED`/…)
-  Category: correctness
-  Where: shipped `background.core.js:15440` (`_WrappedXHR.prototype = _OrigXHR.prototype` only) vs `:15463` (the WebSocket wrapper does `Object.assign(_WrappedWS, {CONNECTING…CLOSED})`)
-  Problem: After the proxy installs, `XMLHttpRequest.DONE`/`.OPENED`/`.UNSENT` (static) are `undefined` for every userscript, so the very common `xhr.readyState === XMLHttpRequest.DONE` comparison silently never matches. The sibling WebSocket wrapper copies its constants, proving the asymmetry.
-  Evidence: Verified — read both wrapper installs in shipped `background.core.js`.
-  Fix: `Object.assign(_WrappedXHR, { UNSENT:0, OPENED:1, HEADERS_RECEIVED:2, LOADING:3, DONE:4 })` after assigning the prototype.
-  Acceptance: `XMLHttpRequest.DONE === 4` inside a wrapped script; a wrapper test asserts the constants.
-  Confidence: Verified
-  Effort: S
-
 - [ ] P3 — Storage-cache refresh clobbers `GM_setValue`/`GM_deleteValue` writes made during the startup window
   Category: correctness
   Where: shipped `background.core.js:13593` (`_cache = { ..._cache, ...freshValues }`)

@@ -60,6 +60,17 @@ describe('source hardening parity guards', () => {
       .rejects.toThrow(/Script too large/);
   });
 
+  it('keeps XMLHttpRequest static ready-state constants on the wrapped constructor', () => {
+    const core = source('src/background/core.ts');
+    const xhrStart = core.indexOf('const _WrappedXHR = function __svXHR()');
+    const xhrEnd = core.indexOf('// ── WebSocket', xhrStart);
+    const xhr = core.slice(xhrStart, xhrEnd);
+    expect(xhr).toContain('Object.assign(_WrappedXHR');
+    expect(xhr).toContain('UNSENT: _OrigXHR.UNSENT ?? 0');
+    expect(xhr).toContain('HEADERS_RECEIVED: _OrigXHR.HEADERS_RECEIVED ?? 2');
+    expect(xhr).toContain('DONE: _OrigXHR.DONE ?? 4');
+  });
+
   it('keeps empty grants and grant none locked down in the TypeScript wrapper mirror', () => {
     const wrapper = source('src/background/wrapper-builder.ts');
     expect(wrapper).toContain("const grants: string[] = meta.grant.length > 0 ? meta.grant : ['none'];");

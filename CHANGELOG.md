@@ -32,6 +32,8 @@ All notable changes to ScriptVault will be documented in this file.
   core bytes.
 - Refused unpinned plaintext HTTP @require and GM_loadScript execution while
   preserving review probes; pinned HTTP loads verify their declared digest.
+- Preserved XMLHttpRequest's standard static ready-state constants on the
+  network-auditing wrapper (`DONE`, `OPENED`, and peers).
 
 ## [v3.27.0] — Recoverable restores, real isolation & honest errors (2026-08-08)
 

@@ -45934,6 +45934,13 @@ ${mappedCode}
         return xhr;
       };
       _WrappedXHR.prototype = _OrigXHR.prototype;
+      Object.assign(_WrappedXHR, {
+        UNSENT: _OrigXHR.UNSENT ?? 0,
+        OPENED: _OrigXHR.OPENED ?? 1,
+        HEADERS_RECEIVED: _OrigXHR.HEADERS_RECEIVED ?? 2,
+        LOADING: _OrigXHR.LOADING ?? 3,
+        DONE: _OrigXHR.DONE ?? 4
+      });
       _safeSet(window, 'XMLHttpRequest', _WrappedXHR);
     }
 
