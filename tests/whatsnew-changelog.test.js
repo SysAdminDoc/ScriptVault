@@ -67,4 +67,46 @@ describe('dashboard WhatsNew changelog', () => {
     expect(storageSet).toHaveBeenCalledWith({ lastSeenVersion: manifest.version });
     expect(document.querySelector('.sv-wn-overlay')).toBeNull();
   });
+
+  // show() runs from an async storage read, so the modal can open after focus
+  // has already moved into the page. Removing the overlay without handing focus
+  // back drops document.activeElement to <body>, losing the keyboard position
+  // the user (or a driving harness) had established.
+  it('returns focus to whatever held it before the modal opened', () => {
+    const anchor = document.createElement('button');
+    anchor.id = 'preModalFocus';
+    document.body.appendChild(anchor);
+    anchor.focus();
+    expect(document.activeElement).toBe(anchor);
+
+    const { WhatsNew } = createWhatsNew();
+    WhatsNew.show();
+    expect(document.activeElement?.id).toBe('svWnDismiss');
+
+    document.querySelector('#svWnDismiss').click();
+    expect(document.querySelector('.sv-wn-overlay')).toBeNull();
+    expect(document.activeElement).toBe(anchor);
+  });
+
+  it('falls back to the workbench rail when the pre-modal element is gone', () => {
+    const doomed = document.createElement('button');
+    document.body.appendChild(doomed);
+    doomed.focus();
+
+    const rail = document.createElement('div');
+    rail.className = 'workbench-rail';
+    const tab = document.createElement('button');
+    tab.setAttribute('role', 'tab');
+    tab.setAttribute('aria-selected', 'true');
+    tab.id = 'railScripts';
+    rail.appendChild(tab);
+    document.body.appendChild(rail);
+
+    const { WhatsNew } = createWhatsNew();
+    WhatsNew.show();
+    doomed.remove();
+
+    document.querySelector('#svWnDismiss').click();
+    expect(document.activeElement).toBe(tab);
+  });
 });

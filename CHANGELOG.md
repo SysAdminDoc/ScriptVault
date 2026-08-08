@@ -4,6 +4,16 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Dismissing the What's New dialog dropped keyboard focus to nowhere.** The
+  overlay was removed without handing focus back, so `document.activeElement`
+  fell to `<body>` and a keyboard user lost their place. Because the dialog opens
+  from an async storage read it can appear after focus has already moved into the
+  page, making the loss arbitrary. Dismissal now restores focus to whatever held
+  it before the dialog opened, falling back to the workbench rail's selected tab
+  and then the Scripts panel. The dashboard smoke no longer assumes the dialog
+  has settled either: it verifies focus actually landed on each workbench
+  shortcut before sending Enter, and re-checks for a late dialog per shortcut.
+
 - **A persistent UserCSS sheet could bleed onto every route of an SPA with
   nothing able to remove it.** When a client-side route change made a style stop
   matching, `onTabUpdated` deleted the per-tab registry entry whether or not

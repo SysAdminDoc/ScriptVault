@@ -997,16 +997,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
   Confidence: Likely
   Effort: M
 
-- [ ] P2 — `npm run smoke:dashboard` fails on the signingTrustSection workbench shortcut (pre-existing baseline)
-  Category: testing
-  Where: `scripts/smoke-dashboard.mjs:196` (`destinationReady` waitForFunction) and `:226`; the failing destination is the `signingTrustSection` workbench shortcut
-  Problem: The dashboard smoke exits 1. The reported state is `{"panelActive":false,"panelHidden":true,"filterPressed":"false","activeElement":"svWnDismiss","focusSurface":"signingTrustSection"}` — focus is still on the What's New dismiss button (`svWnDismiss`), so the shortcut click never activated the Settings panel and the 5s `waitForFunction` times out. The editor smoke (`npm run smoke:editor`) passes, so the extension loads and renders fine; this is specific to the workbench deep-link + What's New interaction.
-  Evidence: Reproduced 3/3 consecutive runs. **Confirmed pre-existing**: also fails at `bec9e75` (the pre-session release commit) with a clean `npm ci`, so it is not a regression from the 2026-08-06 fix batch. It did pass once earlier the same day on the same tree, which points at a timing/ordering dependency (the What's New modal is dismissed asynchronously and the harness may click the shortcut before focus leaves the modal) rather than a hard break.
-  Fix: In `scripts/smoke-dashboard.mjs`, wait for the What's New modal to be fully closed (element removed or `document.activeElement` no longer inside it) before driving the workbench destinations, instead of assuming dismissal completed. If the race is in the product rather than the harness, make the What's New close handler return focus deterministically to the rail before resolving.
-  Acceptance: `npm run smoke:dashboard` exits 0 on three consecutive runs.
-  Confidence: Verified
-  Effort: S
-
 ### P3
 
 - [ ] P3 — The pending-updates count badge/chip renders `#93c5fd` on a near-white tint = 1.52:1 in light theme

@@ -7,6 +7,66 @@ import { closeBrowserWithFallback, removeTempProfileDir } from './browser-smoke-
 
 const extensionPath = resolve(process.cwd());
 
+const WHATS_NEW_OVERLAY = '.sv-wn-overlay';
+
+/**
+ * Dismiss the What's New modal and prove it stays gone. `show()` is gated on an
+ * async `chrome.storage.local` read, so a single "is it there?" check races it.
+ * Dismissing sets `lastSeenVersion`, which makes `shouldShow()` false for the
+ * rest of the session, so one confirmed-quiet window is enough.
+ */
+async function settleWhatsNew(page, { quietMs = 400, timeoutMs = 8000 } = {}) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+        const dismissButton = await page.$('#svWnDismiss');
+        if (dismissButton) {
+            await dismissButton.click();
+            await page.waitForFunction(
+                (selector) => !document.querySelector(selector),
+                { timeout: 5000 },
+                WHATS_NEW_OVERLAY,
+            );
+            continue;
+        }
+        // No overlay right now — require it to stay absent before trusting it.
+        const stillAbsent = await page
+            .waitForFunction(
+                (selector) => !!document.querySelector(selector),
+                { timeout: quietMs },
+                WHATS_NEW_OVERLAY,
+            )
+            .then(() => false)
+            .catch(() => true);
+        if (stillAbsent) return;
+    }
+    throw new Error("What's New modal never settled: it kept reappearing");
+}
+
+/**
+ * Focus a workbench shortcut and activate it, verifying focus actually landed
+ * first. If something took focus in between (a late modal), clear it and retry
+ * rather than sending Enter to whatever happens to be focused.
+ */
+async function activateWorkbenchShortcut(page, selector, attempts = 4) {
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+        await settleWhatsNew(page);
+        await page.focus(selector);
+        const focusedId = await page.evaluate(
+            (sel) => (document.activeElement === document.querySelector(sel)
+                ? true
+                : (document.activeElement?.id || document.activeElement?.tagName || 'unknown')),
+            selector,
+        );
+        if (focusedId === true) {
+            await page.keyboard.press('Enter');
+            return;
+        }
+        if (attempt === attempts) {
+            throw new Error(`Could not focus ${selector}: focus was held by ${focusedId}`);
+        }
+    }
+}
+
 function chromeCandidates() {
     const envPaths = [
         process.env.SCRIPT_VAULT_CHROME_PATH,
@@ -160,11 +220,13 @@ try {
         throw new Error(`Dashboard smoke failed: ${failures.join('; ')}`);
     }
 
-    const whatsNewDismiss = await page.$('#svWnDismiss');
-    if (whatsNewDismiss) {
-        await whatsNewDismiss.click();
-        await page.waitForFunction(() => !document.querySelector('.sv-wn-overlay'), { timeout: 5000 });
-    }
+    // The What's New modal is opened from an ASYNC storage read, so it can
+    // appear at any point after load — including after a one-shot check found
+    // nothing — and it focuses its own Continue button when it does. Sampling
+    // once and moving on let a late modal swallow the keystroke meant for a
+    // workbench shortcut (observed as activeElement 'svWnDismiss' with the
+    // Settings panel never activating). Settle it, then re-check per shortcut.
+    await settleWhatsNew(page);
 
     const workbenchDestinations = [
         { target: 'signingTrustSection', tab: 'utilities', filter: 'diagnostics' },
@@ -173,8 +235,7 @@ try {
     ];
     for (const destination of workbenchDestinations) {
         const shortcutSelector = `[data-workbench-target="${destination.target}"]`;
-        await page.focus(shortcutSelector);
-        await page.keyboard.press('Enter');
+        await activateWorkbenchShortcut(page, shortcutSelector);
         const destinationReady = ({ target, tab, filter }) => {
             const panel = document.getElementById(`${tab}Panel`);
             const targetElement = document.getElementById(target);

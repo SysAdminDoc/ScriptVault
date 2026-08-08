@@ -410,6 +410,28 @@ const WhatsNew = (() => {
     return CHANGELOG[version] || null;
   }
 
+  /**
+   * Hand focus back to the element that held it before the modal opened. Falls
+   * back to the workbench rail's active tab, then to the main region, so a
+   * keyboard user always lands somewhere navigable instead of at <body>.
+   */
+  function _restoreFocus(previous) {
+    const candidates = [
+      previous,
+      document.querySelector('.workbench-rail [role="tab"][aria-selected="true"]'),
+      document.querySelector('#scriptsPanel'),
+      document.querySelector('main'),
+    ];
+    for (const candidate of candidates) {
+      if (!candidate || typeof candidate.focus !== 'function') continue;
+      if (!candidate.isConnected) continue;
+      try {
+        candidate.focus({ preventScroll: true });
+      } catch { continue; }
+      if (document.activeElement === candidate) return;
+    }
+  }
+
   function _injectStyles() {
     if (document.getElementById('sv-whatsnew-css')) return;
     const style = document.createElement('style');
@@ -481,6 +503,10 @@ const WhatsNew = (() => {
 
       _injectStyles();
 
+      // Remember what had focus before the dialog takes it, so dismissing can
+      // hand it back rather than dropping the user at <body>.
+      const previouslyFocused = document.activeElement;
+
       const overlay = document.createElement('div');
       overlay.className = 'sv-wn-overlay';
 
@@ -532,6 +558,12 @@ const WhatsNew = (() => {
         chrome.storage.local.set(patch);
         document.removeEventListener('keydown', escHandler);
         overlay.remove();
+        // Return focus where it was before the modal took it. Removing the
+        // overlay otherwise drops document.activeElement to <body>, so a
+        // keyboard user loses their place entirely — and because this modal is
+        // shown from an async storage read, it can open after focus has already
+        // moved into the page, making the loss arbitrary.
+        _restoreFocus(previouslyFocused);
       };
 
       overlay.querySelector('#svWnDismiss').addEventListener('click', () => dismiss(false));
