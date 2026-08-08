@@ -907,16 +907,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
   Confidence: Verified
   Effort: S
 
-- [ ] P2 — `GM_xmlhttpRequest` abandons any request longer than 30 s; `GM.fetch` stream polls forever after a SW restart
-  Category: correctness
-  Where: shipped `background.core.js:13990-14000` (`pollXhrFinalResult` caps at `attempt < 600` × 50 ms = 30 s; terminal events delivered only by this poll) and `:14256` (stream `for (;;)` no cap); `gm-network-handler.ts:501` returns `{done:false}` for an unknown `requestId`
-  Problem: (a) A request with `timeout:60000` or any slow transfer completes in the background but the script's `onload`/`onerror`/`onloadend` never fire and `_xhrRequests` keeps the entry. (b) The `GM.fetch` stream loop polls `GM_xmlhttpRequest_result` forever; after an MV3 SW restart (XhrManager in-memory) the id is unknown, `{done:false}` returns indefinitely, so the promise never settles and a 40 msg/s wake loop keeps the SW from idling.
-  Evidence: Verified — read the shipped poll loop (`if (attempt<600) setTimeout(...50)`) and the uncapped stream `for(;;)`; unknown-id `{done:false}` at gm-network-handler.ts:501.
-  Fix: Base the XHR poll on wall-clock vs the request's own `timeout` (not a fixed 600 ticks) and reconcile via postMessage terminal events; cap the stream loop and, on `{done:false}` for a `requestId` the background no longer knows, reject and stop.
-  Acceptance: A 60 s request delivers `onload`; a simulated SW restart terminates the stream loop; tests cover both.
-  Confidence: Verified
-  Effort: M
-
 - [ ] P2 — Both worldId fallback paths silently restore the exact Firefox failure mode af0bfb3 fixed
   Category: correctness
   Where: `src/background/registration.ts:646-697` (mirror `src/background/core.ts:11928-11973`)

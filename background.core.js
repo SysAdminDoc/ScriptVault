@@ -14347,17 +14347,53 @@ ${mappedCode}
       if (requestId) _xhrRequests.delete(requestId);
     }
 
-    function pollXhrFinalResult(attempt = 0) {
+    // Terminal events reach the script only through this poll, so its deadline
+    // IS the request effective lifetime. A fixed 600 ticks x 50 ms capped every
+    // request at 30 s regardless of its own timeout, so a timeout of 60000 ms
+    // completed in the background while onload/onerror/onloadend never fired and
+    // the _xhrRequests entry leaked. Track wall-clock against the request own
+    // timeout plus headroom for the background own bookkeeping.
+    const XHR_POLL_INTERVAL_MS = 50;
+    const XHR_POLL_GRACE_MS = 15000;
+    const xhrPollDeadline = Date.now()
+      + (Number(details.timeout) > 0 ? Number(details.timeout) : 30000)
+      + XHR_POLL_GRACE_MS;
+
+    function pollXhrFinalResult() {
       if (aborted || requestEntry.aborted || !requestId) return;
       sendToBackground('GM_xmlhttpRequest_result', { scriptId, requestId }).then((result) => {
         if (aborted || requestEntry.aborted) return;
+        if (result && result.done !== true && result.unknown === true) {
+          // The background no longer knows this request — a service-worker
+          // restart dropped it. Polling can never succeed, so settle now instead
+          // of spinning until the deadline.
+          dispatchXhrTerminal('error', {
+            readyState: 4,
+            status: 0,
+            error: 'Request was lost before it completed (the extension service worker restarted)'
+          });
+          return;
+        }
         if (!result || result.done !== true) {
-          if (attempt < 600) setTimeout(() => pollXhrFinalResult(attempt + 1), 50);
+          scheduleNextXhrPoll();
           return;
         }
         dispatchXhrTerminal(result.type || 'error', result.response || { readyState: 4, status: 0, error: result.error || 'Request failed' });
       }).catch(() => {
-        if (attempt < 600) setTimeout(() => pollXhrFinalResult(attempt + 1), 50);
+        scheduleNextXhrPoll();
+      });
+    }
+
+    function scheduleNextXhrPoll() {
+      if (Date.now() < xhrPollDeadline) {
+        setTimeout(pollXhrFinalResult, XHR_POLL_INTERVAL_MS);
+        return;
+      }
+      // Past the deadline: report it rather than abandoning the request silently.
+      dispatchXhrTerminal('timeout', {
+        readyState: 4,
+        status: 0,
+        error: 'No result from the background within the request timeout'
       });
     }
     
@@ -14611,10 +14647,24 @@ ${mappedCode}
         return responsePromise;
       }
 
+      // Bounded, and it stops the moment the background says it no longer knows
+      // this request. The old unbounded loop polled every 25 ms forever: after an
+      // MV3 service-worker restart the id was unknown and a bare {done:false} came
+      // back indefinitely, so the promise never settled and a ~40 msg/s wake loop
+      // kept the worker from ever idling.
+      const STREAM_POLL_INTERVAL_MS = 25;
+      const STREAM_POLL_GRACE_MS = 15000;
+      const streamPollDeadline = Date.now()
+        + (Number(requestPayload.timeout) > 0 ? Number(requestPayload.timeout) : 300000)
+        + STREAM_POLL_GRACE_MS;
+
       (async () => {
         try {
           for (;;) {
             if (signal && signal.aborted) throw _gmFetchAbortError();
+            if (Date.now() >= streamPollDeadline) {
+              throw new Error('GM.fetch stream timed out waiting for the background');
+            }
             const result = await sendToBackground('GM_xmlhttpRequest_result', {
               scriptId,
               requestId,
@@ -14622,6 +14672,10 @@ ${mappedCode}
             });
             if (result?.meta) settleResponse(result.meta);
             enqueueChunks(result?.streamChunks);
+
+            if (result && result.done !== true && result.unknown === true) {
+              throw new Error('GM.fetch stream was lost before it completed (the extension service worker restarted)');
+            }
 
             if (result?.done === true) {
               const terminalType = result.type || 'error';
@@ -14636,7 +14690,7 @@ ${mappedCode}
               }
               return;
             }
-            await _gmFetchDelay(25);
+            await _gmFetchDelay(STREAM_POLL_INTERVAL_MS);
           }
         } catch (error) {
           failStream((signal && signal.aborted) ? _gmFetchAbortError() : error);

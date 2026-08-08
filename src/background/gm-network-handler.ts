@@ -548,7 +548,13 @@ export async function handleGMNetworkMessage(
 
     case 'GM_xmlhttpRequest_result': {
       const request = XhrManager.get(data.requestId);
-      if (!request || request.scriptId !== ownedScriptId) return { done: false };
+      // `unknown` separates "still running" from "this id will never complete
+      // for you" — the request is gone (an MV3 service-worker restart drops
+      // XhrManager's in-memory map) or belongs to another script. Without the
+      // distinction a poller saw a bare {done:false} forever: the promise never
+      // settled and the poll kept waking the worker. Both cases collapse to the
+      // same answer so a script cannot probe for another script's request ids.
+      if (!request || request.scriptId !== ownedScriptId) return { done: false, unknown: true };
       if (data.takeStream === true) {
         const streamChunks = Array.isArray(request.streamChunks) && request.streamChunks.length
           ? request.streamChunks.splice(0, request.streamChunks.length)

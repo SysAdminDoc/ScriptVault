@@ -4,6 +4,22 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Any `GM_xmlhttpRequest` longer than 30 s silently never called back, and a
+  `GM.fetch` stream polled forever after a service-worker restart.** Terminal
+  events (`onload` / `onerror` / `onloadend`) reach a script only through the
+  wrapper's result poll, and that poll was capped at a fixed 600 ticks × 50 ms —
+  so a request with `timeout: 60000`, or any slow transfer, completed in the
+  background while the script's callbacks never fired and the request entry
+  leaked. The poll now runs against the request's own timeout plus headroom, and
+  reports a timeout instead of abandoning the request. Separately, the `GM.fetch`
+  stream loop was unbounded and the background answered a bare `{done:false}` for
+  a request id it no longer knew — after an MV3 restart that meant an unsettleable
+  promise plus a ~40 msg/s loop keeping the worker awake. The background now
+  answers `unknown: true` for any id it cannot serve (identically for a
+  never-existed id and another script's, so ids cannot be probed), and both the
+  XHR poll and the stream loop stop and report on it. The stream loop also has a
+  wall-clock deadline.
+
 - **`GM_xmlhttpRequest` buffered the entire response before enforcing its 50 MB
   cap on every response type except `stream`.** The only pre-read bound was
   `Content-Length`, which a hostile host reachable under `@connect` can omit or

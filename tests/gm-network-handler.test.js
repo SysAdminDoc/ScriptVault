@@ -288,6 +288,48 @@ describe('GM network handler', () => {
     expect(xhrRequests.get('xhr_1').finalResult.response.responseText).toBe('alphabeta');
   });
 
+  // A bare {done:false} for a request the background has forgotten (an MV3
+  // service-worker restart drops XhrManager's in-memory map) used to keep the
+  // wrapper polling forever: the promise never settled and the poll kept waking
+  // the worker. `unknown` is the signal to stop.
+  it('reports unknown:true for a requestId it has no record of', async () => {
+    await expect(handleGMNetworkMessage('GM_xmlhttpRequest_result', {
+      scriptId: 'script-1',
+      requestId: 'xhr_does_not_exist',
+    }, { tab: { id: 7 } })).resolves.toEqual({ done: false, unknown: true });
+  });
+
+  it("reports unknown:true rather than revealing another script request", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response('ok', { status: 200 }));
+    await handleGMNetworkMessage('GM_xmlhttpRequest', {
+      scriptId: 'script-1',
+      url: 'https://api.example.com/data',
+    }, { tab: { id: 7 } });
+
+    // Same id, different owner: indistinguishable from "never existed".
+    await expect(handleGMNetworkMessage('GM_xmlhttpRequest_result', {
+      scriptId: 'script-2',
+      requestId: 'xhr_1',
+    }, { tab: { id: 8 } })).resolves.toEqual({ done: false, unknown: true });
+  });
+
+  it('still reports a plain done:false while a known request is in flight', async () => {
+    let release;
+    globalThis.fetch = vi.fn(() => new Promise((resolve) => { release = () => resolve(new Response('ok', { status: 200 })); }));
+    await handleGMNetworkMessage('GM_xmlhttpRequest', {
+      scriptId: 'script-1',
+      url: 'https://api.example.com/slow',
+    }, { tab: { id: 7 } });
+
+    const pending = await handleGMNetworkMessage('GM_xmlhttpRequest_result', {
+      scriptId: 'script-1',
+      requestId: 'xhr_1',
+    }, { tab: { id: 7 } });
+    expect(pending).toEqual({ done: false });
+    expect(pending.unknown).toBeUndefined();
+    release?.();
+  });
+
   it('streams GM.fetch-compatible response chunks through privileged result polling', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue(chunkedResponse(['alpha', 'beta'], {
       status: 206,

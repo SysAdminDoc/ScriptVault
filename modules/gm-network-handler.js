@@ -447,7 +447,7 @@ const GMNetworkHandler = (() => {
       }
       case "GM_xmlhttpRequest_result": {
         const request = XhrManager.get(data.requestId);
-        if (!request || request.scriptId !== ownedScriptId) return { done: false };
+        if (!request || request.scriptId !== ownedScriptId) return { done: false, unknown: true };
         if (data.takeStream === true) {
           const streamChunks = Array.isArray(request.streamChunks) && request.streamChunks.length ? request.streamChunks.splice(0, request.streamChunks.length) : [];
           if (!request.finalResult) {
