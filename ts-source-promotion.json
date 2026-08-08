@@ -295,6 +295,14 @@
       "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for GM network and script host-scope policy helpers."
     },
     {
+      "runtime": "modules/fetch-freshness.js",
+      "sources": [
+        "src/background/fetch-freshness.ts"
+      ],
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for the shared fetch-intent freshness policy used by update checks, subscriptions, and install interception."
+    },
+    {
       "runtime": "modules/resources.js",
       "sources": [
         "src/modules/resources.ts",

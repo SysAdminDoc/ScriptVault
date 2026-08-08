@@ -4,6 +4,22 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **A stale HTTP-cache hit could install an older script than the page showed,
+  and "check for updates" could answer without reaching the server.** Only the
+  scheduled update check managed freshness; every other remote read of userscript
+  content — the intercepted `.user.js`/`.user.css` navigation, right-click
+  install-from-link, install-from-URL, the catalog preview, and both subscription
+  feed and feed-script pulls — called bare `fetch(url)` and inherited the shared
+  HTTP cache. A new `FetchFreshness` policy (`src/background/fetch-freshness.ts`)
+  is now the single decision point: every intent sets `cache: 'no-store'`, so the
+  browser cache can neither answer nor absorb these reads, and only the two
+  scheduled intents send stored `If-None-Match`/`If-Modified-Since` validators.
+  A user-triggered single-script check is now an explicit refresh that sends no
+  validators, so it can never report "up to date" off a cached body. Subscriptions
+  persist feed validators (rejecting any value that could split a request) plus a
+  `sourceFetchedAt` age that a `304` no longer resets, and a `304` feed pull is
+  recorded as a check without reparsing the body.
+
 ## [v3.25.0] — Release integrity, supply chain & Firefox reproducibility (2026-08-06)
 
 - **The Firefox package built differently on different machines.**

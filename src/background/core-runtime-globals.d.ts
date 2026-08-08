@@ -19,6 +19,7 @@ declare const ErrorLog: any;
 declare const ESMUserscriptBundler: any;
 declare const ExecutionDiagnostics: any;
 declare const ExecutionTelemetry: any;
+declare const FetchFreshness: any;
 declare const fflate: any;
 declare const FolderStorage: any;
 declare const GMAudioHandler: any;

@@ -1806,7 +1806,7 @@ const UpdateSystem = {
     return Date.now() + wait;
   },
 
-  async fetchUpdateCandidate(updateUrl, fetchOptions = {}) {
+  async fetchUpdateCandidate(updateUrl, fetchOptions = {}, intent = 'scheduled-update') {
     // Pre-flight: refuse update URLs that point at internal/loopback/link-local
     // hosts. Userscript update URLs are stored from prior installs, so this
     // catches both adversarial @updateURL metadata and rebinds that turned a
@@ -1820,7 +1820,19 @@ const UpdateSystem = {
     const timeoutId = setTimeout(() => controller.abort(), this._FETCH_TIMEOUT_MS);
 
     try {
-      const response = await fetch(updateUrl, { ...fetchOptions, signal: controller.signal });
+      // Freshness is decided by the shared policy, not by the browser's HTTP
+      // cache: a cached body could otherwise answer an update check and hide a
+      // newly published version. Conditional intents contribute the stored
+      // validators; explicit ones deliberately send none so a body always
+      // comes back.
+      const { headers: callerHeaders, etag, lastModified, ...restInit } = fetchOptions || {};
+      const init = FetchFreshness.buildFreshnessInit(intent, {
+        etag,
+        lastModified,
+        headers: callerHeaders,
+        init: { ...restInit, signal: controller.signal }
+      });
+      const response = await fetch(updateUrl, init);
 
       if (response.status === 304 || !response.ok) {
         return { response, code: '' };
@@ -1872,13 +1884,16 @@ const UpdateSystem = {
 
       try {
         const updateUrl = script.meta.updateURL || script.meta.downloadURL;
-        const headers = {};
 
-        // Conditional request using stored etag/last-modified
-        if (script._httpEtag) headers['If-None-Match'] = script._httpEtag;
-        if (script._httpLastModified) headers['If-Modified-Since'] = script._httpLastModified;
-
-        const { response, code: newCode } = await this.fetchUpdateCandidate(updateUrl, { headers });
+        // A user-triggered single-script check is an explicit refresh: it sends
+        // no validators, so the server always returns a body and the user can
+        // never be told "up to date" on the strength of a stale cache entry.
+        // The periodic sweep stays conditional and treats 304 as success.
+        const intent = isManualSingle ? 'manual-update' : 'scheduled-update';
+        const { response, code: newCode } = await this.fetchUpdateCandidate(updateUrl, {
+          etag: script._httpEtag,
+          lastModified: script._httpLastModified
+        }, intent);
 
         // 304 Not Modified — counts as success; clear any backoff state.
         if (response.status === 304) {
@@ -1897,19 +1912,18 @@ const UpdateSystem = {
           continue;
         }
 
-        // Store HTTP cache headers for next check + clear backoff on success.
-        const etag = response.headers.get('etag');
-        const lastModified = response.headers.get('last-modified');
+        // Store HTTP validators for the next scheduled check + clear backoff.
+        const validators = FetchFreshness.readResponseValidators(intent, response);
         const hadBackoff = script._updateFailureCount || script._updateNextCheck;
-        if (etag || lastModified) {
-          script._httpEtag = etag || '';
-          script._httpLastModified = lastModified || '';
+        if (validators) {
+          script._httpEtag = validators.etag;
+          script._httpLastModified = validators.lastModified;
         }
         if (hadBackoff) {
           script._updateFailureCount = 0;
           script._updateNextCheck = 0;
         }
-        if (etag || lastModified || hadBackoff) {
+        if (validators || hadBackoff) {
           await ScriptStorage.set(script.id, script);
         }
 
@@ -3910,12 +3924,25 @@ const SubscriptionSystem = {
   _MAX_SCRIPT_BYTES: MAX_SCRIPT_SIZE,
   _MAX_SCRIPTS_PER_REFRESH: 50,
 
-  async fetchText(url, label, maxBytes) {
+  async fetchText(url, label, maxBytes, options = {}) {
     InternalHostGuard.assertExternalFetchUrl(url, label, ['http:', 'https:']);
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this._FETCH_TIMEOUT_MS);
     try {
-      const response = await fetch(url, { signal: controller.signal });
+      // Feed and feed-script reads go through the same freshness policy as
+      // update checks: never answered from the shared HTTP cache, conditional
+      // only for the alarm-driven sweep.
+      const intent = options.intent || 'manual-feed';
+      const response = await fetch(url, FetchFreshness.buildFreshnessInit(intent, {
+        etag: options.etag,
+        lastModified: options.lastModified,
+        init: { signal: controller.signal }
+      }));
+      if (response.status === 304) {
+        // Conditional feed pull with an unchanged body — the caller keeps the
+        // feed it already has rather than reparsing an empty response.
+        return { notModified: true, text: '', response };
+      }
       if (!response.ok) {
         throw new Error(`${label} fetch failed with HTTP ${response.status}`);
       }
@@ -3923,7 +3950,8 @@ const SubscriptionSystem = {
       if (!postCheck.ok) {
         throw new Error(`${label} redirected to ${postCheck.message}`);
       }
-      return await _fetchTextBounded(response, maxBytes, label);
+      const text = await _fetchTextBounded(response, maxBytes, label);
+      return { notModified: false, text, response };
     } catch (error) {
       if (error?.name === 'AbortError') {
         throw new Error(`${label} fetch timed out after ${Math.round(this._FETCH_TIMEOUT_MS / 1000)} seconds`);
@@ -3934,15 +3962,33 @@ const SubscriptionSystem = {
     }
   },
 
-  async fetchFeed(url) {
+  async fetchFeed(url, options = {}) {
     const feedUrl = ScriptSubscriptions.normalizeFeedUrl(url);
-    const text = await this.fetchText(feedUrl, 'Subscription feed', this._MAX_FEED_BYTES);
-    return ScriptSubscriptions.parseFeed(text, feedUrl);
+    const intent = options.intent || 'manual-feed';
+    const result = await this.fetchText(feedUrl, 'Subscription feed', this._MAX_FEED_BYTES, {
+      intent,
+      etag: options.etag,
+      lastModified: options.lastModified
+    });
+    if (result.notModified) {
+      return { notModified: true, sourceUrl: feedUrl, validators: null };
+    }
+    const feed = ScriptSubscriptions.parseFeed(result.text, feedUrl);
+    return {
+      ...feed,
+      notModified: false,
+      validators: FetchFreshness.readResponseValidators(intent, result.response)
+    };
   },
 
   async fetchScript(url) {
     const scriptUrl = ScriptSubscriptions.normalizeFeedUrl(url);
-    return await this.fetchText(scriptUrl, 'Subscription script', this._MAX_SCRIPT_BYTES);
+    // A feed-listed script body is always read in full: a 304 would leave
+    // nothing to install, so this intent never sends validators.
+    const result = await this.fetchText(scriptUrl, 'Subscription script', this._MAX_SCRIPT_BYTES, {
+      intent: 'feed-script'
+    });
+    return result.text;
   },
 
   hashString(input) {
@@ -4046,8 +4092,12 @@ const SubscriptionSystem = {
   async addSubscription(url, name = '') {
     if (!url) return { success: false, error: 'Subscription URL is required' };
     try {
-      const feed = await this.fetchFeed(url);
-      const subscription = await ScriptSubscriptions.upsertFromFeed(feed.sourceUrl, feed, { name });
+      // Adding a feed is an explicit action — read it unconditionally.
+      const feed = await this.fetchFeed(url, { intent: 'manual-feed' });
+      const subscription = await ScriptSubscriptions.upsertFromFeed(feed.sourceUrl, feed, {
+        name,
+        validators: feed.validators
+      });
       const result = await this.refreshSubscription(subscription.id, { feed, subscription });
       if (result?.success) {
         await setupAlarms().catch(() => {});
@@ -4065,10 +4115,36 @@ const SubscriptionSystem = {
       if (!subscription) return { success: false, error: 'Subscription not found' };
       let feed = options.feed || null;
       if (!feed) {
-        feed = await this.fetchFeed(subscription.url);
+        // Only the alarm-driven sweep sends validators; a hand-triggered
+        // refresh always re-reads the feed body.
+        const intent = options.intent || 'manual-feed';
+        feed = await this.fetchFeed(subscription.url, {
+          intent,
+          etag: subscription.httpEtag,
+          lastModified: subscription.httpLastModified
+        });
+        if (feed.notModified) {
+          // Feed unchanged since the last read — record the check without
+          // reparsing, and keep the cached item list as the queue input.
+          const unchanged = await ScriptSubscriptions.markRefreshResult(subscription.id, {
+            queued: 0,
+            skipped: 0,
+            errors: [],
+            notModified: true
+          });
+          return {
+            success: true,
+            subscription: unchanged || subscription,
+            notModified: true,
+            queued: 0,
+            skipped: 0,
+            errors: []
+          };
+        }
         subscription = await ScriptSubscriptions.upsertFromFeed(subscription.url, feed, {
           name: subscription.name,
-          enabled: subscription.enabled
+          enabled: subscription.enabled,
+          validators: feed.validators
         });
       }
 
@@ -4095,15 +4171,17 @@ const SubscriptionSystem = {
     }
   },
 
-  async refreshSubscriptions() {
+  async refreshSubscriptions(options = {}) {
     const subscriptions = await ScriptSubscriptions.list();
     const results = [];
     let queued = 0;
     let skipped = 0;
     const errors = [];
+    // The alarm sweep is the only conditional feed reader.
+    const intent = options.intent || 'scheduled-feed';
 
     for (const subscription of subscriptions.filter(item => item.enabled !== false)) {
-      const result = await this.refreshSubscription(subscription.id);
+      const result = await this.refreshSubscription(subscription.id, { intent });
       results.push(result);
       if (result?.success) {
         queued += result.queued || 0;
@@ -6492,8 +6570,9 @@ backgroundActionRegistry.registerHandlers(UpdateActionHandler.createUpdateAction
   rollbackScript: (scriptId, index) => rollbackScriptVersion(scriptId, index),
   getSubscriptions: () => SubscriptionSystem.list(),
   addSubscription: (url, name) => SubscriptionSystem.addSubscription(url, name),
-  refreshSubscription: id => SubscriptionSystem.refreshSubscription(id),
-  refreshSubscriptions: () => SubscriptionSystem.refreshSubscriptions(),
+  // Both arrive from a dashboard button, so they are explicit refreshes.
+  refreshSubscription: id => SubscriptionSystem.refreshSubscription(id, { intent: 'manual-feed' }),
+  refreshSubscriptions: () => SubscriptionSystem.refreshSubscriptions({ intent: 'manual-feed' }),
   removeSubscription: id => SubscriptionSystem.removeSubscription(id)
 }));
 backgroundActionRegistry.registerHandlers(SyncActionHandler.createSyncActionHandlers({
@@ -8751,7 +8830,9 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
           const timeoutId = setTimeout(() => controller.abort(), 20000);
           let code;
           try {
-            const response = await fetch(linkUrl, { signal: controller.signal });
+            const response = await fetch(linkUrl, FetchFreshness.buildFreshnessInit('install', {
+              init: { signal: controller.signal }
+            }));
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const postCheck = InternalHostGuard.classifyResponseUrl(response, ['http:', 'https:']);
             if (!postCheck.ok) {
@@ -10197,7 +10278,11 @@ async function _fetchPendingUserscript(url) {
     // network I/O.
     InternalHostGuard.assertExternalFetchUrl(url, 'Script source', ['http:', 'https:']);
 
-    const response = await fetch(url, { signal: controller.signal });
+    // An install must read the publisher's current body: a stale HTTP-cache hit
+    // here installs an older script than the page the user is looking at.
+    const response = await fetch(url, FetchFreshness.buildFreshnessInit('install', {
+      init: { signal: controller.signal }
+    }));
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
@@ -10289,7 +10374,9 @@ async function _fetchPendingUserStyle(url) {
   const timeoutId = setTimeout(() => controller.abort(), 30000);
   try {
     InternalHostGuard.assertExternalFetchUrl(url, 'UserCSS source', ['http:', 'https:']);
-    const response = await fetch(url, { signal: controller.signal });
+    const response = await fetch(url, FetchFreshness.buildFreshnessInit('install', {
+      init: { signal: controller.signal }
+    }));
     if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     const postCheck = InternalHostGuard.classifyResponseUrl(response, ['http:', 'https:']);
     if (!postCheck.ok) throw new Error('UserCSS source redirected to ' + postCheck.message);
@@ -10484,7 +10571,9 @@ async function installFromUrl(url) {
     const timeoutId = setTimeout(() => controller.abort(), 30000);
     let code;
     try {
-      const response = await fetch(url, { signal: controller.signal });
+      const response = await fetch(url, FetchFreshness.buildFreshnessInit('install', {
+        init: { signal: controller.signal }
+      }));
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
@@ -10522,7 +10611,11 @@ async function fetchScriptPreview(url) {
   const timeoutId = setTimeout(() => controller.abort(), 20000);
   try {
     InternalHostGuard.assertExternalFetchUrl(url, 'Script preview', ['http:', 'https:']);
-    const response = await fetch(url, { signal: controller.signal });
+    // The preview is the body the user is about to install — a cached one would
+    // show code that differs from what installFromUrl then downloads.
+    const response = await fetch(url, FetchFreshness.buildFreshnessInit('install', {
+      init: { signal: controller.signal }
+    }));
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const postCheck = InternalHostGuard.classifyResponseUrl(response, ['http:', 'https:']);
     if (!postCheck.ok) throw new Error('Script preview redirected to ' + postCheck.message);

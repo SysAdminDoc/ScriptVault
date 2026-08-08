@@ -377,6 +377,13 @@ export const TS_RUNTIME_MODULES = [
     exportName: 'ConnectPolicy',
   },
   {
+    id: 'fetch-freshness',
+    source: 'src/background/fetch-freshness.ts',
+    output: 'modules/fetch-freshness.js',
+    exportName: 'FetchFreshness',
+    selfExportName: 'FetchFreshness',
+  },
+  {
     id: 'resources',
     source: 'src/modules/resources.ts',
     output: 'modules/resources.js',

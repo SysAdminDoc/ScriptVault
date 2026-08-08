@@ -80,4 +80,43 @@ describe.each(implementations)('script subscriptions ($label)', ({ api: ScriptSu
     expect(await ScriptSubscriptions.remove(created.id)).toBe(true);
     expect(await ScriptSubscriptions.list()).toEqual([]);
   });
+
+  it('persists feed validators and source age, and refuses unsafe validator values', async () => {
+    const feed = ScriptSubscriptions.parseFeed(JSON.stringify([
+      'https://cdn.example.com/one.user.js',
+    ]), 'https://feeds.example.com/list.json');
+
+    const created = await ScriptSubscriptions.upsertFromFeed(feed.sourceUrl, feed, {
+      validators: { etag: 'W/"feed-1"', lastModified: 'Wed, 21 Oct 2026 07:28:00 GMT' },
+    });
+    expect(created.httpEtag).toBe('W/"feed-1"');
+    expect(created.httpLastModified).toBe('Wed, 21 Oct 2026 07:28:00 GMT');
+    expect(typeof created.sourceFetchedAt).toBe('number');
+
+    // A read that carried no validators must not wipe the working pair.
+    const reread = await ScriptSubscriptions.upsertFromFeed(feed.sourceUrl, feed, {});
+    expect(reread.httpEtag).toBe('W/"feed-1"');
+
+    // A header-splitting value never reaches storage.
+    const hostile = await ScriptSubscriptions.upsertFromFeed(feed.sourceUrl, feed, {
+      validators: { etag: 'W/"x"\r\nX-Injected: 1', lastModified: 'y'.repeat(600) },
+    });
+    expect(hostile.httpEtag).toBe('');
+    expect(hostile.httpLastModified).toBe('');
+  });
+
+  it('keeps source age counting from the last real download when a feed answers 304', async () => {
+    const feed = ScriptSubscriptions.parseFeed(JSON.stringify([
+      'https://cdn.example.com/one.user.js',
+    ]), 'https://feeds.example.com/list.json');
+    const created = await ScriptSubscriptions.upsertFromFeed(feed.sourceUrl, feed, {});
+    const downloadedAt = created.sourceFetchedAt;
+
+    const notModified = await ScriptSubscriptions.markRefreshResult(created.id, { notModified: true });
+    expect(notModified.sourceFetchedAt).toBe(downloadedAt);
+    expect(notModified.lastCheckedAt).toBeGreaterThanOrEqual(downloadedAt);
+
+    const downloaded = await ScriptSubscriptions.markRefreshResult(created.id, { queued: 1 });
+    expect(downloaded.sourceFetchedAt).toBeGreaterThanOrEqual(downloadedAt);
+  });
 });

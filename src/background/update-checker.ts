@@ -5,6 +5,7 @@
 import type { Script, ScriptMeta, ScriptTrustReceipt, VersionHistoryEntry } from '../types/script';
 import type { Settings } from '../types/settings';
 import { fetchTextBounded } from './fetch-bounded';
+import { buildFreshnessInit, readResponseValidators, type FetchIntent } from './fetch-freshness';
 import { classifyFetchUrl, classifyResponseUrl } from './internal-host-guard';
 import { createScriptTrustReceipt, getRequireTofuSriFailure } from './trust-receipt';
 import { bundleIfNeeded } from '../bg/esm-bundler';
@@ -202,7 +203,8 @@ export const UpdateSystem = {
 
   async fetchUpdateCandidate(
     updateUrl: string,
-    fetchOptions: RequestInit = {},
+    fetchOptions: { headers?: Record<string, string>; etag?: string | null; lastModified?: string | null } = {},
+    intent: FetchIntent = 'scheduled-update',
   ): Promise<{ response: Response; code: string }> {
     const preCheck = classifyFetchUrl(updateUrl, ['http:', 'https:']);
     if (!preCheck.ok) {
@@ -213,7 +215,15 @@ export const UpdateSystem = {
     const timeoutId = setTimeout(() => controller.abort(), this._FETCH_TIMEOUT_MS);
 
     try {
-      const response: Response = await fetch(updateUrl, { ...fetchOptions, signal: controller.signal });
+      // Freshness comes from the shared policy, never from the browser's HTTP
+      // cache — see src/background/fetch-freshness.ts.
+      const { headers, etag, lastModified } = fetchOptions;
+      const response: Response = await fetch(updateUrl, buildFreshnessInit(intent, {
+        headers,
+        etag,
+        lastModified,
+        init: { signal: controller.signal },
+      }) as RequestInit);
 
       const postCheck = classifyResponseUrl(response, ['http:', 'https:']);
       if (!postCheck.ok) {
@@ -242,6 +252,8 @@ export const UpdateSystem = {
    * Returns an array of updates that have a newer version than the installed one.
    */
   async checkForUpdates(scriptId: string | null = null): Promise<UpdateInfo[]> {
+    // A single-script check means the user asked; read the body unconditionally.
+    const intent: FetchIntent = scriptId ? 'manual-update' : 'scheduled-update';
     const scripts: Script[] = scriptId
       ? ([await ScriptStorage.get(scriptId)].filter(Boolean) as Script[])
       : await ScriptStorage.getAll();
@@ -257,24 +269,21 @@ export const UpdateSystem = {
 
       try {
         const updateUrl: string = script.meta.updateURL || script.meta.downloadURL;
-        const headers: Record<string, string> = {};
 
-        // Conditional request using stored etag/last-modified
-        if (script._httpEtag) headers['If-None-Match'] = script._httpEtag;
-        if (script._httpLastModified) headers['If-Modified-Since'] = script._httpLastModified;
-
-        const { response, code: newCode } = await this.fetchUpdateCandidate(updateUrl, { headers });
+        const { response, code: newCode } = await this.fetchUpdateCandidate(updateUrl, {
+          etag: script._httpEtag,
+          lastModified: script._httpLastModified,
+        }, intent);
 
         // 304 Not Modified - no update needed
         if (response.status === 304) continue;
         if (!response.ok) continue;
 
-        // Store HTTP cache headers for next check
-        const etag: string | null = response.headers.get('etag');
-        const lastModified: string | null = response.headers.get('last-modified');
-        if (etag || lastModified) {
-          script._httpEtag = etag || '';
-          script._httpLastModified = lastModified || '';
+        // Store HTTP validators for the next scheduled check
+        const validators = readResponseValidators(intent, response);
+        if (validators) {
+          script._httpEtag = validators.etag;
+          script._httpLastModified = validators.lastModified;
           await ScriptStorage.set(script.id, script);
         }
 

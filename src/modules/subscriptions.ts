@@ -29,17 +29,31 @@ export interface ScriptSubscription {
   lastQueued: number;
   lastSkipped: number;
   lastErrors: string[];
+  /** `ETag` of the last feed read, for the scheduled conditional pull. */
+  httpEtag: string;
+  /** `Last-Modified` of the last feed read. */
+  httpLastModified: string;
+  /** When the stored `scripts` list was last read from the network. */
+  sourceFetchedAt: number | null;
+}
+
+interface FeedValidators {
+  etag?: string | null;
+  lastModified?: string | null;
 }
 
 interface UpsertOptions {
   name?: string;
   enabled?: boolean;
+  validators?: FeedValidators | null;
 }
 
 interface RefreshResult {
   queued?: number;
   skipped?: number;
   errors?: string[];
+  /** True when the feed answered `304` and the cached item list still stands. */
+  notModified?: boolean;
 }
 
 const STORAGE_KEY = 'scriptSubscriptions';
@@ -55,6 +69,19 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 function asCleanString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
+}
+
+/**
+ * A validator is only stored if it is safe to replay as a request header: a
+ * value carrying CR/LF or NUL would be dropped by the header setter at best and
+ * split the request at worst, so it never reaches storage. Length is bounded
+ * because these come from an untrusted feed host.
+ */
+const MAX_VALIDATOR_LENGTH = 512;
+function safeValidator(value: unknown): string {
+  const text = asCleanString(value);
+  if (!text || text.length > MAX_VALIDATOR_LENGTH) return '';
+  return /[\r\n\0]/.test(text) ? '' : text;
 }
 
 function normalizeHttpUrl(value: unknown, baseUrl?: string): string {
@@ -145,6 +172,9 @@ function normalizeSubscription(value: unknown): ScriptSubscription | null {
       lastErrors: Array.isArray(record.lastErrors)
         ? record.lastErrors.filter((item): item is string => typeof item === 'string').slice(0, MAX_ERRORS)
         : [],
+      httpEtag: safeValidator(record.httpEtag),
+      httpLastModified: safeValidator(record.httpLastModified),
+      sourceFetchedAt: typeof record.sourceFetchedAt === 'number' ? record.sourceFetchedAt : null,
     };
   } catch (_) {
     return null;
@@ -241,6 +271,15 @@ async function upsertFromFeed(url: string, feed: ParsedSubscriptionFeed, options
     lastQueued: existing?.lastQueued || 0,
     lastSkipped: existing?.lastSkipped || 0,
     lastErrors: existing?.lastErrors ? [...existing.lastErrors] : [],
+    // A read with no validators must not wipe a working pair — the next
+    // scheduled check would then re-download a feed that had not changed.
+    httpEtag: options.validators
+      ? safeValidator(options.validators.etag)
+      : (existing?.httpEtag || ''),
+    httpLastModified: options.validators
+      ? safeValidator(options.validators.lastModified)
+      : (existing?.httpLastModified || ''),
+    sourceFetchedAt: now,
   };
   const next = existingIndex >= 0
     ? subscriptions.map((item, index) => index === existingIndex ? subscription : item)
@@ -271,6 +310,9 @@ async function markRefreshResult(id: string, result: RefreshResult = {}): Promis
     lastQueued: Math.max(0, result.queued || 0),
     lastSkipped: Math.max(0, result.skipped || 0),
     lastErrors: Array.isArray(result.errors) ? result.errors.slice(0, MAX_ERRORS) : [],
+    // A 304 means the check happened but the stored item list was not re-read,
+    // so its age must keep counting from the last real download.
+    sourceFetchedAt: result.notModified ? current.sourceFetchedAt : now,
   };
   subscriptions[index] = updated;
   await writeAll(subscriptions);
@@ -288,6 +330,7 @@ export const ScriptSubscriptions = {
   upsertFromFeed,
   remove,
   markRefreshResult,
+  safeValidator,
 };
 
 export default ScriptSubscriptions;

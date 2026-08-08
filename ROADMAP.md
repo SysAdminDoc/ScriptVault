@@ -20,6 +20,18 @@ Tampermonkey was briefly removed from CWS in July 2025 [S01] but returned and no
 
 **ScriptVault is the only MV3-native, open-source, full-featured userscript manager with zero telemetry on the Chrome Web Store.** Tampermonkey's return narrows the MV3 exclusivity window, but its closed-source and freemium model remain trust liabilities. The roadmap prioritises differentiation: ship Firefox AMO, land Edge, close GM API parity gaps, and capitalize on trust advantages (Ed25519 signing, AST analysis, update review, MIT license).
 
+> **Correction — 2026-08-06.** The paragraph above is out of date and the
+> exclusivity claim no longer holds. **Violentmonkey shipped MV3 stable in
+> v2.43.0 on 2026-07-14** (first MV3 beta v2.41.2, 2026-07-07) and is at
+> **v2.47.0 as of 2026-08-06**, with S3 sync, an opt-in "Alternative page mode"
+> for true `document-start` timing, and Firefox CSP bypass. ScriptCat is at
+> v1.4.0 stable with Firefox MV3 support, and FireMonkey revived with v3.0–v3.6
+> (2026-07). The durable differentiators are now Ed25519 signing (answers the
+> still-open Violentmonkey #1558), the shipped update-review triad (answers the
+> still-open #1023 +37 and #500 +30), AST risk analysis, and the accessibility
+> gate — not MV3 itself. See `RESEARCH.md` (2026-08-06) and the P1 item
+> "Refresh the README comparison table" below.
+
 ---
 
 ## How to Read This Roadmap
@@ -714,8 +726,6 @@ _Net-new from the 2026-07-09 pass. Deduped against ROADMAP.md, Roadmap_Blocked.m
 
 ## Research-Driven Additions
 
-### P0
-
 ### P1
 
 ### P3
@@ -756,3 +766,728 @@ Roadmap_Blocked.md; those are re-surfaced here as actionable (P2 FF153 cluster).
 ### Delta — focused re-pass (2026-07-22)
 
 _Additional verified findings from a same-day analyzer/storage/scope re-pass. Not duplicates of the items above._
+
+## Audit Findings — 2026-08-02
+
+_Verified-by-observation audit pass against v3.23.1. Baseline before this pass:
+`npm run check` green (227 files / 2434 tests), `npm run smoke:firefox` green,
+`npm run smoke:dashboard` and `npm run smoke:editor` green, working tree clean —
+no pre-existing failures. Live verification used Firefox Developer Edition
+154.0b1 via geckodriver 0.37.1 and headless Chromium via the repo's
+puppeteer-core. Audit-only: no source file was modified._
+
+- [ ] P2 — Persistent UserCSS can orphan an injected stylesheet on an SPA route change
+  Category: correctness
+  Where: `src/modules/userstyles.ts:1536-1551` (`onTabUpdated`, the SPA re-match block); generated copy in `modules/userstyles.js`
+  Problem: The no-longer-matching branch deletes the style from the per-tab registry unconditionally, outside the `try` that wraps `chrome.scripting.removeCSS`. If `removeCSS` rejects while the document is still alive, the stylesheet stays applied to the page but ScriptVault has forgotten it, so nothing can ever remove it — the userstyle visually bleeds onto routes it does not match for the life of that document, and a later re-match cannot clean it up because `previousCss` is gone.
+  Evidence: Traced the block added in commit `8865a3e`. The `catch {}` swallows every rejection with the comment "Tab/document may already be gone", then `existing.delete(styleId)` runs on both the success and failure path. The `_registeredTabs` map is the only record of injected CSS (`tabStyles.set(styleId, css)` at `src/modules/userstyles.ts:1582`), and `onTabNavigated` only clears it on a full document commit — which by definition does not happen for the SPA navigations this code path exists to serve.
+  Fix: Only forget the entry when removal actually succeeded, or when the failure proves the target is gone. Move `existing.delete(styleId)` inside the `try` after the awaited `removeCSS`, and in the `catch` keep the entry unless the error indicates a missing tab/frame (so a live-document failure is retried on the next navigation event rather than leaked).
+  Acceptance: A unit test in `tests/userstyle-injection.test.js` where `chrome.scripting.removeCSS` rejects for a still-open tab asserts the style remains in the registry and that a subsequent `onTabUpdated` to the same non-matching URL retries the removal.
+  Confidence: Verified
+  Effort: S
+
+- [ ] P3 — Pending-updates size cap measures UTF-16 code units, not bytes, and cites a quota that does not apply
+  Category: reliability
+  Where: `src/background/core.ts` (`UpdateSystem._MAX_PENDING_TOTAL_BYTES` and the eviction loop); generated at `background.core.js:1799` and `background.core.js:2149-2155`
+  Problem: The cap added in commit `405a0f6` computes `JSON.stringify(normalized).length`, which counts UTF-16 code units, and compares it against a budget named `_MAX_PENDING_TOTAL_BYTES`. For non-ASCII script bodies the real UTF-8 footprint is up to ~3x the measured value, so a store the code believes is 8 MB can exceed 20 MB on disk — the eviction never fires when it is most needed. The warning string also reports the wrong unit. Separately, the justifying comment says "keep the store safely under the default chrome.storage.local 10 MB quota", but both manifests declare `unlimitedStorage`, so that quota does not apply and the stated rationale is wrong.
+  Evidence: `node -e` on a representative non-ASCII payload: `JSON.stringify` length 101 vs `Buffer.byteLength(...,'utf8')` 281 — a 2.78x undercount. `grep -n unlimitedStorage manifest.json manifest-firefox.json` confirms the permission is declared in both.
+  Fix: Measure real bytes with `new TextEncoder().encode(json).byteLength` (the codebase already uses this in `_scriptSourceByteLength`), and correct the comment to state the actual reason for the bound (bounding service-worker memory and write cost under `unlimitedStorage`), not a quota that is not in force.
+  Acceptance: A test queues pending updates whose UTF-8 size exceeds the budget while their UTF-16 length does not, and asserts eviction occurs.
+  Confidence: Verified
+  Effort: S
+
+- [ ] P3 — Light-theme skip link falls just under AA contrast
+  Category: a11y
+  Where: `pages/dashboard-a11y.js:30-48` — the `.a11y-skip-link` rule inside the injected `STYLES` template (`color: var(--accent-blue)` on `background: var(--bg-header)`); the element itself is created at `pages/dashboard-a11y.js:198`
+  Problem: The "Skip to main content" link renders `rgb(37,99,235)` on `rgb(228,228,228)` for a 4.07:1 ratio at 14px, below the 4.5:1 AA requirement for normal text. This is the first control a keyboard user reaches on the page.
+  Evidence: Computed live in the loaded extension in light theme by walking to the first ancestor with an opaque background and applying the WCAG relative-luminance formula: ratio 4.07, required 4.5, font-size 14px. It was the only genuine failure the sweep found in light theme — the other flagged elements were false positives from gradient-backed buttons whose `backgroundColor` is transparent.
+  Fix: Darken the skip-link foreground in light theme to a blue meeting 4.5:1 against its actual background (or give the link an opaque high-contrast background of its own when focused), using the theme's existing accent tokens rather than a new literal.
+  Acceptance: The focused skip link measures at least 4.5:1 in light theme; the other three themes stay unchanged.
+  Confidence: Verified
+  Effort: S
+
+### Unaudited — needs a pass
+
+_Scope not covered by the 2026-08-02 pass. Not findings; each needs its own audit._
+
+- [ ] P3 — Unaudited: cloud sync providers end to end against live services
+  Category: testing
+  Where: `modules/sync-providers.js`, `src/modules/sync-providers.ts`, `modules/cloud-sync.js`
+  Problem: The 2026-08-02 pass verified only the WebDAV path that `smoke:firefox` exercises against a local stub server. Google Drive, Dropbox, OneDrive, Easy Cloud, and S3 were not exercised against real endpoints, so OAuth refresh, quota, and conflict behavior on those providers is unverified by this pass.
+  Evidence: The Firefox smoke's `webdav` scenario is the only provider with live coverage in the harness output.
+  Fix: Audit each provider's token refresh, error mapping, and 3-way merge against a real or high-fidelity fake endpoint.
+  Acceptance: Each provider has an observed pass/fail record rather than an inference from shared code.
+  Confidence: Needs-repro
+  Effort: L
+
+- [ ] P3 — Unaudited: Monaco editor interaction surface and the DevTools panel in a real DevTools host
+  Category: testing
+  Where: `pages/editor-sandbox.html`, `pages/monaco-adapter.js`, `pages/devtools-panel.js`
+  Problem: `smoke:editor` was run and passes (overlay geometry, 14 controls hit-tested, close works), but editor behaviors beyond that harness — find/replace history, undo across tab switches, Vim mode, large-file handling — were not exercised. The DevTools panel was loaded as a bare page, where `chrome.devtools.inspectedWindow` is absent; its real behavior inside an attached DevTools host is unverified.
+  Evidence: The panel rendered its empty state correctly as a standalone page, which does not exercise the inspected-window code paths.
+  Fix: Drive the editor through its documented interactions, and load the DevTools panel through an actual DevTools session.
+  Acceptance: Both surfaces have observed coverage of their primary interactions.
+  Confidence: Needs-repro
+  Effort: M
+
+- [ ] P3 — Unaudited: install/update flow driven from a real `.user.js` navigation
+  Category: testing
+  Where: `pages/install.js`, install interception in `src/background/core.ts`
+  Problem: The install page was audited only in its no-pending-install error state, which is handled well ("No userscript was found ... Download the userscript again from its source page"). The populated review flow — permission rendering, downgrade detection, `@require` probing, trust-card provenance — was not exercised in this pass.
+  Evidence: Loading `pages/install.html` directly yields the empty state by design.
+  Fix: Drive a real `.user.js` navigation through interception into the review UI and audit the populated states, including a malformed and an oversized script.
+  Acceptance: The populated install review has observed coverage across valid, malformed, and downgrade cases.
+  Confidence: Needs-repro
+  Effort: M
+
+## Research-Driven Additions
+
+### P0
+
+### P1
+
+### P2
+
+- [ ] P2 — Add a bounded local-file watcher fallback with explicit watcher health
+  Why: FileSystemObserver is optional and its current error path stops watching and falls back to manual refresh; Chrome’s documented API history and unknown/errored event semantics require a polling fallback for reliable local editing.
+  Evidence: pages/dashboard.js localWorkspaceFileObservers and observer error handling; tests/local-workspace-dashboard.test.js; https://developer.chrome.com/blog/file-system-observer; existing File System Access contract https://developer.chrome.com/docs/capabilities/web-apis/file-system-access.
+  Touches: pages/dashboard.js, pages/dashboard.html, src/storage/script-db.ts, src/background/core.ts only where message/state contracts require it, modules/storage.js/generated artifacts, and local-workspace/dashboard tests.
+  Acceptance: When FileSystemObserver is unavailable or reports unknown/errored state, an active bound editor performs debounced, bounded metadata polling and routes detected changes through the existing permission check and review-diff apply flow; unbound/hidden editors do not poll, permission/read/oversize failures are visible, and tests cover unavailable, healthy, unknown, errored, unchanged, changed, and rebind cases.
+  Complexity: M
+
+- [ ] P2 — Add a partial-locale and RTL regression ratchet
+  Why: The locale gate currently proves generated parity but permits eight partial runtime catalogs at roughly 2.2%–6.1% coverage, so new UI can remain English-only or break RTL without failing CI.
+  Evidence: scripts/check-locales.mjs, docs/locale-coverage.md, _locales/*, modules/i18n.js, and the 2026-08-02 locale:check:gate output; localization backlog https://github.com/quoid/userscripts/issues/415; Stylus translation workflow https://github.com/openstyles/stylus.
+  Touches: scripts/check-locales.mjs, docs/locale-coverage.md, tests/check-locales-report.test.js, tests/dashboard-i18n-removal.test.js, tests/sidepanel-rtl-layout.test.js, and the dashboard/popup/sidepanel localization harness.
+  Acceptance: CI fails on a coverage regression or missing locale status, a deterministic pseudo-locale exercises the major dashboard/popup/sidepanel/editor labels, and RTL checks cover direction, accessible names, overflow, and control order while keeping partial translations explicitly labeled rather than requiring immediate full translation.
+  Complexity: M
+
+### P3
+
+- [ ] P3 — Make browser-support and release-artifact references version-derived
+  Why: README.md’s generated support matrix and release-preflight example still reference version 3.22.0 and 2026-07-16 while the live manifests are 3.23.1; readme:check passes without checking those generated references.
+  Evidence: README.md:382, README.md:387-391, README.md:591, manifest.json, manifest-firefox.json, scripts/generate-browser-support-matrix.mjs, and scripts/check-readme-claims.mjs.
+  Touches: README.md generated block, scripts/generate-browser-support-matrix.mjs, scripts/check-readme-claims.mjs, release preflight/version checks, and focused documentation tests.
+  Acceptance: Regenerating the support matrix derives the version and verification date from the current release inputs, artifact filenames and examples agree with the same version, historical examples are marked as historical or removed, and the documentation gate fails on stale version/date references.
+  Complexity: S
+
+## Audit Findings — 2026-08-06
+
+_Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check` is green (227 files / 2434 tests, `tsc` clean, all gates pass) — no pre-existing failures (an earlier red run was only an empty `node_modules`). `npm audit --omit=optional --audit-level=high` reports 16 vulns (10 high, 4 critical) — see the still-open P0 "Restore the blocking high-severity dependency-audit gate" above; not re-logged. Findings were traced against the SHIPPED source of truth: `src/background/core.ts` (inline, generated into `background.core.js`) and the promoted `src/modules/*.ts` / `src/background/gm-*.ts` handlers. Several `src/background/*.ts` files (`wrapper-builder.ts`, `import-export.ts`, `update-checker.ts`, `install-handler.ts`, `trust-receipt.ts`, `parser.ts`) are UNSHIPPED mirrors — mirror-only issues were dropped or folded into the mirror-drift item (last P3 below)._
+
+### P2
+
+- [ ] P2 — `@grant` is advisory: the privileged background enforces it for almost no GM handler
+  Category: security
+  Where: `src/background/user-script-message-policy.ts:141-145` (allowlist admits every `GM_*`); grant checks exist only in `gm-webrequest-handler.ts:70` (`GM_webRequest`) and `gm-network-handler.ts:535` (`GM_webSocket`); `scriptHasGrant` (`core.ts:7727`) is referenced nowhere else
+  Problem: `hasGrant()` enforcement lives inside the injected wrapper, which runs in the same USER_SCRIPT world as the untrusted body; the body is concatenated into that scope with no shadowing of `chrome`, so a script can skip the wrapper and call `chrome.runtime.sendMessage` directly. The background then accepts `GM_setValue/getValue`, `GM_openInTab`, `GM_closeTab`, `GM_notification`, `GM_download`, `GM_registerMenuCommand`, `GM_cookie_*` (host-scoped, not grant-gated), and `GM_xmlhttpRequest` (`@connect`-scoped, not grant-gated) from a script the install review presented as `@grant none`. The permission disclosure shown at install does not reflect enforced capability.
+  Evidence: Verified — `grep scriptHasGrant src/background/*.ts` → definition + one call (GM_webSocket); `gm-webrequest-handler.ts:70` is the only other grant check; all value/cookie/tab/notification/download handlers read, none consult grants.
+  Fix: Move grant enforcement to the background: an action→grant table (`GM_cookie_*→GM_cookie`, `GM_xmlhttpRequest→GM_xmlhttpRequest`, `GM_setValue/getValue→GM_setValue/GM_getValue`, …) checked in each `gm-*-handler` using the already-computed `ownedScriptId`/`sender.userScriptId`. Keep the wrapper checks as the fast path.
+  Acceptance: A `@grant none` script that messages `GM_setValue`/`GM_cookie_list`/`GM_download` directly is rejected "not granted"; tests cover a granted vs ungranted action per handler.
+  Confidence: Verified
+  Effort: M
+
+- [ ] P2 — The page-facing Public API and Local MCP bridge has been dead since v3.18.0 (relay action missing from the allowlist); a naive fix opens origin spoofing
+  Category: correctness
+  Where: `content.js:164-168` (relays `action:'publicApi_handleWebMessage'`); `src/background/user-script-message-policy.ts:5-13` (allowlist lacks it); rejection `src/background/core.ts:7686-7693`; handlers `src/modules/public-api.ts:1577-1826`
+  Problem: `publicApi_handleWebMessage` is not `GM_`/`GM.`-prefixed and is absent from `USER_SCRIPT_ALLOWED_EXTRAS`, so every page message returns `{error:'Action not permitted from non-extension context'}` — killing `scriptvault:getScripts`/`isInstalled`/`install` and all four `scriptvault:mcp:*` handlers, a capability CHANGELOG v3.18.0 advertises as shipped. Commit `31c2dbe` touched content.js/router/public-api/core and both tests but not the policy file; the "covering" test mocks `sendMessage` and asserts only the outgoing shape, never the background rejection.
+  Evidence: Verified — allowlist read (chainDomEvent present, publicApi_handleWebMessage absent); `isExtensionSurfaceSender` rejects content-script senders on all three branches.
+  Fix: Add `publicApi_handleWebMessage` to `USER_SCRIPT_ALLOWED_EXTRAS`, AND in the same change stop trusting the message-supplied `origin` — derive it from `sender.origin ?? sender.url` in the handler binding (otherwise any tab-origin sender forges `origin:'https://trusted.example'` for `scriptvault:mcp:writeScript`). Add an integration test driving the real `onMessage` listener.
+  Acceptance: A trusted page round-trips `scriptvault:isInstalled`; a forged-origin `mcp:writeScript` from an untrusted tab is rejected; the test exercises the real listener.
+  Confidence: Verified
+  Effort: M
+
+- [ ] P2 — Tampered remote sync blob silently installs executing scripts (no analyzer/review) and hard-deletes local ones (no trash), in the default plaintext mode
+  Category: security
+  Where: `src/background/cloud-sync.ts:1726-1815` (apply loop: `parseUserscript`→`ScriptStorage.set`→`refreshSyncedScriptRuntime`, no analyzer), `:370-380` (`deleteSyncedScript`→`ScriptStorage.delete`, bypasses trash)
+  Problem: With encryption off (default), the remote envelope is unauthenticated JSON. Synced-in bodies are gated only by `parseUserscript` — no 31-detector analyzer, no review, no notification — then registered and run. Remote tombstones drive a hard delete that skips trash (permanent). An attacker with write access to the user's own backend (shared WebDAV, leaked S3 key, compromised Dropbox/Google account) gets silent arbitrary execution on every device plus unrecoverable library destruction. The E2EE latch protects only passphrase users.
+  Evidence: Verified — read the entire apply loop (no analyzer/review); `deleteSyncedScript` calls `ScriptStorage.delete(scriptId)` directly.
+  Fix: Run synced-in bodies through the analyzer and surface a notification/review on high-risk deltas (new `@grant`/`@match`, eval-class findings); route tombstone deletions through trash. Document that plaintext sync trusts the backend.
+  Acceptance: A high-risk synced-in script raises review/notification; a remote tombstone lands the script in trash; tests cover both.
+  Confidence: Verified
+  Effort: M
+
+- [ ] P2 — Restore/import persist their undo receipt only AFTER all mutations, so a service-worker death mid-restore leaves half-restored state with no rollback record
+  Category: correctness
+  Where: `src/modules/backup-scheduler.ts:1484-1491,1740-1783` (`restoreBackup`); `src/background/core.ts:5353,5497-5533,5853-5889` (`importScripts`/`importFromZip`)
+  Problem: `restoreBackup` snapshots pre-restore state in memory, runs the full mutation chain (`importFromZip` → N IDB writes → settings → folders → workspaces), and calls `_pushReceipt` only at the very end. An MV3 SW can die at any await; on restart the user has mixed restored/pre-restore data and the receipts ledger — the only undo — holds nothing. This is exactly the multi-key-write / SW-died-between-A-and-B class the receipts feature exists to protect against.
+  Evidence: Verified — traced `restoreBackup` end to end; receipt push is the last step.
+  Fix: Persist the receipt (with snapshot) BEFORE the first mutation, marked `pending`, and finalize afterward; on scheduler init surface any still-`pending` receipt as "restore may be incomplete — roll back?". Cheap alt: a `restoreInProgress` journal key written before mutating.
+  Acceptance: Killing the SW mid-restore leaves a recoverable receipt; a failure-injection test asserts a receipt exists before mutations begin.
+  Confidence: Verified
+  Effort: M
+
+- [ ] P2 — Custom themes and extra presets apply only to the dashboard; popup, side panel, install, and DevTools ignore them
+  Category: visual
+  Where: `pages/dashboard-theme-editor.js` persists `sv_active_custom_theme`; only `pages/dashboard.js:5667-5695` reads it. `pages/popup.js:709-713`, `pages/sidepanel.js:503-507`, `pages/install.js:786-791`, `pages/devtools-panel.js:295-302` set `data-theme` from `settings.layout` only and never read `sv_active_custom_theme`
+  Problem: The Theme Editor's extra presets (nord/dracula/solarized/etc.) and custom themes are stored as CSS-var overrides under `sv_active_custom_theme` (they leave `settings.layout` a built-in). The dashboard injects those vars; every other surface renders the base built-in theme, so a user's chosen theme applies to the dashboard alone — a cross-surface inconsistency that undercuts cohesion.
+  Evidence: Verified — `grep -rln sv_active_custom_theme pages/` returns only `dashboard.js` + `dashboard-theme-editor.js`; the four secondary surfaces read only `settings.layout`.
+  Fix: Extract a shared `applyTheme()` (e.g. `pages/theme-apply.js`) that sets `data-theme` AND reads+sanitizes `sv_active_custom_theme` (replicate the dashboard's `/^--[\w-]+$/` key regex + `[{};]`-in-value rejection), called from popup/sidepanel/install/devtools. Also removes the 5× duplicated auto/layout logic.
+  Acceptance: Applying a custom/extra-preset theme then opening popup/sidepanel/install/devtools renders the custom vars; a test asserts each surface reads and sanitizes `sv_active_custom_theme`.
+  Confidence: Verified
+  Effort: M
+
+- [ ] P2 — Switching a profile mutates script enabled-states but the Scripts table is never refreshed
+  Category: correctness
+  Where: `pages/dashboard-profiles.js:563-581` (`_applyProfile` re-renders only the profile bar), auto-switcher `:610-637`; `pages/dashboard.js:19736-19751` (`switchTab` has no `scripts` refresh); dashboard.js has zero `chrome.storage.onChanged` listeners
+  Problem: `_applyProfile` toggles scripts via background messages then only refreshes the chip; it never reloads dashboard state, `switchTab('scripts')` never calls `loadScripts()`, and there is no storage-change listener (grep count 0). After switching a profile in Utilities and returning to Scripts, every row toggle shows the pre-switch state. The URL-rule auto-switcher fires `_applyProfile` from `tabs.onActivated`/`onUpdated` while open, desyncing the table at any time.
+  Evidence: Verified — `grep -c storage.onChanged pages/dashboard.js` → 0; read `_applyProfile`/`switchTab`.
+  Fix: After `_applyProfile`, invoke the dashboard refresh (expose `ScriptVaultDashboardUI.refreshScripts`) or add a scripts-changed listener; minimally make `switchTab('scripts')` re-run `loadScripts()`.
+  Acceptance: Switching a profile updates the table toggles without a manual reload; a test asserts re-render after apply.
+  Confidence: Verified
+  Effort: M
+
+- [ ] P2 — Profile apply reports success even when every toggle fails
+  Category: correctness
+  Where: `pages/dashboard-profiles.js:533-551` (`_setScriptEnabled` is `try{await sendMessage}catch(_){}`, ignores `{error}`) and `:563-581` (no caller checks a result)
+  Problem: Rejections are swallowed and `{error}` responses never inspected; `_getAllScripts` returns `[]` on failure. A profile switch with an unreachable background still sets `_activeProfileId`, persists it, and renders the profile active — claiming a state that does not exist, with no toast/log entry.
+  Evidence: Verified — read both helpers and the chip-click/`switchProfile` callers; none inspect results.
+  Fix: Collect per-script results (check `response?.error` and catch rejections); on any failure show an error toast and skip the active-profile update, mirroring `dashboard-collections.js handleToggleAll`.
+  Acceptance: A profile switch with a failing background shows an error and does not mark the profile active; a test injects a rejecting `sendMessage`.
+  Confidence: Verified
+  Effort: S
+
+- [ ] P2 — The debugger identifies scripts by raw `script_<uuid>` everywhere a name should appear
+  Category: ux
+  Where: `pages/dashboard-debugger.js:298` (console selector option text = id), `:425` (variables selector), `:386` (live-reload row label), `:396` (toggle `aria-label`)
+  Problem: All four render the internal id (`"script_" + crypto.randomUUID()`), so users pick between `script_3f6a1c2e-…` entries and the debugger is effectively unusable with more than one script; screen-reader users hear a UUID. The module receives only ids and never resolves names, though `dashboard.js:16085` builds the `init` options and holds `state.scripts` with `metadata.name`.
+  Evidence: Verified — traced id origin (`generateId`) and all four render sites.
+  Fix: Pass a `getScriptName(id)` callback in `ScriptDebugger.init` options and use it for option text, live-reload labels, and aria-labels, falling back to the id.
+  Acceptance: The debugger's selectors and rows show names; a test asserts names render when a resolver is provided.
+  Confidence: Verified
+  Effort: S
+
+- [ ] P2 — Deleting a custom theme is a 16px hover-only control with no confirmation and no undo
+  Category: ux
+  Where: `pages/dashboard-theme-editor.js:924-929` (`deleteCustomTheme` deletes+persists+toasts immediately), CSS `:575-593` (`.sv-te-delete-custom { width:16px; height:16px; display:none }` revealed on hover)
+  Problem: A custom theme is 21+ hand-picked tokens; the delete trigger is a 16×16 CSS-px "x" appearing on hover (below the repo-enforced 24×24 WCAG 2.2 SC 2.5.8 minimum), with no `showConfirmModal` (available via `ScriptVaultDashboardUI.confirm`, used by every other module's delete) and no undo. One mis-click destroys the theme permanently.
+  Evidence: Verified — read the delete handler (stopPropagation → `deleteCustomTheme` directly) and the hover-reveal CSS.
+  Fix: Route through `ScriptVaultDashboardUI.confirm('Delete Theme?', …, {tone:'danger'})` like chains/profiles/templates, and raise the button to ≥24px.
+  Acceptance: Deleting a custom theme requires confirmation and the control is ≥24×24; a test asserts the confirm path.
+  Confidence: Verified
+  Effort: S
+
+- [ ] P2 — `GM_xmlhttpRequest` buffers the entire response before enforcing the 50 MB cap on every response type except `stream`
+  Category: reliability
+  Where: `src/background/gm-network-handler.ts:292-396` (text/json `await response.text()` `:388,:323` unbounded; arraybuffer/blob check size AFTER `await response.arrayBuffer()`/`.blob()` `:302-303,:313-314`)
+  Problem: The only pre-read bound is `parseInt(content-length||'0')`, which passes on a missing/lying header. A malicious host reachable under `@connect` returns a chunked multi-GB body and OOM-kills the SW (taking down registration, sync, update checks) on every retry. The fix primitive exists (`fetchTextBounded`/`readResponseBytesBounded`, applied to ResourceCache/npm-resolve/install/public-api in 2026-05-24) but `gm-network-handler` was never converted; `responseToDownloadDataUrl` (`core.ts:4932`) has the same declared-length-only pre-check.
+  Evidence: Verified — read all four response paths; only `stream` bounds during read.
+  Fix: Route text/json through `fetchTextBounded` and arraybuffer/blob through a bounded bytes reader so the cap trips during the read.
+  Acceptance: A chunked no-`Content-Length` response over 50 MB is rejected mid-read; a test drives an oversized chunked body.
+  Confidence: Verified
+  Effort: S
+
+- [ ] P2 — `GM_xmlhttpRequest` abandons any request longer than 30 s; `GM.fetch` stream polls forever after a SW restart
+  Category: correctness
+  Where: shipped `background.core.js:13990-14000` (`pollXhrFinalResult` caps at `attempt < 600` × 50 ms = 30 s; terminal events delivered only by this poll) and `:14256` (stream `for (;;)` no cap); `gm-network-handler.ts:501` returns `{done:false}` for an unknown `requestId`
+  Problem: (a) A request with `timeout:60000` or any slow transfer completes in the background but the script's `onload`/`onerror`/`onloadend` never fire and `_xhrRequests` keeps the entry. (b) The `GM.fetch` stream loop polls `GM_xmlhttpRequest_result` forever; after an MV3 SW restart (XhrManager in-memory) the id is unknown, `{done:false}` returns indefinitely, so the promise never settles and a 40 msg/s wake loop keeps the SW from idling.
+  Evidence: Verified — read the shipped poll loop (`if (attempt<600) setTimeout(...50)`) and the uncapped stream `for(;;)`; unknown-id `{done:false}` at gm-network-handler.ts:501.
+  Fix: Base the XHR poll on wall-clock vs the request's own `timeout` (not a fixed 600 ticks) and reconcile via postMessage terminal events; cap the stream loop and, on `{done:false}` for a `requestId` the background no longer knows, reject and stop.
+  Acceptance: A 60 s request delivers `onload`; a simulated SW restart terminates the stream loop; tests cover both.
+  Confidence: Verified
+  Effort: M
+
+- [ ] P2 — Both worldId fallback paths silently restore the exact Firefox failure mode af0bfb3 fixed
+  Category: correctness
+  Where: `src/background/registration.ts:646-697` (mirror `src/background/core.ts:11928-11973`)
+  Problem: If `configureWorld` throws (`:654-656`) or `register` rejects with a `worldId` message (`:687-693`), the script registers into the SHARED default world with no warning, no `_registrationError`, no error-log entry — precisely the "scripts 2..n fail silently" state `af0bfb3` fixed. The catch is deliberately broad (world-count limit, reserved-id rejection, transient failure all land here). Related: `worldId = script.id`, and Chrome reserves ids with leading `_`; imported-backup ids come from the file, so an id starting with `_` silently downgrades to the shared world.
+  Evidence: Verified (code path); Likely (which engine hits the fallback determines user impact).
+  Fix: When `worldConfigured` is false (or the retry fires) on Firefox, record a diagnostic (`_registrationWarning`/ErrorLog) so a silent single-script-per-page regression is observable; sanitize/prefix the worldId so it can never start with `_`.
+  Acceptance: A world-config failure is visible in the error log; an id starting with `_` still gets an isolated world; tests cover both.
+  Confidence: Likely
+  Effort: M
+
+- [ ] P2 — The Firefox worldId feature probe tests for `configureWorld`, not for worldId support
+  Category: correctness
+  Where: `src/background/registration.ts:147-157` (`supportsUserScriptsWorldId` returns `typeof chrome.userScripts.configureWorld === 'function'`)
+  Problem: `configureWorld` shipped in Firefox before per-world `worldId` support (dated to 153); on 136–152 the probe is true and the code relies on the engine THROWING on the unknown `worldId` property. If Firefox instead ignores the unknown property, `worldConfigured` is true, the retry never fires, and every script silently shares one world again — the original bug, on the Firefox range most users are on, with a suite that only proves behavior on 154.0b1. `tests/firefox-per-script-world.test.js:44-51` mocks `configureWorld` as a no-op and asserts the probe returns true — encoding the same assumption under audit.
+  Evidence: Verified (code + test); Likely (needs a Firefox 152 run to close).
+  Fix: Probe the capability, not the symbol — `configureWorld({worldId:'sv-probe', messaging:true})` then `getWorldConfigurations()` (or a one-time two-script co-execution check), cached per session; fall back to the shared world only when the probe proves worldId is absent.
+  Acceptance: On a Firefox build without worldId support the probe returns false and the code degrades knowingly; a capability-probe test covers it.
+  Confidence: Likely
+  Effort: M
+
+- [ ] P2 — SPA navigation events are dropped, not coalesced, leaving UserCSS applied to routes it no longer matches
+  Category: correctness
+  Where: `src/modules/userstyles.ts:1527-1528` (`if (_injectingTabs.has(tabId)) return;`) with the SPA listeners from `8865a3e` (`src/background/core.ts:9982-10003`)
+  Problem: `onTabUpdated` is invoked un-awaited from `onCommitted` and both SPA listeners. While one pass awaits `removeCSS`/`insertCSS`, every further event for that tab is discarded with no queued re-run. On a client-side router firing `pushState` several times quickly (the scenario `8865a3e` targets), the final route's re-match never runs: a style stays on a non-matching route, or a newly-matching route gets no sheet until the next navigation. Distinct from the already-logged orphan-on-removeCSS-failure item (that is `existing.delete` outside the `try`; this is the event never being processed).
+  Evidence: Verified — the re-entrancy guard drops rather than queues; un-awaited invocation from three listeners.
+  Fix: Coalesce — record the latest URL for an in-flight tab and re-run once the current pass settles (or serialize per-tab with a promise chain like `_toggleLocks`).
+  Acceptance: Rapid `pushState` navigations end with the correct final-route styles; a test drives multiple SPA events during an in-flight injection.
+  Confidence: Verified
+  Effort: M
+
+- [ ] P2 — `npm run smoke:dashboard` fails on the signingTrustSection workbench shortcut (pre-existing baseline)
+  Category: testing
+  Where: `scripts/smoke-dashboard.mjs:196` (`destinationReady` waitForFunction) and `:226`; the failing destination is the `signingTrustSection` workbench shortcut
+  Problem: The dashboard smoke exits 1. The reported state is `{"panelActive":false,"panelHidden":true,"filterPressed":"false","activeElement":"svWnDismiss","focusSurface":"signingTrustSection"}` — focus is still on the What's New dismiss button (`svWnDismiss`), so the shortcut click never activated the Settings panel and the 5s `waitForFunction` times out. The editor smoke (`npm run smoke:editor`) passes, so the extension loads and renders fine; this is specific to the workbench deep-link + What's New interaction.
+  Evidence: Reproduced 3/3 consecutive runs. **Confirmed pre-existing**: also fails at `bec9e75` (the pre-session release commit) with a clean `npm ci`, so it is not a regression from the 2026-08-06 fix batch. It did pass once earlier the same day on the same tree, which points at a timing/ordering dependency (the What's New modal is dismissed asynchronously and the harness may click the shortcut before focus leaves the modal) rather than a hard break.
+  Fix: In `scripts/smoke-dashboard.mjs`, wait for the What's New modal to be fully closed (element removed or `document.activeElement` no longer inside it) before driving the workbench destinations, instead of assuming dismissal completed. If the race is in the product rather than the harness, make the What's New close handler return focus deterministically to the rail before resolving.
+  Acceptance: `npm run smoke:dashboard` exits 0 on three consecutive runs.
+  Confidence: Verified
+  Effort: S
+
+### P3
+
+- [ ] P3 — The pending-updates count badge/chip renders `#93c5fd` on a near-white tint = 1.52:1 in light theme
+  Category: a11y
+  Where: `pages/popup.html:694-701` (`.menu-item-badge`, element `#pendingUpdatesBadge` at `:1472`) and `pages/sidepanel.html:44-51` (`.sp-update-chip`, element `#btnPendingUpdates` at `:463`)
+  Problem: Both use `background: rgb(from var(--sv-info) r g b / 0.12)` (theme-aware, near-white in light) with hardcoded `color:#93c5fd`. In light theme `--sv-info` is `#2563eb`, so the background is ~`rgb(229,236,253)` and `#93c5fd` text measures 1.52:1 — far below AA 4.5:1. These badges show the queued-updates count (un-hidden when >0). Unlike the dashboard's `.script-health-badge`/`.script-tag` (which have `html[data-theme="light"]` overrides), popup/sidepanel have none for these.
+  Evidence: Verified — computed via the WCAG relative-luminance formula (1.52:1); no light-theme override exists for either selector (one `#93c5fd` per file).
+  Fix: Replace the hardcoded `#93c5fd` with a theme-aware token meeting 4.5:1 on the tint in all four themes (plain `var(--sv-info)` is only 4.37:1 in light — use a darker info-on-tint token such as a new `--sv-info-strong`, or `var(--sv-text)`).
+  Acceptance: Both badges measure ≥4.5:1 in light theme (other themes unchanged); an assertion added to `tests/accessibility-surface-pass.test.js`.
+  Confidence: Verified
+  Effort: S
+
+- [ ] P3 — Restore writes an unvalidated `folders.json`; a non-array value bricks `FolderStorage` (all folder ops throw)
+  Category: correctness
+  Where: `src/modules/backup-scheduler.ts:1671-1716` (writes parsed archive JSON straight to `chrome.storage.local.set({ scriptFolders: folders })`); `src/modules/storage.ts:872-873` (`this.cache = (data['scriptFolders'] as Folder[]) || []`)
+  Problem: Backups can be arbitrary external files via "import backup ZIP". `restoreBackup` writes `folders.json` with no `Array.isArray` check; `FolderStorage.init` assigns any truthy non-array (object/string/number) to `cache`, and every subsequent `cache.find/push/filter` throws — folder create/update/delete all TypeError until another restore overwrites the key. `verifyBackup` only checks it parses as JSON, and verify is optional. Same gap for `workspaces.json`.
+  Evidence: Verified — read the restore write (no validation) and `FolderStorage.init` (`|| []` guards only falsy).
+  Fix: Validate `Array.isArray(folders)` (and minimally each entry's `id`/`scriptIds`) before writing; harden `FolderStorage.init` to coerce non-arrays to `[]`.
+  Acceptance: Restoring a backup whose `folders.json` is an object leaves folders empty rather than broken; a test asserts a malformed `folders.json` is rejected/coerced.
+  Confidence: Verified
+  Effort: S
+
+- [ ] P3 — Imported/restored settings have no key/type allowlist beyond credential redaction, so a hostile backup can flip security gates
+  Category: security
+  Where: `src/background/core.ts:4512-4520,5462` (`prepareSettingsForPortableImport`) and `src/modules/backup-scheduler.ts:604-620,1653` (`_prepareSettingsForRestore`) — both strip only `SETTINGS_CREDENTIAL_KEYS` then pass the object to `SettingsManager.set`
+  Problem: JSON import and full restore apply the backup's settings after removing only the ~11 credential keys. Security-posture keys — `allowInternalXhr`, `allowInternalSyncEndpoints`, `allowHighPrivilegeScriptApis`, `trustedSigningKeys`, `deniedHosts`, `blacklist`, `scopedHostPermissions` — and arbitrary unknown keys are applied verbatim with no type validation. A shared/hostile backup can silently flip SSRF/privilege gates and seed the signing trust store; malformed types (e.g. `deniedHosts` as a string) flow into consumers. (Prototype pollution is not possible — spread uses CreateDataProperty; verified.)
+  Evidence: Verified — both redaction helpers delete only `SETTINGS_CREDENTIAL_KEYS`; `SettingsManager.set` shallow-merges any object.
+  Fix: Validate imported settings against `src/config/settings-schema.json`: drop unknown keys, type-check known ones, and require explicit confirmation (or always skip) for the security-relevant subset, mirroring the credentials treatment.
+  Acceptance: Importing a backup that sets `allowInternalXhr:true`/`trustedSigningKeys` does not silently apply them; a test asserts unknown/security keys are dropped or gated.
+  Confidence: Verified
+  Effort: M
+
+- [ ] P3 — Local-library `sha256` is format-checked but never re-verified against the code it labels (false provenance on import)
+  Category: security
+  Where: `src/background/local-libraries.ts:78-114` (`normalizeLocalLibrarySnapshots` accepts any 64-hex `sha256` without recomputing over `code`) + `src/background/core.ts:5386-5388` (JSON import runs settings through it) and `:13012-13024` (`getLocalLibraryRequireScripts` embeds `code` with the stored hash as a `#sha256=` label)
+  Problem: The hash is decoration on every path except the original `createLocalLibrarySnapshot` intake. An imported script can carry up to 8×512 KB of arbitrary library code wearing a "reviewed" hash of, say, real jQuery — false provenance in any UI that shows the hash as review evidence. (The script is quarantine-disabled on import, so this is a provenance-integrity gap, not direct execution.)
+  Evidence: Verified — `sha256` is recomputed only in `createLocalLibrarySnapshot` (`:62`); `normalizeLocalLibrarySnapshots` only regex-checks format (`:87-90`).
+  Fix: Recompute `sha256` at registration/wrap time and drop mismatched snapshots; or strip `localLibraries` from imported settings and require re-review.
+  Acceptance: An imported snapshot whose bytes don't match its `sha256` is rejected; a test asserts recomputation.
+  Confidence: Verified
+  Effort: S
+
+- [ ] P3 — `@require` fallback CDNs silently substitute a different library (jQuery core for a plugin) and cache it for 7 days
+  Category: correctness
+  Where: `src/background/core.ts:12041-12071` (`getFallbackUrls`, substring match `lowerUrl.includes('jquery')`/`'gm_config'`/`'mutation-summary'`) and `:12321` + the cache-store block
+  Problem: A require of `https://mysite.com/jquery-plugin-custom.js` that 5xx's falls through to `https://code.jquery.com/jquery-3.7.1.min.js`, and the bytes are cached under the ORIGINAL URL key (memory + `chrome.storage.local`, 7 days). The script runs jQuery core in place of its plugin with no error. Version sniffing is also wrong (`includes('2.')` routes `jquery-1.12.4.min.js` to the jQuery-2 list).
+  Evidence: Verified — `getFallbackUrls` substring branches and the jQuery CDN fallback arrays read in shipped `core.ts`.
+  Fix: Apply a fallback only when the requested URL host is the known CDN being replaced (not any URL containing the substring), or drop generic-name fallbacks; fix version sniffing to parse the version token.
+  Acceptance: A custom-named script whose URL merely contains "jquery" is not substituted; a test covers a plugin URL that 5xx's.
+  Confidence: Verified
+  Effort: S
+
+- [ ] P3 — `@require`/`GM_loadScript` execute code fetched over plaintext HTTP with optional SRI
+  Category: security
+  Where: `src/background/core.ts` require/loadScript fetch paths pass `['http:', 'https:']` to `InternalHostGuard` (e.g. `:10139`); `verifySRI` returns true for a missing/`md5-` hash
+  Problem: Because the fetch happens in the service worker, no mixed-content blocking applies and SRI is opt-in. Any on-path attacker can replace an `@require http://…` body or a `GM_loadScript('http://…')` response with arbitrary JS, evaluated in the script's world.
+  Evidence: Verified — require/loadScript/usercss fetch guards pass `['http:', 'https:']`; SRI enforcement is opt-in (`sri === 'require'`).
+  Fix: For `http:` requires/loadScript, require a verifiable SRI hash (reject un-pinned `http:`) or surface an install/update warning; prefer upgrading known https mirrors.
+  Acceptance: An un-pinned `@require http://…` is refused (or warned) at install; a test covers the http-without-SRI case.
+  Confidence: Likely
+  Effort: S
+
+- [ ] P3 — The network XHR proxy drops `XMLHttpRequest`'s static constants (`DONE`/`OPENED`/…)
+  Category: correctness
+  Where: shipped `background.core.js:15440` (`_WrappedXHR.prototype = _OrigXHR.prototype` only) vs `:15463` (the WebSocket wrapper does `Object.assign(_WrappedWS, {CONNECTING…CLOSED})`)
+  Problem: After the proxy installs, `XMLHttpRequest.DONE`/`.OPENED`/`.UNSENT` (static) are `undefined` for every userscript, so the very common `xhr.readyState === XMLHttpRequest.DONE` comparison silently never matches. The sibling WebSocket wrapper copies its constants, proving the asymmetry.
+  Evidence: Verified — read both wrapper installs in shipped `background.core.js`.
+  Fix: `Object.assign(_WrappedXHR, { UNSENT:0, OPENED:1, HEADERS_RECEIVED:2, LOADING:3, DONE:4 })` after assigning the prototype.
+  Acceptance: `XMLHttpRequest.DONE === 4` inside a wrapped script; a wrapper test asserts the constants.
+  Confidence: Verified
+  Effort: S
+
+- [ ] P3 — Storage-cache refresh clobbers `GM_setValue`/`GM_deleteValue` writes made during the startup window
+  Category: correctness
+  Where: shipped `background.core.js:13593` (`_cache = { ..._cache, ...freshValues }`)
+  Problem: The comment says "merge fresh values with local changes made before refresh completed", but the spread order lets the (possibly pre-write) background snapshot overwrite them. A `GM_setValue` during the startup window is persisted but the local cache reverts to the stale value, so subsequent synchronous `GM_getValue` returns the old value for the page's life; a `GM_deleteValue` is likewise resurrected in the cache.
+  Evidence: Verified — read the merge line in shipped `background.core.js`.
+  Fix: Track keys mutated locally before the refresh lands and exclude them from the `freshValues` overwrite (or spread `freshValues` first then re-apply the local mutation log).
+  Acceptance: A `GM_setValue` during startup is readable synchronously afterward; a test drives a write racing the initial fill.
+  Confidence: Verified
+  Effort: S
+
+- [ ] P3 — Notification ownership check fails open and records an unauthenticated owner
+  Category: security
+  Where: `src/background/gm-notification-handler.ts:138-146` (`callerOwnsNotification` returns true when no `_notifCallbacks` entry exists) and `:176,187-193` (id = caller-chosen `tag`, owner = `data.scriptId`)
+  Problem: `callerOwnsNotification` returns true whenever there is no callback record — true for every fire-and-forget script notification AND ScriptVault's own internal notifications (update-available, error digests; ids like `update-batch-${Date.now()}`/`error-${scriptId}-${Date.now()}`, brute-forceable within a second). Any script can `GM_closeNotification`/`GM_updateNotification` a guessed id to suppress or fully rewrite (arbitrary title/text/image) the extension's own notifications under its identity. The owner is stored as the unauthenticated `data.scriptId`, and a caller-chosen `tag` becomes the Chrome id, so two scripts sharing a tag overwrite each other.
+  Evidence: Verified — the fail-open branch is documented in a comment; owner stored as `data.scriptId`.
+  Fix: Always record an owner (`sender.userScriptId || data.scriptId`) at create time, namespace caller tags per script (`${scriptId}:${tag}`), and fail closed when no owner record exists for a caller-supplied id.
+  Acceptance: A script cannot update/close another script's or the extension's notification; a test covers a forged-id update attempt.
+  Confidence: Verified
+  Effort: S
+
+- [ ] P3 — Cookie-routing DNR session rule is not scoped to the extension's own request
+  Category: security
+  Where: `src/background/core.ts:4842-4878` (session rule condition `{ regexFilter: <exact url>, resourceTypes: ['xmlhttprequest'] }` — no `tabIds`/`initiatorDomains`)
+  Problem: For the lifetime of a cookie-routed `GM_xmlhttpRequest`, any XHR from any tab to that exact URL gets its `Cookie` header replaced with the extension-computed value (possibly from a partitioned jar the page cannot otherwise reach). `regexFilter` is case-insensitive by default, widening the match. A page racing a fetch to the same URL can harvest the injected header server-side or strip its own session cookie.
+  Evidence: Verified — rule construction read; the URL lock serializes ids but not applicability.
+  Fix: Add `condition.tabIds: [chrome.tabs.TAB_ID_NONE]` (extension-initiated only) or an extension-scoped `initiatorDomains`, and set `isUrlFilterCaseSensitive: true`.
+  Acceptance: The cookie-routing rule applies only to the extension's own request; a test asserts the condition scoping.
+  Confidence: Likely
+  Effort: S
+
+- [ ] P3 — `.user.js`/`.user.css` URLs with a fragment bypass install interception
+  Category: correctness
+  Where: `src/background/core.ts:10176,10217` (JS regex `/\.user\.js(\?.*)?$/i` + `urlMatches` filter) and `:10253,10272` (`.user.css`)
+  Problem: `webNavigation` `details.url` includes fragments, so `https://example.com/x.user.js#anything` never matches (the `urlMatches` filter means the listener isn't even invoked) and the raw script renders in the tab instead of the install review. Same for `.user.css`.
+  Evidence: Verified — regex evaluated; the RE2 filter gates listener invocation.
+  Fix: Extend both patterns to `(\?[^#]*)?(#.*)?$` (JS check and the RE2 `urlMatches` filter).
+  Acceptance: A `.user.js#frag` URL is intercepted into the review page; a test covers the fragment case.
+  Confidence: Verified
+  Effort: S
+
+- [ ] P3 — Install trust/provenance records the pre-redirect URL; the final `response.url` is discarded (source-badge laundering)
+  Category: security
+  Where: `src/background/core.ts:10141-10157` (`_fetchPendingUserscript` stores the navigation URL), `:10428-10451` (`installFromUrl`)
+  Problem: `classifyResponseUrl` rejects only internal-host redirects; the Source & Trust card, `classifyInstallSource` badge, and the persisted receipt `installUrl` all use the PRE-redirect URL. An open redirect on a "good"-tone registry host would display a trusted source for bytes served by an arbitrary external host. `fetchScriptPreview` already returns `finalUrl`, so the asymmetry is known.
+  Evidence: Verified — traced `pendingInstall.url` → `installSourceUrl` → receipt `source.installUrl`; `response.url` is never captured on this path.
+  Fix: Record `response.url` alongside the requested URL in `pendingInstall`; badge/classify from the final URL and flag a cross-host redirect as a review reason.
+  Acceptance: A cross-host redirect shows the final host (and a warning); a test asserts the receipt records the resolved URL.
+  Confidence: Likely (mechanism verified; end-to-end needs an open redirect on a trusted host)
+  Effort: S
+
+- [ ] P3 — Auto-update re-notifies every cycle for update URLs whose servers send no validators
+  Category: ux
+  Where: `src/background/core.ts:2506-2541` (`autoUpdate` notification gate), `:1899` (validators stored only if present), `queueUpdates` rebuild
+  Problem: When the update endpoint returns no ETag/Last-Modified, every cycle re-fetches, re-detects the same newer version, re-queues it (resetting `queuedAt`), and — for review-required/non-apply-safe mode — fires "N updates ready" again. The user is re-notified every cycle until they act, and a dismissed pending update from such a server reappears next cycle.
+  Evidence: Verified — traced the no-validator path through `queueUpdates` to the notification gate `queued > 0`.
+  Fix: Suppress the notification when the queued set is id+version-identical to what was already pending; preserve original `queuedAt` for unchanged entries.
+  Acceptance: A validator-less server does not re-notify on an unchanged pending update; a test covers repeated cycles.
+  Confidence: Verified (logic); real-world cadence Needs-repro
+  Effort: S
+
+- [ ] P3 — `checkForUpdates` doesn't skip user-modified scripts, so they are fetched/receipt-built/queued/notified but can never apply and never clear
+  Category: correctness
+  Where: shipped `src/background/core.ts:1859-1866` (skips `@nodownload` but not `settings.userModified`) vs `:2001` (`applyUpdate` refuses non-force applies of user-modified); `applyPendingUpdate` clears the queue entry only on success
+  Problem: A user-modified script with an update URL is fetched every cycle, `_buildPendingUpdate` runs full trust-receipt construction (network-fetching every `@require` body), the item is queued (possibly `safeToApply`), the user is notified, and Apply returns `{skipped:'user-modified'}` without clearing the queue — so it sits there indefinitely. The tested mirror `update-checker.ts:256` DOES have the skip, so the suite pins behavior the runtime lacks.
+  Evidence: Verified — `grep userModified` in shipped `checkForUpdates` returns nothing; mirror has the skip.
+  Fix: Add the `userModified` skip to the live `checkForUpdates` auto path (keep manual single-script checks reporting it), or mark such items un-appliable and exclude them from the "ready" count.
+  Acceptance: A user-modified script is not re-queued/re-notified on auto-update; a test covers the auto path.
+  Confidence: Verified
+  Effort: S
+
+- [ ] P3 — The primary install path (`saveScript`) skips ESM bundling, so ESM scripts install unbundled and bypass the experimental-flag refusal
+  Category: correctness
+  Where: `src/background/core.ts:6754-6916` (`saveScript` — no `ESMUserscriptBundler.bundleIfNeeded`) vs `installFromCode` (`:10298`) and `applyUpdate` (`:2001`) which call it
+  Problem: `saveScript` is the path used by the install-review page and the dashboard editor. An `@module 1`/`@inject-into module` script is accepted raw: with `experimentalESMUserscripts` off it installs where the other paths would refuse it, and either way the raw `import` statements land in the GM wrapper IIFE and fail at injection with no surfaced error.
+  Evidence: Verified — read the full `saveScript` body; no bundler reference.
+  Fix: Run `bundleIfNeeded` in `saveScript` after parse (same pattern as `installFromCode`).
+  Acceptance: An ESM script installed via the review page is bundled or refused per the flag; a test covers both flag states.
+  Confidence: Verified
+  Effort: S
+
+- [ ] P3 — `applyUpdate` registers new code before persisting; a persist failure leaves running and stored code divergent
+  Category: correctness
+  Where: `src/background/core.ts:2091-2108` (re-register, then `ensurePersistentStorageForScriptWrite`/`ScriptStorage.set`)
+  Problem: Register-first is deliberate and registration failure is handled, but the reverse is not: if the persist throws after successful re-registration (e.g. quota), the browser runs the new code while storage holds the old version — dashboard, receipts, and version history disagree with what executes until the next SW restart re-registers the old code (a silent downgrade of running code).
+  Evidence: Verified — read the ordering; no compensating re-register on persist failure.
+  Fix: On persist failure, best-effort re-register the previous script (or unregister) before propagating the error.
+  Acceptance: A persist failure after re-register restores the previously-running code; a test injects a rejecting `ScriptStorage.set`.
+  Confidence: Verified
+  Effort: S
+
+- [ ] P3 — `.user.css` pending payloads have no TTL, cap, or dedup — unlike the `.user.js` path — and leak when the tab never loads the dashboard
+  Category: reliability
+  Where: `src/background/core.ts:10249-10262` (writes `pendingUserStyle_<tabId>`, up to `MAX_SCRIPT_SIZE` = 5 MB), consumed at `pages/dashboard.js:13547-13554`; the `_storePendingInstall` TTL/cap sweep (`:10104-10131`) covers only `pendingInstall*`
+  Problem: The `.user.css` interceptor writes the full untrusted CSS under `pendingUserStyle_<tabId>` with no TTL, no cap, and no in-flight dedup. The sibling `.user.js` path has a 5-minute TTL, a 32-entry cap, and a `_fetchPendingUserscript` in-flight map. Close the redirected tab before the dashboard loads and the entry is permanent; two tabs opening the same `.user.css` fetch it twice. (Corroborated by two independent passes.)
+  Evidence: Verified — the pending-install sweep prefix does not include `pendingUserStyle_`; no dedup map on the UserCSS fetch.
+  Fix: Reuse the `_storePendingInstall` TTL/cap eviction for the `pendingUserStyle_` prefix and add the same in-flight dedup as `_fetchPendingUserscript`.
+  Acceptance: An unconsumed `pendingUserStyle_` entry is swept after the TTL and concurrent same-URL opens fetch once; tests cover both.
+  Confidence: Verified
+  Effort: S
+
+- [ ] P3 — EasyCloud debounce/periodic sync paths bypass the connected gate (status churn; possible post-disconnect resurrection)
+  Category: correctness
+  Where: `src/modules/sync-easycloud.ts:1185-1192` (`notifyScriptSaved`/`notifyScriptDeleted` → `_debouncedSync`), `_handleAlarm` → `_performSync` (`:980-1005`) never checks `KEYS.CONNECTED`; contrast the gated storage listener `:1220-1223`; `disconnect` revoke is fire-and-forget `.catch(()=>{})` (`:1378-1382`)
+  Problem: For never-connected users, every script save schedules a doomed sync 5 s later that fails token acquisition and persists `easycloud_status='error'` (churn). Worse edge: after `disconnect()`, if the revoke fetch fails, the Google grant survives, `getAuthToken(false)` still mints tokens, and the next save silently resumes uploading to Drive after the user disconnected.
+  Evidence: Verified — traced `notifyScriptSaved` → `_debouncedSync` → `_handleAlarm` → `_performSync`; no `KEYS.CONNECTED` read on that path.
+  Fix: Read `KEYS.CONNECTED` at the top of `_performSync` (or `_handleAlarm`) and return early when false.
+  Acceptance: Saves while disconnected schedule no sync; a test asserts `_performSync` early-returns when disconnected.
+  Confidence: Verified (churn); Likely (resurrection)
+  Effort: S
+
+- [ ] P3 — Refresh-token failure no longer clears stale tokens (regression vs the documented v2.0.2 fix)
+  Category: reliability
+  Where: `src/modules/sync-providers.ts:975-978,1413-1416,1764` (Google/Dropbox/OneDrive refresh only log + return null; connected flags stay true)
+  Problem: CLAUDE.md records a v2.0.2 fix "clear stale tokens on 400/401 refresh failure". The current TS source and generated `modules/sync-providers.js` only log and return null; with a revoked refresh token every cycle burns a probe+refresh and fails generically, `googleDriveConnected` etc. stay true, and nothing tells the user to reconnect. With the autoSync-persistence gap above, the failure is fully silent.
+  Evidence: Verified — behavior read in TS + generated runtime; intent regression inferred from the changelog note.
+  Fix: On a definitive `invalid_grant`/400/401 refresh, clear the dead tokens and flip the provider's connected flag to "reconnect required"; keep network-level nulls non-destructive.
+  Acceptance: A revoked refresh token flips the provider to disconnected and surfaces "reconnect"; a test covers `invalid_grant`.
+  Confidence: Verified
+  Effort: S
+
+- [ ] P3 — No 429/Retry-After handling; Drive rate-limit 403 is misread as an auth failure
+  Category: reliability
+  Where: `src/modules/sync-providers.ts:1009-1011` and all providers
+  Problem: No provider inspects 429/`Retry-After`; a rate-limited upload throws generically and the fixed-period `autoSync` alarm retries at the same cadence (no backoff). Google Drive signals rate limiting with HTTP 403 (`userRateLimitExceeded`), and `googledrive.getValidToken` treats 403 as expired-token → a pointless refresh per cycle while rate-limited.
+  Evidence: Verified — code paths read; Drive's 403-for-quota is documented API behavior.
+  Fix: Distinguish 403 rate-limit bodies from auth 403s before refreshing; honor `Retry-After` and back off the autoSync alarm after consecutive failures.
+  Acceptance: A 429/403-quota response backs off rather than refreshing every cycle; a test covers a rate-limit body.
+  Confidence: Verified
+  Effort: M
+
+- [ ] P3 — Encrypt-side sync KDF iterations are uncapped while decrypt caps at 10M, so a large configured value produces undecryptable envelopes
+  Category: correctness
+  Where: `src/modules/sync-crypto.ts:97-102` (`resolveIterations`, no upper bound) vs `:221-225` (decrypt rejects `> MAX_KDF_ITERATIONS` = 10M); setting at `settings-defaults.json:34` + the `Settings` type (reachable via settings import)
+  Problem: A settings import setting `syncEncryptionKdfIterations` to e.g. 20M produces uploads every device — including the author — refuses with "out-of-range KDF iteration count", bricking sync until the remote blob is manually deleted.
+  Evidence: Verified — both bounds read; the setting is reachable via import.
+  Fix: Clamp `resolveIterations` to `[floor, MAX_KDF_ITERATIONS]`.
+  Acceptance: A configured value above the cap is clamped and the envelope decrypts; a test covers an over-cap value.
+  Confidence: Verified
+  Effort: S
+
+- [ ] P3 — 30-day tombstone prune is defeated by the remote round-trip; the uploaded tombstone map grows unboundedly
+  Category: maintainability
+  Where: `src/background/cloud-sync.ts:1665` and `src/modules/sync-easycloud.ts:869` (union remote tombstones unconditionally), upload includes the full merged map (`:1872`); local prune `core.ts:10975-10986`
+  Problem: The maintenance prune removes local tombstones >30 days, but the next sync unions the remote envelope's tombstones back in, detects a change, re-persists the pruned entries, and re-uploads them. Nothing prunes tombstones from the uploaded envelope, so the local prune is a no-op and the map grows with every deletion for the account's life (inflating every future encrypted payload).
+  Evidence: Verified — both engines union remote tombstones; upload includes the full map.
+  Fix: Apply the same 30-day age filter to the merged tombstones before persisting/uploading (safe: the resurrection guard is timestamp-based).
+  Acceptance: Tombstones older than 30 days stop reappearing after a sync; a test covers prune survival across a round-trip.
+  Confidence: Verified
+  Effort: S
+
+- [ ] P3 — `matchPattern` diverges from Chrome on scheme wildcard and host case (over-counts, needless reloads, missed matches)
+  Category: correctness
+  Where: `src/background/url-matcher.ts:191` (`scheme === '*'`) and `:203-212` (case-sensitive host)
+  Problem: Used for badge counts, popup listing, `autoReloadMatchingTabs`, and `MatchSet.getMatching`. (a) `scheme === '*'` accepts ANY protocol, so `@match *://*/*` reports a match on `file://`/`ftp://`/`chrome-extension://`; Chrome's `*` means http/https only → over-counted badges and needless `chrome.tabs.reload` of `file://` tabs on save (`tab-reload.ts:41-45`). (b) Host comparison is case-sensitive against the already-lowercased `urlObj.hostname` while `isValidMatchPattern` accepts uppercase, so `@match *://GitHub.com/*` runs in Chrome (which canonicalizes) but ScriptVault's matcher says "no match" → the popup shows no scripts and auto-reload skips the page.
+  Evidence: Verified — both divergences read in the shipped matcher.
+  Fix: Restrict `*` to http/https (keep `@include`'s broader semantics in `matchIncludePattern`), and lowercase the pattern host before comparison.
+  Acceptance: `@match *://*/*` does not match `file://`; `@match *://GitHub.com/*` matches `github.com`; tests cover both.
+  Confidence: Verified
+  Effort: S
+
+- [ ] P3 — The badge counts scripts that can never run on the page
+  Category: correctness
+  Where: `src/background/badge.ts:88-98` (`matchingScripts` = `script.enabled && doesScriptMatchUrl(...)`)
+  Problem: The count does not exclude the classes `registerScript` refuses: `meta.background` scripts (`registration.ts:331-337`), `@run-at context-menu` (`:543-548`), `settings._importQuarantine` (`:192-194`), or scripts left with `_registrationError`. A user with a couple of background/context-menu scripts sees a permanently inflated "running here" count.
+  Evidence: Verified — read the counting predicate vs the registration exclusions.
+  Fix: Filter through `isScriptEligibleForRegistration` plus the background/context-menu exclusions before counting.
+  Acceptance: Background/context-menu/quarantined scripts are not counted as running on a page; a test covers the exclusions.
+  Confidence: Verified
+  Effort: S
+
+- [ ] P3 — `key in meta` walks the prototype chain in the UserCSS metadata parser
+  Category: correctness
+  Where: `src/modules/userstyles.ts:545-547` (`else if (key in meta) { meta[key] = value; }`)
+  Problem: `key in meta` is true for every `Object.prototype` member, so `@toString evil` in a `==UserStyle==` block stores an own `toString` string on the persisted meta; any later string coercion throws. Impact is small (nothing currently coerces it) but the guard is not doing what it reads as. (Same class as the `GM_getValue` proto item.)
+  Evidence: Verified — read the parse branch.
+  Fix: `Object.prototype.hasOwnProperty.call(meta, key)`.
+  Acceptance: `@toString`/`@constructor` directives are ignored; a parser test covers them.
+  Confidence: Verified
+  Effort: S
+
+- [ ] P3 — `executeMenuCommand` forwards a caller-supplied `scriptId`, letting one script trigger another's menu-command callback
+  Category: security
+  Where: `src/background/gm-menu-handler.ts:146-153` (passes `data.scriptId` to `chrome.tabs.sendMessage`; every other branch uses `ownedScriptId`)
+  Problem: Unlike the sibling branches, this trusts `data.scriptId`, so a script can fire another script's registered menu-command callback in the shared tab. (Also: `menuCommands` read-modify-write via `chrome.storage.session` at `:84-119` is unserialized and keys under the literal `"undefined"` when `ownedScriptId` is absent.)
+  Evidence: Verified — read the handler; the asymmetry with `ownedScriptId` is clear.
+  Fix: Use `ownedScriptId`/`sender.userScriptId` for the target; serialize the `menuCommands` read-modify-write and skip when the owner id is undefined.
+  Acceptance: A script cannot trigger another script's menu command; a test asserts owner scoping.
+  Confidence: Verified
+  Effort: S
+
+- [ ] P3 — `GM_audio` watch state is per-tab, not per-script — one script's unwatch stops events for all
+  Category: correctness
+  Where: `src/background/gm-audio-handler.ts:86-101` (`_audioWatchedTabs` is a `Set<number>`)
+  Problem: The first script to call `GM_audio_unwatchState` stops state events for every other script watching that tab.
+  Evidence: Verified — read the handler; watch state keyed by tab only.
+  Fix: Key watch state by `${scriptId}:${tabId}` and emit per-script.
+  Acceptance: Two scripts watching one tab's audio are independent; a test covers isolation.
+  Confidence: Verified
+  Effort: S
+
+- [ ] P3 — `__svEventHandler` accepts cross-frame `postMessage` (missing the `event.source !== window` guard its three siblings have)
+  Category: security
+  Where: shipped `background.core.js:14910` (`window.addEventListener('message', function __svEventHandler(event) {…}` with no source guard) vs the guarded handlers at `:13347,13483,13556`
+  Problem: Any window holding a handle (opener, embedding frame) can inject `notificationEvent`/`downloadEvent`/`openedTabClosed` and fire the script's `onclick`/`onload`/`onclose` callbacks. `CHANNEL_ID` derives from the public extension id; the required per-install `scriptId` is leaked into the page DOM by `GM_addStyle` (`style.setAttribute('data-scriptvault', scriptId)`), so a same-window page script can read it and forge messages.
+  Evidence: Verified — the three siblings guard `event.source !== window`; `__svEventHandler` at :14910 does not.
+  Fix: Add `if (event.source !== window) return;` to `__svEventHandler`; stop stamping the raw `scriptId` into the page DOM (use a non-reversible marker).
+  Acceptance: A cross-frame forged event does not fire the script's callbacks; a test covers a foreign `event.source`.
+  Confidence: Verified
+  Effort: S
+
+- [ ] P3 — Offscreen document accepts analysis/merge work from any extension context (content scripts, userscripts) with no input size bounds
+  Category: security
+  Where: `offscreen.js:10-33` (gate is only `_sender.id !== chrome.runtime.id`); `handleAnalyze`/`handleMerge`/`handleDiff`/`handleESMImports` have no length caps
+  Problem: `chrome.runtime.sendMessage` reaches all extension contexts, so `{type:'offscreen_analyze', code:<pathological>}` from a content-script/userScript-world sender reaches `handleAnalyze` even though the SW's action gate would reject the same message. A full Acorn parse + `walkAST` (or `Diff.structuredPatch`) on multi-MB inputs is CPU/memory abusable.
+  Evidence: Verified — the only gate is the id check; no size caps in the handlers.
+  Fix: Require a nonce or verify `_sender.url` is the SW/extension page (content-script senders carry an http(s) `sender.url` and a `sender.tab`), and cap input lengths before parsing.
+  Acceptance: An oversized/foreign offscreen request is rejected; a test covers a content-script-shaped sender and an oversized input.
+  Confidence: Verified (reachability); Needs-repro (practical impact)
+  Effort: S
+
+- [ ] P3 — Messaging-failure catch branches discard `e.message`, leaving no actionable detail on SW-asleep/port-closed failures
+  Category: maintainability
+  Where: `pages/dashboard.js:12587,13015,13121,13198,15338,16406` (`catch (e)` toasts a bare fallback like "Rollback failed"/"Update failed")
+  Problem: The sibling `res?.error || 'X failed'` path surfaces background-reported errors, but the `catch (e)` branches drop `e.message`; on a rejection the user gets no detail. `btnCreateBackup` (`:17468`) and the save path already preserve detail.
+  Evidence: Verified — read all six sites.
+  Fix: `showToast(e?.message || 'X failed', 'error')` in the catch branches.
+  Acceptance: A rejected background call shows its message; consistent with the save/backup handlers.
+  Confidence: Verified
+  Effort: S
+
+- [ ] P3 — CSP reporter's "workarounds" recommend approaches that cannot work in this product
+  Category: ux
+  Where: `pages/dashboard-csp.js:30-52`
+  Problem: The connect-src suggestion ships `chrome.runtime.sendMessage({ action: 'fetch', url })` — no `fetch` action exists in the router and the userscript allowlist would reject it — and the script-src suggestions (`chrome.scripting.executeScript`, content-script `new Function`) are extension-developer techniques unavailable to userscript authors. Users following the product's own advice hit dead ends.
+  Evidence: Verified — `action:'fetch'` is the only sent action string with no router entry.
+  Fix: Replace with ScriptVault-actionable guidance (`GM_xmlhttpRequest` + `@grant`/`@connect`, `GM_addElement`, `@inject-into` notes) and drop the extension-dev samples.
+  Acceptance: The CSP workaround cards reference only actions/APIs available to userscripts.
+  Confidence: Verified
+  Effort: S
+
+- [ ] P3 — Live Reload empty state tells end users to call an internal JS function
+  Category: docs
+  Where: `pages/dashboard-debugger.js:380` (`'No scripts registered. Call enableLiveReload(scriptId) to add one.'`)
+  Problem: `enableLiveReload` is a module API, not a UI action; developer copy leaked into a user-facing empty state, and the real path (open the debugger from a script's editor) is never mentioned.
+  Evidence: Verified — read `renderLiveReloadPanel`; population is via the editor debug button / console ingestion.
+  Fix: Replace with e.g. "No scripts captured yet. Open the debugger from a script's editor to add it here."
+  Acceptance: The empty state describes an in-UI action.
+  Confidence: Verified
+  Effort: S
+
+- [ ] P3 — Dependency graph has no zero-scripts empty state (blank canvas)
+  Category: ux
+  Where: `pages/dashboard-depgraph.js:576-620` (`render()` has no `nodes.length === 0` path); the only empty copy is the sidebar's "Select a node…"
+  Problem: A user with no scripts (or no relationships) opening Utilities → Dependency Graph sees an unexplained empty canvas.
+  Evidence: Verified — read `render()`; `dg-empty` is sidebar-only.
+  Fix: When `nodes.length === 0`, overlay "No scripts to graph yet — install a script to see its dependencies and match overlaps."
+  Acceptance: The empty graph shows an explanatory message.
+  Confidence: Verified
+  Effort: S
+
+- [ ] P3 — Drifted UNSHIPPED mirror modules are pinned by the test suite as if they were the product
+  Category: maintainability
+  Where: `src/background/wrapper-builder.ts`, `import-export.ts`, `update-checker.ts`, `install-handler.ts`, `trust-receipt.ts`, `parser.ts` (none in `ts-source-promotion.json`; live copies are inline in `core.ts`); tests `tests/gm-websocket.test.js`, `wrapper-gm-tabs-39-13.test.js`, `wrapper-dom-security.test.js`, `pending-update-queue.test.js`, `pending-install-isolation.test.js`, `trust-receipt*.test.js`, `versions.test.js` and others import the mirrors
+  Problem: These files are re-exported only by the unused `src/background/index.ts` barrel and are not built. They have measurably drifted from the live `core.ts`: mirror `wrapper-builder.ts` lacks `GM_getTab/saveTab/getTabs` grant checks (live core.ts has them), defaults `GM_getResourceURL` to a never-revoked blob URL (live uses the data-URI leak fix), is missing standalone `GM_updateNotification`/`GM_closeNotification` + `buttons[]`/`onbuttonclick` + the highlight-path `_notifCallbacks` cleanup, and `meta.grant.length` throws where core uses `meta.grant || ['none']`; mirror `import-export.ts` lacks versionHistory snapshot, import receipts, per-script settings preservation, and resets `createdAt` on overwrite; mirror `update-checker.ts` lacks the backoff engine, the pending-updates byte cap, and the provenance-failure gate (but has the `userModified` skip the runtime lost). Tests importing these prove nothing about shipped behavior (the "check wired to the wrong data source" failure mode) and mislead anyone who "fixes" a bug in the mirror. `GM_webSocket` is concrete: implemented in the mirror wrapper and covered by `tests/gm-websocket.test.js`, but the shipped injected wrapper exposes no `window.GM_webSocket`/`GM.webSocket` (`grep "window.GM_webSocket" background.js` → 0), so a `@grant GM_webSocket` script gets a `ReferenceError`.
+  Evidence: Verified — `ts-source-promotion.json` has no entries for these files; live-vs-mirror drift confirmed feature-by-feature (consolidates three passes' observations); `grep "window.GM_webSocket" background.js` → 0.
+  Fix: For each mirror either (a) promote it — extract the live logic from `core.ts` into the module, add it to `ts-source-promotion.json` + the drift gate — or (b) delete it and repoint its tests at the generated `background.core.js` extraction. At minimum add a drift assertion between each mirror and its inline `core.ts` copy so divergence fails CI. Separately decide whether `GM_webSocket` is a shipped feature; if so expose the client in the live wrapper, else drop the mirror + test.
+  Acceptance: No test imports a non-promoted `src/background/*.ts` mirror without a drift assertion against the shipped copy; `GM_webSocket` either works in a live browser or is removed from docs/tests.
+  Confidence: Verified
+  Effort: L
+
+- [ ] P3 — Doc rot: CLAUDE.md lists dashboard modules that do not exist
+  Category: docs
+  Where: repo `CLAUDE.md` "Dashboard Modules (26 files)" lists `dashboard-i18n-v2.js` and `dashboard-recommendations.js`
+  Problem: Neither file exists in `pages/` and nothing references `I18nV2`; future maintainers/agents hunt for phantom files.
+  Evidence: Verified — `ls` fails for both; grep for references returns nothing.
+  Fix: Remove the two entries and re-count the module list. (CLAUDE.md is AI working notes, not user-facing; safe to edit.)
+  Acceptance: The module inventory lists only files that exist.
+  Confidence: Verified
+  Effort: S
+  _2026-08-06 research pass — same item, wider scope than first recorded._ The
+  same file also states version v3.19.2 (actual 3.24.0), Monaco 0.55.1 (actual
+  0.56.0), vendored `acorn 8.14.1` and `diff 7.0.0` — both wrong: `lib/acorn.min.js`
+  is 8.17.0 and `lib/diff.min.js` is 9.0.0, correctly recorded in
+  `docs/amo-vendored-libraries.md`. Fold these into the same sweep; the vendored
+  ones matter most because a stale note invites a needless "upgrade the vendored
+  library" task that is already done.
+
+### Unaudited — needs a pass
+
+- [ ] P3 — Unaudited: live-browser drive of the populated install review, editor interactions, and DevTools panel in a real host
+  Category: testing
+  Where: `pages/install.js` (populated states), `pages/monaco-adapter.js`/`pages/editor-sandbox.html`, `pages/devtools-panel.js`
+  Problem: This pass was static/trace + Node-timing based; the populated install review (valid/malformed/oversized/downgrade), editor find/replace/undo-across-tabs/large-file behavior, and the DevTools panel inside an attached DevTools session were not driven live. (Overlaps the prior 2026-08-02 "Unaudited" items; still open.)
+  Evidence: No live-drive harness was run in this pass.
+  Fix: Drive a real `.user.js` navigation into the review UI and load the DevTools panel through an attached session; drive the editor's documented interactions.
+  Acceptance: Observed coverage of the populated install/editor/devtools interactions.
+  Confidence: Needs-repro
+  Effort: M
+
+- [ ] P3 — Unaudited: cloud providers against live endpoints, and Stylus import
+  Category: testing
+  Where: `src/modules/sync-providers.ts` (Google Drive/Dropbox/OneDrive/S3 live OAuth+quota+429 bodies), `src/modules/sync-easycloud.ts`, `_convertStylusStyle`/`importStylusBackup` in `src/modules/userstyles.ts`
+  Problem: Provider findings above were traced statically; real OAuth consent, token refresh, quota, and 429/403 bodies were not exercised against live services. Stylus import conversion was not audited.
+  Evidence: No live endpoint or Stylus-import fixture was run in this pass.
+  Fix: Audit each provider against a real/high-fidelity fake endpoint; add Stylus-import conversion fixtures.
+  Acceptance: Each provider and the Stylus import path has an observed pass/fail record.
+  Confidence: Needs-repro
+  Effort: L
+
+## Research-Driven Additions (2026-08-06 research pass)
+
+_Net-new from the 2026-08-06 external research pass (baseline v3.24.0, commit
+`13e63d6`). Deduped against every existing section of this file and against
+`Roadmap_Blocked.md`. The prior pass's P0 (blocking high-severity dependency
+audit) shipped in `68d2001` and `npm audit --omit=optional --audit-level=high`
+is now clean — not re-added. The prior pass's freshness, watcher-fallback,
+RTL-ratchet and version-derived-reference items remain open above and are not
+duplicated. Conclusions and sources: `RESEARCH.md` (2026-08-06)._
+
+### P2
+
+- [ ] P2 — `release:check:public` cannot pass, because the project never signs tags
+  Why: The public release gate rejects any unsigned tag outright — the accepted-unsigned allowlist is deliberately honoured only when `checkPublic` is false — while ScriptVault's stated policy is to ship unsigned. The gate is therefore unpassable by construction, which makes it as uninformative as one that always passes, and it silently failed for v3.21.0, v3.22.0 and now v3.25.0.
+  Evidence: `scripts/check-release-artifacts.mjs` `verifyReleaseTag()` only consults `legacyUnsignedTags` under `!checkPublic`; `tests/release-supply-chain.test.js:177` pins that behaviour as intentional ("allows the existing legacy unsigned tag only outside the public release gate"); `npm run release:check:public` fails with "git tag v3.25.0 is unsigned: error: no signature found" while every other release gate passes and `verify_release_notes.py --check-published v3.25.0` succeeds.
+  Touches: scripts/check-release-artifacts.mjs, tests/release-supply-chain.test.js, docs/release-runbook.md, Roadmap_Blocked.md (the Sigstore entry).
+  Acceptance: a decision is recorded and enforced — either the allowlist is honoured in the public gate so an unsigned-by-policy release can pass with a visible warning, or the public gate is explicitly scoped to the checks that do not require signing and the signature assertion is removed from it. Either way `npm run release:check:public` returns a meaningful pass/fail for a release built under the current no-signing policy, and the test names the chosen policy rather than the current accident.
+  Complexity: S
+
+- [ ] P2 — Tree-shake Monaco: the editor ships 79 language tokenizers and 5 workers to open one language
+  Why: The bundle is imported as a full barrel, so 4.24 MB of unreachable workers and ~79 unused language tokenizers ship to every Chrome user — and this exact weight is the recorded reason Monaco is omitted from the Firefox package entirely, so pruning it is the direct unblock for Firefox editor parity rather than separate work.
+  Evidence: src/editor/monaco-esm-entry.ts:1 `import * as monaco from 'monaco-editor'`; pages/editor-sandbox.html:255 and :681 are the only model-language call sites and both pass 'javascript'; built sizes lib/monaco-esm/editor.js 9.78 MB, workers/ts.worker.js 13.36 MB, css.worker.js 1.96 MB, html.worker.js 1.34 MB, json.worker.js 0.94 MB; a scan of editor.js finds 79 distinct basic-language ids; FIREFOX-PORT.md:45 "build-firefox.sh intentionally omits lib/monaco/ because AMO's linter rejects the bundled TypeScript worker as too large to parse"; monaco-editor 0.56.0 added tree-shakeable ESM entry points (https://github.com/microsoft/monaco-editor/blob/main/CHANGELOG.md).
+  Touches: src/editor/monaco-esm-entry.ts, esbuild.config.mjs worker entry points, pages/editor-sandbox.html worker label map, scripts/check-monaco-package-contract.mjs, scripts/check-monaco-esm-prototype.mjs, docs/monaco-esm-migration-plan.md, docs/audit/monaco-esm-prototype-*.json, build-firefox.sh.
+  Acceptance: the entry imports monaco-editor/esm/vs/editor/editor.api plus only the language contributions the product opens (javascript/typescript, and css once the UserCSS item lands); html and json workers are no longer built or mapped; the package contract budgets are lowered to the new sizes so a regression fails; `npm run smoke:editor` and the Monaco E2E specs still pass; the resulting bundle size is recorded against the AMO lint ceiling so FIREFOX-PORT.md can state whether Monaco now fits.
+  Complexity: L
+
+- [ ] P2 — Edit UserCSS in a CSS model, not a JavaScript one
+  Why: Persistent UserCSS was the v3.22.0 headline feature, but the editor never creates a css model, so userstyles are authored under JavaScript tokenization and receive JavaScript diagnostics — while css.worker.js is bundled and unreachable.
+  Evidence: pages/editor-sandbox.html:255,681 both hardcode 'javascript'; no 'css' or usercss string appears in pages/editor-sandbox.html or pages/monaco-adapter.js; src/editor/monaco-esm-entry.ts:9-11 maps css/scss/less labels to a worker nothing requests; src/modules/userstyles.ts owns the UserCSS parse and tests/userstyle-compat-fixtures.test.js already exercises parseUserCSS.
+  Touches: pages/editor-sandbox.html, pages/monaco-adapter.js, pages/dashboard.js editor-open path, src/editor/userscript-language-service.ts, tests/ editor and userstyle coverage, tests/e2e/usercss-advanced.spec.js.
+  Acceptance: opening a userstyle selects the css language model and switching between a script and a style tab switches the model language; CSS diagnostics appear for a malformed userstyle and JavaScript diagnostics do not; @preprocessor / @-moz-document blocks do not produce spurious errors; the E2E UserCSS spec asserts the active model language.
+  Complexity: M
+
+- [ ] P2 — Measure service-worker cold start and gate it
+  Why: Nothing in the repo measures the cost users actually pay on every service-worker wake — parsing and executing a 1.81 MB script — and MV3 boot latency is the most-reported performance symptom across the whole ecosystem, so a regression here is currently invisible.
+  Evidence: scripts/smoke-large-library.mjs and tests/large-library-perf.test.js gate MatchSet build/lookup and dashboard virtual-row render only; a grep for cold-start/boot timing across scripts/*.mjs and tests/*.test.js returns nothing; background.js is 44,365 lines / 1.81 MB; https://github.com/violentmonkey/violentmonkey/issues/2608 ("Microfreezes in MV3 version"), https://github.com/Tampermonkey/tampermonkey/discussions/2347 (50-500 ms per navigation, hundreds of restarts per day), https://github.com/Tampermonkey/tampermonkey/issues/2456.
+  Touches: new scripts/smoke-service-worker-boot.mjs (mirroring smoke-large-library.mjs's --check/--json shape), package.json scripts, scripts/release-preflight.mjs, docs/large-library-perf.md, tests/ threshold mirror.
+  Acceptance: a headless-Chromium harness forces the service worker to terminate and wake, measures boot-to-first-message-response p50/p99 over a repeated basket, writes a JSON report, and exits non-zero above a documented threshold; the harness runs against both a fresh profile and a seeded 1k-script library; the measured baseline is recorded so the production-build item can be evaluated against it.
+  Complexity: M
+
+- [ ] P2 — Classify update-host failures instead of reporting them as parse errors
+  Why: Greasy Fork is the dominant update and discovery host, and as of 2026-08-06 its API certificates had expired while update.greasyfork.org sat behind a Cloudflare challenge — an HTML challenge body reaches parseUserscript and surfaces as a generic "Parse failed", so users see a broken script rather than a broken host, and repeated challenges quietly drive the update backoff toward silence.
+  Evidence: https://github.com/greasyfork-org/greasyfork/issues/1553 (Cloudflare challenge on update.greasyfork.org breaking manager update checks), https://github.com/greasyfork-org/greasyfork/issues/1561 (expired certs on api.greasyfork.org / api.sleazyfork.org); src/background/update-checker.ts:375-384 returns `parsed.error ?? 'Parse failed'` with no content-type or challenge classification; src/background/core.ts SubscriptionSystem and the install-interception fetch share the pattern; discovery hardcodes https://api.greasyfork.org/en/scripts.json and https://openuserjs.org/api/script/list (pages/dashboard.js); the existing exponential-backoff ring (_updateFailureCount/_updateNextCheck) treats all failures alike.
+  Touches: src/background/update-checker.ts, src/background/core.ts (subscription plus install fetch paths), generated background.core.js/background.js, pages/dashboard.js update banner and Find Scripts source status, src/locales/en.json, tests/ update and subscription coverage.
+  Acceptance: a response that is not a userscript is classified — host-challenge (HTML/Cloudflare interstitial), transport (TLS/DNS/network), http-status, and not-a-userscript — and each is reported with a distinct, actionable message naming the host; host-level failures do not advance the script's failure ring the way a genuine bad body does, and do not mark the script as having a pending update; the Find Scripts panel shows a per-source health state instead of an empty result list; tests cover a Cloudflare challenge body, an HTML error page, a TLS failure and a truncated body.
+  Complexity: M
+
+- [ ] P2 — Prove document-start actually wins the race in a real browser
+  Why: Unreliable @run-at document-start is one of the most-reported userscript-manager defects, and ScriptVault's native chrome.userScripts registration is believed to avoid the workarounds competitors need — but no test anywhere asserts a document-start script runs before the page's own inline script, so the claim is untested on both engines.
+  Evidence: src/background/registration.ts:550-581,669 maps @run-at to runAt and is unit-tested for the mapping only; a grep for document-start assertions across tests/e2e/*.spec.js and scripts/smoke-*.mjs returns no ordering test; https://github.com/Tampermonkey/tampermonkey/issues/211 and https://github.com/Tampermonkey/tampermonkey/issues/2771; Violentmonkey needed an opt-in "Alternative page mode" for this and caps it at ~1 MB per page (https://github.com/violentmonkey/violentmonkey/releases/tag/v2.46.0).
+  Touches: tests/e2e/ (new spec), tests/e2e/helpers/, scripts/smoke-firefox-sideload.mjs, README.md @run-at section, docs/cross-browser-pipeline.md.
+  Acceptance: an E2E fixture page with an inline script that stamps a marker is visited with a registered @run-at document-start userscript; the test asserts the userscript observed the document before the page marker existed, both on a cold service worker and a warm one, and the equivalent assertion runs in the Firefox sideload smoke; the README states the measured behaviour rather than asserting it.
+  Complexity: M
+
+### P3
+
+- [ ] P3 — Surface userScripts.execute() syntax diagnostics on the on-demand run path
+  Why: Chrome 149 made userScripts.execute() validate syntax synchronously and return diagnostics on failure, and Firefox 153 added execute() at all — the on-demand run path currently reports a generic failure where the browser can now name the syntax error and its location.
+  Evidence: https://developer.chrome.com/docs/extensions/whats-new (Chrome 149: "validates script syntax synchronously and returns diagnostics on failure"; execute() since Chrome 135); https://blog.mozilla.org/addons/2026/07/23/firefox-153-webextensions-api-updates/ ("userScripts.execute(), which provides for one-off injection"); src/background/core.ts:7327 and :9376 already branch on chrome.userScripts.execute availability with a hard error when absent.
+  Touches: src/background/core.ts (runScriptNow / on-demand execution), generated background.core.js/background.js, pages/popup.js "Run on This Tab", pages/dashboard.js toast path, src/locales/en.json, tests/ core-flow coverage.
+  Acceptance: when execute() rejects with diagnostics, the message shown to the user includes the reported error and line/column; when the browser supplies no diagnostics the current generic message is retained; Firefox 153+ takes the same path via feature detection and the smoke harness exercises one failing script.
+  Complexity: S
+
+- [ ] P3 — Use runtime.getDocumentId() on Firefox to key per-document injection state
+  Why: The open UserCSS SPA and injection-dedup items key state per tab, which cannot distinguish a reloaded document from a live one; Firefox 153 introduced a stable per-document identifier that makes that distinction directly.
+  Evidence: https://blog.mozilla.org/addons/2026/07/23/firefox-153-webextensions-api-updates/ ("Firefox 153 introduces documentId, a stable identifier for a document instance, including a new runtime.getDocumentId() method"); relates to the open items "Persistent UserCSS can orphan an injected stylesheet on an SPA route change" and "SPA navigation events are dropped, not coalesced" above — this is an enabling mechanism for those, not a replacement.
+  Touches: src/modules/userstyles.ts, src/background/core.ts (onTabNavigated/onTabUpdated/rehydrateOpenTabs), generated modules/userstyles.js, tests/userstyle-injection.test.js, scripts/smoke-firefox-sideload.mjs.
+  Acceptance: where available, per-document injection state is keyed by documentId rather than tab id, with the tab-id path retained for Chrome; a reload no longer reuses the previous document's registry entry; the Firefox smoke harness proves a reloaded SPA page re-injects exactly once.
+  Complexity: M
+
+- [ ] P3 — Review the Find Scripts surface against the 2026-08-01 Chrome Web Store prohibited-products update
+  Why: CWS added a Malicious and Prohibited Products clause on 2026-08-01 banning circumvention of AI service safety guardrails and usage restrictions; ScriptVault's discovery panel installs arbitrary third-party scripts from Greasy Fork and OpenUserJS, and neither the listing copy nor the in-product risk copy acknowledges that class.
+  Evidence: https://developer.chrome.com/blog/cws-policy-updates-2026 (Limited Use, Disclosure Requirements and the prohibited-products clause all effective 2026-08-01); pages/dashboard.js Find Scripts sources hardcode https://api.greasyfork.org/en/scripts.json and https://openuserjs.org/api/script/list; scripts/check-permission-copy.mjs and docs/store-listing-copy.md cover permissions and privacy but not prohibited-content classes; the @antifeature surface already exists as the disclosure mechanism (https://greasyfork.org/en/help/antifeatures).
+  Touches: docs/store-listing-copy.md, PRIVACY.md, scripts/check-permission-copy.mjs, pages/dashboard.js Find Scripts copy, pages/install.js review copy, docs/cws-remote-code-compliance.md.
+  Acceptance: the listing and in-product copy state that discovery surfaces third-party code the project does not author or endorse and that installation is the user's decision; the compliance doc records the 2026-08-01 clauses and how each is met; the store-copy gate covers the new clauses so a future policy change fails the check instead of passing silently.
+  Complexity: S
+
+- [ ] P3 — Refresh dev dependencies and adopt the test-tooling features already paid for
+  Why: Several dev dependencies are behind current releases and the newer versions ship capabilities that would directly improve this repo's existing harnesses; none of these are security-driven, so they belong behind the P0 audit work.
+  Evidence: current vs latest as of 2026-08-06 — @playwright/test 1.61.1 vs 1.62.1 (2026-07-30), jsdom 29.1.1 vs 30.0.1 (2026-07-29, requires Node >=24.15 which the repo's >=24.16.0 satisfies), puppeteer-core 25.2.1 vs 25.5.0, acorn 8.17.0 vs 8.18.0, chrome-types 0.1.431 vs 0.1.436; Playwright 1.61 added page.localStorage/page.sessionStorage, 1.62 added retryStrategy 'isolated' and WebP screenshots; Vitest 4 ships Playwright trace integration usable from the existing browser-mode config; acorn 8.17's strict option and using/await-using fixes matter for the AST analyzer, whose vendored copy is already 8.17.0.
+  Touches: package.json, package-lock.json, playwright.config.mjs, vitest.visual.config.mjs, tests/e2e/helpers/, scripts/check-cve-floors.mjs, docs/audit/cycle-22-dependency-freshness-*.md, docs/amo-vendored-libraries.md if acorn is re-vendored.
+  Acceptance: dependencies are bumped with the full gate suite green; the extension-state assertions that currently go through page.evaluate() use the WebStorage API where it is clearer; failing browser-mode tests emit a Playwright trace; retryStrategy 'isolated' is applied to the extension-load E2E specs that have historically flaked; if acorn is re-vendored, docs/amo-vendored-libraries.md hashes are regenerated in the same change.
+  Complexity: S

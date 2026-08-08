@@ -49,6 +49,12 @@ const ScriptSubscriptions = (() => {
   function asCleanString(value) {
     return typeof value === "string" ? value.trim() : "";
   }
+  var MAX_VALIDATOR_LENGTH = 512;
+  function safeValidator(value) {
+    const text = asCleanString(value);
+    if (!text || text.length > MAX_VALIDATOR_LENGTH) return "";
+    return /[\r\n\0]/.test(text) ? "" : text;
+  }
   function normalizeHttpUrl(value, baseUrl) {
     const raw = asCleanString(value);
     if (!raw) throw new Error("Subscription URL is required");
@@ -120,7 +126,10 @@ const ScriptSubscriptions = (() => {
         lastCheckedAt: typeof record.lastCheckedAt === "number" ? record.lastCheckedAt : null,
         lastQueued: typeof record.lastQueued === "number" ? record.lastQueued : 0,
         lastSkipped: typeof record.lastSkipped === "number" ? record.lastSkipped : 0,
-        lastErrors: Array.isArray(record.lastErrors) ? record.lastErrors.filter((item) => typeof item === "string").slice(0, MAX_ERRORS) : []
+        lastErrors: Array.isArray(record.lastErrors) ? record.lastErrors.filter((item) => typeof item === "string").slice(0, MAX_ERRORS) : [],
+        httpEtag: safeValidator(record.httpEtag),
+        httpLastModified: safeValidator(record.httpLastModified),
+        sourceFetchedAt: typeof record.sourceFetchedAt === "number" ? record.sourceFetchedAt : null
       };
     } catch (_) {
       return null;
@@ -197,7 +206,12 @@ const ScriptSubscriptions = (() => {
       lastCheckedAt: now,
       lastQueued: existing?.lastQueued || 0,
       lastSkipped: existing?.lastSkipped || 0,
-      lastErrors: existing?.lastErrors ? [...existing.lastErrors] : []
+      lastErrors: existing?.lastErrors ? [...existing.lastErrors] : [],
+      // A read with no validators must not wipe a working pair — the next
+      // scheduled check would then re-download a feed that had not changed.
+      httpEtag: options.validators ? safeValidator(options.validators.etag) : existing?.httpEtag || "",
+      httpLastModified: options.validators ? safeValidator(options.validators.lastModified) : existing?.httpLastModified || "",
+      sourceFetchedAt: now
     };
     const next = existingIndex >= 0 ? subscriptions.map((item, index) => index === existingIndex ? subscription : item) : [subscription, ...subscriptions];
     await writeAll(next);
@@ -223,7 +237,10 @@ const ScriptSubscriptions = (() => {
       lastCheckedAt: now,
       lastQueued: Math.max(0, result.queued || 0),
       lastSkipped: Math.max(0, result.skipped || 0),
-      lastErrors: Array.isArray(result.errors) ? result.errors.slice(0, MAX_ERRORS) : []
+      lastErrors: Array.isArray(result.errors) ? result.errors.slice(0, MAX_ERRORS) : [],
+      // A 304 means the check happened but the stored item list was not re-read,
+      // so its age must keep counting from the last real download.
+      sourceFetchedAt: result.notModified ? current.sourceFetchedAt : now
     };
     subscriptions[index] = updated;
     await writeAll(subscriptions);
@@ -239,7 +256,8 @@ const ScriptSubscriptions = (() => {
     get,
     upsertFromFeed,
     remove,
-    markRefreshResult
+    markRefreshResult,
+    safeValidator
   };
   var subscriptions_default = ScriptSubscriptions;
   return module.exports.default || module.exports.ScriptSubscriptions || module.exports;
