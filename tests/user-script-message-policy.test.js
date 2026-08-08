@@ -35,6 +35,9 @@ describe('user-script message policy', () => {
       'chainDomEvent',
       'getChainDomEventTriggers',
       'netlog_record',
+      // The page-facing Public API / Local MCP relay. Authorised by the
+      // SENDER'S origin, not by anything in the relayed payload.
+      'publicApi_handleWebMessage',
       'recordBridgeTelemetry',
       'reportDocumentReady',
       'reportExecError',

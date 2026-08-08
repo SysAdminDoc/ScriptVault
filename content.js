@@ -161,9 +161,12 @@
     if (!msg || typeof msg !== 'object') return;
     if (isPublicApiPageMessage(msg)) {
       try {
+        // No `origin` field: the background derives the requesting origin from
+        // the sender, so a relayed value would be ignored at best and misleading
+        // at worst. The `event.source !== window` guard above already means
+        // event.origin is this frame's own origin.
         const result = await chrome.runtime.sendMessage({
           action: 'publicApi_handleWebMessage',
-          origin: event.origin,
           message: msg
         });
         if (result?.response) {

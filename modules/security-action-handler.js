@@ -31,7 +31,8 @@ const SecurityActionHandler = (() => {
     SECURITY_BACKGROUND_ACTIONS: () => SECURITY_BACKGROUND_ACTIONS,
     SecurityActionHandler: () => SecurityActionHandler,
     createSecurityActionHandlers: () => createSecurityActionHandlers,
-    default: () => security_action_handler_default
+    default: () => security_action_handler_default,
+    senderWebOrigin: () => senderWebOrigin
   });
   module.exports = __toCommonJS(security_action_handler_exports);
   var SECURITY_BACKGROUND_ACTIONS = [
@@ -54,6 +55,19 @@ const SecurityActionHandler = (() => {
     "publicApi_clearAuditLog",
     "publicApi_handleWebMessage"
   ];
+  function senderWebOrigin(sender) {
+    const record = sender;
+    const declared = typeof record?.origin === "string" ? record.origin : "";
+    const candidate = declared || (typeof record?.url === "string" ? record.url : "");
+    if (!candidate) return "";
+    try {
+      const parsed = new URL(candidate);
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return "";
+      return parsed.origin;
+    } catch {
+      return "";
+    }
+  }
   function createSecurityActionHandlers(dependencies) {
     const handlers = {
       signing_getPublicKey: () => dependencies.getPublicKey(),
@@ -79,8 +93,13 @@ const SecurityActionHandler = (() => {
       publicApi_getPermissions: () => dependencies.getPermissions(),
       publicApi_getAuditLog: ({ message }) => dependencies.getAuditLog(message.limit || 50),
       publicApi_clearAuditLog: () => dependencies.clearAuditLog(),
-      publicApi_handleWebMessage: ({ message }) => dependencies.handleWebMessage(
-        typeof message.origin === "string" ? message.origin : "",
+      // The origin is derived from the SENDER, never from the relayed payload.
+      // content.js sets `origin` from the page's own `event.origin`, but that field
+      // is attacker-controllable by anything that can reach this action — a tab on
+      // an untrusted origin could otherwise claim `origin: 'https://trusted.example'`
+      // and pass the trusted-origin check for `scriptvault:mcp:writeScript`.
+      publicApi_handleWebMessage: ({ message, sender }) => dependencies.handleWebMessage(
+        senderWebOrigin(sender),
         message.message
       )
     };
@@ -88,7 +107,8 @@ const SecurityActionHandler = (() => {
   }
   var SecurityActionHandler = Object.freeze({
     SECURITY_BACKGROUND_ACTIONS,
-    createSecurityActionHandlers
+    createSecurityActionHandlers,
+    senderWebOrigin
   });
   var security_action_handler_default = SecurityActionHandler;
   return module.exports.default || module.exports.SecurityActionHandler || module.exports;

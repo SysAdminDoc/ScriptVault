@@ -867,16 +867,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
 
 ### P2
 
-- [ ] P2 — The page-facing Public API and Local MCP bridge has been dead since v3.18.0 (relay action missing from the allowlist); a naive fix opens origin spoofing
-  Category: correctness
-  Where: `content.js:164-168` (relays `action:'publicApi_handleWebMessage'`); `src/background/user-script-message-policy.ts:5-13` (allowlist lacks it); rejection `src/background/core.ts:7686-7693`; handlers `src/modules/public-api.ts:1577-1826`
-  Problem: `publicApi_handleWebMessage` is not `GM_`/`GM.`-prefixed and is absent from `USER_SCRIPT_ALLOWED_EXTRAS`, so every page message returns `{error:'Action not permitted from non-extension context'}` — killing `scriptvault:getScripts`/`isInstalled`/`install` and all four `scriptvault:mcp:*` handlers, a capability CHANGELOG v3.18.0 advertises as shipped. Commit `31c2dbe` touched content.js/router/public-api/core and both tests but not the policy file; the "covering" test mocks `sendMessage` and asserts only the outgoing shape, never the background rejection.
-  Evidence: Verified — allowlist read (chainDomEvent present, publicApi_handleWebMessage absent); `isExtensionSurfaceSender` rejects content-script senders on all three branches.
-  Fix: Add `publicApi_handleWebMessage` to `USER_SCRIPT_ALLOWED_EXTRAS`, AND in the same change stop trusting the message-supplied `origin` — derive it from `sender.origin ?? sender.url` in the handler binding (otherwise any tab-origin sender forges `origin:'https://trusted.example'` for `scriptvault:mcp:writeScript`). Add an integration test driving the real `onMessage` listener.
-  Acceptance: A trusted page round-trips `scriptvault:isInstalled`; a forged-origin `mcp:writeScript` from an untrusted tab is rejected; the test exercises the real listener.
-  Confidence: Verified
-  Effort: M
-
 - [ ] P2 — Tampered remote sync blob silently installs executing scripts (no analyzer/review) and hard-deletes local ones (no trash), in the default plaintext mode
   Category: security
   Where: `src/background/cloud-sync.ts:1726-1815` (apply loop: `parseUserscript`→`ScriptStorage.set`→`refreshSyncedScriptRuntime`, no analyzer), `:370-380` (`deleteSyncedScript`→`ScriptStorage.delete`, bypasses trash)

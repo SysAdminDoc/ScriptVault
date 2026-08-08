@@ -6,6 +6,14 @@ export const USER_SCRIPT_ALLOWED_EXTRAS = Object.freeze([
   'chainDomEvent',
   'getChainDomEventTriggers',
   'netlog_record',
+  // The page-facing Public API and Local MCP bridge: content.js relays a
+  // `window.postMessage` from the page under this action. It is not GM_-prefixed,
+  // so without an entry here every relayed message was rejected as
+  // "Action not permitted from non-extension context" — the capability was dead
+  // from v3.18.0. The handler derives the requesting origin from the SENDER, not
+  // from the relayed payload, so admitting it here does not let a page choose
+  // which origin it is treated as.
+  'publicApi_handleWebMessage',
   'recordBridgeTelemetry',
   'reportDocumentReady',
   'reportExecError',

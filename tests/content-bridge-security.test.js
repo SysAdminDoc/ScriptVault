@@ -341,9 +341,10 @@ describe('content script bridge security boundary', () => {
     }));
 
     await expect(pageResponse).resolves.toEqual(response);
+    // No origin field: the background derives the requesting origin from the
+    // sender, so relaying a page-supplied value would only invite forgery.
     expect(chromeMock.runtime.sendMessage).toHaveBeenCalledWith({
       action: 'publicApi_handleWebMessage',
-      origin: 'https://trusted.example',
       message: request,
     });
 
@@ -772,6 +773,22 @@ describe('runtime.onMessage user-script gate (Chrome <131 / Firefox fallback)', 
     );
     expect(denied.error).toContain('is not granted');
     expect(handleMessageCalls).toHaveLength(0);
+  });
+
+  // The page-facing Public API relay was rejected here from v3.18.0: the action
+  // is not GM_-prefixed and was missing from the allowlist, so every relayed
+  // page message came back "Action not permitted from non-extension context".
+  it('lets the public API relay through from a tab-origin sender', async () => {
+    const { onMessageListeners, handleMessageCalls } = loadUserScriptMessagingGate({ hasUserScriptMessage: false });
+    const response = await invokeListener(
+      onMessageListeners[0],
+      { action: 'publicApi_handleWebMessage', message: { type: 'scriptvault:isInstalled', name: 'x' } },
+      { id: 'gate-extension-id', url: 'https://trusted.example/page', tab: { id: 11 } }
+    );
+    expect(response).toEqual({ handled: true, action: 'publicApi_handleWebMessage' });
+    expect(handleMessageCalls).toHaveLength(1);
+    // No script token is required — the sender origin is what authorises it.
+    expect(handleMessageCalls[0].sender.url).toBe('https://trusted.example/page');
   });
 
   it('applies the same gate on the onMessage fallback path', async () => {

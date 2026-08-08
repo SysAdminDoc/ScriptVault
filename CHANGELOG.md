@@ -4,6 +4,18 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **The page-facing Public API and Local MCP bridge had been dead since v3.18.0.**
+  `content.js` relays page messages under `publicApi_handleWebMessage`, which is
+  not `GM_`-prefixed and was missing from the user-script action allowlist, so
+  every relayed message came back `Action not permitted from non-extension
+  context` — killing `scriptvault:getScripts` / `isInstalled` / `install` and all
+  four `scriptvault:mcp:*` handlers. The allowlist entry is added, and in the same
+  change the requesting origin is now derived from the message **sender** instead
+  of a payload field: a tab on any origin could otherwise have claimed
+  `origin: 'https://trusted.example'` and passed the trusted-origin check for
+  `scriptvault:mcp:writeScript`. Non-web senders (extension pages, `file:`,
+  sandboxed frames with a null origin) resolve to no origin and are refused.
+
 - **`@grant` was advisory: the privileged background enforced it for almost no
   GM handler.** `hasGrant()` lives in the injected wrapper, which runs in the same
   USER_SCRIPT world as the untrusted script body with `chrome` unshadowed — so a

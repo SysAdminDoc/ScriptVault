@@ -24,6 +24,32 @@ export const SECURITY_BACKGROUND_ACTIONS = [
 
 export type SecurityBackgroundAction = typeof SECURITY_BACKGROUND_ACTIONS[number];
 
+/**
+ * The web origin a relayed page message actually came from.
+ *
+ * Chrome supplies `sender.origin` for content-script senders; Firefox and older
+ * Chrome only give `sender.url`, so fall back to parsing that. Anything that is
+ * not an `http(s)` web origin — an extension page, a `file:` document, a missing
+ * sender — yields `''`, which the handler treats as "no origin" and refuses.
+ *
+ * Deliberately ignores any `origin` field on the message: that value crosses the
+ * trust boundary from the page, and the Public API's trusted-origin check is the
+ * only thing standing between an arbitrary tab and `scriptvault:mcp:writeScript`.
+ */
+export function senderWebOrigin(sender: unknown): string {
+  const record = sender as { origin?: unknown; url?: unknown } | null | undefined;
+  const declared = typeof record?.origin === 'string' ? record.origin : '';
+  const candidate = declared || (typeof record?.url === 'string' ? record.url : '');
+  if (!candidate) return '';
+  try {
+    const parsed = new URL(candidate);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return '';
+    return parsed.origin;
+  } catch {
+    return '';
+  }
+}
+
 export interface LocalMcpBridgeConfigUpdate {
   enabled?: boolean;
   origins?: string[];
@@ -89,8 +115,13 @@ export function createSecurityActionHandlers(
     publicApi_getPermissions: () => dependencies.getPermissions(),
     publicApi_getAuditLog: ({ message }) => dependencies.getAuditLog(message.limit || 50),
     publicApi_clearAuditLog: () => dependencies.clearAuditLog(),
-    publicApi_handleWebMessage: ({ message }) => dependencies.handleWebMessage(
-      typeof message.origin === 'string' ? message.origin : '',
+    // The origin is derived from the SENDER, never from the relayed payload.
+    // content.js sets `origin` from the page's own `event.origin`, but that field
+    // is attacker-controllable by anything that can reach this action — a tab on
+    // an untrusted origin could otherwise claim `origin: 'https://trusted.example'`
+    // and pass the trusted-origin check for `scriptvault:mcp:writeScript`.
+    publicApi_handleWebMessage: ({ message, sender }) => dependencies.handleWebMessage(
+      senderWebOrigin(sender),
       message.message,
     ),
   };
@@ -100,6 +131,7 @@ export function createSecurityActionHandlers(
 export const SecurityActionHandler = Object.freeze({
   SECURITY_BACKGROUND_ACTIONS,
   createSecurityActionHandlers,
+  senderWebOrigin,
 });
 
 export default SecurityActionHandler;

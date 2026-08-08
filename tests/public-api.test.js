@@ -945,4 +945,71 @@ console.log('mcp');`;
       expect(read.script).toMatchObject({ id: scriptId, name: 'Local MCP Demo', code });
     });
   });
+
+  // The relay carrying these payloads was rejected by the user-script allowlist
+  // from v3.18.0 until the allowlist entry was added, so the whole page-facing
+  // surface was dead. These prove the payload path works and that the origin
+  // decides — the background derives it from the sender, never from the payload.
+  describe('relayed web-message payloads', () => {
+    const stored = new Map();
+    function makeStorage() {
+      return {
+        getAll: vi.fn(async () => [...stored.values()]),
+        get: vi.fn(async (id) => stored.get(id) || null),
+        set: vi.fn(async (id, script) => { stored.set(id, script); }),
+      };
+    }
+
+    it('round-trips scriptvault:isInstalled for a trusted origin', async () => {
+      stored.clear();
+      // The web handlers read the flat 'userscripts' store, not ScriptStorage.
+      await chrome.storage.local.set({
+        userscripts: [{ id: 's1', name: 'Relay Fixture', version: '1.2.3', enabled: true, code: '// x' }],
+      });
+      PublicAPI = createFreshAPI({ ScriptStorage: makeStorage() });
+      await PublicAPI.init();
+      await PublicAPI.setTrustedOrigins(['https://trusted.example']);
+
+      const response = await PublicAPI.handleWebMessagePayload(
+        { type: 'scriptvault:isInstalled', name: 'Relay Fixture' },
+        'https://trusted.example',
+      );
+      expect(response).toMatchObject({ type: 'scriptvault:isInstalled:response', installed: true });
+    });
+
+    it('ignores the same payload from an untrusted origin', async () => {
+      stored.clear();
+      await chrome.storage.local.set({
+        userscripts: [{ id: 's1', name: 'Relay Fixture', version: '1.2.3', enabled: true, code: '// x' }],
+      });
+      PublicAPI = createFreshAPI({ ScriptStorage: makeStorage() });
+      await PublicAPI.init();
+      await PublicAPI.setTrustedOrigins(['https://trusted.example']);
+
+      await expect(PublicAPI.handleWebMessagePayload(
+        { type: 'scriptvault:isInstalled', name: 'Relay Fixture' },
+        'https://attacker.test',
+      )).resolves.toBeNull();
+      // An empty origin is what a non-web sender resolves to; it must not pass.
+      await expect(PublicAPI.handleWebMessagePayload(
+        { type: 'scriptvault:isInstalled', name: 'Relay Fixture' },
+        '',
+      )).resolves.toBeNull();
+    });
+
+    it('refuses an MCP write from an origin the bridge does not trust', async () => {
+      stored.clear();
+      const storage = makeStorage();
+      PublicAPI = createFreshAPI({ ScriptStorage: storage });
+      await PublicAPI.init();
+      await PublicAPI.setTrustedOrigins(['https://trusted.example']);
+
+      const response = await PublicAPI.handleWebMessagePayload(
+        { type: 'scriptvault:mcp:writeScript', name: 'evil', code: '// evil' },
+        'https://attacker.test',
+      );
+      expect(response == null || response.error).toBeTruthy();
+      expect(storage.set).not.toHaveBeenCalled();
+    });
+  });
 });
