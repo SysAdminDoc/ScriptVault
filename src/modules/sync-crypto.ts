@@ -96,9 +96,10 @@ function randomBytes(length: number): Uint8Array {
 
 function resolveIterations(settings: SyncCryptoSettings): number {
   const configured = settings.syncEncryptionKdfIterations;
-  return Number.isFinite(configured) && configured && configured > 0
+  const candidate = Number.isFinite(configured) && configured && configured > 0
     ? Math.floor(configured)
     : DEFAULT_KDF_ITERATIONS;
+  return Math.min(MAX_KDF_ITERATIONS, Math.max(1, candidate));
 }
 
 function getPassphrase(settings: SyncCryptoSettings): string {
@@ -258,6 +259,8 @@ async function prepareSyncEnvelopeForUpload(
 
 export const SyncCrypto = {
   DEFAULT_KDF_ITERATIONS,
+  MAX_KDF_ITERATIONS,
+  resolveIterations,
   isEncryptedSyncEnvelope,
   isEncryptionEnabled,
   encryptSyncEnvelope,

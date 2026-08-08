@@ -63,6 +63,9 @@ All notable changes to ScriptVault will be documented in this file.
 - Added bounded 429/Retry-After handling for every cloud provider, classified
   Google Drive quota 403s before token refresh, and paused the periodic sync
   alarm until the provider's retry window expires.
+- Clamped configured sync-encryption PBKDF2 iterations to the same bounded
+  range used by decryption, preventing over-cap settings from creating
+  undecryptable envelopes.
 
 ## [v3.27.0] — Recoverable restores, real isolation & honest errors (2026-08-08)
 

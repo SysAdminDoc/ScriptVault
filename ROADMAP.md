@@ -828,16 +828,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
 
 ### P3
 
-- [ ] P3 — Encrypt-side sync KDF iterations are uncapped while decrypt caps at 10M, so a large configured value produces undecryptable envelopes
-  Category: correctness
-  Where: `src/modules/sync-crypto.ts:97-102` (`resolveIterations`, no upper bound) vs `:221-225` (decrypt rejects `> MAX_KDF_ITERATIONS` = 10M); setting at `settings-defaults.json:34` + the `Settings` type (reachable via settings import)
-  Problem: A settings import setting `syncEncryptionKdfIterations` to e.g. 20M produces uploads every device — including the author — refuses with "out-of-range KDF iteration count", bricking sync until the remote blob is manually deleted.
-  Evidence: Verified — both bounds read; the setting is reachable via import.
-  Fix: Clamp `resolveIterations` to `[floor, MAX_KDF_ITERATIONS]`.
-  Acceptance: A configured value above the cap is clamped and the envelope decrypts; a test covers an over-cap value.
-  Confidence: Verified
-  Effort: S
-
 - [ ] P3 — 30-day tombstone prune is defeated by the remote round-trip; the uploaded tombstone map grows unboundedly
   Category: maintainability
   Where: `src/background/cloud-sync.ts:1665` and `src/modules/sync-easycloud.ts:869` (union remote tombstones unconditionally), upload includes the full merged map (`:1872`); local prune `core.ts:10975-10986`

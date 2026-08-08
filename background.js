@@ -17489,7 +17489,8 @@ const SyncCrypto = (() => {
   }
   function resolveIterations(settings) {
     const configured = settings.syncEncryptionKdfIterations;
-    return Number.isFinite(configured) && configured && configured > 0 ? Math.floor(configured) : DEFAULT_KDF_ITERATIONS;
+    const candidate = Number.isFinite(configured) && configured && configured > 0 ? Math.floor(configured) : DEFAULT_KDF_ITERATIONS;
+    return Math.min(MAX_KDF_ITERATIONS, Math.max(1, candidate));
   }
   function getPassphrase(settings) {
     const passphrase = settings.syncEncryptionPassphrase;
@@ -17605,6 +17606,8 @@ const SyncCrypto = (() => {
   }
   var SyncCrypto = {
     DEFAULT_KDF_ITERATIONS,
+    MAX_KDF_ITERATIONS,
+    resolveIterations,
     isEncryptedSyncEnvelope,
     isEncryptionEnabled,
     encryptSyncEnvelope,
@@ -17700,7 +17703,8 @@ const CloudSync = (() => {
   }
   function resolveIterations(settings) {
     const configured = settings.syncEncryptionKdfIterations;
-    return Number.isFinite(configured) && configured && configured > 0 ? Math.floor(configured) : DEFAULT_KDF_ITERATIONS;
+    const candidate = Number.isFinite(configured) && configured && configured > 0 ? Math.floor(configured) : DEFAULT_KDF_ITERATIONS;
+    return Math.min(MAX_KDF_ITERATIONS, Math.max(1, candidate));
   }
   function getPassphrase(settings) {
     const passphrase = settings.syncEncryptionPassphrase;
@@ -17816,6 +17820,8 @@ const CloudSync = (() => {
   }
   var SyncCrypto = {
     DEFAULT_KDF_ITERATIONS,
+    MAX_KDF_ITERATIONS,
+    resolveIterations,
     isEncryptedSyncEnvelope,
     isEncryptionEnabled,
     encryptSyncEnvelope,
@@ -19497,7 +19503,8 @@ const EasyCloudSync = (() => {
   }
   function resolveIterations(settings) {
     const configured = settings.syncEncryptionKdfIterations;
-    return Number.isFinite(configured) && configured && configured > 0 ? Math.floor(configured) : DEFAULT_KDF_ITERATIONS;
+    const candidate = Number.isFinite(configured) && configured && configured > 0 ? Math.floor(configured) : DEFAULT_KDF_ITERATIONS;
+    return Math.min(MAX_KDF_ITERATIONS, Math.max(1, candidate));
   }
   function getPassphrase(settings) {
     const passphrase = settings.syncEncryptionPassphrase;
@@ -19613,6 +19620,8 @@ const EasyCloudSync = (() => {
   }
   var SyncCrypto = {
     DEFAULT_KDF_ITERATIONS,
+    MAX_KDF_ITERATIONS,
+    resolveIterations,
     isEncryptedSyncEnvelope,
     isEncryptionEnabled,
     encryptSyncEnvelope,

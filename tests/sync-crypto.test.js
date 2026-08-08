@@ -34,6 +34,15 @@ afterAll(() => {
 });
 
 describe.each(implementations)('sync crypto helper ($label)', ({ api: SyncCrypto }) => {
+  it('clamps configured encryption iterations to the decrypt ceiling', () => {
+    expect(SyncCrypto.resolveIterations({
+      syncEncryptionKdfIterations: SyncCrypto.MAX_KDF_ITERATIONS + 1,
+    })).toBe(SyncCrypto.MAX_KDF_ITERATIONS);
+    expect(SyncCrypto.resolveIterations({
+      syncEncryptionKdfIterations: 0.5,
+    })).toBe(1);
+  });
+
   it('round-trips a v1 sync envelope through PBKDF2 and AES-256-GCM', async () => {
     const envelope = {
       version: 1,
