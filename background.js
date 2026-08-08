@@ -31879,10 +31879,23 @@ const UpdateSystem = {
       script.settings._registrationError = regError.message || 'Registration failed after update';
     }
 
-    await ensurePersistentStorageForScriptWrite('script-update', newCode);
+    try {
+      await ensurePersistentStorageForScriptWrite('script-update', newCode);
 
-    // Persist to storage after registration attempt
-    await ScriptStorage.set(scriptId, script);
+      // Persist to storage after registration attempt. If this fails, restore
+      // the previous registration before surfacing the error so running code
+      // cannot diverge from the last durable script version.
+      await ScriptStorage.set(scriptId, script);
+    } catch (persistError) {
+      console.error(`[ScriptVault] Failed to persist update for ${scriptId}; restoring previous registration:`, persistError);
+      try {
+        await unregisterScript(scriptId);
+        if (previousScript.enabled !== false) await registerScript(previousScript);
+      } catch (restoreError) {
+        console.error(`[ScriptVault] Failed to restore previous registration for ${scriptId}:`, restoreError);
+      }
+      return { error: persistError?.message || String(persistError) };
+    }
     notifyEasyCloudScriptSaved(scriptId);
 
     // Phase 12.10 — applyUpdate no longer fires a per-script OS notification.

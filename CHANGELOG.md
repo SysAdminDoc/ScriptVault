@@ -51,6 +51,8 @@ All notable changes to ScriptVault will be documented in this file.
   explicit single-script checks for reviewing an available upstream version.
 - Routed dashboard/editor saves through the ESM bundler gate, preserving bundle
   metadata and returning a bounded refusal when experimental ESM is disabled.
+- Restored the previous userscript registration when update persistence fails,
+  preventing the running version from diverging from durable storage.
 
 ## [v3.27.0] — Recoverable restores, real isolation & honest errors (2026-08-08)
 

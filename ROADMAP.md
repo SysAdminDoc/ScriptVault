@@ -828,16 +828,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
 
 ### P3
 
-- [ ] P3 — `applyUpdate` registers new code before persisting; a persist failure leaves running and stored code divergent
-  Category: correctness
-  Where: `src/background/core.ts:2091-2108` (re-register, then `ensurePersistentStorageForScriptWrite`/`ScriptStorage.set`)
-  Problem: Register-first is deliberate and registration failure is handled, but the reverse is not: if the persist throws after successful re-registration (e.g. quota), the browser runs the new code while storage holds the old version — dashboard, receipts, and version history disagree with what executes until the next SW restart re-registers the old code (a silent downgrade of running code).
-  Evidence: Verified — read the ordering; no compensating re-register on persist failure.
-  Fix: On persist failure, best-effort re-register the previous script (or unregister) before propagating the error.
-  Acceptance: A persist failure after re-register restores the previously-running code; a test injects a rejecting `ScriptStorage.set`.
-  Confidence: Verified
-  Effort: S
-
 - [ ] P3 — `.user.css` pending payloads have no TTL, cap, or dedup — unlike the `.user.js` path — and leak when the tab never loads the dashboard
   Category: reliability
   Where: `src/background/core.ts:10249-10262` (writes `pendingUserStyle_<tabId>`, up to `MAX_SCRIPT_SIZE` = 5 MB), consumed at `pages/dashboard.js:13547-13554`; the `_storePendingInstall` TTL/cap sweep (`:10104-10131`) covers only `pendingInstall*`

@@ -353,7 +353,7 @@ describe('pending update queue', () => {
       expect(delta).toBeNull();
     });
 
-    it('records the risk-delta at the applyUpdate choke point even on a forced/direct apply', async () => {
+  it('records the risk-delta at the applyUpdate choke point even on a forced/direct apply', async () => {
       const scripts = new Map([['s1', makeScript('s1')]]);
       installStorage(scripts);
       const oldCode = scripts.get('s1').code;
@@ -378,6 +378,29 @@ describe('pending update queue', () => {
       expect(result.riskDelta.hasNewRiskySinks).toBe(true);
       expect(result.riskDelta.categories).toContain('network');
       expect(scripts.get('s1').settings?.lastUpdateRiskDelta?.hasNewRiskySinks).toBe(true);
+    });
+
+    it('restores the previous registration when persistence fails after re-registering', async () => {
+      const coreSource = readFileSync(resolve(process.cwd(), 'src/background/core.ts'), 'utf8');
+      expect(coreSource).toContain('restoring previous registration');
+      const previous = makeScript('persist-fail');
+      const stored = cloneScript(previous);
+      globalThis.ScriptStorage = {
+        get: vi.fn(async () => cloneScript(stored)),
+        getAll: vi.fn(async () => [cloneScript(stored)]),
+        set: vi.fn().mockRejectedValue(new Error('quota exceeded')),
+      };
+
+      const result = await UpdateSystem.applyUpdate('persist-fail', makeCode('Persist Fail', '2.0.0'), {
+        force: true,
+        sourceUrl: 'https://cdn.example.com/persist-fail.user.js',
+      });
+
+      expect(result).toEqual({ error: 'quota exceeded' });
+      expect(globalThis.unregisterScript).toHaveBeenCalledTimes(2);
+      expect(globalThis.registerScript).toHaveBeenCalledTimes(2);
+      expect(globalThis.registerScript.mock.calls[1][0].meta.version).toBe('1.0.0');
+      expect(globalThis.registerScript.mock.calls[1][0].code).toBe(previous.code);
     });
   });
 

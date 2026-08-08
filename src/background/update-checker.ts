@@ -481,8 +481,21 @@ export const UpdateSystem = {
         (regError instanceof Error ? regError.message : undefined) || 'Registration failed after update';
     }
 
-    // Persist to storage after registration attempt
-    await ScriptStorage.set(scriptId, script);
+    // Persist to storage after registration attempt. If persistence fails,
+    // restore the previous registration before surfacing the error so the
+    // running code never diverges from the durable script version.
+    try {
+      await ScriptStorage.set(scriptId, script);
+    } catch (persistError: unknown) {
+      console.error(`[ScriptVault] Failed to persist update for ${scriptId}; restoring previous registration:`, persistError);
+      try {
+        await unregisterScript(scriptId);
+        if (previousScript.enabled !== false) await registerScript(previousScript);
+      } catch (restoreError: unknown) {
+        console.error(`[ScriptVault] Failed to restore previous registration for ${scriptId}:`, restoreError);
+      }
+      return { error: persistError instanceof Error ? persistError.message : String(persistError) };
+    }
 
     const settings: Settings = await SettingsManager.get();
     if (settings.notifyOnUpdate) {
