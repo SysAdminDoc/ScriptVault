@@ -22,6 +22,8 @@ All notable changes to ScriptVault will be documented in this file.
 - Added byte-level provenance rows for every shipped CodeMirror, Monaco,
   DOMPurify, Acorn, diff, and fflate asset, and marked those artifact-backed
   components in the CycloneDX SBOM.
+- Routed userscript updates that change the declared `@author` or `@namespace`
+  to manual review with a compact old-to-new identity reason.
 - Added a bounded local-file metadata polling fallback with explicit watcher
   health when FileSystemObserver is unavailable or reports an unknown/error
   state; only the active editor polls and changes still go through review.

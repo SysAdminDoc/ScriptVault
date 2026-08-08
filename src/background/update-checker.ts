@@ -98,6 +98,20 @@ export interface PendingUpdateInfo extends UpdateInfo {
   rollback?: unknown;
 }
 
+type MetadataIdentity = Pick<Partial<ScriptMeta>, 'author' | 'namespace'> | null | undefined;
+
+function metadataIdentityReviewReasons(previousMeta: MetadataIdentity, nextMeta: MetadataIdentity): string[] {
+  const reasons: string[] = [];
+  for (const field of ['author', 'namespace'] as const) {
+    const previous = typeof previousMeta?.[field] === 'string' ? previousMeta[field].trim().replace(/[\r\n\t]+/g, ' ') : '';
+    const next = typeof nextMeta?.[field] === 'string' ? nextMeta[field].trim().replace(/[\r\n\t]+/g, ' ') : '';
+    if (!previous && !next) continue;
+    if (previous === next) continue;
+    reasons.push(`Changes @${field} (${previous || '(none)'} -> ${next || '(none)'})`);
+  }
+  return reasons;
+}
+
 function normalizePendingUpdateList(value: unknown, limit: number): PendingUpdateInfo[] {
   if (!Array.isArray(value)) return [];
   const normalized: PendingUpdateInfo[] = [];
@@ -570,7 +584,7 @@ export const UpdateSystem = {
     });
   },
 
-  _getUpdateReviewReasons(receipt: { permissionChanges?: Record<string, { added?: string[] }>; dependencyChanges?: ScriptTrustReceipt['dependencyChanges']; dependencies?: { require?: Array<{ provenance?: { status?: string; verification?: string } }> } }, sourceIdentityChanged: boolean, riskDelta: UpdateRiskDelta | null = null): string[] {
+  _getUpdateReviewReasons(receipt: { permissionChanges?: Record<string, { added?: string[] }>; dependencyChanges?: ScriptTrustReceipt['dependencyChanges']; dependencies?: { require?: Array<{ provenance?: { status?: string; verification?: string } }> } }, sourceIdentityChanged: boolean, riskDelta: UpdateRiskDelta | null = null, previousMeta: MetadataIdentity = null, nextMeta: MetadataIdentity = null): string[] {
     const reasons: string[] = [];
     if (this._hasAddedPermission(receipt.permissionChanges)) {
       reasons.push('Adds permissions or host scope');
@@ -586,6 +600,7 @@ export const UpdateSystem = {
     if (sourceIdentityChanged) {
       reasons.push('Changes install source');
     }
+    reasons.push(...metadataIdentityReviewReasons(previousMeta, nextMeta));
     if (riskDelta && riskDelta.hasNewRiskySinks) {
       const cats = Array.isArray(riskDelta.categories) && riskDelta.categories.length
         ? riskDelta.categories.join(', ')
@@ -660,7 +675,7 @@ export const UpdateSystem = {
       fetchProvenanceBundle,
     });
     const riskDelta = await this._computeUpdateRiskDelta(script.code, update.code);
-    const reviewReasons = this._getUpdateReviewReasons(receipt, sourceIdentityChanged, riskDelta);
+    const reviewReasons = this._getUpdateReviewReasons(receipt, sourceIdentityChanged, riskDelta, script.meta, parsed.meta);
     const now = Date.now();
 
     return {

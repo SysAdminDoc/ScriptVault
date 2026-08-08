@@ -32252,7 +32252,23 @@ const UpdateSystem = {
     });
   },
 
-  _getUpdateReviewReasons(receipt, sourceIdentityChanged, riskDelta = null) {
+  _metadataIdentityReviewReasons(previousMeta = null, nextMeta = null) {
+    const reasons = [];
+    for (const field of ['author', 'namespace']) {
+      const previous = typeof previousMeta?.[field] === 'string'
+        ? previousMeta[field].trim().replace(/[\r\n\t]+/g, ' ')
+        : '';
+      const next = typeof nextMeta?.[field] === 'string'
+        ? nextMeta[field].trim().replace(/[\r\n\t]+/g, ' ')
+        : '';
+      if (!previous && !next) continue;
+      if (previous === next) continue;
+      reasons.push(`Changes @${field} (${previous || '(none)'} -> ${next || '(none)'})`);
+    }
+    return reasons;
+  },
+
+  _getUpdateReviewReasons(receipt, sourceIdentityChanged, riskDelta = null, previousMeta = null, nextMeta = null) {
     const reasons = [];
     if (this._hasAddedPermission(receipt.permissionChanges)) {
       reasons.push('Adds permissions or host scope');
@@ -32268,6 +32284,7 @@ const UpdateSystem = {
     if (sourceIdentityChanged) {
       reasons.push('Changes install source');
     }
+    reasons.push(...this._metadataIdentityReviewReasons(previousMeta, nextMeta));
     if (riskDelta && riskDelta.hasNewRiskySinks) {
       const cats = Array.isArray(riskDelta.categories) && riskDelta.categories.length
         ? riskDelta.categories.join(', ')
@@ -32345,7 +32362,7 @@ const UpdateSystem = {
       fetchProvenanceBundle
     });
     const riskDelta = await this._computeUpdateRiskDelta(script.code, update.code);
-    const reviewReasons = this._getUpdateReviewReasons(receipt, sourceIdentityChanged, riskDelta);
+    const reviewReasons = this._getUpdateReviewReasons(receipt, sourceIdentityChanged, riskDelta, script.meta, parsed.meta);
     const now = Date.now();
 
     return {

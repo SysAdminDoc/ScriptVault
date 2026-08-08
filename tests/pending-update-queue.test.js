@@ -253,6 +253,45 @@ describe('pending update queue', () => {
     expect(result.pendingUpdates[0].reviewReasons).toContain('Adds permissions or host scope');
   });
 
+  it('routes author and namespace identity changes to manual review', async () => {
+    const scripts = new Map([['identity', makeScript('identity', {
+      meta: { author: 'Original Author', namespace: 'stable-namespace' },
+    })]]);
+    installStorage(scripts);
+    globalThis.parseUserscript = vi.fn((code) => ({
+      meta: makeMeta({ author: 'New Author', namespace: 'replacement-namespace' }),
+      code,
+      metaBlock: '// ==UserScript==\n// ==/UserScript==',
+    }));
+
+    const result = await UpdateSystem.queueUpdates([{
+      id: 'identity',
+      name: 'Identity Script',
+      currentVersion: '1.0.0',
+      newVersion: '2.0.0',
+      code: makeCode('Identity Script', '2.0.0'),
+      sourceUrl: 'https://cdn.example.com/identity.user.js',
+    }]);
+
+    expect(result.pendingUpdates[0].safeToApply).toBe(false);
+    expect(result.pendingUpdates[0].reviewReasons).toEqual(expect.arrayContaining([
+      'Changes @author (Original Author -> New Author)',
+      'Changes @namespace (stable-namespace -> replacement-namespace)',
+    ]));
+  });
+
+  it('does not flag an update when neither version declares an author', () => {
+    const reasons = UpdateSystem._getUpdateReviewReasons(
+      { permissionChanges: null, dependencyChanges: { require: [] }, dependencies: { require: [] } },
+      false,
+      null,
+      { author: '', namespace: 'stable-namespace' },
+      { author: '', namespace: 'stable-namespace' },
+    );
+
+    expect(reasons).not.toContain(expect.stringContaining('Changes @author'));
+  });
+
   it('marks previously trusted unpinned @require byte changes for TOFU review', () => {
     const reasons = UpdateSystem._getUpdateReviewReasons({
       permissionChanges: null,
