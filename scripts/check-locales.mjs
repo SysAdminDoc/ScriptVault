@@ -45,6 +45,7 @@ function setDifference(left, right) {
 const report = {
   sources: {},
   coverage: [],
+  surfaces: [],
   drifts: [],
   warnings: [],
 };
@@ -144,6 +145,31 @@ if (!english) {
       report.warnings.push({ kind: 'runtime-partial', ...coverage });
     }
   }
+
+  const surfaceFiles = [
+    'pages/dashboard.html',
+    'pages/popup.html',
+    'pages/sidepanel.html',
+  ];
+  const surfacePattern = /data-i18n(?:-(?:placeholder|title|aria-label))?=["']([^"']+)["']/g;
+  for (const file of surfaceFiles) {
+    try {
+      const source = await readFile(join(root, file), 'utf8');
+      const keys = [...source.matchAll(surfacePattern)].map(match => match[1]);
+      const uniqueKeys = [...new Set(keys)].sort();
+      const missing = uniqueKeys.filter(key => !Object.prototype.hasOwnProperty.call(english.runtime, key));
+      report.surfaces.push({ file, localizedAttributes: keys.length, uniqueKeys: uniqueKeys.length, missing });
+      for (const key of missing) {
+        report.drifts.push({ kind: 'surface-missing-runtime-key', file, key });
+      }
+    } catch (error) {
+      report.drifts.push({
+        kind: 'surface-read-error',
+        file,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
 }
 
 if (wantJson) {
@@ -168,6 +194,12 @@ if (wantJson) {
     const label = coverage.status === 'partial' ? 'partial' : 'complete';
     console.log(`    ${coverage.locale.padEnd(3)} ${String(coverage.translated).padStart(4)}/${coverage.total} ` +
       `(${String(coverage.percent).padStart(4)}%) ${label}; baseline ${coverage.baseline}`);
+  }
+  console.log('');
+  console.log('  Localized surfaces:');
+  for (const surface of report.surfaces) {
+    console.log(`    ${surface.file.padEnd(24)} ${String(surface.uniqueKeys).padStart(4)} keys ` +
+      `${surface.missing.length ? `missing ${surface.missing.join(', ')}` : 'all keys present'}`);
   }
 }
 

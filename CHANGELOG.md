@@ -10,6 +10,9 @@ All notable changes to ScriptVault will be documented in this file.
 - Added a bounded local-file metadata polling fallback with explicit watcher
   health when FileSystemObserver is unavailable or reports an unknown/error
   state; only the active editor polls and changes still go through review.
+- Added a locale surface ratchet that inventories dashboard, popup, and side
+  panel keys and runs deterministic pseudo-locale/RTL checks across editor
+  labels, accessible names, overflow, and control order.
 
 ## [v3.27.0] — Recoverable restores, real isolation & honest errors (2026-08-08)
 

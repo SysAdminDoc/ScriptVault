@@ -838,13 +838,6 @@ _Scope not covered by the 2026-08-02 pass. Not findings; each needs its own audi
 
 ### P2
 
-- [ ] P2 — Add a partial-locale and RTL regression ratchet
-  Why: The locale gate currently proves generated parity but permits eight partial runtime catalogs at roughly 2.2%–6.1% coverage, so new UI can remain English-only or break RTL without failing CI.
-  Evidence: scripts/check-locales.mjs, docs/locale-coverage.md, _locales/*, modules/i18n.js, and the 2026-08-02 locale:check:gate output; localization backlog https://github.com/quoid/userscripts/issues/415; Stylus translation workflow https://github.com/openstyles/stylus.
-  Touches: scripts/check-locales.mjs, docs/locale-coverage.md, tests/check-locales-report.test.js, tests/dashboard-i18n-removal.test.js, tests/sidepanel-rtl-layout.test.js, and the dashboard/popup/sidepanel localization harness.
-  Acceptance: CI fails on a coverage regression or missing locale status, a deterministic pseudo-locale exercises the major dashboard/popup/sidepanel/editor labels, and RTL checks cover direction, accessible names, overflow, and control order while keeping partial translations explicitly labeled rather than requiring immediate full translation.
-  Complexity: M
-
 ### P3
 
 - [ ] P3 — Make browser-support and release-artifact references version-derived
