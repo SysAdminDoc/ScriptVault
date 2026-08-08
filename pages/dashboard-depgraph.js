@@ -14,6 +14,7 @@ const DependencyGraph = (() => {
         styleEl: null,
         canvas: null,
         ctx: null,
+        emptyState: null,
         sidebar: null,
         toolbar: null,
         scripts: [],
@@ -96,6 +97,23 @@ const DependencyGraph = (() => {
 }
 .dg-canvas-area canvas.dg-dragging {
     cursor: grabbing;
+}
+.dg-canvas-empty {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    line-height: 1.5;
+    text-align: center;
+    pointer-events: none;
+    z-index: 1;
+}
+.dg-canvas-empty[hidden] {
+    display: none;
 }
 .dg-toolbar {
     position: absolute;
@@ -1000,6 +1018,13 @@ const DependencyGraph = (() => {
         const canvas = document.createElement('canvas');
         canvasArea.appendChild(canvas);
 
+        const emptyState = document.createElement('div');
+        emptyState.className = 'dg-canvas-empty';
+        emptyState.setAttribute('role', 'status');
+        emptyState.textContent = 'No scripts to graph yet — install a script to see its dependencies and match overlaps.';
+        emptyState.hidden = true;
+        canvasArea.appendChild(emptyState);
+
         // Toolbar
         const toolbar = document.createElement('div');
         toolbar.className = 'dg-toolbar';
@@ -1045,6 +1070,7 @@ const DependencyGraph = (() => {
         _state.canvas = canvas;
         _state.sidebar = sidebar;
         _state.toolbar = toolbar;
+        _state.emptyState = emptyState;
 
         // Resize canvas
         resizeCanvas();
@@ -1245,6 +1271,7 @@ const DependencyGraph = (() => {
         const result = analyzeRelationships(_state.scripts);
         _state.nodes = result.nodes;
         _state.edges = result.edges;
+        if (_state.emptyState) _state.emptyState.hidden = _state.nodes.length > 0;
         _state.simulationAlpha = 1;
         _state.simulationRunning = true;
         renderSidebar();
@@ -1278,6 +1305,7 @@ const DependencyGraph = (() => {
         _state.container = null;
         _state.canvas = null;
         _state.ctx = null;
+        _state.emptyState = null;
         _state.sidebar = null;
         _state.toolbar = null;
         _state.nodes = [];

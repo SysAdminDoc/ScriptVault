@@ -58,4 +58,10 @@ describe('DependencyGraph module source contracts', () => {
     expect(depgraphCode).toContain('vx *= damping');
     expect(depgraphCode).toContain('vy *= damping');
   });
+
+  it('renders a clear empty state when there are no scripts to graph', () => {
+    expect(depgraphCode).toContain('No scripts to graph yet — install a script to see its dependencies and match overlaps.');
+    expect(depgraphCode).toContain("emptyState.hidden = _state.nodes.length > 0");
+    expect(depgraphCode).toContain('.dg-canvas-empty[hidden]');
+  });
 });

@@ -828,16 +828,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
 
 ### P3
 
-- [ ] P3 — Dependency graph has no zero-scripts empty state (blank canvas)
-  Category: ux
-  Where: `pages/dashboard-depgraph.js:576-620` (`render()` has no `nodes.length === 0` path); the only empty copy is the sidebar's "Select a node…"
-  Problem: A user with no scripts (or no relationships) opening Utilities → Dependency Graph sees an unexplained empty canvas.
-  Evidence: Verified — read `render()`; `dg-empty` is sidebar-only.
-  Fix: When `nodes.length === 0`, overlay "No scripts to graph yet — install a script to see its dependencies and match overlaps."
-  Acceptance: The empty graph shows an explanatory message.
-  Confidence: Verified
-  Effort: S
-
 - [ ] P3 — Drifted UNSHIPPED mirror modules are pinned by the test suite as if they were the product
   Category: maintainability
   Where: `src/background/wrapper-builder.ts`, `import-export.ts`, `update-checker.ts`, `install-handler.ts`, `trust-receipt.ts`, `parser.ts` (none in `ts-source-promotion.json`; live copies are inline in `core.ts`); tests `tests/gm-websocket.test.js`, `wrapper-gm-tabs-39-13.test.js`, `wrapper-dom-security.test.js`, `pending-update-queue.test.js`, `pending-install-isolation.test.js`, `trust-receipt*.test.js`, `versions.test.js` and others import the mirrors
