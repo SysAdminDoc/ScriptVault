@@ -262,19 +262,17 @@ const GMNetworkHandler = (() => {
               let responseData;
               let responseText = "";
               if (data.responseType === "arraybuffer") {
-                const buffer = await response.arrayBuffer();
-                if (buffer.byteLength > maxBytes) throw new Error(`Response too large (${formatBytes(buffer.byteLength)}).`);
-                const bytes = new Uint8Array(buffer);
+                const bytes = await _readResponseBytesBounded(response, maxBytes, "Response");
                 responseData = { __sv_base64__: true, data: encodeBytesToBase64(bytes) };
                 sendEvent("progress", {
                   readyState: 3,
                   lengthComputable: contentLength > 0,
-                  loaded: buffer.byteLength,
-                  total: contentLength || buffer.byteLength
+                  loaded: bytes.byteLength,
+                  total: contentLength || bytes.byteLength
                 });
               } else if (data.responseType === "blob") {
-                const blob = await response.blob();
-                if (blob.size > maxBytes) throw new Error(`Response too large (${formatBytes(blob.size)}).`);
+                const blobBytes = await _readResponseBytesBounded(response, maxBytes, "Response");
+                const blob = new Blob([blobBytes], { type: response.headers.get("content-type") || "" });
                 responseData = await blobToDataUrl(blob);
                 sendEvent("progress", {
                   readyState: 3,
@@ -283,7 +281,7 @@ const GMNetworkHandler = (() => {
                   total: contentLength || blob.size
                 });
               } else if (data.responseType === "json") {
-                responseText = await response.text();
+                responseText = await _fetchTextBounded(response, maxBytes, "Response");
                 try {
                   responseData = JSON.parse(responseText);
                 } catch (_) {
@@ -338,7 +336,7 @@ const GMNetworkHandler = (() => {
                   responseText = streamAsBase64 ? "" : chunks.join("");
                   responseData = streamAsBase64 ? null : responseText;
                 } else {
-                  responseText = await response.text();
+                  responseText = await _fetchTextBounded(response, maxBytes, "Response");
                   responseData = responseText;
                 }
                 sendEvent("progress", {
@@ -348,7 +346,7 @@ const GMNetworkHandler = (() => {
                   total: contentLength || responseText.length
                 });
               } else {
-                responseText = await response.text();
+                responseText = await _fetchTextBounded(response, maxBytes, "Response");
                 responseData = responseText;
                 sendEvent("progress", {
                   readyState: 3,

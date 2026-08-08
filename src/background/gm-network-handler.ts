@@ -52,6 +52,8 @@ declare const normalizeDownloadFilename: (name: unknown, url: string, sourceName
 declare const trackPendingDownload: (downloadId: number, data: GMNetworkPayload) => any;
 declare const reconcilePendingDownload: (downloadId: number, tracker: any, now?: number) => Promise<void>;
 declare const scriptHasGrant: (script: any, grants: string[]) => boolean;
+declare const _fetchTextBounded: (response: Response, maxBytes: number, label: string) => Promise<string>;
+declare const _readResponseBytesBounded: (response: Response, maxBytes: number, label: string) => Promise<Uint8Array>;
 declare const normalizeGMWebSocketUrl: (url: unknown) => string;
 declare const normalizeGMWebSocketProtocols: (protocols: unknown) => string | string[] | undefined;
 declare const normalizeGMWebSocketCloseCode: (code: unknown) => number | undefined;
@@ -336,6 +338,9 @@ export async function handleGMNetworkMessage(
 
             const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
             const maxBytes = GM_DOWNLOAD_FETCH_MAX_BYTES;
+            // Cheap early refusal only. Content-Length is a hint a hostile host
+            // under @connect can omit or lie about, so every read path below
+            // bounds DURING the read rather than checking a buffered size.
             if (Number.isFinite(contentLength) && contentLength > maxBytes) {
               throw new Error(`Response too large (${formatBytes(contentLength)}). Maximum is ${formatBytes(maxBytes)}.`);
             }
@@ -344,19 +349,19 @@ export async function handleGMNetworkMessage(
             let responseText = '';
 
             if (data.responseType === 'arraybuffer') {
-              const buffer = await response.arrayBuffer();
-              if (buffer.byteLength > maxBytes) throw new Error(`Response too large (${formatBytes(buffer.byteLength)}).`);
-              const bytes = new Uint8Array(buffer);
+              const bytes = await _readResponseBytesBounded(response, maxBytes, 'Response');
               responseData = { __sv_base64__: true, data: encodeBytesToBase64(bytes) };
               sendEvent('progress', {
                 readyState: 3,
                 lengthComputable: contentLength > 0,
-                loaded: buffer.byteLength,
-                total: contentLength || buffer.byteLength,
+                loaded: bytes.byteLength,
+                total: contentLength || bytes.byteLength,
               });
             } else if (data.responseType === 'blob') {
-              const blob = await response.blob();
-              if (blob.size > maxBytes) throw new Error(`Response too large (${formatBytes(blob.size)}).`);
+              // Read bounded, then wrap: response.blob() would buffer the whole
+              // body before any size check could refuse it.
+              const blobBytes = await _readResponseBytesBounded(response, maxBytes, 'Response');
+              const blob = new Blob([blobBytes as unknown as BlobPart], { type: response.headers.get('content-type') || '' });
               responseData = await blobToDataUrl(blob);
               sendEvent('progress', {
                 readyState: 3,
@@ -365,7 +370,7 @@ export async function handleGMNetworkMessage(
                 total: contentLength || blob.size,
               });
             } else if (data.responseType === 'json') {
-              responseText = await response.text();
+              responseText = await _fetchTextBounded(response, maxBytes, 'Response');
               try {
                 responseData = JSON.parse(responseText);
               } catch (_) {
@@ -420,7 +425,7 @@ export async function handleGMNetworkMessage(
                 responseText = streamAsBase64 ? '' : chunks.join('');
                 responseData = streamAsBase64 ? null : responseText;
               } else {
-                responseText = await response.text();
+                responseText = await _fetchTextBounded(response, maxBytes, 'Response');
                 responseData = responseText;
               }
               sendEvent('progress', {
@@ -430,7 +435,7 @@ export async function handleGMNetworkMessage(
                 total: contentLength || responseText.length,
               });
             } else {
-              responseText = await response.text();
+              responseText = await _fetchTextBounded(response, maxBytes, 'Response');
               responseData = responseText;
               sendEvent('progress', {
                 readyState: 3,

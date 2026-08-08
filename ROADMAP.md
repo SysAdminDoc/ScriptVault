@@ -907,16 +907,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
   Confidence: Verified
   Effort: S
 
-- [ ] P2 — `GM_xmlhttpRequest` buffers the entire response before enforcing the 50 MB cap on every response type except `stream`
-  Category: reliability
-  Where: `src/background/gm-network-handler.ts:292-396` (text/json `await response.text()` `:388,:323` unbounded; arraybuffer/blob check size AFTER `await response.arrayBuffer()`/`.blob()` `:302-303,:313-314`)
-  Problem: The only pre-read bound is `parseInt(content-length||'0')`, which passes on a missing/lying header. A malicious host reachable under `@connect` returns a chunked multi-GB body and OOM-kills the SW (taking down registration, sync, update checks) on every retry. The fix primitive exists (`fetchTextBounded`/`readResponseBytesBounded`, applied to ResourceCache/npm-resolve/install/public-api in 2026-05-24) but `gm-network-handler` was never converted; `responseToDownloadDataUrl` (`core.ts:4932`) has the same declared-length-only pre-check.
-  Evidence: Verified — read all four response paths; only `stream` bounds during read.
-  Fix: Route text/json through `fetchTextBounded` and arraybuffer/blob through a bounded bytes reader so the cap trips during the read.
-  Acceptance: A chunked no-`Content-Length` response over 50 MB is rejected mid-read; a test drives an oversized chunked body.
-  Confidence: Verified
-  Effort: S
-
 - [ ] P2 — `GM_xmlhttpRequest` abandons any request longer than 30 s; `GM.fetch` stream polls forever after a SW restart
   Category: correctness
   Where: shipped `background.core.js:13990-14000` (`pollXhrFinalResult` caps at `attempt < 600` × 50 ms = 30 s; terminal events delivered only by this poll) and `:14256` (stream `for (;;)` no cap); `gm-network-handler.ts:501` returns `{done:false}` for an unknown `requestId`

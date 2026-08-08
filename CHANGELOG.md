@@ -4,6 +4,19 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **`GM_xmlhttpRequest` buffered the entire response before enforcing its 50 MB
+  cap on every response type except `stream`.** The only pre-read bound was
+  `Content-Length`, which a hostile host reachable under `@connect` can omit or
+  lie about; `text`/`json` called `response.text()` unbounded, and
+  `arraybuffer`/`blob` checked the size only *after* `arrayBuffer()`/`blob()` had
+  already buffered it. A chunked multi-GB reply could therefore OOM-kill the
+  service worker — taking registration, cloud sync and update checks down with it
+  — on every retry. All four paths now bound during the read (`text`/`json`
+  through the existing bounded text reader, `arraybuffer`/`blob` through a new
+  byte-bounded reader that cancels the stream the moment the cap trips), and the
+  download fetch-bridge data URL path was converted the same way. The declared
+  length is kept as a cheap early refusal.
+
 - **Switching a profile left the Scripts table showing the old toggle states, and
   claimed success even when every toggle failed.** `_applyProfile` toggled scripts
   through the background and then refreshed only the profile chip — the table was

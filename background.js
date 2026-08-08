@@ -13765,19 +13765,17 @@ const GMNetworkHandler = (() => {
               let responseData;
               let responseText = "";
               if (data.responseType === "arraybuffer") {
-                const buffer = await response.arrayBuffer();
-                if (buffer.byteLength > maxBytes) throw new Error(`Response too large (${formatBytes(buffer.byteLength)}).`);
-                const bytes = new Uint8Array(buffer);
+                const bytes = await _readResponseBytesBounded(response, maxBytes, "Response");
                 responseData = { __sv_base64__: true, data: encodeBytesToBase64(bytes) };
                 sendEvent("progress", {
                   readyState: 3,
                   lengthComputable: contentLength > 0,
-                  loaded: buffer.byteLength,
-                  total: contentLength || buffer.byteLength
+                  loaded: bytes.byteLength,
+                  total: contentLength || bytes.byteLength
                 });
               } else if (data.responseType === "blob") {
-                const blob = await response.blob();
-                if (blob.size > maxBytes) throw new Error(`Response too large (${formatBytes(blob.size)}).`);
+                const blobBytes = await _readResponseBytesBounded(response, maxBytes, "Response");
+                const blob = new Blob([blobBytes], { type: response.headers.get("content-type") || "" });
                 responseData = await blobToDataUrl(blob);
                 sendEvent("progress", {
                   readyState: 3,
@@ -13786,7 +13784,7 @@ const GMNetworkHandler = (() => {
                   total: contentLength || blob.size
                 });
               } else if (data.responseType === "json") {
-                responseText = await response.text();
+                responseText = await _fetchTextBounded(response, maxBytes, "Response");
                 try {
                   responseData = JSON.parse(responseText);
                 } catch (_) {
@@ -13841,7 +13839,7 @@ const GMNetworkHandler = (() => {
                   responseText = streamAsBase64 ? "" : chunks.join("");
                   responseData = streamAsBase64 ? null : responseText;
                 } else {
-                  responseText = await response.text();
+                  responseText = await _fetchTextBounded(response, maxBytes, "Response");
                   responseData = responseText;
                 }
                 sendEvent("progress", {
@@ -13851,7 +13849,7 @@ const GMNetworkHandler = (() => {
                   total: contentLength || responseText.length
                 });
               } else {
-                responseText = await response.text();
+                responseText = await _fetchTextBounded(response, maxBytes, "Response");
                 responseData = responseText;
                 sendEvent("progress", {
                   readyState: 3,
@@ -34013,15 +34011,17 @@ function downloadBytesToDataUrl(bytes, mimeType) {
 }
 
 async function responseToDownloadDataUrl(response) {
-  const declaredLen = parseInt(response.headers?.get?.('content-length') || '0', 10);
-  if (Number.isFinite(declaredLen) && declaredLen > GM_DOWNLOAD_FETCH_MAX_BYTES) {
-    throw new Error(`Download too large (${formatBytes(declaredLen)}). Maximum is ${formatBytes(GM_DOWNLOAD_FETCH_MAX_BYTES)} when headers/anonymous mode requires a fetch bridge.`);
+  // Bounded during the read: the old declared-length pre-check plus a post-hoc
+  // arrayBuffer() size check had already buffered a chunked multi-GB body by the
+  // time it could refuse it.
+  let bytes;
+  try {
+    bytes = await _readResponseBytesBounded(response, GM_DOWNLOAD_FETCH_MAX_BYTES, 'Download');
+  } catch (e) {
+    const detail = e?.message || String(e);
+    throw new Error(`${detail} (limit applies when headers/anonymous mode requires a fetch bridge.)`);
   }
-  const buffer = await response.arrayBuffer();
-  if (buffer.byteLength > GM_DOWNLOAD_FETCH_MAX_BYTES) {
-    throw new Error(`Download too large (${formatBytes(buffer.byteLength)}). Maximum is ${formatBytes(GM_DOWNLOAD_FETCH_MAX_BYTES)} when headers/anonymous mode requires a fetch bridge.`);
-  }
-  return downloadBytesToDataUrl(new Uint8Array(buffer), response.headers?.get?.('content-type') || 'application/octet-stream');
+  return downloadBytesToDataUrl(bytes, response.headers?.get?.('content-type') || 'application/octet-stream');
 }
 
 function _normalizeDownloadId(downloadId) {
@@ -34281,6 +34281,62 @@ async function _fetchTextBounded(response, maxBytes, label) {
     offset += c.byteLength;
   }
   return decoder.decode(total);
+}
+
+/**
+ * Read a response body as BYTES with the cap tripping during the read.
+ *
+ * Byte sibling of `_fetchTextBounded`. `Content-Length` is a hint a hostile host
+ * can omit or lie about, so `await response.arrayBuffer()` followed by a size
+ * check has already buffered the whole body by the time it can refuse — which is
+ * how a chunked multi-GB reply could OOM-kill the service worker, taking
+ * registration, sync and update checks with it, on every retry.
+ */
+async function _readResponseBytesBounded(response, maxBytes, label) {
+  if (!response) throw new Error(`${label}: invalid response`);
+
+  const declaredLen = parseInt(response.headers?.get?.('content-length') || '0', 10);
+  if (Number.isFinite(declaredLen) && declaredLen > maxBytes) {
+    throw new Error(`${label} too large (${formatBytes(declaredLen)}). Maximum is ${formatBytes(maxBytes)}.`);
+  }
+
+  const body = response.body;
+  if (!body || typeof body.getReader !== 'function') {
+    // Nothing to stream (synthetic or already-buffered response): buffer, then
+    // refuse. Still better than trusting the declared length alone.
+    const buffer = await response.arrayBuffer();
+    if (buffer.byteLength > maxBytes) {
+      throw new Error(`${label} too large (${formatBytes(buffer.byteLength)}). Maximum is ${formatBytes(maxBytes)}.`);
+    }
+    return new Uint8Array(buffer);
+  }
+
+  const reader = body.getReader();
+  const chunks = [];
+  let bytesRead = 0;
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      bytesRead += value.byteLength;
+      if (bytesRead > maxBytes) {
+        try { await reader.cancel(); } catch (_e) { /* ignore */ }
+        throw new Error(`${label} too large (${formatBytes(bytesRead)}+). Maximum is ${formatBytes(maxBytes)}.`);
+      }
+      chunks.push(value);
+    }
+  } finally {
+    try { reader.releaseLock(); } catch (_e) { /* already released */ }
+  }
+
+  const total = new Uint8Array(bytesRead);
+  let offset = 0;
+  for (const c of chunks) {
+    total.set(c, offset);
+    offset += c.byteLength;
+  }
+  return total;
 }
 
 // chrome.cookies.* only accepts http(s) URLs. Front-validate to give scripts a

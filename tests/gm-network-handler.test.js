@@ -5,6 +5,7 @@ import {
   handleGMNetworkMessage,
   isGMNetworkAction,
 } from '../src/background/gm-network-handler.ts';
+import { fetchTextBounded, readResponseBytesBounded } from '../src/background/fetch-bounded.ts';
 
 const originalGlobals = {
   ScriptStorage: globalThis.ScriptStorage,
@@ -33,6 +34,8 @@ const originalGlobals = {
   encodeGMWebSocketPayload: globalThis.encodeGMWebSocketPayload,
   decodeGMWebSocketPayload: globalThis.decodeGMWebSocketPayload,
   formatBytes: globalThis.formatBytes,
+  _fetchTextBounded: globalThis._fetchTextBounded,
+  _readResponseBytesBounded: globalThis._readResponseBytesBounded,
   GM_DOWNLOAD_FETCH_MAX_BYTES: globalThis.GM_DOWNLOAD_FETCH_MAX_BYTES,
   GM_WEBSOCKET_MAX_MESSAGE_BYTES: globalThis.GM_WEBSOCKET_MAX_MESSAGE_BYTES,
   WebSocket: globalThis.WebSocket,
@@ -125,6 +128,10 @@ describe('GM network handler', () => {
     globalThis.encodeGMWebSocketPayload = vi.fn(async (payload) => payload);
     globalThis.decodeGMWebSocketPayload = vi.fn((payload) => payload);
     globalThis.formatBytes = vi.fn((bytes) => `${bytes} B`);
+    // The XHR read paths are bounded during the read; wire the real readers so
+    // the test exercises the shipped size enforcement rather than a stub.
+    globalThis._fetchTextBounded = fetchTextBounded;
+    globalThis._readResponseBytesBounded = readResponseBytesBounded;
     globalThis.GM_DOWNLOAD_FETCH_MAX_BYTES = 1024 * 1024;
     globalThis.GM_WEBSOCKET_MAX_MESSAGE_BYTES = 1024;
     globalThis.fetch = vi.fn().mockResolvedValue(new Response('ok', {
@@ -231,6 +238,54 @@ describe('GM network handler', () => {
       }),
     });
     expect(globalThis.XhrManager.remove).toHaveBeenCalledWith('xhr_1');
+  });
+
+  // A host reachable under @connect can omit Content-Length and stream forever.
+  // Every response type must trip the cap mid-read rather than after buffering.
+  it.each(['text', 'json', 'arraybuffer', 'blob'])(
+    'rejects an oversized chunked %s response with no content-length',
+    async (responseType) => {
+      globalThis.GM_DOWNLOAD_FETCH_MAX_BYTES = 64;
+      // 10 chunks x 32 bytes = 320 bytes, no content-length header at all.
+      globalThis.fetch = vi.fn().mockResolvedValue(
+        chunkedResponse(Array.from({ length: 10 }, () => 'x'.repeat(32)), {
+          status: 200,
+          headers: { 'content-type': 'application/octet-stream' },
+        }),
+      );
+
+      await expect(handleGMNetworkMessage('GM_xmlhttpRequest', {
+        scriptId: 'script-1',
+        url: 'https://api.example.com/huge',
+        responseType,
+      }, { tab: { id: 7 } })).resolves.toEqual({ requestId: 'xhr_1', started: true });
+
+      await vi.waitFor(() => {
+        expect(xhrRequests.get('xhr_1')?.finalResult).toMatchObject({ done: true, type: 'error' });
+      });
+      const error = xhrRequests.get('xhr_1').finalResult.response?.error
+        || xhrRequests.get('xhr_1').finalResult.error
+        || '';
+      expect(String(error)).toMatch(/too large/i);
+    },
+  );
+
+  it('still accepts a chunked response that stays under the cap', async () => {
+    globalThis.GM_DOWNLOAD_FETCH_MAX_BYTES = 1024;
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      chunkedResponse(['alpha', 'beta'], { status: 200, headers: { 'content-type': 'text/plain' } }),
+    );
+
+    await handleGMNetworkMessage('GM_xmlhttpRequest', {
+      scriptId: 'script-1',
+      url: 'https://api.example.com/small',
+      responseType: 'text',
+    }, { tab: { id: 7 } });
+
+    await vi.waitFor(() => {
+      expect(xhrRequests.get('xhr_1')?.finalResult).toMatchObject({ done: true, type: 'load' });
+    });
+    expect(xhrRequests.get('xhr_1').finalResult.response.responseText).toBe('alphabeta');
   });
 
   it('streams GM.fetch-compatible response chunks through privileged result polling', async () => {
