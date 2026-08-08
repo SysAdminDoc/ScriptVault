@@ -103,6 +103,25 @@ export function normalizeLocalLibrarySnapshots(input: unknown): LocalLibrarySnap
   return normalized;
 }
 
+/**
+ * Verify portable snapshots before an import can make them executable.
+ * Normalization intentionally stays synchronous for ordinary storage/sync
+ * paths; import boundaries use this bounded Web Crypto pass to reject a code
+ * body wearing another library's digest.
+ */
+export async function verifyLocalLibrarySnapshots(input: unknown): Promise<LocalLibrarySnapshot[]> {
+  const normalized = normalizeLocalLibrarySnapshots(input);
+  const verified: LocalLibrarySnapshot[] = [];
+  for (const snapshot of normalized) {
+    try {
+      if (await sha256Hex(snapshot.code) === snapshot.sha256) verified.push(snapshot);
+    } catch (_) {
+      // Fail closed when Web Crypto is unavailable or the digest fails.
+    }
+  }
+  return verified;
+}
+
 export function getLocalLibraryRequireScripts(settings: unknown): Array<{ url: string; code: string }> {
   const candidate = settings && typeof settings === 'object'
     ? (settings as Record<string, unknown>).localLibraries
@@ -130,6 +149,7 @@ export const LocalLibraries = Object.freeze({
   getLocalLibraryRequireScripts,
   getLocalLibraryReviewSignals,
   normalizeLocalLibrarySnapshots,
+  verifyLocalLibrarySnapshots,
 });
 
 export default LocalLibraries;

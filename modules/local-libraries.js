@@ -35,7 +35,8 @@ const LocalLibraries = (() => {
     default: () => local_libraries_default,
     getLocalLibraryRequireScripts: () => getLocalLibraryRequireScripts,
     getLocalLibraryReviewSignals: () => getLocalLibraryReviewSignals,
-    normalizeLocalLibrarySnapshots: () => normalizeLocalLibrarySnapshots
+    normalizeLocalLibrarySnapshots: () => normalizeLocalLibrarySnapshots,
+    verifyLocalLibrarySnapshots: () => verifyLocalLibrarySnapshots
   });
   module.exports = __toCommonJS(local_libraries_exports);
   var MAX_LOCAL_LIBRARIES = 8;
@@ -107,6 +108,17 @@ const LocalLibraries = (() => {
     }
     return normalized;
   }
+  async function verifyLocalLibrarySnapshots(input) {
+    const normalized = normalizeLocalLibrarySnapshots(input);
+    const verified = [];
+    for (const snapshot of normalized) {
+      try {
+        if (await sha256Hex(snapshot.code) === snapshot.sha256) verified.push(snapshot);
+      } catch (_) {
+      }
+    }
+    return verified;
+  }
   function getLocalLibraryRequireScripts(settings) {
     const candidate = settings && typeof settings === "object" ? settings.localLibraries : void 0;
     return normalizeLocalLibrarySnapshots(candidate).map((snapshot) => ({
@@ -129,7 +141,8 @@ const LocalLibraries = (() => {
     createLocalLibrarySnapshot,
     getLocalLibraryRequireScripts,
     getLocalLibraryReviewSignals,
-    normalizeLocalLibrarySnapshots
+    normalizeLocalLibrarySnapshots,
+    verifyLocalLibrarySnapshots
   });
   var local_libraries_default = LocalLibraries;
   return module.exports.default || module.exports.LocalLibraries || module.exports;

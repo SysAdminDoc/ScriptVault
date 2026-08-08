@@ -838,16 +838,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
   Confidence: Verified
   Effort: S
 
-- [ ] P3 — Local-library `sha256` is format-checked but never re-verified against the code it labels (false provenance on import)
-  Category: security
-  Where: `src/background/local-libraries.ts:78-114` (`normalizeLocalLibrarySnapshots` accepts any 64-hex `sha256` without recomputing over `code`) + `src/background/core.ts:5386-5388` (JSON import runs settings through it) and `:13012-13024` (`getLocalLibraryRequireScripts` embeds `code` with the stored hash as a `#sha256=` label)
-  Problem: The hash is decoration on every path except the original `createLocalLibrarySnapshot` intake. An imported script can carry up to 8×512 KB of arbitrary library code wearing a "reviewed" hash of, say, real jQuery — false provenance in any UI that shows the hash as review evidence. (The script is quarantine-disabled on import, so this is a provenance-integrity gap, not direct execution.)
-  Evidence: Verified — `sha256` is recomputed only in `createLocalLibrarySnapshot` (`:62`); `normalizeLocalLibrarySnapshots` only regex-checks format (`:87-90`).
-  Fix: Recompute `sha256` at registration/wrap time and drop mismatched snapshots; or strip `localLibraries` from imported settings and require re-review.
-  Acceptance: An imported snapshot whose bytes don't match its `sha256` is rejected; a test asserts recomputation.
-  Confidence: Verified
-  Effort: S
-
 - [ ] P3 — `@require` fallback CDNs silently substitute a different library (jQuery core for a plugin) and cache it for 7 days
   Category: correctness
   Where: `src/background/core.ts:12041-12071` (`getFallbackUrls`, substring match `lowerUrl.includes('jquery')`/`'gm_config'`/`'mutation-summary'`) and `:12321` + the cache-store block

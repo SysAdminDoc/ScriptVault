@@ -6,6 +6,7 @@ import {
   getLocalLibraryRequireScripts,
   getLocalLibraryReviewSignals,
   normalizeLocalLibrarySnapshots,
+  verifyLocalLibrarySnapshots,
 } from '../src/background/local-libraries.ts';
 
 describe('reviewed local library snapshots', () => {
@@ -39,6 +40,16 @@ describe('reviewed local library snapshots', () => {
     }]);
     expect(normalized).toEqual([created.snapshot]);
     expect(Object.keys(normalized[0])).toEqual(['id', 'name', 'code', 'sha256', 'bytes', 'reviewedAt']);
+  });
+
+  it('recomputes imported snapshot hashes and rejects false provenance', async () => {
+    const created = await createLocalLibrarySnapshot({ name: 'verified.js', code: 'window.verified = true;' });
+    if (!created.ok) throw new Error(created.error);
+    const verified = await verifyLocalLibrarySnapshots([
+      created.snapshot,
+      { ...created.snapshot, id: 'local-library-tampered-1234', sha256: 'a'.repeat(64) },
+    ]);
+    expect(verified).toEqual([created.snapshot]);
   });
 
   it('rejects empty and oversized libraries and caps the collection', async () => {

@@ -10334,7 +10334,8 @@ const LocalLibraries = (() => {
     default: () => local_libraries_default,
     getLocalLibraryRequireScripts: () => getLocalLibraryRequireScripts,
     getLocalLibraryReviewSignals: () => getLocalLibraryReviewSignals,
-    normalizeLocalLibrarySnapshots: () => normalizeLocalLibrarySnapshots
+    normalizeLocalLibrarySnapshots: () => normalizeLocalLibrarySnapshots,
+    verifyLocalLibrarySnapshots: () => verifyLocalLibrarySnapshots
   });
   module.exports = __toCommonJS(local_libraries_exports);
   var MAX_LOCAL_LIBRARIES = 8;
@@ -10406,6 +10407,17 @@ const LocalLibraries = (() => {
     }
     return normalized;
   }
+  async function verifyLocalLibrarySnapshots(input) {
+    const normalized = normalizeLocalLibrarySnapshots(input);
+    const verified = [];
+    for (const snapshot of normalized) {
+      try {
+        if (await sha256Hex(snapshot.code) === snapshot.sha256) verified.push(snapshot);
+      } catch (_) {
+      }
+    }
+    return verified;
+  }
   function getLocalLibraryRequireScripts(settings) {
     const candidate = settings && typeof settings === "object" ? settings.localLibraries : void 0;
     return normalizeLocalLibrarySnapshots(candidate).map((snapshot) => ({
@@ -10428,7 +10440,8 @@ const LocalLibraries = (() => {
     createLocalLibrarySnapshot,
     getLocalLibraryRequireScripts,
     getLocalLibraryReviewSignals,
-    normalizeLocalLibrarySnapshots
+    normalizeLocalLibrarySnapshots,
+    verifyLocalLibrarySnapshots
   });
   var local_libraries_default = LocalLibraries;
   return module.exports.default || module.exports.LocalLibraries || module.exports;
@@ -17733,6 +17746,17 @@ const CloudSync = (() => {
     }
     return normalized;
   }
+  async function verifyLocalLibrarySnapshots(input) {
+    const normalized = normalizeLocalLibrarySnapshots(input);
+    const verified = [];
+    for (const snapshot of normalized) {
+      try {
+        if (await sha256Hex(snapshot.code) === snapshot.sha256) verified.push(snapshot);
+      } catch (_) {
+      }
+    }
+    return verified;
+  }
   function getLocalLibraryRequireScripts(settings) {
     const candidate = settings && typeof settings === "object" ? settings.localLibraries : void 0;
     return normalizeLocalLibrarySnapshots(candidate).map((snapshot) => ({
@@ -17755,7 +17779,8 @@ const CloudSync = (() => {
     createLocalLibrarySnapshot,
     getLocalLibraryRequireScripts,
     getLocalLibraryReviewSignals,
-    normalizeLocalLibrarySnapshots
+    normalizeLocalLibrarySnapshots,
+    verifyLocalLibrarySnapshots
   });
 
   // src/background/gm-value-sync.ts
@@ -19514,6 +19539,17 @@ const EasyCloudSync = (() => {
     }
     return normalized;
   }
+  async function verifyLocalLibrarySnapshots(input) {
+    const normalized = normalizeLocalLibrarySnapshots(input);
+    const verified = [];
+    for (const snapshot of normalized) {
+      try {
+        if (await sha256Hex(snapshot.code) === snapshot.sha256) verified.push(snapshot);
+      } catch (_) {
+      }
+    }
+    return verified;
+  }
   function getLocalLibraryRequireScripts(settings) {
     const candidate = settings && typeof settings === "object" ? settings.localLibraries : void 0;
     return normalizeLocalLibrarySnapshots(candidate).map((snapshot) => ({
@@ -19536,7 +19572,8 @@ const EasyCloudSync = (() => {
     createLocalLibrarySnapshot,
     getLocalLibraryRequireScripts,
     getLocalLibraryReviewSignals,
-    normalizeLocalLibrarySnapshots
+    normalizeLocalLibrarySnapshots,
+    verifyLocalLibrarySnapshots
   });
 
   // src/modules/sync-easycloud.ts
@@ -35288,8 +35325,10 @@ async function importScripts(data, options = {}) {
       const nextSettings = importSettings && script.settings && typeof script.settings === 'object'
         ? { ...script.settings }
         : { ...(existing?.settings || {}) };
-      if (Object.prototype.hasOwnProperty.call(nextSettings, 'localLibraries') && typeof LocalLibraries !== 'undefined') {
-        nextSettings.localLibraries = LocalLibraries.normalizeLocalLibrarySnapshots(nextSettings.localLibraries);
+      if (importSettings && Object.prototype.hasOwnProperty.call(nextSettings, 'localLibraries')) {
+        nextSettings.localLibraries = typeof LocalLibraries !== 'undefined' && typeof LocalLibraries.verifyLocalLibrarySnapshots === 'function'
+          ? await LocalLibraries.verifyLocalLibrarySnapshots(nextSettings.localLibraries)
+          : [];
       }
       const trustState = applyImportedScriptTrust(nextSettings, script.enabled !== false, {
         trustImportedScripts,

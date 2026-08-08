@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { normalizeLocalLibrarySnapshots } from '../src/background/local-libraries.ts';
+import {
+  normalizeLocalLibrarySnapshots,
+  verifyLocalLibrarySnapshots,
+} from '../src/background/local-libraries.ts';
 
 const backgroundCoreCode = readFileSync(resolve(process.cwd(), 'background.core.js'), 'utf8');
 const encoder = new TextEncoder();
@@ -204,7 +207,7 @@ function createRuntimeHarness(existingScripts = [], storedValuesByScript = {}, s
       updateBadge,
       generateId,
       chrome,
-      { normalizeLocalLibrarySnapshots },
+      { normalizeLocalLibrarySnapshots, verifyLocalLibrarySnapshots },
       runtimeConsole,
     ),
     fakeFflate,
@@ -428,7 +431,7 @@ describe('runtime import/export archive identity', () => {
     expect(JSON.stringify(exported)).not.toContain('handle');
   });
 
-  it('round-trips reviewed local library snapshots without local file metadata', async () => {
+  it('rejects imported local library snapshots whose digest does not match the code', async () => {
     const script = makeScript('script_local_library', 'Local Library Script');
     script.settings = {
       notes: 'portable note',
@@ -467,7 +470,7 @@ describe('runtime import/export archive identity', () => {
 
     expect(result.errors).toEqual([]);
     expect(Array.from(restoreHarness.scriptCache.values())[0].settings.localLibraries)
-      .toEqual(exported.scripts[0].settings.localLibraries);
+      .toEqual([]);
   });
 
   it('round-trips JSON vault exports with stored values, folders, and workspaces', async () => {

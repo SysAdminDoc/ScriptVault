@@ -5696,8 +5696,10 @@ async function importScripts(data, options = {}) {
       const nextSettings = importSettings && script.settings && typeof script.settings === 'object'
         ? { ...script.settings }
         : { ...(existing?.settings || {}) };
-      if (Object.prototype.hasOwnProperty.call(nextSettings, 'localLibraries') && typeof LocalLibraries !== 'undefined') {
-        nextSettings.localLibraries = LocalLibraries.normalizeLocalLibrarySnapshots(nextSettings.localLibraries);
+      if (importSettings && Object.prototype.hasOwnProperty.call(nextSettings, 'localLibraries')) {
+        nextSettings.localLibraries = typeof LocalLibraries !== 'undefined' && typeof LocalLibraries.verifyLocalLibrarySnapshots === 'function'
+          ? await LocalLibraries.verifyLocalLibrarySnapshots(nextSettings.localLibraries)
+          : [];
       }
       const trustState = applyImportedScriptTrust(nextSettings, script.enabled !== false, {
         trustImportedScripts,

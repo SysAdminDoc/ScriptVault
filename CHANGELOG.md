@@ -25,6 +25,8 @@ All notable changes to ScriptVault will be documented in this file.
 - Hardened JSON and ZIP settings intake with a schema-derived key/type allowlist;
   unknown, malformed, credential, and security-posture keys are reported and
   kept out of SettingsManager unless credentials are explicitly opted in.
+- Recomputed SHA-256 digests for local-library snapshots at JSON import time so
+  code carrying a false provenance hash is dropped before it can be wrapped.
 
 ## [v3.27.0] — Recoverable restores, real isolation & honest errors (2026-08-08)
 
