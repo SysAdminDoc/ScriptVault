@@ -377,6 +377,13 @@ export const TS_RUNTIME_MODULES = [
     exportName: 'ConnectPolicy',
   },
   {
+    id: 'gm-grant-policy',
+    source: 'src/background/gm-grant-policy.ts',
+    output: 'modules/gm-grant-policy.js',
+    exportName: 'GMGrantPolicy',
+    selfExportName: 'GMGrantPolicy',
+  },
+  {
     id: 'fetch-freshness',
     source: 'src/background/fetch-freshness.ts',
     output: 'modules/fetch-freshness.js',

@@ -4,6 +4,23 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **`@grant` was advisory: the privileged background enforced it for almost no
+  GM handler.** `hasGrant()` lives in the injected wrapper, which runs in the same
+  USER_SCRIPT world as the untrusted script body with `chrome` unshadowed — so a
+  script can skip the wrapper and message the background directly. The background
+  checked grants for exactly two actions (`GM_webRequest`, `GM_webSocket`), which
+  meant a script the install review presented as `@grant none` could still drive
+  `GM_setValue`/`GM_getValue`, `GM_openInTab`, `GM_closeTab`, `GM_notification`,
+  `GM_download`, `GM_registerMenuCommand`, `GM_cookie_*` and `GM_xmlhttpRequest`.
+  The permission disclosure described the wrapper, not enforced capability. A new
+  `GMGrantPolicy` (`src/background/gm-grant-policy.ts`) maps every GM action the
+  router accepts to the grants that authorize it — mirroring the wrapper's own
+  checks so nothing that worked through the wrapper is newly rejected — and both
+  user-script message listeners now consult it before dispatch. Unclassified GM
+  actions, a missing script, and a failed grant lookup all fail closed, and a test
+  derives the expected scope from the router so a new action cannot slip through
+  unclassified.
+
 - **Dismissing the What's New dialog dropped keyboard focus to nowhere.** The
   overlay was removed without handing focus back, so `document.activeElement`
   fell to `<body>` and a keyboard user lost their place. Because the dialog opens

@@ -7786,7 +7786,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     ? Promise.resolve(sender)
     : UserScriptMessagePolicy.authenticateUserScriptSender(message, sender);
   authenticatedSender
-    .then((verifiedSender: any) => handleMessage(message, verifiedSender))
+    .then(async (verifiedSender: any) => {
+      const denied = await checkGmActionGrant(message.action, verifiedSender);
+      if (denied) return denied;
+      return handleMessage(message, verifiedSender);
+    })
     .then(sendResponse)
     .catch((e: any) => {
       console.error('[ScriptVault] Unhandled message error:', e);
@@ -7819,6 +7823,43 @@ function scriptHasGrant(script: any, names: any) {
   const grants = Array.isArray(script?.meta?.grant) ? script.meta.grant : [];
   if (grants.includes('*')) return true;
   return names.some((name: any) => grants.includes(name));
+}
+
+/**
+ * Enforce `@grant` at the privileged boundary.
+ *
+ * The wrapper's own `hasGrant()` runs in the USER_SCRIPT world alongside the
+ * untrusted body, with `chrome` unshadowed — so a script can bypass the wrapper
+ * and message the background directly. Without this gate a `@grant none` script
+ * could still drive the value store, tabs, downloads, notifications, menu
+ * commands and cookies, making the install-time permission disclosure a
+ * description of the wrapper rather than of enforced capability.
+ *
+ * Returns an error object to send back, or null when the request may proceed.
+ * Only requests carrying a resolved `userScriptId` are gated: extension surfaces
+ * (dashboard, popup, install page) are trusted callers with no `@grant` of their
+ * own.
+ */
+async function checkGmActionGrant(action: any, sender: any) {
+  const scriptId = sender?.userScriptId;
+  if (!scriptId) return null;
+  if (typeof action !== 'string') return null;
+  if (!action.startsWith('GM_') && !action.startsWith('GM.')) return null;
+
+  let script: any = null;
+  try {
+    script = await ScriptStorage.get(scriptId);
+  } catch (e: any) {
+    // A storage failure must not silently grant the capability.
+    debugWarn('[ScriptVault] Grant check could not load script:', e?.message || e);
+    return { error: GMGrantPolicy.grantDeniedError(action) };
+  }
+  if (!script) {
+    // The token authenticated, but the script is gone (uninstalled mid-flight).
+    return { error: GMGrantPolicy.grantDeniedError(action) };
+  }
+  if (GMGrantPolicy.isActionGrantedForScript(action, script)) return null;
+  return { error: GMGrantPolicy.grantDeniedError(action) };
 }
 
 function normalizeGMWebSocketUrl(rawUrl: any) {
@@ -8204,7 +8245,11 @@ if (chrome.runtime.onUserScriptMessage) {
       return false;
     }
     UserScriptMessagePolicy.authenticateUserScriptSender(message, sender)
-      .then((verifiedSender: any) => handleMessage(message, verifiedSender))
+      .then(async (verifiedSender: any) => {
+        const denied = await checkGmActionGrant(message.action, verifiedSender);
+        if (denied) return denied;
+        return handleMessage(message, verifiedSender);
+      })
       .then(sendResponse)
       .catch((e: any) => {
         console.error('[ScriptVault] Unhandled user script message error:', e);

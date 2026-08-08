@@ -24,6 +24,7 @@ declare const fflate: any;
 declare const FolderStorage: any;
 declare const GMAudioHandler: any;
 declare const GMCookieHandler: any;
+declare const GMGrantPolicy: any;
 declare const GMMenuHandler: any;
 declare const GMNetworkHandler: any;
 declare const GMNotificationHandler: any;

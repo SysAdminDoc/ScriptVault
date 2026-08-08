@@ -867,16 +867,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
 
 ### P2
 
-- [ ] P2 — `@grant` is advisory: the privileged background enforces it for almost no GM handler
-  Category: security
-  Where: `src/background/user-script-message-policy.ts:141-145` (allowlist admits every `GM_*`); grant checks exist only in `gm-webrequest-handler.ts:70` (`GM_webRequest`) and `gm-network-handler.ts:535` (`GM_webSocket`); `scriptHasGrant` (`core.ts:7727`) is referenced nowhere else
-  Problem: `hasGrant()` enforcement lives inside the injected wrapper, which runs in the same USER_SCRIPT world as the untrusted body; the body is concatenated into that scope with no shadowing of `chrome`, so a script can skip the wrapper and call `chrome.runtime.sendMessage` directly. The background then accepts `GM_setValue/getValue`, `GM_openInTab`, `GM_closeTab`, `GM_notification`, `GM_download`, `GM_registerMenuCommand`, `GM_cookie_*` (host-scoped, not grant-gated), and `GM_xmlhttpRequest` (`@connect`-scoped, not grant-gated) from a script the install review presented as `@grant none`. The permission disclosure shown at install does not reflect enforced capability.
-  Evidence: Verified — `grep scriptHasGrant src/background/*.ts` → definition + one call (GM_webSocket); `gm-webrequest-handler.ts:70` is the only other grant check; all value/cookie/tab/notification/download handlers read, none consult grants.
-  Fix: Move grant enforcement to the background: an action→grant table (`GM_cookie_*→GM_cookie`, `GM_xmlhttpRequest→GM_xmlhttpRequest`, `GM_setValue/getValue→GM_setValue/GM_getValue`, …) checked in each `gm-*-handler` using the already-computed `ownedScriptId`/`sender.userScriptId`. Keep the wrapper checks as the fast path.
-  Acceptance: A `@grant none` script that messages `GM_setValue`/`GM_cookie_list`/`GM_download` directly is rejected "not granted"; tests cover a granted vs ungranted action per handler.
-  Confidence: Verified
-  Effort: M
-
 - [ ] P2 — The page-facing Public API and Local MCP bridge has been dead since v3.18.0 (relay action missing from the allowlist); a naive fix opens origin spoofing
   Category: correctness
   Where: `content.js:164-168` (relays `action:'publicApi_handleWebMessage'`); `src/background/user-script-message-policy.ts:5-13` (allowlist lacks it); rejection `src/background/core.ts:7686-7693`; handlers `src/modules/public-api.ts:1577-1826`

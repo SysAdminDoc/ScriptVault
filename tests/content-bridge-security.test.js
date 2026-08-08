@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { buildWrappedScript } from '../src/background/wrapper-builder.ts';
 
+import { GMGrantPolicy } from '../src/background/gm-grant-policy.ts';
+
 const contentBridgeCode = readFileSync(resolve(process.cwd(), 'content.js'), 'utf8');
 const backgroundCoreCode = readFileSync(resolve(process.cwd(), 'background.core.js'), 'utf8');
 const connectPolicyCode = readFileSync(resolve(process.cwd(), 'modules/connect-policy.js'), 'utf8');
@@ -187,7 +189,7 @@ function loadUserScriptMessagePolicy(chromeMock = globalThis.chrome) {
 // listeners) out of background.core.js so we can drive both senders without booting the
 // full SW. The slice runs end-to-end so the listener registrations execute against the
 // supplied chrome mock and we can capture them.
-function loadUserScriptMessagingGate({ hasUserScriptMessage = true } = {}) {
+function loadUserScriptMessagingGate({ hasUserScriptMessage = true, scriptGrants = ['GM_xmlhttpRequest'] } = {}) {
   // Background source is checked in with CRLF line endings on Windows; normalize so
   // the slice search and the eval'd code both use LF.
   const source = backgroundCoreCode.replace(/\r\n/g, '\n');
@@ -236,12 +238,19 @@ function loadUserScriptMessagingGate({ hasUserScriptMessage = true } = {}) {
     return { handled: true, action: message?.action };
   };
   const debugLog = () => {};
+  const debugWarn = () => {};
   const UserScriptMessagePolicy = loadUserScriptMessagePolicy(chromeMock);
   const ConnectPolicy = loadConnectPolicyHelpers();
+  // The slice now also carries the privileged @grant gate, which reads the
+  // sending script's declared grants out of storage before anything reaches
+  // handleMessage.
+  const ScriptStorage = {
+    get: async (id) => (id ? { id, meta: { name: 'Gate Fixture', grant: scriptGrants } } : null),
+  };
 
-  const _factoryBody = `${sliceCode}\nreturn { isExtensionSurfaceSender, isUserScriptAllowedAction, USER_SCRIPT_MESSAGING_AVAILABLE };`;
-  const _factoryParams = ['chrome', 'handleMessage', 'debugLog', 'UserScriptMessagePolicy', 'ConnectPolicy'];
-  const _factoryArgs = [chromeMock, handleMessage, debugLog, UserScriptMessagePolicy, ConnectPolicy];
+  const _factoryBody = `${sliceCode}\nreturn { isExtensionSurfaceSender, isUserScriptAllowedAction, USER_SCRIPT_MESSAGING_AVAILABLE, checkGmActionGrant };`;
+  const _factoryParams = ['chrome', 'handleMessage', 'debugLog', 'debugWarn', 'UserScriptMessagePolicy', 'ConnectPolicy', 'ScriptStorage', 'GMGrantPolicy'];
+  const _factoryArgs = [chromeMock, handleMessage, debugLog, debugWarn, UserScriptMessagePolicy, ConnectPolicy, ScriptStorage, GMGrantPolicy];
   let exports;
   try { const vm = require('node:vm'); exports = vm.compileFunction(_factoryBody, _factoryParams, { filename: resolve(process.cwd(), 'background.core.js') })(..._factoryArgs); } catch { exports = new Function(..._factoryParams, _factoryBody)(..._factoryArgs); }
 
@@ -642,7 +651,9 @@ describe('runtime.onMessage user-script gate (Chrome <131 / Firefox fallback)', 
   });
 
   it('allows GM_* actions from tab-origin senders (user-script fallback path)', async () => {
-    const { onMessageListeners, handleMessageCalls, userScriptMessagePolicy } = loadUserScriptMessagingGate({ hasUserScriptMessage: false });
+    // The privileged gate also checks @grant here, so the fixture script has to
+    // declare the grant the action needs.
+    const { onMessageListeners, handleMessageCalls, userScriptMessagePolicy } = loadUserScriptMessagingGate({ hasUserScriptMessage: false, scriptGrants: ['GM_setValue'] });
     const tabSender = {
       id: 'gate-extension-id',
       url: 'https://example.com/page',
@@ -742,6 +753,41 @@ describe('runtime.onMessage user-script gate (Chrome <131 / Firefox fallback)', 
     );
     expect(allowed).toEqual({ handled: true, action: 'GM_xmlhttpRequest' });
     expect(handleMessageCalls).toHaveLength(1);
+  });
+
+  // The GM wrapper's own hasGrant() runs in the same world as the untrusted
+  // body, so a script can message the background directly. The privileged gate
+  // is what actually enforces the disclosure the install review showed.
+  it('rejects a GM action the sending script never declared a grant for', async () => {
+    const { onUserScriptListeners, handleMessageCalls } = loadUserScriptMessagingGate({
+      hasUserScriptMessage: true,
+      scriptGrants: ['none'],
+    });
+    const userScriptSender = { id: 'gate-extension-id', url: 'https://example.com/page', userScriptId: 'script-1' };
+
+    const denied = await invokeListener(
+      onUserScriptListeners[0],
+      { action: 'GM_setValue', data: { key: 'k', value: 1 } },
+      userScriptSender
+    );
+    expect(denied.error).toContain('is not granted');
+    expect(handleMessageCalls).toHaveLength(0);
+  });
+
+  it('applies the same gate on the onMessage fallback path', async () => {
+    const { onMessageListeners, handleMessageCalls, chromeMock } = loadUserScriptMessagingGate({
+      hasUserScriptMessage: false,
+      scriptGrants: ['none'],
+    });
+    const token = await loadUserScriptMessagePolicy(chromeMock).getScriptAuthToken('script-1');
+
+    const denied = await invokeListener(
+      onMessageListeners[0],
+      { action: 'GM_download', data: { scriptId: 'script-1', scriptAuthToken: token, url: 'https://example.com/x' } },
+      { id: 'gate-extension-id', url: 'https://example.com/page', tab: { id: 3 } }
+    );
+    expect(denied.error).toContain('is not granted');
+    expect(handleMessageCalls).toHaveLength(0);
   });
 
   it('does not register the dedicated listener and reports unavailable on older runtimes', () => {

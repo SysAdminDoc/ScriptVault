@@ -140,6 +140,7 @@ async function buildBackground() {
     readFile("modules/gm-cookie-handler.js"),
     readFile("modules/gm-network-handler.js"),
     readFile("modules/connect-policy.js"),
+    readFile("modules/gm-grant-policy.js"),
     readFile("modules/fetch-freshness.js"),
     readFile("modules/resources.js"),
 

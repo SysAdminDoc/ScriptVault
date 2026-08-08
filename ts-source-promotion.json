@@ -295,6 +295,14 @@
       "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for GM network and script host-scope policy helpers."
     },
     {
+      "runtime": "modules/gm-grant-policy.js",
+      "sources": [
+        "src/background/gm-grant-policy.ts"
+      ],
+      "status": "promoted",
+      "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for privileged-side @grant enforcement across every GM handler."
+    },
+    {
       "runtime": "modules/fetch-freshness.js",
       "sources": [
         "src/background/fetch-freshness.ts"
