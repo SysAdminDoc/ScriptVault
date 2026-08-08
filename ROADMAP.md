@@ -887,26 +887,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
   Confidence: Verified
   Effort: M
 
-- [ ] P2 — Switching a profile mutates script enabled-states but the Scripts table is never refreshed
-  Category: correctness
-  Where: `pages/dashboard-profiles.js:563-581` (`_applyProfile` re-renders only the profile bar), auto-switcher `:610-637`; `pages/dashboard.js:19736-19751` (`switchTab` has no `scripts` refresh); dashboard.js has zero `chrome.storage.onChanged` listeners
-  Problem: `_applyProfile` toggles scripts via background messages then only refreshes the chip; it never reloads dashboard state, `switchTab('scripts')` never calls `loadScripts()`, and there is no storage-change listener (grep count 0). After switching a profile in Utilities and returning to Scripts, every row toggle shows the pre-switch state. The URL-rule auto-switcher fires `_applyProfile` from `tabs.onActivated`/`onUpdated` while open, desyncing the table at any time.
-  Evidence: Verified — `grep -c storage.onChanged pages/dashboard.js` → 0; read `_applyProfile`/`switchTab`.
-  Fix: After `_applyProfile`, invoke the dashboard refresh (expose `ScriptVaultDashboardUI.refreshScripts`) or add a scripts-changed listener; minimally make `switchTab('scripts')` re-run `loadScripts()`.
-  Acceptance: Switching a profile updates the table toggles without a manual reload; a test asserts re-render after apply.
-  Confidence: Verified
-  Effort: M
-
-- [ ] P2 — Profile apply reports success even when every toggle fails
-  Category: correctness
-  Where: `pages/dashboard-profiles.js:533-551` (`_setScriptEnabled` is `try{await sendMessage}catch(_){}`, ignores `{error}`) and `:563-581` (no caller checks a result)
-  Problem: Rejections are swallowed and `{error}` responses never inspected; `_getAllScripts` returns `[]` on failure. A profile switch with an unreachable background still sets `_activeProfileId`, persists it, and renders the profile active — claiming a state that does not exist, with no toast/log entry.
-  Evidence: Verified — read both helpers and the chip-click/`switchProfile` callers; none inspect results.
-  Fix: Collect per-script results (check `response?.error` and catch rejections); on any failure show an error toast and skip the active-profile update, mirroring `dashboard-collections.js handleToggleAll`.
-  Acceptance: A profile switch with a failing background shows an error and does not mark the profile active; a test injects a rejecting `sendMessage`.
-  Confidence: Verified
-  Effort: S
-
 - [ ] P2 — The debugger identifies scripts by raw `script_<uuid>` everywhere a name should appear
   Category: ux
   Where: `pages/dashboard-debugger.js:298` (console selector option text = id), `:425` (variables selector), `:386` (live-reload row label), `:396` (toggle `aria-label`)

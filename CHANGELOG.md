@@ -4,6 +4,20 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **Switching a profile left the Scripts table showing the old toggle states, and
+  claimed success even when every toggle failed.** `_applyProfile` toggled scripts
+  through the background and then refreshed only the profile chip — the table was
+  never reloaded, and there was no storage-change listener, so every row toggle
+  kept the pre-switch state until a manual reload. The URL-rule auto-switcher
+  fires from `tabs.onActivated`/`onUpdated` while the dashboard is open, so the
+  table could desync at any moment. Separately, `_setScriptEnabled` swallowed
+  rejections and ignored `{error}` responses and `_getAllScripts` returned `[]` on
+  failure, so a switch against an unreachable background still persisted
+  `_activeProfileId` and rendered the profile as active. The apply now reloads the
+  table when it toggled anything, collects per-script failures, and on any failure
+  shows an error and leaves the active profile pointing at the state the library
+  actually has.
+
 - **A tampered remote sync blob installed executing scripts with no review, and
   hard-deleted local ones past trash.** With encryption off — the default — the
   remote envelope is unauthenticated JSON, so anyone able to write the user's own

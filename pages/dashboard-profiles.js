@@ -529,25 +529,67 @@ const ProfileManager = (() => {
     });
   }
 
-  /** Get all scripts from the extension background. */
+  /**
+   * Get all scripts from the extension background.
+   *
+   * Returns null — not [] — when the background could not be reached. An empty
+   * array reads as "no scripts", which made a failed apply look like a complete
+   * one with nothing to do.
+   */
   async function _getAllScripts() {
     try {
       const res = await chrome.runtime.sendMessage({ action: 'getScripts' });
-      return res?.scripts || res || [];
+      if (res?.error) return null;
+      const scripts = res?.scripts || res;
+      return Array.isArray(scripts) ? scripts : null;
     } catch (_) {
-      return [];
+      return null;
     }
   }
 
-  /** Enable/disable a script via background message. */
+  /**
+   * Enable/disable a script via background message.
+   *
+   * Returns an error string, or null on success. Rejections used to be swallowed
+   * and `{error}` responses never inspected, so a profile switch against an
+   * unreachable background still marked the profile active — claiming a state
+   * that did not exist, with nothing shown to the user.
+   */
   async function _setScriptEnabled(scriptId, enabled) {
     try {
-      await chrome.runtime.sendMessage({
+      const res = await chrome.runtime.sendMessage({
         action: 'toggleScript',
         scriptId,
         enabled
       });
-    } catch (_) {}
+      if (res?.error) return String(res.error);
+      return null;
+    } catch (e) {
+      return e?.message || String(e);
+    }
+  }
+
+  function _showProfileError(message) {
+    if (typeof window.ScriptVaultDashboardUI?.toast === 'function') {
+      window.ScriptVaultDashboardUI.toast(message, 'error');
+    } else {
+      console.error('[ScriptVault] ' + message);
+    }
+  }
+
+  /**
+   * Reload the Scripts table after a profile changed script enabled-states.
+   * Without this the row toggles keep showing the pre-switch state until a manual
+   * reload, and the URL-rule auto-switcher can desync the table at any time.
+   */
+  async function _refreshScriptsTable() {
+    const refresh = window.ScriptVaultDashboardUI?.refreshScripts;
+    if (typeof refresh !== 'function') return;
+    try {
+      await refresh();
+    } catch (e) {
+      console.warn('[ScriptVault] Could not refresh scripts after profile apply:', e?.message || e);
+    }
   }
 
   function _refreshHeaderIndicator() {
@@ -560,24 +602,54 @@ const ProfileManager = (() => {
   /*  Profile switching                                                  */
   /* ------------------------------------------------------------------ */
 
+  /**
+   * Apply a profile's script enabled-states.
+   *
+   * Returns true when every needed toggle landed. On any failure the profile is
+   * NOT marked active — a half-applied profile must not be presented as the
+   * current one — and the user is told.
+   */
   async function _applyProfile(profile) {
-    if (!profile) return;
+    if (!profile) return false;
     const scripts = await _getAllScripts();
+    if (!scripts) {
+      _showProfileError('Could not switch profile: the extension background did not respond.');
+      return false;
+    }
 
+    const failures = [];
+    let toggled = 0;
     for (const script of scripts) {
       const id = script.id;
       if (id in profile.scriptStates) {
         const shouldBeEnabled = profile.scriptStates[id];
         if ((script.enabled !== false) !== shouldBeEnabled) {
-          await _setScriptEnabled(id, shouldBeEnabled);
+          const error = await _setScriptEnabled(id, shouldBeEnabled);
+          if (error) failures.push({ id, name: script.meta?.name || script.name || id, error });
+          else toggled += 1;
         }
       }
+    }
+
+    if (toggled > 0) await _refreshScriptsTable();
+
+    if (failures.length) {
+      const first = failures[0];
+      _showProfileError(failures.length === 1
+        ? `Could not switch profile: "${first.name}" failed (${first.error}).`
+        : `Could not switch profile: ${failures.length} scripts failed to toggle.`);
+      // Leave _activeProfileId alone so the chip keeps showing the profile that
+      // actually reflects the library.
+      _renderProfileBar();
+      _refreshHeaderIndicator();
+      return false;
     }
 
     _activeProfileId = profile.id;
     await _saveProfiles();
     _renderProfileBar();
     _refreshHeaderIndicator();
+    return true;
   }
 
   /* ------------------------------------------------------------------ */
@@ -1173,7 +1245,10 @@ const ProfileManager = (() => {
       await _loadProfiles();
       const profile = _profiles.find(p => p.id === profileId);
       if (!profile) return { error: 'Profile not found' };
-      await _applyProfile(profile);
+      // Propagate a partial apply: the caller must not be told the switch
+      // succeeded when some scripts never toggled.
+      const applied = await _applyProfile(profile);
+      if (!applied) return { error: 'Profile could not be applied', name: profile.name };
       return { success: true, name: profile.name };
     },
 

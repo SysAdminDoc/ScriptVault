@@ -15736,7 +15736,13 @@
         // handlers. Without these, the sandbox's save/close postMessages hit a
         // non-existent global and a dead [data-action="save"] selector.
         saveEditor: () => { saveCurrentScript(); },
-        closeEditor: () => { closeEditor(); }
+        closeEditor: () => { closeEditor(); },
+        // Exposed for dashboard-profiles.js: applying a profile toggles scripts
+        // through the background, which leaves the Scripts table showing
+        // pre-switch toggle states until something reloads it. The URL-rule
+        // auto-switcher can fire at any time while the dashboard is open, so the
+        // refresh has to be callable from outside this IIFE.
+        refreshScripts: async () => { await loadScripts(); }
     };
 
     function getEditorLineCount(editor) {
