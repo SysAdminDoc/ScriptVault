@@ -119,4 +119,17 @@ describe('Chrome userScripts onboarding diagnostics', () => {
     expect(messagesTs).toContain('| ToggleScript | RunScriptNow | DuplicateScript');
     expect(messagesTs).toContain("runScriptNow: SuccessOrError<{ mode: 'userScripts.execute' | 'scripting.executeScript' }>;");
   });
+
+  it('preserves one-shot syntax diagnostics while retaining the generic fallback path', () => {
+    const start = backgroundCore.indexOf('function formatUserScriptExecuteDiagnostic');
+    const end = backgroundCore.indexOf('\n\nbackgroundActionRegistry.registerHandlers', start);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    const format = new Function(`${backgroundCore.slice(start, end)}\nreturn formatUserScriptExecuteDiagnostic;`)();
+
+    expect(format({ diagnostics: [{ message: 'Unexpected token', line: 4, column: 9 }] }))
+      .toBe('Unexpected token (line 4, column 9)');
+    expect(format(new Error('generic execute failure'))).toBe('');
+    expect(backgroundCore).toContain('error: userScriptsDiagnostic ||');
+  });
 });

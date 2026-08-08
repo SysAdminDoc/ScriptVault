@@ -91,6 +91,8 @@ All notable changes to ScriptVault will be documented in this file.
   debugger from a script editor instead of exposing an internal API call.
 - Added a compact dependency-graph empty state that explains how to populate
   the canvas when no scripts are installed.
+- Preserved browser-reported one-shot userscript syntax diagnostics, including
+  line and column locations, while retaining the older generic fallback path.
 
 ## [v3.27.0] — Recoverable restores, real isolation & honest errors (2026-08-08)
 

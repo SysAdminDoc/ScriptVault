@@ -37492,6 +37492,24 @@ backgroundActionRegistry.registerHandlers(DataActionHandler.createDataActionHand
   },
   exportZip: options => exportToZip(options)
 }));
+function formatUserScriptExecuteDiagnostic(error) {
+  const diagnostics = Array.isArray(error?.diagnostics)
+    ? error.diagnostics
+    : (Array.isArray(error?.details?.diagnostics) ? error.details.diagnostics : []);
+  const diagnostic = diagnostics[0] || error?.diagnostic || error;
+  const hasLocation = diagnostics.length > 0 ||
+    Number.isFinite(Number(diagnostic?.line ?? diagnostic?.lineNumber ?? error?.lineNumber)) ||
+    Number.isFinite(Number(diagnostic?.column ?? diagnostic?.columnNumber ?? error?.columnNumber));
+  if (!hasLocation) return '';
+  const message = String(diagnostic?.message || error?.message || 'Script syntax error').trim();
+  const line = Number(diagnostic?.line ?? diagnostic?.lineNumber ?? error?.lineNumber);
+  const column = Number(diagnostic?.column ?? diagnostic?.columnNumber ?? error?.columnNumber);
+  const location = Number.isFinite(line) && line > 0
+    ? ` (line ${line}${Number.isFinite(column) && column > 0 ? `, column ${column}` : ''})`
+    : '';
+  return `${message}${location}`;
+}
+
 backgroundActionRegistry.registerHandlers(RuntimeActionHandler.createRuntimeActionHandlers({
   installFromUrl: url => installFromUrl(url),
   installFromCode: (code, sourceUrl, operation) => installFromCode(code, { sourceUrl, operation }),
@@ -37577,6 +37595,7 @@ backgroundActionRegistry.registerHandlers(RuntimeActionHandler.createRuntimeActi
     if (tabId && url) await updateBadgeForTab(tabId, url);
     return { success: true };
   },
+
   runScriptNow: async message => {
     const scriptId = message.scriptId || message.id;
     if (!scriptId) return { success: false, error: 'Missing scriptId' };
@@ -37619,6 +37638,7 @@ backgroundActionRegistry.registerHandlers(RuntimeActionHandler.createRuntimeActi
       );
       const wantsDocumentStart = script?.meta?.['run-at'] === 'document-start';
 
+      let userScriptsDiagnostic = '';
       if (typeof chrome.userScripts?.execute === 'function') {
         // Per-script world — see ensureExecutionWorldId. Without it this shared
         // the default USER_SCRIPT world with every other on-demand injection.
@@ -37633,6 +37653,7 @@ backgroundActionRegistry.registerHandlers(RuntimeActionHandler.createRuntimeActi
           });
           return { success: true, mode: 'userScripts.execute' };
         } catch (error) {
+          userScriptsDiagnostic = formatUserScriptExecuteDiagnostic(error);
           debugLog('userScripts.execute failed, falling back:', error?.message);
         }
       }
@@ -37643,7 +37664,7 @@ backgroundActionRegistry.registerHandlers(RuntimeActionHandler.createRuntimeActi
       if (!wantsPageContext) {
         return {
           success: false,
-          error: 'chrome.userScripts.execute is unavailable and this script does not declare @inject-into page — MAIN-world fallback is not allowed to avoid silently downgrading USER_SCRIPT isolation. Update Chrome to 135+ or set @inject-into page if page context is intended.'
+          error: userScriptsDiagnostic || 'chrome.userScripts.execute is unavailable and this script does not declare @inject-into page — MAIN-world fallback is not allowed to avoid silently downgrading USER_SCRIPT isolation. Update Chrome to 135+ or set @inject-into page if page context is intended.'
         };
       }
       try {
@@ -37658,7 +37679,8 @@ backgroundActionRegistry.registerHandlers(RuntimeActionHandler.createRuntimeActi
         });
         return { success: true, mode: 'scripting.executeScript' };
       } catch (error) {
-        return { success: false, error: error?.message || 'Run failed' };
+        const fallbackError = error?.message || 'Run failed';
+        return { success: false, error: userScriptsDiagnostic ? `${userScriptsDiagnostic}; ${fallbackError}` : fallbackError };
       }
     } catch (error) {
       console.error('[ScriptVault] runScriptNow error:', error);

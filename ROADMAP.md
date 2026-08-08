@@ -926,13 +926,6 @@ duplicated. Conclusions and sources: `RESEARCH.md` (2026-08-06)._
 
 ### P3
 
-- [ ] P3 — Surface userScripts.execute() syntax diagnostics on the on-demand run path
-  Why: Chrome 149 made userScripts.execute() validate syntax synchronously and return diagnostics on failure, and Firefox 153 added execute() at all — the on-demand run path currently reports a generic failure where the browser can now name the syntax error and its location.
-  Evidence: https://developer.chrome.com/docs/extensions/whats-new (Chrome 149: "validates script syntax synchronously and returns diagnostics on failure"; execute() since Chrome 135); https://blog.mozilla.org/addons/2026/07/23/firefox-153-webextensions-api-updates/ ("userScripts.execute(), which provides for one-off injection"); src/background/core.ts:7327 and :9376 already branch on chrome.userScripts.execute availability with a hard error when absent.
-  Touches: src/background/core.ts (runScriptNow / on-demand execution), generated background.core.js/background.js, pages/popup.js "Run on This Tab", pages/dashboard.js toast path, src/locales/en.json, tests/ core-flow coverage.
-  Acceptance: when execute() rejects with diagnostics, the message shown to the user includes the reported error and line/column; when the browser supplies no diagnostics the current generic message is retained; Firefox 153+ takes the same path via feature detection and the smoke harness exercises one failing script.
-  Complexity: S
-
 - [ ] P3 — Use runtime.getDocumentId() on Firefox to key per-document injection state
   Why: The open UserCSS SPA and injection-dedup items key state per tab, which cannot distinguish a reloaded document from a live one; Firefox 153 introduced a stable per-document identifier that makes that distinction directly.
   Evidence: https://blog.mozilla.org/addons/2026/07/23/firefox-153-webextensions-api-updates/ ("Firefox 153 introduces documentId, a stable identifier for a document instance, including a new runtime.getDocumentId() method"); relates to the open items "Persistent UserCSS can orphan an injected stylesheet on an SPA route change" and "SPA navigation events are dropped, not coalesced" above — this is an enabling mechanism for those, not a replacement.
