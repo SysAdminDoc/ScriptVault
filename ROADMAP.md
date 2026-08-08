@@ -828,16 +828,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
 
 ### P3
 
-- [ ] P3 — `key in meta` walks the prototype chain in the UserCSS metadata parser
-  Category: correctness
-  Where: `src/modules/userstyles.ts:545-547` (`else if (key in meta) { meta[key] = value; }`)
-  Problem: `key in meta` is true for every `Object.prototype` member, so `@toString evil` in a `==UserStyle==` block stores an own `toString` string on the persisted meta; any later string coercion throws. Impact is small (nothing currently coerces it) but the guard is not doing what it reads as. (Same class as the `GM_getValue` proto item.)
-  Evidence: Verified — read the parse branch.
-  Fix: `Object.prototype.hasOwnProperty.call(meta, key)`.
-  Acceptance: `@toString`/`@constructor` directives are ignored; a parser test covers them.
-  Confidence: Verified
-  Effort: S
-
 - [ ] P3 — `executeMenuCommand` forwards a caller-supplied `scriptId`, letting one script trigger another's menu-command callback
   Category: security
   Where: `src/background/gm-menu-handler.ts:146-153` (passes `data.scriptId` to `chrome.tabs.sendMessage`; every other branch uses `ownedScriptId`)

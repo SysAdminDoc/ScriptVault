@@ -72,6 +72,8 @@ All notable changes to ScriptVault will be documented in this file.
   normalized match hosts case-insensitively for accurate page matching.
 - Excluded background, context-menu, quarantined, and failed-registration
   scripts from the per-page running badge count.
+- Ignored inherited `Object.prototype` names in UserCSS metadata instead of
+  persisting directives such as `@toString` or `@constructor`.
 
 ## [v3.27.0] — Recoverable restores, real isolation & honest errors (2026-08-08)
 

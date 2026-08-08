@@ -110,6 +110,25 @@ body { color: tomato; }`;
     expect(converted.script).not.toContain('// @match        *://*/*');
   });
 
+  it('ignores UserCSS directives that only exist on Object.prototype', () => {
+    const source = `/* ==UserStyle==
+@name Prototype-safe style
+@namespace scriptvault
+@version 1.0.0
+@toString should-not-be-persisted
+@constructor should-not-be-persisted
+@match https://example.com/*
+==/UserStyle== */
+body { color: tomato; }`;
+
+    const parsed = UserStylesEngine.parseUserCSS(source);
+
+    expect(Object.prototype.hasOwnProperty.call(parsed.meta, 'toString')).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(parsed.meta, 'constructor')).toBe(false);
+    expect(parsed.meta.name).toBe('Prototype-safe style');
+    expect(parsed.meta.toString()).toBe('[object Object]');
+  });
+
   it('warns on an unsupported @preprocessor (less/stylus) but not on default/uso', async () => {
     const build = (pre) => `/* ==UserStyle==\n@name P\n@namespace scriptvault\n@version 1.0.0\n@preprocessor ${pre}\n@match https://example.com/*\n==/UserStyle== */\nbody { color: red; }`;
 

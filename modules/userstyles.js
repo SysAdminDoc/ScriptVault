@@ -327,7 +327,7 @@ const UserStylesEngine = (() => {
         }
       } else if (key === "match" && value) {
         matchPatterns.push(value);
-      } else if (key in meta) {
+      } else if (Object.prototype.hasOwnProperty.call(meta, key)) {
         meta[key] = value;
       }
     }
