@@ -189,6 +189,13 @@ let _initialized = false;
 const _registeredTabs: Map<number, Map<string, string>> = new Map();
 const _draftPreviewTabs: Map<number, string> = new Map();
 const _injectingTabs: Set<number> = new Set();
+// Latest URL that arrived for a tab while an injection pass was in flight. The
+// re-entrancy guard used to DROP those events, so a client-side router firing
+// several pushState calls in a row could leave the final route unprocessed —
+// a style stuck on a non-matching route, or a newly matching route with no
+// sheet until the next real navigation. Only the newest URL is worth keeping:
+// intermediate routes are already superseded.
+const _pendingTabUrls: Map<number, string> = new Map();
 // Serializes previewDraft/clearDraftPreview: overlapping calls would both
 // insert CSS while _draftPreviewTabs remembers only the last, orphaning the
 // earlier sheet on the page until navigation.
@@ -1526,6 +1533,22 @@ function isUserCSSUrl(url: string): boolean {
 /* ------------------------------------------------------------------ */
 
 /**
+ * True when a `chrome.scripting` rejection proves the injection target no
+ * longer exists, so the per-tab registry entry describes nothing and can be
+ * dropped. Anything else — a transient failure against a live document, a
+ * permission error — must keep the entry: `_registeredTabs` is the only record
+ * of the injected sheet, and forgetting it leaks the stylesheet onto every
+ * route for the life of that document with no way to retry.
+ */
+function _isMissingTargetError(error: unknown): boolean {
+  const message: string = typeof error === 'string'
+    ? error
+    : String((error as { message?: unknown } | null)?.message ?? '');
+  if (!message) return false;
+  return /no tab with id|no frame with id|frame with id .* was removed|tab was closed|no window with id|target closed|the tab is being discarded/i.test(message);
+}
+
+/**
  * Handle tab navigation — inject matching styles into newly loaded pages.
  * Call from background.js webNavigation.onCommitted or tabs.onUpdated.
  */
@@ -1534,69 +1557,111 @@ async function onTabUpdated(tabId: number, url: string | undefined): Promise<voi
   if (_draftPreviewTabs.has(tabId)) {
     await clearDraftPreview({ tabId });
   }
-  if (_injectingTabs.has(tabId)) return;
+  if (_injectingTabs.has(tabId)) {
+    // Coalesce instead of dropping: the in-flight pass re-runs with this URL
+    // once it settles, so the last route always gets processed. Only the newest
+    // URL is kept — intermediate SPA routes are already superseded.
+    _pendingTabUrls.set(tabId, url);
+    return;
+  }
   _injectingTabs.add(tabId);
+  _pendingTabUrls.delete(tabId);
 
   try {
-    if (!_initialized) await _loadState();
-    // Remove any previously-injected sheet that no longer applies to the current
-    // URL (an SPA route change to a non-matching route), is now disabled, or was
-    // deleted. On a full document commit onTabNavigated() has already cleared the
-    // registry, so this pass only does work for same-document (SPA/hash) updates.
-    const existing: Map<string, string> | undefined = _registeredTabs.get(tabId);
-    if (existing) {
-      for (const [styleId, injectedCss] of [...existing]) {
-        const style = _styles[styleId];
-        const stillApplies = !!style && style.enabled && _urlMatchesPatterns(url, style.match);
-        if (!stillApplies) {
-          try {
-            await chrome.scripting.removeCSS({ target: { tabId }, css: injectedCss });
-          } catch {
-            // Tab/document may already be gone.
-          }
-          existing.delete(styleId);
-        }
+    let current: string | undefined = url;
+    // Flat drain loop rather than a recursive re-entry, so a router that keeps
+    // firing pushState cannot grow the stack.
+    while (current) {
+      await _applyStylesToTab(tabId, current);
+      current = _pendingTabUrls.get(tabId);
+      _pendingTabUrls.delete(tabId);
+      // Skip a route that has nothing injected and nothing to inject rather
+      // than paying for a full sweep on every intermediate route.
+      while (current && !_registeredTabs.has(tabId) && !_anyEnabledStyleMatches(current)) {
+        current = _pendingTabUrls.get(tabId);
+        _pendingTabUrls.delete(tabId);
       }
-      if (existing.size === 0) _registeredTabs.delete(tabId);
     }
-    for (const [styleId, style] of Object.entries(_styles)) {
-      if (!style.enabled) continue;
-      if (!_urlMatchesPatterns(url, style.match)) continue;
-
-      const css: string = _buildCSS(styleId);
-      if (!css) continue;
-
-        try {
-          const tabStyles: Map<string, string> = _registeredTabs.get(tabId) ?? new Map<string, string>();
-          const previousCss: string | undefined = tabStyles.get(styleId);
-          // Dedup: the exact CSS is already injected in this document, so a
-          // repeated onUpdated/onCommitted event must not stack a duplicate
-          // sheet. onTabNavigated() clears this registry per document commit, so
-          // an equal previousCss here means the same live document, not a stale
-          // pre-navigation record.
-          if (previousCss === css) continue;
-          if (previousCss) {
-            try {
-              await chrome.scripting.removeCSS({
-                target: { tabId },
-                css: previousCss,
-              });
-            } catch {
-              // The previous page may already be gone.
-            }
-          }
-          await chrome.scripting.insertCSS({
-            target: { tabId },
-            css,
-          });
-          tabStyles.set(styleId, css);
-          _registeredTabs.set(tabId, tabStyles);
-        } catch {
-          // Tab not injectable
-        }
-      }
   } finally {
     _injectingTabs.delete(tabId);
+    _pendingTabUrls.delete(tabId);
+  }
+}
+
+/** True when at least one enabled style matches `url`. */
+function _anyEnabledStyleMatches(url: string): boolean {
+  for (const style of Object.values(_styles)) {
+    if (style.enabled && _urlMatchesPatterns(url, style.match)) return true;
+  }
+  return false;
+}
+
+/**
+ * One injection pass for a tab at `url`: drop sheets that no longer apply, then
+ * inject every enabled matching style. Callers hold the per-tab in-flight guard.
+ */
+async function _applyStylesToTab(tabId: number, url: string): Promise<void> {
+  if (!_initialized) await _loadState();
+  // Remove any previously-injected sheet that no longer applies to the current
+  // URL (an SPA route change to a non-matching route), is now disabled, or was
+  // deleted. On a full document commit onTabNavigated() has already cleared the
+  // registry, so this pass only does work for same-document (SPA/hash) updates.
+  const existing: Map<string, string> | undefined = _registeredTabs.get(tabId);
+  if (existing) {
+    for (const [styleId, injectedCss] of [...existing]) {
+      const style = _styles[styleId];
+      const stillApplies = !!style && style.enabled && _urlMatchesPatterns(url, style.match);
+      if (!stillApplies) {
+        try {
+          await chrome.scripting.removeCSS({ target: { tabId }, css: injectedCss });
+          existing.delete(styleId);
+        } catch (error) {
+          // Only forget the sheet when the target is provably gone. If removal
+          // failed against a live document the stylesheet is STILL applied, and
+          // this registry is the only record of it — dropping the entry would
+          // bleed the userstyle onto non-matching routes for the life of that
+          // document. Keeping it means the next navigation event retries.
+          if (_isMissingTargetError(error)) existing.delete(styleId);
+        }
+      }
+    }
+    if (existing.size === 0) _registeredTabs.delete(tabId);
+  }
+  for (const [styleId, style] of Object.entries(_styles)) {
+    if (!style.enabled) continue;
+    if (!_urlMatchesPatterns(url, style.match)) continue;
+
+    const css: string = _buildCSS(styleId);
+    if (!css) continue;
+
+    try {
+      const tabStyles: Map<string, string> = _registeredTabs.get(tabId) ?? new Map<string, string>();
+      const previousCss: string | undefined = tabStyles.get(styleId);
+      // Dedup: the exact CSS is already injected in this document, so a
+      // repeated onUpdated/onCommitted event must not stack a duplicate
+      // sheet. onTabNavigated() clears this registry per document commit, so
+      // an equal previousCss here means the same live document, not a stale
+      // pre-navigation record.
+      if (previousCss === css) continue;
+      if (previousCss) {
+        try {
+          await chrome.scripting.removeCSS({
+            target: { tabId },
+            css: previousCss,
+          });
+        } catch {
+          // The previous page may already be gone.
+        }
+      }
+      await chrome.scripting.insertCSS({
+        target: { tabId },
+        css,
+      });
+      tabStyles.set(styleId, css);
+      _registeredTabs.set(tabId, tabStyles);
+    } catch {
+      // Tab not injectable
+    }
   }
 }
 
@@ -1606,6 +1671,8 @@ async function onTabUpdated(tabId: number, url: string | undefined): Promise<voi
 function onTabRemoved(tabId: number): void {
   _registeredTabs.delete(tabId);
   _draftPreviewTabs.delete(tabId);
+  // A queued SPA route for a closed tab has nowhere to apply.
+  _pendingTabUrls.delete(tabId);
 }
 
 /* ------------------------------------------------------------------ */

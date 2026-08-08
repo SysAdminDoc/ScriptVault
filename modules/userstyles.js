@@ -43,6 +43,7 @@ const UserStylesEngine = (() => {
   var _registeredTabs = /* @__PURE__ */ new Map();
   var _draftPreviewTabs = /* @__PURE__ */ new Map();
   var _injectingTabs = /* @__PURE__ */ new Set();
+  var _pendingTabUrls = /* @__PURE__ */ new Map();
   var _draftPreviewChain = Promise.resolve();
   async function _loadState() {
     try {
@@ -1038,64 +1039,94 @@ const UserStylesEngine = (() => {
       return false;
     }
   }
+  function _isMissingTargetError(error) {
+    const message = typeof error === "string" ? error : String(error?.message ?? "");
+    if (!message) return false;
+    return /no tab with id|no frame with id|frame with id .* was removed|tab was closed|no window with id|target closed|the tab is being discarded/i.test(message);
+  }
   async function onTabUpdated(tabId, url) {
     if (!url) return;
     if (_draftPreviewTabs.has(tabId)) {
       await clearDraftPreview({ tabId });
     }
-    if (_injectingTabs.has(tabId)) return;
+    if (_injectingTabs.has(tabId)) {
+      _pendingTabUrls.set(tabId, url);
+      return;
+    }
     _injectingTabs.add(tabId);
+    _pendingTabUrls.delete(tabId);
     try {
-      if (!_initialized) await _loadState();
-      const existing = _registeredTabs.get(tabId);
-      if (existing) {
-        for (const [styleId, injectedCss] of [...existing]) {
-          const style = _styles[styleId];
-          const stillApplies = !!style && style.enabled && _urlMatchesPatterns(url, style.match);
-          if (!stillApplies) {
-            try {
-              await chrome.scripting.removeCSS({ target: { tabId }, css: injectedCss });
-            } catch {
-            }
-            existing.delete(styleId);
-          }
-        }
-        if (existing.size === 0) _registeredTabs.delete(tabId);
-      }
-      for (const [styleId, style] of Object.entries(_styles)) {
-        if (!style.enabled) continue;
-        if (!_urlMatchesPatterns(url, style.match)) continue;
-        const css = _buildCSS(styleId);
-        if (!css) continue;
-        try {
-          const tabStyles = _registeredTabs.get(tabId) ?? /* @__PURE__ */ new Map();
-          const previousCss = tabStyles.get(styleId);
-          if (previousCss === css) continue;
-          if (previousCss) {
-            try {
-              await chrome.scripting.removeCSS({
-                target: { tabId },
-                css: previousCss
-              });
-            } catch {
-            }
-          }
-          await chrome.scripting.insertCSS({
-            target: { tabId },
-            css
-          });
-          tabStyles.set(styleId, css);
-          _registeredTabs.set(tabId, tabStyles);
-        } catch {
+      let current = url;
+      while (current) {
+        await _applyStylesToTab(tabId, current);
+        current = _pendingTabUrls.get(tabId);
+        _pendingTabUrls.delete(tabId);
+        while (current && !_registeredTabs.has(tabId) && !_anyEnabledStyleMatches(current)) {
+          current = _pendingTabUrls.get(tabId);
+          _pendingTabUrls.delete(tabId);
         }
       }
     } finally {
       _injectingTabs.delete(tabId);
+      _pendingTabUrls.delete(tabId);
+    }
+  }
+  function _anyEnabledStyleMatches(url) {
+    for (const style of Object.values(_styles)) {
+      if (style.enabled && _urlMatchesPatterns(url, style.match)) return true;
+    }
+    return false;
+  }
+  async function _applyStylesToTab(tabId, url) {
+    if (!_initialized) await _loadState();
+    const existing = _registeredTabs.get(tabId);
+    if (existing) {
+      for (const [styleId, injectedCss] of [...existing]) {
+        const style = _styles[styleId];
+        const stillApplies = !!style && style.enabled && _urlMatchesPatterns(url, style.match);
+        if (!stillApplies) {
+          try {
+            await chrome.scripting.removeCSS({ target: { tabId }, css: injectedCss });
+            existing.delete(styleId);
+          } catch (error) {
+            if (_isMissingTargetError(error)) existing.delete(styleId);
+          }
+        }
+      }
+      if (existing.size === 0) _registeredTabs.delete(tabId);
+    }
+    for (const [styleId, style] of Object.entries(_styles)) {
+      if (!style.enabled) continue;
+      if (!_urlMatchesPatterns(url, style.match)) continue;
+      const css = _buildCSS(styleId);
+      if (!css) continue;
+      try {
+        const tabStyles = _registeredTabs.get(tabId) ?? /* @__PURE__ */ new Map();
+        const previousCss = tabStyles.get(styleId);
+        if (previousCss === css) continue;
+        if (previousCss) {
+          try {
+            await chrome.scripting.removeCSS({
+              target: { tabId },
+              css: previousCss
+            });
+          } catch {
+          }
+        }
+        await chrome.scripting.insertCSS({
+          target: { tabId },
+          css
+        });
+        tabStyles.set(styleId, css);
+        _registeredTabs.set(tabId, tabStyles);
+      } catch {
+      }
     }
   }
   function onTabRemoved(tabId) {
     _registeredTabs.delete(tabId);
     _draftPreviewTabs.delete(tabId);
+    _pendingTabUrls.delete(tabId);
   }
   async function init() {
     if (_initialized) return;

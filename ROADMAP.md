@@ -776,16 +776,6 @@ no pre-existing failures. Live verification used Firefox Developer Edition
 154.0b1 via geckodriver 0.37.1 and headless Chromium via the repo's
 puppeteer-core. Audit-only: no source file was modified._
 
-- [ ] P2 — Persistent UserCSS can orphan an injected stylesheet on an SPA route change
-  Category: correctness
-  Where: `src/modules/userstyles.ts:1536-1551` (`onTabUpdated`, the SPA re-match block); generated copy in `modules/userstyles.js`
-  Problem: The no-longer-matching branch deletes the style from the per-tab registry unconditionally, outside the `try` that wraps `chrome.scripting.removeCSS`. If `removeCSS` rejects while the document is still alive, the stylesheet stays applied to the page but ScriptVault has forgotten it, so nothing can ever remove it — the userstyle visually bleeds onto routes it does not match for the life of that document, and a later re-match cannot clean it up because `previousCss` is gone.
-  Evidence: Traced the block added in commit `8865a3e`. The `catch {}` swallows every rejection with the comment "Tab/document may already be gone", then `existing.delete(styleId)` runs on both the success and failure path. The `_registeredTabs` map is the only record of injected CSS (`tabStyles.set(styleId, css)` at `src/modules/userstyles.ts:1582`), and `onTabNavigated` only clears it on a full document commit — which by definition does not happen for the SPA navigations this code path exists to serve.
-  Fix: Only forget the entry when removal actually succeeded, or when the failure proves the target is gone. Move `existing.delete(styleId)` inside the `try` after the awaited `removeCSS`, and in the `catch` keep the entry unless the error indicates a missing tab/frame (so a live-document failure is retried on the next navigation event rather than leaked).
-  Acceptance: A unit test in `tests/userstyle-injection.test.js` where `chrome.scripting.removeCSS` rejects for a still-open tab asserts the style remains in the registry and that a subsequent `onTabUpdated` to the same non-matching URL retries the removal.
-  Confidence: Verified
-  Effort: S
-
 - [ ] P3 — Pending-updates size cap measures UTF-16 code units, not bytes, and cites a quota that does not apply
   Category: reliability
   Where: `src/background/core.ts` (`UpdateSystem._MAX_PENDING_TOTAL_BYTES` and the eviction loop); generated at `background.core.js:1799` and `background.core.js:2149-2155`
@@ -1005,16 +995,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
   Fix: Probe the capability, not the symbol — `configureWorld({worldId:'sv-probe', messaging:true})` then `getWorldConfigurations()` (or a one-time two-script co-execution check), cached per session; fall back to the shared world only when the probe proves worldId is absent.
   Acceptance: On a Firefox build without worldId support the probe returns false and the code degrades knowingly; a capability-probe test covers it.
   Confidence: Likely
-  Effort: M
-
-- [ ] P2 — SPA navigation events are dropped, not coalesced, leaving UserCSS applied to routes it no longer matches
-  Category: correctness
-  Where: `src/modules/userstyles.ts:1527-1528` (`if (_injectingTabs.has(tabId)) return;`) with the SPA listeners from `8865a3e` (`src/background/core.ts:9982-10003`)
-  Problem: `onTabUpdated` is invoked un-awaited from `onCommitted` and both SPA listeners. While one pass awaits `removeCSS`/`insertCSS`, every further event for that tab is discarded with no queued re-run. On a client-side router firing `pushState` several times quickly (the scenario `8865a3e` targets), the final route's re-match never runs: a style stays on a non-matching route, or a newly-matching route gets no sheet until the next navigation. Distinct from the already-logged orphan-on-removeCSS-failure item (that is `existing.delete` outside the `try`; this is the event never being processed).
-  Evidence: Verified — the re-entrancy guard drops rather than queues; un-awaited invocation from three listeners.
-  Fix: Coalesce — record the latest URL for an in-flight tab and re-run once the current pass settles (or serialize per-tab with a promise chain like `_toggleLocks`).
-  Acceptance: Rapid `pushState` navigations end with the correct final-route styles; a test drives multiple SPA events during an in-flight injection.
-  Confidence: Verified
   Effort: M
 
 - [ ] P2 — `npm run smoke:dashboard` fails on the signingTrustSection workbench shortcut (pre-existing baseline)

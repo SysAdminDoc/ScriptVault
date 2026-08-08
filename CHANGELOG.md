@@ -4,6 +4,20 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **A persistent UserCSS sheet could bleed onto every route of an SPA with
+  nothing able to remove it.** When a client-side route change made a style stop
+  matching, `onTabUpdated` deleted the per-tab registry entry whether or not
+  `chrome.scripting.removeCSS` had actually succeeded. That registry is the only
+  record of an injected sheet, so a removal that failed against a still-live
+  document left the stylesheet applied and forgotten — permanently, for that
+  document. The entry is now dropped only when removal succeeds or the error
+  proves the tab/frame is gone; otherwise the next navigation event retries.
+- **Rapid SPA navigations could leave the wrong styles applied.** The per-tab
+  re-entrancy guard *discarded* every event that arrived while an injection pass
+  was in flight, so a router firing several `pushState` calls in a row could end
+  on a route whose styles were never re-evaluated. Events are now coalesced: the
+  newest URL is queued and drained by a flat loop once the current pass settles.
+
 - **A stale HTTP-cache hit could install an older script than the page showed,
   and "check for updates" could answer without reaching the server.** Only the
   scheduled update check managed freshness; every other remote read of userscript

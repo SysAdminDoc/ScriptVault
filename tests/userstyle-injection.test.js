@@ -187,4 +187,109 @@ describe('UserStyles persistent injection lifecycle', () => {
     await engineB.rehydrateOpenTabs();
     expect(chromeB._sheets(7)).toEqual(['body{color:red}']);
   });
+
+  // The registry is the ONLY record of an injected sheet. If a removeCSS
+  // rejection against a live document dropped the entry, the stylesheet would
+  // stay applied to routes it no longer matches for the life of that document,
+  // with nothing left that could ever remove it.
+  it('keeps the registry entry when removeCSS fails on a still-open tab, and retries on the next event', async () => {
+    await engine.registerStyle({ ...STYLE });
+    chrome._setTabs([{ id: 7, url: 'https://example.com/match' }]);
+    await engine.onTabUpdated(7, 'https://example.com/match');
+    expect(chrome._sheets(7)).toEqual(['body{color:red}']);
+
+    // SPA route change to a non-matching route while removeCSS transiently
+    // fails against a document that is still very much alive.
+    let failRemovals = true;
+    const realRemove = chrome.scripting.removeCSS;
+    chrome.scripting.removeCSS = async (args) => {
+      if (failRemovals) throw new Error('Could not remove stylesheet');
+      return realRemove(args);
+    };
+
+    await engine.onTabUpdated(7, 'https://other.example.org/route');
+    // Removal failed, so the sheet is still on the page — and must still be
+    // recorded, or nothing can clean it up.
+    expect(chrome._sheets(7)).toEqual(['body{color:red}']);
+
+    failRemovals = false;
+    await engine.onTabUpdated(7, 'https://other.example.org/route');
+    expect(chrome._sheets(7)).toEqual([]);
+  });
+
+  it('forgets the entry when the failure proves the tab is gone', async () => {
+    await engine.registerStyle({ ...STYLE });
+    chrome._setTabs([{ id: 7, url: 'https://example.com/match' }]);
+    await engine.onTabUpdated(7, 'https://example.com/match');
+
+    chrome.scripting.removeCSS = async () => { throw new Error('No tab with id: 7.'); };
+    await engine.onTabUpdated(7, 'https://other.example.org/route');
+
+    // The record was dropped, so a later re-match injects fresh rather than
+    // trying to remove a sheet that cannot exist.
+    chrome.scripting.insertCSS = async ({ target, css }) => {
+      const arr = chrome._injected.get(target.tabId) || [];
+      arr.push(css);
+      chrome._injected.set(target.tabId, arr);
+    };
+    const before = chrome._sheets(7).length;
+    await engine.onTabUpdated(7, 'https://example.com/match');
+    expect(chrome._sheets(7).length).toBe(before + 1);
+  });
+
+  // A client-side router firing several pushState events in a row used to have
+  // every event after the first DISCARDED by the re-entrancy guard, so the final
+  // route was never processed.
+  it('coalesces SPA events that arrive during an in-flight pass and ends on the final route', async () => {
+    await engine.registerStyle({ ...STYLE });
+    chrome._setTabs([{ id: 7, url: 'https://example.com/one' }]);
+
+    // Hold the first insertCSS open so later events land mid-flight.
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    const realInsert = chrome.scripting.insertCSS;
+    let gated = true;
+    chrome.scripting.insertCSS = async (args) => {
+      if (gated) {
+        gated = false;
+        await gate;
+      }
+      return realInsert(args);
+    };
+
+    const inFlight = engine.onTabUpdated(7, 'https://example.com/one');
+    // Two more routes arrive while the first pass is stuck; the last one no
+    // longer matches, so the style must end up removed.
+    const dropped = engine.onTabUpdated(7, 'https://example.com/two');
+    const final = engine.onTabUpdated(7, 'https://not-example.test/three');
+    release();
+    await Promise.all([inFlight, dropped, final]);
+
+    expect(chrome._sheets(7)).toEqual([]);
+  });
+
+  it('ends on the final route when that route is the matching one', async () => {
+    await engine.registerStyle({ ...STYLE });
+    chrome._setTabs([{ id: 7, url: 'https://not-example.test/a' }]);
+
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    let gated = true;
+    const realQuery = chrome.tabs.query;
+    chrome.tabs.query = async () => {
+      if (gated) {
+        gated = false;
+        await gate;
+      }
+      return realQuery();
+    };
+
+    // First pass is on a non-matching route; a matching route arrives mid-flight.
+    const inFlight = engine.onTabUpdated(7, 'https://not-example.test/a');
+    const queued = engine.onTabUpdated(7, 'https://example.com/b');
+    release();
+    await Promise.all([inFlight, queued]);
+
+    expect(chrome._sheets(7)).toEqual(['body{color:red}']);
+  });
 });
