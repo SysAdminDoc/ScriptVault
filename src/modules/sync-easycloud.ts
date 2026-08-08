@@ -1013,6 +1013,15 @@ async function _performSync(): Promise<SyncResult> {
     return { skipped: true };
   }
 
+  // Debounced and periodic alarms can outlive a disconnect. Read the durable
+  // connected flag before acquiring a token so a stale alarm cannot resurrect
+  // uploads after the user has disconnected.
+  const connectedData = await _getStorageValues([KEYS.CONNECTED]);
+  if (!connectedData[KEYS.CONNECTED]) {
+    log('Sync skipped: EasyCloud is disconnected');
+    return { skipped: true };
+  }
+
   if (!_isOnline()) {
     setStatus(STATUS.OFFLINE);
     return { offline: true };

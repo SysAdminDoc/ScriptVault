@@ -828,16 +828,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
 
 ### P3
 
-- [ ] P3 — EasyCloud debounce/periodic sync paths bypass the connected gate (status churn; possible post-disconnect resurrection)
-  Category: correctness
-  Where: `src/modules/sync-easycloud.ts:1185-1192` (`notifyScriptSaved`/`notifyScriptDeleted` → `_debouncedSync`), `_handleAlarm` → `_performSync` (`:980-1005`) never checks `KEYS.CONNECTED`; contrast the gated storage listener `:1220-1223`; `disconnect` revoke is fire-and-forget `.catch(()=>{})` (`:1378-1382`)
-  Problem: For never-connected users, every script save schedules a doomed sync 5 s later that fails token acquisition and persists `easycloud_status='error'` (churn). Worse edge: after `disconnect()`, if the revoke fetch fails, the Google grant survives, `getAuthToken(false)` still mints tokens, and the next save silently resumes uploading to Drive after the user disconnected.
-  Evidence: Verified — traced `notifyScriptSaved` → `_debouncedSync` → `_handleAlarm` → `_performSync`; no `KEYS.CONNECTED` read on that path.
-  Fix: Read `KEYS.CONNECTED` at the top of `_performSync` (or `_handleAlarm`) and return early when false.
-  Acceptance: Saves while disconnected schedule no sync; a test asserts `_performSync` early-returns when disconnected.
-  Confidence: Verified (churn); Likely (resurrection)
-  Effort: S
-
 - [ ] P3 — Refresh-token failure no longer clears stale tokens (regression vs the documented v2.0.2 fix)
   Category: reliability
   Where: `src/modules/sync-providers.ts:975-978,1413-1416,1764` (Google/Dropbox/OneDrive refresh only log + return null; connected flags stay true)

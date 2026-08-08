@@ -190,15 +190,18 @@ describe('source easycloud sync module', () => {
 
     const { EasyCloudSync, SettingsManager } = await loadFreshEasyCloud();
     await EasyCloudSync.init();
+    await chrome.storage.local.set({ easycloud_connected: true });
 
     const alarmHandler = chrome.alarms.onAlarm.addListener.mock.calls.at(-1)?.[0];
     expect(typeof alarmHandler).toBe('function');
 
     alarmHandler({ name: 'easycloud-debounce-sync' });
 
-    expect(chrome.identity.getAuthToken).toHaveBeenCalledWith(
-      expect.objectContaining({ interactive: false }),
-    );
+    await vi.waitFor(() => {
+      expect(chrome.identity.getAuthToken).toHaveBeenCalledWith(
+        expect.objectContaining({ interactive: false }),
+      );
+    });
     await vi.waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
         expect.stringContaining('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart'),
@@ -210,6 +213,23 @@ describe('source easycloud sync module', () => {
         }),
       );
       expect(SettingsManager.set).toHaveBeenCalledWith('lastSync', expect.any(Number));
+    });
+  });
+
+  it('skips debounce work when disconnected instead of acquiring a token', async () => {
+    await chrome.storage.local.set({ easycloud_connected: false });
+    const fetchMock = vi.fn();
+    globalThis.fetch = fetchMock;
+    const { EasyCloudSync } = await loadFreshEasyCloud();
+    await EasyCloudSync.init();
+
+    const alarmHandler = chrome.alarms.onAlarm.addListener.mock.calls.at(-1)?.[0];
+    expect(typeof alarmHandler).toBe('function');
+    alarmHandler({ name: 'easycloud-debounce-sync' });
+
+    await vi.waitFor(() => {
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(chrome.identity.getAuthToken).not.toHaveBeenCalled();
     });
   });
 
