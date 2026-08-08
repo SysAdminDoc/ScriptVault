@@ -27,6 +27,19 @@ const projectSupplier = 'SysAdminDoc';
 const projectRepositoryUrl = 'https://github.com/SysAdminDoc/ScriptVault';
 const projectLicense = 'MIT';
 
+// These packages are present in the shipped extension even when npm does not
+// model the byte as a runtime dependency (fflate is inlined manually and
+// Monaco/DOMPurify are bundled into ignored build output). Keep them in the
+// CycloneDX component set with the artifact paths that provenance audits hash.
+const SHIPPED_THIRD_PARTY = [
+  { name: 'acorn', version: '8.17.0', license: 'MIT', paths: ['lib/acorn.min.js'], description: 'Vendored JS parser for AST analysis' },
+  { name: 'diff', version: '9.0.0', license: 'BSD-3-Clause', paths: ['lib/diff.min.js'], description: 'Vendored diff library for sync merge' },
+  { name: 'fflate', version: '0.8.3', license: 'MIT', paths: ['lib/fflate.js'], description: 'Vendored ZIP compression library' },
+  { name: 'codemirror', version: '5.65.15', license: 'MIT', paths: ['lib/codemirror'], description: 'Vendored CodeMirror compatibility editor and lint assets' },
+  { name: 'monaco-editor', version: '0.56.0', license: 'MIT', paths: ['lib/monaco-esm'], description: 'Bundled Monaco ESM editor, workers, stylesheet, and icon font' },
+  { name: 'dompurify', version: '3.4.13', license: 'MPL-2.0 OR Apache-2.0', paths: ['lib/monaco-esm/editor.js (inlined dependency)'], artifactPaths: ['lib/monaco-esm/editor.js'], description: 'DOMPurify sanitizer inlined into the Monaco editor bundle' },
+];
+
 const failures = [];
 const warnings = [];
 
@@ -48,6 +61,10 @@ function writeJson(path, value) {
 
 function sha256File(path) {
   return createHash('sha256').update(readFileSync(path)).digest('hex');
+}
+
+function sha256Bytes(bytes) {
+  return createHash('sha256').update(bytes).digest('hex');
 }
 
 function run(command, args, opts = {}) {
@@ -144,7 +161,7 @@ function directDependencyNames(pkg) {
   }).sort();
 }
 
-function buildSbom(lock, pkg, version) {
+function buildSbom(lock, pkg, version, artifactHashes = new Map()) {
   const componentByRef = new Map();
   for (const [path, meta] of Object.entries(lock.packages || {})) {
     if (!path.startsWith('node_modules/') || !meta?.version) continue;
@@ -166,15 +183,9 @@ function buildSbom(lock, pkg, version) {
     }
     componentByRef.set(purl, component);
   }
-  const vendoredLibraries = [
-    { name: 'acorn', version: '8.17.0', license: 'MIT', path: 'lib/acorn.min.js', description: 'Vendored JS parser for AST analysis' },
-    { name: 'diff', version: '9.0.0', license: 'BSD-3-Clause', path: 'lib/diff.min.js', description: 'Vendored diff library for sync merge' },
-    { name: 'fflate', version: '0.8.3', license: 'MIT', path: 'lib/fflate.js', description: 'Vendored ZIP compression library' },
-  ];
-  for (const lib of vendoredLibraries) {
+  for (const lib of SHIPPED_THIRD_PARTY) {
     const ref = packagePurl(lib.name, lib.version);
-    if (!componentByRef.has(ref)) {
-      componentByRef.set(ref, {
+    const component = componentByRef.get(ref) || {
         'bom-ref': ref,
         type: 'library',
         name: lib.name,
@@ -183,12 +194,25 @@ function buildSbom(lock, pkg, version) {
         purl: packagePurl(lib.name, lib.version),
         licenses: [{ expression: lib.license }],
         description: lib.description,
-        properties: [
-          { name: 'scriptvault:vendored', value: 'true' },
-          { name: 'scriptvault:vendored-path', value: lib.path },
-        ],
-      });
+        properties: [],
+      };
+    component.scope = 'required';
+    component.licenses = [{ expression: lib.license }];
+    component.description = lib.description;
+    const properties = Array.isArray(component.properties) ? component.properties : [];
+    const shippedProperties = properties.filter((property) => !String(property?.name || '').startsWith('scriptvault:shipped'));
+    shippedProperties.push({ name: 'scriptvault:shipped', value: 'true' });
+    for (const path of lib.paths) shippedProperties.push({ name: 'scriptvault:shipped-path', value: path });
+    for (const path of lib.artifactPaths || lib.paths) {
+      const hashes = artifactHashes.has(path)
+        ? [[path, artifactHashes.get(path)]]
+        : [...artifactHashes.entries()].filter(([artifactPath]) => artifactPath.startsWith(`${path}/`));
+      for (const [artifactPath, hash] of hashes) {
+        if (hash) shippedProperties.push({ name: 'scriptvault:packaged-sha256', value: `${artifactPath}=${hash}` });
+      }
     }
+    component.properties = shippedProperties;
+    componentByRef.set(ref, component);
   }
 
   const components = [...componentByRef.values()]
@@ -397,7 +421,17 @@ function main() {
   const sourceHash = sha256File(sourceZip);
 
   const sbomPath = join(outDir, `ScriptVault-v${version}.sbom.cyclonedx.json`);
-  writeJson(sbomPath, buildSbom(lock, pkg, version));
+  const shippedArtifactHashes = new Map();
+  for (const path of SHIPPED_THIRD_PARTY.flatMap((library) => library.artifactPaths || library.paths)) {
+    const matchingEntries = zip.entries
+      .filter((entry) => entry.name === path || entry.name.startsWith(`${path}/`))
+      .map((entry) => entry.name);
+    for (const entry of matchingEntries) {
+      const bytes = zip.readEntry(entry);
+      if (bytes) shippedArtifactHashes.set(entry, sha256Bytes(bytes));
+    }
+  }
+  writeJson(sbomPath, buildSbom(lock, pkg, version, shippedArtifactHashes));
 
   const packageDiffPath = join(outDir, `ScriptVault-v${version}.package-diff.json`);
   const packageDiff = {

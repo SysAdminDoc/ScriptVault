@@ -6,6 +6,14 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(scriptDir, '..');
 
+const REQUIRED_SHIPPED_COMPONENTS = Object.freeze([
+  ['monaco-editor', '0.56.0'],
+  ['dompurify', '3.4.13'],
+  ['acorn', '8.17.0'],
+  ['fflate', '0.8.3'],
+  ['codemirror', '5.65.15'],
+]);
+
 function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'));
 }
@@ -45,7 +53,7 @@ function push(failures, condition, message) {
   if (!condition) failures.push(message);
 }
 
-export function validateCraSbom(sbom, pkg, lock) {
+export function validateCraSbom(sbom, pkg, lock, { requireShippedComponents = false } = {}) {
   const failures = [];
   const rootRef = packagePurl(pkg.name, pkg.version);
   const components = Array.isArray(sbom?.components) ? sbom.components : [];
@@ -88,6 +96,20 @@ export function validateCraSbom(sbom, pkg, lock) {
     push(failures, Boolean(component), `Direct dependency ${name} is missing from SBOM components`);
     push(failures, component?.version === lockMeta?.version, `Direct dependency ${name} version must match package-lock.json`);
     push(failures, licenseExpression(component).length > 0, `Direct dependency ${name} must include license`);
+  }
+
+  if (requireShippedComponents) {
+    for (const [name, version] of REQUIRED_SHIPPED_COMPONENTS) {
+      const ref = packagePurl(name, version);
+      const component = components.find((entry) => entry?.['bom-ref'] === ref);
+      push(failures, Boolean(component), `Shipped third-party component ${ref} is missing from SBOM components`);
+      const properties = Array.isArray(component?.properties) ? component.properties : [];
+      push(
+        failures,
+        properties.some((property) => property?.name === 'scriptvault:shipped' && property?.value === 'true'),
+        `Shipped third-party component ${ref} must carry scriptvault:shipped=true`,
+      );
+    }
   }
 
   const rootDependency = dependencies.find((entry) => entry?.ref === rootRef);
@@ -133,7 +155,7 @@ function main() {
 
   const pkg = readJson(join(projectRoot, 'package.json'));
   const lock = readJson(join(projectRoot, 'package-lock.json'));
-  const report = validateCraSbom(readJson(sbomPath), pkg, lock);
+  const report = validateCraSbom(readJson(sbomPath), pkg, lock, { requireShippedComponents: true });
   if (!report.ok) {
     console.error('CRA SBOM check failed:');
     for (const failure of report.failures) console.error(`- ${failure}`);
