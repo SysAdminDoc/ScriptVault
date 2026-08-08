@@ -310,6 +310,9 @@
     const MAX_PUBLICATION_RECEIPTS_PER_SCRIPT = 10;
     const LOCAL_WORKSPACE_MAX_SCRIPT_BYTES = 5 * 1024 * 1024;
     const LOCAL_WORKSPACE_OBSERVER_DEBOUNCE_MS = 750;
+    const LOCAL_WORKSPACE_POLL_INTERVAL_MS = 2500;
+    const LOCAL_WORKSPACE_POLL_MAX_INTERVAL_MS = 30000;
+    const LOCAL_WORKSPACE_POLL_MAX_ERRORS = 3;
     const SETTINGS_SECTION_GROUPS = {
         general: 'core',
         appearance: 'workspace',
@@ -11402,6 +11405,7 @@
         const slot = bindingId ? localWorkspaceFileObservers.get(bindingId) : null;
         if (!slot) return;
         if (slot.timerId) clearTimeout(slot.timerId);
+        if (slot.pollTimerId) clearTimeout(slot.pollTimerId);
         try { slot.observer?.disconnect?.(); } catch {}
         localWorkspaceFileObservers.delete(bindingId);
     }
@@ -11410,6 +11414,31 @@
         for (const [bindingId, slot] of localWorkspaceFileObservers.entries()) {
             if (slot.scriptId === scriptId) disconnectLocalWorkspaceObserver(bindingId);
         }
+    }
+
+    function disconnectLocalWorkspacePollingForScript(scriptId) {
+        for (const [bindingId, slot] of localWorkspaceFileObservers.entries()) {
+            if (slot.scriptId === scriptId && slot.watchMode === 'poll') disconnectLocalWorkspaceObserver(bindingId);
+        }
+    }
+
+    function getLocalWorkspaceWatchMode(bindingId) {
+        return localWorkspaceFileObservers.get(bindingId)?.watchMode || '';
+    }
+
+    async function persistLocalWorkspaceWatchState(bindingRecord, slot, patch = {}) {
+        if (!bindingRecord || !slot) return null;
+        const summary = await putDashboardLocalWorkspaceBinding({
+            ...bindingRecord,
+            ...patch,
+            updatedAt: Date.now()
+        });
+        const script = state.scripts.find(item => item.id === slot.scriptId) || null;
+        if (script) {
+            patchOpenTabStatus(script.id, { localWorkspaceBinding: summary }, script);
+            if (script.id === state.currentScriptId) refreshLocalWorkspaceControls(script);
+        }
+        return summary;
     }
 
     function shouldRefreshForLocalWorkspaceRecords(records) {
@@ -11469,13 +11498,185 @@
         }, LOCAL_WORKSPACE_OBSERVER_DEBOUNCE_MS);
     }
 
+    function scheduleLocalWorkspacePolling(bindingId, delay = LOCAL_WORKSPACE_POLL_INTERVAL_MS) {
+        const slot = localWorkspaceFileObservers.get(bindingId);
+        if (!slot || slot.watchMode !== 'poll' || slot.pollingStopped) return;
+        if (slot.scriptId !== state.currentScriptId || slot.bindingKind !== 'script') {
+            disconnectLocalWorkspaceObserver(bindingId);
+            return;
+        }
+        if (slot.pollTimerId) clearTimeout(slot.pollTimerId);
+        const boundedDelay = Math.max(
+            LOCAL_WORKSPACE_OBSERVER_DEBOUNCE_MS,
+            Math.min(LOCAL_WORKSPACE_POLL_MAX_INTERVAL_MS, Number(delay) || LOCAL_WORKSPACE_POLL_INTERVAL_MS)
+        );
+        slot.pollTimerId = setTimeout(() => {
+            slot.pollTimerId = null;
+            void pollLocalWorkspaceBinding(bindingId).catch(error => {
+                console.warn('[ScriptVault] Local file polling failed:', error);
+                slot.errorCount = Math.min(LOCAL_WORKSPACE_POLL_MAX_ERRORS, (slot.errorCount || 0) + 1);
+                if (slot.errorCount >= LOCAL_WORKSPACE_POLL_MAX_ERRORS) {
+                    slot.pollingStopped = true;
+                    refreshLocalWorkspaceControls();
+                    return;
+                }
+                scheduleLocalWorkspacePolling(bindingId, boundedDelay * 2);
+            });
+        }, boundedDelay);
+    }
+
+    function localWorkspaceMetadataChanged(previous, next) {
+        if (!previous || !next) return false;
+        return previous.lastKnownSize !== next.lastKnownSize
+            || previous.lastKnownModified !== next.lastKnownModified;
+    }
+
+    async function pollLocalWorkspaceBinding(bindingId) {
+        const slot = localWorkspaceFileObservers.get(bindingId);
+        if (!slot || slot.watchMode !== 'poll' || slot.pollingStopped) return false;
+        if (slot.scriptId !== state.currentScriptId || slot.bindingKind !== 'script') {
+            disconnectLocalWorkspaceObserver(bindingId);
+            return false;
+        }
+
+        let bindingRecord;
+        try {
+            bindingRecord = await getDashboardLocalWorkspaceBindingRecord(bindingId);
+            if (!bindingRecord?.handle) {
+                const missing = new Error('Local file handle is missing');
+                missing.name = 'NotFoundError';
+                throw missing;
+            }
+            const permissionState = await queryLocalWorkspacePermission(bindingRecord.handle, 'read');
+            if (permissionState !== 'granted') {
+                slot.errorCount = Math.min(LOCAL_WORKSPACE_POLL_MAX_ERRORS, (slot.errorCount || 0) + 1);
+                await persistLocalWorkspaceWatchState(bindingRecord, slot, {
+                    permissionState,
+                    lastErrorKind: 'permission-denied',
+                    lastStatusKind: slot.errorCount >= LOCAL_WORKSPACE_POLL_MAX_ERRORS ? 'polling-stopped' : 'polling'
+                });
+                if (slot.errorCount >= LOCAL_WORKSPACE_POLL_MAX_ERRORS) {
+                    slot.pollingStopped = true;
+                    return false;
+                }
+                scheduleLocalWorkspacePolling(bindingId, LOCAL_WORKSPACE_POLL_INTERVAL_MS * slot.errorCount);
+                return false;
+            }
+
+            const metadata = await readLocalWorkspaceFileMetadata(bindingRecord.handle);
+            const changed = localWorkspaceMetadataChanged(slot.lastMetadata, metadata);
+            slot.lastMetadata = metadata;
+            slot.errorCount = 0;
+            await persistLocalWorkspaceWatchState(bindingRecord, slot, {
+                ...metadata,
+                permissionState,
+                lastErrorKind: '',
+                lastStatusKind: 'polling'
+            });
+            if (changed) scheduleLocalWorkspaceObservedRefresh(bindingId, [{ type: 'modified' }]);
+            scheduleLocalWorkspacePolling(bindingId);
+            return changed;
+        } catch (error) {
+            slot.errorCount = Math.min(LOCAL_WORKSPACE_POLL_MAX_ERRORS, (slot.errorCount || 0) + 1);
+            if (bindingRecord) {
+                await persistLocalWorkspaceWatchState(bindingRecord, slot, {
+                    lastErrorKind: classifyLocalWorkspaceError(error),
+                    lastStatusKind: slot.errorCount >= LOCAL_WORKSPACE_POLL_MAX_ERRORS ? 'polling-stopped' : 'polling-error'
+                });
+            }
+            if (slot.errorCount >= LOCAL_WORKSPACE_POLL_MAX_ERRORS) {
+                slot.pollingStopped = true;
+                return false;
+            }
+            scheduleLocalWorkspacePolling(bindingId, LOCAL_WORKSPACE_POLL_INTERVAL_MS * (slot.errorCount + 1));
+            return false;
+        }
+    }
+
+    async function ensureLocalWorkspacePollingForBinding(scriptId, binding, reason = 'observer-unavailable') {
+        if (!scriptId || !binding?.bindingId || binding.bindingKind !== 'script' || scriptId !== state.currentScriptId) return false;
+        const existing = localWorkspaceFileObservers.get(binding.bindingId);
+        if (existing?.watchMode === 'poll' && !existing.pollingStopped) return true;
+        disconnectLocalWorkspaceObserver(binding.bindingId);
+
+        let bindingRecord;
+        try {
+            bindingRecord = await getDashboardLocalWorkspaceBindingRecord(binding.bindingId);
+        } catch (error) {
+            console.warn('[ScriptVault] Failed to load local file polling binding:', error);
+            return false;
+        }
+        if (!bindingRecord?.handle) return false;
+
+        const permissionState = await queryLocalWorkspacePermission(bindingRecord.handle, 'read');
+        const slot = {
+            observer: null,
+            watchMode: 'poll',
+            bindingId: binding.bindingId,
+            scriptId,
+            bindingKind: 'script',
+            libraryId: '',
+            timerId: null,
+            pollTimerId: null,
+            refreshing: false,
+            queued: false,
+            pollingStopped: permissionState !== 'granted',
+            errorCount: permissionState === 'granted' ? 0 : 1,
+            lastMetadata: null,
+            fallbackReason: reason
+        };
+        localWorkspaceFileObservers.set(binding.bindingId, slot);
+        if (permissionState !== 'granted') {
+            await persistLocalWorkspaceWatchState(bindingRecord, slot, {
+                permissionState,
+                lastErrorKind: 'permission-denied',
+                lastStatusKind: 'polling-stopped'
+            });
+            return false;
+        }
+
+        try {
+            slot.lastMetadata = await readLocalWorkspaceFileMetadata(bindingRecord.handle);
+            await persistLocalWorkspaceWatchState(bindingRecord, slot, {
+                ...slot.lastMetadata,
+                permissionState,
+                lastErrorKind: '',
+                lastStatusKind: 'polling'
+            });
+        } catch (error) {
+            slot.errorCount = 1;
+            await persistLocalWorkspaceWatchState(bindingRecord, slot, {
+                permissionState,
+                lastErrorKind: classifyLocalWorkspaceError(error),
+                lastStatusKind: 'polling-error'
+            });
+        }
+        scheduleLocalWorkspacePolling(binding.bindingId);
+        return true;
+    }
+
     function handleLocalWorkspaceObserverRecords(bindingId, records) {
         const slot = localWorkspaceFileObservers.get(bindingId);
         if (!slot) return;
         const types = Array.isArray(records) ? records.map(record => String(record?.type || '').toLowerCase()) : [];
-        if (types.includes('errored')) {
+        if (types.includes('errored') || types.includes('unknown')) {
+            const fallbackBinding = {
+                bindingId: slot.bindingId,
+                scriptId: slot.scriptId,
+                bindingKind: slot.bindingKind,
+                libraryId: slot.libraryId
+            };
+            const shouldPoll = slot.bindingKind === 'script';
             disconnectLocalWorkspaceObserver(bindingId);
-            showToast('Local file watcher stopped. Use Refresh File or rebind the file.', 'warning');
+            if (shouldPoll) {
+                void ensureLocalWorkspacePollingForBinding(
+                    fallbackBinding.scriptId,
+                    fallbackBinding,
+                    types.includes('errored') ? 'observer-error' : 'observer-unknown'
+                );
+            } else if (types.includes('errored')) {
+                showToast('Local file watcher stopped. Use Refresh File or rebind the file.', 'warning');
+            }
             return;
         }
         scheduleLocalWorkspaceObservedRefresh(bindingId, records);
@@ -11483,13 +11684,16 @@
 
     async function ensureLocalWorkspaceObserverForBinding(scriptId, binding) {
         if (!scriptId || !binding?.bindingId) return false;
-        if (!isLocalWorkspaceObserverSupported()) {
-            disconnectLocalWorkspaceObserver(binding.bindingId);
+        if (binding.bindingKind === 'script' && scriptId !== state.currentScriptId) {
+            disconnectLocalWorkspacePollingForScript(scriptId);
             return false;
+        }
+        if (!isLocalWorkspaceObserverSupported()) {
+            return ensureLocalWorkspacePollingForBinding(scriptId, binding, 'observer-unavailable');
         }
 
         const existing = localWorkspaceFileObservers.get(binding.bindingId);
-        if (existing?.scriptId === scriptId) return true;
+        if (existing?.scriptId === scriptId && existing.watchMode === 'observer') return true;
         disconnectLocalWorkspaceObserver(binding.bindingId);
 
         let bindingRecord;
@@ -11511,11 +11715,13 @@
             });
             localWorkspaceFileObservers.set(binding.bindingId, {
                 observer,
+                watchMode: 'observer',
                 bindingId: binding.bindingId,
                 scriptId,
                 bindingKind: binding.bindingKind === 'library' ? 'library' : 'script',
                 libraryId: binding.libraryId || '',
                 timerId: null,
+                pollTimerId: null,
                 refreshing: false,
                 queued: false
             });
@@ -11525,7 +11731,7 @@
         } catch (error) {
             disconnectLocalWorkspaceObserver(binding.bindingId);
             console.warn('[ScriptVault] Failed to start local file watcher:', error);
-            return false;
+            return ensureLocalWorkspacePollingForBinding(scriptId, binding, 'observer-start-error');
         }
     }
 
@@ -11558,6 +11764,9 @@
             case 'read-failed': return 'read failed';
             case 'apply-failed': return 'apply failed';
             case 'load-failed': return 'status unavailable';
+            case 'polling': return 'metadata polling';
+            case 'polling-error': return 'watcher error';
+            case 'polling-stopped': return 'watcher stopped';
             case 'cancelled': return 'cancelled';
             default:
                 return binding?.lastRefreshAt ? `checked ${formatTime(binding.lastRefreshAt)}` : 'not refreshed yet';
@@ -11606,11 +11815,14 @@
         const size = typeof binding.lastKnownSize === 'number' ? `, ${formatBytes(binding.lastKnownSize)}` : '';
         const modified = binding.lastKnownModified ? `, modified ${formatTime(binding.lastKnownModified)}` : '';
         const refreshStatus = formatLocalWorkspaceRefreshStatus(binding);
-        const observerStatus = binding.bindingId && localWorkspaceFileObservers.has(binding.bindingId)
+        const watchMode = getLocalWorkspaceWatchMode(binding.bindingId);
+        const observerStatus = watchMode === 'observer'
             ? ', auto-refresh on'
-            : isLocalWorkspaceObserverSupported()
-                ? ', manual refresh until permission is granted'
-                : '';
+            : watchMode === 'poll'
+                ? binding.lastStatusKind === 'polling-stopped' ? ', watcher stopped' : ', metadata polling'
+                : isLocalWorkspaceObserverSupported()
+                    ? ', manual refresh until permission is granted'
+                    : '';
         const label = `Local: ${binding.displayName} (${permission}; ${refreshStatus}${observerStatus}${size}${modified})`;
         elements.editorLocalWorkspaceStatus.hidden = false;
         elements.editorLocalWorkspaceStatus.textContent = label;
@@ -12228,6 +12440,9 @@
 
         runDashboardViewTransition('sv-vt-editor', () => {
             const previousScriptId = state.currentScriptId;
+            if (previousScriptId && previousScriptId !== scriptId) {
+                disconnectLocalWorkspacePollingForScript(previousScriptId);
+            }
             // Persist the outgoing tab's in-progress code before switching.
             // Most callers already do this, but Ctrl+Tab cycling and programmatic
             // switches (e.g., closeScriptTab fallback) skip it — leaving unsaved

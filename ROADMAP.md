@@ -838,13 +838,6 @@ _Scope not covered by the 2026-08-02 pass. Not findings; each needs its own audi
 
 ### P2
 
-- [ ] P2 — Add a bounded local-file watcher fallback with explicit watcher health
-  Why: FileSystemObserver is optional and its current error path stops watching and falls back to manual refresh; Chrome’s documented API history and unknown/errored event semantics require a polling fallback for reliable local editing.
-  Evidence: pages/dashboard.js localWorkspaceFileObservers and observer error handling; tests/local-workspace-dashboard.test.js; https://developer.chrome.com/blog/file-system-observer; existing File System Access contract https://developer.chrome.com/docs/capabilities/web-apis/file-system-access.
-  Touches: pages/dashboard.js, pages/dashboard.html, src/storage/script-db.ts, src/background/core.ts only where message/state contracts require it, modules/storage.js/generated artifacts, and local-workspace/dashboard tests.
-  Acceptance: When FileSystemObserver is unavailable or reports unknown/errored state, an active bound editor performs debounced, bounded metadata polling and routes detected changes through the existing permission check and review-diff apply flow; unbound/hidden editors do not poll, permission/read/oversize failures are visible, and tests cover unavailable, healthy, unknown, errored, unchanged, changed, and rebind cases.
-  Complexity: M
-
 - [ ] P2 — Add a partial-locale and RTL regression ratchet
   Why: The locale gate currently proves generated parity but permits eight partial runtime catalogs at roughly 2.2%–6.1% coverage, so new UI can remain English-only or break RTL without failing CI.
   Evidence: scripts/check-locales.mjs, docs/locale-coverage.md, _locales/*, modules/i18n.js, and the 2026-08-02 locale:check:gate output; localization backlog https://github.com/quoid/userscripts/issues/415; Stylus translation workflow https://github.com/openstyles/stylus.

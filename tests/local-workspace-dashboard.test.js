@@ -165,7 +165,37 @@ describe('dashboard local workspace binding', () => {
     expect(runFn).toContain("source: 'observer'");
     expect(runFn).toContain('skipPermissionPrompt: true');
     expect(unbindFn).toContain('disconnectLocalWorkspaceObserver(binding.bindingId)');
-    expect(controlsFn).toContain('localWorkspaceFileObservers.has(binding.bindingId)');
+    expect(controlsFn).toContain('getLocalWorkspaceWatchMode(binding.bindingId)');
+  });
+
+  it('falls back to bounded metadata polling for the active editor', () => {
+    const startFn = extractFunction(dashboardJs, 'ensureLocalWorkspacePollingForBinding');
+    const pollFn = extractFunction(dashboardJs, 'pollLocalWorkspaceBinding');
+    const scheduleFn = extractFunction(dashboardJs, 'scheduleLocalWorkspacePolling');
+    const handleFn = extractFunction(dashboardJs, 'handleLocalWorkspaceObserverRecords');
+    const activateFn = extractFunction(dashboardJs, 'activateScriptTab');
+    const controlsFn = extractFunction(dashboardJs, 'refreshLocalWorkspaceControls');
+    const statusFn = extractFunction(dashboardJs, 'formatLocalWorkspaceRefreshStatus');
+
+    expect(dashboardJs).toContain('LOCAL_WORKSPACE_POLL_INTERVAL_MS = 2500');
+    expect(dashboardJs).toContain('LOCAL_WORKSPACE_POLL_MAX_INTERVAL_MS = 30000');
+    expect(dashboardJs).toContain('LOCAL_WORKSPACE_POLL_MAX_ERRORS = 3');
+    expect(startFn).toContain("binding.bindingKind !== 'script'");
+    expect(startFn).toContain('scriptId !== state.currentScriptId');
+    expect(startFn).toContain('readLocalWorkspaceFileMetadata(bindingRecord.handle)');
+    expect(startFn).toContain("lastStatusKind: 'polling'");
+    expect(pollFn).toContain("queryLocalWorkspacePermission(bindingRecord.handle, 'read')");
+    expect(pollFn).toContain('localWorkspaceMetadataChanged(slot.lastMetadata, metadata)');
+    expect(pollFn).toContain('scheduleLocalWorkspaceObservedRefresh(bindingId');
+    expect(pollFn).toContain("'polling-error'");
+    expect(scheduleFn).toContain('LOCAL_WORKSPACE_POLL_MAX_INTERVAL_MS');
+    expect(scheduleFn).toContain('LOCAL_WORKSPACE_POLL_MAX_ERRORS');
+    expect(handleFn).toContain("types.includes('unknown')");
+    expect(handleFn).toContain("types.includes('errored') ? 'observer-error' : 'observer-unknown'");
+    expect(activateFn).toContain('disconnectLocalWorkspacePollingForScript(previousScriptId)');
+    expect(controlsFn).toContain("watchMode === 'poll'");
+    expect(controlsFn).toContain('metadata polling');
+    expect(statusFn).toContain("case 'polling-stopped': return 'watcher stopped'");
   });
 
   it('guards local refresh against oversized files and parse failures', () => {
