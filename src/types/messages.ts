@@ -507,6 +507,9 @@ interface LocalHealthReportResponse {
     configuredUrlEntries: number;
     configuredInlineEntries: number;
     configuredInvalidEntries: number;
+    configuredIntegrityEntries: number;
+    configuredSignatureEntries: number;
+    configuredUnverifiedEntries: number;
     cleanupEnabled: boolean;
     installedManagedScripts: number;
     lastRun: null | {
@@ -519,6 +522,10 @@ interface LocalHealthReportResponse {
       attemptedEntries: number;
       installedEntries: number;
       failedEntries: number;
+      verifiedEntries: number;
+      verifiedIntegrityEntries: number;
+      verifiedSignatureEntries: number;
+      verificationFailedEntries: number;
       skippedInvalidEntries: number;
       prunedScripts: number;
       pruneFailedScripts: number;

@@ -3,7 +3,7 @@
   "properties": {
     "managedScripts": {
       "title": "Managed userscripts",
-      "description": "Userscripts provisioned by enterprise policy. Each item may provide a remote userscript URL or inline userscript source.",
+      "description": "Userscripts provisioned by enterprise policy. Each item must provide a remote userscript URL or inline userscript source plus an integrity pin or trusted Ed25519 signature.",
       "type": "array",
       "items": {
         "type": "object",
@@ -17,6 +17,30 @@
             "title": "Inline userscript source",
             "description": "Complete userscript source including a ==UserScript== metadata block.",
             "type": "string"
+          },
+          "integrity": {
+            "title": "Userscript integrity pin",
+            "description": "Required unless signature is supplied. Use sha256-<base64> SRI or sha256:<64-hex>.",
+            "type": "string"
+          },
+          "signature": {
+            "title": "Trusted userscript signature",
+            "description": "Optional Ed25519 signature object. The public key must already be trusted in ScriptVault.",
+            "type": "object",
+            "properties": {
+              "algorithm": {
+                "type": "string"
+              },
+              "signature": {
+                "type": "string"
+              },
+              "publicKey": {
+                "type": "string"
+              },
+              "timestamp": {
+                "type": "integer"
+              }
+            }
           }
         }
       }

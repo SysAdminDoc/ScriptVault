@@ -10,6 +10,9 @@ All notable changes to ScriptVault will be documented in this file.
 - Remapped Monaco's pre-vendored DOMPurify import to the audited project
   dependency and added a built-artifact version-floor gate, so vulnerable
   sanitizer bytes cannot hide behind a clean lockfile audit.
+- Required enterprise-managed scripts to carry a verifiable integrity pin or
+  trusted Ed25519 signature before installation, with aggregate verification
+  outcomes in the local health report.
 - Added a bounded local-file metadata polling fallback with explicit watcher
   health when FileSystemObserver is unavailable or reports an unknown/error
   state; only the active editor polls and changes still go through review.

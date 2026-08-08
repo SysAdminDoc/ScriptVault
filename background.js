@@ -33503,6 +33503,9 @@ async function buildManagedPolicyHealthSummary(scripts = []) {
     configuredUrlEntries: 0,
     configuredInlineEntries: 0,
     configuredInvalidEntries: 0,
+    configuredIntegrityEntries: 0,
+    configuredSignatureEntries: 0,
+    configuredUnverifiedEntries: 0,
     cleanupEnabled: false,
     installedManagedScripts: scripts.filter(script => script?.settings?.managed).length,
     lastRun: null
@@ -33542,6 +33545,11 @@ async function buildManagedPolicyHealthSummary(scripts = []) {
       summary.configuredInlineEntries++;
     } else {
       summary.configuredInvalidEntries++;
+    }
+    if (typeof item?.integrity === 'string' && item.integrity.trim()) summary.configuredIntegrityEntries++;
+    if (item?.signature && typeof item.signature === 'object' && !Array.isArray(item.signature)) summary.configuredSignatureEntries++;
+    if (!(typeof item?.integrity === 'string' && item.integrity.trim()) && !(item?.signature && typeof item.signature === 'object' && !Array.isArray(item.signature))) {
+      summary.configuredUnverifiedEntries++;
     }
   }
 
@@ -33748,6 +33756,9 @@ function buildLocalHealthWarningList({ runtime, storage, scripts, updates, callb
   if (managedPolicy?.configuredInvalidEntries > 0) {
     push('managedPolicyInvalidEntries', 'warning', `${managedPolicy.configuredInvalidEntries} managed policy entr${managedPolicy.configuredInvalidEntries === 1 ? 'y is' : 'ies are'} not installable`);
   }
+  if (managedPolicy?.configuredUnverifiedEntries > 0) {
+    push('managedPolicyUnverifiedEntries', 'warning', `${managedPolicy.configuredUnverifiedEntries} managed policy entr${managedPolicy.configuredUnverifiedEntries === 1 ? 'y is' : 'ies are'} missing an integrity pin or trusted signature`);
+  }
   if (managedPolicy?.configuredEntries > 0 && managedPolicy?.installedManagedScripts === 0) {
     push('managedPolicyNotApplied', 'warning', `${managedPolicy.configuredEntries} managed policy entr${managedPolicy.configuredEntries === 1 ? 'y has' : 'ies have'} not produced an installed managed script yet`);
   }
@@ -33874,6 +33885,9 @@ async function buildLocalHealthReport() {
       configuredUrlEntries: 0,
       configuredInlineEntries: 0,
       configuredInvalidEntries: 0,
+      configuredIntegrityEntries: 0,
+      configuredSignatureEntries: 0,
+      configuredUnverifiedEntries: 0,
       cleanupEnabled: false,
       installedManagedScripts: scripts.managedScripts,
       lastRun: null
@@ -41313,6 +41327,10 @@ function createManagedPolicyRunSummary(policy = {}, policyReadStatus = 'readable
     attemptedEntries: 0,
     installedEntries: 0,
     failedEntries: 0,
+    verifiedEntries: 0,
+    verifiedIntegrityEntries: 0,
+    verifiedSignatureEntries: 0,
+    verificationFailedEntries: 0,
     skippedInvalidEntries: hasManagedScriptPolicyKey(policy, 'managedScripts') && !Array.isArray(policy?.managedScripts) ? 1 : 0,
     prunedScripts: 0,
     pruneFailedScripts: 0,
@@ -41332,6 +41350,10 @@ function sanitizeManagedPolicyRunSummary(summary = null) {
     attemptedEntries: _managedScriptRunCount(summary.attemptedEntries),
     installedEntries: _managedScriptRunCount(summary.installedEntries),
     failedEntries: _managedScriptRunCount(summary.failedEntries),
+    verifiedEntries: _managedScriptRunCount(summary.verifiedEntries),
+    verifiedIntegrityEntries: _managedScriptRunCount(summary.verifiedIntegrityEntries),
+    verifiedSignatureEntries: _managedScriptRunCount(summary.verifiedSignatureEntries),
+    verificationFailedEntries: _managedScriptRunCount(summary.verificationFailedEntries),
     skippedInvalidEntries: _managedScriptRunCount(summary.skippedInvalidEntries),
     prunedScripts: _managedScriptRunCount(summary.prunedScripts),
     pruneFailedScripts: _managedScriptRunCount(summary.pruneFailedScripts),
@@ -41391,6 +41413,83 @@ async function getManagedScriptOriginKey(item) {
   return null;
 }
 
+async function verifyManagedScriptPolicyEntry(item, code) {
+  const computedSha256 = await _sha256Hex(code);
+  const integrity = typeof item?.integrity === 'string' ? item.integrity.trim() : '';
+  const signature = item?.signature && typeof item.signature === 'object' && !Array.isArray(item.signature)
+    ? item.signature
+    : null;
+  const diagnosticHash = `Computed SHA-256: ${computedSha256}`;
+  if (!integrity && !signature) {
+    return {
+      ok: false,
+      method: 'missing',
+      error: `Managed script is unverified; add an integrity pin or trusted Ed25519 signature. ${diagnosticHash}`
+    };
+  }
+
+  let integrityVerified = false;
+  if (integrity) {
+    const hexIntegrity = integrity.match(/^sha256[:=]([0-9a-f]{64})$/i);
+    if (!hexIntegrity && !/^(sha256|sha384|sha512)[-=]/i.test(integrity)) {
+      return {
+        ok: false,
+        method: 'integrity-failed',
+        error: `Managed script integrity must use sha256- SRI or sha256:<64-hex> syntax. ${diagnosticHash}`
+      };
+    }
+    integrityVerified = hexIntegrity
+      ? hexIntegrity[1].toLowerCase() === computedSha256
+      : await verifySRI(code, integrity);
+    if (!integrityVerified) {
+      return {
+        ok: false,
+        method: 'integrity-failed',
+        error: `Managed script integrity mismatch. ${diagnosticHash}`
+      };
+    }
+  }
+
+  let signatureVerified = false;
+  if (signature) {
+    if (signature.algorithm && signature.algorithm !== 'Ed25519') {
+      return {
+        ok: false,
+        method: 'signature-failed',
+        error: `Managed script signature algorithm must be Ed25519. ${diagnosticHash}`
+      };
+    }
+    if (typeof ScriptSigning?.verifyScript !== 'function') {
+      return {
+        ok: false,
+        method: 'signature-failed',
+        error: `Managed script signature verifier is unavailable. ${diagnosticHash}`
+      };
+    }
+    const result = await ScriptSigning.verifyScript(code, signature);
+    if (!result?.valid) {
+      return {
+        ok: false,
+        method: 'signature-failed',
+        error: `Managed script signature is invalid: ${result?.reason || 'verification failed'}. ${diagnosticHash}`
+      };
+    }
+    if (!result.trusted) {
+      return {
+        ok: false,
+        method: 'signature-untrusted',
+        error: `Managed script signature key is not trusted in ScriptVault. ${diagnosticHash}`
+      };
+    }
+    signatureVerified = true;
+  }
+
+  return {
+    ok: true,
+    method: integrityVerified && signatureVerified ? 'integrity+signature' : integrityVerified ? 'integrity' : 'signature'
+  };
+}
+
 async function markManagedScript(result, originKey) {
   if (!result?.success || !result?.script?.id || !originKey) return null;
   const current = await ScriptStorage.get(result.script.id);
@@ -41414,10 +41513,13 @@ async function markManagedScript(result, originKey) {
 // (`ExtensionSettings` JSON → `chrome.storage.managed`). The expected shape is:
 //
 //   chrome.storage.managed.managedScripts = [
-//     { url: "https://internal.corp/foo.user.js" },   // fetched + installed
-//     { code: "// ==UserScript== ... " }              // installed inline
+//     { url: "https://internal.corp/foo.user.js", integrity: "sha256-..." },
+//     { code: "// ==UserScript== ... ", signature: { signature, publicKey } }
 //   ]
 //
+// Every entry is verified before it reaches installFromCode: either its fetched
+// bytes match the declared SRI pin or its Ed25519 signature validates against a
+// key already trusted in ScriptVault.
 // Each managed script is flagged `script.settings.managed = true` and appears
 // with a Managed badge in the dashboard. Managed scripts are NOT auto-deleted
 // from local storage when removed from policy; admins can clear via an explicit
@@ -41470,11 +41572,47 @@ async function applyManagedScripts() {
     runSummary.attemptedEntries++;
 
     const url = typeof item.url === 'string' ? item.url.trim() : '';
-    const code = typeof item.code === 'string' ? item.code : '';
+    const inlineCode = typeof item.code === 'string' ? item.code : '';
+    let sourceCode = inlineCode;
+    let sourceUrl = url;
     let res = null;
     if (url) {
       try {
-        res = await installFromUrl(url);
+        const fetched = await fetchScriptPreview(url);
+        if (!fetched?.success || typeof fetched.code !== 'string') throw new Error(fetched?.error || 'Managed script fetch failed');
+        sourceCode = fetched.code;
+        sourceUrl = fetched.finalUrl || url;
+      } catch (e) {
+        runSummary.failedEntries++;
+        console.warn('[ScriptVault] Managed script fetch failed for a URL policy entry.');
+        continue;
+      }
+    } else if (!sourceCode) {
+      runSummary.skippedInvalidEntries++;
+      continue;
+    }
+
+    try {
+      const verification = await verifyManagedScriptPolicyEntry(item, sourceCode);
+      if (!verification.ok) {
+        runSummary.failedEntries++;
+        runSummary.verificationFailedEntries++;
+        console.warn('[ScriptVault] Managed policy verification failed:', verification.error);
+        continue;
+      }
+      runSummary.verifiedEntries++;
+      if (verification.method === 'integrity' || verification.method === 'integrity+signature') runSummary.verifiedIntegrityEntries++;
+      if (verification.method === 'signature' || verification.method === 'integrity+signature') runSummary.verifiedSignatureEntries++;
+    } catch (e) {
+      runSummary.failedEntries++;
+      runSummary.verificationFailedEntries++;
+      console.warn('[ScriptVault] Managed policy verification failed.');
+      continue;
+    }
+
+    if (url) {
+      try {
+        res = await installFromCode(sourceCode, { sourceUrl, operation: 'install' });
         if (res?.error) {
           runSummary.failedEntries++;
           console.warn('[ScriptVault] Managed script install failed for a URL policy entry.');
@@ -41482,12 +41620,12 @@ async function applyManagedScripts() {
         }
       } catch (e) {
         runSummary.failedEntries++;
-        console.warn('[ScriptVault] Managed script fetch failed for a URL policy entry.');
+        console.warn('[ScriptVault] Managed script install failed for a URL policy entry.');
         continue;
       }
-    } else if (code) {
+    } else {
       try {
-        res = await installFromCode(code);
+        res = await installFromCode(sourceCode, { operation: 'install' });
         if (res?.error) {
           runSummary.failedEntries++;
           console.warn('[ScriptVault] Managed script install failed for an inline policy entry.');
@@ -41498,9 +41636,6 @@ async function applyManagedScripts() {
         console.warn('[ScriptVault] Managed inline install failed for a policy entry.');
         continue;
       }
-    } else {
-      runSummary.skippedInvalidEntries++;
-      continue;
     }
 
     try {

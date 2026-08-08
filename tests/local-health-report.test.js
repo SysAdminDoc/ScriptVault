@@ -45,6 +45,12 @@ describe('local health report background action', () => {
     expect(backgroundCoreTs).toContain('configuredUrlEntries');
     expect(backgroundCoreTs).toContain('configuredInlineEntries');
     expect(backgroundCoreTs).toContain('configuredInvalidEntries');
+    expect(backgroundCoreTs).toContain('configuredIntegrityEntries');
+    expect(backgroundCoreTs).toContain('configuredSignatureEntries');
+    expect(backgroundCoreTs).toContain('configuredUnverifiedEntries');
+    expect(backgroundCoreTs).toContain('verifiedIntegrityEntries');
+    expect(backgroundCoreTs).toContain('verifiedSignatureEntries');
+    expect(backgroundCoreTs).toContain('verificationFailedEntries');
     expect(backgroundCoreTs).toContain('installedManagedScripts: scripts.filter');
     expect(backgroundCoreTs).toContain('lastRun: await readManagedPolicyRunSummary()');
     expect(backgroundCoreTs).toContain('managedPolicy,');

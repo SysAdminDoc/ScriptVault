@@ -21,6 +21,10 @@ describe('enterprise policy provisioning manifest contract', () => {
     expect(schema.properties.managedScripts.items.type).toBe('object');
     expect(schema.properties.managedScripts.items.properties.url.type).toBe('string');
     expect(schema.properties.managedScripts.items.properties.code.type).toBe('string');
+    expect(schema.properties.managedScripts.items.properties.integrity.type).toBe('string');
+    expect(schema.properties.managedScripts.items.properties.signature.type).toBe('object');
+    expect(schema.properties.managedScripts.items.properties.signature.properties.publicKey.type).toBe('string');
+    expect(schema.properties.managedScripts.items.properties.signature.properties.signature.type).toBe('string');
     expect(schema.properties.managedScriptsCleanup.type).toBe('boolean');
   });
 
@@ -58,6 +62,25 @@ describe('enterprise policy provisioning runtime contract', () => {
     expect(coreSource).toContain('const managedScript = await markManagedScript(res, originKey);');
     expect(coreSource).not.toContain('item.code.slice(0, 64)');
     expect(coreSource).not.toContain('Date.now() - s.updatedAt < 30000');
+  });
+
+  it('verifies managed policy bytes before the install path and records aggregate outcomes', () => {
+    expect(coreSource).toContain('async function verifyManagedScriptPolicyEntry(item, code)');
+    expect(coreSource).toContain('Managed script is unverified; add an integrity pin or trusted Ed25519 signature.');
+    expect(coreSource).toContain('const verification = await verifyManagedScriptPolicyEntry(item, sourceCode);');
+    expect(coreSource).toContain('res = await installFromCode(sourceCode, { sourceUrl, operation: \'install\' });');
+    expect(coreSource).toContain('verificationFailedEntries++');
+    expect(coreSource).toContain('verifiedIntegrityEntries++');
+    expect(coreSource).toContain('verifiedSignatureEntries++');
+    expect(coreSource).toContain('configuredUnverifiedEntries');
+    expect(coreSource).toContain("push('managedPolicyUnverifiedEntries', 'warning'");
+
+    const applyStart = coreSource.indexOf('async function applyManagedScripts()');
+    const applyEnd = coreSource.indexOf('// Re-run provisioning whenever the managed-storage area changes.', applyStart);
+    const applyBlock = coreSource.slice(applyStart, applyEnd);
+    expect(applyBlock.indexOf('const verification = await verifyManagedScriptPolicyEntry(item, sourceCode);')).toBeGreaterThan(-1);
+    expect(applyBlock.indexOf('if (!verification.ok)')).toBeLessThan(applyBlock.indexOf('res = await installFromCode(sourceCode'));
+    expect(applyBlock).toMatch(/if \(!verification\.ok\)[\s\S]*?continue;/);
   });
 
   it('records only aggregate managed-policy apply run feedback', () => {
