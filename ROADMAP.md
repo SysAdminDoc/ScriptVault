@@ -828,16 +828,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
 
 ### P3
 
-- [ ] P3 — CSP reporter's "workarounds" recommend approaches that cannot work in this product
-  Category: ux
-  Where: `pages/dashboard-csp.js:30-52`
-  Problem: The connect-src suggestion ships `chrome.runtime.sendMessage({ action: 'fetch', url })` — no `fetch` action exists in the router and the userscript allowlist would reject it — and the script-src suggestions (`chrome.scripting.executeScript`, content-script `new Function`) are extension-developer techniques unavailable to userscript authors. Users following the product's own advice hit dead ends.
-  Evidence: Verified — `action:'fetch'` is the only sent action string with no router entry.
-  Fix: Replace with ScriptVault-actionable guidance (`GM_xmlhttpRequest` + `@grant`/`@connect`, `GM_addElement`, `@inject-into` notes) and drop the extension-dev samples.
-  Acceptance: The CSP workaround cards reference only actions/APIs available to userscripts.
-  Confidence: Verified
-  Effort: S
-
 - [ ] P3 — Live Reload empty state tells end users to call an internal JS function
   Category: docs
   Where: `pages/dashboard-debugger.js:380` (`'No scripts registered. Call enableLiveReload(scriptId) to add one.'`)

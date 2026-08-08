@@ -84,6 +84,9 @@ All notable changes to ScriptVault will be documented in this file.
   inputs before AST, merge, diff, or ESM work begins.
 - Preserved dashboard background-call rejection details in the audited rollback,
   save, update, install, and update-check error toasts.
+- Replaced CSP reporter dead-end extension samples with supported userscript
+  guidance for `GM_xmlhttpRequest`, `GM_addElement`, `@grant`, `@connect`, and
+  `@inject-into`.
 
 ## [v3.27.0] — Recoverable restores, real isolation & honest errors (2026-08-08)
 

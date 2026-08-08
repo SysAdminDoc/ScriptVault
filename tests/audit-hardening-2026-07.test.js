@@ -68,6 +68,30 @@ describe('Dashboard messaging failure detail (2026-08 regression)', () => {
   });
 });
 
+describe('CSP workaround guidance uses userscript APIs (2026-08 regression)', () => {
+  const src = read('pages/dashboard-csp.js');
+  const start = src.indexOf('const SUGGESTIONS');
+  const end = src.indexOf('/* ------------------------------------------------------------------ */', start);
+  const suggestions = src.slice(start, end);
+
+  it('does not ship extension-only or nonexistent relay samples', () => {
+    expect(suggestions).not.toMatch(/\bchrome\./);
+    expect(suggestions).not.toContain('new Function');
+    expect(suggestions).not.toContain("action: 'fetch'");
+  });
+
+  it('documents the grants, host allowlist, DOM API, and injection-world controls', () => {
+    expect(suggestions).toContain('GM_xmlhttpRequest');
+    expect(suggestions).toContain('GM.xmlHttpRequest');
+    expect(suggestions).toContain('GM_addElement');
+    expect(suggestions).toContain('@grant        GM_xmlhttpRequest');
+    expect(suggestions).toContain('@grant        GM_addElement');
+    expect(suggestions).toContain('@connect      api.example.com');
+    expect(suggestions).toContain('@inject-into  content');
+    expect(suggestions).toContain('@inject-into page');
+  });
+});
+
 describe('Dashboard untrusted HTML sanitizer (2026-07 regression)', () => {
   const src = read('pages/dashboard.js');
 

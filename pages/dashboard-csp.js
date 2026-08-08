@@ -28,45 +28,45 @@ const CSPReporter = (() => {
   const SUGGESTIONS = {
     'script-src': [
       {
-        title: 'Use chrome.scripting API',
-        description: 'Instead of injecting <script> tags, use chrome.scripting.executeScript() from the extension background to bypass script-src restrictions.',
-        code: `chrome.scripting.executeScript({\n  target: { tabId },\n  func: myFunction,\n  world: 'MAIN'\n});`
+        title: 'Add page elements with GM_addElement',
+        description: 'Use ScriptVault\'s userscript DOM API instead of extension-only injection APIs. Declare the grant and let the target site\'s CSP decide which resource URLs are allowed.',
+        code: `// @grant        GM_addElement\nconst script = GM_addElement('script', {\n  src: 'https://cdn.example.com/widget.js',\n  async: true\n});`
       },
       {
-        title: 'Use Function() constructor via extension context',
-        description: 'Execute code from the isolated content script world where CSP does not apply to extension-injected scripts.',
-        code: `// In content script (isolated world)\nconst result = new Function('return ' + expression)();`
+        title: 'Choose the injection world explicitly',
+        description: 'Declare @inject-into content when the script should stay isolated. Use @inject-into page only when page globals are required; page-world code remains subject to the page CSP and is not a general bypass.',
+        code: `// @inject-into  content\n// @run-at        document-start\n// Keep page-API calls in the userscript body; do not inject extension code.`
       }
     ],
     'connect-src': [
       {
         title: 'Use GM_xmlhttpRequest',
-        description: 'Tampermonkey/ScriptVault GM_xmlhttpRequest bypasses CSP connect-src by routing requests through the extension background.',
-        code: `GM_xmlhttpRequest({\n  method: 'GET',\n  url: 'https://api.example.com/data',\n  onload: (resp) => console.log(resp.responseText)\n});`
+        description: 'ScriptVault routes GM_xmlhttpRequest through the extension background, but only for declared hosts. Add both the grant and a narrow @connect entry.',
+        code: `// @grant        GM_xmlhttpRequest\n// @connect      api.example.com\nGM_xmlhttpRequest({\n  method: 'GET',\n  url: 'https://api.example.com/data',\n  onload: (resp) => console.log(resp.responseText)\n});`
       },
       {
-        title: 'Use chrome.runtime.sendMessage relay',
-        description: 'Route fetch requests through the background service worker which is not subject to page CSP.',
-        code: `// Content script\nchrome.runtime.sendMessage(\n  { action: 'fetch', url: 'https://...' },\n  (response) => { /* handle */ }\n);`
+        title: 'Use the namespaced request API',
+        description: 'GM.xmlHttpRequest uses the same @connect policy while giving async userscripts a promise-compatible request surface.',
+        code: `// @grant        GM.xmlHttpRequest\n// @connect      api.example.com\nconst response = await GM.xmlHttpRequest({\n  method: 'GET',\n  url: 'https://api.example.com/data'\n});`
       }
     ],
     'style-src': [
       {
-        title: 'Use GM_addStyle with nonce injection',
-        description: 'GM_addStyle injects styles via the extension context. If a nonce is available on the page, it can be attached to the style element.',
-        code: `// Auto-detect nonce from existing styles\nconst nonce = document.querySelector('style[nonce]')?.nonce;\nconst style = GM_addStyle(css);\nif (nonce) style.nonce = nonce;`
+        title: 'Use GM_addStyle',
+        description: 'Add userscript-owned CSS through ScriptVault instead of copying a page nonce or assigning inline style attributes.',
+        code: `// @grant        GM_addStyle\nGM_addStyle('.my-class { color: red; }');`
       },
       {
-        title: 'Use CSSStyleSheet.insertRule()',
-        description: 'Programmatically add rules to an existing stylesheet instead of creating new style elements.',
-        code: `const sheet = document.styleSheets[0];\nsheet.insertRule('.my-class { color: red; }', sheet.cssRules.length);`
+        title: 'Create a stylesheet with GM_addElement',
+        description: 'When a stylesheet node is required, create it with the userscript API and set textContent rather than assigning HTML.',
+        code: `// @grant        GM_addElement\nconst style = GM_addElement('style', {\n  textContent: '.my-class { color: red; }'\n});`
       }
     ],
     'default-src': [
       {
-        title: 'Use extension-context injection',
-        description: 'When default-src is restrictive, all resource types are affected. Use the extension isolated world for script execution and chrome.runtime messaging for network requests.',
-        code: `// Execute in isolated world (bypasses page CSP)\nchrome.scripting.executeScript({\n  target: { tabId },\n  files: ['my-script.js'],\n  world: 'ISOLATED'\n});`
+        title: 'Combine supported userscript APIs',
+        description: 'For broad default-src restrictions, keep code in the userscript, use GM_xmlhttpRequest for declared network hosts, and use GM_addElement for DOM nodes. These APIs still honor ScriptVault grants and host policy.',
+        code: `// @grant        GM_xmlhttpRequest\n// @grant        GM_addElement\n// @connect      api.example.com\nconst script = GM_addElement('script', {\n  src: 'https://cdn.example.com/widget.js'\n});`
       }
     ]
   };
