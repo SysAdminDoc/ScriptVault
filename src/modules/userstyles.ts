@@ -9,8 +9,11 @@
 //   Persistent install/management is driven by the userStyle* message actions
 //   (getUserStyles, installUserStyle, toggleUserStyle, deleteUserStyle,
 //   updateUserStyleCode, setUserStyleVariables) in src/background/core.ts, and
-//   per-tab injection runs off `webNavigation.onCommitted` (onTabNavigated →
-//   onTabUpdated), `tabs.onRemoved` (onTabRemoved), a startup `rehydrateOpenTabs`
+//   enabled styles register persisted `document_start` CSS content scripts;
+//   already-open tabs and SPA routes still use `insertCSS` through
+//   `onTabUpdated`, while browsers without registration support fall back to
+//   `webNavigation.onCommitted` (onDocumentCommitted → onTabUpdated),
+//   `tabs.onRemoved` (onTabRemoved), and a startup `rehydrateOpenTabs`
 //   call, and `.user.css` navigation interception. The live editor draft preview
 //   (previewDraft / clearDraftPreview) remains wired via the `previewUserStyle` /
 //   `clearUserStylePreview` handlers. Keep the injection dedup (onTabUpdated skips
@@ -189,6 +192,9 @@ let _initialized = false;
 const _registeredTabs: Map<number, Map<string, string>> = new Map();
 const _draftPreviewTabs: Map<number, string> = new Map();
 const _injectingTabs: Set<number> = new Set();
+const PERSISTENT_REGISTRATION_PREFIX = 'scriptvault-usercss-';
+let _persistentRegistrationSupported = false;
+let _persistentRegistrationChain: Promise<boolean> = Promise.resolve(false);
 // Latest URL that arrived for a tab while an injection pass was in flight. The
 // re-entrancy guard used to DROP those events, so a client-side router firing
 // several pushState calls in a row could leave the final route unprocessed —
@@ -784,6 +790,77 @@ function _buildCSS(styleId: string): string {
   return _substituteVariables(style.css, vars, custom);
 }
 
+function _persistentRegistrationId(styleId: string): string {
+  let hash = 2166136261;
+  for (const character of String(styleId || '')) {
+    hash ^= character.charCodeAt(0);
+    hash = Math.imul(hash, 16777619) >>> 0;
+  }
+  return `${PERSISTENT_REGISTRATION_PREFIX}${hash.toString(36)}`;
+}
+
+function _persistentMatchPatterns(style: StyleEntry): string[] {
+  const patterns = Array.isArray(style.match) && style.match.length > 0 ? style.match : ['*://*/*'];
+  return patterns
+    .map((pattern) => String(pattern || '').trim())
+    .filter((pattern) => {
+      if (pattern === '<all_urls>') return true;
+      try {
+        _matchPatternToRegex(pattern);
+        return true;
+      } catch {
+        return false;
+      }
+    });
+}
+
+async function _syncPersistentRegistrationsNow(): Promise<boolean> {
+  const scripting: any = chrome.scripting as any;
+  if (typeof scripting?.registerContentScripts !== 'function' ||
+      typeof scripting?.unregisterContentScripts !== 'function' ||
+      typeof scripting?.getRegisteredContentScripts !== 'function') {
+    _persistentRegistrationSupported = false;
+    return false;
+  }
+
+  try {
+    const registered = await scripting.getRegisteredContentScripts();
+    const staleIds = (Array.isArray(registered) ? registered : [])
+      .map((entry: any) => entry?.id)
+      .filter((id: any): id is string => typeof id === 'string' && id.startsWith(PERSISTENT_REGISTRATION_PREFIX));
+    if (staleIds.length > 0) await scripting.unregisterContentScripts({ ids: staleIds });
+
+    const registrations: any[] = [];
+    for (const [styleId, style] of Object.entries(_styles)) {
+      if (!style.enabled) continue;
+      const css = _buildCSS(styleId);
+      const matches = _persistentMatchPatterns(style);
+      if (!css || matches.length === 0) continue;
+      registrations.push({
+        id: _persistentRegistrationId(styleId),
+        matches,
+        css: [css],
+        runAt: 'document_start',
+        persistAcrossSessions: true,
+        allFrames: false,
+      });
+    }
+    if (registrations.length > 0) await scripting.registerContentScripts(registrations);
+    _persistentRegistrationSupported = true;
+    return true;
+  } catch (error: unknown) {
+    _persistentRegistrationSupported = false;
+    console.warn('[UserStylesEngine] Persistent document_start registration unavailable:', error instanceof Error ? error.message : String(error));
+    return false;
+  }
+}
+
+function _syncPersistentRegistrations(): Promise<boolean> {
+  const queued = _persistentRegistrationChain.then(_syncPersistentRegistrationsNow, _syncPersistentRegistrationsNow);
+  _persistentRegistrationChain = queued.catch(() => false);
+  return queued;
+}
+
 function _buildDraftPreviewCSS(
   usercssCode: string,
   options: DraftPreviewOptions = {},
@@ -928,6 +1005,7 @@ async function registerStyle(style: StyleRegistration): Promise<string> {
 
   _styles[id] = entry;
   await _saveStyles();
+  await _syncPersistentRegistrations();
 
   if (entry.enabled) {
     await _injectStyleToMatchingTabs(id);
@@ -948,6 +1026,7 @@ async function unregisterStyle(styleId: string): Promise<void> {
   delete _customVars[styleId];
 
   await Promise.all([_saveStyles(), _saveVars()]);
+  await _syncPersistentRegistrations();
 }
 
 /**
@@ -961,6 +1040,7 @@ async function toggleStyle(styleId: string, enabled: boolean): Promise<void> {
 
   style.enabled = enabled;
   await _saveStyles();
+  await _syncPersistentRegistrations();
 
   if (enabled) {
     await _injectStyleToMatchingTabs(styleId);
@@ -1211,6 +1291,7 @@ async function setVariables(styleId: string, values: Record<string, StyleVariabl
   }
 
   await _saveVars();
+  await _syncPersistentRegistrations();
 
   // Re-inject with updated values
   if (style.enabled) {
@@ -1588,6 +1669,18 @@ async function onTabUpdated(tabId: number, url: string | undefined): Promise<voi
   }
 }
 
+/**
+ * Handle a new top-level document. Persisted document_start registrations do
+ * the first-paint work; only browsers without that API use the old immediate
+ * insertCSS fallback here.
+ */
+async function onDocumentCommitted(tabId: number, url: string | undefined): Promise<void> {
+  if (!url) return;
+  if (!_initialized) await _loadState();
+  onTabNavigated(tabId);
+  if (!_persistentRegistrationSupported) await onTabUpdated(tabId, url);
+}
+
 /** True when at least one enabled style matches `url`. */
 function _anyEnabledStyleMatches(url: string): boolean {
   for (const style of Object.values(_styles)) {
@@ -1682,6 +1775,7 @@ function onTabRemoved(tabId: number): void {
 async function init(): Promise<void> {
   if (_initialized) return;
   await _loadState();
+  await _syncPersistentRegistrations();
   _initialized = true;
 }
 
@@ -1723,6 +1817,7 @@ async function updateCSS(styleId: string, newCSS: string): Promise<void> {
 
   style.updateDate = Date.now();
   await _saveStyles();
+  await _syncPersistentRegistrations();
 
   if (style.enabled) {
     await _removeStyleFromAllTabs(styleId);
@@ -1754,6 +1849,7 @@ export const UserStylesEngine = {
   convertToUserscript,
   importStylusBackup,
   isUserCSSUrl,
+  onDocumentCommitted,
   onTabUpdated,
   onTabNavigated,
   onTabRemoved,

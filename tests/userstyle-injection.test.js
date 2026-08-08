@@ -12,11 +12,36 @@ const factory = compileFunction(`${engineCode}\nreturn UserStylesEngine;`, ['chr
 // injection lifecycle. `injected` maps tabId -> array of live CSS strings; a
 // real navigation clears a tab's document CSS, which the tests simulate by
 // resetting that array before dispatching a commit.
-function makeChrome(store = {}) {
+function makeChrome(store = {}, options = {}) {
   const injected = new Map();
+  const registered = new Map();
   let tabs = [];
+  const scripting = {
+    insertCSS: async ({ target, css }) => {
+      const arr = injected.get(target.tabId) || [];
+      arr.push(css);
+      injected.set(target.tabId, arr);
+    },
+    removeCSS: async ({ target, css }) => {
+      const arr = injected.get(target.tabId) || [];
+      const idx = arr.indexOf(css);
+      if (idx === -1) throw new Error('no such sheet');
+      arr.splice(idx, 1);
+      injected.set(target.tabId, arr);
+    },
+  };
+  if (options.persistentRegistrations) {
+    scripting.getRegisteredContentScripts = async () => [...registered.values()];
+    scripting.unregisterContentScripts = async ({ ids } = {}) => {
+      for (const id of ids || []) registered.delete(id);
+    };
+    scripting.registerContentScripts = async (entries) => {
+      for (const entry of entries || []) registered.set(entry.id, { ...entry });
+    };
+  }
   return {
     _injected: injected,
+    _registered: registered,
     _setTabs: (t) => { tabs = t; },
     _sheets: (tabId) => injected.get(tabId) || [],
     _clearDocument: (tabId) => injected.set(tabId, []),
@@ -35,20 +60,7 @@ function makeChrome(store = {}) {
       query: async () => tabs.map((t) => ({ ...t })),
       get: async (id) => tabs.find((t) => t.id === id) || null,
     },
-    scripting: {
-      insertCSS: async ({ target, css }) => {
-        const arr = injected.get(target.tabId) || [];
-        arr.push(css);
-        injected.set(target.tabId, arr);
-      },
-      removeCSS: async ({ target, css }) => {
-        const arr = injected.get(target.tabId) || [];
-        const idx = arr.indexOf(css);
-        if (idx === -1) throw new Error('no such sheet');
-        arr.splice(idx, 1);
-        injected.set(target.tabId, arr);
-      },
-    },
+    scripting,
   };
 }
 
@@ -67,6 +79,29 @@ describe('UserStyles persistent injection lifecycle', () => {
   beforeEach(() => {
     chrome = makeChrome();
     engine = factory(chrome, console);
+  });
+
+  it('registers enabled styles for persisted document_start injection when supported', async () => {
+    const chrome = makeChrome({}, { persistentRegistrations: true });
+    const engine = factory(chrome, console);
+
+    const id = await engine.registerStyle({ ...STYLE });
+    const registration = [...chrome._registered.values()][0];
+
+    expect(id).toBeTruthy();
+    expect(registration).toMatchObject({
+      matches: ['*://example.com/*'],
+      css: ['body{color:red}'],
+      runAt: 'document_start',
+      persistAcrossSessions: true,
+      allFrames: false,
+    });
+    expect(registration.id).toMatch(/^scriptvault-usercss-/);
+
+    // The registration owns first-paint injection. A top-level commit should
+    // only reset the fallback registry when the browser lacks this API.
+    await engine.onDocumentCommitted(7, 'https://example.com/page');
+    expect(chrome._sheets(7)).toEqual([]);
   });
 
   it('injects an enabled style into a matching tab on navigation', async () => {

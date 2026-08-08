@@ -10682,20 +10682,19 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
   }
 });
 
-// Persistent UserCSS injection: inject matching enabled styles as each top-level
-// document commits (early, before render, so there is no flash of unstyled
-// content). onTabNavigated first forgets the tab's prior injected-sheet registry
-// because the previous document's injected CSS is gone with it, which keeps the
-// onTabUpdated dedup safe across navigations and reloads.
+// Persistent UserCSS injection: enabled styles are registered as persisted
+// document_start CSS content scripts, which applies them before the page paints.
+// The module keeps an insertCSS fallback for browsers without dynamic
+// registration support; both paths reset the per-tab registry at a top-level
+// document commit so SPA/update dedup remains safe across navigations.
 if (chrome.webNavigation?.onCommitted?.addListener) {
   chrome.webNavigation.onCommitted.addListener(async (details) => {
     if (details.frameId !== 0) return;
     if (typeof UserStylesEngine === 'undefined') return;
     if (!details.url || details.url.startsWith('chrome-extension://')) return;
     try { await ensureInitialized(); } catch (_) { /* logged in init() */ }
-    UserStylesEngine.onTabNavigated(details.tabId);
-    UserStylesEngine.onTabUpdated(details.tabId, details.url)
-      .catch((e: any) => console.error('[ScriptVault] UserCSS inject error:', e));
+    UserStylesEngine.onDocumentCommitted(details.tabId, details.url)
+      .catch((e: any) => console.error('[ScriptVault] UserCSS document-start registration error:', e));
   });
 }
 

@@ -16,6 +16,9 @@ All notable changes to ScriptVault will be documented in this file.
 - Added the `build-for-amo` source-review command, aligned the declared engine
   floor with the AMO reviewer baseline, and kept the secure developer pin
   separate from reviewer compatibility.
+- Registered enabled UserCSS at `document_start` with persisted dynamic CSS
+  content scripts, while retaining the immediate `insertCSS` fallback for
+  already-open tabs and browsers without registration support.
 - Added a bounded local-file metadata polling fallback with explicit watcher
   health when FileSystemObserver is unavailable or reports an unknown/error
   state; only the active editor polls and changes still go through review.

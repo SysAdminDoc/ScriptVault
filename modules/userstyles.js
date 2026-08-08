@@ -43,6 +43,9 @@ const UserStylesEngine = (() => {
   var _registeredTabs = /* @__PURE__ */ new Map();
   var _draftPreviewTabs = /* @__PURE__ */ new Map();
   var _injectingTabs = /* @__PURE__ */ new Set();
+  var PERSISTENT_REGISTRATION_PREFIX = "scriptvault-usercss-";
+  var _persistentRegistrationSupported = false;
+  var _persistentRegistrationChain = Promise.resolve(false);
   var _pendingTabUrls = /* @__PURE__ */ new Map();
   var _draftPreviewChain = Promise.resolve();
   async function _loadState() {
@@ -494,6 +497,65 @@ const UserStylesEngine = (() => {
     const custom = _customVars[styleId] ?? {};
     return _substituteVariables(style.css, vars, custom);
   }
+  function _persistentRegistrationId(styleId) {
+    let hash = 2166136261;
+    for (const character of String(styleId || "")) {
+      hash ^= character.charCodeAt(0);
+      hash = Math.imul(hash, 16777619) >>> 0;
+    }
+    return `${PERSISTENT_REGISTRATION_PREFIX}${hash.toString(36)}`;
+  }
+  function _persistentMatchPatterns(style) {
+    const patterns = Array.isArray(style.match) && style.match.length > 0 ? style.match : ["*://*/*"];
+    return patterns.map((pattern) => String(pattern || "").trim()).filter((pattern) => {
+      if (pattern === "<all_urls>") return true;
+      try {
+        _matchPatternToRegex(pattern);
+        return true;
+      } catch {
+        return false;
+      }
+    });
+  }
+  async function _syncPersistentRegistrationsNow() {
+    const scripting = chrome.scripting;
+    if (typeof scripting?.registerContentScripts !== "function" || typeof scripting?.unregisterContentScripts !== "function" || typeof scripting?.getRegisteredContentScripts !== "function") {
+      _persistentRegistrationSupported = false;
+      return false;
+    }
+    try {
+      const registered = await scripting.getRegisteredContentScripts();
+      const staleIds = (Array.isArray(registered) ? registered : []).map((entry) => entry?.id).filter((id) => typeof id === "string" && id.startsWith(PERSISTENT_REGISTRATION_PREFIX));
+      if (staleIds.length > 0) await scripting.unregisterContentScripts({ ids: staleIds });
+      const registrations = [];
+      for (const [styleId, style] of Object.entries(_styles)) {
+        if (!style.enabled) continue;
+        const css = _buildCSS(styleId);
+        const matches = _persistentMatchPatterns(style);
+        if (!css || matches.length === 0) continue;
+        registrations.push({
+          id: _persistentRegistrationId(styleId),
+          matches,
+          css: [css],
+          runAt: "document_start",
+          persistAcrossSessions: true,
+          allFrames: false
+        });
+      }
+      if (registrations.length > 0) await scripting.registerContentScripts(registrations);
+      _persistentRegistrationSupported = true;
+      return true;
+    } catch (error) {
+      _persistentRegistrationSupported = false;
+      console.warn("[UserStylesEngine] Persistent document_start registration unavailable:", error instanceof Error ? error.message : String(error));
+      return false;
+    }
+  }
+  function _syncPersistentRegistrations() {
+    const queued = _persistentRegistrationChain.then(_syncPersistentRegistrationsNow, _syncPersistentRegistrationsNow);
+    _persistentRegistrationChain = queued.catch(() => false);
+    return queued;
+  }
   function _buildDraftPreviewCSS(usercssCode, options = {}) {
     const parsed = parseUserCSS(usercssCode);
     if (parsed.error) return { error: parsed.error };
@@ -612,6 +674,7 @@ const UserStylesEngine = (() => {
     };
     _styles[id] = entry;
     await _saveStyles();
+    await _syncPersistentRegistrations();
     if (entry.enabled) {
       await _injectStyleToMatchingTabs(id);
     }
@@ -623,6 +686,7 @@ const UserStylesEngine = (() => {
     delete _styles[styleId];
     delete _customVars[styleId];
     await Promise.all([_saveStyles(), _saveVars()]);
+    await _syncPersistentRegistrations();
   }
   async function toggleStyle(styleId, enabled) {
     if (!_initialized) await _loadState();
@@ -630,6 +694,7 @@ const UserStylesEngine = (() => {
     if (!style) return;
     style.enabled = enabled;
     await _saveStyles();
+    await _syncPersistentRegistrations();
     if (enabled) {
       await _injectStyleToMatchingTabs(styleId);
     } else {
@@ -794,6 +859,7 @@ const UserStylesEngine = (() => {
       _customVars[styleId][key] = val;
     }
     await _saveVars();
+    await _syncPersistentRegistrations();
     if (style.enabled) {
       await _removeStyleFromAllTabs(styleId);
       await _injectStyleToMatchingTabs(styleId);
@@ -1071,6 +1137,12 @@ const UserStylesEngine = (() => {
       _pendingTabUrls.delete(tabId);
     }
   }
+  async function onDocumentCommitted(tabId, url) {
+    if (!url) return;
+    if (!_initialized) await _loadState();
+    onTabNavigated(tabId);
+    if (!_persistentRegistrationSupported) await onTabUpdated(tabId, url);
+  }
   function _anyEnabledStyleMatches(url) {
     for (const style of Object.values(_styles)) {
       if (style.enabled && _urlMatchesPatterns(url, style.match)) return true;
@@ -1131,6 +1203,7 @@ const UserStylesEngine = (() => {
   async function init() {
     if (_initialized) return;
     await _loadState();
+    await _syncPersistentRegistrations();
     _initialized = true;
   }
   function getStyles() {
@@ -1157,6 +1230,7 @@ const UserStylesEngine = (() => {
     }
     style.updateDate = Date.now();
     await _saveStyles();
+    await _syncPersistentRegistrations();
     if (style.enabled) {
       await _removeStyleFromAllTabs(styleId);
       await _injectStyleToMatchingTabs(styleId);
@@ -1182,6 +1256,7 @@ const UserStylesEngine = (() => {
     convertToUserscript,
     importStylusBackup,
     isUserCSSUrl,
+    onDocumentCommitted,
     onTabUpdated,
     onTabNavigated,
     onTabRemoved,
