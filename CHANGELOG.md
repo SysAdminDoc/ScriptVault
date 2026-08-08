@@ -4,6 +4,29 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased]
 
+- **The Firefox per-script-world probe tested for a symbol, not for the
+  capability.** `supportsUserScriptsWorldId()` returned
+  `typeof configureWorld === 'function'`, but Firefox shipped `configureWorld`
+  *before* per-world `worldId` — so on 136–152 the check was true and the code
+  relied on the engine throwing on the unknown property. An engine that instead
+  accepted the call and silently dropped the property would leave every script on
+  a page sharing one sandbox again, which is the bug per-script worlds fixed, on
+  the Firefox range most users are on. A real capability probe now configures a
+  throwaway world and reads it back: only a world that returns carrying the id we
+  asked for counts as support. The probe runs once per session, cleans up after
+  itself, and falls back to the shared world only when absence is proven.
+- **Losing per-script isolation was silent.** If `configureWorld` threw, or
+  `register`/`update` rejected the `worldId`, the script registered into the
+  SHARED world with no warning, no `_registrationError` and no log entry — which
+  is indistinguishable from working. Both fallbacks now record a
+  `_registrationWarning` on the script and an error-log entry naming the
+  consequence in plain terms, and the warning clears once a world is established.
+- **A script id starting with `_` silently cost that script its isolated world.**
+  Chrome reserves world ids beginning with `_`, and restored-backup script ids
+  come straight from the archive, so `configureWorld` threw and the script dropped
+  to the shared sandbox. World ids are now derived from the script id with that
+  prefix escaped, deterministically, so the world stays stable per script.
+
 - **An interrupted restore left mixed data and no way back.** `restoreBackup`
   snapshotted the pre-restore state in memory, ran the whole mutation chain
   (import → N database writes → settings → folders → workspaces), and wrote its

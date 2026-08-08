@@ -897,26 +897,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
   Confidence: Verified
   Effort: S
 
-- [ ] P2 — Both worldId fallback paths silently restore the exact Firefox failure mode af0bfb3 fixed
-  Category: correctness
-  Where: `src/background/registration.ts:646-697` (mirror `src/background/core.ts:11928-11973`)
-  Problem: If `configureWorld` throws (`:654-656`) or `register` rejects with a `worldId` message (`:687-693`), the script registers into the SHARED default world with no warning, no `_registrationError`, no error-log entry — precisely the "scripts 2..n fail silently" state `af0bfb3` fixed. The catch is deliberately broad (world-count limit, reserved-id rejection, transient failure all land here). Related: `worldId = script.id`, and Chrome reserves ids with leading `_`; imported-backup ids come from the file, so an id starting with `_` silently downgrades to the shared world.
-  Evidence: Verified (code path); Likely (which engine hits the fallback determines user impact).
-  Fix: When `worldConfigured` is false (or the retry fires) on Firefox, record a diagnostic (`_registrationWarning`/ErrorLog) so a silent single-script-per-page regression is observable; sanitize/prefix the worldId so it can never start with `_`.
-  Acceptance: A world-config failure is visible in the error log; an id starting with `_` still gets an isolated world; tests cover both.
-  Confidence: Likely
-  Effort: M
-
-- [ ] P2 — The Firefox worldId feature probe tests for `configureWorld`, not for worldId support
-  Category: correctness
-  Where: `src/background/registration.ts:147-157` (`supportsUserScriptsWorldId` returns `typeof chrome.userScripts.configureWorld === 'function'`)
-  Problem: `configureWorld` shipped in Firefox before per-world `worldId` support (dated to 153); on 136–152 the probe is true and the code relies on the engine THROWING on the unknown `worldId` property. If Firefox instead ignores the unknown property, `worldConfigured` is true, the retry never fires, and every script silently shares one world again — the original bug, on the Firefox range most users are on, with a suite that only proves behavior on 154.0b1. `tests/firefox-per-script-world.test.js:44-51` mocks `configureWorld` as a no-op and asserts the probe returns true — encoding the same assumption under audit.
-  Evidence: Verified (code + test); Likely (needs a Firefox 152 run to close).
-  Fix: Probe the capability, not the symbol — `configureWorld({worldId:'sv-probe', messaging:true})` then `getWorldConfigurations()` (or a one-time two-script co-execution check), cached per session; fall back to the shared world only when the probe proves worldId is absent.
-  Acceptance: On a Firefox build without worldId support the probe returns false and the code degrades knowingly; a capability-probe test covers it.
-  Confidence: Likely
-  Effort: M
-
 ### P3
 
 - [ ] P3 — The pending-updates count badge/chip renders `#93c5fd` on a near-white tint = 1.52:1 in light theme

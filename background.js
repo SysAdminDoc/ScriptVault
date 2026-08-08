@@ -38806,16 +38806,22 @@ async function scheduleCrontabAlarm(script, from = new Date()) {
  * cookie host scope.
  */
 async function ensureExecutionWorldId(scriptId) {
-  if (!scriptId || !_supportsUserScriptsWorldId()) return '';
+  if (!scriptId) return '';
+  if (!await _ensureUserScriptWorldIdSupport()) return '';
+  const worldId = _userScriptWorldIdFor(scriptId);
+  if (!worldId) return '';
   try {
     await chrome.userScripts.configureWorld({
-      worldId: scriptId,
+      worldId,
       csp: "script-src 'self' 'unsafe-inline' 'unsafe-eval' *",
       messaging: true
     });
-    return scriptId;
-  } catch (_e) {
-    // Engine without worldId support — fall back to the default world.
+    return worldId;
+  } catch (e) {
+    // The engine claimed support and then refused this world. Sharing the
+    // default world is a real isolation loss, so say so rather than degrading
+    // silently — see _recordWorldIsolationLoss.
+    debugWarn('[ScriptVault] On-demand world config failed for', scriptId, e?.message || e);
     return '';
   }
 }
@@ -40563,12 +40569,169 @@ function _supportsUserScriptsWorldId() {
   // configureWorld({ worldId }) and accepts worldId on register/update; without
   // it every script for a page shares one sandbox and only the first one runs
   // (verified against Firefox 154.0b1 — scripts 2..n were silently dead).
-  // Older Firefox rejects the unknown property, which the configureWorld
-  // try/catch below feature-detects.
+  //
+  // On Firefox this is only the CHEAP gate: `configureWorld` shipped before
+  // per-world `worldId` did, so the symbol being present proves nothing on
+  // 136–152. _ensureUserScriptWorldIdSupport() below does the real capability
+  // probe; a resolved probe result overrides this answer.
   if (_isFirefoxRuntime()) {
-    return typeof chrome.userScripts?.configureWorld === 'function';
+    if (typeof chrome.userScripts?.configureWorld !== 'function') return false;
+    return _worldIdSupportProbe.resolved ? _worldIdSupportProbe.supported : true;
   }
   return _getChromeVersion() >= 133;
+}
+
+// Result of the one-time Firefox capability probe. `resolved: false` means the
+// probe has not run yet, in which case the symbol check above stands in.
+const _worldIdSupportProbe = { resolved: false, supported: false, proven: false, promise: null };
+
+const _WORLD_ID_PROBE_ID = 'sv-worldid-probe';
+
+/**
+ * Prove — rather than assume — that this engine honours a per-script `worldId`.
+ *
+ * The old check was `typeof configureWorld === 'function'`, but Firefox shipped
+ * `configureWorld` BEFORE per-world `worldId`, so on 136–152 the symbol is there
+ * and the code was relying on the engine throwing on the unknown property. An
+ * engine that silently ignores it instead would leave every script sharing one
+ * world again — the exact bug per-script worlds fixed — on the Firefox range
+ * most users are on.
+ *
+ * So: configure a throwaway world, then read the configuration back. Only a
+ * world that comes back with the id we asked for proves the property was
+ * honoured. When the engine offers no way to read back, the result is recorded
+ * as unproven and the optimistic answer stands (a false negative here would
+ * disable isolation that may well work).
+ */
+async function _ensureUserScriptWorldIdSupport() {
+  if (!_isFirefoxRuntime()) return _getChromeVersion() >= 133;
+  if (_worldIdSupportProbe.resolved) return _worldIdSupportProbe.supported;
+  if (_worldIdSupportProbe.promise) return _worldIdSupportProbe.promise;
+
+  _worldIdSupportProbe.promise = (async () => {
+    const api = chrome.userScripts;
+    if (typeof api?.configureWorld !== 'function') return false;
+
+    try {
+      await api.configureWorld({
+        worldId: _WORLD_ID_PROBE_ID,
+        csp: "script-src 'self'",
+        messaging: false
+      });
+    } catch (e) {
+      // Rejected the unknown property — no worldId support. This is the good
+      // failure: the engine told us.
+      debugLog('[ScriptVault] worldId probe rejected by engine:', e?.message || e);
+      _worldIdSupportProbe.proven = true;
+      return false;
+    }
+
+    if (typeof api.getWorldConfigurations !== 'function') {
+      // Nothing to read back. Stay optimistic but record that it is unproven so
+      // the registration path can say so if a world then fails to take.
+      _worldIdSupportProbe.proven = false;
+      return true;
+    }
+
+    try {
+      const worlds = await api.getWorldConfigurations();
+      const honoured = Array.isArray(worlds)
+        && worlds.some(world => world?.worldId === _WORLD_ID_PROBE_ID);
+      _worldIdSupportProbe.proven = true;
+      if (!honoured) {
+        // configureWorld accepted the call and dropped the property: exactly the
+        // silent-shared-world case the symbol check could not see.
+        debugWarn('[ScriptVault] Engine accepted worldId but did not honour it — per-script worlds unavailable');
+      }
+      return honoured;
+    } catch (e) {
+      debugLog('[ScriptVault] worldId probe read-back failed:', e?.message || e);
+      _worldIdSupportProbe.proven = false;
+      return true;
+    } finally {
+      // Clean the probe world up so it does not sit in the engine's world list.
+      try {
+        if (typeof api.resetWorldConfiguration === 'function') {
+          await api.resetWorldConfiguration(_WORLD_ID_PROBE_ID);
+        }
+      } catch (_e) { /* best effort */ }
+    }
+  })().then((supported) => {
+    _worldIdSupportProbe.resolved = true;
+    _worldIdSupportProbe.supported = supported;
+    _worldIdSupportProbe.promise = null;
+    return supported;
+  }).catch(() => {
+    _worldIdSupportProbe.resolved = true;
+    _worldIdSupportProbe.supported = false;
+    _worldIdSupportProbe.promise = null;
+    return false;
+  });
+
+  return _worldIdSupportProbe.promise;
+}
+
+/**
+ * The world id to use for a script.
+ *
+ * Chrome reserves world ids beginning with `_`, and script ids come from the
+ * imported file on a backup restore — so an id starting with `_` made
+ * configureWorld throw and silently downgraded that script to the SHARED world.
+ * Prefix those instead of losing isolation. Deterministic, so a script keeps the
+ * same world across registrations.
+ */
+/**
+ * Record that a script had to fall back to the SHARED user-script world.
+ *
+ * This used to be a bare `catch {}`: the script registered into the default
+ * world with no warning, no `_registrationError`, and no log entry — which is
+ * indistinguishable from working, and is the "scripts 2..n silently dead" state
+ * per-script worlds exist to prevent. The catch is deliberately broad (world
+ * count limit, reserved id, transient failure all land here), so the point is
+ * observability rather than classification.
+ */
+async function _recordWorldIsolationLoss(script, reason) {
+  const detail = reason instanceof Error ? (reason.message || String(reason)) : String(reason || 'unknown');
+  const warning = `Per-script world unavailable — this script shares the default sandbox with other scripts on the page (${detail})`;
+  debugWarn('[ScriptVault]', script?.meta?.name || script?.id, warning);
+  try {
+    if (script?.settings) {
+      script.settings._registrationWarning = warning;
+      await ScriptStorage.set(script.id, script);
+    }
+  } catch (e) {
+    debugWarn('[ScriptVault] Could not persist world-isolation warning:', e?.message || e);
+  }
+  try {
+    if (typeof ErrorLog !== 'undefined' && typeof ErrorLog.log === 'function') {
+      await ErrorLog.log({
+        scriptId: script?.id,
+        scriptName: script?.meta?.name || script?.id,
+        error: warning,
+        source: 'registration',
+        context: 'world-isolation',
+      });
+    }
+  } catch (e) {
+    debugWarn('[ScriptVault] Could not log world-isolation warning:', e?.message || e);
+  }
+}
+
+/** Clear a previously recorded isolation warning once a world is established. */
+async function _clearWorldIsolationLoss(script) {
+  if (!script?.settings?._registrationWarning) return;
+  try {
+    delete script.settings._registrationWarning;
+    await ScriptStorage.set(script.id, script);
+  } catch (e) {
+    debugWarn('[ScriptVault] Could not clear world-isolation warning:', e?.message || e);
+  }
+}
+
+function _userScriptWorldIdFor(scriptId) {
+  const id = typeof scriptId === 'string' ? scriptId : String(scriptId || '');
+  if (!id) return '';
+  return id.startsWith('_') ? `sv${id}` : id;
 }
 
 function getExtensionDetailsUrl() {
@@ -41470,24 +41633,36 @@ async function registerScript(script, { useUpdate = false, throwOnError = false 
     };
 
     // Chrome 133+ / Firefox 153+: configure and use a per-script worldId so
-    // scripts do not collide in one shared sandbox. Engines without support
-    // reject the unknown property and fall through to the default world.
+    // scripts do not collide in one shared sandbox. An engine that has no
+    // support falls back to the default world — but that fallback is an
+    // isolation loss, so it is recorded rather than swallowed.
     let worldConfigured = false;
-    if (_supportsUserScriptsWorldId()) {
+    const worldIdSupported = await _ensureUserScriptWorldIdSupport();
+    const desiredWorldId = _userScriptWorldIdFor(script.id);
+    if (worldIdSupported && desiredWorldId) {
       try {
         await chrome.userScripts.configureWorld({
-          worldId: script.id,
+          worldId: desiredWorldId,
           csp: "script-src 'self' 'unsafe-inline' 'unsafe-eval' *",
           messaging: true
         });
         worldConfigured = true;
       } catch (e) {
-        // Chrome <133 doesn't support worldId on configureWorld — fall through to default world
+        // The engine said it supports per-script worlds and then refused this
+        // one (world-count limit, reserved id, transient failure). Registering
+        // into the shared world is still better than not registering, but the
+        // user and the diagnostics need to know it happened.
+        await _recordWorldIsolationLoss(script, e);
       }
+    } else if (!worldIdSupported && _isFirefoxRuntime()) {
+      // A Firefox old enough to lack per-world support: one shared sandbox for
+      // every script on the page. Knowable, so make it visible once.
+      await _recordWorldIsolationLoss(script, 'this browser version has no per-script world support');
     }
 
     if (worldConfigured) {
-      registration.worldId = script.id;
+      registration.worldId = desiredWorldId;
+      await _clearWorldIsolationLoss(script);
     }
 
     try {
@@ -41513,9 +41688,11 @@ async function registerScript(script, { useUpdate = false, throwOnError = false 
         await chrome.userScripts.register([registration]);
       } else if (registration.worldId && e.message?.includes('worldId')) {
         // configureWorld accepted worldId but register/update did not; drop the
-        // per-script world rather than leaving the script unregistered.
+        // per-script world rather than leaving the script unregistered — and
+        // record it, because this leaves the script in the shared sandbox.
         delete registration.worldId;
         await chrome.userScripts.register([{ ...registration, messaging: world === 'USER_SCRIPT' }]);
+        await _recordWorldIsolationLoss(script, e);
       } else {
         throw e;
       }

@@ -162,12 +162,151 @@ function supportsUserScriptsWorldId(): boolean {
   // Per-script worlds are no longer Chromium-only. Firefox 153 implements
   // configureWorld({ worldId }) and accepts worldId on register/update; without
   // it every script for a page shares one sandbox and only the first one runs.
-  // Older Firefox rejects the unknown property, which the configureWorld
-  // try/catch feature-detects.
+  //
+  // On Firefox this is only the CHEAP gate: `configureWorld` shipped before
+  // per-world `worldId` did, so the symbol proves nothing on 136-152.
+  // ensureUserScriptWorldIdSupport() does the real capability probe and its
+  // resolved answer wins.
   if (isFirefoxRuntime()) {
-    return typeof chrome?.userScripts?.configureWorld === 'function';
+    if (typeof chrome?.userScripts?.configureWorld !== 'function') return false;
+    return worldIdSupportProbe.resolved ? worldIdSupportProbe.supported : true;
   }
   return getChromeMajorVersion() >= 133;
+}
+
+const worldIdSupportProbe: {
+  resolved: boolean;
+  supported: boolean;
+  proven: boolean;
+  promise: Promise<boolean> | null;
+} = { resolved: false, supported: false, proven: false, promise: null };
+
+const WORLD_ID_PROBE_ID = 'sv-worldid-probe';
+
+/**
+ * Prove — rather than assume — that this engine honours a per-script `worldId`.
+ *
+ * Configure a throwaway world, then read the configuration back: only a world
+ * that comes back carrying the id we asked for proves the property was honoured.
+ * An engine that accepts `configureWorld({worldId})` and silently drops the
+ * property would otherwise leave every script sharing one world, which is the
+ * bug per-script worlds fixed.
+ */
+async function ensureUserScriptWorldIdSupport(): Promise<boolean> {
+  if (!isFirefoxRuntime()) return getChromeMajorVersion() >= 133;
+  if (worldIdSupportProbe.resolved) return worldIdSupportProbe.supported;
+  if (worldIdSupportProbe.promise) return worldIdSupportProbe.promise;
+
+  worldIdSupportProbe.promise = (async () => {
+    const api = chrome?.userScripts as unknown as {
+      configureWorld?: (config: Record<string, unknown>) => Promise<void>;
+      getWorldConfigurations?: () => Promise<Array<{ worldId?: string }>>;
+      resetWorldConfiguration?: (worldId: string) => Promise<void>;
+    } | undefined;
+    if (typeof api?.configureWorld !== 'function') return false;
+
+    try {
+      await api.configureWorld({
+        worldId: WORLD_ID_PROBE_ID,
+        csp: "script-src 'self'",
+        messaging: false,
+      });
+    } catch (_e: unknown) {
+      // Rejected the unknown property — the good failure: the engine told us.
+      worldIdSupportProbe.proven = true;
+      return false;
+    }
+
+    if (typeof api.getWorldConfigurations !== 'function') {
+      worldIdSupportProbe.proven = false;
+      return true;
+    }
+
+    try {
+      const worlds = await api.getWorldConfigurations();
+      const honoured = Array.isArray(worlds)
+        && worlds.some((world) => world?.worldId === WORLD_ID_PROBE_ID);
+      worldIdSupportProbe.proven = true;
+      return honoured;
+    } catch (_e: unknown) {
+      worldIdSupportProbe.proven = false;
+      return true;
+    } finally {
+      try {
+        if (typeof api.resetWorldConfiguration === 'function') {
+          await api.resetWorldConfiguration(WORLD_ID_PROBE_ID);
+        }
+      } catch (_e: unknown) { /* best effort */ }
+    }
+  })().then((supported) => {
+    worldIdSupportProbe.resolved = true;
+    worldIdSupportProbe.supported = supported;
+    worldIdSupportProbe.promise = null;
+    return supported;
+  }).catch(() => {
+    worldIdSupportProbe.resolved = true;
+    worldIdSupportProbe.supported = false;
+    worldIdSupportProbe.promise = null;
+    return false;
+  });
+
+  return worldIdSupportProbe.promise;
+}
+
+/**
+ * The world id to use for a script.
+ *
+ * Chrome reserves world ids beginning with `_`, and script ids come from the
+ * imported file on a backup restore — so a `_`-prefixed id made configureWorld
+ * throw and silently downgraded that script to the SHARED world. Prefix instead
+ * of losing isolation; deterministic so the world is stable per script.
+ */
+function userScriptWorldIdFor(scriptId: string): string {
+  const id = typeof scriptId === 'string' ? scriptId : String(scriptId || '');
+  if (!id) return '';
+  return id.startsWith('_') ? `sv${id}` : id;
+}
+
+/**
+ * Record that a script fell back to the SHARED user-script world.
+ *
+ * Previously a bare `catch {}`: the script registered into the default world
+ * with no warning, no `_registrationError` and no log entry, which is
+ * indistinguishable from working and is the "scripts 2..n silently dead" state
+ * per-script worlds exist to prevent.
+ */
+async function recordWorldIsolationLoss(script: Script, reason: unknown): Promise<void> {
+  const detail = reason instanceof Error ? (reason.message || String(reason)) : String(reason || 'unknown');
+  const warning = `Per-script world unavailable — this script shares the default sandbox with other scripts on the page (${detail})`;
+  try {
+    const settings = script.settings as Record<string, unknown> | undefined;
+    if (settings) {
+      settings._registrationWarning = warning;
+      await ScriptStorage.set(script.id, script);
+    }
+  } catch (_e: unknown) { /* diagnostics must not break registration */ }
+  try {
+    const errorLog = (globalThis as { ErrorLog?: { log?: (entry: unknown) => Promise<unknown> } }).ErrorLog;
+    if (typeof errorLog?.log === 'function') {
+      await errorLog.log({
+        scriptId: script.id,
+        scriptName: script.meta?.name || script.id,
+        error: warning,
+        source: 'registration',
+        context: 'world-isolation',
+      });
+    }
+  } catch (_e: unknown) { /* best effort */ }
+}
+
+/** Clear a recorded isolation warning once a world is established. */
+async function clearWorldIsolationLoss(script: Script): Promise<void> {
+  const settings = script.settings as Record<string, unknown> | undefined;
+  if (!settings?._registrationWarning) return;
+  try {
+    delete settings._registrationWarning;
+    await ScriptStorage.set(script.id, script);
+  } catch (_e: unknown) { /* best effort */ }
 }
 
 function shouldEnforceScopedHostPermissions(settings: Settings): boolean {
@@ -675,21 +814,29 @@ export async function registerScript(
     // scripts do not collide in one shared sandbox. Engines without support
     // reject the unknown property and fall through to the default world.
     let worldConfigured = false;
-    if (supportsUserScriptsWorldId()) {
+    const worldIdSupported = await ensureUserScriptWorldIdSupport();
+    const desiredWorldId = userScriptWorldIdFor(script.id);
+    if (worldIdSupported && desiredWorldId) {
       try {
         await chrome.userScripts.configureWorld({
-          worldId: script.id,
+          worldId: desiredWorldId,
           csp: "script-src 'self' 'unsafe-inline' 'unsafe-eval' *",
           messaging: true
         });
         worldConfigured = true;
-      } catch (_e: unknown) {
-        // Chrome <133 doesn't support worldId on configureWorld — fall through to default world
+      } catch (e: unknown) {
+        // The engine claimed support and then refused this world (count limit,
+        // reserved id, transient failure). Registering into the shared world
+        // beats not registering, but it must not be invisible.
+        await recordWorldIsolationLoss(script, e);
       }
+    } else if (!worldIdSupported && isFirefoxRuntime()) {
+      await recordWorldIsolationLoss(script, 'this browser version has no per-script world support');
     }
 
     if (worldConfigured) {
-      registration.worldId = script.id;
+      registration.worldId = desiredWorldId;
+      await clearWorldIsolationLoss(script);
     }
 
     try {
@@ -718,11 +865,13 @@ export async function registerScript(
         await chrome.userScripts.register([registration as chrome.userScripts.RegisteredUserScript]);
       } else if (registration.worldId && errMsg?.includes('worldId')) {
         // configureWorld accepted worldId but register/update did not; drop the
-        // per-script world rather than leaving the script unregistered.
+        // per-script world rather than leaving the script unregistered — and
+        // record it, because the script now shares the default sandbox.
         delete registration.worldId;
         await chrome.userScripts.register([
           { ...registration, messaging: world === 'USER_SCRIPT' } as chrome.userScripts.RegisteredUserScript,
         ]);
+        await recordWorldIsolationLoss(script, e);
       } else {
         throw e;
       }
