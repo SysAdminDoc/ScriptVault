@@ -193,6 +193,49 @@ describe('pending update queue', () => {
     expect(stored.pendingUpdates).toHaveLength(1);
   });
 
+  it('preserves the queue timestamp and suppresses repeat notifications for an unchanged version', async () => {
+    const coreSource = readFileSync(resolve(process.cwd(), 'src/background/core.ts'), 'utf8');
+    expect(coreSource).toContain('const existingById = new Map<string, any>(existing.map((item: any) => [item.id, item] as [string, any]));');
+    expect(coreSource).toContain('pending.queuedAt = Number.isFinite(previous.queuedAt) ? previous.queuedAt : pending.queuedAt;');
+    const scripts = new Map([['repeat', makeScript('repeat')]]);
+    installStorage(scripts);
+    const update = {
+      id: 'repeat',
+      name: 'Repeat',
+      currentVersion: '1.0.0',
+      newVersion: '2.0.0',
+      code: makeCode('Repeat', '2.0.0'),
+      sourceUrl: 'https://cdn.example.com/repeat.user.js',
+    };
+    const firstCheck = vi.spyOn(UpdateSystem, 'checkForUpdates').mockResolvedValue([update]);
+    const previousSettings = SettingsManager.get;
+    SettingsManager.get = vi.fn().mockResolvedValue({
+      autoUpdate: true,
+      autoUpdateMode: 'notify',
+      notifyOnUpdate: true,
+    });
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-08-08T12:00:00.000Z'));
+      await UpdateSystem.autoUpdate();
+      const first = await UpdateSystem.getPendingUpdates();
+      expect(first).toHaveLength(1);
+      const queuedAt = first[0].queuedAt;
+
+      vi.setSystemTime(new Date('2026-08-08T12:05:00.000Z'));
+      await UpdateSystem.autoUpdate();
+      const second = await UpdateSystem.getPendingUpdates();
+
+      expect(second[0].queuedAt).toBe(queuedAt);
+      expect(chrome.notifications.create).toHaveBeenCalledTimes(1);
+      expect(firstCheck).toHaveBeenCalledTimes(2);
+    } finally {
+      firstCheck.mockRestore();
+      SettingsManager.get = previousSettings;
+      vi.useRealTimers();
+    }
+  });
+
   it('marks permission-expanding updates for review', async () => {
     const scripts = new Map([['risky', makeScript('risky')]]);
     installStorage(scripts);

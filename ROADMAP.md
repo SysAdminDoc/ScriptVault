@@ -828,26 +828,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
 
 ### P3
 
-- [ ] P3 — The pending-updates count badge/chip renders `#93c5fd` on a near-white tint = 1.52:1 in light theme
-  Category: a11y
-  Where: `pages/popup.html:694-701` (`.menu-item-badge`, element `#pendingUpdatesBadge` at `:1472`) and `pages/sidepanel.html:44-51` (`.sp-update-chip`, element `#btnPendingUpdates` at `:463`)
-  Problem: Both use `background: rgb(from var(--sv-info) r g b / 0.12)` (theme-aware, near-white in light) with hardcoded `color:#93c5fd`. In light theme `--sv-info` is `#2563eb`, so the background is ~`rgb(229,236,253)` and `#93c5fd` text measures 1.52:1 — far below AA 4.5:1. These badges show the queued-updates count (un-hidden when >0). Unlike the dashboard's `.script-health-badge`/`.script-tag` (which have `html[data-theme="light"]` overrides), popup/sidepanel have none for these.
-  Evidence: Verified — computed via the WCAG relative-luminance formula (1.52:1); no light-theme override exists for either selector (one `#93c5fd` per file).
-  Fix: Replace the hardcoded `#93c5fd` with a theme-aware token meeting 4.5:1 on the tint in all four themes (plain `var(--sv-info)` is only 4.37:1 in light — use a darker info-on-tint token such as a new `--sv-info-strong`, or `var(--sv-text)`).
-  Acceptance: Both badges measure ≥4.5:1 in light theme (other themes unchanged); an assertion added to `tests/accessibility-surface-pass.test.js`.
-  Confidence: Verified
-  Effort: S
-
-- [ ] P3 — Auto-update re-notifies every cycle for update URLs whose servers send no validators
-  Category: ux
-  Where: `src/background/core.ts:2506-2541` (`autoUpdate` notification gate), `:1899` (validators stored only if present), `queueUpdates` rebuild
-  Problem: When the update endpoint returns no ETag/Last-Modified, every cycle re-fetches, re-detects the same newer version, re-queues it (resetting `queuedAt`), and — for review-required/non-apply-safe mode — fires "N updates ready" again. The user is re-notified every cycle until they act, and a dismissed pending update from such a server reappears next cycle.
-  Evidence: Verified — traced the no-validator path through `queueUpdates` to the notification gate `queued > 0`.
-  Fix: Suppress the notification when the queued set is id+version-identical to what was already pending; preserve original `queuedAt` for unchanged entries.
-  Acceptance: A validator-less server does not re-notify on an unchanged pending update; a test covers repeated cycles.
-  Confidence: Verified (logic); real-world cadence Needs-repro
-  Effort: S
-
 - [ ] P3 — `checkForUpdates` doesn't skip user-modified scripts, so they are fetched/receipt-built/queued/notified but can never apply and never clear
   Category: correctness
   Where: shipped `src/background/core.ts:1859-1866` (skips `@nodownload` but not `settings.userModified`) vs `:2001` (`applyUpdate` refuses non-force applies of user-modified); `applyPendingUpdate` clears the queue entry only on success

@@ -45,6 +45,8 @@ All notable changes to ScriptVault will be documented in this file.
 - Recorded the resolved URL for redirected installs so trust receipts and the
   review surface identify the host that served the script, with a redirect
   warning when it differs from the requested source.
+- Kept the original queued timestamp and suppressed repeat notifications when
+  a validator-less update endpoint returns the same pending version again.
 
 ## [v3.27.0] — Recoverable restores, real isolation & honest errors (2026-08-08)
 

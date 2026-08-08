@@ -727,16 +727,27 @@ export const UpdateSystem = {
   async queueUpdates(updates: UpdateInfo[] = [], { source = 'manual-check' } = {}): Promise<{ success: true; queued: number; pendingUpdates: PendingUpdateInfo[]; safeCount: number; reviewCount: number }> {
     const incoming = Array.isArray(updates) ? updates : [];
     const existing = await this._loadPendingUpdates();
+    const existingById = new Map(existing.map((item) => [item.id, item]));
     const incomingIds = new Set(incoming.map((update) => update?.id).filter(Boolean));
     const retained = existing.filter((item) => !incomingIds.has(item.id));
     const queued: PendingUpdateInfo[] = [];
+    const refreshed: PendingUpdateInfo[] = [];
 
     for (const update of incoming) {
       const pending = await this._buildPendingUpdate(update, source);
-      if (pending) queued.push(pending);
+      if (!pending) continue;
+      const previous = existingById.get(pending.id);
+      if (previous && previous.kind === pending.kind && previous.newVersion === pending.newVersion) {
+        // Refresh review data without making an unchanged pending version look
+        // like a new queue entry to the periodic notification gate.
+        pending.queuedAt = Number.isFinite(previous.queuedAt) ? previous.queuedAt : pending.queuedAt;
+        refreshed.push(pending);
+      } else {
+        queued.push(pending);
+      }
     }
 
-    const pendingUpdates = await this._savePendingUpdates([...queued, ...retained]);
+    const pendingUpdates = await this._savePendingUpdates([...queued, ...refreshed, ...retained]);
     return {
       success: true,
       queued: queued.length,

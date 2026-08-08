@@ -32141,20 +32141,32 @@ const UpdateSystem = {
   async queueUpdates(updates = [], { source = 'manual-check' } = {}) {
     const incoming = Array.isArray(updates) ? updates : [];
     const existing = await this._loadPendingUpdates();
+    const existingById = new Map(existing.map(item => [item.id, item]));
     const incomingIds = new Set(incoming.map(update => update?.id).filter(Boolean));
     const retained = existing.filter(item => !incomingIds.has(item.id));
     const queued = [];
+    const refreshed = [];
 
     for (const update of incoming) {
       try {
         const pending = await this._buildPendingUpdate(update, source);
-        if (pending) queued.push(pending);
+        if (!pending) continue;
+        const previous = existingById.get(pending.id);
+        if (previous && previous.kind === pending.kind && previous.newVersion === pending.newVersion) {
+          // Keep the original queue timestamp for an unchanged version. The
+          // periodic check still refreshes the receipt/code, but auto-update
+          // can distinguish a new queue entry from the same pending update.
+          pending.queuedAt = Number.isFinite(previous.queuedAt) ? previous.queuedAt : pending.queuedAt;
+          refreshed.push(pending);
+        } else {
+          queued.push(pending);
+        }
       } catch (error) {
         console.warn('[ScriptVault] Failed to queue update:', update?.name || update?.id, error?.message || error);
       }
     }
 
-    const pendingUpdates = await this._savePendingUpdates([...queued, ...retained]);
+    const pendingUpdates = await this._savePendingUpdates([...queued, ...refreshed, ...retained]);
     return {
       success: true,
       queued: queued.length,
