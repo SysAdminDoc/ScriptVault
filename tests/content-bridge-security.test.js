@@ -436,6 +436,66 @@ GM_loadScript('https://cdn.example.com/fallback.js')
     }
   });
 
+  it('ignores cross-frame callback events and does not expose the raw script id in styles', async () => {
+    const originalChrome = globalThis.chrome;
+    const script = makeWrapperScript('');
+    script.meta.grant = ['GM_notification'];
+    const sendMessage = vi.fn().mockResolvedValue({});
+    const scriptId = script.id;
+    const extensionId = 'event-guard-extension';
+    globalThis.chrome = {
+      runtime: {
+        id: extensionId,
+        getManifest: () => ({ version: '3.27.0' }),
+        sendMessage,
+      },
+    };
+
+    try {
+      const wrapped = buildWrappedScript(script);
+      new Function(wrapped)();
+      const style = window.GM_addStyle('body { color: red; }');
+      expect(style.getAttribute('data-scriptvault')).toBe('1');
+      expect(style.getAttribute('data-scriptvault')).not.toBe(scriptId);
+
+      window.__svClicked = false;
+      window.GM_notification({
+        tag: 'cross-frame',
+        text: 'test',
+        onclick: () => { window.__svClicked = true; },
+      });
+      const eventData = {
+        channel: `ScriptVault_${extensionId}`,
+        direction: 'to-userscript',
+        type: 'notificationEvent',
+        scriptId,
+        notifTag: 'cross-frame',
+        eventType: 'click',
+      };
+      const foreignEvent = new Event('message');
+      Object.defineProperties(foreignEvent, {
+        source: { value: {}, configurable: true },
+        data: { value: eventData, configurable: true },
+      });
+      window.dispatchEvent(foreignEvent);
+      expect(window.__svClicked).toBe(false);
+
+      const sameWindowEvent = new Event('message');
+      Object.defineProperties(sameWindowEvent, {
+        source: { value: window, configurable: true },
+        data: { value: eventData, configurable: true },
+      });
+      window.dispatchEvent(sameWindowEvent);
+      expect(window.__svClicked).toBe(true);
+    } finally {
+      globalThis.chrome = originalChrome;
+      delete window.__svClicked;
+      window.document.querySelectorAll('style[data-scriptvault="1"]').forEach(node => node.remove());
+      delete window.GM_notification;
+      delete window.GM_addStyle;
+    }
+  });
+
   it('rejects generated malformed bridge messages without reaching extension privileges', async () => {
     const { window: win, chromeMock, channel } = loadContentBridge();
     chromeMock.runtime.sendMessage.mockClear();

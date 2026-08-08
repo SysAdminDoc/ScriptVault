@@ -14722,7 +14722,9 @@ ${mappedCode}
   function GM_addStyle(css) {
     const style = document.createElement('style');
     style.textContent = css;
-    style.setAttribute('data-scriptvault', scriptId);
+    // Keep a non-reversible marker for diagnostics without exposing the
+    // per-install script identity to page scripts.
+    style.setAttribute('data-scriptvault', '1');
 
     // Try to inject immediately
     function inject() {
@@ -15928,6 +15930,7 @@ ${mappedCode}
   // Event listener for notification/download/tab close events from background
   // Content.js forwards these with 'type' field (not 'action') and flat structure (not nested 'data')
   window.addEventListener('message', function __svEventHandler(event) {
+    if (event.source !== window) return;
     if (!event.data || event.data.channel !== CHANNEL_ID || event.data.direction !== 'to-userscript') return;
 
     // Notification events (content.js sends: type, scriptId, notifTag, eventType)

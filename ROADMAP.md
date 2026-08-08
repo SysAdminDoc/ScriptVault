@@ -828,16 +828,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
 
 ### P3
 
-- [ ] P3 — `__svEventHandler` accepts cross-frame `postMessage` (missing the `event.source !== window` guard its three siblings have)
-  Category: security
-  Where: shipped `background.core.js:14910` (`window.addEventListener('message', function __svEventHandler(event) {…}` with no source guard) vs the guarded handlers at `:13347,13483,13556`
-  Problem: Any window holding a handle (opener, embedding frame) can inject `notificationEvent`/`downloadEvent`/`openedTabClosed` and fire the script's `onclick`/`onload`/`onclose` callbacks. `CHANNEL_ID` derives from the public extension id; the required per-install `scriptId` is leaked into the page DOM by `GM_addStyle` (`style.setAttribute('data-scriptvault', scriptId)`), so a same-window page script can read it and forge messages.
-  Evidence: Verified — the three siblings guard `event.source !== window`; `__svEventHandler` at :14910 does not.
-  Fix: Add `if (event.source !== window) return;` to `__svEventHandler`; stop stamping the raw `scriptId` into the page DOM (use a non-reversible marker).
-  Acceptance: A cross-frame forged event does not fire the script's callbacks; a test covers a foreign `event.source`.
-  Confidence: Verified
-  Effort: S
-
 - [ ] P3 — Offscreen document accepts analysis/merge work from any extension context (content scripts, userscripts) with no input size bounds
   Category: security
   Where: `offscreen.js:10-33` (gate is only `_sender.id !== chrome.runtime.id`); `handleAnalyze`/`handleMerge`/`handleDiff`/`handleESMImports` have no length caps

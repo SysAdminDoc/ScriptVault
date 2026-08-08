@@ -78,6 +78,8 @@ All notable changes to ScriptVault will be documented in this file.
   menu-command storage mutations to prevent cross-script dispatch and lost updates.
 - Scoped GM_audio watch state and notifications by script and tab so one script
   can stop listening without silencing another script in the same tab.
+- Guarded userscript callback events against cross-frame messages and replaced
+  the raw DOM script-id marker with a non-reversible diagnostic marker.
 
 ## [v3.27.0] — Recoverable restores, real isolation & honest errors (2026-08-08)
 
