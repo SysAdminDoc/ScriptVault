@@ -11,6 +11,24 @@ const WhatsNew = (() => {
     : '2.0.0';
 
   const CHANGELOG = {
+    '3.27.0': {
+      title: 'ScriptVault 3.27.0 \u2014 Recoverable Restores, Real Isolation & Honest Errors',
+      date: '2026-08-08',
+      summary: 'This release makes an interrupted restore recoverable, proves that each script really gets its own sandbox on Firefox instead of assuming it, and stops blaming your scripts for problems that belong to the servers they update from.',
+      highlights: [
+        { icon: 'SAFE', title: 'An Interrupted Restore Can Be Undone', desc: 'Restoring a backup saved its undo record only after every change had been written, so if the extension was shut down part-way you were left with a mix of old and new data and nothing to roll back to. The undo record is now saved first, and a restore that never finished is reported so you can reverse it.' },
+        { icon: 'SAFE', title: 'Per-Script Sandboxes Are Verified, Not Assumed', desc: 'On Firefox, ScriptVault checked for a feature by name rather than testing whether it worked. On versions where that check was misleading, every script on a page could quietly end up sharing one sandbox. It is now tested directly, and if isolation cannot be established you are told instead of it happening silently.' },
+        { icon: 'FLOW', title: 'A Broken Update Server Says So', desc: 'When a script host was behind a browser check or serving an error page, ScriptVault reported it as a broken script and gradually stopped checking that script for updates. Those failures are now named for what they are, and a server problem no longer counts against your script.' },
+        { icon: 'FLOW', title: 'Your Theme Applies Everywhere', desc: 'Custom themes and the extra presets applied to the dashboard only \u2014 the popup, side panel, install screen and DevTools panel all showed the built-in colours. Every surface now uses your chosen theme.' },
+      ],
+      improvements: [
+        'Deleting a custom theme now asks first, and its button is large enough to hit \u2014 it used to be a tiny hover-only "x" that deleted 21 hand-picked colours on one mis-click.',
+        'The debugger lists your scripts by name instead of by internal ID, so it is usable with more than one script and screen readers no longer read out a long code.',
+        'A script whose ID starts with an underscore \u2014 which can happen after restoring a backup \u2014 no longer loses its private sandbox.',
+        'The public release check can pass again: it demanded a signed tag while this project deliberately ships unsigned, so it had been failing silently for three releases.',
+        'An import that is interrupted part-way now leaves a record, so a half-written library is reported rather than looking complete.',
+      ],
+    },
     '3.26.0': {
       title: 'ScriptVault 3.26.0 \u2014 Enforced Permissions, Reviewed Sync & Honest Freshness',
       date: '2026-08-08',

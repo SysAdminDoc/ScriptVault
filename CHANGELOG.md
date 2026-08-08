@@ -2,7 +2,7 @@
 
 All notable changes to ScriptVault will be documented in this file.
 
-## [Unreleased]
+## [v3.27.0] — Recoverable restores, real isolation & honest errors (2026-08-08)
 
 - **A broken update host was reported as a broken script, and quietly silenced
   updates.** Greasy Fork — the dominant update host — has served Cloudflare
