@@ -12813,7 +12813,7 @@
                                 showToast(res?.error || 'Rollback failed', 'error');
                             }
                         } catch (e) {
-                            showToast('Rollback failed', 'error');
+                            showToast(e?.message || 'Rollback failed', 'error');
                         }
                     });
                 });
@@ -13131,7 +13131,7 @@
                 control.checked = previousEnabled;
             }
             renderScriptTable();
-            showToast('Failed to update script status', 'error');
+            showToast(e?.message || 'Failed to update script status', 'error');
             return false;
         } finally {
             if (control?.matches('input, button') && control.isConnected) {
@@ -13241,7 +13241,7 @@
             return true;
         } catch (e) {
             markScriptSaveFailed(savingScriptId, e?.message || 'Failed to save');
-            showToast('Failed to save', 'error');
+            showToast(e?.message || 'Failed to save', 'error');
             return false;
         }
     }
@@ -13424,7 +13424,7 @@
                 setTimeout(() => loadScripts(), 800);
                 return true;
             } catch (err) {
-                showToast('Update failed', 'error');
+                showToast(err?.message || 'Update failed', 'error');
                 return false;
             }
         } finally {
@@ -15564,7 +15564,7 @@
                     }
                 } catch (e) {
                     btn.textContent = 'Failed';
-                    showToast('Install failed', 'error');
+                    showToast(e?.message || 'Install failed', 'error');
                     setTimeout(() => {
                         btn.textContent = originalLabel;
                         btn.disabled = false;
@@ -16644,7 +16644,7 @@
                 );
             } catch (e) {
                 hideProgress();
-                showToast('Update check failed', 'error');
+                showToast(e?.message || 'Update check failed', 'error');
             }
         });
 

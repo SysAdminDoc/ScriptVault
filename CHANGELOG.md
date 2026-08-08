@@ -82,6 +82,8 @@ All notable changes to ScriptVault will be documented in this file.
   the raw DOM script-id marker with a non-reversible diagnostic marker.
 - Restricted offscreen analysis to same-extension callers and bounded parser
   inputs before AST, merge, diff, or ESM work begins.
+- Preserved dashboard background-call rejection details in the audited rollback,
+  save, update, install, and update-check error toasts.
 
 ## [v3.27.0] — Recoverable restores, real isolation & honest errors (2026-08-08)
 

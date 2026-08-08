@@ -724,7 +724,7 @@ describe("dashboard accessibility markup", () => {
     expect(dashboardJs).toMatch(/const previousEnabled = script \? script\.enabled !== false : !enabled;/);
     expect(dashboardJs).toMatch(/renderScriptTable\(\);\s*updateStats\(\);\s*showToast\(enabled \? 'Enabled' : 'Disabled', 'success'\);/);
     expect(dashboardJs).toMatch(/if \(control instanceof HTMLInputElement && control\.isConnected\) \{\s*control\.checked = previousEnabled;/);
-    expect(dashboardJs).toMatch(/showToast\('Failed to update script status', 'error'\);/);
+    expect(dashboardJs).toMatch(/showToast\(e\?\.message \|\| 'Failed to update script status', 'error'\);/);
     expect(dashboardJs).toMatch(/folderTr\.addEventListener\('click', async \(e\) => \{/);
     expect(dashboardJs).toMatch(/await runButtonTask\(deleteButton, \(\) => deleteFolder\(folder\.id\), \{ busyLabel: 'Deleting…' \}\);/);
     expect(dashboardJs).toMatch(/showToast\('Failed to delete folder', 'error'\);/);

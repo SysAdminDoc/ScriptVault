@@ -828,16 +828,6 @@ _Deep multi-pass audit against v3.23.1. Baseline: after `npm ci`, `npm run check
 
 ### P3
 
-- [ ] P3 — Messaging-failure catch branches discard `e.message`, leaving no actionable detail on SW-asleep/port-closed failures
-  Category: maintainability
-  Where: `pages/dashboard.js:12587,13015,13121,13198,15338,16406` (`catch (e)` toasts a bare fallback like "Rollback failed"/"Update failed")
-  Problem: The sibling `res?.error || 'X failed'` path surfaces background-reported errors, but the `catch (e)` branches drop `e.message`; on a rejection the user gets no detail. `btnCreateBackup` (`:17468`) and the save path already preserve detail.
-  Evidence: Verified — read all six sites.
-  Fix: `showToast(e?.message || 'X failed', 'error')` in the catch branches.
-  Acceptance: A rejected background call shows its message; consistent with the save/backup handlers.
-  Confidence: Verified
-  Effort: S
-
 - [ ] P3 — CSP reporter's "workarounds" recommend approaches that cannot work in this product
   Category: ux
   Where: `pages/dashboard-csp.js:30-52`

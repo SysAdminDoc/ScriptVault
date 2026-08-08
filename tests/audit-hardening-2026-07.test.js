@@ -51,6 +51,23 @@ describe('safeSetHtml fragment context (2026-07 regression)', () => {
   }
 });
 
+describe('Dashboard messaging failure detail (2026-08 regression)', () => {
+  const src = read('pages/dashboard.js');
+
+  it('surfaces rejection messages at the six audited background-call sites', () => {
+    for (const message of [
+      'Rollback failed',
+      'Failed to update script status',
+      'Failed to save',
+      'Install failed',
+      'Update check failed',
+    ]) {
+      expect(src).toContain(`showToast(e?.message || '${message}', 'error');`);
+    }
+    expect(src).toContain("showToast(err?.message || 'Update failed', 'error');");
+  });
+});
+
 describe('Dashboard untrusted HTML sanitizer (2026-07 regression)', () => {
   const src = read('pages/dashboard.js');
 
