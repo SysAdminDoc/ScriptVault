@@ -573,8 +573,11 @@ describe('Per-tab run diagnostics (2026-07 feature)', () => {
     const core = read('background.core.js');
     expect(core).toContain('diagnoseScripts: async (url, tabId)');
     expect(core).toContain('userScriptsAvailable');
-    for (const status of ['disabled', 'no-match', 'not-registered', 'running', 'on-demand', 'scheduled']) {
+    for (const status of ['disabled', 'matched-disabled', 'excluded', 'no-match', 'quarantined', 'not-registered', 'running', 'on-demand', 'scheduled']) {
       expect(core).toContain(`'${status}'`);
+    }
+    for (const field of ['reasonCode', 'reasonParams', 'matchDirective', 'matchPattern', 'framePolicy', 'global-denied-host', 'global-whitelist', 'global-blacklist']) {
+      expect(core).toContain(field);
     }
   });
   it('diagnoseScripts is registered in the router action table', () => {
@@ -588,10 +591,21 @@ describe('Per-tab run diagnostics (2026-07 feature)', () => {
     expect(src).toContain('renderDiagnostics');
     // Names/reasons from the background are escaped before innerHTML.
     expect(src).toContain('escapeHtml(s.name');
-    expect(src).toContain('escapeHtml(s.reason');
+    expect(src).toContain('escapeHtml(diagnosticReasonText(s))');
+    expect(src).toContain('popupDiagnosticMatchedRule');
+    expect(src).toContain('popupDiagnosticTopFrameOnly');
     expect(src).toContain("const nameA = String(a.name || a.id || '');");
     expect(src).toContain("const nameB = String(b.name || b.id || '');");
     expect(src).not.toContain('a.name.localeCompare(b.name)');
+  });
+  it('localizes the compact menu label and diagnostics status vocabulary', () => {
+    const html = read('pages/popup.html');
+    const locale = read('src/locales/en.json');
+    expect(html).toContain('data-i18n="popupWhyScriptsNotRunning"');
+    expect(html).toContain('data-i18n-aria-label="popupScriptRunDiagnostics"');
+    for (const key of ['popupWhyScriptsNotRunning', 'popupDiagnosticStatusMatchedDisabled', 'popupDiagnosticReasonDeniedHost', 'popupDiagnosticTopFrameOnly', 'popupDiagnosticAllFrames']) {
+      expect(locale).toContain(`"${key}"`);
+    }
   });
 });
 

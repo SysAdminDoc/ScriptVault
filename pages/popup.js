@@ -27,6 +27,71 @@
         return message && message !== key ? message : formatPopupI18nFallback(fallback, placeholders);
     }
 
+    const DIAGNOSTIC_STATUS_LABELS = {
+        running: ['popupDiagnosticStatusRunning', 'Running'],
+        'matched-disabled': ['popupDiagnosticStatusMatchedDisabled', 'Matched · disabled'],
+        disabled: ['popupDiagnosticStatusDisabled', 'Disabled'],
+        excluded: ['popupDiagnosticStatusExcluded', 'Excluded'],
+        'no-match': ['popupDiagnosticStatusNoMatch', 'Not matched'],
+        blocked: ['popupDiagnosticStatusBlocked', 'Blocked'],
+        quarantined: ['popupDiagnosticStatusQuarantined', 'Quarantined'],
+        paused: ['popupDiagnosticStatusPaused', 'Paused'],
+        error: ['popupDiagnosticStatusError', 'Registration error'],
+        'not-registered': ['popupDiagnosticStatusNotRegistered', 'Not registered'],
+        'on-demand': ['popupDiagnosticStatusOnDemand', 'On demand'],
+        scheduled: ['popupDiagnosticStatusScheduled', 'Scheduled'],
+        background: ['popupDiagnosticStatusBackground', 'Background'],
+    };
+
+    const DIAGNOSTIC_REASON_LABELS = {
+        running: ['popupDiagnosticReasonRunning', 'Matches the page and is registered.'],
+        disabled: ['popupDiagnosticReasonDisabled', 'Script is turned off.'],
+        quarantined: ['popupDiagnosticReasonQuarantined', 'Quarantined import — review it before enabling.'],
+        excluded: ['popupDiagnosticReasonExcluded', 'Excluded by {directive} {pattern}.'],
+        'no-match': ['popupDiagnosticReasonNoMatch', 'No @match/@include pattern matches this page.'],
+        'global-denied-host': ['popupDiagnosticReasonDeniedHost', 'Blocked by the denied host {host}.'],
+        'global-whitelist': ['popupDiagnosticReasonWhitelist', 'Blocked by the global allowlist: no rule matches this page.'],
+        'global-blacklist': ['popupDiagnosticReasonBlacklist', 'Blocked by global block rule {pattern}.'],
+        'context-menu': ['popupDiagnosticReasonContextMenu', 'Runs from the right-click menu, not on page load.'],
+        scheduled: ['popupDiagnosticReasonScheduled', 'Runs on its @crontab schedule, not on page load.'],
+        background: ['popupDiagnosticReasonBackground', '@background script — runs without a page.'],
+        'user-scripts-unavailable': ['popupDiagnosticReasonUserScriptsUnavailable', 'User scripts are turned off for this extension.'],
+        paused: ['popupDiagnosticReasonPaused', 'ScriptVault is paused.'],
+        'registration-error': ['popupDiagnosticReasonRegistrationError', 'Registration failed: {error}'],
+        'not-registered': ['popupDiagnosticReasonNotRegistered', 'Not currently registered.'],
+    };
+
+    function diagnosticStatusLabel(status) {
+        const [key, fallback] = DIAGNOSTIC_STATUS_LABELS[status] || ['', status || 'Unknown'];
+        return key ? tPopup(key, fallback) : fallback;
+    }
+
+    function diagnosticReasonText(script) {
+        const code = String(script?.reasonCode || '');
+        const [key, fallback] = DIAGNOSTIC_REASON_LABELS[code] || ['', script?.reason || 'Script did not run on this page.'];
+        const params = { ...(script?.reasonParams || {}) };
+        if (script?.matchDirective && !params.directive) params.directive = script.matchDirective;
+        if (script?.matchPattern && !params.pattern) params.pattern = script.matchPattern;
+        let text = key ? tPopup(key, fallback, params) : fallback;
+        if (script?.matchState === 'matched' && script?.matchPattern && code !== 'excluded') {
+            const rule = tPopup(
+                'popupDiagnosticMatchedRule',
+                'Matched {directive} {pattern}',
+                { directive: script.matchDirective || '@match', pattern: script.matchPattern }
+            );
+            if (!text.includes(script.matchPattern)) text = `${text} · ${rule}`;
+        }
+        if (script?.status === 'disabled' && script?.matchState === 'not-matched') {
+            text = `${text} · ${tPopup('popupDiagnosticNoMatch', 'No @match/@include pattern matches this page.')}`;
+        }
+        if (script?.framePolicy === 'top') {
+            text = `${text} · ${tPopup('popupDiagnosticTopFrameOnly', 'Top frame only')}`;
+        } else if (script?.framePolicy === 'all') {
+            text = `${text} · ${tPopup('popupDiagnosticAllFrames', 'All frames')}`;
+        }
+        return text;
+    }
+
     function pPopup(family, count, singularFallback, pluralFallback) {
         const message = getPopupI18n()?.getPluralMessage?.(family, count);
         return message && !message.startsWith(`${family}.`)
@@ -744,7 +809,11 @@
             return;
         }
         const running = scripts.filter(s => s.status === 'running').length;
-        const order = { error: 0, blocked: 1, 'not-registered': 2, 'no-match': 3, disabled: 4, paused: 5, 'on-demand': 6, scheduled: 7, background: 8, running: 9 };
+        const order = {
+            quarantined: 0, error: 1, blocked: 2, 'not-registered': 3,
+            excluded: 4, 'no-match': 5, 'matched-disabled': 6, disabled: 7,
+            paused: 8, 'on-demand': 9, scheduled: 10, background: 11, running: 12
+        };
         const sorted = scripts.slice().sort((a, b) => {
             const statusOrder = (order[a.status] ?? 99) - (order[b.status] ?? 99);
             if (statusOrder !== 0) return statusOrder;
@@ -782,12 +851,13 @@
         }
         for (const s of sorted) {
             const status = String(s.status || '').replace(/[^a-z-]/gi, '');
+            const statusLabel = diagnosticStatusLabel(s.status);
             html += `
                 <div class="diagnose-row">
                     <span class="diagnose-dot ${status}" aria-hidden="true"></span>
                     <span class="diagnose-text">
-                        <span class="diagnose-name">${escapeHtml(s.name || s.id)}</span>
-                        <span class="diagnose-reason">${escapeHtml(s.reason || '')}</span>
+                        <span class="diagnose-name">${escapeHtml(s.name || s.id)} <span class="diagnose-status">${escapeHtml(statusLabel)}</span></span>
+                        <span class="diagnose-reason">${escapeHtml(diagnosticReasonText(s))}</span>
                     </span>
                 </div>`;
         }

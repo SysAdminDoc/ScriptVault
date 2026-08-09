@@ -19,6 +19,19 @@ export interface GlobalUrlFilterSettings {
   blacklistedPages?: string;
 }
 
+export interface ScriptUrlMatchExplanation {
+  matched: boolean;
+  state: 'matched' | 'excluded' | 'not-matched';
+  directive?: '@match' | '@include' | '@exclude' | '@exclude-match';
+  pattern?: string;
+}
+
+export interface GlobalUrlFilterReason {
+  code: 'global-denied-host' | 'global-whitelist' | 'global-blacklist';
+  host?: string;
+  pattern?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -31,45 +44,51 @@ export function isUrlBlockedByGlobalSettings(
   url: string,
   globalSettings: GlobalUrlFilterSettings,
 ): boolean {
-  if (!url) return false;
+  return getUrlBlockReason(url, globalSettings) !== null;
+}
+
+/**
+ * Return the first global page-filter rule that blocks `url`, preserving the
+ * layer and rule so the popup can explain a blocked script without guessing.
+ */
+export function getUrlBlockReason(
+  url: string,
+  globalSettings: GlobalUrlFilterSettings,
+): GlobalUrlFilterReason | null {
+  if (!url) return null;
   try {
     const urlObj = new URL(url);
 
-    // Denied hosts
     const denied = globalSettings.deniedHosts;
     if (denied && Array.isArray(denied)) {
       for (const host of denied) {
         if (host && (urlObj.hostname === host || urlObj.hostname.endsWith('.' + host))) {
-          return true;
+          return { code: 'global-denied-host', host };
         }
       }
     }
 
-    // Page filter mode
     const mode: string = globalSettings.pageFilterMode || 'blacklist';
     if (mode === 'whitelist') {
       const whitelist = (globalSettings.whitelistedPages || '')
         .split('\n')
         .map((s) => s.trim())
         .filter(Boolean);
-      if (whitelist.length > 0) {
-        const matched = whitelist.some((p) => matchIncludePattern(p, url, urlObj));
-        if (!matched) return true;
+      if (whitelist.length > 0 && !whitelist.some((p) => matchIncludePattern(p, url, urlObj))) {
+        return { code: 'global-whitelist' };
       }
     } else if (mode === 'blacklist') {
       const blacklist = (globalSettings.blacklistedPages || '')
         .split('\n')
         .map((s) => s.trim())
         .filter(Boolean);
-      if (blacklist.length > 0) {
-        const matched = blacklist.some((p) => matchIncludePattern(p, url, urlObj));
-        if (matched) return true;
-      }
+      const pattern = blacklist.find((p) => matchIncludePattern(p, url, urlObj));
+      if (pattern) return { code: 'global-blacklist', pattern };
     }
   } catch (_e) {
     // Invalid URL — treat as not blocked
   }
-  return false;
+  return null;
 }
 
 /**
@@ -78,6 +97,14 @@ export function isUrlBlockedByGlobalSettings(
  * well as per-script settings overrides (userMatches, userIncludes, etc.).
  */
 export function doesScriptMatchUrl(script: Script, url: string): boolean {
+  return explainScriptUrlMatch(script, url).matched;
+}
+
+/**
+ * Explain the positive and negative URL rules used by doesScriptMatchUrl.
+ * Exclusions are checked first, matching the production execution order.
+ */
+export function explainScriptUrlMatch(script: Script, url: string): ScriptUrlMatchExplanation {
   const meta = script.meta || ({} as Script['meta']);
   const settings = script.settings || {};
 
@@ -152,23 +179,31 @@ export function doesScriptMatchUrl(script: Script, url: string): boolean {
 
     // First check if URL matches any exclude pattern
     for (const pattern of effectiveExcludes) {
-      if (matchIncludePattern(pattern, url, urlObj)) return false;
+      if (matchIncludePattern(pattern, url, urlObj)) {
+        return { matched: false, state: 'excluded', directive: '@exclude', pattern };
+      }
     }
     for (const pattern of excludeMatchPatterns) {
-      if (matchPattern(pattern, url, urlObj)) return false;
+      if (matchPattern(pattern, url, urlObj)) {
+        return { matched: false, state: 'excluded', directive: '@exclude-match', pattern };
+      }
     }
 
     // Then check if URL matches any include/match pattern
     for (const pattern of effectiveMatches) {
-      if (matchPattern(pattern, url, urlObj)) return true;
+      if (matchPattern(pattern, url, urlObj)) {
+        return { matched: true, state: 'matched', directive: '@match', pattern };
+      }
     }
     for (const pattern of effectiveIncludes) {
-      if (matchIncludePattern(pattern, url, urlObj)) return true;
+      if (matchIncludePattern(pattern, url, urlObj)) {
+        return { matched: true, state: 'matched', directive: '@include', pattern };
+      }
     }
 
-    return false;
+    return { matched: false, state: 'not-matched' };
   } catch (_e) {
-    return false;
+    return { matched: false, state: 'not-matched' };
   }
 }
 

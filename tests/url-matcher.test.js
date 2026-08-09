@@ -13,6 +13,8 @@ import {
   nativeMatchPatternForRegistration,
   doesScriptMatchUrl,
   isUrlBlockedByGlobalSettings,
+  explainScriptUrlMatch,
+  getUrlBlockReason,
   extractMatchPatternsFromRegex,
   MatchSet,
 } from '../src/background/url-matcher.ts';
@@ -519,6 +521,39 @@ describe('doesScriptMatchUrl', () => {
   });
 });
 
+describe('run-diagnostic URL explanations', () => {
+  it('returns the matching @match rule', () => {
+    expect(explainScriptUrlMatch(
+      { meta: { match: ['https://example.com/*'] } },
+      'https://example.com/page',
+    )).toEqual({
+      matched: true,
+      state: 'matched',
+      directive: '@match',
+      pattern: 'https://example.com/*',
+    });
+  });
+
+  it('returns the first matching @exclude rule before positive rules', () => {
+    expect(explainScriptUrlMatch(
+      { meta: { match: ['https://example.com/*'], exclude: ['https://example.com/private/*'] } },
+      'https://example.com/private/page',
+    )).toEqual({
+      matched: false,
+      state: 'excluded',
+      directive: '@exclude',
+      pattern: 'https://example.com/private/*',
+    });
+  });
+
+  it('distinguishes a page with no positive match', () => {
+    expect(explainScriptUrlMatch(
+      { meta: { match: ['https://example.com/*'] } },
+      'https://other.com/page',
+    )).toEqual({ matched: false, state: 'not-matched' });
+  });
+});
+
 // ── isUrlBlockedByGlobalSettings ────────────────────────────────────────────
 
 describe('isUrlBlockedByGlobalSettings', () => {
@@ -566,6 +601,27 @@ describe('isUrlBlockedByGlobalSettings', () => {
 
   it('returns false on malformed URLs (treated as not-blocked)', () => {
     expect(isUrlBlockedByGlobalSettings('not-a-url', { deniedHosts: ['x'] })).toBe(false);
+  });
+});
+
+describe('getUrlBlockReason', () => {
+  it('identifies the denied-host layer', () => {
+    expect(getUrlBlockReason('https://blocked.com/page', { deniedHosts: ['blocked.com'] }))
+      .toEqual({ code: 'global-denied-host', host: 'blocked.com' });
+  });
+
+  it('identifies the whitelist layer when no allow rule matches', () => {
+    expect(getUrlBlockReason('https://other.com/page', {
+      pageFilterMode: 'whitelist',
+      whitelistedPages: '*://example.com/*',
+    })).toEqual({ code: 'global-whitelist' });
+  });
+
+  it('returns the concrete blacklist rule', () => {
+    expect(getUrlBlockReason('https://blocked.com/page', {
+      pageFilterMode: 'blacklist',
+      blacklistedPages: '*://blocked.com/*',
+    })).toEqual({ code: 'global-blacklist', pattern: '*://blocked.com/*' });
   });
 });
 

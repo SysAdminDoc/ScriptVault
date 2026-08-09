@@ -31,6 +31,9 @@ All notable changes to ScriptVault will be documented in this file.
 - Enforced Trusted Types on Chrome and Firefox extension pages, migrated the
   final template entity decoder off a raw HTML sink, and surfaced blocked
   extension renders in the dashboard activity log.
+- Made popup run diagnostics explain the exact matching or exclusion rule,
+  global page-filter layer, frame policy, quarantine marker, and localized
+  execution status for every installed script.
 - Added a bounded local-file metadata polling fallback with explicit watcher
   health when FileSystemObserver is unavailable or reports an unknown/error
   state; only the active editor polls and changes still go through review.

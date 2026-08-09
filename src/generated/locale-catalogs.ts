@@ -261,6 +261,39 @@ export const localeCatalogs = {
     "popupDocumentActivitySeparated": "{current} current-document event(s); {stale} earlier-document event(s) kept separate.",
     "popupCurrentDocumentEvent": "{count} event recorded for the current document.",
     "popupCurrentDocumentEvents": "{count} events recorded for the current document.",
+    "popupWhyScriptsNotRunning": "Why aren’t my scripts running?",
+    "popupScriptRunDiagnostics": "Script run diagnostics",
+    "popupDiagnosticStatusRunning": "Running",
+    "popupDiagnosticStatusMatchedDisabled": "Matched · disabled",
+    "popupDiagnosticStatusDisabled": "Disabled",
+    "popupDiagnosticStatusExcluded": "Excluded",
+    "popupDiagnosticStatusNoMatch": "Not matched",
+    "popupDiagnosticStatusBlocked": "Blocked",
+    "popupDiagnosticStatusQuarantined": "Quarantined",
+    "popupDiagnosticStatusPaused": "Paused",
+    "popupDiagnosticStatusError": "Registration error",
+    "popupDiagnosticStatusNotRegistered": "Not registered",
+    "popupDiagnosticStatusOnDemand": "On demand",
+    "popupDiagnosticStatusScheduled": "Scheduled",
+    "popupDiagnosticStatusBackground": "Background",
+    "popupDiagnosticReasonRunning": "Matches the page and is registered.",
+    "popupDiagnosticReasonDisabled": "Script is turned off.",
+    "popupDiagnosticReasonQuarantined": "Quarantined import — review it before enabling.",
+    "popupDiagnosticReasonExcluded": "Excluded by {directive} {pattern}.",
+    "popupDiagnosticReasonNoMatch": "No @match/@include pattern matches this page.",
+    "popupDiagnosticReasonDeniedHost": "Blocked by the denied host {host}.",
+    "popupDiagnosticReasonWhitelist": "Blocked by the global allowlist: no rule matches this page.",
+    "popupDiagnosticReasonBlacklist": "Blocked by global block rule {pattern}.",
+    "popupDiagnosticReasonContextMenu": "Runs from the right-click menu, not on page load.",
+    "popupDiagnosticReasonScheduled": "Runs on its @crontab schedule, not on page load.",
+    "popupDiagnosticReasonBackground": "@background script — runs without a page.",
+    "popupDiagnosticReasonUserScriptsUnavailable": "User scripts are turned off for this extension.",
+    "popupDiagnosticReasonPaused": "ScriptVault is paused.",
+    "popupDiagnosticReasonRegistrationError": "Registration failed: {error}",
+    "popupDiagnosticReasonNotRegistered": "Not currently registered.",
+    "popupDiagnosticMatchedRule": "Matched {directive} {pattern}",
+    "popupDiagnosticTopFrameOnly": "Top frame only",
+    "popupDiagnosticAllFrames": "All frames",
     "sideSkipToScripts": "Skip to scripts",
     "sideOpenQueuedUpdates": "Open queued updates",
     "sideRefreshScripts": "Refresh scripts",
@@ -3168,15 +3201,15 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 43,
     "translatedRuntimeMessages": 43,
-    "totalRuntimeMessages": 1916
+    "totalRuntimeMessages": 1949
   },
   "en": {
     "name": "English",
     "direction": "ltr",
     "translationStatus": "complete",
-    "runtimeCoverageBaseline": 1916,
-    "translatedRuntimeMessages": 1916,
-    "totalRuntimeMessages": 1916
+    "runtimeCoverageBaseline": 1949,
+    "translatedRuntimeMessages": 1949,
+    "totalRuntimeMessages": 1949
   },
   "es": {
     "name": "Español",
@@ -3184,7 +3217,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 45,
     "translatedRuntimeMessages": 45,
-    "totalRuntimeMessages": 1916
+    "totalRuntimeMessages": 1949
   },
   "fr": {
     "name": "Français",
@@ -3192,7 +3225,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 43,
     "translatedRuntimeMessages": 43,
-    "totalRuntimeMessages": 1916
+    "totalRuntimeMessages": 1949
   },
   "he": {
     "name": "עברית",
@@ -3200,7 +3233,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 58,
     "translatedRuntimeMessages": 58,
-    "totalRuntimeMessages": 1916
+    "totalRuntimeMessages": 1949
   },
   "ja": {
     "name": "日本語",
@@ -3208,7 +3241,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 71,
     "translatedRuntimeMessages": 71,
-    "totalRuntimeMessages": 1916
+    "totalRuntimeMessages": 1949
   },
   "pt": {
     "name": "Português",
@@ -3216,7 +3249,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 42,
     "translatedRuntimeMessages": 42,
-    "totalRuntimeMessages": 1916
+    "totalRuntimeMessages": 1949
   },
   "ru": {
     "name": "Русский",
@@ -3224,7 +3257,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 117,
     "translatedRuntimeMessages": 117,
-    "totalRuntimeMessages": 1916
+    "totalRuntimeMessages": 1949
   },
   "zh": {
     "name": "中文",
@@ -3232,7 +3265,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 46,
     "translatedRuntimeMessages": 46,
-    "totalRuntimeMessages": 1916
+    "totalRuntimeMessages": 1949
   }
 } as const;
 

@@ -5304,6 +5304,39 @@ const I18n = (() => {
       "popupDocumentActivitySeparated": "{current} current-document event(s); {stale} earlier-document event(s) kept separate.",
       "popupCurrentDocumentEvent": "{count} event recorded for the current document.",
       "popupCurrentDocumentEvents": "{count} events recorded for the current document.",
+      "popupWhyScriptsNotRunning": "Why aren\u2019t my scripts running?",
+      "popupScriptRunDiagnostics": "Script run diagnostics",
+      "popupDiagnosticStatusRunning": "Running",
+      "popupDiagnosticStatusMatchedDisabled": "Matched \xB7 disabled",
+      "popupDiagnosticStatusDisabled": "Disabled",
+      "popupDiagnosticStatusExcluded": "Excluded",
+      "popupDiagnosticStatusNoMatch": "Not matched",
+      "popupDiagnosticStatusBlocked": "Blocked",
+      "popupDiagnosticStatusQuarantined": "Quarantined",
+      "popupDiagnosticStatusPaused": "Paused",
+      "popupDiagnosticStatusError": "Registration error",
+      "popupDiagnosticStatusNotRegistered": "Not registered",
+      "popupDiagnosticStatusOnDemand": "On demand",
+      "popupDiagnosticStatusScheduled": "Scheduled",
+      "popupDiagnosticStatusBackground": "Background",
+      "popupDiagnosticReasonRunning": "Matches the page and is registered.",
+      "popupDiagnosticReasonDisabled": "Script is turned off.",
+      "popupDiagnosticReasonQuarantined": "Quarantined import \u2014 review it before enabling.",
+      "popupDiagnosticReasonExcluded": "Excluded by {directive} {pattern}.",
+      "popupDiagnosticReasonNoMatch": "No @match/@include pattern matches this page.",
+      "popupDiagnosticReasonDeniedHost": "Blocked by the denied host {host}.",
+      "popupDiagnosticReasonWhitelist": "Blocked by the global allowlist: no rule matches this page.",
+      "popupDiagnosticReasonBlacklist": "Blocked by global block rule {pattern}.",
+      "popupDiagnosticReasonContextMenu": "Runs from the right-click menu, not on page load.",
+      "popupDiagnosticReasonScheduled": "Runs on its @crontab schedule, not on page load.",
+      "popupDiagnosticReasonBackground": "@background script \u2014 runs without a page.",
+      "popupDiagnosticReasonUserScriptsUnavailable": "User scripts are turned off for this extension.",
+      "popupDiagnosticReasonPaused": "ScriptVault is paused.",
+      "popupDiagnosticReasonRegistrationError": "Registration failed: {error}",
+      "popupDiagnosticReasonNotRegistered": "Not currently registered.",
+      "popupDiagnosticMatchedRule": "Matched {directive} {pattern}",
+      "popupDiagnosticTopFrameOnly": "Top frame only",
+      "popupDiagnosticAllFrames": "All frames",
       "sideSkipToScripts": "Skip to scripts",
       "sideOpenQueuedUpdates": "Open queued updates",
       "sideRefreshScripts": "Refresh scripts",
@@ -7454,15 +7487,15 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 43,
       "translatedRuntimeMessages": 43,
-      "totalRuntimeMessages": 1916
+      "totalRuntimeMessages": 1949
     },
     "en": {
       "name": "English",
       "direction": "ltr",
       "translationStatus": "complete",
-      "runtimeCoverageBaseline": 1916,
-      "translatedRuntimeMessages": 1916,
-      "totalRuntimeMessages": 1916
+      "runtimeCoverageBaseline": 1949,
+      "translatedRuntimeMessages": 1949,
+      "totalRuntimeMessages": 1949
     },
     "es": {
       "name": "Espa\xF1ol",
@@ -7470,7 +7503,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 45,
       "translatedRuntimeMessages": 45,
-      "totalRuntimeMessages": 1916
+      "totalRuntimeMessages": 1949
     },
     "fr": {
       "name": "Fran\xE7ais",
@@ -7478,7 +7511,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 43,
       "translatedRuntimeMessages": 43,
-      "totalRuntimeMessages": 1916
+      "totalRuntimeMessages": 1949
     },
     "he": {
       "name": "\u05E2\u05D1\u05E8\u05D9\u05EA",
@@ -7486,7 +7519,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 58,
       "translatedRuntimeMessages": 58,
-      "totalRuntimeMessages": 1916
+      "totalRuntimeMessages": 1949
     },
     "ja": {
       "name": "\u65E5\u672C\u8A9E",
@@ -7494,7 +7527,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 71,
       "translatedRuntimeMessages": 71,
-      "totalRuntimeMessages": 1916
+      "totalRuntimeMessages": 1949
     },
     "pt": {
       "name": "Portugu\xEAs",
@@ -7502,7 +7535,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 42,
       "translatedRuntimeMessages": 42,
-      "totalRuntimeMessages": 1916
+      "totalRuntimeMessages": 1949
     },
     "ru": {
       "name": "\u0420\u0443\u0441\u0441\u043A\u0438\u0439",
@@ -7510,7 +7543,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 117,
       "translatedRuntimeMessages": 117,
-      "totalRuntimeMessages": 1916
+      "totalRuntimeMessages": 1949
     },
     "zh": {
       "name": "\u4E2D\u6587",
@@ -7518,7 +7551,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 46,
       "translatedRuntimeMessages": 46,
-      "totalRuntimeMessages": 1916
+      "totalRuntimeMessages": 1949
     }
   };
 
@@ -37635,7 +37668,8 @@ backgroundActionRegistry.registerHandlers(RuntimeActionHandler.createRuntimeActi
     const settings = await SettingsManager.get();
     const userScriptsAvailable = !!chrome.userScripts;
     const globallyEnabled = settings.enabled !== false;
-    const urlBlocked = url ? isUrlBlockedByGlobalSettings(url, settings) : false;
+    const globalBlock = url ? getUrlBlockReason(url, settings) : null;
+    const urlBlocked = globalBlock !== null;
 
     let registeredIds = new Set();
     try {
@@ -37648,7 +37682,8 @@ backgroundActionRegistry.registerHandlers(RuntimeActionHandler.createRuntimeActi
     const allScripts = await ScriptStorage.getAll();
     const scripts = allScripts.map(script => {
       const enabled = script.enabled !== false;
-      const matches = url ? doesScriptMatchUrl(script, url) : false;
+      const matchInfo = url ? explainScriptUrlMatch(script, url) : { matched: false, state: 'not-matched' };
+      const matches = matchInfo.matched;
       const registered = registeredIds.has(script.id);
       const registrationError = script.settings?._registrationError || null;
       const effectiveRunAt = script.settings?.runAt && script.settings.runAt !== 'default'
@@ -37657,38 +37692,56 @@ backgroundActionRegistry.registerHandlers(RuntimeActionHandler.createRuntimeActi
       const isContextMenu = effectiveRunAt === 'context-menu';
       const isCrontab = !!script.meta?.crontab;
       const isBackground = !!script.meta?.background;
+      const quarantined = !!script.settings?._importQuarantine;
+      const framePolicy = diagnosticFramePolicy(script);
 
       let status;
-      let reason;
-      if (!enabled) {
-        status = 'disabled'; reason = 'Script is turned off.';
+      let reasonCode;
+      const reasonParams = {};
+      if (quarantined) {
+        status = 'quarantined'; reasonCode = 'quarantined';
+      } else if (!enabled) {
+        status = matches ? 'matched-disabled' : 'disabled'; reasonCode = 'disabled';
       } else if (isContextMenu) {
-        status = 'on-demand'; reason = 'Runs from the right-click menu, not on page load.';
+        status = 'on-demand'; reasonCode = 'context-menu';
       } else if (isCrontab) {
-        status = 'scheduled'; reason = 'Runs on its @crontab schedule, not on page load.';
+        status = 'scheduled'; reasonCode = 'scheduled';
       } else if (isBackground) {
-        status = 'background'; reason = '@background script — runs without a page.';
+        status = 'background'; reasonCode = 'background';
       } else if (!matches) {
-        status = 'no-match'; reason = 'No @match/@include pattern matches this page.';
+        status = matchInfo.state === 'excluded' ? 'excluded' : 'no-match';
+        reasonCode = matchInfo.state === 'excluded' ? 'excluded' : 'no-match';
+        if (matchInfo.directive) reasonParams.directive = matchInfo.directive;
+        if (matchInfo.pattern) reasonParams.pattern = matchInfo.pattern;
       } else if (urlBlocked) {
-        status = 'blocked'; reason = 'This page is excluded by your global page filter or blocklist.';
+        status = 'blocked'; reasonCode = globalBlock?.code || 'global-blacklist';
+        if (globalBlock?.host) reasonParams.host = globalBlock.host;
+        if (globalBlock?.pattern) reasonParams.pattern = globalBlock.pattern;
       } else if (!userScriptsAvailable) {
-        status = 'blocked'; reason = 'User scripts are turned off for this extension. Enable "Allow User Scripts" at chrome://extensions.';
+        status = 'blocked'; reasonCode = 'user-scripts-unavailable';
       } else if (!globallyEnabled) {
-        status = 'paused'; reason = 'ScriptVault is paused — enable it from the popup toggle.';
+        status = 'paused'; reasonCode = 'paused';
       } else if (registrationError) {
-        status = 'error'; reason = 'Registration failed: ' + registrationError;
+        status = 'error'; reasonCode = 'registration-error'; reasonParams.error = String(registrationError);
       } else if (!registered) {
-        status = 'not-registered'; reason = 'Not currently registered. Toggle the script off and on, or reload the page.';
+        status = 'not-registered'; reasonCode = 'not-registered';
       } else {
-        status = 'running'; reason = 'Matches this page and is injected.';
+        status = 'running'; reasonCode = 'running';
       }
+      if (matchInfo.directive) reasonParams.matchDirective = matchInfo.directive;
+      if (matchInfo.pattern) reasonParams.matchPattern = matchInfo.pattern;
       return {
         id: script.id,
         name: script.meta?.name || script.id,
         status,
-        reason,
+        reasonCode,
+        reasonParams,
+        reason: diagnosticReasonText(reasonCode, reasonParams),
         matches,
+        matchState: matchInfo.state,
+        matchDirective: matchInfo.directive || null,
+        matchPattern: matchInfo.pattern || null,
+        framePolicy,
         enabled,
         registered
       };
@@ -38877,37 +38930,108 @@ async function updateBadgeForTab(tabId, url, settings = null, scripts = null) {
   }
 }
 
-// Check if URL is blocked by global page filter or denied hosts
-function isUrlBlockedByGlobalSettings(url, globalSettings) {
-  if (!url) return false;
+// Return the first global page-filter rule that blocks `url`. Keeping the
+// filter layer and rule in the response lets the popup explain a blocked
+// script without reimplementing settings semantics in the UI.
+function getUrlBlockReason(url, globalSettings) {
+  if (!url) return null;
   try {
     const urlObj = new URL(url);
-    // Denied hosts
     const denied = globalSettings.deniedHosts;
     if (denied && Array.isArray(denied)) {
       for (const host of denied) {
         if (host && (urlObj.hostname === host || urlObj.hostname.endsWith('.' + host))) {
-          return true;
+          return { code: 'global-denied-host', host };
         }
       }
     }
-    // Page filter mode
     const mode = globalSettings.pageFilterMode || 'blacklist';
     if (mode === 'whitelist') {
       const whitelist = (globalSettings.whitelistedPages || '').split('\n').map(s => s.trim()).filter(Boolean);
-      if (whitelist.length > 0) {
-        const matched = whitelist.some(p => matchIncludePattern(p, url, urlObj));
-        if (!matched) return true;
+      if (whitelist.length > 0 && !whitelist.some(p => matchIncludePattern(p, url, urlObj))) {
+        return { code: 'global-whitelist' };
       }
     } else if (mode === 'blacklist') {
       const blacklist = (globalSettings.blacklistedPages || '').split('\n').map(s => s.trim()).filter(Boolean);
-      if (blacklist.length > 0) {
-        const matched = blacklist.some(p => matchIncludePattern(p, url, urlObj));
-        if (matched) return true;
+      const pattern = blacklist.find(p => matchIncludePattern(p, url, urlObj));
+      if (pattern) return { code: 'global-blacklist', pattern };
+    }
+  } catch (e) {}
+  return null;
+}
+
+function isUrlBlockedByGlobalSettings(url, globalSettings) {
+  return getUrlBlockReason(url, globalSettings) !== null;
+}
+
+// Explain the same positive/exclusion rule order used by doesScriptMatchUrl.
+// This is intentionally kept in the background bundle (rather than relying
+// on the typed test mirror) because background.core.js is the shipped runtime.
+function explainScriptUrlMatch(script, url) {
+  const meta = script?.meta || {};
+  const settings = script?.settings || {};
+  try {
+    const urlObj = new URL(url);
+    const list = value => Array.isArray(value) ? value : (value ? [value] : []);
+    const effectiveMatches = [];
+    const effectiveIncludes = [];
+    const effectiveExcludes = [];
+    if (settings.useOriginalMatches !== false) effectiveMatches.push(...list(meta.match));
+    effectiveMatches.push(...list(settings.userMatches));
+    if (settings.useOriginalIncludes !== false) effectiveIncludes.push(...list(meta.include));
+    effectiveIncludes.push(...list(settings.userIncludes));
+    if (settings.useOriginalExcludes !== false) effectiveExcludes.push(...list(meta.exclude));
+    effectiveExcludes.push(...list(settings.userExcludes));
+
+    for (const pattern of effectiveExcludes) {
+      if (matchIncludePattern(pattern, url, urlObj)) {
+        return { matched: false, state: 'excluded', directive: '@exclude', pattern };
+      }
+    }
+    for (const pattern of list(meta.excludeMatch)) {
+      if (matchPattern(pattern, url, urlObj)) {
+        return { matched: false, state: 'excluded', directive: '@exclude-match', pattern };
+      }
+    }
+    for (const pattern of effectiveMatches) {
+      if (matchPattern(pattern, url, urlObj)) {
+        return { matched: true, state: 'matched', directive: '@match', pattern };
+      }
+    }
+    for (const pattern of effectiveIncludes) {
+      if (matchIncludePattern(pattern, url, urlObj)) {
+        return { matched: true, state: 'matched', directive: '@include', pattern };
       }
     }
   } catch (e) {}
-  return false;
+  return { matched: false, state: 'not-matched' };
+}
+
+function diagnosticFramePolicy(script) {
+  const frameMode = script?.settings?.frameMode;
+  if (frameMode === 'top' || (frameMode !== 'all' && script?.meta?.noframes)) return 'top';
+  return 'all';
+}
+
+function diagnosticReasonText(code, params = {}) {
+  switch (code) {
+    case 'running': return 'Matches the page and is registered.';
+    case 'disabled': return 'Script is turned off.';
+    case 'quarantined': return 'Quarantined import — review it before enabling.';
+    case 'excluded': return `Excluded by ${params.directive || '@exclude'} ${params.pattern || ''}.`.trim();
+    case 'no-match': return 'No @match/@include pattern matches this page.';
+    case 'global-denied-host': return `Blocked by the denied host ${params.host || ''}.`.trim();
+    case 'global-whitelist': return 'Blocked by the global allowlist: no rule matches this page.';
+    case 'global-blacklist': return `Blocked by global block rule ${params.pattern || ''}.`.trim();
+    case 'context-menu': return 'Runs from the right-click menu, not on page load.';
+    case 'scheduled': return 'Runs on its @crontab schedule, not on page load.';
+    case 'background': return '@background script — runs without a page.';
+    case 'user-scripts-unavailable': return 'User scripts are turned off for this extension.';
+    case 'paused': return 'ScriptVault is paused.';
+    case 'registration-error': return `Registration failed: ${params.error || 'unknown error'}`;
+    case 'not-registered': return 'Not currently registered.';
+    default: return 'Script did not run on this page.';
+  }
 }
 
 // Check if a script matches a URL (with URL override support)

@@ -2331,7 +2331,13 @@ export interface ResponseMap {
       name: string;
       status: string;
       reason: string;
+      reasonCode: string;
+      reasonParams: Record<string, string>;
       matches: boolean;
+      matchState: 'matched' | 'excluded' | 'not-matched';
+      matchDirective: string | null;
+      matchPattern: string | null;
+      framePolicy: 'top' | 'all';
       enabled: boolean;
       registered: boolean;
     }>;
