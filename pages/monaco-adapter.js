@@ -26,6 +26,7 @@
   let _lastCursor = { line: 0, ch: 0 };
   let _useFallback = false;
   let _lastScriptId = null;
+  let _language = null;
   let _fallbackInputBound = false;
   let _resolvedTheme = resolveEditorTheme('default');
   const _optionState = {
@@ -97,7 +98,7 @@
         _pendingReady.forEach(fn => fn());
         _pendingReady = [];
         sendCurrentTheme();
-        sendToFrame({ type: 'set-value', value: _value, scriptId: _lastScriptId });
+        sendToFrame({ type: 'set-value', value: _value, scriptId: _lastScriptId, language: _language });
         // After ready, prime the find widget with saved history.
         primeEditorFindHistory();
         break;
@@ -234,11 +235,16 @@
         if (fallbackTextarea) fallbackTextarea.value = _value;
         return;
       }
-      whenReady(() => sendToFrame({ type: 'set-value', value: _value, scriptId: _lastScriptId }));
+      whenReady(() => sendToFrame({ type: 'set-value', value: _value, scriptId: _lastScriptId, language: _language }));
     },
 
     setScriptId(id) {
       _lastScriptId = id;
+    },
+
+    setLanguage(language) {
+      _language = language === 'css' || language === 'javascript' ? language : null;
+      if (!_useFallback) whenReady(() => sendToFrame({ type: 'set-language', language: _language }));
     },
 
     // on(): register event listeners (change, cursorActivity)

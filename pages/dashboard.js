@@ -12519,7 +12519,10 @@
                 if (previousScriptId && state.openTabs[previousScriptId]) {
                     try { state.openTabs[previousScriptId]._editorHistory = state.editor.getHistory(); } catch {}
                 }
-                if (state.editor.isMonaco) state.editor.setScriptId(script.id);
+                if (state.editor.isMonaco) {
+                    state.editor.setScriptId(script.id);
+                    state.editor.setLanguage?.(isUserCSSDraft(tabData?.code ?? script.code ?? '') ? 'css' : 'javascript');
+                }
                 state.editor.setValue(tabData?.code ?? script.code ?? '');
                 // Restore target tab's undo history if available, otherwise clear
                 if (tabData?._editorHistory) {

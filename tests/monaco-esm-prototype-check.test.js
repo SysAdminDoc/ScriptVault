@@ -12,9 +12,7 @@ const REQUIRED_OUTPUTS = [
   'lib/monaco-esm/editor.css',
   'lib/monaco-esm/assets/codicon-test.ttf',
   'lib/monaco-esm/workers/editor.worker.js',
-  'lib/monaco-esm/workers/json.worker.js',
   'lib/monaco-esm/workers/css.worker.js',
-  'lib/monaco-esm/workers/html.worker.js',
   'lib/monaco-esm/workers/ts.worker.js',
   'lib/monaco-esm/workers/userscript-lsp.worker.js',
 ];
@@ -56,7 +54,7 @@ describe('Monaco ESM prototype checker', () => {
     const result = runMonacoEsmPrototypeCheck({ projectRoot: root });
 
     expect(result.failures).toEqual([]);
-    expect(result.outputs).toHaveLength(9);
+    expect(result.outputs).toHaveLength(7);
     expect(result.outputs.find((output) => output.path === 'lib/monaco-esm/editor.js')).toMatchObject({
       bytes: 1024,
     });

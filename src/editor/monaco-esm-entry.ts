@@ -1,17 +1,21 @@
-import * as monaco from 'monaco-editor';
+import * as editorApi from 'monaco-editor/editor/editor.api.js';
+import * as lsp from '../../node_modules/monaco-editor/esm/external/monaco-lsp-client/out/index.js';
+import 'monaco-editor/languages/definitions/javascript/register.js';
+import 'monaco-editor/languages/definitions/typescript/register.js';
+import 'monaco-editor/language/typescript/monaco.contribution.js';
+import 'monaco-editor/languages/definitions/css/register.js';
+import 'monaco-editor/language/css/monaco.contribution.js';
+
+const monaco = Object.freeze({ ...editorApi, lsp });
 
 const DEFAULT_WORKER_FILE = 'workers/editor.worker.js';
 
 export const monacoWorkerFiles: Readonly<Record<string, string>> = Object.freeze({
   default: DEFAULT_WORKER_FILE,
   editorWorkerService: DEFAULT_WORKER_FILE,
-  json: 'workers/json.worker.js',
   css: 'workers/css.worker.js',
   scss: 'workers/css.worker.js',
   less: 'workers/css.worker.js',
-  html: 'workers/html.worker.js',
-  handlebars: 'workers/html.worker.js',
-  razor: 'workers/html.worker.js',
   typescript: 'workers/ts.worker.js',
   javascript: 'workers/ts.worker.js',
   userscriptLsp: 'workers/userscript-lsp.worker.js',

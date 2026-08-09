@@ -79,6 +79,7 @@
   let isReady = false;
   let pendingValue = null;
   let pendingScriptId = null;
+  let pendingLanguage = null;
   let pendingOptions = null;
   let currentTheme = 'sv-dark';
   let ignoreNextChange = false;
@@ -98,13 +99,9 @@
   const MONACO_WORKER_FILES = Object.freeze({
     default: DEFAULT_WORKER_FILE,
     editorWorkerService: DEFAULT_WORKER_FILE,
-    json: 'json.worker.js',
     css: 'css.worker.js',
     scss: 'css.worker.js',
     less: 'css.worker.js',
-    html: 'html.worker.js',
-    handlebars: 'html.worker.js',
-    razor: 'html.worker.js',
     typescript: 'ts.worker.js',
     javascript: 'ts.worker.js'
   });
@@ -561,9 +558,10 @@
       // Apply any pending operations
       if (pendingOptions) { applyOptions(pendingOptions); pendingOptions = null; }
       if (pendingValue !== null) {
-        setValue(pendingValue, pendingScriptId);
+        setValue(pendingValue, pendingScriptId, pendingLanguage);
         pendingValue = null;
         pendingScriptId = null;
+        pendingLanguage = null;
       }
 
       // Signal ready to parent
@@ -589,10 +587,17 @@
 
     switch (msg.type) {
       case 'set-value':
-        if (isReady) setValue(msg.value || '', msg.scriptId);
+        if (isReady) setValue(msg.value || '', msg.scriptId, msg.language);
         else {
           pendingValue = msg.value || '';
           pendingScriptId = msg.scriptId || null;
+          pendingLanguage = msg.language || null;
+        }
+        break;
+      case 'set-language':
+        if (editor && monacoApi && (msg.language === 'css' || msg.language === 'javascript')) {
+          const model = editor.getModel();
+          if (model) monacoApi.editor.setModelLanguage(model, msg.language);
         }
         break;
       case 'get-value':
@@ -682,23 +687,33 @@
     }
   });
 
-  function getScriptModel(scriptId, initialValue) {
+  function getModelLanguage(value, requestedLanguage) {
+    if (requestedLanguage === 'css' || requestedLanguage === 'javascript') return requestedLanguage;
+    return /\/\*\s*==UserStyle==[\s\S]*?==\/UserStyle==\s*\*\//.test(String(value || ''))
+      ? 'css'
+      : 'javascript';
+  }
+
+  function getScriptModel(scriptId, initialValue, requestedLanguage) {
     if (!monacoApi || !scriptId) return null;
+    const language = getModelLanguage(initialValue, requestedLanguage);
     let model = scriptModels.get(scriptId);
     if (!model || model.isDisposed?.()) {
-      model = monacoApi.editor.createModel(initialValue || '', 'javascript');
+      model = monacoApi.editor.createModel(initialValue || '', language);
       scriptModels.set(scriptId, model);
+    } else if (model.getLanguageId?.() !== language) {
+      monacoApi.editor.setModelLanguage(model, language);
     }
     return model;
   }
 
-  function setValue(value, scriptId) {
+  function setValue(value, scriptId, requestedLanguage) {
     if (!editor) return;
     const nextScriptId = scriptId || null;
     const sameScript = nextScriptId !== null && currentScriptId === nextScriptId;
     // Preserve cursor position only on same-script reload.
     const pos = sameScript ? editor.getPosition() : null;
-    const model = getScriptModel(nextScriptId, value);
+    const model = getScriptModel(nextScriptId, value, requestedLanguage);
     if (model && editor.getModel() !== model) {
       editor.setModel(model);
     }

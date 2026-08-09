@@ -13,7 +13,7 @@ describe('Firefox vendored library provenance', () => {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
-    expect(output).toContain('Vendored library provenance verified for 23 shipped provenance entries.');
+    expect(output).toContain('Vendored library provenance verified for 21 shipped provenance entries.');
   });
 
   it('documents each Firefox packaged minified library for AMO reviewers', () => {

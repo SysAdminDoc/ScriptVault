@@ -1020,7 +1020,8 @@ describe('Editor adapter/sandbox correctness (2026-07-02 audit)', () => {
     const fn = src.slice(src.indexOf('function setValue'), src.indexOf('function applyOptions'));
     expect(src).toContain('let currentScriptId = null;');
     expect(src).toContain('let pendingScriptId = null;');
-    expect(src).toContain('setValue(pendingValue, pendingScriptId);');
+    expect(src).toContain('let pendingLanguage = null;');
+    expect(src).toContain('setValue(pendingValue, pendingScriptId, pendingLanguage);');
     expect(fn).toContain('const sameScript = nextScriptId !== null && currentScriptId === nextScriptId;');
     expect(fn).toContain('const pos = sameScript ? editor.getPosition() : null;');
     expect(fn).toContain('if (sameScript && pos) editor.setPosition(pos);');

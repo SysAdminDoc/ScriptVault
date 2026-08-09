@@ -21,16 +21,14 @@ run `npm run vendored:provenance:check` or `npm run firefox:package`.
 | `lib/codemirror/theme/material-darker.min.css` | codemirror | 5.65.15 | MIT | `36f7867d65852095da9627424ca794ab24b58187ccbdfdf637fda7b57ab417f8` | `e45937ac5dc64b64df239f0f7ed6119def02ba792e390605fca9318a6167992a` | generated locally | [npm](https://www.npmjs.com/package/codemirror/v/5.65.15) / [tarball](https://registry.npmjs.org/codemirror/-/codemirror-5.65.15.tgz) | not shipped; source package archive is disclosed |
 | `lib/codemirror/theme/monokai.min.css` | codemirror | 5.65.15 | MIT | `8e384a464c2adf6e08c4bd37a561f632d018dec2691d35e9179e5a16b27c6d30` | `e45937ac5dc64b64df239f0f7ed6119def02ba792e390605fca9318a6167992a` | generated locally | [npm](https://www.npmjs.com/package/codemirror/v/5.65.15) / [tarball](https://registry.npmjs.org/codemirror/-/codemirror-5.65.15.tgz) | not shipped; source package archive is disclosed |
 | `lib/codemirror/theme/nord.min.css` | codemirror | 5.65.15 | MIT | `5f16126f7822fbd3776ce2895c0dcbedd02e75f155b8d6bc8fbf53b710925c7f` | `e45937ac5dc64b64df239f0f7ed6119def02ba792e390605fca9318a6167992a` | generated locally | [npm](https://www.npmjs.com/package/codemirror/v/5.65.15) / [tarball](https://registry.npmjs.org/codemirror/-/codemirror-5.65.15.tgz) | not shipped; source package archive is disclosed |
-| `lib/monaco-esm/editor.js` | monaco-editor | 0.56.0 | MIT | `eab805c5621d572a474245b2cd72c65f4062741a366ccc502f2d1c8d635f6903` | `b74bc4437205c194b779b0f21e5e7fcd3b4e9acbf3f7c8732a545d2059fb7412` | generated locally | [npm](https://www.npmjs.com/package/monaco-editor/v/0.56.0) / [tarball](https://registry.npmjs.org/monaco-editor/-/monaco-editor-0.56.0.tgz) | not shipped; generated ESM bundle |
-| `lib/monaco-esm/editor.css` | monaco-editor | 0.56.0 | MIT | `aa8f51e5f566e58e0b05b637369116e75a95851d7b226c1cfc7458c984c559fd` | `b74bc4437205c194b779b0f21e5e7fcd3b4e9acbf3f7c8732a545d2059fb7412` | generated locally | [npm](https://www.npmjs.com/package/monaco-editor/v/0.56.0) / [tarball](https://registry.npmjs.org/monaco-editor/-/monaco-editor-0.56.0.tgz) | not shipped; generated ESM bundle |
+| `lib/monaco-esm/editor.js` | monaco-editor | 0.56.0 | MIT | `6b6b200508a6024dc16a54770bd4050934342a38b435ec98855eb6ec362e5200` | `b74bc4437205c194b779b0f21e5e7fcd3b4e9acbf3f7c8732a545d2059fb7412` | generated locally | [npm](https://www.npmjs.com/package/monaco-editor/v/0.56.0) / [tarball](https://registry.npmjs.org/monaco-editor/-/monaco-editor-0.56.0.tgz) | not shipped; generated ESM bundle |
+| `lib/monaco-esm/editor.css` | monaco-editor | 0.56.0 | MIT | `8932e8a97aaa06c789cbdc38b9eb03ada1851e2f38ddde0e4ff33410ccc02e1a` | `b74bc4437205c194b779b0f21e5e7fcd3b4e9acbf3f7c8732a545d2059fb7412` | generated locally | [npm](https://www.npmjs.com/package/monaco-editor/v/0.56.0) / [tarball](https://registry.npmjs.org/monaco-editor/-/monaco-editor-0.56.0.tgz) | not shipped; generated ESM bundle |
 | `lib/monaco-esm/assets/codicon-KP4OV2OO.ttf` | monaco-editor | 0.56.0 | MIT | `cc2472e239e17062e7760af87f8f5997720cc0d94aa014a615c418baaf6333a8` | `b74bc4437205c194b779b0f21e5e7fcd3b4e9acbf3f7c8732a545d2059fb7412` | generated locally | [npm](https://www.npmjs.com/package/monaco-editor/v/0.56.0) / [tarball](https://registry.npmjs.org/monaco-editor/-/monaco-editor-0.56.0.tgz) | not shipped; generated ESM bundle asset |
 | `lib/monaco-esm/workers/editor.worker.js` | monaco-editor | 0.56.0 | MIT | `23863d6635f4500b47ff6d8918d98c72da79711f2e851784621be27712bed499` | `b74bc4437205c194b779b0f21e5e7fcd3b4e9acbf3f7c8732a545d2059fb7412` | generated locally | [npm](https://www.npmjs.com/package/monaco-editor/v/0.56.0) / [tarball](https://registry.npmjs.org/monaco-editor/-/monaco-editor-0.56.0.tgz) | not shipped; generated ESM worker bundle |
 | `lib/monaco-esm/workers/css.worker.js` | monaco-editor | 0.56.0 | MIT | `5fe6377b26fe29e45c44c34e29ffc2bd10ea385a0ec5c3b06a8862fe6fa1d775` | `b74bc4437205c194b779b0f21e5e7fcd3b4e9acbf3f7c8732a545d2059fb7412` | generated locally | [npm](https://www.npmjs.com/package/monaco-editor/v/0.56.0) / [tarball](https://registry.npmjs.org/monaco-editor/-/monaco-editor-0.56.0.tgz) | not shipped; generated ESM worker bundle |
-| `lib/monaco-esm/workers/html.worker.js` | monaco-editor | 0.56.0 | MIT | `142ab8a74fd4b42bbb15fa758bc1b884ecbfad055fd54f4153ac11eb96ea4c9a` | `b74bc4437205c194b779b0f21e5e7fcd3b4e9acbf3f7c8732a545d2059fb7412` | generated locally | [npm](https://www.npmjs.com/package/monaco-editor/v/0.56.0) / [tarball](https://registry.npmjs.org/monaco-editor/-/monaco-editor-0.56.0.tgz) | not shipped; generated ESM worker bundle |
-| `lib/monaco-esm/workers/json.worker.js` | monaco-editor | 0.56.0 | MIT | `ff72c3d5d93e22c00071417611b0dcb6364752ea97bb6cb17401f67f2bf6b0d6` | `b74bc4437205c194b779b0f21e5e7fcd3b4e9acbf3f7c8732a545d2059fb7412` | generated locally | [npm](https://www.npmjs.com/package/monaco-editor/v/0.56.0) / [tarball](https://registry.npmjs.org/monaco-editor/-/monaco-editor-0.56.0.tgz) | not shipped; generated ESM worker bundle |
 | `lib/monaco-esm/workers/ts.worker.js` | monaco-editor | 0.56.0 | MIT | `83e90c8aeb63b5de7e892426b32983e280540739cf8ade8bd88a865702ec7f61` | `b74bc4437205c194b779b0f21e5e7fcd3b4e9acbf3f7c8732a545d2059fb7412` | generated locally | [npm](https://www.npmjs.com/package/monaco-editor/v/0.56.0) / [tarball](https://registry.npmjs.org/monaco-editor/-/monaco-editor-0.56.0.tgz) | not shipped; generated ESM worker bundle |
 | `lib/monaco-esm/workers/userscript-lsp.worker.js` | monaco-editor | 0.56.0 | MIT | `942a5d3e666a6b239d4f4a1f190d12b2005d7e193601e8929bdab54b601777a7` | `b74bc4437205c194b779b0f21e5e7fcd3b4e9acbf3f7c8732a545d2059fb7412` | generated locally | [npm](https://www.npmjs.com/package/monaco-editor/v/0.56.0) / [tarball](https://registry.npmjs.org/monaco-editor/-/monaco-editor-0.56.0.tgz) | not shipped; generated ESM worker bundle |
-| `lib/monaco-esm/editor.js (inlined dependency)` | dompurify | 3.4.13 | MPL-2.0 OR Apache-2.0 | `eab805c5621d572a474245b2cd72c65f4062741a366ccc502f2d1c8d635f6903` | `2a0647141c748404c9958cf12079c3fdb79cf9a7faaa87c8fac034a3b1275ab2` | generated locally | [npm](https://www.npmjs.com/package/dompurify/v/3.4.13) / [tarball](https://registry.npmjs.org/dompurify/-/dompurify-3.4.13.tgz) | inlined in editor.js; no standalone file shipped |
+| `lib/monaco-esm/editor.js (inlined dependency)` | dompurify | 3.4.13 | MPL-2.0 OR Apache-2.0 | `6b6b200508a6024dc16a54770bd4050934342a38b435ec98855eb6ec362e5200` | `2a0647141c748404c9958cf12079c3fdb79cf9a7faaa87c8fac034a3b1275ab2` | generated locally | [npm](https://www.npmjs.com/package/dompurify/v/3.4.13) / [tarball](https://registry.npmjs.org/dompurify/-/dompurify-3.4.13.tgz) | inlined in editor.js; no standalone file shipped |
 
 ### Acorn (acorn@8.17.0)
 
@@ -250,7 +248,7 @@ run `npm run vendored:provenance:check` or `npm run firefox:package`.
 - Source archive path after `npm ci`: `monaco-editor-0.56.0.tgz`
 - Generation: esbuild-bundle from the pinned npm package archive
 - Official source archive: `monaco-editor-0.56.0.tgz` (SHA-256 `b74bc4437205c194b779b0f21e5e7fcd3b4e9acbf3f7c8732a545d2059fb7412`).
-- Packaged SHA-256: `eab805c5621d572a474245b2cd72c65f4062741a366ccc502f2d1c8d635f6903`
+- Packaged SHA-256: `6b6b200508a6024dc16a54770bd4050934342a38b435ec98855eb6ec362e5200`
 - Source SHA-256: `b74bc4437205c194b779b0f21e5e7fcd3b4e9acbf3f7c8732a545d2059fb7412`
 - Shipped channels: chrome, edge
 
@@ -266,7 +264,7 @@ run `npm run vendored:provenance:check` or `npm run firefox:package`.
 - Source archive path after `npm ci`: `monaco-editor-0.56.0.tgz`
 - Generation: copied-from-bundle-build from the pinned npm package archive
 - Official source archive: `monaco-editor-0.56.0.tgz` (SHA-256 `b74bc4437205c194b779b0f21e5e7fcd3b4e9acbf3f7c8732a545d2059fb7412`).
-- Packaged SHA-256: `aa8f51e5f566e58e0b05b637369116e75a95851d7b226c1cfc7458c984c559fd`
+- Packaged SHA-256: `8932e8a97aaa06c789cbdc38b9eb03ada1851e2f38ddde0e4ff33410ccc02e1a`
 - Source SHA-256: `b74bc4437205c194b779b0f21e5e7fcd3b4e9acbf3f7c8732a545d2059fb7412`
 - Shipped channels: chrome, edge
 
@@ -318,38 +316,6 @@ run `npm run vendored:provenance:check` or `npm run firefox:package`.
 - Source SHA-256: `b74bc4437205c194b779b0f21e5e7fcd3b4e9acbf3f7c8732a545d2059fb7412`
 - Shipped channels: chrome, edge
 
-### Monaco html.worker.js (monaco-editor@0.56.0)
-
-- Packaged file: `lib/monaco-esm/workers/html.worker.js`
-- Runtime use: Monaco editor worker runtime
-- License: MIT
-- Official package page: https://www.npmjs.com/package/monaco-editor/v/0.56.0
-- Official npm tarball: https://registry.npmjs.org/monaco-editor/-/monaco-editor-0.56.0.tgz
-- npm integrity: `sha512-sXboRm3BeBeLm938eaiyLMe0OxzfXIlZvbv4ir/jVgQy1zDhWjgmny0WoN45fuDKhCCQsYMbBJrv/A6jd8aCUg==`
-- Repository: https://github.com/microsoft/monaco-editor
-- Source archive path after `npm ci`: `monaco-editor-0.56.0.tgz`
-- Generation: esbuild-worker-bundle from the pinned npm package archive
-- Official source archive: `monaco-editor-0.56.0.tgz` (SHA-256 `b74bc4437205c194b779b0f21e5e7fcd3b4e9acbf3f7c8732a545d2059fb7412`).
-- Packaged SHA-256: `142ab8a74fd4b42bbb15fa758bc1b884ecbfad055fd54f4153ac11eb96ea4c9a`
-- Source SHA-256: `b74bc4437205c194b779b0f21e5e7fcd3b4e9acbf3f7c8732a545d2059fb7412`
-- Shipped channels: chrome, edge
-
-### Monaco json.worker.js (monaco-editor@0.56.0)
-
-- Packaged file: `lib/monaco-esm/workers/json.worker.js`
-- Runtime use: Monaco editor worker runtime
-- License: MIT
-- Official package page: https://www.npmjs.com/package/monaco-editor/v/0.56.0
-- Official npm tarball: https://registry.npmjs.org/monaco-editor/-/monaco-editor-0.56.0.tgz
-- npm integrity: `sha512-sXboRm3BeBeLm938eaiyLMe0OxzfXIlZvbv4ir/jVgQy1zDhWjgmny0WoN45fuDKhCCQsYMbBJrv/A6jd8aCUg==`
-- Repository: https://github.com/microsoft/monaco-editor
-- Source archive path after `npm ci`: `monaco-editor-0.56.0.tgz`
-- Generation: esbuild-worker-bundle from the pinned npm package archive
-- Official source archive: `monaco-editor-0.56.0.tgz` (SHA-256 `b74bc4437205c194b779b0f21e5e7fcd3b4e9acbf3f7c8732a545d2059fb7412`).
-- Packaged SHA-256: `ff72c3d5d93e22c00071417611b0dcb6364752ea97bb6cb17401f67f2bf6b0d6`
-- Source SHA-256: `b74bc4437205c194b779b0f21e5e7fcd3b4e9acbf3f7c8732a545d2059fb7412`
-- Shipped channels: chrome, edge
-
 ### Monaco ts.worker.js (monaco-editor@0.56.0)
 
 - Packaged file: `lib/monaco-esm/workers/ts.worker.js`
@@ -394,7 +360,7 @@ run `npm run vendored:provenance:check` or `npm run firefox:package`.
 - Source archive path after `npm ci`: `dompurify-3.4.13.tgz`
 - Generation: monaco-esm-resolve-override from the pinned npm package archive
 - Official source archive: `dompurify-3.4.13.tgz` (SHA-256 `2a0647141c748404c9958cf12079c3fdb79cf9a7faaa87c8fac034a3b1275ab2`).
-- Packaged SHA-256: `eab805c5621d572a474245b2cd72c65f4062741a366ccc502f2d1c8d635f6903`
+- Packaged SHA-256: `6b6b200508a6024dc16a54770bd4050934342a38b435ec98855eb6ec362e5200`
 - Source SHA-256: `2a0647141c748404c9958cf12079c3fdb79cf9a7faaa87c8fac034a3b1275ab2`
 - Shipped channels: chrome, edge
 

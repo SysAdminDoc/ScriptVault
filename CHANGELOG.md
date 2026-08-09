@@ -4,6 +4,9 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased] — Minimal workbench surfaces
 
+- Reduced the Monaco ESM surface to the editor plus JavaScript/TypeScript/CSS
+  contributions, dropped the unused HTML/JSON workers, and opened UserCSS
+  drafts in a CSS model with live language switching.
 - Added a compact first-run setup tab that probes live `userScripts` access,
   deep-links to the browser's extension details when setup is required, and
   stays closed on extension updates.

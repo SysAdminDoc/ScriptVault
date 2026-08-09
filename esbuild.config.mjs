@@ -215,9 +215,7 @@ async function buildMonacoEsm() {
     ...commonOptions,
     entryPoints: {
       "editor.worker": join(ROOT, "node_modules", "monaco-editor", "esm", "vs", "editor", "editor.worker.js"),
-      "json.worker": join(ROOT, "node_modules", "monaco-editor", "esm", "vs", "language", "json", "json.worker.js"),
       "css.worker": join(ROOT, "node_modules", "monaco-editor", "esm", "vs", "language", "css", "css.worker.js"),
-      "html.worker": join(ROOT, "node_modules", "monaco-editor", "esm", "vs", "language", "html", "html.worker.js"),
       "ts.worker": join(ROOT, "node_modules", "monaco-editor", "esm", "vs", "language", "typescript", "ts.worker.js"),
       "userscript-lsp.worker": join(ROOT, "src", "editor", "userscript-lsp-worker.ts"),
     },

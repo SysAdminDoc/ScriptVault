@@ -12,13 +12,12 @@ describe('Monaco ESM prototype build contract', () => {
   it('builds from a dedicated source entrypoint with file-backed worker URLs', () => {
     const entry = read('src/editor/monaco-esm-entry.ts');
 
-    expect(entry).toContain("import * as monaco from 'monaco-editor';");
+    expect(entry).toContain("import * as editorApi from 'monaco-editor/editor/editor.api.js';");
+    expect(entry).toContain("import * as lsp from '../../node_modules/monaco-editor/esm/external/monaco-lsp-client/out/index.js';");
     expect(entry).toContain("DEFAULT_WORKER_FILE = 'workers/editor.worker.js'");
     for (const worker of [
       'workers/editor.worker.js',
-      'workers/json.worker.js',
       'workers/css.worker.js',
-      'workers/html.worker.js',
       'workers/ts.worker.js',
       'workers/userscript-lsp.worker.js',
     ]) {
@@ -45,9 +44,7 @@ describe('Monaco ESM prototype build contract', () => {
     expect(config).toContain('plugins: [monacoDomPurifyPlugin]');
     for (const worker of [
       '"editor.worker":',
-      '"json.worker":',
       '"css.worker":',
-      '"html.worker":',
       '"ts.worker":',
       '"userscript-lsp.worker":',
     ]) {

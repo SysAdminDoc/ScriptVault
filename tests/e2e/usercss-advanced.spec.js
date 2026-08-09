@@ -28,6 +28,10 @@ async function markWhatsNewSeen(page) {
   }));
 }
 
+function editorSandboxFrame(page) {
+  return page.frames().find(frame => frame.url().includes('/pages/editor-sandbox.html'));
+}
+
 test('advanced UserCSS configuration live-previews linked palettes and persists draft defaults', async () => {
   test.setTimeout(120_000);
   const app = await launchScriptVault();
@@ -53,6 +57,21 @@ test('advanced UserCSS configuration live-previews linked palettes and persists 
     await page.locator(`.action-icon[data-action="edit"][data-id="${SCRIPT_ID}"]`).click();
     await expect(page.frameLocator('#monacoFrame').locator('.monaco-editor')).toBeVisible({ timeout: 20_000 });
     await page.waitForFunction(() => window._monacoEditorAdapter?.isMonaco === true, null, { timeout: 20_000 });
+
+    let editorFrame;
+    await expect.poll(() => {
+      editorFrame = editorSandboxFrame(page);
+      return Boolean(editorFrame);
+    }, { timeout: 20_000 }).toBe(true);
+    await expect.poll(() => editorFrame.evaluate(() =>
+      window.ScriptVaultMonacoEsm?.monaco?.editor?.getModels?.()[0]?.getLanguageId?.() || ''
+    ), { timeout: 20_000 }).toBe('css');
+
+    await page.evaluate(() => window._monacoEditorAdapter.setValue(`/* ==UserStyle==\n@name malformed\n==/UserStyle== */\nbody { color: ; }`));
+    await expect.poll(() => editorFrame.evaluate(() =>
+      window.ScriptVaultMonacoEsm?.monaco?.editor?.getModelMarkers?.({})?.length || 0
+    ), { timeout: 20_000 }).toBeGreaterThan(0);
+    await page.evaluate(code => window._monacoEditorAdapter.setValue(code), ADVANCED_USERCSS);
 
     await expect(page.locator('#btnEditorConfigureUserCSS')).toBeVisible();
     await page.locator('#btnEditorConfigureUserCSS').click();
