@@ -41,19 +41,24 @@
         i18n.applyToDOM(document);
     }
 
-    const _svPolicy = (typeof window.trustedTypes !== 'undefined' && window.trustedTypes.createPolicy)
-        ? window.trustedTypes.createPolicy('sv-popup', { createHTML: s => s })
-        : null;
+    const _svPolicy = window.ScriptVaultTrustedTypes?.getPolicy?.('sv-popup')
+        || ((typeof window.trustedTypes !== 'undefined' && window.trustedTypes.createPolicy)
+            ? window.trustedTypes.createPolicy('sv-popup', {
+                createHTML: s => s,
+                createScriptURL: s => s,
+            })
+            : null);
     function htmlToFragment(html, contextEl) {
         // Anchor the parse range in the target element so context-sensitive
         // tags (<td>/<tr>/<option>/<li>) parse correctly instead of being
         // dropped in document context (regression fixed 2026-07-01).
         const range = document.createRange();
         if (contextEl) range.selectNodeContents(contextEl);
-        return range.createContextualFragment(String(html ?? ''));
+        return range.createContextualFragment(html);
     }
     function safeSetHtml(el, html) {
-        el.replaceChildren(htmlToFragment(_svPolicy ? _svPolicy.createHTML(html) : html, el));
+        const raw = String(html ?? '');
+        el.replaceChildren(htmlToFragment(_svPolicy ? _svPolicy.createHTML(raw) : raw, el));
     }
 
     // Event delegation for favicon error handling (CSP-compliant)

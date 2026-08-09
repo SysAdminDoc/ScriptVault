@@ -32,7 +32,7 @@ const ProfileManager = (() => {
   const _safeSetHtml = (typeof window.ScriptVaultDashboardUI?.safeSetHtml === 'function')
       ? window.ScriptVaultDashboardUI.safeSetHtml
       : (el, html) => {
-        { const _r = document.createRange(); _r.selectNodeContents(el); el.replaceChildren(_r.createContextualFragment(String(html ?? ''))); }
+        { const _r = document.createRange(); _r.selectNodeContents(el); el.replaceChildren(_r.createContextualFragment(window.ScriptVaultTrustedTypes?.toTrustedHTML?.('sv-dashboard', html) ?? String(html ?? ''))); }
       };
 
   let _container = null;

@@ -71,7 +71,7 @@
     ]
   },
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self';",
+    "extension_pages": "require-trusted-types-for 'script'; trusted-types sv-dashboard sv-popup sv-install sv-devtools sv-sidepanel; script-src 'self'; object-src 'self';",
     "sandbox": "sandbox allow-scripts allow-forms allow-popups allow-modals; script-src 'self' 'unsafe-eval' 'unsafe-inline' blob:; object-src 'self';"
   },
   "content_scripts": [

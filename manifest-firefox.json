@@ -89,5 +89,8 @@
       },
       "description": "__MSG_cmdToggleScripts__"
     }
+  },
+  "content_security_policy": {
+    "extension_pages": "require-trusted-types-for 'script'; trusted-types sv-dashboard sv-popup sv-install sv-devtools sv-sidepanel; script-src 'self'; object-src 'self';"
   }
 }

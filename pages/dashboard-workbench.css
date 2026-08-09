@@ -5364,7 +5364,9 @@ html[data-theme="light"] #scriptsPanel .script-inspector-panel {
   #svRailStorageText,
   #svWorkbenchSectionTitle,
   #emptyStateTitle,
-  #svFooterUpdateStatus {
+  #svFooterUpdateStatus,
+  .script-inspector-eyebrow,
+  .script-inspector-empty strong {
     color: CanvasText !important;
   }
 

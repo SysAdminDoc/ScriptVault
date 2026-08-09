@@ -110,6 +110,12 @@ the page policy applies. Avoid assigning raw strings to `innerHTML`,
 site requires a `TrustedHTML` object, use a policy approved by that site; do not
 create a broad passthrough policy just to bypass CSP.
 
+ScriptVault's own extension pages enforce `require-trusted-types-for 'script'`
+with a named, same-extension policy. Internal render helpers preserve the
+browser's `TrustedHTML`/`TrustedScriptURL` types, escape user-controlled values
+before interpolation, and route any blocked render to the dashboard activity
+log and CSP reporter.
+
 ### Script Management
 
 - **Auto-detect installation** &mdash; Navigate to any `.user.js` URL

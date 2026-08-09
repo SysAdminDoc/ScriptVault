@@ -81,7 +81,15 @@ function createHarness({
 } = {}) {
   const messages = [];
   const appendedLinks = [];
-  const loading = { style: {}, innerHTML: '' };
+  const textOf = value => typeof value === 'string' ? value : (value?.textContent || '');
+  const loading = {
+    style: {},
+    textContent: '',
+    replaceChildren(...children) {
+      this.children = children;
+      this.textContent = children.map(textOf).join('');
+    },
+  };
   const container = {};
   const { monaco, editorInstance } = createFakeMonaco({ lspConstructorFails, withLsp });
   const windowObject = {};
@@ -99,7 +107,19 @@ function createHarness({
       },
     },
     createElement(tagName) {
-      return { tagName, style: {} };
+      return {
+        tagName,
+        style: {},
+        textContent: '',
+        append(...children) {
+          this.children = [...(this.children || []), ...children];
+          this.textContent += children.map(textOf).join('');
+        },
+        appendChild(child) {
+          this.append(child);
+          return child;
+        },
+      };
     },
     getElementById(id) {
       if (id === 'loading') return loading;
@@ -283,6 +303,6 @@ describe('Monaco ESM sandbox loader', () => {
     await runSandbox(harness.context);
 
     expect(harness.messages).toContainEqual({ type: 'monaco-load-error', reason: 'missing-bundle' });
-    expect(harness.loading.innerHTML).toContain('node esbuild.config.mjs --monaco-esm-only');
+    expect(harness.loading.textContent).toContain('node esbuild.config.mjs --monaco-esm-only');
   });
 });

@@ -2,9 +2,13 @@
 (function() {
     'use strict';
 
-    const _svPolicy = (typeof window.trustedTypes !== 'undefined' && window.trustedTypes.createPolicy)
-        ? window.trustedTypes.createPolicy('sv-dashboard', { createHTML: s => s })
-        : null;
+    const _svPolicy = window.ScriptVaultTrustedTypes?.getPolicy?.('sv-dashboard')
+        || ((typeof window.trustedTypes !== 'undefined' && window.trustedTypes.createPolicy)
+            ? window.trustedTypes.createPolicy('sv-dashboard', {
+                createHTML: s => s,
+                createScriptURL: s => s,
+            })
+            : null);
     function htmlToFragment(html, contextEl) {
         // Anchor the parse range in the target element so context-sensitive
         // tags (<td>/<tr>/<option>/<li>) parse correctly. A bare
@@ -12,10 +16,14 @@
         // drops table cells (regression fixed 2026-07-01).
         const range = document.createRange();
         if (contextEl) range.selectNodeContents(contextEl);
-        return range.createContextualFragment(String(html ?? ''));
+        // Range#createContextualFragment is a Trusted Types-enforced sink.
+        // Preserve the TrustedHTML object returned by the named policy;
+        // coercing it to String would discard the browser's type marker.
+        return range.createContextualFragment(html);
     }
     function safeSetHtml(el, html) {
-        el.replaceChildren(htmlToFragment(_svPolicy ? _svPolicy.createHTML(html) : html, el));
+        const raw = String(html ?? '');
+        el.replaceChildren(htmlToFragment(_svPolicy ? _svPolicy.createHTML(raw) : raw, el));
     }
     function escapeUntrustedHtmlFallback(html) {
         const raw = String(html ?? '');
@@ -2883,6 +2891,13 @@
                 event.directive || 'default-src',
                 { scriptName: event.scriptName || 'Dashboard', detail: event.detail || event.blockedURI || '' }
             ).catch?.(() => {});
+        }
+
+        // Trusted Types violations are security-relevant extension failures,
+        // not just site CSP noise. Keep them visible in the existing activity
+        // log so a blocked render is actionable without opening DevTools.
+        if (type === 'cspViolation' && /trusted-types|require-trusted-types-for/i.test(event.directive || '')) {
+            logActivity(`Trusted Types blocked an HTML update${event.detail ? `: ${event.detail}` : ''}`, 'error');
         }
 
         if ((type === 'scriptEdited' || type === 'scriptUpdated') &&

@@ -48,7 +48,9 @@ describe('Firefox AMO validation gate', () => {
     expect(firefoxManifest.optional_permissions).not.toContain('identity');
     expect(firefoxManifest.optional_permissions).not.toContain('contextualIdentities');
     expect(firefoxManifest).not.toHaveProperty('sandbox');
-    expect(firefoxManifest).not.toHaveProperty('content_security_policy');
+    expect(firefoxManifest.content_security_policy?.extension_pages).toContain("require-trusted-types-for 'script'");
+    expect(firefoxManifest.content_security_policy?.extension_pages).toContain('trusted-types sv-dashboard sv-popup sv-install sv-devtools sv-sidepanel');
+    expect(firefoxManifest.content_security_policy).not.toHaveProperty('sandbox');
   });
 
   it('builds, lints, packages, and sources Firefox artifacts through web-ext', () => {

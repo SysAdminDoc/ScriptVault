@@ -37,4 +37,20 @@ describe('Trusted Types author documentation', () => {
     expect(wrapper).not.toMatch(/trustedTypes\s*\.\s*createPolicy/);
     expect(core).not.toMatch(/trustedTypes\s*\.\s*createPolicy/);
   });
+
+  it('keeps extension-page enforcement and the reporting path explicit', () => {
+    const manifest = read('manifest.json');
+    const firefoxManifest = read('manifest-firefox.json');
+    const dashboard = read('pages/dashboard.js');
+    const templates = read('pages/dashboard-templates.js');
+
+    for (const source of [manifest, firefoxManifest]) {
+      expect(source).toContain("require-trusted-types-for 'script'");
+      expect(source).toContain('trusted-types sv-dashboard sv-popup sv-install sv-devtools sv-sidepanel');
+    }
+    expect(dashboard).toContain("document.addEventListener('securitypolicyviolation'");
+    expect(dashboard).toContain('Trusted Types blocked an HTML update');
+    expect(templates).toContain("new DOMParser().parseFromString(raw, 'text/html')");
+    expect(templates).not.toMatch(/\.innerHTML\s*=/);
+  });
 });

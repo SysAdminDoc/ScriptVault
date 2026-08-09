@@ -63,7 +63,9 @@ describe('manifest generator', () => {
     expect(manifest).not.toHaveProperty('minimum_chrome_version');
     expect(manifest).not.toHaveProperty('side_panel');
     expect(manifest).not.toHaveProperty('sandbox');
-    expect(manifest).not.toHaveProperty('content_security_policy');
+    expect(manifest.content_security_policy.extension_pages).toContain("require-trusted-types-for 'script'");
+    expect(manifest.content_security_policy.extension_pages).toContain('trusted-types sv-dashboard sv-popup sv-install sv-devtools sv-sidepanel');
+    expect(manifest.content_security_policy).not.toHaveProperty('sandbox');
   });
 
   it('keeps Edge manifest schema-valid for Chromium MV3 packaging', async () => {

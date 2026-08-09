@@ -4,6 +4,17 @@
 (function () {
   'use strict';
 
+  // Keep the side panel on the same named-policy allowlist as the other
+  // extension surfaces, even though it currently renders with DOM methods.
+  // This makes a future HTML renderer fail closed under the page CSP.
+  const _svPolicy = window.ScriptVaultTrustedTypes?.getPolicy?.('sv-sidepanel')
+    || ((typeof window.trustedTypes !== 'undefined' && window.trustedTypes.createPolicy)
+      ? window.trustedTypes.createPolicy('sv-sidepanel', {
+          createHTML: value => value,
+          createScriptURL: value => value,
+        })
+      : null);
+
   const numberFormatter = new Intl.NumberFormat();
 
   function getSidepanelI18n() {

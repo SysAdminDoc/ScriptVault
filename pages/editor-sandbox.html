@@ -113,7 +113,15 @@
   setupMonacoSandboxWorkers();
 
   loadMonacoEsm().catch(() => {
-    loading.innerHTML = '<div><strong>Editor Bundle Missing</strong><small>Rebuild the local Monaco assets with:<br>node esbuild.config.mjs --monaco-esm-only</small></div>';
+    const message = document.createElement('div');
+    const title = document.createElement('strong');
+    title.textContent = 'Editor Bundle Missing';
+    const detail = document.createElement('small');
+    detail.append('Rebuild the local Monaco assets with:');
+    detail.append(document.createElement('br'));
+    detail.append('node esbuild.config.mjs --monaco-esm-only');
+    message.append(title, detail);
+    loading.replaceChildren(message);
     parent.postMessage({ type: 'monaco-load-error', reason: 'missing-bundle' }, '*');
   });
 

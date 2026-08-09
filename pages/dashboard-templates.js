@@ -40,7 +40,7 @@ const TemplateManager = (() => {
     const _safeSetHtml = (typeof window.ScriptVaultDashboardUI?.safeSetHtml === 'function')
         ? window.ScriptVaultDashboardUI.safeSetHtml
         : (el, html) => {
-          { const _r = document.createRange(); _r.selectNodeContents(el); el.replaceChildren(_r.createContextualFragment(String(html ?? ''))); }
+          { const _r = document.createRange(); _r.selectNodeContents(el); el.replaceChildren(_r.createContextualFragment(window.ScriptVaultTrustedTypes?.toTrustedHTML?.('sv-dashboard', html) ?? String(html ?? ''))); }
         };
 
     const CATEGORIES = [
@@ -405,9 +405,15 @@ const TemplateManager = (() => {
         const raw = String(icon || '').trim();
         if (!raw) return DEFAULT_TEMPLATE_ICON;
         if (!/&(?:#\d+|#x[\da-f]+|[a-z][\w]+);/i.test(raw)) return raw;
-        const textarea = document.createElement('textarea');
-        textarea.innerHTML = raw;
-        return textarea.value || raw;
+        // DOMParser decodes character references without writing an HTML
+        // string into a live DOM sink. This keeps template icons compatible
+        // with extension pages enforcing Trusted Types.
+        try {
+            const parsed = new DOMParser().parseFromString(raw, 'text/html');
+            return parsed.body?.textContent || raw;
+        } catch {
+            return raw;
+        }
     }
 
     function normalizeTemplateIcon(icon) {

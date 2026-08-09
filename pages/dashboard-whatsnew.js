@@ -436,7 +436,7 @@ const WhatsNew = (() => {
   const _safeSetHtml = (typeof _dashboardUi?.safeSetHtml === 'function')
       ? _dashboardUi.safeSetHtml
       : (el, html) => {
-        { const _r = document.createRange(); _r.selectNodeContents(el); el.replaceChildren(_r.createContextualFragment(String(html ?? ''))); }
+        { const _r = document.createRange(); _r.selectNodeContents(el); el.replaceChildren(_r.createContextualFragment(window.ScriptVaultTrustedTypes?.toTrustedHTML?.('sv-dashboard', html) ?? String(html ?? ''))); }
       };
 
   function _hasChangelogEntry(version) {

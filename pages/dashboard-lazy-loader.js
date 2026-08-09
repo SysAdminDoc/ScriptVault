@@ -7,6 +7,7 @@ const LazyLoader = (() => {
 
   const _loaded = new Set();
   const _loading = new Map(); // script src → Promise
+  const _scriptUrlPolicy = globalThis.ScriptVaultTrustedTypes?.getPolicy?.('sv-dashboard');
 
   // Modules that should load IMMEDIATELY (critical path)
   // Everything else is deferred until the user navigates to the relevant tab
@@ -68,7 +69,9 @@ const LazyLoader = (() => {
 
     const promise = new Promise((resolve, reject) => {
       const script = document.createElement('script');
-      script.src = src;
+      script.src = _scriptUrlPolicy?.createScriptURL(src)
+        || globalThis.ScriptVaultTrustedTypes?.toTrustedScriptURL?.('sv-dashboard', src)
+        || src;
       script.async = true;
       script.onload = () => {
         _loaded.add(src);
