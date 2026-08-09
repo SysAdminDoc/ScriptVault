@@ -33,6 +33,7 @@ describe('credential-free release preflight', () => {
       'typescript-source-drift',
       'runtime-generation-drift',
       'unit-static-gates',
+      'service-worker-boot',
       'dependency-audit',
       'locale-drift',
       'privacy-store-copy',

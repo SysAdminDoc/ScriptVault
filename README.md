@@ -585,6 +585,12 @@ Both commands use an isolated temporary headless Chromium profile. The release
 lane must execute local-workspace apply, service-worker rehydration, cross-tab
 value changes, and GM XHR FormData; it never treats a capability skip as proof.
 
+The MV3 boot budget is measured separately with
+`npm run smoke:service-worker:check`. It stops and wakes the worker through
+headless CDP, records p50/p99 first-response timings for an empty profile and a
+seeded 1,000-script profile, writes `release-artifacts/service-worker-boot-report.json`,
+and gates p99 at 1,000 ms (empty) / 1,500 ms (seeded) with no response errors.
+
 ### Credential-free release preflight
 
 ```bash

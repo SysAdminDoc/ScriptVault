@@ -7,6 +7,9 @@ All notable changes to ScriptVault will be documented in this file.
 - Reduced the Monaco ESM surface to the editor plus JavaScript/TypeScript/CSS
   contributions, dropped the unused HTML/JSON workers, and opened UserCSS
   drafts in a CSS model with live language switching.
+- Added a headless service-worker cold-start gate covering empty and seeded
+  1,000-script profiles, with p50/p99 JSON reports and release-preflight
+  enforcement.
 - Added a compact first-run setup tab that probes live `userScripts` access,
   deep-links to the browser's extension details when setup is required, and
   stays closed on extension updates.

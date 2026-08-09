@@ -61,6 +61,7 @@ export function buildPreflightPlan({ version, artifactRoot, buildRoot }) {
     nodeCheck('typescript-source-drift', ['scripts/check-ts-source-drift.mjs'], 'TypeScript/source authority drift'),
     nodeCheck('runtime-generation-drift', ['scripts/generate-ts-runtime-modules.mjs', '--check'], 'generated runtime byte drift'),
     npmCheck('unit-static-gates', ['run', 'check'], 'typecheck, static gates, and unit tests'),
+    npmCheck('service-worker-boot', ['run', 'smoke:service-worker:check'], 'MV3 service-worker cold-start budget'),
     npmCheck('dependency-audit', ['audit', '--audit-level=high', '--omit=optional'], 'high/critical production dependency advisories'),
     npmCheck('locale-drift', ['run', 'locale:generate:check'], 'canonical locale and generated catalog drift'),
     npmCheck('privacy-store-copy', ['run', 'store-copy:check'], 'manifest, privacy, and store-copy parity'),
