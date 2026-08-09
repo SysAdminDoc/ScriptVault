@@ -20,6 +20,18 @@ beforeEach(() => {
 });
 
 describe.each(implementations)('script subscriptions ($label)', ({ api: ScriptSubscriptions }) => {
+  it('parses HTTPS UserSubscribe bundles and constrains member connect scope', () => {
+    const bundle = ScriptSubscriptions.parseUserSubscribe(`// ==UserSubscribe==\n// @name Curated Pack\n// @connect api.example.com\n// @connect cdn.example.com\n// @scriptUrl https://cdn.example.com/one.user.js\n// ==/UserSubscribe==`, 'https://feeds.example.com/pack.user.sub.js');
+    expect(bundle.name).toBe('Curated Pack');
+    expect(bundle.scripts).toEqual([{ url: 'https://cdn.example.com/one.user.js' }]);
+    expect(ScriptSubscriptions.constrainConnectPatterns(['api.example.com', 'other.example.com'], bundle.connect)).toEqual(['api.example.com']);
+    expect(ScriptSubscriptions.constrainConnectPatterns(['*'], ['api.example.com'])).toEqual(['api.example.com']);
+  });
+
+  it('rejects non-HTTPS UserSubscribe members', () => {
+    expect(() => ScriptSubscriptions.parseUserSubscribe('// ==UserSubscribe==\n// @scriptUrl http://cdn.example.com/a.user.js\n// ==/UserSubscribe==', 'https://feeds.example.com/pack.user.sub.js')).toThrow(/https/);
+  });
+
   it('parses array and object feed entries with relative URLs', () => {
     const feed = ScriptSubscriptions.parseFeed(JSON.stringify({
       name: 'Curated Pack',

@@ -37,6 +37,8 @@ const RuntimeActionHandler = (() => {
   var RUNTIME_BACKGROUND_ACTIONS = [
     "installFromUrl",
     "installFromCode",
+    "prepareSubscriptionInstall",
+    "applySubscriptionInstall",
     "fetchScriptPreview",
     "probeInstallDependency",
     "verifyRequireProvenancePreview",
@@ -69,6 +71,8 @@ const RuntimeActionHandler = (() => {
         message.sourceUrl || "",
         message.operation || "install"
       ),
+      prepareSubscriptionInstall: ({ message }) => dependencies.prepareSubscriptionInstall(message.code || "", message.sourceUrl || ""),
+      applySubscriptionInstall: ({ message }) => dependencies.applySubscriptionInstall(message.code || "", message.sourceUrl || ""),
       fetchScriptPreview: ({ message }) => dependencies.fetchScriptPreview(message.url),
       probeInstallDependency: ({ message }) => dependencies.probeInstallDependency(message.url),
       verifyRequireProvenancePreview: ({ message }) => dependencies.verifyRequireProvenancePreview(message),

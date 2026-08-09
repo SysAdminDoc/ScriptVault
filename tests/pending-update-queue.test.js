@@ -106,6 +106,9 @@ function installStorage(scripts) {
     set: vi.fn(async (id, script) => {
       scripts.set(id, script);
     }),
+    delete: vi.fn(async id => {
+      scripts.delete(id);
+    }),
   };
 }
 
@@ -549,6 +552,23 @@ describe('pending update queue', () => {
       operation: 'subscription-install',
     });
     expect(await UpdateSystem.getPendingUpdates()).toEqual([]);
+  });
+
+  it('queues and applies an explicit uninstall proposal for a removed member', async () => {
+    const scripts = new Map([['removed', makeScript('removed', { meta: { name: 'Removed member' } })]]);
+    installStorage(scripts);
+    const queue = await UpdateSystem.queueSubscriptionRemovals([{
+      id: 'subscription_remove_feed_removed',
+      scriptId: 'removed',
+      name: 'Removed member',
+      subscriptionId: 'feed-1',
+      subscriptionName: 'Curated Feed',
+    }]);
+    expect(queue.pendingUpdates[0]).toMatchObject({ kind: 'subscription-remove', scriptId: 'removed', safeToApply: false });
+    const result = await UpdateSystem.applyPendingUpdate('subscription_remove_feed_removed', { force: true });
+    expect(result.success).toBe(true);
+    expect(globalThis.unregisterScript).toHaveBeenCalledWith('removed');
+    expect(scripts.has('removed')).toBe(false);
   });
 
   it('serializes concurrent applyUpdate calls on the same script', async () => {

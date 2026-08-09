@@ -49,6 +49,7 @@ interface PendingInstallData {
   url: string;
   finalUrl?: string;
   code?: string;
+  kind?: 'script' | 'subscription';
   error?: string;
   timestamp: number;
 }
@@ -134,8 +135,17 @@ async function fetchPendingUserscript(url: string): Promise<PendingInstallFetchR
     const postCheck = classifyResponseUrl(response, ['http:', 'https:']);
     if (!postCheck.ok) throw new Error(`Script source redirected to ${postCheck.message}`);
     const code = await fetchTextBounded(response, MAX_SCRIPT_SIZE, 'Script');
-    if (!code.includes('==UserScript==')) return { action: 'pass-through' };
-    return { action: 'install', pendingInstall: { url, finalUrl: response.url || url, code, timestamp: Date.now() } };
+    if (!code.includes('==UserScript==') && !code.includes('==UserSubscribe==')) return { action: 'pass-through' };
+    return {
+      action: 'install',
+      pendingInstall: {
+        url,
+        finalUrl: response.url || url,
+        code,
+        kind: code.includes('==UserSubscribe==') ? 'subscription' : 'script',
+        timestamp: Date.now(),
+      },
+    };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     console.error('[ScriptVault] Failed to fetch script:', error);
@@ -153,8 +163,8 @@ export function registerWebNavigationListener(): void {
 
       const url: string = details.url;
 
-      // Check if this is a .user.js URL
-      if (!url.match(/\.user\.js(\?[^#]*)?(#.*)?$/i)) return;
+      // Check if this is a userscript or subscription URL
+      if (!url.match(/\.user(?:\.sub)?\.js(\?[^#]*)?(#.*)?$/i)) return;
 
       // Don't intercept extension pages
       if (url.startsWith('chrome-extension://')) return;
@@ -181,7 +191,7 @@ export function registerWebNavigationListener(): void {
       }
     },
     {
-      url: [{ urlMatches: '.*\\.user\\.js(\\?[^#]*)?(#.*)?$' }],
+      url: [{ urlMatches: '.*\\.user(?:\\.sub)?\\.js(\\?[^#]*)?(#.*)?$' }],
     },
   );
 }

@@ -961,6 +961,18 @@ interface InstallFromCode {
   operation?: string;
 }
 
+interface PrepareSubscriptionInstall {
+  action: 'prepareSubscriptionInstall';
+  code: string;
+  sourceUrl?: string;
+}
+
+interface ApplySubscriptionInstall {
+  action: 'applySubscriptionInstall';
+  code: string;
+  sourceUrl?: string;
+}
+
 interface FetchScriptPreview {
   action: 'fetchScriptPreview';
   url: string;
@@ -1822,7 +1834,7 @@ export type BackgroundMessage =
   | EasyCloudConnect | EasyCloudDisconnect | EasyCloudSync | EasyCloudStatus
   // Import/export
   | ExportAll | ImportAll | ImportBackup | ExportZip | ImportFromZip | InstallFromUrl | InstallFromCode
-  | FetchScriptPreview | ProbeInstallDependency
+  | FetchScriptPreview | ProbeInstallDependency | PrepareSubscriptionInstall | ApplySubscriptionInstall
   | VerifyRequireProvenancePreview
   // Storage quota
   | GetStorageUsage | GetStorageBreakdown | CleanupStorage
@@ -2015,6 +2027,8 @@ export interface ResponseMap {
   // ── Install flow ───────────────────────────────────────────────────
   installFromUrl: { success: true } | ErrorResponse;
   installFromCode: { success: true } | ErrorResponse;
+  prepareSubscriptionInstall: unknown;
+  applySubscriptionInstall: unknown;
   fetchScriptPreview:
     | { success: true; code: string; finalUrl?: string }
     | { success: false; error: string };

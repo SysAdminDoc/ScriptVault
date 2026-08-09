@@ -3722,6 +3722,8 @@
             const safe = update.safeToApply === true;
             const versionLabel = update.kind === 'subscription-install'
                 ? `New -> ${escapeHtml(update.newVersion || '?')}`
+                : update.kind === 'subscription-remove'
+                    ? 'Proposed uninstall'
                 : `${escapeHtml(update.currentVersion || '?')} -> ${escapeHtml(update.newVersion || '?')}`;
             return `
                 <article class="scripts-update-queue-row${safe ? '' : ' review-required'}" data-update-id="${escapeHtml(update.id)}">
@@ -3751,6 +3753,7 @@
     function renderPendingUpdateCard(update) {
         const safe = update.safeToApply === true;
         const isSubscriptionInstall = update.kind === 'subscription-install';
+        const isSubscriptionRemove = update.kind === 'subscription-remove';
         const reasons = Array.isArray(update.reviewReasons) && update.reviewReasons.length
             ? update.reviewReasons.join(', ')
             : 'No permission, source, or dependency expansion.';
@@ -3759,6 +3762,8 @@
         const sourceHost = source.installHost || '';
         const versionLabel = isSubscriptionInstall
             ? `New script -> v${escapeHtml(update.newVersion || '?')}`
+            : isSubscriptionRemove
+                ? 'Proposed uninstall'
             : `v${escapeHtml(update.currentVersion || '?')} -> v${escapeHtml(update.newVersion || '?')}`;
         const sourceLabel = [
             update.subscriptionName ? `Subscription: ${update.subscriptionName}` : '',
@@ -3787,7 +3792,7 @@
                 <div class="pending-update-checked">${escapeHtml(checkedLabel)}</div>
                 <div class="pending-update-actions">
                     <button type="button" class="toolbar-btn" data-update-action="diff" data-update-id="${escapeHtml(update.id)}">Review</button>
-                    <button type="button" class="toolbar-btn primary" data-update-action="install" data-update-id="${escapeHtml(update.id)}">Apply</button>
+                    <button type="button" class="toolbar-btn primary" data-update-action="install" data-update-id="${escapeHtml(update.id)}">${isSubscriptionRemove ? 'Uninstall' : 'Apply'}</button>
                     <details class="pending-update-more">
                         <summary class="toolbar-btn" aria-label="More update actions" title="More update actions">•••</summary>
                         <div class="pending-update-more-menu">
@@ -3808,10 +3813,11 @@
         button.disabled = true;
         try {
             if (action === 'diff') {
-                const script = state.scripts.find(item => item.id === scriptId);
+                const isSubscriptionRemove = update.kind === 'subscription-remove';
+                const script = state.scripts.find(item => item.id === (update.scriptId || scriptId));
                 const oldCode = update.kind === 'subscription-install' ? '' : script?.code || '';
-                const oldLabel = update.kind === 'subscription-install' ? 'New script' : `v${update.currentVersion || '?'}`;
-                showDiffView(oldCode, update.code || '', oldLabel, `v${update.newVersion || '?'}`);
+                const oldLabel = update.kind === 'subscription-install' ? 'New script' : isSubscriptionRemove ? 'Installed script' : `v${update.currentVersion || '?'}`;
+                showDiffView(oldCode, update.code || '', oldLabel, isSubscriptionRemove ? 'Removed' : `v${update.newVersion || '?'}`);
                 return;
             }
             if (action === 'install') {
@@ -3823,6 +3829,8 @@
                 showToast(
                     update.kind === 'subscription-install'
                         ? `${update.name || 'Script'} installed from subscription`
+                        : update.kind === 'subscription-remove'
+                            ? `${update.name || 'Script'} removed from subscription`
                         : `${update.name || 'Script'} updated to v${update.newVersion || '?'}`,
                     'success'
                 );
@@ -14733,14 +14741,16 @@
             return `
                 <article class="subscription-item" data-subscription-id="${escapeHtml(subscription.id || '')}">
                     <div class="subscription-copy">
-                        <strong>${escapeHtml(subscription.name || tDashboard('subscriptionDefaultName', 'Script subscription'))}</strong>
+                        <strong>${escapeHtml(subscription.name || tDashboard('subscriptionDefaultName', 'Script subscription'))} ${subscription.kind === 'bundle' ? '<span class="tag neutral">Bundle</span>' : ''}</strong>
                         <span class="subscription-url">${escapeHtml(subscription.url || '')}</span>
+                        ${subscription.description ? `<span class="subscription-url">${escapeHtml(subscription.description)}</span>` : ''}
                         <div class="subscription-meta">
                             <span class="subscription-health ${escapeHtml(health.className)}">${escapeHtml(tDashboard('subscriptionHealthPrefix', 'Health: {health}', { health: health.label }))}</span>
                             <span>${escapeHtml(tDashboard('subscriptionScriptCount', '{count} {scriptLabel}', { count: numberFormatter.format(scripts), scriptLabel }))}</span>
                             <span>${escapeHtml(tDashboard('subscriptionLastChecked', 'Last checked: {time}', { time: lastChecked }))}</span>
                             <span>${escapeHtml(tDashboard('subscriptionQueuedCount', '{count} queued', { count: numberFormatter.format(subscription.lastQueued || 0) }))}</span>
                             <span>${escapeHtml(tDashboard('subscriptionSkippedCount', '{count} skipped', { count: numberFormatter.format(subscription.lastSkipped || 0) }))}</span>
+                            ${subscription.kind === 'bundle' ? `<span>${numberFormatter.format(Array.isArray(subscription.connect) ? subscription.connect.length : 0)} @connect</span>` : ''}
                             ${errors}
                         </div>
                     </div>

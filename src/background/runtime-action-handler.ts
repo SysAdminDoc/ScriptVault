@@ -7,6 +7,8 @@ import type {
 export const RUNTIME_BACKGROUND_ACTIONS = [
   'installFromUrl',
   'installFromCode',
+  'prepareSubscriptionInstall',
+  'applySubscriptionInstall',
   'fetchScriptPreview',
   'probeInstallDependency',
   'verifyRequireProvenancePreview',
@@ -37,6 +39,8 @@ export type RuntimeBackgroundAction = typeof RUNTIME_BACKGROUND_ACTIONS[number];
 export interface RuntimeActionDependencies {
   installFromUrl(url: string): Promise<ResponseMap['installFromUrl']>;
   installFromCode(code: string, sourceUrl: string, operation: string): Promise<ResponseMap['installFromCode']>;
+  prepareSubscriptionInstall(code: string, sourceUrl: string): Promise<ResponseMap['prepareSubscriptionInstall']>;
+  applySubscriptionInstall(code: string, sourceUrl: string): Promise<ResponseMap['applySubscriptionInstall']>;
   fetchScriptPreview(url: string): Promise<ResponseMap['fetchScriptPreview']>;
   probeInstallDependency(url: string): Promise<ResponseMap['probeInstallDependency']>;
   verifyRequireProvenancePreview(
@@ -82,6 +86,8 @@ export function createRuntimeActionHandlers(
       message.sourceUrl || '',
       message.operation || 'install',
     ),
+    prepareSubscriptionInstall: ({ message }) => dependencies.prepareSubscriptionInstall(message.code || '', message.sourceUrl || ''),
+    applySubscriptionInstall: ({ message }) => dependencies.applySubscriptionInstall(message.code || '', message.sourceUrl || ''),
     fetchScriptPreview: ({ message }) => dependencies.fetchScriptPreview(message.url),
     probeInstallDependency: ({ message }) => dependencies.probeInstallDependency(message.url),
     verifyRequireProvenancePreview: ({ message }) => dependencies.verifyRequireProvenancePreview(message),

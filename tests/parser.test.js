@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseUserscript } from '../src/background/parser.ts';
+import { parseUserscript, parseUserSubscribe } from '../src/background/parser.ts';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -452,5 +452,19 @@ describe('parseUserscript', () => {
       expect(meta.requireProvenance).toEqual(['https://cdn.example.com/a.bundle']);
       expect(meta.requireIdentity).toEqual(['https://github.com/a (issuer: https://github.com/login/oauth)']);
     });
+  });
+});
+
+describe('parseUserSubscribe', () => {
+  it('parses HTTPS member URLs and bundle network scope', () => {
+    const result = parseUserSubscribe(`// ==UserSubscribe==\n// @name Curated\n// @description A compact pack\n// @version 2.0.0\n// @connect api.example.com\n// @scriptUrl https://cdn.example.com/one.user.js\n// @scriptUrl https://cdn.example.com/one.user.js#duplicate\n// ==/UserSubscribe==`, 'https://feeds.example.com/pack.user.sub.js');
+    expect(result.error).toBeUndefined();
+    expect(result.meta).toMatchObject({ name: 'Curated', description: 'A compact pack', version: '2.0.0', connect: ['api.example.com'] });
+    expect(result.meta.scriptUrl).toEqual(['https://cdn.example.com/one.user.js']);
+  });
+
+  it('rejects non-HTTPS or empty bundles', () => {
+    expect(parseUserSubscribe('// ==UserSubscribe==\n// @scriptUrl http://cdn.example.com/a.user.js\n// ==/UserSubscribe==').error).toMatch(/https/);
+    expect(parseUserSubscribe('// ==UserSubscribe==\n// @name Empty\n// ==/UserSubscribe==').error).toMatch(/at least one/);
   });
 });

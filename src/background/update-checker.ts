@@ -19,6 +19,7 @@ declare const ScriptStorage: {
   get(id: string): Promise<Script | null>;
   getAll(): Promise<Script[]>;
   set(id: string, script: Script): Promise<void>;
+  delete?(id: string): Promise<void>;
 };
 
 declare const SettingsManager: {
@@ -68,6 +69,15 @@ export interface SubscriptionInstallInfo {
   subscriptionName?: string;
 }
 
+export interface SubscriptionRemovalInfo {
+  id: string;
+  scriptId: string;
+  name?: string;
+  sourceUrl?: string;
+  subscriptionId?: string;
+  subscriptionName?: string;
+}
+
 export interface UpdateRiskDelta {
   hasNewRiskySinks: boolean;
   introduced: Array<{ id: string; label?: string; category: string; risk?: number }>;
@@ -80,7 +90,7 @@ export interface UpdateRiskDelta {
 }
 
 export interface PendingUpdateInfo extends UpdateInfo {
-  kind?: 'update' | 'subscription-install';
+  kind?: 'update' | 'subscription-install' | 'subscription-remove';
   source: string;
   queuedAt: number;
   checkedAt: number;
@@ -90,6 +100,7 @@ export interface PendingUpdateInfo extends UpdateInfo {
   riskDelta?: UpdateRiskDelta | null;
   subscriptionId?: string;
   subscriptionName?: string;
+  scriptId?: string;
   trustReceipt?: unknown;
   dependencyChanges?: unknown;
   permissionChanges?: unknown;
@@ -122,7 +133,11 @@ function normalizePendingUpdateList(value: unknown, limit: number): PendingUpdat
     const item = candidate as Partial<PendingUpdateInfo>;
     const id = typeof item.id === 'string' ? item.id.trim() : '';
     if (!id || id.length > 512 || seenIds.has(id) || typeof item.code !== 'string') continue;
-    const kind = item.kind === 'subscription-install' ? 'subscription-install' : 'update';
+    const kind = item.kind === 'subscription-install'
+      ? 'subscription-install'
+      : item.kind === 'subscription-remove'
+        ? 'subscription-remove'
+        : 'update';
     const reviewReasons = Array.isArray(item.reviewReasons)
       ? item.reviewReasons.filter((reason): reason is string => typeof reason === 'string').slice(0, 50)
       : [];
@@ -141,6 +156,7 @@ function normalizePendingUpdateList(value: unknown, limit: number): PendingUpdat
       safeToApply: kind === 'update' && item.safeToApply === true,
       reviewReasons,
       sourceIdentityChanged: item.sourceIdentityChanged === true,
+      scriptId: typeof item.scriptId === 'string' ? item.scriptId : undefined,
     });
     seenIds.add(id);
     if (normalized.length >= limit) break;
@@ -809,6 +825,42 @@ export const UpdateSystem = {
     };
   },
 
+  async queueSubscriptionRemovals(removals: SubscriptionRemovalInfo[] = [], { source = 'subscription' } = {}): Promise<{ success: true; queued: number; pendingUpdates: PendingUpdateInfo[]; safeCount: number; reviewCount: number }> {
+    const incoming = Array.isArray(removals) ? removals : [];
+    const existing = await this._loadPendingUpdates();
+    const incomingIds = new Set(incoming.map((item) => item?.id).filter(Boolean));
+    const retained = existing.filter((item) => !incomingIds.has(item.id));
+    const queued: PendingUpdateInfo[] = incoming
+      .filter((item) => item?.id && item?.scriptId)
+      .map((item) => ({
+        kind: 'subscription-remove' as const,
+        id: item.id,
+        scriptId: item.scriptId,
+        name: item.name || item.scriptId,
+        currentVersion: '',
+        newVersion: '',
+        code: '',
+        sourceUrl: item.sourceUrl || '',
+        source,
+        queuedAt: Date.now(),
+        checkedAt: Date.now(),
+        safeToApply: false,
+        reviewReasons: ['Removed from subscription; review uninstall'],
+        sourceIdentityChanged: false,
+        subscriptionId: item.subscriptionId || '',
+        subscriptionName: item.subscriptionName || '',
+        diff: { previousLines: 0, nextLines: 0, addedLines: 0, removedLines: 0 },
+      }));
+    const pendingUpdates = await this._savePendingUpdates([...queued, ...retained]);
+    return {
+      success: true,
+      queued: queued.length,
+      pendingUpdates,
+      safeCount: pendingUpdates.filter((item) => item.safeToApply).length,
+      reviewCount: pendingUpdates.filter((item) => !item.safeToApply).length,
+    };
+  },
+
   async getPendingUpdates(): Promise<PendingUpdateInfo[]> {
     return (await this._loadPendingUpdates()).slice();
   },
@@ -834,6 +886,16 @@ export const UpdateSystem = {
     const pendingUpdates = await this._loadPendingUpdates();
     const item = pendingUpdates.find((update) => update.id === scriptId);
     if (!item) return { error: 'Pending update not found' };
+    if (item.kind === 'subscription-remove') {
+      const targetId = item.scriptId || item.id;
+      const existing = await ScriptStorage.get(targetId);
+      if (existing) {
+        await unregisterScript(existing.id);
+        await ScriptStorage.delete?.(existing.id);
+      }
+      await this.clearPendingUpdates(scriptId);
+      return { success: true, script: existing || ({ id: targetId } as Script) };
+    }
     if (item.kind === 'subscription-install') {
       const result = await installFromCode(item.code, {
         sourceUrl: item.sourceUrl || '',

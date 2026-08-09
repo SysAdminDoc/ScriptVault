@@ -17,6 +17,94 @@ export interface ParseError {
   error: string;
 }
 
+/** Metadata parsed from a ScriptCat-compatible `==UserSubscribe==` bundle. */
+export interface UserSubscribeMeta {
+  name: string;
+  description: string;
+  version: string;
+  author: string;
+  connect: string[];
+  scriptUrl: string[];
+  metaBlock: string;
+}
+
+export interface UserSubscribeParseSuccess {
+  meta: UserSubscribeMeta;
+  code: string;
+  metaBlock: string;
+  error?: undefined;
+}
+
+export interface UserSubscribeParseError {
+  meta?: undefined;
+  code?: undefined;
+  metaBlock?: undefined;
+  error: string;
+}
+
+export type UserSubscribeParseResult = UserSubscribeParseSuccess | UserSubscribeParseError;
+
+/**
+ * Parse a curated subscription header without treating it as executable code.
+ * Subscription links are intentionally HTTPS-only; the member scripts still
+ * go through the normal install guards and per-script review path.
+ */
+export function parseUserSubscribe(code: string, baseUrl = ''): UserSubscribeParseResult {
+  const match = code.match(/\/\/\s*==UserSubscribe==([\s\S]*?)\/\/\s*==\/UserSubscribe==/);
+  if (!match) return { error: 'No UserSubscribe metadata block found.' };
+  if (baseUrl) {
+    try {
+      if (new URL(baseUrl).protocol !== 'https:') return { error: 'Subscription sources must use https' };
+    } catch (_) {
+      return { error: 'Invalid subscription source URL' };
+    }
+  }
+
+  const meta: UserSubscribeMeta = {
+    name: 'Script subscription',
+    description: '',
+    version: '1.0.0',
+    author: '',
+    connect: [],
+    scriptUrl: [],
+    metaBlock: match[0]!,
+  };
+  const seenUrls = new Set<string>();
+  for (const line of match[1]!.split('\n')) {
+    const directive = line.match(/\/\/\s*@([\w-]+)(?:\s+(.*))?/);
+    if (!directive) continue;
+    const key = directive[1]!.trim();
+    const value = (directive[2] ?? '').trim();
+    if (key === 'name' || key === 'description' || key === 'version' || key === 'author') {
+      (meta as unknown as Record<string, string>)[key] = value;
+      continue;
+    }
+    if (key === 'connect') {
+      if (value) meta.connect.push(...value.split(',').map((part) => part.trim()).filter(Boolean));
+      continue;
+    }
+    if (key !== 'scriptUrl' && key !== 'script-url') continue;
+    if (!value) continue;
+    let resolved: URL;
+    try {
+      resolved = new URL(value, baseUrl || undefined);
+    } catch (_) {
+      return { error: `Invalid subscription script URL: ${value}` };
+    }
+    if (resolved.protocol !== 'https:') {
+      return { error: 'Subscription script URLs must use https' };
+    }
+    resolved.hash = '';
+    const url = resolved.href;
+    if (!seenUrls.has(url)) {
+      seenUrls.add(url);
+      meta.scriptUrl.push(url);
+    }
+  }
+  if (meta.scriptUrl.length === 0) return { error: 'Subscription must declare at least one @scriptUrl' };
+  return { meta, code, metaBlock: match[0]! };
+}
+
 export type ParseResult = ParseSuccess | ParseError;
 
 /** String‐valued metadata keys that map directly to ScriptMeta */

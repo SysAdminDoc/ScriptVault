@@ -37,6 +37,9 @@ All notable changes to ScriptVault will be documented in this file.
 - Extended UserCSS injection into open shadow roots with a bounded,
   mutation-observed style registry that follows later roots and cleans up on
   route changes, edits, disable, and deletion.
+- Added HTTPS-only `==UserSubscribe==` bundle reviews with per-member metadata,
+  risk summaries, scope-limited `@connect`, and explicit uninstall proposals
+  when a bundle removes a member.
 - Added a bounded local-file metadata polling fallback with explicit watcher
   health when FileSystemObserver is unavailable or reports an unknown/error
   state; only the active editor polls and changes still go through review.

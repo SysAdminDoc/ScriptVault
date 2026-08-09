@@ -405,6 +405,8 @@ const CM_THEME_MAP = {
 
 let scriptCode = '';
 let scriptMeta = null;
+let subscriptionMeta = null;
+let subscriptionPreview = null;
 let existingScript = null;
 let codeEditor = null;
 let autoUpdate = true;
@@ -758,6 +760,27 @@ async function init() {
       return;
     }
 
+    subscriptionMeta = parseSubscriptionMetadata(scriptCode, sourceUrl);
+    if (subscriptionMeta) {
+      if (subscriptionMeta.error) {
+        showError(tInstall('subscriptionInvalidTitle', 'Invalid subscription'), subscriptionMeta.error);
+        clearPendingInstallStorage();
+        return;
+      }
+      const preview = await chrome.runtime.sendMessage({
+        action: 'prepareSubscriptionInstall',
+        code: scriptCode,
+        sourceUrl,
+      });
+      if (!preview?.success && (!Array.isArray(preview?.members) || preview.members.length === 0)) {
+        showError(tInstall('subscriptionReviewFailedTitle', 'Subscription review failed'), preview?.error || tInstall('subscriptionReviewFailed', 'Some members could not be reviewed'));
+        clearPendingInstallStorage();
+        return;
+      }
+      renderSubscriptionInstallUI(sourceUrl, preview);
+      return;
+    }
+
     // Parse metadata
     scriptMeta = parseMetadata(scriptCode);
 
@@ -970,6 +993,47 @@ function getRequireMetadataForUrl(meta, field, url, index) {
 
   const values = Array.isArray(meta?.[field]) ? meta[field] : [];
   return values[index] || '';
+}
+
+function parseSubscriptionMetadata(code, baseUrl = '') {
+  const match = String(code || '').match(/\/\/\s*==UserSubscribe==([\s\S]*?)\/\/\s*==\/UserSubscribe==/);
+  if (!match) return null;
+  if (baseUrl) {
+    try { if (new URL(baseUrl).protocol !== 'https:') return { error: 'Subscription sources must use https' }; }
+    catch { return { error: 'Invalid subscription source URL' }; }
+  }
+  const meta = {
+    name: 'Script subscription',
+    description: '',
+    version: '1.0.0',
+    author: '',
+    connect: [],
+    scriptUrl: [],
+  };
+  const seen = new Set();
+  for (const line of match[1].split('\n')) {
+    const directive = line.match(/\/\/\s*@([\w-]+)(?:\s+(.*))?/);
+    if (!directive) continue;
+    const key = directive[1];
+    const value = (directive[2] || '').trim();
+    if (['name', 'description', 'version', 'author'].includes(key)) {
+      meta[key] = value;
+    } else if (key === 'connect') {
+      if (value) meta.connect.push(...value.split(',').map(part => part.trim()).filter(Boolean));
+    } else if (key === 'scriptUrl' || key === 'script-url') {
+      if (!value) continue;
+      let resolved;
+      try { resolved = new URL(value, baseUrl || undefined); } catch { return { error: `Invalid subscription script URL: ${value}` }; }
+      if (resolved.protocol !== 'https:') return { error: 'Subscription script URLs must use https' };
+      resolved.hash = '';
+      if (!seen.has(resolved.href)) {
+        seen.add(resolved.href);
+        meta.scriptUrl.push(resolved.href);
+      }
+    }
+  }
+  if (meta.scriptUrl.length === 0) return { error: 'Subscription must declare at least one @scriptUrl' };
+  return meta;
 }
 
 function getInstallPresentation() {
@@ -1400,6 +1464,92 @@ function updateDecisionSummary() {
 
   updateDecisionStates();
   updateDecisionHint();
+}
+
+function renderSubscriptionInstallUI(sourceUrl, preview) {
+  const content = document.getElementById('content');
+  if (!content) return;
+  subscriptionPreview = preview;
+  content.setAttribute('aria-busy', 'false');
+  const members = Array.isArray(preview?.members) ? preview.members : [];
+  const riskCounts = members.reduce((counts, member) => {
+    const level = String(member?.riskLevel || 'unknown').toLowerCase();
+    counts[level] = (counts[level] || 0) + 1;
+    return counts;
+  }, {});
+  const memberRows = members.map(member => `
+    <article class="subscription-member" data-subscription-member="${escapeHtml(member.url || '')}">
+      <div class="subscription-member-copy">
+        <strong>${escapeHtml(member.name || member.url || 'Unnamed script')}</strong>
+        <span class="tag neutral">v${escapeHtml(member.version || '?')}</span>
+        ${member.existingId ? `<span class="tag safe">${escapeHtml(tInstall('subscriptionExisting', 'Existing'))}</span>` : `<span class="tag">${escapeHtml(tInstall('subscriptionNew', 'New'))}</span>`}
+      </div>
+      <div class="subscription-member-meta">
+        <span class="tag ${String(member.riskLevel || '').toLowerCase() === 'high' ? 'warning' : 'safe'}">${escapeHtml(member.riskLevel || 'unknown')} risk</span>
+        <span>${numberFormatter.format(Array.isArray(member.grants) ? member.grants.length : 0)} grants</span>
+      </div>
+      <div class="subscription-member-url" title="${escapeHtml(member.url || '')}">${escapeHtml(member.url || '')}</div>
+      <div class="subscription-member-meta" style="grid-column:1/-1;justify-content:flex-start;text-align:left">
+        <span>${escapeHtml(tInstall('subscriptionEffectiveConnect', 'Effective @connect'))}</span>
+        ${(Array.isArray(member.effectiveConnect) && member.effectiveConnect.length ? member.effectiveConnect : [tInstall('subscriptionNoConnect', 'none')]).map(host => `<span class="tag neutral">${escapeHtml(host)}</span>`).join('')}
+        ${Array.isArray(member.originalConnect) && member.originalConnect.join('|') !== (member.effectiveConnect || []).join('|') ? `<span class="tag warning" title="${escapeHtml(tInstall('subscriptionConnectConstrainedDetail', 'The bundle cannot widen this member network scope.'))}">${escapeHtml(tInstall('subscriptionConnectConstrained', 'Constrained'))}</span>` : ''}
+      </div>
+    </article>
+  `).join('');
+  const errorRows = Array.isArray(preview?.errors) && preview.errors.length
+    ? `<div class="install-alert is-danger" role="alert"><div class="install-alert-header">${escapeHtml(tInstall('subscriptionReviewFailed', 'Some members could not be reviewed'))}</div><div class="install-alert-body">${preview.errors.map(error => `<div>${escapeHtml(error)}</div>`).join('')}</div></div>`
+    : '';
+  safeSetHtml(content, `
+    <div class="surface-card analysis-card review-section" role="region" aria-labelledby="subscriptionReviewTitle">
+      <div class="install-card-header">
+        <div>
+          <div class="install-card-title" id="subscriptionReviewTitle">${escapeHtml(tInstall('subscriptionReviewTitle', 'Review script subscription'))}</div>
+          <div class="install-card-subtitle">${escapeHtml(preview?.description || tInstall('subscriptionReviewSubtitle', 'One confirmation reviews every member before anything is saved.'))}</div>
+        </div>
+        <span class="count status-neutral">${numberFormatter.format(members.length)} ${escapeHtml(tInstall('subscriptionScripts', 'scripts'))}</span>
+      </div>
+      <div class="analysis-summary">
+        <strong>${escapeHtml(preview?.name || subscriptionMeta?.name || 'Script subscription')}</strong>${preview?.version ? ` · v${escapeHtml(preview.version)}` : ''}${preview?.author ? ` · ${escapeHtml(preview.author)}` : ''}
+        <div class="subscription-review-summary"><span class="tag safe">${numberFormatter.format(riskCounts.low || 0)} low risk</span><span class="tag neutral">${numberFormatter.format(riskCounts.medium || 0)} medium</span><span class="tag warning">${numberFormatter.format(riskCounts.high || 0)} high</span><span class="tag neutral">${escapeHtml(tInstall('subscriptionConnectGuarded', 'Bundle @connect is scope-limited'))}</span></div>
+      </div>
+      ${errorRows}
+      <div class="subscription-review-list" aria-label="${escapeHtml(tInstall('subscriptionMemberListLabel', 'Subscription members'))}">${memberRows}</div>
+      <div class="install-alert is-info"><div class="install-alert-header">${escapeHtml(tInstall('subscriptionReviewGuardTitle', 'No code is saved yet'))}</div><div class="install-alert-body">${escapeHtml(tInstall('subscriptionReviewGuardBody', 'Each member is fetched again, parsed, and installed through the normal trust receipt path only after you confirm. Removed members become reviewable uninstall proposals on refresh.'))}</div></div>
+      <div class="install-error" id="subscriptionInstallError" role="alert"></div>
+      <div class="actions"><button class="btn btn-primary" id="btn-install-subscription" type="button" ${members.length === 0 || preview?.success === false ? 'disabled' : ''}>${escapeHtml(tInstall('subscriptionInstallButton', 'Install subscription'))}</button><button class="btn btn-secondary" id="btn-cancel-subscription" type="button">${escapeHtml(tInstall('cancel', 'Cancel'))}</button></div>
+    </div>
+  `);
+  setReviewExitGuard(true);
+  document.getElementById('btn-cancel-subscription')?.addEventListener('click', handleCancel);
+  document.getElementById('btn-install-subscription')?.addEventListener('click', () => handleSubscriptionInstall(sourceUrl));
+}
+
+async function handleSubscriptionInstall(sourceUrl) {
+  const button = document.getElementById('btn-install-subscription');
+  const errorEl = document.getElementById('subscriptionInstallError');
+  if (!button) return;
+  button.disabled = true;
+  button.textContent = tInstall('installInstallingEllipsis', 'Installing...');
+  if (errorEl) errorEl.textContent = '';
+  try {
+    const response = await chrome.runtime.sendMessage({ action: 'applySubscriptionInstall', code: scriptCode, sourceUrl });
+    if (!response?.success) throw new Error(response?.error || tInstall('subscriptionInstallFailed', 'Subscription installation failed'));
+    await clearPendingInstallStorage();
+    setReviewExitGuard(false);
+    const installed = Array.isArray(response.installed) ? response.installed : [];
+    const content = document.getElementById('content');
+    if (content) {
+      content.setAttribute('aria-busy', 'false');
+      safeSetHtml(content, `<div class="success install-terminal" role="status" aria-live="polite" aria-labelledby="installTerminalTitle"><div class="install-state-mark is-success success-icon">${escapeHtml(tInstall('ok', 'OK'))}</div><div class="success-title" id="installTerminalTitle">${escapeHtml(tInstall('subscriptionInstalledTitle', 'Subscription installed'))}</div><div class="success-message">${escapeHtml(tInstall('subscriptionInstalledCopy', '{count} scripts are now managed by this subscription.', { count: numberFormatter.format(installed.length) }))}</div><div class="success-next-step">${escapeHtml(tInstall('subscriptionInstalledNextStep', 'Future changes stay in the existing review queue.'))}</div><div class="success-actions"><button class="btn btn-primary" id="btnOpenSubscriptionDashboard" type="button">${escapeHtml(tInstall('installOpenDashboard', 'Open Dashboard'))}</button><button class="btn btn-secondary" id="btnSubscriptionClose" type="button">${escapeHtml(tInstall('installCloseReview', 'Close review'))}</button></div></div>`);
+      document.getElementById('btnSubscriptionClose')?.addEventListener('click', () => { allowInstallExitOnce(); if (history.length > 1) history.back(); else window.close(); });
+      document.getElementById('btnOpenSubscriptionDashboard')?.addEventListener('click', () => { allowInstallExitOnce(); chrome.tabs.update({ url: chrome.runtime.getURL('pages/dashboard.html#tab=updates') }); });
+      document.getElementById('btnOpenSubscriptionDashboard')?.focus({ preventScroll: true });
+    }
+  } catch (error) {
+    button.disabled = false;
+    button.textContent = tInstall('subscriptionInstallButton', 'Install subscription');
+    if (errorEl) { errorEl.textContent = error?.message || String(error); errorEl.style.display = 'flex'; }
+  }
 }
 
 function renderInstallUI(sourceUrl) {

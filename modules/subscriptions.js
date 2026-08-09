@@ -70,6 +70,89 @@ const ScriptSubscriptions = (() => {
     resolved.hash = "";
     return resolved.href;
   }
+  function normalizeHttpsUrl(value, baseUrl) {
+    const normalized = normalizeHttpUrl(value, baseUrl);
+    if (!normalized.startsWith("https://")) throw new Error("Subscription script URLs must use https");
+    return normalized;
+  }
+  function parseUserSubscribe(code, baseUrl = "") {
+    const match = code.match(/\/\/\s*==UserSubscribe==([\s\S]*?)\/\/\s*==\/UserSubscribe==/);
+    if (!match) throw new Error("No UserSubscribe metadata block found");
+    const meta = {
+      name: "Script subscription",
+      description: "",
+      version: "1.0.0",
+      author: "",
+      connect: [],
+      scriptUrl: [],
+      metaBlock: match[0]
+    };
+    const seen = /* @__PURE__ */ new Set();
+    for (const line of match[1].split("\n")) {
+      const directive = line.match(/\/\/\s*@([\w-]+)(?:\s+(.*))?/);
+      if (!directive) continue;
+      const key = directive[1].trim();
+      const value = (directive[2] ?? "").trim();
+      if (key === "name" || key === "description" || key === "version" || key === "author") {
+        meta[key] = value;
+      } else if (key === "connect") {
+        if (value) meta.connect.push(...value.split(",").map((part) => part.trim()).filter(Boolean));
+      } else if (key === "scriptUrl" || key === "script-url") {
+        if (!value) continue;
+        const url = normalizeHttpsUrl(value, baseUrl);
+        if (!seen.has(url)) {
+          seen.add(url);
+          meta.scriptUrl.push(url);
+        }
+      }
+    }
+    if (meta.scriptUrl.length === 0) throw new Error("Subscription must declare at least one @scriptUrl");
+    return {
+      name: meta.name,
+      description: meta.description,
+      version: meta.version,
+      author: meta.author,
+      connect: [...new Set(meta.connect)],
+      sourceUrl: baseUrl ? normalizeHttpsUrl(baseUrl) : "",
+      scripts: meta.scriptUrl.map((url) => ({ url })),
+      metaBlock: meta.metaBlock,
+      code,
+      parsedAt: Date.now()
+    };
+  }
+  function connectHost(value) {
+    const raw = String(value || "").trim().toLowerCase().replace(/^\*:\/\//, "").replace(/^https?:\/\//, "");
+    const host = raw.split(/[/?#:]/, 1)[0] || raw;
+    return host.startsWith("*.") ? host.slice(2) : host;
+  }
+  function intersectConnectPatterns(member, bundle) {
+    const left = String(member || "").trim();
+    const right = String(bundle || "").trim();
+    if (!left || !right) return null;
+    if (left === "*") return right;
+    if (right === "*") return left;
+    if (left.toLowerCase() === right.toLowerCase()) return left;
+    const leftHost = connectHost(left);
+    const rightHost = connectHost(right);
+    if (!leftHost || !rightHost) return null;
+    if (leftHost === rightHost) return left.length <= right.length ? left : right;
+    if (leftHost.endsWith(`.${rightHost}`)) return left;
+    if (rightHost.endsWith(`.${leftHost}`)) return right;
+    return null;
+  }
+  function constrainConnectPatterns(memberConnect, bundleConnect) {
+    const member = Array.isArray(memberConnect) ? memberConnect.map(String).map((item) => item.trim()).filter(Boolean) : [];
+    const bundle = Array.isArray(bundleConnect) ? bundleConnect.map(String).map((item) => item.trim()).filter(Boolean) : [];
+    if (bundle.length === 0) return [...new Set(member)];
+    const result = /* @__PURE__ */ new Set();
+    for (const memberPattern of member) {
+      for (const bundlePattern of bundle) {
+        const overlap = intersectConnectPatterns(memberPattern, bundlePattern);
+        if (overlap) result.add(overlap);
+      }
+    }
+    return [...result].sort();
+  }
   function getFeedItemUrl(item) {
     return asCleanString(item.url) || asCleanString(item.downloadURL) || asCleanString(item.downloadUrl) || asCleanString(item.codeURL) || asCleanString(item.codeUrl) || asCleanString(item.sourceURL) || asCleanString(item.sourceUrl) || asCleanString(item.href);
   }
@@ -119,6 +202,10 @@ const ScriptSubscriptions = (() => {
         id: asCleanString(record.id) || generateId(),
         url,
         name: asCleanString(record.name) || fallbackNameFromUrl(url),
+        kind: record.kind === "bundle" ? "bundle" : "feed",
+        description: asCleanString(record.description),
+        version: asCleanString(record.version),
+        connect: Array.isArray(record.connect) ? record.connect.filter((item) => typeof item === "string").slice(0, 100) : [],
         enabled: record.enabled !== false,
         scripts: Array.isArray(record.scripts) ? record.scripts.map((item) => normalizeFeedItem(item, url)).filter((item) => !!item).slice(0, MAX_FEED_ITEMS) : [],
         createdAt: typeof record.createdAt === "number" ? record.createdAt : now,
@@ -148,6 +235,7 @@ const ScriptSubscriptions = (() => {
   function cloneSubscription(subscription) {
     return {
       ...subscription,
+      connect: Array.isArray(subscription.connect) ? [...subscription.connect] : [],
       scripts: subscription.scripts.map((script) => ({ ...script })),
       lastErrors: [...subscription.lastErrors]
     };
@@ -199,6 +287,10 @@ const ScriptSubscriptions = (() => {
       id: existing?.id || generateId(),
       url: normalizedUrl,
       name: asCleanString(options.name) || feed.name || existing?.name || fallbackNameFromUrl(normalizedUrl),
+      kind: existing?.kind || "feed",
+      description: existing?.description || "",
+      version: existing?.version || "",
+      connect: existing?.connect ? [...existing.connect] : [],
       enabled: typeof options.enabled === "boolean" ? options.enabled : existing?.enabled !== false,
       scripts: feed.scripts.map((script) => ({ ...script })),
       createdAt: existing?.createdAt || now,
@@ -209,6 +301,36 @@ const ScriptSubscriptions = (() => {
       lastErrors: existing?.lastErrors ? [...existing.lastErrors] : [],
       // A read with no validators must not wipe a working pair — the next
       // scheduled check would then re-download a feed that had not changed.
+      httpEtag: options.validators ? safeValidator(options.validators.etag) : existing?.httpEtag || "",
+      httpLastModified: options.validators ? safeValidator(options.validators.lastModified) : existing?.httpLastModified || "",
+      sourceFetchedAt: now
+    };
+    const next = existingIndex >= 0 ? subscriptions.map((item, index) => index === existingIndex ? subscription : item) : [subscription, ...subscriptions];
+    await writeAll(next);
+    return cloneSubscription(subscription);
+  }
+  async function upsertBundle(bundle, options = {}) {
+    const normalizedUrl = normalizeHttpsUrl(bundle.sourceUrl);
+    const subscriptions = await readAll();
+    const existingIndex = subscriptions.findIndex((item) => item.url === normalizedUrl);
+    const existing = existingIndex >= 0 ? subscriptions[existingIndex] : null;
+    const now = Date.now();
+    const subscription = {
+      id: existing?.id || generateId(),
+      url: normalizedUrl,
+      name: asCleanString(options.name) || bundle.name || existing?.name || fallbackNameFromUrl(normalizedUrl),
+      kind: "bundle",
+      description: bundle.description || "",
+      version: bundle.version || "",
+      connect: [...new Set(bundle.connect.map((item) => item.trim()).filter(Boolean))],
+      enabled: typeof options.enabled === "boolean" ? options.enabled : existing?.enabled !== false,
+      scripts: bundle.scripts.map((script) => ({ ...script })),
+      createdAt: existing?.createdAt || now,
+      updatedAt: now,
+      lastCheckedAt: now,
+      lastQueued: existing?.lastQueued || 0,
+      lastSkipped: existing?.lastSkipped || 0,
+      lastErrors: existing?.lastErrors ? [...existing.lastErrors] : [],
       httpEtag: options.validators ? safeValidator(options.validators.etag) : existing?.httpEtag || "",
       httpLastModified: options.validators ? safeValidator(options.validators.lastModified) : existing?.httpLastModified || "",
       sourceFetchedAt: now
@@ -251,10 +373,14 @@ const ScriptSubscriptions = (() => {
     MAX_SUBSCRIPTIONS,
     MAX_FEED_ITEMS,
     normalizeFeedUrl: normalizeHttpUrl,
+    normalizeHttpsUrl,
+    parseUserSubscribe,
+    constrainConnectPatterns,
     parseFeed,
     list,
     get,
     upsertFromFeed,
+    upsertBundle,
     remove,
     markRefreshResult,
     safeValidator

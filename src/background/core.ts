@@ -879,6 +879,60 @@ function parseBooleanDirective(value: any) {
   return !['0', 'false', 'no', 'off', 'disabled'].includes(normalized);
 }
 
+// ScriptCat-compatible curated bundles. Keep this parser deliberately small:
+// the bundle header is metadata only, while every member is parsed and
+// installed through the normal userscript trust path below.
+function parseUserSubscribe(code: any, baseUrl: any = '') {
+  const match = String(code || '').match(/\/\/\s*==UserSubscribe==([\s\S]*?)\/\/\s*==\/UserSubscribe==/);
+  if (!match) return { error: 'No UserSubscribe metadata block found.' };
+  if (baseUrl) {
+    try {
+      if (new URL(baseUrl).protocol !== 'https:') return { error: 'Subscription sources must use https' };
+    } catch (_) {
+      return { error: 'Invalid subscription source URL' };
+    }
+  }
+  const meta: any = {
+    name: 'Script subscription',
+    description: '',
+    version: '1.0.0',
+    author: '',
+    connect: [],
+    scriptUrl: [],
+    metaBlock: match[0]
+  };
+  const seenUrls = new Set();
+  for (const line of (match[1] || '').split('\n')) {
+    const directive = line.match(/\/\/\s*@([\w-]+)(?:\s+(.*))?/);
+    if (!directive) continue;
+    const key = (directive[1] || '').trim();
+    const value = (directive[2] || '').trim();
+    if (['name', 'description', 'version', 'author'].includes(key)) {
+      meta[key] = value;
+      continue;
+    }
+    if (key === 'connect') {
+      if (value) meta.connect.push(...value.split(',').map(part => part.trim()).filter(Boolean));
+      continue;
+    }
+    if (key !== 'scriptUrl' && key !== 'script-url') continue;
+    if (!value) continue;
+    let resolved;
+    try { resolved = new URL(value, baseUrl || undefined); } catch (_) {
+      return { error: `Invalid subscription script URL: ${value}` };
+    }
+    if (resolved.protocol !== 'https:') return { error: 'Subscription script URLs must use https' };
+    resolved.hash = '';
+    const url = resolved.href;
+    if (!seenUrls.has(url)) {
+      seenUrls.add(url);
+      meta.scriptUrl.push(url);
+    }
+  }
+  if (meta.scriptUrl.length === 0) return { error: 'Subscription must declare at least one @scriptUrl' };
+  return { meta, code, metaBlock: match[0] };
+}
+
 /**
  * Parse a userscript's metadata block and extract all supported directives.
  * @param {string} code - The full userscript source code
@@ -2538,6 +2592,42 @@ const UpdateSystem: any = {
     };
   },
 
+  async queueSubscriptionRemovals(removals: any = [], { source = 'subscription' }: any = {}) {
+    const incoming = Array.isArray(removals) ? removals : [];
+    const existing: any = await this._loadPendingUpdates();
+    const incomingIds = new Set(incoming.map(update => update?.id).filter(Boolean));
+    const retained = existing.filter((item: any) => !incomingIds.has(item.id));
+    const queued = incoming
+      .filter(item => item?.id && item?.scriptId)
+      .map(item => ({
+        kind: 'subscription-remove',
+        id: item.id,
+        scriptId: item.scriptId,
+        name: item.name || item.scriptId,
+        currentVersion: '',
+        newVersion: '',
+        code: '',
+        sourceUrl: item.sourceUrl || '',
+        source,
+        queuedAt: Date.now(),
+        checkedAt: Date.now(),
+        safeToApply: false,
+        reviewReasons: ['Removed from subscription; review uninstall'],
+        sourceIdentityChanged: false,
+        subscriptionId: item.subscriptionId || '',
+        subscriptionName: item.subscriptionName || '',
+        diff: { previousLines: 0, nextLines: 0, addedLines: 0, removedLines: 0 }
+      }));
+    const pendingUpdates = await this._savePendingUpdates([...queued, ...retained]);
+    return {
+      success: true,
+      queued: queued.length,
+      pendingUpdates,
+      safeCount: pendingUpdates.filter((item: any) => item.safeToApply).length,
+      reviewCount: pendingUpdates.filter((item: any) => !item.safeToApply).length
+    };
+  },
+
   async getPendingUpdates() {
     return (await this._loadPendingUpdates()).slice();
   },
@@ -2563,6 +2653,17 @@ const UpdateSystem: any = {
     const pendingUpdates: any = await this._loadPendingUpdates();
     const item = pendingUpdates.find((update: any) => update.id === scriptId);
     if (!item) return { error: 'Pending update not found' };
+
+    if (item.kind === 'subscription-remove') {
+      const targetId = item.scriptId || item.id;
+      const existing = await ScriptStorage.get(targetId);
+      if (existing) {
+        await unregisterScript(existing.id);
+        if (typeof ScriptStorage.delete === 'function') await ScriptStorage.delete(existing.id);
+      }
+      await this.clearPendingUpdates(scriptId);
+      return { success: true, script: existing || { id: targetId } };
+    }
 
     if (item.kind === 'subscription-install') {
       const result = await installFromCode(item.code, {
@@ -4070,11 +4171,154 @@ function _scriptSourceByteLength(code: any) {
 const SUBSCRIPTION_REFRESH_ALARM = 'subscriptionRefresh';
 const DEFAULT_SUBSCRIPTION_REFRESH_INTERVAL_HOURS = 24;
 
+function rewriteSubscriptionMemberConnect(code: any, connect: any[] = []) {
+  const source = String(code || '');
+  const block = source.match(/(\/\/\s*==UserScript==)([\s\S]*?)(\/\/\s*==\/UserScript==)/);
+  if (!block) return source;
+  const body = (block[2] || '')
+    .split(/\r?\n/)
+    .filter((line: string) => !/^\s*\/\/\s*@connect(?:\s|$)/i.test(line))
+    .join('\n')
+    .replace(/^\n+|\n+$/g, '');
+  const connectLines = (Array.isArray(connect) ? connect : [])
+    .map((item: any) => String(item || '').trim())
+    .filter(Boolean)
+    .map((item: string) => `// @connect ${item}`);
+  const nextBody = [body, ...connectLines].filter(Boolean).join('\n');
+  return source.replace(block[0], `${block[1]}\n${nextBody}\n${block[3]}`);
+}
+
+function subscriptionMemberIdentity(meta: any = {}) {
+  return `${String(meta.name || '').trim()}\n${String(meta.namespace || '').trim()}`;
+}
+
 const SubscriptionSystem = {
   _FETCH_TIMEOUT_MS: 15 * 1000,
   _MAX_FEED_BYTES: 512 * 1024,
   _MAX_SCRIPT_BYTES: MAX_SCRIPT_SIZE,
   _MAX_SCRIPTS_PER_REFRESH: 50,
+
+  async prepareBundle(code: any, sourceUrl: any = '') {
+    const parsedBundle: any = parseUserSubscribe(code, sourceUrl);
+    if (parsedBundle?.error) return { success: false, error: parsedBundle.error };
+    const bundleMeta = parsedBundle.meta || {};
+    const installed = await ScriptStorage.getAll();
+    const installedByIdentity = new Map<string, any>(installed.map((script: any) => [subscriptionMemberIdentity(script.meta), script] as [string, any]));
+    const members = [];
+    const errors = [];
+    for (const url of bundleMeta.scriptUrl || []) {
+      try {
+        const memberCode = await this.fetchScript(url);
+        const parsed = parseUserscript(memberCode);
+        if (parsed.error) throw new Error(parsed.error);
+        const originalConnect = Array.isArray(parsed.meta?.connect) ? [...parsed.meta.connect] : [];
+        const effectiveConnect = typeof ScriptSubscriptions?.constrainConnectPatterns === 'function'
+          ? ScriptSubscriptions.constrainConnectPatterns(originalConnect, bundleMeta.connect)
+          : originalConnect;
+        const effectiveCode = rewriteSubscriptionMemberConnect(memberCode, effectiveConnect);
+        const effectiveParsed = parseUserscript(effectiveCode);
+        if (effectiveParsed.error) throw new Error(effectiveParsed.error);
+        const existing = installedByIdentity.get(subscriptionMemberIdentity(effectiveParsed.meta));
+        const analysis = await analyzeSyncedScriptCode(effectiveCode);
+        members.push({
+          url,
+          code: effectiveCode,
+          name: effectiveParsed.meta.name || url,
+          namespace: effectiveParsed.meta.namespace || '',
+          version: effectiveParsed.meta.version || '',
+          description: effectiveParsed.meta.description || '',
+          grants: Array.isArray(effectiveParsed.meta.grant) ? [...effectiveParsed.meta.grant] : [],
+          originalConnect,
+          effectiveConnect,
+          riskLevel: analysis?.riskLevel || 'unknown',
+          totalRisk: Number(analysis?.totalRisk) || 0,
+          findings: Array.isArray(analysis?.findings) ? analysis.findings.slice(0, 20) : [],
+          existingId: existing?.id || '',
+        });
+      } catch (error: any) {
+        errors.push(`${url}: ${error?.message || String(error)}`);
+      }
+    }
+    return {
+      success: errors.length === 0,
+      error: errors.length ? 'One or more subscription members could not be reviewed' : undefined,
+      kind: 'subscription',
+      name: bundleMeta.name || 'Script subscription',
+      description: bundleMeta.description || '',
+      version: bundleMeta.version || '',
+      author: bundleMeta.author || '',
+      connect: Array.isArray(bundleMeta.connect) ? [...bundleMeta.connect] : [],
+      sourceUrl: sourceUrl || '',
+      members,
+      errors,
+    };
+  },
+
+  async installBundle(code: any, sourceUrl: any = '') {
+    const preview = await this.prepareBundle(code, sourceUrl);
+    if (!preview.success || !Array.isArray(preview.members) || preview.members.length === 0) {
+      return { success: false, error: preview.error || 'Subscription has no installable members', preview };
+    }
+    const installed = [];
+    for (const member of preview.members) {
+      const result: any = await installFromCode(member.code, {
+        sourceUrl: member.url,
+        operation: 'subscription-install',
+      });
+      if (!result?.success) {
+        return { success: false, error: result?.error || `Failed to install ${member.name}`, installed, preview };
+      }
+      const current = await ScriptStorage.get(result.script?.id);
+      if (current) {
+        current.settings = {
+          ...(current.settings || {}),
+          subscriptionId: preview.sourceUrl || sourceUrl,
+          subscriptionName: preview.name,
+          subscriptionMemberUrl: member.url,
+          subscriptionConnect: preview.connect,
+          subscriptionOriginalConnect: member.originalConnect,
+        };
+        await ScriptStorage.set(current.id, current);
+      }
+      installed.push({ id: result.script?.id || '', name: member.name, url: member.url });
+    }
+    let subscription: any = null;
+    try {
+      const bundle = {
+        sourceUrl: sourceUrl || preview.sourceUrl,
+        name: preview.name,
+        description: preview.description,
+        version: preview.version,
+        author: preview.author,
+        connect: preview.connect,
+        scripts: preview.members.map((member: any) => ({ url: member.url, name: member.name, namespace: member.namespace, version: member.version })),
+        metaBlock: '',
+        code: String(code || ''),
+        parsedAt: Date.now(),
+      };
+      subscription = await ScriptSubscriptions.upsertBundle(bundle);
+      await setupAlarms().catch(() => {});
+      } catch (_) {
+      // Installing the reviewed members is durable even if subscription index
+      // storage is temporarily unavailable; the next refresh can repair it.
+    }
+    // The subscription record owns the stable id used by refresh/removal
+    // reconciliation. Retag the freshly installed members after the record is
+    // persisted so future refreshes can propose uninstalling removed members.
+    if (subscription?.id) {
+      for (const entry of installed) {
+        if (!entry?.id) continue;
+        const current = await ScriptStorage.get(entry.id);
+        if (!current) continue;
+        current.settings = {
+          ...(current.settings || {}),
+          subscriptionId: subscription.id,
+        };
+        await ScriptStorage.set(current.id, current);
+      }
+    }
+    return { success: true, subscription, installed, preview };
+  },
 
   async fetchText(url: any, label: any, maxBytes: any, options: any = {}) {
     InternalHostGuard.assertExternalFetchUrl(url, label, ['http:', 'https:']);
@@ -4133,6 +4377,43 @@ const SubscriptionSystem = {
     };
   },
 
+  async fetchBundle(url: any, options: any = {}) {
+    const bundleUrl = ScriptSubscriptions.normalizeHttpsUrl(url);
+    const intent = options.intent || 'manual-feed';
+    const result = await this.fetchText(bundleUrl, 'Subscription bundle', this._MAX_FEED_BYTES, {
+      intent,
+      etag: options.etag,
+      lastModified: options.lastModified
+    });
+    if (result.notModified) return { notModified: true, sourceUrl: bundleUrl, validators: null };
+    const parsed = parseUserSubscribe(result.text, bundleUrl);
+    if (parsed.error) throw new Error(parsed.error);
+    return {
+      ...parsed,
+      notModified: false,
+      validators: FetchFreshness.readResponseValidators(intent, result.response)
+    };
+  },
+
+  async fetchSubscriptionSource(url: any, options: any = {}) {
+    const sourceUrl = ScriptSubscriptions.normalizeFeedUrl(url);
+    const intent = options.intent || 'manual-feed';
+    const result = await this.fetchText(sourceUrl, 'Subscription source', this._MAX_FEED_BYTES, {
+      intent,
+      etag: options.etag,
+      lastModified: options.lastModified
+    });
+    if (result.notModified) return { notModified: true, sourceUrl, validators: null, kind: options.kind || 'feed' };
+    const validators = FetchFreshness.readResponseValidators(intent, result.response);
+    if (result.text.includes('==UserSubscribe==')) {
+      const bundle = parseUserSubscribe(result.text, sourceUrl);
+      if (bundle.error) throw new Error(bundle.error);
+      return { ...bundle, kind: 'bundle', notModified: false, validators };
+    }
+    const feed = ScriptSubscriptions.parseFeed(result.text, sourceUrl);
+    return { ...feed, kind: 'feed', notModified: false, validators };
+  },
+
   async fetchScript(url: any) {
     const scriptUrl = ScriptSubscriptions.normalizeFeedUrl(url);
     // A feed-listed script body is always read in full: a 304 would leave
@@ -4167,6 +4448,56 @@ const SubscriptionSystem = {
       script?.trustReceipt?.source?.installUrl,
       script?.installSource?.url
     ].filter(Boolean);
+  },
+
+  async buildBundleCandidates(subscription: any, members: any[] = []) {
+    const installedScripts = await ScriptStorage.getAll();
+    const byIdentity = new Map<string, any>(installedScripts.map((script: any) => [subscriptionMemberIdentity(script.meta), script] as [string, any]));
+    const byMemberUrl = new Map<string, any>(installedScripts
+      .filter((script: any) => script?.settings?.subscriptionMemberUrl)
+      .map((script: any) => [script.settings.subscriptionMemberUrl, script] as [string, any]));
+    const pending = await UpdateSystem.getPendingUpdates();
+    const pendingIds = new Set(pending.map((item: any) => item.id));
+    const installs = [];
+    const updates = [];
+    let skipped = 0;
+    for (const member of Array.isArray(members) ? members.slice(0, this._MAX_SCRIPTS_PER_REFRESH) : []) {
+      const existing = byMemberUrl.get(member.url) || byIdentity.get(`${member.name}\n${member.namespace || ''}`);
+      if (!member?.code || !member?.url) {
+        skipped++;
+        continue;
+      }
+      if (!existing) {
+        const id = `subscription_${subscription.id}_${this.hashString(member.url)}`;
+        if (pendingIds.has(id)) {
+          skipped++;
+          continue;
+        }
+        installs.push({
+          id,
+          code: member.code,
+          sourceUrl: member.url,
+          name: member.name,
+          newVersion: member.version,
+          subscriptionId: subscription.id,
+          subscriptionName: subscription.name
+        });
+        continue;
+      }
+      if (existing.code !== member.code && existing.id && !pendingIds.has(existing.id)) {
+        updates.push({
+          id: existing.id,
+          code: member.code,
+          sourceUrl: member.url,
+          name: member.name,
+          currentVersion: existing.meta?.version || '',
+          newVersion: member.version
+        });
+      } else {
+        skipped++;
+      }
+    }
+    return { installs, updates, skipped };
   },
 
   async buildInstallCandidates(subscription: any, scripts: any = []) {
@@ -4245,16 +4576,42 @@ const SubscriptionSystem = {
     if (!url) return { success: false, error: 'Subscription URL is required' };
     try {
       // Adding a feed is an explicit action — read it unconditionally.
-      const feed = await this.fetchFeed(url, { intent: 'manual-feed' });
-      const subscription = await ScriptSubscriptions.upsertFromFeed(feed.sourceUrl, feed, {
-        name,
-        validators: feed.validators
-      });
-      const result = await this.refreshSubscription(subscription.id, { feed, subscription });
-      if (result?.success) {
-        await setupAlarms().catch(() => {});
+      const source = await this.fetchSubscriptionSource(url, { intent: 'manual-feed' });
+      let subscription;
+      if (source.kind === 'bundle') {
+        const preview = await this.prepareBundle(source.code, source.sourceUrl);
+        if (!preview.success) return { success: false, error: preview.error || 'Subscription review failed', preview };
+        const reviewedMembers = Array.isArray(preview.members) ? preview.members : [];
+        const existingSubscription = await ScriptSubscriptions.get(source.sourceUrl);
+        subscription = existingSubscription || await ScriptSubscriptions.upsertBundle({
+          sourceUrl: source.sourceUrl,
+          name: source.name,
+          description: source.description,
+          version: source.version,
+          author: source.author,
+          connect: source.connect,
+          scripts: reviewedMembers.map((member: any) => ({ url: member.url, name: member.name, namespace: member.namespace, version: member.version })),
+          metaBlock: source.metaBlock,
+          code: source.code,
+          parsedAt: source.parsedAt
+        }, { name, validators: source.validators });
+        const result = await this.refreshSubscription(subscription.id, { bundle: source, subscription });
+        if (result?.success) {
+          await setupAlarms().catch(() => {});
+        }
+        return result;
+      } else {
+        subscription = await ScriptSubscriptions.upsertFromFeed(source.sourceUrl, source, {
+          name,
+          validators: source.validators
+        });
+        const feed = source;
+        const result = await this.refreshSubscription(subscription.id, { feed, subscription });
+        if (result?.success) {
+          await setupAlarms().catch(() => {});
+        }
+        return result;
       }
-      return result;
     } catch (error: any) {
       return { success: false, error: error?.message || String(error) };
     }
@@ -4265,6 +4622,87 @@ const SubscriptionSystem = {
     try {
       let subscription = options.subscription || await ScriptSubscriptions.get(id);
       if (!subscription) return { success: false, error: 'Subscription not found' };
+      if (subscription.kind === 'bundle' || options.bundle) {
+        let bundle = options.bundle || null;
+        if (!bundle) {
+          const intent = options.intent || 'manual-feed';
+          bundle = await this.fetchSubscriptionSource(subscription.url, {
+            intent,
+            etag: subscription.httpEtag,
+            lastModified: subscription.httpLastModified,
+            kind: 'bundle'
+          });
+          if (bundle.notModified) {
+            const unchanged = await ScriptSubscriptions.markRefreshResult(subscription.id, {
+              queued: 0,
+              skipped: 0,
+              errors: [],
+              notModified: true
+            });
+            return { success: true, subscription: unchanged || subscription, notModified: true, queued: 0, skipped: 0, errors: [] };
+          }
+        }
+        const preview = await this.prepareBundle(bundle.code, bundle.sourceUrl || subscription.url);
+        if (!preview.success) {
+          const failed = await ScriptSubscriptions.markRefreshResult(subscription.id, { queued: 0, skipped: 0, errors: preview.errors || [preview.error || 'Subscription review failed'] });
+          return { success: false, error: preview.error || 'Subscription review failed', subscription: failed || subscription, errors: preview.errors || [] };
+        }
+        const reviewedMembers = Array.isArray(preview.members) ? preview.members : [];
+        const candidates = await this.buildBundleCandidates(subscription, reviewedMembers);
+        const installQueue = await UpdateSystem.queueSubscriptionInstalls(candidates.installs, {
+          source: `subscription:${subscription.id}`
+        });
+        const updateQueue = await UpdateSystem.queueUpdates(candidates.updates, {
+          source: `subscription:${subscription.id}`
+        });
+        const previousUrls = new Set((Array.isArray(subscription.scripts) ? subscription.scripts : []).map((item: any) => item?.url).filter(Boolean));
+        const nextUrls = new Set(reviewedMembers.map((item: any) => item.url));
+        const installedMembers = await ScriptStorage.getAll();
+        const removals = installedMembers
+          .filter((script: any) => script?.settings?.subscriptionId === subscription.id
+            && script?.settings?.subscriptionMemberUrl
+            && previousUrls.has(script.settings.subscriptionMemberUrl)
+            && !nextUrls.has(script.settings.subscriptionMemberUrl))
+          .map((script: any) => ({
+            id: `subscription_remove_${subscription.id}_${this.hashString(script.id)}`,
+            scriptId: script.id,
+            name: script.meta?.name || script.id,
+            sourceUrl: subscription.url,
+            subscriptionId: subscription.id,
+            subscriptionName: subscription.name
+          }));
+        const removalQueue = await UpdateSystem.queueSubscriptionRemovals(removals, {
+          source: `subscription:${subscription.id}`
+        });
+        const updated = await ScriptSubscriptions.upsertBundle({
+          sourceUrl: bundle.sourceUrl || subscription.url,
+          name: preview.name,
+          description: preview.description,
+          version: preview.version,
+          author: preview.author,
+          connect: preview.connect,
+          scripts: reviewedMembers.map((member: any) => ({ url: member.url, name: member.name, namespace: member.namespace, version: member.version })),
+          metaBlock: bundle.metaBlock || '',
+          code: bundle.code,
+          parsedAt: bundle.parsedAt || Date.now()
+        }, { name: subscription.name, validators: bundle.validators });
+        const queued = (installQueue.queued || 0) + (updateQueue.queued || 0) + (removalQueue.queued || 0);
+        const skipped = (candidates.skipped || 0);
+        const resultErrors = [...(preview.errors || [])];
+        const refreshed = await ScriptSubscriptions.markRefreshResult(updated.id, {
+          queued,
+          skipped,
+          errors: resultErrors
+        });
+        return {
+          success: true,
+          subscription: refreshed || updated,
+          queued,
+          skipped,
+          errors: resultErrors,
+          pendingUpdates: await UpdateSystem.getPendingUpdates()
+        };
+      }
       let feed = options.feed || null;
       if (!feed) {
         // Only the alarm-driven sweep sends validators; a hand-triggered
@@ -7646,6 +8084,8 @@ function formatUserScriptExecuteDiagnostic(error: any): string {
 backgroundActionRegistry.registerHandlers(RuntimeActionHandler.createRuntimeActionHandlers({
   installFromUrl: (url: any) => installFromUrl(url),
   installFromCode: (code: any, sourceUrl: any, operation: any) => installFromCode(code, { sourceUrl, operation }),
+  prepareSubscriptionInstall: (code: any, sourceUrl: any) => SubscriptionSystem.prepareBundle(code, sourceUrl),
+  applySubscriptionInstall: (code: any, sourceUrl: any) => SubscriptionSystem.installBundle(code, sourceUrl),
   fetchScriptPreview: (url: any) => fetchScriptPreview(url),
   probeInstallDependency: (url: any) => probeInstallDependency(url),
   verifyRequireProvenancePreview: (message: any) => previewRequireProvenance(message),
@@ -10953,7 +11393,11 @@ async function _storePendingInstall(storageKey: any, payload: any, options: any 
   } catch (cleanupError: any) {
     debugLog('[ScriptVault] Pending install cleanup failed:', cleanupError?.message || cleanupError);
   }
-  const pendingInstall = { ...payload, timestamp };
+  const pendingInstall = {
+    ...payload,
+    kind: payload?.kind || (String(payload?.code || '').includes('==UserSubscribe==') ? 'subscription' : 'script'),
+    timestamp
+  };
   await chrome.storage.local.set({ [storageKey]: pendingInstall });
   return pendingInstall;
 }
@@ -10983,7 +11427,7 @@ async function _fetchPendingUserscript(url: any) {
     // unbounded body (the previous content-length check was advisory and
     // ran AFTER `response.text()` already buffered everything).
     const code = await _fetchTextBounded(response, MAX_SCRIPT_SIZE, 'Script');
-    if (!code.includes('==UserScript==')) {
+    if (!code.includes('==UserScript==') && !code.includes('==UserSubscribe==')) {
       return { action: 'pass-through' };
     }
     return {
@@ -11007,8 +11451,8 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
 
   const url = details.url;
 
-  // Check if this is a .user.js URL
-  if (!url.match(/\.user\.js(\?[^#]*)?(#.*)?$/i)) return;
+  // Check if this is a userscript or subscription URL.
+  if (!url.match(/\.user(?:\.sub)?\.js(\?[^#]*)?(#.*)?$/i)) return;
 
   // Don't intercept extension pages
   if (url.startsWith('chrome-extension://')) return;
@@ -11049,7 +11493,8 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
   }
 }, {
   url: [
-    { urlMatches: '.*\\.user\\.js(\\?[^#]*)?(#.*)?$' }
+    { urlMatches: '.*\\.user\\.js(\\?[^#]*)?(#.*)?$' },
+    { urlMatches: '.*\\.user\\.sub\\.js(\\?[^#]*)?(#.*)?$' }
   ]
 });
 

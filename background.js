@@ -5751,6 +5751,27 @@ const I18n = (() => {
       "installSuccessUpdatedNextStep": "Existing script settings and stored values were preserved during the update.",
       "installSuccessSavedNextStep": "ScriptVault saved the script locally before leaving the install review.",
       "installOpenDashboard": "Open Dashboard",
+      "subscriptionReviewTitle": "Review script subscription",
+      "subscriptionReviewSubtitle": "One confirmation reviews every member before anything is saved.",
+      "subscriptionScripts": "scripts",
+      "subscriptionExisting": "Existing",
+      "subscriptionNew": "New",
+      "subscriptionEffectiveConnect": "Effective @connect",
+      "subscriptionNoConnect": "none",
+      "subscriptionConnectConstrained": "Constrained",
+      "subscriptionConnectConstrainedDetail": "The bundle cannot widen this member network scope.",
+      "subscriptionConnectGuarded": "Bundle @connect is scope-limited",
+      "subscriptionMemberListLabel": "Subscription members",
+      "subscriptionReviewGuardTitle": "No code is saved yet",
+      "subscriptionReviewGuardBody": "Each member is fetched again, parsed, and installed through the normal trust receipt path only after you confirm. Removed members become reviewable uninstall proposals on refresh.",
+      "subscriptionReviewFailed": "Some members could not be reviewed",
+      "subscriptionReviewFailedTitle": "Subscription review failed",
+      "subscriptionInvalidTitle": "Invalid subscription",
+      "subscriptionInstallButton": "Install subscription",
+      "subscriptionInstallFailed": "Subscription installation failed",
+      "subscriptionInstalledTitle": "Subscription installed",
+      "subscriptionInstalledCopy": "{count} scripts are now managed by this subscription.",
+      "subscriptionInstalledNextStep": "Future changes stay in the existing review queue.",
       "installSignatureVerificationUnavailable": "Verification unavailable",
       "installSignedByTrustedKeyNamed": 'Signed by trusted key "{name}".',
       "installSignedByTrustedKey": "Signed by a trusted key.",
@@ -7487,15 +7508,15 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 43,
       "translatedRuntimeMessages": 43,
-      "totalRuntimeMessages": 1949
+      "totalRuntimeMessages": 1970
     },
     "en": {
       "name": "English",
       "direction": "ltr",
       "translationStatus": "complete",
-      "runtimeCoverageBaseline": 1949,
-      "translatedRuntimeMessages": 1949,
-      "totalRuntimeMessages": 1949
+      "runtimeCoverageBaseline": 1970,
+      "translatedRuntimeMessages": 1970,
+      "totalRuntimeMessages": 1970
     },
     "es": {
       "name": "Espa\xF1ol",
@@ -7503,7 +7524,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 45,
       "translatedRuntimeMessages": 45,
-      "totalRuntimeMessages": 1949
+      "totalRuntimeMessages": 1970
     },
     "fr": {
       "name": "Fran\xE7ais",
@@ -7511,7 +7532,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 43,
       "translatedRuntimeMessages": 43,
-      "totalRuntimeMessages": 1949
+      "totalRuntimeMessages": 1970
     },
     "he": {
       "name": "\u05E2\u05D1\u05E8\u05D9\u05EA",
@@ -7519,7 +7540,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 58,
       "translatedRuntimeMessages": 58,
-      "totalRuntimeMessages": 1949
+      "totalRuntimeMessages": 1970
     },
     "ja": {
       "name": "\u65E5\u672C\u8A9E",
@@ -7527,7 +7548,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 71,
       "translatedRuntimeMessages": 71,
-      "totalRuntimeMessages": 1949
+      "totalRuntimeMessages": 1970
     },
     "pt": {
       "name": "Portugu\xEAs",
@@ -7535,7 +7556,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 42,
       "translatedRuntimeMessages": 42,
-      "totalRuntimeMessages": 1949
+      "totalRuntimeMessages": 1970
     },
     "ru": {
       "name": "\u0420\u0443\u0441\u0441\u043A\u0438\u0439",
@@ -7543,7 +7564,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 117,
       "translatedRuntimeMessages": 117,
-      "totalRuntimeMessages": 1949
+      "totalRuntimeMessages": 1970
     },
     "zh": {
       "name": "\u4E2D\u6587",
@@ -7551,7 +7572,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 46,
       "translatedRuntimeMessages": 46,
-      "totalRuntimeMessages": 1949
+      "totalRuntimeMessages": 1970
     }
   };
 
@@ -12076,6 +12097,8 @@ const RuntimeActionHandler = (() => {
   var RUNTIME_BACKGROUND_ACTIONS = [
     "installFromUrl",
     "installFromCode",
+    "prepareSubscriptionInstall",
+    "applySubscriptionInstall",
     "fetchScriptPreview",
     "probeInstallDependency",
     "verifyRequireProvenancePreview",
@@ -12108,6 +12131,8 @@ const RuntimeActionHandler = (() => {
         message.sourceUrl || "",
         message.operation || "install"
       ),
+      prepareSubscriptionInstall: ({ message }) => dependencies.prepareSubscriptionInstall(message.code || "", message.sourceUrl || ""),
+      applySubscriptionInstall: ({ message }) => dependencies.applySubscriptionInstall(message.code || "", message.sourceUrl || ""),
       fetchScriptPreview: ({ message }) => dependencies.fetchScriptPreview(message.url),
       probeInstallDependency: ({ message }) => dependencies.probeInstallDependency(message.url),
       verifyRequireProvenancePreview: ({ message }) => dependencies.verifyRequireProvenancePreview(message),
@@ -12243,6 +12268,7 @@ const MessageRouter = (() => {
     "analyzeScript",
     "applyPendingUpdate",
     "applySafePendingUpdates",
+    "applySubscriptionInstall",
     "applyUpdate",
     "chainDomEvent",
     "checkUpdates",
@@ -12354,6 +12380,7 @@ const MessageRouter = (() => {
     "permanentlyDelete",
     "prefetchResources",
     "prepareBackgroundRunnerDryRun",
+    "prepareSubscriptionInstall",
     "probeInstallDependency",
     "publicApi_clearAuditLog",
     "publicApi_getAuditLog",
@@ -27215,6 +27242,89 @@ const ScriptSubscriptions = (() => {
     resolved.hash = "";
     return resolved.href;
   }
+  function normalizeHttpsUrl(value, baseUrl) {
+    const normalized = normalizeHttpUrl(value, baseUrl);
+    if (!normalized.startsWith("https://")) throw new Error("Subscription script URLs must use https");
+    return normalized;
+  }
+  function parseUserSubscribe(code, baseUrl = "") {
+    const match = code.match(/\/\/\s*==UserSubscribe==([\s\S]*?)\/\/\s*==\/UserSubscribe==/);
+    if (!match) throw new Error("No UserSubscribe metadata block found");
+    const meta = {
+      name: "Script subscription",
+      description: "",
+      version: "1.0.0",
+      author: "",
+      connect: [],
+      scriptUrl: [],
+      metaBlock: match[0]
+    };
+    const seen = /* @__PURE__ */ new Set();
+    for (const line of match[1].split("\n")) {
+      const directive = line.match(/\/\/\s*@([\w-]+)(?:\s+(.*))?/);
+      if (!directive) continue;
+      const key = directive[1].trim();
+      const value = (directive[2] ?? "").trim();
+      if (key === "name" || key === "description" || key === "version" || key === "author") {
+        meta[key] = value;
+      } else if (key === "connect") {
+        if (value) meta.connect.push(...value.split(",").map((part) => part.trim()).filter(Boolean));
+      } else if (key === "scriptUrl" || key === "script-url") {
+        if (!value) continue;
+        const url = normalizeHttpsUrl(value, baseUrl);
+        if (!seen.has(url)) {
+          seen.add(url);
+          meta.scriptUrl.push(url);
+        }
+      }
+    }
+    if (meta.scriptUrl.length === 0) throw new Error("Subscription must declare at least one @scriptUrl");
+    return {
+      name: meta.name,
+      description: meta.description,
+      version: meta.version,
+      author: meta.author,
+      connect: [...new Set(meta.connect)],
+      sourceUrl: baseUrl ? normalizeHttpsUrl(baseUrl) : "",
+      scripts: meta.scriptUrl.map((url) => ({ url })),
+      metaBlock: meta.metaBlock,
+      code,
+      parsedAt: Date.now()
+    };
+  }
+  function connectHost(value) {
+    const raw = String(value || "").trim().toLowerCase().replace(/^\*:\/\//, "").replace(/^https?:\/\//, "");
+    const host = raw.split(/[/?#:]/, 1)[0] || raw;
+    return host.startsWith("*.") ? host.slice(2) : host;
+  }
+  function intersectConnectPatterns(member, bundle) {
+    const left = String(member || "").trim();
+    const right = String(bundle || "").trim();
+    if (!left || !right) return null;
+    if (left === "*") return right;
+    if (right === "*") return left;
+    if (left.toLowerCase() === right.toLowerCase()) return left;
+    const leftHost = connectHost(left);
+    const rightHost = connectHost(right);
+    if (!leftHost || !rightHost) return null;
+    if (leftHost === rightHost) return left.length <= right.length ? left : right;
+    if (leftHost.endsWith(`.${rightHost}`)) return left;
+    if (rightHost.endsWith(`.${leftHost}`)) return right;
+    return null;
+  }
+  function constrainConnectPatterns(memberConnect, bundleConnect) {
+    const member = Array.isArray(memberConnect) ? memberConnect.map(String).map((item) => item.trim()).filter(Boolean) : [];
+    const bundle = Array.isArray(bundleConnect) ? bundleConnect.map(String).map((item) => item.trim()).filter(Boolean) : [];
+    if (bundle.length === 0) return [...new Set(member)];
+    const result = /* @__PURE__ */ new Set();
+    for (const memberPattern of member) {
+      for (const bundlePattern of bundle) {
+        const overlap = intersectConnectPatterns(memberPattern, bundlePattern);
+        if (overlap) result.add(overlap);
+      }
+    }
+    return [...result].sort();
+  }
   function getFeedItemUrl(item) {
     return asCleanString(item.url) || asCleanString(item.downloadURL) || asCleanString(item.downloadUrl) || asCleanString(item.codeURL) || asCleanString(item.codeUrl) || asCleanString(item.sourceURL) || asCleanString(item.sourceUrl) || asCleanString(item.href);
   }
@@ -27264,6 +27374,10 @@ const ScriptSubscriptions = (() => {
         id: asCleanString(record.id) || generateId(),
         url,
         name: asCleanString(record.name) || fallbackNameFromUrl(url),
+        kind: record.kind === "bundle" ? "bundle" : "feed",
+        description: asCleanString(record.description),
+        version: asCleanString(record.version),
+        connect: Array.isArray(record.connect) ? record.connect.filter((item) => typeof item === "string").slice(0, 100) : [],
         enabled: record.enabled !== false,
         scripts: Array.isArray(record.scripts) ? record.scripts.map((item) => normalizeFeedItem(item, url)).filter((item) => !!item).slice(0, MAX_FEED_ITEMS) : [],
         createdAt: typeof record.createdAt === "number" ? record.createdAt : now,
@@ -27293,6 +27407,7 @@ const ScriptSubscriptions = (() => {
   function cloneSubscription(subscription) {
     return {
       ...subscription,
+      connect: Array.isArray(subscription.connect) ? [...subscription.connect] : [],
       scripts: subscription.scripts.map((script) => ({ ...script })),
       lastErrors: [...subscription.lastErrors]
     };
@@ -27344,6 +27459,10 @@ const ScriptSubscriptions = (() => {
       id: existing?.id || generateId(),
       url: normalizedUrl,
       name: asCleanString(options.name) || feed.name || existing?.name || fallbackNameFromUrl(normalizedUrl),
+      kind: existing?.kind || "feed",
+      description: existing?.description || "",
+      version: existing?.version || "",
+      connect: existing?.connect ? [...existing.connect] : [],
       enabled: typeof options.enabled === "boolean" ? options.enabled : existing?.enabled !== false,
       scripts: feed.scripts.map((script) => ({ ...script })),
       createdAt: existing?.createdAt || now,
@@ -27354,6 +27473,36 @@ const ScriptSubscriptions = (() => {
       lastErrors: existing?.lastErrors ? [...existing.lastErrors] : [],
       // A read with no validators must not wipe a working pair — the next
       // scheduled check would then re-download a feed that had not changed.
+      httpEtag: options.validators ? safeValidator(options.validators.etag) : existing?.httpEtag || "",
+      httpLastModified: options.validators ? safeValidator(options.validators.lastModified) : existing?.httpLastModified || "",
+      sourceFetchedAt: now
+    };
+    const next = existingIndex >= 0 ? subscriptions.map((item, index) => index === existingIndex ? subscription : item) : [subscription, ...subscriptions];
+    await writeAll(next);
+    return cloneSubscription(subscription);
+  }
+  async function upsertBundle(bundle, options = {}) {
+    const normalizedUrl = normalizeHttpsUrl(bundle.sourceUrl);
+    const subscriptions = await readAll();
+    const existingIndex = subscriptions.findIndex((item) => item.url === normalizedUrl);
+    const existing = existingIndex >= 0 ? subscriptions[existingIndex] : null;
+    const now = Date.now();
+    const subscription = {
+      id: existing?.id || generateId(),
+      url: normalizedUrl,
+      name: asCleanString(options.name) || bundle.name || existing?.name || fallbackNameFromUrl(normalizedUrl),
+      kind: "bundle",
+      description: bundle.description || "",
+      version: bundle.version || "",
+      connect: [...new Set(bundle.connect.map((item) => item.trim()).filter(Boolean))],
+      enabled: typeof options.enabled === "boolean" ? options.enabled : existing?.enabled !== false,
+      scripts: bundle.scripts.map((script) => ({ ...script })),
+      createdAt: existing?.createdAt || now,
+      updatedAt: now,
+      lastCheckedAt: now,
+      lastQueued: existing?.lastQueued || 0,
+      lastSkipped: existing?.lastSkipped || 0,
+      lastErrors: existing?.lastErrors ? [...existing.lastErrors] : [],
       httpEtag: options.validators ? safeValidator(options.validators.etag) : existing?.httpEtag || "",
       httpLastModified: options.validators ? safeValidator(options.validators.lastModified) : existing?.httpLastModified || "",
       sourceFetchedAt: now
@@ -27396,10 +27545,14 @@ const ScriptSubscriptions = (() => {
     MAX_SUBSCRIPTIONS,
     MAX_FEED_ITEMS,
     normalizeFeedUrl: normalizeHttpUrl,
+    normalizeHttpsUrl,
+    parseUserSubscribe,
+    constrainConnectPatterns,
     parseFeed,
     list,
     get,
     upsertFromFeed,
+    upsertBundle,
     remove,
     markRefreshResult,
     safeValidator
@@ -31078,6 +31231,60 @@ function parseBooleanDirective(value) {
   return !['0', 'false', 'no', 'off', 'disabled'].includes(normalized);
 }
 
+// ScriptCat-compatible curated bundles. Keep this parser deliberately small:
+// the bundle header is metadata only, while every member is parsed and
+// installed through the normal userscript trust path below.
+function parseUserSubscribe(code, baseUrl = '') {
+  const match = String(code || '').match(/\/\/\s*==UserSubscribe==([\s\S]*?)\/\/\s*==\/UserSubscribe==/);
+  if (!match) return { error: 'No UserSubscribe metadata block found.' };
+  if (baseUrl) {
+    try {
+      if (new URL(baseUrl).protocol !== 'https:') return { error: 'Subscription sources must use https' };
+    } catch (_) {
+      return { error: 'Invalid subscription source URL' };
+    }
+  }
+  const meta = {
+    name: 'Script subscription',
+    description: '',
+    version: '1.0.0',
+    author: '',
+    connect: [],
+    scriptUrl: [],
+    metaBlock: match[0]
+  };
+  const seenUrls = new Set();
+  for (const line of (match[1] || '').split('\n')) {
+    const directive = line.match(/\/\/\s*@([\w-]+)(?:\s+(.*))?/);
+    if (!directive) continue;
+    const key = (directive[1] || '').trim();
+    const value = (directive[2] || '').trim();
+    if (['name', 'description', 'version', 'author'].includes(key)) {
+      meta[key] = value;
+      continue;
+    }
+    if (key === 'connect') {
+      if (value) meta.connect.push(...value.split(',').map(part => part.trim()).filter(Boolean));
+      continue;
+    }
+    if (key !== 'scriptUrl' && key !== 'script-url') continue;
+    if (!value) continue;
+    let resolved;
+    try { resolved = new URL(value, baseUrl || undefined); } catch (_) {
+      return { error: `Invalid subscription script URL: ${value}` };
+    }
+    if (resolved.protocol !== 'https:') return { error: 'Subscription script URLs must use https' };
+    resolved.hash = '';
+    const url = resolved.href;
+    if (!seenUrls.has(url)) {
+      seenUrls.add(url);
+      meta.scriptUrl.push(url);
+    }
+  }
+  if (meta.scriptUrl.length === 0) return { error: 'Subscription must declare at least one @scriptUrl' };
+  return { meta, code, metaBlock: match[0] };
+}
+
 /**
  * Parse a userscript's metadata block and extract all supported directives.
  * @param {string} code - The full userscript source code
@@ -32737,6 +32944,42 @@ const UpdateSystem = {
     };
   },
 
+  async queueSubscriptionRemovals(removals = [], { source = 'subscription' } = {}) {
+    const incoming = Array.isArray(removals) ? removals : [];
+    const existing = await this._loadPendingUpdates();
+    const incomingIds = new Set(incoming.map(update => update?.id).filter(Boolean));
+    const retained = existing.filter(item => !incomingIds.has(item.id));
+    const queued = incoming
+      .filter(item => item?.id && item?.scriptId)
+      .map(item => ({
+        kind: 'subscription-remove',
+        id: item.id,
+        scriptId: item.scriptId,
+        name: item.name || item.scriptId,
+        currentVersion: '',
+        newVersion: '',
+        code: '',
+        sourceUrl: item.sourceUrl || '',
+        source,
+        queuedAt: Date.now(),
+        checkedAt: Date.now(),
+        safeToApply: false,
+        reviewReasons: ['Removed from subscription; review uninstall'],
+        sourceIdentityChanged: false,
+        subscriptionId: item.subscriptionId || '',
+        subscriptionName: item.subscriptionName || '',
+        diff: { previousLines: 0, nextLines: 0, addedLines: 0, removedLines: 0 }
+      }));
+    const pendingUpdates = await this._savePendingUpdates([...queued, ...retained]);
+    return {
+      success: true,
+      queued: queued.length,
+      pendingUpdates,
+      safeCount: pendingUpdates.filter(item => item.safeToApply).length,
+      reviewCount: pendingUpdates.filter(item => !item.safeToApply).length
+    };
+  },
+
   async getPendingUpdates() {
     return (await this._loadPendingUpdates()).slice();
   },
@@ -32762,6 +33005,17 @@ const UpdateSystem = {
     const pendingUpdates = await this._loadPendingUpdates();
     const item = pendingUpdates.find(update => update.id === scriptId);
     if (!item) return { error: 'Pending update not found' };
+
+    if (item.kind === 'subscription-remove') {
+      const targetId = item.scriptId || item.id;
+      const existing = await ScriptStorage.get(targetId);
+      if (existing) {
+        await unregisterScript(existing.id);
+        if (typeof ScriptStorage.delete === 'function') await ScriptStorage.delete(existing.id);
+      }
+      await this.clearPendingUpdates(scriptId);
+      return { success: true, script: existing || { id: targetId } };
+    }
 
     if (item.kind === 'subscription-install') {
       const result = await installFromCode(item.code, {
@@ -34269,11 +34523,154 @@ function _scriptSourceByteLength(code) {
 const SUBSCRIPTION_REFRESH_ALARM = 'subscriptionRefresh';
 const DEFAULT_SUBSCRIPTION_REFRESH_INTERVAL_HOURS = 24;
 
+function rewriteSubscriptionMemberConnect(code, connect = []) {
+  const source = String(code || '');
+  const block = source.match(/(\/\/\s*==UserScript==)([\s\S]*?)(\/\/\s*==\/UserScript==)/);
+  if (!block) return source;
+  const body = (block[2] || '')
+    .split(/\r?\n/)
+    .filter(line => !/^\s*\/\/\s*@connect(?:\s|$)/i.test(line))
+    .join('\n')
+    .replace(/^\n+|\n+$/g, '');
+  const connectLines = (Array.isArray(connect) ? connect : [])
+    .map(item => String(item || '').trim())
+    .filter(Boolean)
+    .map(item => `// @connect ${item}`);
+  const nextBody = [body, ...connectLines].filter(Boolean).join('\n');
+  return source.replace(block[0], `${block[1]}\n${nextBody}\n${block[3]}`);
+}
+
+function subscriptionMemberIdentity(meta = {}) {
+  return `${String(meta.name || '').trim()}\n${String(meta.namespace || '').trim()}`;
+}
+
 const SubscriptionSystem = {
   _FETCH_TIMEOUT_MS: 15 * 1000,
   _MAX_FEED_BYTES: 512 * 1024,
   _MAX_SCRIPT_BYTES: MAX_SCRIPT_SIZE,
   _MAX_SCRIPTS_PER_REFRESH: 50,
+
+  async prepareBundle(code, sourceUrl = '') {
+    const parsedBundle = parseUserSubscribe(code, sourceUrl);
+    if (parsedBundle?.error) return { success: false, error: parsedBundle.error };
+    const bundleMeta = parsedBundle.meta || {};
+    const installed = await ScriptStorage.getAll();
+    const installedByIdentity = new Map(installed.map(script => [subscriptionMemberIdentity(script.meta), script]));
+    const members = [];
+    const errors = [];
+    for (const url of bundleMeta.scriptUrl || []) {
+      try {
+        const memberCode = await this.fetchScript(url);
+        const parsed = parseUserscript(memberCode);
+        if (parsed.error) throw new Error(parsed.error);
+        const originalConnect = Array.isArray(parsed.meta?.connect) ? [...parsed.meta.connect] : [];
+        const effectiveConnect = typeof ScriptSubscriptions?.constrainConnectPatterns === 'function'
+          ? ScriptSubscriptions.constrainConnectPatterns(originalConnect, bundleMeta.connect)
+          : originalConnect;
+        const effectiveCode = rewriteSubscriptionMemberConnect(memberCode, effectiveConnect);
+        const effectiveParsed = parseUserscript(effectiveCode);
+        if (effectiveParsed.error) throw new Error(effectiveParsed.error);
+        const existing = installedByIdentity.get(subscriptionMemberIdentity(effectiveParsed.meta));
+        const analysis = await analyzeSyncedScriptCode(effectiveCode);
+        members.push({
+          url,
+          code: effectiveCode,
+          name: effectiveParsed.meta.name || url,
+          namespace: effectiveParsed.meta.namespace || '',
+          version: effectiveParsed.meta.version || '',
+          description: effectiveParsed.meta.description || '',
+          grants: Array.isArray(effectiveParsed.meta.grant) ? [...effectiveParsed.meta.grant] : [],
+          originalConnect,
+          effectiveConnect,
+          riskLevel: analysis?.riskLevel || 'unknown',
+          totalRisk: Number(analysis?.totalRisk) || 0,
+          findings: Array.isArray(analysis?.findings) ? analysis.findings.slice(0, 20) : [],
+          existingId: existing?.id || '',
+        });
+      } catch (error) {
+        errors.push(`${url}: ${error?.message || String(error)}`);
+      }
+    }
+    return {
+      success: errors.length === 0,
+      error: errors.length ? 'One or more subscription members could not be reviewed' : undefined,
+      kind: 'subscription',
+      name: bundleMeta.name || 'Script subscription',
+      description: bundleMeta.description || '',
+      version: bundleMeta.version || '',
+      author: bundleMeta.author || '',
+      connect: Array.isArray(bundleMeta.connect) ? [...bundleMeta.connect] : [],
+      sourceUrl: sourceUrl || '',
+      members,
+      errors,
+    };
+  },
+
+  async installBundle(code, sourceUrl = '') {
+    const preview = await this.prepareBundle(code, sourceUrl);
+    if (!preview.success || !Array.isArray(preview.members) || preview.members.length === 0) {
+      return { success: false, error: preview.error || 'Subscription has no installable members', preview };
+    }
+    const installed = [];
+    for (const member of preview.members) {
+      const result = await installFromCode(member.code, {
+        sourceUrl: member.url,
+        operation: 'subscription-install',
+      });
+      if (!result?.success) {
+        return { success: false, error: result?.error || `Failed to install ${member.name}`, installed, preview };
+      }
+      const current = await ScriptStorage.get(result.script?.id);
+      if (current) {
+        current.settings = {
+          ...(current.settings || {}),
+          subscriptionId: preview.sourceUrl || sourceUrl,
+          subscriptionName: preview.name,
+          subscriptionMemberUrl: member.url,
+          subscriptionConnect: preview.connect,
+          subscriptionOriginalConnect: member.originalConnect,
+        };
+        await ScriptStorage.set(current.id, current);
+      }
+      installed.push({ id: result.script?.id || '', name: member.name, url: member.url });
+    }
+    let subscription = null;
+    try {
+      const bundle = {
+        sourceUrl: sourceUrl || preview.sourceUrl,
+        name: preview.name,
+        description: preview.description,
+        version: preview.version,
+        author: preview.author,
+        connect: preview.connect,
+        scripts: preview.members.map(member => ({ url: member.url, name: member.name, namespace: member.namespace, version: member.version })),
+        metaBlock: '',
+        code: String(code || ''),
+        parsedAt: Date.now(),
+      };
+      subscription = await ScriptSubscriptions.upsertBundle(bundle);
+      await setupAlarms().catch(() => {});
+      } catch (_) {
+      // Installing the reviewed members is durable even if subscription index
+      // storage is temporarily unavailable; the next refresh can repair it.
+    }
+    // The subscription record owns the stable id used by refresh/removal
+    // reconciliation. Retag the freshly installed members after the record is
+    // persisted so future refreshes can propose uninstalling removed members.
+    if (subscription?.id) {
+      for (const entry of installed) {
+        if (!entry?.id) continue;
+        const current = await ScriptStorage.get(entry.id);
+        if (!current) continue;
+        current.settings = {
+          ...(current.settings || {}),
+          subscriptionId: subscription.id,
+        };
+        await ScriptStorage.set(current.id, current);
+      }
+    }
+    return { success: true, subscription, installed, preview };
+  },
 
   async fetchText(url, label, maxBytes, options = {}) {
     InternalHostGuard.assertExternalFetchUrl(url, label, ['http:', 'https:']);
@@ -34332,6 +34729,43 @@ const SubscriptionSystem = {
     };
   },
 
+  async fetchBundle(url, options = {}) {
+    const bundleUrl = ScriptSubscriptions.normalizeHttpsUrl(url);
+    const intent = options.intent || 'manual-feed';
+    const result = await this.fetchText(bundleUrl, 'Subscription bundle', this._MAX_FEED_BYTES, {
+      intent,
+      etag: options.etag,
+      lastModified: options.lastModified
+    });
+    if (result.notModified) return { notModified: true, sourceUrl: bundleUrl, validators: null };
+    const parsed = parseUserSubscribe(result.text, bundleUrl);
+    if (parsed.error) throw new Error(parsed.error);
+    return {
+      ...parsed,
+      notModified: false,
+      validators: FetchFreshness.readResponseValidators(intent, result.response)
+    };
+  },
+
+  async fetchSubscriptionSource(url, options = {}) {
+    const sourceUrl = ScriptSubscriptions.normalizeFeedUrl(url);
+    const intent = options.intent || 'manual-feed';
+    const result = await this.fetchText(sourceUrl, 'Subscription source', this._MAX_FEED_BYTES, {
+      intent,
+      etag: options.etag,
+      lastModified: options.lastModified
+    });
+    if (result.notModified) return { notModified: true, sourceUrl, validators: null, kind: options.kind || 'feed' };
+    const validators = FetchFreshness.readResponseValidators(intent, result.response);
+    if (result.text.includes('==UserSubscribe==')) {
+      const bundle = parseUserSubscribe(result.text, sourceUrl);
+      if (bundle.error) throw new Error(bundle.error);
+      return { ...bundle, kind: 'bundle', notModified: false, validators };
+    }
+    const feed = ScriptSubscriptions.parseFeed(result.text, sourceUrl);
+    return { ...feed, kind: 'feed', notModified: false, validators };
+  },
+
   async fetchScript(url) {
     const scriptUrl = ScriptSubscriptions.normalizeFeedUrl(url);
     // A feed-listed script body is always read in full: a 304 would leave
@@ -34366,6 +34800,56 @@ const SubscriptionSystem = {
       script?.trustReceipt?.source?.installUrl,
       script?.installSource?.url
     ].filter(Boolean);
+  },
+
+  async buildBundleCandidates(subscription, members = []) {
+    const installedScripts = await ScriptStorage.getAll();
+    const byIdentity = new Map(installedScripts.map(script => [subscriptionMemberIdentity(script.meta), script]));
+    const byMemberUrl = new Map(installedScripts
+      .filter(script => script?.settings?.subscriptionMemberUrl)
+      .map(script => [script.settings.subscriptionMemberUrl, script]));
+    const pending = await UpdateSystem.getPendingUpdates();
+    const pendingIds = new Set(pending.map(item => item.id));
+    const installs = [];
+    const updates = [];
+    let skipped = 0;
+    for (const member of Array.isArray(members) ? members.slice(0, this._MAX_SCRIPTS_PER_REFRESH) : []) {
+      const existing = byMemberUrl.get(member.url) || byIdentity.get(`${member.name}\n${member.namespace || ''}`);
+      if (!member?.code || !member?.url) {
+        skipped++;
+        continue;
+      }
+      if (!existing) {
+        const id = `subscription_${subscription.id}_${this.hashString(member.url)}`;
+        if (pendingIds.has(id)) {
+          skipped++;
+          continue;
+        }
+        installs.push({
+          id,
+          code: member.code,
+          sourceUrl: member.url,
+          name: member.name,
+          newVersion: member.version,
+          subscriptionId: subscription.id,
+          subscriptionName: subscription.name
+        });
+        continue;
+      }
+      if (existing.code !== member.code && existing.id && !pendingIds.has(existing.id)) {
+        updates.push({
+          id: existing.id,
+          code: member.code,
+          sourceUrl: member.url,
+          name: member.name,
+          currentVersion: existing.meta?.version || '',
+          newVersion: member.version
+        });
+      } else {
+        skipped++;
+      }
+    }
+    return { installs, updates, skipped };
   },
 
   async buildInstallCandidates(subscription, scripts = []) {
@@ -34444,16 +34928,42 @@ const SubscriptionSystem = {
     if (!url) return { success: false, error: 'Subscription URL is required' };
     try {
       // Adding a feed is an explicit action — read it unconditionally.
-      const feed = await this.fetchFeed(url, { intent: 'manual-feed' });
-      const subscription = await ScriptSubscriptions.upsertFromFeed(feed.sourceUrl, feed, {
-        name,
-        validators: feed.validators
-      });
-      const result = await this.refreshSubscription(subscription.id, { feed, subscription });
-      if (result?.success) {
-        await setupAlarms().catch(() => {});
+      const source = await this.fetchSubscriptionSource(url, { intent: 'manual-feed' });
+      let subscription;
+      if (source.kind === 'bundle') {
+        const preview = await this.prepareBundle(source.code, source.sourceUrl);
+        if (!preview.success) return { success: false, error: preview.error || 'Subscription review failed', preview };
+        const reviewedMembers = Array.isArray(preview.members) ? preview.members : [];
+        const existingSubscription = await ScriptSubscriptions.get(source.sourceUrl);
+        subscription = existingSubscription || await ScriptSubscriptions.upsertBundle({
+          sourceUrl: source.sourceUrl,
+          name: source.name,
+          description: source.description,
+          version: source.version,
+          author: source.author,
+          connect: source.connect,
+          scripts: reviewedMembers.map(member => ({ url: member.url, name: member.name, namespace: member.namespace, version: member.version })),
+          metaBlock: source.metaBlock,
+          code: source.code,
+          parsedAt: source.parsedAt
+        }, { name, validators: source.validators });
+        const result = await this.refreshSubscription(subscription.id, { bundle: source, subscription });
+        if (result?.success) {
+          await setupAlarms().catch(() => {});
+        }
+        return result;
+      } else {
+        subscription = await ScriptSubscriptions.upsertFromFeed(source.sourceUrl, source, {
+          name,
+          validators: source.validators
+        });
+        const feed = source;
+        const result = await this.refreshSubscription(subscription.id, { feed, subscription });
+        if (result?.success) {
+          await setupAlarms().catch(() => {});
+        }
+        return result;
       }
-      return result;
     } catch (error) {
       return { success: false, error: error?.message || String(error) };
     }
@@ -34464,6 +34974,87 @@ const SubscriptionSystem = {
     try {
       let subscription = options.subscription || await ScriptSubscriptions.get(id);
       if (!subscription) return { success: false, error: 'Subscription not found' };
+      if (subscription.kind === 'bundle' || options.bundle) {
+        let bundle = options.bundle || null;
+        if (!bundle) {
+          const intent = options.intent || 'manual-feed';
+          bundle = await this.fetchSubscriptionSource(subscription.url, {
+            intent,
+            etag: subscription.httpEtag,
+            lastModified: subscription.httpLastModified,
+            kind: 'bundle'
+          });
+          if (bundle.notModified) {
+            const unchanged = await ScriptSubscriptions.markRefreshResult(subscription.id, {
+              queued: 0,
+              skipped: 0,
+              errors: [],
+              notModified: true
+            });
+            return { success: true, subscription: unchanged || subscription, notModified: true, queued: 0, skipped: 0, errors: [] };
+          }
+        }
+        const preview = await this.prepareBundle(bundle.code, bundle.sourceUrl || subscription.url);
+        if (!preview.success) {
+          const failed = await ScriptSubscriptions.markRefreshResult(subscription.id, { queued: 0, skipped: 0, errors: preview.errors || [preview.error || 'Subscription review failed'] });
+          return { success: false, error: preview.error || 'Subscription review failed', subscription: failed || subscription, errors: preview.errors || [] };
+        }
+        const reviewedMembers = Array.isArray(preview.members) ? preview.members : [];
+        const candidates = await this.buildBundleCandidates(subscription, reviewedMembers);
+        const installQueue = await UpdateSystem.queueSubscriptionInstalls(candidates.installs, {
+          source: `subscription:${subscription.id}`
+        });
+        const updateQueue = await UpdateSystem.queueUpdates(candidates.updates, {
+          source: `subscription:${subscription.id}`
+        });
+        const previousUrls = new Set((Array.isArray(subscription.scripts) ? subscription.scripts : []).map(item => item?.url).filter(Boolean));
+        const nextUrls = new Set(reviewedMembers.map(item => item.url));
+        const installedMembers = await ScriptStorage.getAll();
+        const removals = installedMembers
+          .filter(script => script?.settings?.subscriptionId === subscription.id
+            && script?.settings?.subscriptionMemberUrl
+            && previousUrls.has(script.settings.subscriptionMemberUrl)
+            && !nextUrls.has(script.settings.subscriptionMemberUrl))
+          .map(script => ({
+            id: `subscription_remove_${subscription.id}_${this.hashString(script.id)}`,
+            scriptId: script.id,
+            name: script.meta?.name || script.id,
+            sourceUrl: subscription.url,
+            subscriptionId: subscription.id,
+            subscriptionName: subscription.name
+          }));
+        const removalQueue = await UpdateSystem.queueSubscriptionRemovals(removals, {
+          source: `subscription:${subscription.id}`
+        });
+        const updated = await ScriptSubscriptions.upsertBundle({
+          sourceUrl: bundle.sourceUrl || subscription.url,
+          name: preview.name,
+          description: preview.description,
+          version: preview.version,
+          author: preview.author,
+          connect: preview.connect,
+          scripts: reviewedMembers.map(member => ({ url: member.url, name: member.name, namespace: member.namespace, version: member.version })),
+          metaBlock: bundle.metaBlock || '',
+          code: bundle.code,
+          parsedAt: bundle.parsedAt || Date.now()
+        }, { name: subscription.name, validators: bundle.validators });
+        const queued = (installQueue.queued || 0) + (updateQueue.queued || 0) + (removalQueue.queued || 0);
+        const skipped = (candidates.skipped || 0);
+        const resultErrors = [...(preview.errors || [])];
+        const refreshed = await ScriptSubscriptions.markRefreshResult(updated.id, {
+          queued,
+          skipped,
+          errors: resultErrors
+        });
+        return {
+          success: true,
+          subscription: refreshed || updated,
+          queued,
+          skipped,
+          errors: resultErrors,
+          pendingUpdates: await UpdateSystem.getPendingUpdates()
+        };
+      }
       let feed = options.feed || null;
       if (!feed) {
         // Only the alarm-driven sweep sends validators; a hand-triggered
@@ -37845,6 +38436,8 @@ function formatUserScriptExecuteDiagnostic(error) {
 backgroundActionRegistry.registerHandlers(RuntimeActionHandler.createRuntimeActionHandlers({
   installFromUrl: url => installFromUrl(url),
   installFromCode: (code, sourceUrl, operation) => installFromCode(code, { sourceUrl, operation }),
+  prepareSubscriptionInstall: (code, sourceUrl) => SubscriptionSystem.prepareBundle(code, sourceUrl),
+  applySubscriptionInstall: (code, sourceUrl) => SubscriptionSystem.installBundle(code, sourceUrl),
   fetchScriptPreview: url => fetchScriptPreview(url),
   probeInstallDependency: url => probeInstallDependency(url),
   verifyRequireProvenancePreview: message => previewRequireProvenance(message),
@@ -41152,7 +41745,11 @@ async function _storePendingInstall(storageKey, payload, options = {}) {
   } catch (cleanupError) {
     debugLog('[ScriptVault] Pending install cleanup failed:', cleanupError?.message || cleanupError);
   }
-  const pendingInstall = { ...payload, timestamp };
+  const pendingInstall = {
+    ...payload,
+    kind: payload?.kind || (String(payload?.code || '').includes('==UserSubscribe==') ? 'subscription' : 'script'),
+    timestamp
+  };
   await chrome.storage.local.set({ [storageKey]: pendingInstall });
   return pendingInstall;
 }
@@ -41182,7 +41779,7 @@ async function _fetchPendingUserscript(url) {
     // unbounded body (the previous content-length check was advisory and
     // ran AFTER `response.text()` already buffered everything).
     const code = await _fetchTextBounded(response, MAX_SCRIPT_SIZE, 'Script');
-    if (!code.includes('==UserScript==')) {
+    if (!code.includes('==UserScript==') && !code.includes('==UserSubscribe==')) {
       return { action: 'pass-through' };
     }
     return {
@@ -41206,8 +41803,8 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
 
   const url = details.url;
 
-  // Check if this is a .user.js URL
-  if (!url.match(/\.user\.js(\?[^#]*)?(#.*)?$/i)) return;
+  // Check if this is a userscript or subscription URL.
+  if (!url.match(/\.user(?:\.sub)?\.js(\?[^#]*)?(#.*)?$/i)) return;
 
   // Don't intercept extension pages
   if (url.startsWith('chrome-extension://')) return;
@@ -41248,7 +41845,8 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
   }
 }, {
   url: [
-    { urlMatches: '.*\\.user\\.js(\\?[^#]*)?(#.*)?$' }
+    { urlMatches: '.*\\.user\\.js(\\?[^#]*)?(#.*)?$' },
+    { urlMatches: '.*\\.user\\.sub\\.js(\\?[^#]*)?(#.*)?$' }
   ]
 });
 

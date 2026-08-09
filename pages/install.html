@@ -1326,6 +1326,60 @@
       margin-bottom: 12px;
     }
 
+    .subscription-review-list {
+      display: grid;
+      gap: 8px;
+      margin: 12px 0 16px;
+    }
+
+    .subscription-member {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px 12px;
+      align-items: start;
+      padding: 10px 12px;
+      border: 1px solid rgba(127, 127, 127, 0.18);
+      border-radius: var(--radius-sm);
+      background: var(--sv-overlay-subtle);
+    }
+
+    .subscription-member-copy,
+    .subscription-member-meta {
+      min-width: 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 8px;
+      align-items: baseline;
+    }
+
+    .subscription-member-url {
+      grid-column: 1 / -1;
+      color: var(--text-muted);
+      font-size: 0.6875rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .subscription-member-meta {
+      justify-content: flex-end;
+      color: var(--text-secondary);
+      font-size: 0.75rem;
+      text-align: right;
+    }
+
+    .subscription-review-summary {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .subscription-review-summary .tag,
+    .subscription-member-meta .tag {
+      margin: 0;
+    }
+
     /* Premium review polish */
     .review-nav-btn:focus-visible,
     .code-preview-toggle:focus-visible,

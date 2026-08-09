@@ -739,6 +739,27 @@ const I18n = (() => {
       "installSuccessUpdatedNextStep": "Existing script settings and stored values were preserved during the update.",
       "installSuccessSavedNextStep": "ScriptVault saved the script locally before leaving the install review.",
       "installOpenDashboard": "Open Dashboard",
+      "subscriptionReviewTitle": "Review script subscription",
+      "subscriptionReviewSubtitle": "One confirmation reviews every member before anything is saved.",
+      "subscriptionScripts": "scripts",
+      "subscriptionExisting": "Existing",
+      "subscriptionNew": "New",
+      "subscriptionEffectiveConnect": "Effective @connect",
+      "subscriptionNoConnect": "none",
+      "subscriptionConnectConstrained": "Constrained",
+      "subscriptionConnectConstrainedDetail": "The bundle cannot widen this member network scope.",
+      "subscriptionConnectGuarded": "Bundle @connect is scope-limited",
+      "subscriptionMemberListLabel": "Subscription members",
+      "subscriptionReviewGuardTitle": "No code is saved yet",
+      "subscriptionReviewGuardBody": "Each member is fetched again, parsed, and installed through the normal trust receipt path only after you confirm. Removed members become reviewable uninstall proposals on refresh.",
+      "subscriptionReviewFailed": "Some members could not be reviewed",
+      "subscriptionReviewFailedTitle": "Subscription review failed",
+      "subscriptionInvalidTitle": "Invalid subscription",
+      "subscriptionInstallButton": "Install subscription",
+      "subscriptionInstallFailed": "Subscription installation failed",
+      "subscriptionInstalledTitle": "Subscription installed",
+      "subscriptionInstalledCopy": "{count} scripts are now managed by this subscription.",
+      "subscriptionInstalledNextStep": "Future changes stay in the existing review queue.",
       "installSignatureVerificationUnavailable": "Verification unavailable",
       "installSignedByTrustedKeyNamed": 'Signed by trusted key "{name}".',
       "installSignedByTrustedKey": "Signed by a trusted key.",
@@ -2475,15 +2496,15 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 43,
       "translatedRuntimeMessages": 43,
-      "totalRuntimeMessages": 1949
+      "totalRuntimeMessages": 1970
     },
     "en": {
       "name": "English",
       "direction": "ltr",
       "translationStatus": "complete",
-      "runtimeCoverageBaseline": 1949,
-      "translatedRuntimeMessages": 1949,
-      "totalRuntimeMessages": 1949
+      "runtimeCoverageBaseline": 1970,
+      "translatedRuntimeMessages": 1970,
+      "totalRuntimeMessages": 1970
     },
     "es": {
       "name": "Espa\xF1ol",
@@ -2491,7 +2512,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 45,
       "translatedRuntimeMessages": 45,
-      "totalRuntimeMessages": 1949
+      "totalRuntimeMessages": 1970
     },
     "fr": {
       "name": "Fran\xE7ais",
@@ -2499,7 +2520,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 43,
       "translatedRuntimeMessages": 43,
-      "totalRuntimeMessages": 1949
+      "totalRuntimeMessages": 1970
     },
     "he": {
       "name": "\u05E2\u05D1\u05E8\u05D9\u05EA",
@@ -2507,7 +2528,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 58,
       "translatedRuntimeMessages": 58,
-      "totalRuntimeMessages": 1949
+      "totalRuntimeMessages": 1970
     },
     "ja": {
       "name": "\u65E5\u672C\u8A9E",
@@ -2515,7 +2536,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 71,
       "translatedRuntimeMessages": 71,
-      "totalRuntimeMessages": 1949
+      "totalRuntimeMessages": 1970
     },
     "pt": {
       "name": "Portugu\xEAs",
@@ -2523,7 +2544,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 42,
       "translatedRuntimeMessages": 42,
-      "totalRuntimeMessages": 1949
+      "totalRuntimeMessages": 1970
     },
     "ru": {
       "name": "\u0420\u0443\u0441\u0441\u043A\u0438\u0439",
@@ -2531,7 +2552,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 117,
       "translatedRuntimeMessages": 117,
-      "totalRuntimeMessages": 1949
+      "totalRuntimeMessages": 1970
     },
     "zh": {
       "name": "\u4E2D\u6587",
@@ -2539,7 +2560,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 46,
       "translatedRuntimeMessages": 46,
-      "totalRuntimeMessages": 1949
+      "totalRuntimeMessages": 1970
     }
   };
 
