@@ -5,6 +5,8 @@ const backgroundCore = readFileSync(resolve(process.cwd(), 'background.core.js')
 const popupJs = readFileSync(resolve(process.cwd(), 'pages/popup.js'), 'utf8');
 const dashboardHtml = readFileSync(resolve(process.cwd(), 'pages/dashboard.html'), 'utf8');
 const dashboardJs = readFileSync(resolve(process.cwd(), 'pages/dashboard.js'), 'utf8');
+const onboardingHtml = readFileSync(resolve(process.cwd(), 'pages/onboarding.html'), 'utf8');
+const onboardingJs = readFileSync(resolve(process.cwd(), 'pages/onboarding.js'), 'utf8');
 const messagesTs = readFileSync(resolve(process.cwd(), 'src/types/messages.ts'), 'utf8');
 const setupDoctorTs = readFileSync(resolve(process.cwd(), 'src/modules/user-scripts-setup.ts'), 'utf8');
 const edgeSmoke = readFileSync(resolve(process.cwd(), 'scripts/smoke-edge-sideload.mjs'), 'utf8');
@@ -12,6 +14,19 @@ const firefoxSmoke = readFileSync(resolve(process.cwd(), 'scripts/smoke-firefox-
 const edgeSmokeEvidence = JSON.parse(readFileSync(resolve(process.cwd(), 'docs/audit/edge-smoke-3.11.0.json'), 'utf8'));
 
 describe('Chrome userScripts onboarding diagnostics', () => {
+  it('opens the compact first-run setup surface only when the live probe needs it', () => {
+    expect(backgroundCore).toContain('async function openFirstRunSetupIfNeeded(details = {})');
+    expect(backgroundCore).toContain("if (details?.reason !== 'install') return;");
+    expect(backgroundCore).toContain("const url = chrome.runtime.getURL('pages/onboarding.html');");
+    expect(backgroundCore).toContain('if (status?.userScriptsAvailable === true) return;');
+    expect(backgroundCore).toContain('await chrome.tabs.create({ url });');
+    expect(onboardingHtml).toContain('id="onboardingStatus"');
+    expect(onboardingHtml).toContain('../modules/user-scripts-setup.js');
+    expect(onboardingJs).toContain("action: 'getExtensionStatus'");
+    expect(onboardingJs).toContain('setInterval(() =>');
+    expect(onboardingJs).toContain('ScriptVault is ready');
+  });
+
   it('centralizes the live Chrome userScripts probe in the background worker', () => {
     expect(backgroundCore).toContain('async function probeUserScriptsAvailability()');
     expect(backgroundCore).toContain("await chrome.userScripts.getScripts();");

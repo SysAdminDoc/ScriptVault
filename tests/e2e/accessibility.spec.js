@@ -19,6 +19,7 @@ const SURFACES = [
   { name: 'popup', path: 'pages/popup.html', ready: 'body', viewports: [{ width: 400, height: 650 }] },
   { name: 'sidepanel', path: 'pages/sidepanel.html', ready: 'body', viewports: [{ width: 420, height: 760 }] },
   { name: 'install', path: 'pages/install.html', ready: '#content', viewports: [{ width: 1100, height: 800 }, { width: 720, height: 700 }] },
+  { name: 'onboarding', path: 'pages/onboarding.html', ready: '#onboardingStatus', viewports: [{ width: 620, height: 640 }] },
   { name: 'devtools', path: 'pages/devtools-panel.html', ready: 'body', viewports: [{ width: 1100, height: 720 }, { width: 620, height: 700 }] },
 ];
 

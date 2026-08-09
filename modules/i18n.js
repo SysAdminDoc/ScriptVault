@@ -109,6 +109,21 @@ const I18n = (() => {
       "setupOpenExtensionDetails": "Open Extension Details",
       "setupHowToEnable": "How to Enable",
       "setupDismissWarning": "Dismiss setup warning",
+      "onboardingEyebrow": "First run",
+      "onboardingTitle": "Finish ScriptVault setup",
+      "onboardingMessage": "Checking browser access\u2026",
+      "onboardingReadyTitle": "ScriptVault is ready",
+      "onboardingReadyMessage": "User scripts are enabled for this browser profile.",
+      "onboardingReadyStatus": "Ready \u2014 user scripts can run.",
+      "onboardingReadyDetail": "The live runtime probe passed. You can close this tab or open the dashboard.",
+      "onboardingReadyHint": "Setup is complete. Your scripts will use the normal review and registration flow.",
+      "onboardingSetupRequired": "ScriptVault needs one browser setting before scripts can run.",
+      "onboardingStatusPrefix": "Setup required",
+      "onboardingStatusError": "Runtime status could not be read.",
+      "onboardingOpenDetails": "Open Extension Details",
+      "onboardingContinue": "Open Dashboard",
+      "onboardingRefresh": "Refresh status",
+      "onboardingSetupHint": "Enable the requested browser setting, then return here. This page refreshes automatically.",
       "search": "Search",
       "refresh": "Refresh",
       "tabScripts": "Scripts",
@@ -2496,15 +2511,15 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 43,
       "translatedRuntimeMessages": 43,
-      "totalRuntimeMessages": 1970
+      "totalRuntimeMessages": 1985
     },
     "en": {
       "name": "English",
       "direction": "ltr",
       "translationStatus": "complete",
-      "runtimeCoverageBaseline": 1970,
-      "translatedRuntimeMessages": 1970,
-      "totalRuntimeMessages": 1970
+      "runtimeCoverageBaseline": 1985,
+      "translatedRuntimeMessages": 1985,
+      "totalRuntimeMessages": 1985
     },
     "es": {
       "name": "Espa\xF1ol",
@@ -2512,7 +2527,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 45,
       "translatedRuntimeMessages": 45,
-      "totalRuntimeMessages": 1970
+      "totalRuntimeMessages": 1985
     },
     "fr": {
       "name": "Fran\xE7ais",
@@ -2520,7 +2535,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 43,
       "translatedRuntimeMessages": 43,
-      "totalRuntimeMessages": 1970
+      "totalRuntimeMessages": 1985
     },
     "he": {
       "name": "\u05E2\u05D1\u05E8\u05D9\u05EA",
@@ -2528,7 +2543,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 58,
       "translatedRuntimeMessages": 58,
-      "totalRuntimeMessages": 1970
+      "totalRuntimeMessages": 1985
     },
     "ja": {
       "name": "\u65E5\u672C\u8A9E",
@@ -2536,7 +2551,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 71,
       "translatedRuntimeMessages": 71,
-      "totalRuntimeMessages": 1970
+      "totalRuntimeMessages": 1985
     },
     "pt": {
       "name": "Portugu\xEAs",
@@ -2544,7 +2559,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 42,
       "translatedRuntimeMessages": 42,
-      "totalRuntimeMessages": 1970
+      "totalRuntimeMessages": 1985
     },
     "ru": {
       "name": "\u0420\u0443\u0441\u0441\u043A\u0438\u0439",
@@ -2552,7 +2567,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 117,
       "translatedRuntimeMessages": 117,
-      "totalRuntimeMessages": 1970
+      "totalRuntimeMessages": 1985
     },
     "zh": {
       "name": "\u4E2D\u6587",
@@ -2560,7 +2575,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 46,
       "translatedRuntimeMessages": 46,
-      "totalRuntimeMessages": 1970
+      "totalRuntimeMessages": 1985
     }
   };
 

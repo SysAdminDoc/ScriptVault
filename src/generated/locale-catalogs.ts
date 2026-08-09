@@ -78,6 +78,21 @@ export const localeCatalogs = {
     "setupOpenExtensionDetails": "Open Extension Details",
     "setupHowToEnable": "How to Enable",
     "setupDismissWarning": "Dismiss setup warning",
+    "onboardingEyebrow": "First run",
+    "onboardingTitle": "Finish ScriptVault setup",
+    "onboardingMessage": "Checking browser access…",
+    "onboardingReadyTitle": "ScriptVault is ready",
+    "onboardingReadyMessage": "User scripts are enabled for this browser profile.",
+    "onboardingReadyStatus": "Ready — user scripts can run.",
+    "onboardingReadyDetail": "The live runtime probe passed. You can close this tab or open the dashboard.",
+    "onboardingReadyHint": "Setup is complete. Your scripts will use the normal review and registration flow.",
+    "onboardingSetupRequired": "ScriptVault needs one browser setting before scripts can run.",
+    "onboardingStatusPrefix": "Setup required",
+    "onboardingStatusError": "Runtime status could not be read.",
+    "onboardingOpenDetails": "Open Extension Details",
+    "onboardingContinue": "Open Dashboard",
+    "onboardingRefresh": "Refresh status",
+    "onboardingSetupHint": "Enable the requested browser setting, then return here. This page refreshes automatically.",
     "search": "Search",
     "refresh": "Refresh",
     "tabScripts": "Scripts",
@@ -3222,15 +3237,15 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 43,
     "translatedRuntimeMessages": 43,
-    "totalRuntimeMessages": 1970
+    "totalRuntimeMessages": 1985
   },
   "en": {
     "name": "English",
     "direction": "ltr",
     "translationStatus": "complete",
-    "runtimeCoverageBaseline": 1970,
-    "translatedRuntimeMessages": 1970,
-    "totalRuntimeMessages": 1970
+    "runtimeCoverageBaseline": 1985,
+    "translatedRuntimeMessages": 1985,
+    "totalRuntimeMessages": 1985
   },
   "es": {
     "name": "Español",
@@ -3238,7 +3253,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 45,
     "translatedRuntimeMessages": 45,
-    "totalRuntimeMessages": 1970
+    "totalRuntimeMessages": 1985
   },
   "fr": {
     "name": "Français",
@@ -3246,7 +3261,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 43,
     "translatedRuntimeMessages": 43,
-    "totalRuntimeMessages": 1970
+    "totalRuntimeMessages": 1985
   },
   "he": {
     "name": "עברית",
@@ -3254,7 +3269,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 58,
     "translatedRuntimeMessages": 58,
-    "totalRuntimeMessages": 1970
+    "totalRuntimeMessages": 1985
   },
   "ja": {
     "name": "日本語",
@@ -3262,7 +3277,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 71,
     "translatedRuntimeMessages": 71,
-    "totalRuntimeMessages": 1970
+    "totalRuntimeMessages": 1985
   },
   "pt": {
     "name": "Português",
@@ -3270,7 +3285,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 42,
     "translatedRuntimeMessages": 42,
-    "totalRuntimeMessages": 1970
+    "totalRuntimeMessages": 1985
   },
   "ru": {
     "name": "Русский",
@@ -3278,7 +3293,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 117,
     "translatedRuntimeMessages": 117,
-    "totalRuntimeMessages": 1970
+    "totalRuntimeMessages": 1985
   },
   "zh": {
     "name": "中文",
@@ -3286,7 +3301,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 46,
     "translatedRuntimeMessages": 46,
-    "totalRuntimeMessages": 1970
+    "totalRuntimeMessages": 1985
   }
 } as const;
 

@@ -4,6 +4,9 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased] — Minimal workbench surfaces
 
+- Added a compact first-run setup tab that probes live `userScripts` access,
+  deep-links to the browser's extension details when setup is required, and
+  stays closed on extension updates.
 - Reimagined every dashboard destination with a compact six-route workbench,
   dense update/trash tables, focused settings/utilities grids, restrained
   empty states, and matching dark/light/Catppuccin/OLED visual baselines.

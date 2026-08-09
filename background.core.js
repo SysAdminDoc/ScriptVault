@@ -9848,7 +9848,20 @@ async function setupContextMenus() {
   }
 }
 
+async function openFirstRunSetupIfNeeded(details = {}) {
+  if (details?.reason !== 'install') return;
+  try {
+    const status = await probeUserScriptsAvailability();
+    if (status?.userScriptsAvailable === true) return;
+    const url = chrome.runtime.getURL('pages/onboarding.html');
+    await chrome.tabs.create({ url });
+  } catch (error) {
+    console.warn('[ScriptVault] First-run setup tab could not open:', error?.message || String(error));
+  }
+}
+
 chrome.runtime.onInstalled.addListener(async (details) => {
+  await openFirstRunSetupIfNeeded(details);
   setupContextMenus();
 
   // v2.0: Initialize backup scheduler (needs alarm registration on install)

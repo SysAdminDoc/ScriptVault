@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="color-scheme" content="dark light">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ScriptVault setup</title>
+  <link rel="stylesheet" href="theme-tokens.css">
+  <style>
+    :root {
+      color-scheme: dark;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background: var(--bg-body, #11151b);
+      color: var(--text-primary, #f8fafc);
+      font: 1rem/1.5 Inter, ui-sans-serif, system-ui, sans-serif;
+    }
+
+    .onboarding-shell {
+      width: min(100%, 620px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0 0 18px;
+      color: var(--text-secondary, #aab5c5);
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .brand img {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+    }
+
+    .card {
+      padding: clamp(22px, 5vw, 42px);
+      border: 1px solid color-mix(in srgb, var(--border-color, #334155) 68%, transparent);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--bg-card, #1b222c) 94%, transparent);
+      box-shadow: 0 24px 70px color-mix(in srgb, #000 30%, transparent);
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--accent-primary, #55d68a);
+      font-size: 0.72rem;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.65rem, 5vw, 2.35rem);
+      line-height: 1.08;
+      letter-spacing: -0.035em;
+    }
+
+    .message {
+      max-width: 52ch;
+      margin: 14px 0 0;
+      color: var(--text-secondary, #aab5c5);
+    }
+
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 22px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--accent-primary, #55d68a) 10%, transparent);
+      color: var(--text-primary, #f8fafc);
+      font-weight: 700;
+    }
+
+    .status[data-ready="true"] {
+      color: var(--accent-primary, #55d68a);
+    }
+
+    .details {
+      display: grid;
+      gap: 5px;
+      margin: 14px 0 0;
+      color: var(--text-secondary, #aab5c5);
+      font-size: 0.82rem;
+    }
+
+    .details p {
+      margin: 0;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 24px;
+    }
+
+    button {
+      min-height: 42px;
+      padding: 0 16px;
+      border: 1px solid transparent;
+      border-radius: 10px;
+      font: inherit;
+      font-weight: 750;
+      cursor: pointer;
+    }
+
+    button:focus-visible {
+      outline: 3px solid color-mix(in srgb, var(--accent-primary, #55d68a) 45%, transparent);
+      outline-offset: 3px;
+    }
+
+    .primary {
+      background: var(--accent-primary, #55d68a);
+      color: var(--text-on-accent, #07110c);
+    }
+
+    .secondary {
+      border-color: color-mix(in srgb, var(--border-color, #334155) 82%, transparent);
+      background: transparent;
+      color: var(--text-primary, #f8fafc);
+    }
+
+    .hint {
+      margin: 18px 0 0;
+      color: var(--text-muted, #7f8da1);
+      font-size: 0.78rem;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+      }
+    }
+
+    @media (forced-colors: active) {
+      body,
+      .brand,
+      .eyebrow,
+      .message,
+      .details,
+      .hint,
+      .status,
+      .status[data-ready="true"],
+      .secondary {
+        background: Canvas;
+        color: CanvasText;
+      }
+
+      body {
+        border-color: CanvasText;
+      }
+
+      .card,
+      .status,
+      button {
+        border: 1px solid CanvasText;
+        background: Canvas;
+        color: CanvasText;
+        box-shadow: none;
+      }
+
+      .primary {
+        background: Highlight;
+        color: HighlightText;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="onboarding-shell" aria-labelledby="onboardingTitle">
+    <div class="brand"><img src="../images/icon48.png" alt=""><span data-i18n="appName">ScriptVault</span></div>
+    <section class="card">
+      <p class="eyebrow" data-i18n="onboardingEyebrow">First run</p>
+      <h1 id="onboardingTitle" data-i18n="onboardingTitle">Finish ScriptVault setup</h1>
+      <p class="message" id="onboardingMessage" data-i18n="onboardingMessage">Checking browser access…</p>
+      <div class="status" id="onboardingStatus" role="status" aria-live="polite" aria-atomic="true">Checking runtime access…</div>
+      <div class="details" id="onboardingDetails" aria-label="Runtime details"></div>
+      <div class="actions">
+        <button class="primary" id="onboardingAction" type="button" hidden>Open Extension Details</button>
+        <button class="secondary" id="onboardingRefresh" type="button" data-i18n="onboardingRefresh">Refresh status</button>
+      </div>
+      <p class="hint" id="onboardingHint" data-i18n="onboardingSetupHint">Enable the requested browser setting, then return here. This page refreshes automatically.</p>
+    </section>
+  </main>
+  <script src="../modules/i18n.js"></script>
+  <script src="../modules/user-scripts-setup.js"></script>
+  <script src="onboarding.js"></script>
+</body>
+</html>
