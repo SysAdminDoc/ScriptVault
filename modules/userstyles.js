@@ -490,6 +490,181 @@ const UserStylesEngine = (() => {
   function _escapeRegex(str) {
     return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
+  function _syncShadowStylesInDocument(styles) {
+    const pageGlobal = globalThis;
+    const pageDocument = pageGlobal.document;
+    if (!pageDocument) return;
+    const stateKey = "__scriptvaultUserStyleShadowState";
+    const state = pageGlobal[stateKey] ?? (pageGlobal[stateKey] = {
+      entries: /* @__PURE__ */ new Map(),
+      observers: /* @__PURE__ */ new Map(),
+      documentRoot: null,
+      scanning: false,
+      scanAgain: false
+    });
+    if (!state.observers) state.observers = /* @__PURE__ */ new Map();
+    const desired = /* @__PURE__ */ new Map();
+    for (const style of Array.isArray(styles) ? styles : []) {
+      if (style?.id && style.css) desired.set(String(style.id), String(style.css));
+    }
+    const removeEntry = (entry) => {
+      for (const node of entry.nodes.values()) {
+        try {
+          node.remove();
+        } catch {
+        }
+      }
+      entry.nodes.clear();
+    };
+    for (const [id, entry] of state.entries) {
+      if (!desired.has(id)) {
+        removeEntry(entry);
+        state.entries.delete(id);
+      }
+    }
+    for (const [id, css] of desired) {
+      const existing = state.entries.get(id);
+      if (existing) {
+        if (existing.css !== css) {
+          existing.css = css;
+          for (const node of existing.nodes.values()) node.textContent = css;
+        }
+      } else {
+        state.entries.set(id, { css, nodes: /* @__PURE__ */ new Map() });
+      }
+    }
+    const hasEntries = state.entries.size > 0;
+    const observedRoot = pageDocument.documentElement || pageDocument;
+    if (!hasEntries) {
+      for (const observer of state.observers.values()) observer?.disconnect?.();
+      state.observers.clear();
+      delete pageGlobal[stateKey];
+      return;
+    }
+    const Observer = pageGlobal.MutationObserver;
+    const observeRoot = (root) => {
+      if (typeof Observer !== "function" || !root?.nodeType || state.observers.has(root)) return;
+      const observer = new Observer(() => scheduleScan());
+      observer.observe(root, { childList: true, subtree: true });
+      state.observers.set(root, observer);
+    };
+    if (state.documentRoot !== observedRoot) {
+      for (const observer of state.observers.values()) observer?.disconnect?.();
+      state.observers.clear();
+      state.documentRoot = observedRoot;
+    }
+    observeRoot(observedRoot);
+    const applyToRoot = (shadowRoot, entry) => {
+      if (!shadowRoot?.appendChild) return;
+      const previous = entry.nodes.get(shadowRoot);
+      if (previous) {
+        if (previous.textContent !== entry.css) previous.textContent = entry.css;
+        return;
+      }
+      const styleNode = pageDocument.createElement("style");
+      styleNode.setAttribute("data-scriptvault-userstyle", "");
+      styleNode.textContent = entry.css;
+      try {
+        shadowRoot.appendChild(styleNode);
+        entry.nodes.set(shadowRoot, styleNode);
+      } catch {
+      }
+    };
+    const pruneDetachedRoots = () => {
+      for (const entry of state.entries.values()) {
+        for (const [shadowRoot, node] of entry.nodes) {
+          if (shadowRoot?.host?.isConnected) continue;
+          try {
+            node.remove();
+          } catch {
+          }
+          entry.nodes.delete(shadowRoot);
+          state.observers.get(shadowRoot)?.disconnect?.();
+          state.observers.delete(shadowRoot);
+        }
+      }
+    };
+    function scheduleScan() {
+      if (state.scanning) {
+        state.scanAgain = true;
+        return;
+      }
+      state.scanning = true;
+      state.scanAgain = false;
+      pruneDetachedRoots();
+      const roots = [pageDocument];
+      const seenRoots = /* @__PURE__ */ new Set();
+      let rootIndex = 0;
+      let hosts = [];
+      let hostIndex = 0;
+      const runChunk = () => {
+        let budget = 200;
+        while (budget-- > 0) {
+          if (hostIndex < hosts.length) {
+            const host = hosts[hostIndex++];
+            const shadowRoot = host?.shadowRoot;
+            if (!shadowRoot || seenRoots.has(shadowRoot)) continue;
+            seenRoots.add(shadowRoot);
+            roots.push(shadowRoot);
+            observeRoot(shadowRoot);
+            for (const entry of state.entries.values()) applyToRoot(shadowRoot, entry);
+            continue;
+          }
+          if (rootIndex >= roots.length) {
+            state.scanning = false;
+            if (state.scanAgain) {
+              state.scanAgain = false;
+              scheduleScan();
+            }
+            return;
+          }
+          const root = roots[rootIndex++];
+          try {
+            hosts = Array.from(root.querySelectorAll?.("*") ?? []);
+          } catch {
+            hosts = [];
+          }
+          hostIndex = 0;
+        }
+        const idle = pageGlobal.requestIdleCallback;
+        if (typeof idle === "function") idle(runChunk, { timeout: 100 });
+        else pageGlobal.setTimeout(runChunk, 0);
+      };
+      runChunk();
+    }
+    scheduleScan();
+  }
+  async function _syncShadowStylesToTab(tabId, url, extraStyles = []) {
+    const executeScript = chrome.scripting?.executeScript;
+    if (typeof executeScript !== "function") return;
+    let targetUrl = url;
+    if (!targetUrl) {
+      try {
+        targetUrl = (await chrome.tabs.get(tabId))?.url;
+      } catch {
+        targetUrl = void 0;
+      }
+    }
+    const desired = [];
+    if (targetUrl) {
+      for (const [styleId, style] of Object.entries(_styles)) {
+        if (!style.enabled || !_urlMatchesPatterns(targetUrl, style.match)) continue;
+        const css = _buildCSS(styleId);
+        if (css) desired.push({ id: styleId, css });
+      }
+    }
+    const draftCss = _draftPreviewTabs.get(tabId);
+    if (draftCss) desired.push({ id: "__draft__", css: draftCss });
+    desired.push(...extraStyles.filter((style) => style?.id && style.css));
+    try {
+      await executeScript({
+        target: { tabId },
+        func: _syncShadowStylesInDocument,
+        args: [desired]
+      });
+    } catch {
+    }
+  }
   function _buildCSS(styleId) {
     const style = _styles[styleId];
     if (!style) return "";
@@ -603,6 +778,7 @@ const UserStylesEngine = (() => {
     } catch {
     }
     _draftPreviewTabs.delete(tabId);
+    await _syncShadowStylesToTab(tabId);
     return true;
   }
   function _enqueueDraftPreviewTask(task) {
@@ -642,6 +818,7 @@ const UserStylesEngine = (() => {
         css: built.css
       });
       _draftPreviewTabs.set(tab.id, built.css);
+      await _syncShadowStylesToTab(tab.id, tab.url, [{ id: "__draft__", css: built.css }]);
       return {
         success: true,
         tabId: tab.id,
@@ -687,6 +864,13 @@ const UserStylesEngine = (() => {
     delete _customVars[styleId];
     await Promise.all([_saveStyles(), _saveVars()]);
     await _syncPersistentRegistrations();
+    try {
+      const tabs = await chrome.tabs.query({});
+      for (const tab of tabs) {
+        if (tab.id != null) await _syncShadowStylesToTab(tab.id, tab.url);
+      }
+    } catch {
+    }
   }
   async function toggleStyle(styleId, enabled) {
     if (!_initialized) await _loadState();
@@ -713,25 +897,27 @@ const UserStylesEngine = (() => {
         if (_urlMatchesPatterns(tab.url, style.match)) {
           const tabStyles = _registeredTabs.get(tab.id) ?? /* @__PURE__ */ new Map();
           const previousCss = tabStyles.get(styleId);
-          if (previousCss === css) continue;
-          try {
-            if (previousCss) {
-              try {
-                await chrome.scripting.removeCSS({
-                  target: { tabId: tab.id },
-                  css: previousCss
-                });
-              } catch {
+          if (previousCss !== css) {
+            try {
+              if (previousCss) {
+                try {
+                  await chrome.scripting.removeCSS({
+                    target: { tabId: tab.id },
+                    css: previousCss
+                  });
+                } catch {
+                }
               }
+              await chrome.scripting.insertCSS({
+                target: { tabId: tab.id },
+                css
+              });
+              tabStyles.set(styleId, css);
+              _registeredTabs.set(tab.id, tabStyles);
+            } catch {
             }
-            await chrome.scripting.insertCSS({
-              target: { tabId: tab.id },
-              css
-            });
-            tabStyles.set(styleId, css);
-            _registeredTabs.set(tab.id, tabStyles);
-          } catch {
           }
+          await _syncShadowStylesToTab(tab.id, tab.url);
         }
       }
     } catch (e) {
@@ -747,13 +933,14 @@ const UserStylesEngine = (() => {
         const tabStyles = _registeredTabs.get(tab.id);
         const registeredCss = tabStyles?.get(styleId);
         const cssToRemove = registeredCss ?? (reconstructedCss || void 0);
-        if (!cssToRemove) continue;
-        try {
-          await chrome.scripting.removeCSS({
-            target: { tabId: tab.id },
-            css: cssToRemove
-          });
-        } catch {
+        if (cssToRemove) {
+          try {
+            await chrome.scripting.removeCSS({
+              target: { tabId: tab.id },
+              css: cssToRemove
+            });
+          } catch {
+          }
         }
         if (tabStyles) {
           tabStyles.delete(styleId);
@@ -761,6 +948,7 @@ const UserStylesEngine = (() => {
             _registeredTabs.delete(tab.id);
           }
         }
+        await _syncShadowStylesToTab(tab.id, tab.url);
       }
     } catch (e) {
       console.error("[UserStylesEngine] Remove failed:", e);
@@ -797,6 +985,9 @@ const UserStylesEngine = (() => {
         } catch {
         }
       }
+    }
+    for (const tab of tabs) {
+      if (tab.id != null) await _syncShadowStylesToTab(tab.id, tab.url);
     }
   }
   function _urlMatchesPatterns(url, patterns) {
@@ -1142,6 +1333,7 @@ const UserStylesEngine = (() => {
     if (!_initialized) await _loadState();
     onTabNavigated(tabId);
     if (!_persistentRegistrationSupported) await onTabUpdated(tabId, url);
+    else await _syncShadowStylesToTab(tabId, url);
   }
   function _anyEnabledStyleMatches(url) {
     for (const style of Object.values(_styles)) {
@@ -1194,6 +1386,7 @@ const UserStylesEngine = (() => {
       } catch {
       }
     }
+    await _syncShadowStylesToTab(tabId, url);
   }
   function onTabRemoved(tabId) {
     _registeredTabs.delete(tabId);

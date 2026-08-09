@@ -779,6 +779,206 @@ function _escapeRegex(str: string): string {
 /*  Style registration via chrome.scripting                            */
 /* ------------------------------------------------------------------ */
 
+interface ShadowStyleInstruction {
+  id: string;
+  css: string;
+}
+
+/**
+ * Runs inside the target document's isolated world. `insertCSS` styles the
+ * document tree but cannot cross a shadow boundary, so keep one bounded,
+ * per-document registry of `<style>` nodes for every open shadow root.
+ *
+ * The observer only watches the host tree; a scan is chunked into small idle
+ * turns so pages with many hosts remain responsive. The function is passed to
+ * `chrome.scripting.executeScript` and therefore must not capture extension
+ * state or call any service-worker APIs.
+ */
+function _syncShadowStylesInDocument(styles: ShadowStyleInstruction[]): void {
+  const pageGlobal: any = globalThis as any;
+  const pageDocument: any = pageGlobal.document;
+  if (!pageDocument) return;
+
+  const stateKey = '__scriptvaultUserStyleShadowState';
+  const state: any = pageGlobal[stateKey] ?? (pageGlobal[stateKey] = {
+    entries: new Map<string, { css: string; nodes: Map<any, any> }>(),
+    observers: new Map<any, any>(),
+    documentRoot: null,
+    scanning: false,
+    scanAgain: false,
+  });
+  if (!state.observers) state.observers = new Map<any, any>();
+  const desired = new Map<string, string>();
+  for (const style of Array.isArray(styles) ? styles : []) {
+    if (style?.id && style.css) desired.set(String(style.id), String(style.css));
+  }
+
+  const removeEntry = (entry: { css: string; nodes: Map<any, any> }): void => {
+    for (const node of entry.nodes.values()) {
+      try { node.remove(); } catch { /* root/document may have been replaced */ }
+    }
+    entry.nodes.clear();
+  };
+  for (const [id, entry] of state.entries) {
+    if (!desired.has(id)) {
+      removeEntry(entry);
+      state.entries.delete(id);
+    }
+  }
+  for (const [id, css] of desired) {
+    const existing = state.entries.get(id);
+    if (existing) {
+      if (existing.css !== css) {
+        existing.css = css;
+        for (const node of existing.nodes.values()) node.textContent = css;
+      }
+    } else {
+      state.entries.set(id, { css, nodes: new Map<any, any>() });
+    }
+  }
+
+  const hasEntries = state.entries.size > 0;
+  const observedRoot = pageDocument.documentElement || pageDocument;
+  if (!hasEntries) {
+    for (const observer of state.observers.values()) observer?.disconnect?.();
+    state.observers.clear();
+    delete pageGlobal[stateKey];
+    return;
+  }
+  const Observer = pageGlobal.MutationObserver;
+  const observeRoot = (root: any): void => {
+    if (typeof Observer !== 'function' || !root?.nodeType || state.observers.has(root)) return;
+    const observer = new Observer(() => scheduleScan());
+    observer.observe(root, { childList: true, subtree: true });
+    state.observers.set(root, observer);
+  };
+  if (state.documentRoot !== observedRoot) {
+    for (const observer of state.observers.values()) observer?.disconnect?.();
+    state.observers.clear();
+    state.documentRoot = observedRoot;
+  }
+  observeRoot(observedRoot);
+
+  const applyToRoot = (shadowRoot: any, entry: { css: string; nodes: Map<any, any> }): void => {
+    if (!shadowRoot?.appendChild) return;
+    const previous = entry.nodes.get(shadowRoot);
+    if (previous) {
+      if (previous.textContent !== entry.css) previous.textContent = entry.css;
+      return;
+    }
+    const styleNode = pageDocument.createElement('style');
+    styleNode.setAttribute('data-scriptvault-userstyle', '');
+    styleNode.textContent = entry.css;
+    try {
+      shadowRoot.appendChild(styleNode);
+      entry.nodes.set(shadowRoot, styleNode);
+    } catch { /* closed or detached root */ }
+  };
+
+  const pruneDetachedRoots = (): void => {
+    for (const entry of state.entries.values()) {
+      for (const [shadowRoot, node] of entry.nodes) {
+        if (shadowRoot?.host?.isConnected) continue;
+        try { node.remove(); } catch { /* already detached */ }
+        entry.nodes.delete(shadowRoot);
+        state.observers.get(shadowRoot)?.disconnect?.();
+        state.observers.delete(shadowRoot);
+      }
+    }
+  };
+
+  function scheduleScan(): void {
+    if (state.scanning) {
+      state.scanAgain = true;
+      return;
+    }
+    state.scanning = true;
+    state.scanAgain = false;
+    pruneDetachedRoots();
+    const roots: any[] = [pageDocument];
+    const seenRoots = new Set<any>();
+    let rootIndex = 0;
+    let hosts: any[] = [];
+    let hostIndex = 0;
+
+    const runChunk = (): void => {
+      let budget = 200;
+      while (budget-- > 0) {
+        if (hostIndex < hosts.length) {
+          const host = hosts[hostIndex++];
+          const shadowRoot = host?.shadowRoot;
+          if (!shadowRoot || seenRoots.has(shadowRoot)) continue;
+          seenRoots.add(shadowRoot);
+          roots.push(shadowRoot);
+          observeRoot(shadowRoot);
+          for (const entry of state.entries.values()) applyToRoot(shadowRoot, entry);
+          continue;
+        }
+        if (rootIndex >= roots.length) {
+          state.scanning = false;
+          if (state.scanAgain) {
+            state.scanAgain = false;
+            scheduleScan();
+          }
+          return;
+        }
+        const root = roots[rootIndex++];
+        try {
+          hosts = Array.from(root.querySelectorAll?.('*') ?? []);
+        } catch {
+          hosts = [];
+        }
+        hostIndex = 0;
+      }
+      const idle = pageGlobal.requestIdleCallback;
+      if (typeof idle === 'function') idle(runChunk, { timeout: 100 });
+      else pageGlobal.setTimeout(runChunk, 0);
+    };
+    runChunk();
+  }
+
+  scheduleScan();
+}
+
+async function _syncShadowStylesToTab(
+  tabId: number,
+  url?: string,
+  extraStyles: ShadowStyleInstruction[] = [],
+): Promise<void> {
+  const executeScript = (chrome.scripting as any)?.executeScript;
+  if (typeof executeScript !== 'function') return;
+
+  let targetUrl = url;
+  if (!targetUrl) {
+    try {
+      targetUrl = (await chrome.tabs.get(tabId))?.url;
+    } catch {
+      targetUrl = undefined;
+    }
+  }
+  const desired: ShadowStyleInstruction[] = [];
+  if (targetUrl) {
+    for (const [styleId, style] of Object.entries(_styles)) {
+      if (!style.enabled || !_urlMatchesPatterns(targetUrl, style.match)) continue;
+      const css = _buildCSS(styleId);
+      if (css) desired.push({ id: styleId, css });
+    }
+  }
+  const draftCss = _draftPreviewTabs.get(tabId);
+  if (draftCss) desired.push({ id: '__draft__', css: draftCss });
+  desired.push(...extraStyles.filter((style) => style?.id && style.css));
+  try {
+    await executeScript({
+      target: { tabId },
+      func: _syncShadowStylesInDocument,
+      args: [desired],
+    });
+  } catch {
+    // Internal pages, missing host permission, and closed tabs are not
+    // injectable; the normal document CSS path reports the same outcome.
+  }
+}
+
 /**
  * Build the final CSS for a style, applying variable substitutions.
  */
@@ -919,6 +1119,7 @@ async function _removeDraftPreviewFromTab(tabId: number): Promise<boolean> {
     // The tab may have navigated or closed. The bookkeeping must still clear.
   }
   _draftPreviewTabs.delete(tabId);
+  await _syncShadowStylesToTab(tabId);
   return true;
 }
 
@@ -966,6 +1167,7 @@ async function _previewDraftNow(usercssCode: string, options: DraftPreviewOption
       css: built.css,
     });
     _draftPreviewTabs.set(tab.id, built.css);
+    await _syncShadowStylesToTab(tab.id, tab.url, [{ id: '__draft__', css: built.css }]);
     return {
       success: true,
       tabId: tab.id,
@@ -1027,6 +1229,14 @@ async function unregisterStyle(styleId: string): Promise<void> {
 
   await Promise.all([_saveStyles(), _saveVars()]);
   await _syncPersistentRegistrations();
+  try {
+    const tabs = await chrome.tabs.query({});
+    for (const tab of tabs) {
+      if (tab.id != null) await _syncShadowStylesToTab(tab.id, tab.url);
+    }
+  } catch {
+    // Tabs can close while the style record is being removed.
+  }
 }
 
 /**
@@ -1068,27 +1278,29 @@ async function _injectStyleToMatchingTabs(styleId: string): Promise<void> {
         const previousCss: string | undefined = tabStyles.get(styleId);
         // Dedup: identical CSS already injected for this tab — do not stack a
         // duplicate sheet on a repeated inject pass.
-        if (previousCss === css) continue;
-        try {
-          if (previousCss) {
-            try {
-              await chrome.scripting.removeCSS({
-                target: { tabId: tab.id },
-                css: previousCss,
-              });
-            } catch {
-              // The tab may have navigated since the previous injection.
+        if (previousCss !== css) {
+          try {
+            if (previousCss) {
+              try {
+                await chrome.scripting.removeCSS({
+                  target: { tabId: tab.id },
+                  css: previousCss,
+                });
+              } catch {
+                // The tab may have navigated since the previous injection.
+              }
             }
+            await chrome.scripting.insertCSS({
+              target: { tabId: tab.id },
+              css,
+            });
+            tabStyles.set(styleId, css);
+            _registeredTabs.set(tab.id, tabStyles);
+          } catch {
+            // Tab may not be injectable (chrome://, etc.)
           }
-          await chrome.scripting.insertCSS({
-            target: { tabId: tab.id },
-            css,
-          });
-          tabStyles.set(styleId, css);
-          _registeredTabs.set(tab.id, tabStyles);
-        } catch {
-          // Tab may not be injectable (chrome://, etc.)
         }
+        await _syncShadowStylesToTab(tab.id, tab.url);
       }
     }
   } catch (e: unknown) {
@@ -1113,14 +1325,15 @@ async function _removeStyleFromAllTabs(styleId: string): Promise<void> {
       const tabStyles: Map<string, string> | undefined = _registeredTabs.get(tab.id);
       const registeredCss: string | undefined = tabStyles?.get(styleId);
       const cssToRemove: string | undefined = registeredCss ?? (reconstructedCss || undefined);
-      if (!cssToRemove) continue;
-      try {
-        await chrome.scripting.removeCSS({
-          target: { tabId: tab.id },
-          css: cssToRemove,
-        });
-      } catch {
-        // Tab may have been closed, navigated, or never carried this sheet.
+      if (cssToRemove) {
+        try {
+          await chrome.scripting.removeCSS({
+            target: { tabId: tab.id },
+            css: cssToRemove,
+          });
+        } catch {
+          // Tab may have been closed, navigated, or never carried this sheet.
+        }
       }
       if (tabStyles) {
         tabStyles.delete(styleId);
@@ -1128,6 +1341,7 @@ async function _removeStyleFromAllTabs(styleId: string): Promise<void> {
           _registeredTabs.delete(tab.id);
         }
       }
+      await _syncShadowStylesToTab(tab.id, tab.url);
     }
   } catch (e: unknown) {
     console.error('[UserStylesEngine] Remove failed:', e);
@@ -1182,6 +1396,9 @@ async function rehydrateOpenTabs(): Promise<void> {
         // Tab not injectable.
       }
     }
+  }
+  for (const tab of tabs) {
+    if (tab.id != null) await _syncShadowStylesToTab(tab.id, tab.url);
   }
 }
 
@@ -1679,6 +1896,7 @@ async function onDocumentCommitted(tabId: number, url: string | undefined): Prom
   if (!_initialized) await _loadState();
   onTabNavigated(tabId);
   if (!_persistentRegistrationSupported) await onTabUpdated(tabId, url);
+  else await _syncShadowStylesToTab(tabId, url);
 }
 
 /** True when at least one enabled style matches `url`. */
@@ -1756,6 +1974,7 @@ async function _applyStylesToTab(tabId: number, url: string): Promise<void> {
       // Tab not injectable
     }
   }
+  await _syncShadowStylesToTab(tabId, url);
 }
 
 /**

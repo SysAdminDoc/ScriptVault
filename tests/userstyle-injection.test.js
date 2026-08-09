@@ -15,6 +15,7 @@ const factory = compileFunction(`${engineCode}\nreturn UserStylesEngine;`, ['chr
 function makeChrome(store = {}, options = {}) {
   const injected = new Map();
   const registered = new Map();
+  const executed = [];
   let tabs = [];
   const scripting = {
     insertCSS: async ({ target, css }) => {
@@ -29,6 +30,10 @@ function makeChrome(store = {}, options = {}) {
       arr.splice(idx, 1);
       injected.set(target.tabId, arr);
     },
+    executeScript: async (args) => {
+      executed.push(args);
+      return [];
+    },
   };
   if (options.persistentRegistrations) {
     scripting.getRegisteredContentScripts = async () => [...registered.values()];
@@ -42,6 +47,7 @@ function makeChrome(store = {}, options = {}) {
   return {
     _injected: injected,
     _registered: registered,
+    _executed: executed,
     _setTabs: (t) => { tabs = t; },
     _sheets: (tabId) => injected.get(tabId) || [],
     _clearDocument: (tabId) => injected.set(tabId, []),
@@ -111,6 +117,20 @@ describe('UserStyles persistent injection lifecycle', () => {
     expect(chrome._sheets(7)).toEqual(['body{color:red}']);
   });
 
+  it('reconciles enabled styles into open shadow roots without blocking the tab pass', async () => {
+    await engine.registerStyle({ ...STYLE });
+    chrome._setTabs([{ id: 7, url: 'https://example.com/page' }]);
+    await engine.onTabUpdated(7, 'https://example.com/page');
+
+    const shadowCall = chrome._executed.at(-1);
+    expect(shadowCall).toMatchObject({ target: { tabId: 7 }, args: [[{ id: expect.any(String), css: 'body{color:red}' }]] });
+    expect(String(shadowCall.func)).toContain('MutationObserver');
+    expect(String(shadowCall.func)).toContain('requestIdleCallback');
+    expect(String(shadowCall.func)).toContain('data-scriptvault-userstyle');
+    expect(String(shadowCall.func)).toContain('budget = 200');
+    expect(String(shadowCall.func)).toContain('pruneDetachedRoots');
+  });
+
   it('does not stack a duplicate sheet on a repeated onUpdated for the same document', async () => {
     await engine.registerStyle({ ...STYLE });
     chrome._setTabs([{ id: 7, url: 'https://example.com/page' }]);
@@ -168,6 +188,14 @@ describe('UserStyles persistent injection lifecycle', () => {
 
     await engine.toggleStyle(id, true);
     expect(chrome._sheets(7)).toEqual(['body{color:red}']);
+  });
+
+  it('removes the shadow-root registration after a style is deleted', async () => {
+    const id = await engine.registerStyle({ ...STYLE });
+    chrome._setTabs([{ id: 7, url: 'https://example.com/p' }]);
+    await engine.onTabUpdated(7, 'https://example.com/p');
+    await engine.unregisterStyle(id);
+    expect(chrome._executed.at(-1).args).toEqual([[]]);
   });
 
   it('onTabRemoved clears the per-tab registry so a later inject is treated as fresh', async () => {

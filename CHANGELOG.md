@@ -34,6 +34,9 @@ All notable changes to ScriptVault will be documented in this file.
 - Made popup run diagnostics explain the exact matching or exclusion rule,
   global page-filter layer, frame policy, quarantine marker, and localized
   execution status for every installed script.
+- Extended UserCSS injection into open shadow roots with a bounded,
+  mutation-observed style registry that follows later roots and cleans up on
+  route changes, edits, disable, and deletion.
 - Added a bounded local-file metadata polling fallback with explicit watcher
   health when FileSystemObserver is unavailable or reports an unknown/error
   state; only the active editor polls and changes still go through review.
