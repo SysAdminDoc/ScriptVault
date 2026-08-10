@@ -12,6 +12,8 @@ All notable changes to ScriptVault will be documented in this file.
 - Replaced Public API audit payloads with allowlisted metadata, UTF-8 byte and
   count budgets, deterministic oldest-first eviction, and URL/token/body
   redaction with hashes and bounded error codes.
+- Serialized all trash read-modify-write paths, including local delete,
+  restore, permanent-delete, empty/prune, and sync tombstone writes.
 - Routed Public API list, status, presence, and install positioning through
   the authoritative IndexedDB-backed ScriptStorage instead of the retired
   `userscripts` storage blob.

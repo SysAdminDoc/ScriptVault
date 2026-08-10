@@ -32080,6 +32080,22 @@ async function _runExclusiveScriptOperation(scriptId, operation) {
   return await operationPromise;
 }
 
+// Trash is stored as one chrome.storage.local array, so per-script locks do
+// not protect it from a delete/restore/sync/prune operation for another ID.
+// Every read-modify-write must pass through this queue or a later writer can
+// silently discard an entry committed by an earlier writer.
+let _trashMutationChain = Promise.resolve();
+
+function _runExclusiveTrashMutation(operation) {
+  const previous = _trashMutationChain;
+  let operationPromise;
+  operationPromise = previous
+    .catch(() => {})
+    .then(operation);
+  _trashMutationChain = operationPromise.then(() => undefined, () => undefined);
+  return operationPromise;
+}
+
 function notifyEasyCloudScriptSaved(scriptId) {
   if (!scriptId) return;
   try {
@@ -38619,10 +38635,12 @@ backgroundActionRegistry.registerHandlers(ScriptActionHandler.createScriptAction
       const settings = await SettingsManager.get();
       const trashMode = settings.trashMode || '30';
       if (trashMode !== 'disabled') {
-        const trashData = await chrome.storage.local.get('trash');
-        const trash = trashData.trash || [];
-        trash.push({ ...script, trashedAt: Date.now() });
-        await chrome.storage.local.set({ trash });
+        await _runExclusiveTrashMutation(async () => {
+          const trashData = await chrome.storage.local.get('trash');
+          const trash = Array.isArray(trashData.trash) ? trashData.trash.slice() : [];
+          trash.push({ ...script, trashedAt: Date.now() });
+          await chrome.storage.local.set({ trash });
+        });
       }
 
       await unregisterScript(scriptId);
@@ -38645,8 +38663,6 @@ backgroundActionRegistry.registerHandlers(ScriptActionHandler.createScriptAction
     });
   },
   getTrash: async () => {
-    const trashData = await chrome.storage.local.get('trash');
-    const trash = trashData.trash || [];
     const settings = await SettingsManager.get();
     const trashMode = settings.trashMode || '30';
     const maxAge = trashMode === '1'
@@ -38656,41 +38672,53 @@ backgroundActionRegistry.registerHandlers(ScriptActionHandler.createScriptAction
         : trashMode === '30'
           ? 2592000000
           : 0;
-    const now = Date.now();
-    const valid = maxAge > 0 ? trash.filter(script => now - script.trashedAt < maxAge) : trash;
-    if (valid.length !== trash.length) await chrome.storage.local.set({ trash: valid });
+    const valid = await _runExclusiveTrashMutation(async () => {
+      const trashData = await chrome.storage.local.get('trash');
+      const trash = Array.isArray(trashData.trash) ? trashData.trash.slice() : [];
+      const now = Date.now();
+      const next = maxAge > 0 ? trash.filter(script => now - script.trashedAt < maxAge) : trash;
+      if (next.length !== trash.length) await chrome.storage.local.set({ trash: next });
+      return next;
+    });
     return { trash: valid };
   },
   restoreFromTrash: async scriptId => {
-    const trashData = await chrome.storage.local.get('trash');
-    const trash = trashData.trash || [];
-    const index = trash.findIndex(script => script.id === scriptId);
-    if (index === -1) return { error: 'Not found in trash' };
+    if (!scriptId) return { error: 'Missing script ID' };
+    return await _runExclusiveScriptOperation(scriptId, async () => {
+      return await _runExclusiveTrashMutation(async () => {
+        const trashData = await chrome.storage.local.get('trash');
+        const trash = Array.isArray(trashData.trash) ? trashData.trash.slice() : [];
+        const index = trash.findIndex(script => script.id === scriptId);
+        if (index === -1) return { error: 'Not found in trash' };
 
-    const script = trash[index];
-    if (!script.code || typeof script.code !== 'string') {
-      return { error: 'Corrupt trash entry: missing code' };
-    }
-    const parsed = parseUserscript(script.code);
-    if (parsed.error) return { error: 'Corrupt trash entry: ' + parsed.error };
-    script.meta = parsed.meta;
-    delete script.trashedAt;
-    await ScriptStorage.set(script.id, script);
-    const tombstoneData = await chrome.storage.local.get('syncTombstones');
-    const tombstones = tombstoneData.syncTombstones || {};
-    if (tombstones[scriptId]) {
-      delete tombstones[scriptId];
-      await chrome.storage.local.set({ syncTombstones: tombstones });
-    }
-    trash.splice(index, 1);
-    await chrome.storage.local.set({ trash });
-    if (script.enabled !== false) await registerScript(script);
-    await updateBadge();
-    notifyEasyCloudScriptSaved(script.id);
-    return { success: true };
+        const script = { ...trash[index] };
+        if (!script.code || typeof script.code !== 'string') {
+          return { error: 'Corrupt trash entry: missing code' };
+        }
+        const parsed = parseUserscript(script.code);
+        if (parsed.error) return { error: 'Corrupt trash entry: ' + parsed.error };
+        script.meta = parsed.meta;
+        delete script.trashedAt;
+        await ScriptStorage.set(script.id, script);
+        const tombstoneData = await chrome.storage.local.get('syncTombstones');
+        const tombstones = tombstoneData.syncTombstones || {};
+        if (tombstones[scriptId]) {
+          delete tombstones[scriptId];
+          await chrome.storage.local.set({ syncTombstones: tombstones });
+        }
+        trash.splice(index, 1);
+        await chrome.storage.local.set({ trash });
+        if (script.enabled !== false) await registerScript(script);
+        await updateBadge();
+        notifyEasyCloudScriptSaved(script.id);
+        return { success: true };
+      });
+    });
   },
   emptyTrash: async () => {
-    await chrome.storage.local.set({ trash: [] });
+    await _runExclusiveTrashMutation(async () => {
+      await chrome.storage.local.set({ trash: [] });
+    });
     return { success: true };
   },
   rescheduleScript: async scriptId => {
@@ -38720,9 +38748,11 @@ backgroundActionRegistry.registerHandlers(ScriptActionHandler.createScriptAction
     return { success: true };
   },
   permanentlyDelete: async scriptId => {
-    const trashData = await chrome.storage.local.get('trash');
-    const trash = trashData.trash || [];
-    await chrome.storage.local.set({ trash: trash.filter(script => script.id !== scriptId) });
+    await _runExclusiveTrashMutation(async () => {
+      const trashData = await chrome.storage.local.get('trash');
+      const trash = Array.isArray(trashData.trash) ? trashData.trash.slice() : [];
+      await chrome.storage.local.set({ trash: trash.filter(script => script.id !== scriptId) });
+    });
     return { success: true };
   },
   toggleScript: async message => {
@@ -40193,13 +40223,15 @@ async function trashScriptForSync(script, reason = 'sync') {
   try {
     const settings = await SettingsManager.get();
     if ((settings.trashMode || '30') === 'disabled') return false;
-    const trashData = await chrome.storage.local.get('trash');
-    const trash = trashData.trash || [];
-    // Don't stack duplicates if the same tombstone arrives on two syncs.
-    if (trash.some(entry => entry?.id === script.id)) return true;
-    trash.push({ ...script, trashedAt: Date.now(), trashedBy: reason });
-    await chrome.storage.local.set({ trash });
-    return true;
+    return await _runExclusiveTrashMutation(async () => {
+      const trashData = await chrome.storage.local.get('trash');
+      const trash = Array.isArray(trashData.trash) ? trashData.trash.slice() : [];
+      // Don't stack duplicates if the same tombstone arrives on two syncs.
+      if (trash.some(entry => entry?.id === script.id)) return true;
+      trash.push({ ...script, trashedAt: Date.now(), trashedBy: reason });
+      await chrome.storage.local.set({ trash });
+      return true;
+    });
   } catch (e) {
     debugWarn('[ScriptVault] Failed to trash script for sync:', script.id, e?.message || e);
     return false;
@@ -43410,15 +43442,18 @@ async function cleanupStaleCaches() {
   try {
     const settings = await SettingsManager.get();
     const trashMode = settings.trashMode || '30';
-    if (trashMode === 'disabled') return;
-    const maxAge = trashMode === '1' ? 86400000 : trashMode === '7' ? 604800000 : 2592000000; // 1/7/30 days
-    const trashData = await chrome.storage.local.get('trash');
-    const trash = trashData.trash || [];
-    const now = Date.now();
-    const valid = trash.filter(s => now - s.trashedAt < maxAge);
-    if (valid.length !== trash.length) {
-      await chrome.storage.local.set({ trash: valid });
-      debugLog(`Pruned ${trash.length - valid.length} expired trash entries`);
+    if (trashMode !== 'disabled') {
+      const maxAge = trashMode === '1' ? 86400000 : trashMode === '7' ? 604800000 : 2592000000; // 1/7/30 days
+      await _runExclusiveTrashMutation(async () => {
+        const trashData = await chrome.storage.local.get('trash');
+        const trash = Array.isArray(trashData.trash) ? trashData.trash.slice() : [];
+        const now = Date.now();
+        const valid = trash.filter(s => now - s.trashedAt < maxAge);
+        if (valid.length !== trash.length) {
+          await chrome.storage.local.set({ trash: valid });
+          debugLog(`Pruned ${trash.length - valid.length} expired trash entries`);
+        }
+      });
     }
   } catch (e) {
     // Non-critical, ignore errors

@@ -31,19 +31,31 @@ describe('trashScriptForSync', () => {
   let trashScriptForSync;
   let warnings;
 
-  function build(trashMode = '30') {
+  function build(trashMode = '30', { delayMs = 0 } = {}) {
     storage = {};
     warnings = [];
+    const pause = async () => {
+      if (delayMs > 0) await new Promise(resolve => setTimeout(resolve, delayMs));
+    };
     const chrome = {
       storage: {
         local: {
-          get: async (key) => ({ [key]: storage[key] }),
-          set: async (entries) => { Object.assign(storage, entries); },
+          get: async (key) => {
+            await pause();
+            const value = storage[key];
+            return { [key]: value === undefined ? undefined : JSON.parse(JSON.stringify(value)) };
+          },
+          set: async (entries) => {
+            await pause();
+            Object.assign(storage, JSON.parse(JSON.stringify(entries)));
+          },
         },
       },
     };
     const SettingsManager = { get: async () => ({ trashMode }) };
-    const body = `${extractFunction(core, 'async function trashScriptForSync(')}
+    const body = `let _trashMutationChain = Promise.resolve();
+${extractFunction(core, 'function _runExclusiveTrashMutation(')}
+${extractFunction(core, 'async function trashScriptForSync(')}
 return trashScriptForSync;`;
     trashScriptForSync = compileFunction(body, ['chrome', 'SettingsManager', 'debugWarn'], {
       filename: resolve(ROOT, 'background.core.js'),
@@ -69,6 +81,15 @@ return trashScriptForSync;`;
     expect(storage.trash).toHaveLength(1);
   });
 
+  it('keeps concurrent sync deletes instead of losing the later snapshot', async () => {
+    build('30', { delayMs: 5 });
+    await Promise.all([
+      trashScriptForSync({ id: 's1', code: '// one', meta: {} }, 'sync-tombstone'),
+      trashScriptForSync({ id: 's2', code: '// two', meta: {} }, 'sync-tombstone'),
+    ]);
+    expect(storage.trash.map(entry => entry.id).sort()).toEqual(['s1', 's2']);
+  });
+
   it('honours an explicit trashMode: disabled opt-out', async () => {
     build('disabled');
     await expect(trashScriptForSync({ id: 's1', code: '// b', meta: {} })).resolves.toBe(false);
@@ -79,7 +100,9 @@ return trashScriptForSync;`;
     build('30');
     const script = { id: 's1', code: '// body', meta: {} };
     // Re-bind with a failing storage to prove the catch path is observable.
-    const body = `${extractFunction(core, 'async function trashScriptForSync(')}
+    const body = `let _trashMutationChain = Promise.resolve();
+${extractFunction(core, 'function _runExclusiveTrashMutation(')}
+${extractFunction(core, 'async function trashScriptForSync(')}
 return trashScriptForSync;`;
     const failing = compileFunction(body, ['chrome', 'SettingsManager', 'debugWarn'], {
       filename: resolve(ROOT, 'background.core.js'),
