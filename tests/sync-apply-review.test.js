@@ -26,6 +26,19 @@ function extractFunction(source, signature) {
   throw new Error(`unbalanced: ${signature}`);
 }
 
+const trashBudgetSupport = `
+const MAX_TRASH_ENTRIES = 100;
+const MAX_TRASH_BYTES = 6 * 1024 * 1024;
+const MAX_TRASH_EVICTION_NOTICES = 50;
+const MAX_TRASH_EVICTION_SUMMARIES = 50;
+const TRASH_EVICTION_NOTICE_KEY = 'trashEvictionNotice';
+${extractFunction(core, 'function _trashSerializedBytes(')}
+${extractFunction(core, 'function _trashTimestamp(')}
+${extractFunction(core, 'function _trashEvictionSummary(')}
+${extractFunction(core, 'function _enforceTrashBudget(')}
+${extractFunction(core, 'async function _recordTrashEvictionNotice(')}
+`;
+
 describe('trashScriptForSync', () => {
   let storage;
   let trashScriptForSync;
@@ -53,7 +66,8 @@ describe('trashScriptForSync', () => {
       },
     };
     const SettingsManager = { get: async () => ({ trashMode }) };
-    const body = `let _trashMutationChain = Promise.resolve();
+    const body = `${trashBudgetSupport}
+let _trashMutationChain = Promise.resolve();
 ${extractFunction(core, 'function _runExclusiveTrashMutation(')}
 ${extractFunction(core, 'async function trashScriptForSync(')}
 return trashScriptForSync;`;
@@ -90,6 +104,45 @@ return trashScriptForSync;`;
     expect(storage.trash.map(entry => entry.id).sort()).toEqual(['s1', 's2']);
   });
 
+  it('evicts the oldest entry at the count budget and records a metadata-only notice', async () => {
+    build('30');
+    storage.trash = Array.from({ length: 100 }, (_, index) => ({
+      id: `old-${index}`,
+      code: '// retained body',
+      meta: { name: `Old ${index}` },
+      trashedAt: index + 1,
+    }));
+
+    await expect(trashScriptForSync({ id: 'new', code: '// new body', meta: { name: 'Newest' } })).resolves.toBe(true);
+
+    expect(storage.trash).toHaveLength(100);
+    expect(storage.trash.some(entry => entry.id === 'old-0')).toBe(false);
+    expect(storage.trash.some(entry => entry.id === 'new')).toBe(true);
+    expect(storage.trashEvictionNotice).toHaveLength(1);
+    expect(storage.trashEvictionNotice[0]).toMatchObject({ count: 1 });
+    expect(storage.trashEvictionNotice[0].entries[0]).toEqual({ id: 'old-0', name: 'Old 0', trashedAt: 1 });
+    expect(JSON.stringify(storage.trashEvictionNotice)).not.toContain('// retained body');
+  });
+
+  it('evicts enough oldest records to keep the serialized payload under the byte budget', async () => {
+    build('30');
+    storage.trash = [{
+      id: 'large-old',
+      code: 'x'.repeat(Math.floor(5.5 * 1024 * 1024)),
+      meta: { name: 'Large old' },
+      trashedAt: 1,
+    }];
+
+    await expect(trashScriptForSync({
+      id: 'small-new',
+      code: 'y'.repeat(1024 * 1024),
+      meta: { name: 'Small new' },
+    })).resolves.toBe(true);
+
+    expect(storage.trash.map(entry => entry.id)).toEqual(['small-new']);
+    expect(new TextEncoder().encode(JSON.stringify(storage.trash)).byteLength).toBeLessThanOrEqual(6 * 1024 * 1024);
+  });
+
   it('honours an explicit trashMode: disabled opt-out', async () => {
     build('disabled');
     await expect(trashScriptForSync({ id: 's1', code: '// b', meta: {} })).resolves.toBe(false);
@@ -100,7 +153,8 @@ return trashScriptForSync;`;
     build('30');
     const script = { id: 's1', code: '// body', meta: {} };
     // Re-bind with a failing storage to prove the catch path is observable.
-    const body = `let _trashMutationChain = Promise.resolve();
+    const body = `${trashBudgetSupport}
+let _trashMutationChain = Promise.resolve();
 ${extractFunction(core, 'function _runExclusiveTrashMutation(')}
 ${extractFunction(core, 'async function trashScriptForSync(')}
 return trashScriptForSync;`;

@@ -85,6 +85,7 @@
         helpPanelFilter: 'all',
         trashPanelFilter: 'all',
         trashItems: [],
+        pendingTrashEvictionCount: 0,
         trustCenter: {
             runtimeStatus: null,
             runtimeHostPermissionStatus: null,
@@ -859,6 +860,11 @@
             const result = { succeededIds, failures, skipped, feedback };
             const resolvedToastOptions = typeof toastOptions === 'function' ? toastOptions(result) : toastOptions;
             showToast(feedback.summary, feedback.tone, resolvedToastOptions || {});
+            if (action === 'delete' && state.pendingTrashEvictionCount > 0) {
+                const evictedCount = state.pendingTrashEvictionCount;
+                state.pendingTrashEvictionCount = 0;
+                showTrashEvictionWarning(evictedCount);
+            }
             return result;
         } finally {
             hideProgress();
@@ -7731,6 +7737,17 @@
         elements.trashList.replaceChildren(fragment);
     }
 
+    function showTrashEvictionWarning(count) {
+        const normalizedCount = Number(count);
+        if (!Number.isFinite(normalizedCount) || normalizedCount <= 0) return;
+        const message = tDashboard(
+            'trashBudgetNotice',
+            'Trash storage limit reached; {count} older recovery items are no longer available.',
+            { count: normalizedCount }
+        ).replace(/\{count\}/g, numberFormatter.format(normalizedCount));
+        showToast(message, 'warning', { duration: 8000 });
+    }
+
     async function loadTrash() {
         if (!elements.trashList) return;
         elements.trashList.hidden = false;
@@ -7739,6 +7756,7 @@
         try {
             const response = await chrome.runtime.sendMessage({ action: 'getTrash' });
             state.trashItems = Array.isArray(response?.trash) ? response.trash : [];
+            showTrashEvictionWarning(response?.evictedCount || response?.evicted?.length || 0);
             renderTrashList();
         } catch (e) {
             console.error('Failed to load trash:', e);
@@ -13301,6 +13319,11 @@
         try {
             const response = await chrome.runtime.sendMessage({ action: 'deleteScript', scriptId });
             if (response?.error) throw new Error(response.error);
+            const trashEvictedCount = Number(response?.trashEvictedCount) || response?.trashEvicted?.length || 0;
+            if (trashEvictedCount > 0) {
+                if (skipReload) state.pendingTrashEvictionCount += trashEvictedCount;
+                else showTrashEvictionWarning(trashEvictedCount);
+            }
             // Clean up open tab if exists
             if (state.openTabs[scriptId]) {
                 delete state.openTabs[scriptId];

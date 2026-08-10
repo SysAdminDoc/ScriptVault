@@ -1356,6 +1356,108 @@ async function _runExclusiveScriptOperation(scriptId, operation) {
 // silently discard an entry committed by an earlier writer.
 let _trashMutationChain = Promise.resolve();
 
+// Keep recovery useful without allowing complete script snapshots to consume
+// the extension's whole storage quota. The byte limit is measured against the
+// exact UTF-8 JSON payload written to chrome.storage.local.
+const MAX_TRASH_ENTRIES = 100;
+const MAX_TRASH_BYTES = 6 * 1024 * 1024;
+const TRASH_EVICTION_NOTICE_KEY = 'trashEvictionNotice';
+const MAX_TRASH_EVICTION_NOTICES = 50;
+const MAX_TRASH_EVICTION_SUMMARIES = 50;
+
+function _trashSerializedBytes(value) {
+  try {
+    const serialized = JSON.stringify(value);
+    if (typeof serialized !== 'string') return Number.POSITIVE_INFINITY;
+    if (typeof TextEncoder === 'function') return new TextEncoder().encode(serialized).byteLength;
+    return serialized.length;
+  } catch {
+    return Number.POSITIVE_INFINITY;
+  }
+}
+
+function _trashTimestamp(entry) {
+  const timestamp = Number(entry?.trashedAt);
+  return Number.isFinite(timestamp) && timestamp >= 0 ? timestamp : 0;
+}
+
+function _trashEvictionSummary(entry) {
+  const meta = entry?.meta || entry?.metadata || {};
+  return {
+    id: typeof entry?.id === 'string' ? entry.id.slice(0, 160) : '',
+    name: typeof meta?.name === 'string' ? meta.name.slice(0, 200) : '',
+    trashedAt: _trashTimestamp(entry)
+  };
+}
+
+function _enforceTrashBudget(trash) {
+  const records = (Array.isArray(trash) ? trash : []).map((entry, index) => ({
+    entry,
+    index,
+    bytes: _trashSerializedBytes(entry)
+  }));
+  const evicted = [];
+  let evictedCount = 0;
+  let serializedBytes = _trashSerializedBytes(records.map(record => record.entry));
+  const candidates = records.slice().sort((a, b) => _trashTimestamp(a.entry) - _trashTimestamp(b.entry) || a.index - b.index);
+
+  while (records.length > MAX_TRASH_ENTRIES || serializedBytes > MAX_TRASH_BYTES) {
+    const candidate = candidates.shift();
+    if (!candidate) break;
+    const index = records.indexOf(candidate);
+    if (index === -1) continue;
+    records.splice(index, 1);
+    evictedCount += 1;
+    if (evicted.length < MAX_TRASH_EVICTION_SUMMARIES) evicted.push(_trashEvictionSummary(candidate.entry));
+    if (Number.isFinite(serializedBytes) && Number.isFinite(candidate.bytes)) {
+      serializedBytes = Math.max(2, serializedBytes - candidate.bytes - (records.length > 0 ? 1 : 0));
+    } else {
+      serializedBytes = _trashSerializedBytes(records.map(record => record.entry));
+    }
+  }
+
+  return {
+    trash: records.map(record => record.entry),
+    evicted,
+    evictedCount,
+    serializedBytes
+  };
+}
+
+async function _recordTrashEvictionNotice(evicted, evictedCount = evicted.length) {
+  if (!evictedCount) return;
+  try {
+    const data = await chrome.storage.local.get(TRASH_EVICTION_NOTICE_KEY);
+    const notices = Array.isArray(data?.[TRASH_EVICTION_NOTICE_KEY])
+      ? data[TRASH_EVICTION_NOTICE_KEY].filter(notice => notice && typeof notice === 'object')
+      : [];
+    notices.push({
+      at: Date.now(),
+      count: evictedCount,
+      entries: (Array.isArray(evicted) ? evicted : []).slice(0, MAX_TRASH_EVICTION_SUMMARIES)
+    });
+    await chrome.storage.local.set({
+      [TRASH_EVICTION_NOTICE_KEY]: notices.slice(-MAX_TRASH_EVICTION_NOTICES)
+    });
+  } catch (e) {
+    debugWarn('[ScriptVault] Failed to persist trash eviction notice:', e?.message || e);
+  }
+}
+
+async function _consumeTrashEvictionNotices() {
+  try {
+    const data = await chrome.storage.local.get(TRASH_EVICTION_NOTICE_KEY);
+    const notices = Array.isArray(data?.[TRASH_EVICTION_NOTICE_KEY])
+      ? data[TRASH_EVICTION_NOTICE_KEY].filter(notice => notice && typeof notice === 'object')
+      : [];
+    if (notices.length > 0) await chrome.storage.local.remove(TRASH_EVICTION_NOTICE_KEY);
+    return notices;
+  } catch (e) {
+    debugWarn('[ScriptVault] Failed to read trash eviction notice:', e?.message || e);
+    return [];
+  }
+}
+
 function _runExclusiveTrashMutation(operation) {
   const previous = _trashMutationChain;
   let operationPromise;
@@ -7904,12 +8006,17 @@ backgroundActionRegistry.registerHandlers(ScriptActionHandler.createScriptAction
       if (!script) return { error: 'Script not found' };
       const settings = await SettingsManager.get();
       const trashMode = settings.trashMode || '30';
+      let trashEvicted = [];
+      let trashEvictedCount = 0;
       if (trashMode !== 'disabled') {
         await _runExclusiveTrashMutation(async () => {
           const trashData = await chrome.storage.local.get('trash');
           const trash = Array.isArray(trashData.trash) ? trashData.trash.slice() : [];
           trash.push({ ...script, trashedAt: Date.now() });
-          await chrome.storage.local.set({ trash });
+          const budgeted = _enforceTrashBudget(trash);
+          trashEvicted = budgeted.evicted;
+          trashEvictedCount = budgeted.evictedCount;
+          await chrome.storage.local.set({ trash: budgeted.trash });
         });
       }
 
@@ -7929,7 +8036,13 @@ backgroundActionRegistry.registerHandlers(ScriptActionHandler.createScriptAction
       await chrome.storage.local.set({ syncTombstones: tombstones });
       await updateBadge();
       notifyEasyCloudScriptDeleted(scriptId);
-      return { success: true, scriptId, scriptName: script.meta?.name || scriptId };
+      return {
+        success: true,
+        scriptId,
+        scriptName: script.meta?.name || scriptId,
+        trashEvicted,
+        trashEvictedCount
+      };
     });
   },
   getTrash: async () => {
@@ -7947,10 +8060,23 @@ backgroundActionRegistry.registerHandlers(ScriptActionHandler.createScriptAction
       const trash = Array.isArray(trashData.trash) ? trashData.trash.slice() : [];
       const now = Date.now();
       const next = maxAge > 0 ? trash.filter(script => now - script.trashedAt < maxAge) : trash;
-      if (next.length !== trash.length) await chrome.storage.local.set({ trash: next });
-      return next;
+      const budgeted = _enforceTrashBudget(next);
+      const notices = await _consumeTrashEvictionNotices();
+      const pendingEvicted = notices.flatMap(notice => Array.isArray(notice.entries) ? notice.entries : []);
+      const pendingEvictedCount = notices.reduce((total, notice) => {
+        const count = Number(notice.count);
+        return total + (Number.isFinite(count) && count > 0 ? count : 0);
+      }, 0);
+      if (next.length !== trash.length || budgeted.evictedCount > 0) {
+        await chrome.storage.local.set({ trash: budgeted.trash });
+      }
+      return {
+        trash: budgeted.trash,
+        evicted: [...budgeted.evicted, ...pendingEvicted].slice(0, MAX_TRASH_EVICTION_SUMMARIES),
+        evictedCount: budgeted.evictedCount + pendingEvictedCount
+      };
     });
-    return { trash: valid };
+    return valid;
   },
   restoreFromTrash: async scriptId => {
     if (!scriptId) return { error: 'Missing script ID' };
@@ -9499,7 +9625,9 @@ async function trashScriptForSync(script, reason = 'sync') {
       // Don't stack duplicates if the same tombstone arrives on two syncs.
       if (trash.some(entry => entry?.id === script.id)) return true;
       trash.push({ ...script, trashedAt: Date.now(), trashedBy: reason });
-      await chrome.storage.local.set({ trash });
+      const budgeted = _enforceTrashBudget(trash);
+      await chrome.storage.local.set({ trash: budgeted.trash });
+      if (budgeted.evictedCount > 0) await _recordTrashEvictionNotice(budgeted.evicted, budgeted.evictedCount);
       return true;
     });
   } catch (e) {
@@ -12712,19 +12840,28 @@ async function cleanupStaleCaches() {
   try {
     const settings = await SettingsManager.get();
     const trashMode = settings.trashMode || '30';
-    if (trashMode !== 'disabled') {
-      const maxAge = trashMode === '1' ? 86400000 : trashMode === '7' ? 604800000 : 2592000000; // 1/7/30 days
-      await _runExclusiveTrashMutation(async () => {
-        const trashData = await chrome.storage.local.get('trash');
-        const trash = Array.isArray(trashData.trash) ? trashData.trash.slice() : [];
-        const now = Date.now();
-        const valid = trash.filter(s => now - s.trashedAt < maxAge);
-        if (valid.length !== trash.length) {
-          await chrome.storage.local.set({ trash: valid });
-          debugLog(`Pruned ${trash.length - valid.length} expired trash entries`);
-        }
-      });
-    }
+    const maxAge = trashMode === '1'
+      ? 86400000
+      : trashMode === '7'
+        ? 604800000
+        : trashMode === '30'
+          ? 2592000000
+          : 0;
+    await _runExclusiveTrashMutation(async () => {
+      const trashData = await chrome.storage.local.get('trash');
+      const trash = Array.isArray(trashData.trash) ? trashData.trash.slice() : [];
+      const now = Date.now();
+      const valid = maxAge > 0 ? trash.filter(s => now - s.trashedAt < maxAge) : trash;
+      const budgeted = _enforceTrashBudget(valid);
+      const expiredCount = trash.length - valid.length;
+      if (expiredCount > 0 || budgeted.evictedCount > 0) {
+        await chrome.storage.local.set({ trash: budgeted.trash });
+        debugLog(`Pruned ${expiredCount} expired trash entries and evicted ${budgeted.evictedCount} over-budget entries`);
+      }
+      if (budgeted.evictedCount > 0) {
+        await _recordTrashEvictionNotice(budgeted.evicted, budgeted.evictedCount);
+      }
+    });
   } catch (e) {
     // Non-critical, ignore errors
   }

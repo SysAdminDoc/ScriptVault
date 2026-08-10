@@ -1652,7 +1652,16 @@
                 updateEnabledState();
                 updateBadgeForTab();
                 const deletedName = result?.scriptName || tPopup('scriptDeleted', 'Script deleted');
-                showPopupToast(tPopup('popupDeletedScript', 'Deleted {name}', { name: deletedName }));
+                const deletedMessage = tPopup('popupDeletedScript', 'Deleted {name}', { name: deletedName });
+                const trashEvictedCount = Number(result?.trashEvictedCount) || result?.trashEvicted?.length || 0;
+                if (trashEvictedCount > 0) {
+                    showPopupToast(
+                        `${deletedMessage} ${tPopup('trashBudgetNotice', 'Trash storage limit reached; {count} older recovery items are no longer available.', { count: trashEvictedCount })}`,
+                        'warning'
+                    );
+                } else {
+                    showPopupToast(deletedMessage);
+                }
             } catch (error) {
                 console.error('Failed to delete script:', error);
                 showPopupToast(error.message || tPopup('popupFailedDeleteScript', 'Failed to delete script'), 'error');

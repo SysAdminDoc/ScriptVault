@@ -1505,6 +1505,7 @@ export const localeCatalogs = {
     "trashDaySingular": "day",
     "trashDayPlural": "days",
     "trashRetentionBannerDefault": "Deleted scripts stay here for the configured retention window before permanent cleanup.",
+    "trashBudgetNotice": "Trash storage limit reached; {count} older recovery items are no longer available.",
     "trashSearchLabel": "Search",
     "trashSearchPlaceholder": "Filter deleted scripts by name, author, or version",
     "trashTimeFilters": "Trash time filters",
@@ -3243,15 +3244,15 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 43,
     "translatedRuntimeMessages": 43,
-    "totalRuntimeMessages": 1991
+    "totalRuntimeMessages": 1992
   },
   "en": {
     "name": "English",
     "direction": "ltr",
     "translationStatus": "complete",
-    "runtimeCoverageBaseline": 1991,
-    "translatedRuntimeMessages": 1991,
-    "totalRuntimeMessages": 1991
+    "runtimeCoverageBaseline": 1992,
+    "translatedRuntimeMessages": 1992,
+    "totalRuntimeMessages": 1992
   },
   "es": {
     "name": "Español",
@@ -3259,7 +3260,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 45,
     "translatedRuntimeMessages": 45,
-    "totalRuntimeMessages": 1991
+    "totalRuntimeMessages": 1992
   },
   "fr": {
     "name": "Français",
@@ -3267,7 +3268,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 43,
     "translatedRuntimeMessages": 43,
-    "totalRuntimeMessages": 1991
+    "totalRuntimeMessages": 1992
   },
   "he": {
     "name": "עברית",
@@ -3275,7 +3276,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 58,
     "translatedRuntimeMessages": 58,
-    "totalRuntimeMessages": 1991
+    "totalRuntimeMessages": 1992
   },
   "ja": {
     "name": "日本語",
@@ -3283,7 +3284,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 71,
     "translatedRuntimeMessages": 71,
-    "totalRuntimeMessages": 1991
+    "totalRuntimeMessages": 1992
   },
   "pt": {
     "name": "Português",
@@ -3291,7 +3292,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 42,
     "translatedRuntimeMessages": 42,
-    "totalRuntimeMessages": 1991
+    "totalRuntimeMessages": 1992
   },
   "ru": {
     "name": "Русский",
@@ -3299,7 +3300,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 117,
     "translatedRuntimeMessages": 117,
-    "totalRuntimeMessages": 1991
+    "totalRuntimeMessages": 1992
   },
   "zh": {
     "name": "中文",
@@ -3307,7 +3308,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 46,
     "translatedRuntimeMessages": 46,
-    "totalRuntimeMessages": 1991
+    "totalRuntimeMessages": 1992
   }
 } as const;
 

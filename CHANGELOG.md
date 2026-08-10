@@ -14,6 +14,9 @@ All notable changes to ScriptVault will be documented in this file.
   redaction with hashes and bounded error codes.
 - Serialized all trash read-modify-write paths, including local delete,
   restore, permanent-delete, empty/prune, and sync tombstone writes.
+- Bounded Trash retention to 100 entries and 6 MiB of UTF-8 serialized data,
+  evicting the oldest recovery records deterministically and surfacing the
+  unavailable items in the dashboard.
 - Routed Public API list, status, presence, and install positioning through
   the authoritative IndexedDB-backed ScriptStorage instead of the retired
   `userscripts` storage blob.

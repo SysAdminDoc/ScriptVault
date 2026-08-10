@@ -254,8 +254,15 @@ interface FactoryReset {
 interface GetTrash {
   action: 'getTrash';
 }
+interface TrashEvictionSummary {
+  id: string;
+  name: string;
+  trashedAt: number;
+}
 interface GetTrashResponse {
   trash: Script[];
+  evicted?: TrashEvictionSummary[];
+  evictedCount?: number;
 }
 
 interface RestoreFromTrash {
@@ -1961,7 +1968,12 @@ export interface ResponseMap {
   getScript: Script | null;
   saveScript: SaveScriptResponse | ErrorResponse;
   createScript: SaveScriptResponse | ErrorResponse;
-  deleteScript: SuccessOrError<{ scriptId: string; scriptName: string }>;
+  deleteScript: SuccessOrError<{
+    scriptId: string;
+    scriptName: string;
+    trashEvicted?: TrashEvictionSummary[];
+    trashEvictedCount?: number;
+  }>;
   toggleScript: SuccessOrError<{ script: { id: string; enabled: boolean } }>;
   runScriptNow: SuccessOrError<{ mode: 'userScripts.execute' | 'scripting.executeScript' }>;
   rescheduleChains: SuccessOrError;

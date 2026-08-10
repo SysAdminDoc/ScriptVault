@@ -1536,6 +1536,7 @@ const I18n = (() => {
       "trashDaySingular": "day",
       "trashDayPlural": "days",
       "trashRetentionBannerDefault": "Deleted scripts stay here for the configured retention window before permanent cleanup.",
+      "trashBudgetNotice": "Trash storage limit reached; {count} older recovery items are no longer available.",
       "trashSearchLabel": "Search",
       "trashSearchPlaceholder": "Filter deleted scripts by name, author, or version",
       "trashTimeFilters": "Trash time filters",
@@ -2517,15 +2518,15 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 43,
       "translatedRuntimeMessages": 43,
-      "totalRuntimeMessages": 1991
+      "totalRuntimeMessages": 1992
     },
     "en": {
       "name": "English",
       "direction": "ltr",
       "translationStatus": "complete",
-      "runtimeCoverageBaseline": 1991,
-      "translatedRuntimeMessages": 1991,
-      "totalRuntimeMessages": 1991
+      "runtimeCoverageBaseline": 1992,
+      "translatedRuntimeMessages": 1992,
+      "totalRuntimeMessages": 1992
     },
     "es": {
       "name": "Espa\xF1ol",
@@ -2533,7 +2534,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 45,
       "translatedRuntimeMessages": 45,
-      "totalRuntimeMessages": 1991
+      "totalRuntimeMessages": 1992
     },
     "fr": {
       "name": "Fran\xE7ais",
@@ -2541,7 +2542,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 43,
       "translatedRuntimeMessages": 43,
-      "totalRuntimeMessages": 1991
+      "totalRuntimeMessages": 1992
     },
     "he": {
       "name": "\u05E2\u05D1\u05E8\u05D9\u05EA",
@@ -2549,7 +2550,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 58,
       "translatedRuntimeMessages": 58,
-      "totalRuntimeMessages": 1991
+      "totalRuntimeMessages": 1992
     },
     "ja": {
       "name": "\u65E5\u672C\u8A9E",
@@ -2557,7 +2558,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 71,
       "translatedRuntimeMessages": 71,
-      "totalRuntimeMessages": 1991
+      "totalRuntimeMessages": 1992
     },
     "pt": {
       "name": "Portugu\xEAs",
@@ -2565,7 +2566,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 42,
       "translatedRuntimeMessages": 42,
-      "totalRuntimeMessages": 1991
+      "totalRuntimeMessages": 1992
     },
     "ru": {
       "name": "\u0420\u0443\u0441\u0441\u043A\u0438\u0439",
@@ -2573,7 +2574,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 117,
       "translatedRuntimeMessages": 117,
-      "totalRuntimeMessages": 1991
+      "totalRuntimeMessages": 1992
     },
     "zh": {
       "name": "\u4E2D\u6587",
@@ -2581,7 +2582,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 46,
       "translatedRuntimeMessages": 46,
-      "totalRuntimeMessages": 1991
+      "totalRuntimeMessages": 1992
     }
   };
 

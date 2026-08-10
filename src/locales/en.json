@@ -3,7 +3,7 @@
   "name": "English",
   "direction": "ltr",
   "translationStatus": "complete",
-  "runtimeCoverageBaseline": 1991,
+  "runtimeCoverageBaseline": 1992,
   "runtime": {
     "appName": "ScriptVault",
     "dashboardTitle": "ScriptVault Dashboard",
@@ -1460,6 +1460,7 @@
     "trashDaySingular": "day",
     "trashDayPlural": "days",
     "trashRetentionBannerDefault": "Deleted scripts stay here for the configured retention window before permanent cleanup.",
+    "trashBudgetNotice": "Trash storage limit reached; {count} older recovery items are no longer available.",
     "trashSearchLabel": "Search",
     "trashSearchPlaceholder": "Filter deleted scripts by name, author, or version",
     "trashTimeFilters": "Trash time filters",
