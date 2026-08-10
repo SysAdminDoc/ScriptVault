@@ -154,14 +154,6 @@ interface ParsedMeta {
   [key: string]: unknown;
 }
 
-type StoredUserscripts = FlatScript[] | Record<string, unknown>;
-
-interface ScriptStoreSnapshot {
-  mode: 'array' | 'record';
-  raw: StoredUserscripts;
-  scripts: FlatScript[];
-}
-
 interface RuntimeHooks {
   registerAllScripts?: () => Promise<void>;
   updateBadge?: (tabId?: number | null) => Promise<void>;
@@ -937,8 +929,10 @@ async function authorize(apiName: string, sender: SenderLike | null): Promise<bo
 
 async function getScripts(): Promise<FlatScript[]> {
   try {
-    const store = await getScriptStore();
-    return store.scripts;
+    const storedScripts = await ScriptStorage.getAll();
+    return storedScripts
+      .map(normalizeStoredScript)
+      .filter((script): script is FlatScript => script !== null);
   } catch {
     return [];
   }
@@ -1103,55 +1097,6 @@ function normalizeStoredScript(raw: unknown): FlatScript | null {
   };
 }
 
-async function getScriptStore(): Promise<ScriptStoreSnapshot> {
-  const result = await chrome.storage.local.get('userscripts');
-  const raw = result['userscripts'];
-
-  if (Array.isArray(raw)) {
-    return {
-      mode: 'array',
-      raw,
-      scripts: raw
-        .map(normalizeStoredScript)
-        .filter((script): script is FlatScript => script !== null)
-    };
-  }
-
-  if (raw && typeof raw === 'object') {
-    const record = raw as Record<string, unknown>;
-    return {
-      mode: 'record',
-      raw: record,
-      scripts: Object.values(record)
-        .map(normalizeStoredScript)
-        .filter((script): script is FlatScript => script !== null)
-    };
-  }
-
-  return {
-    mode: 'record',
-    raw: {},
-    scripts: []
-  };
-}
-
-function findArrayScriptIndex(scripts: FlatScript[], scriptId: string): number {
-  return scripts.findIndex((script) => script.id === scriptId || script.name === scriptId);
-}
-
-function findRecordScriptEntry(
-  record: Record<string, unknown>,
-  scriptId: string
-): { key: string; value: Record<string, unknown> } | null {
-  for (const [key, value] of Object.entries(record)) {
-    const normalized = normalizeStoredScript(value);
-    if (normalized && (normalized.id === scriptId || normalized.name === scriptId) && value && typeof value === 'object') {
-      return { key, value: value as Record<string, unknown> };
-    }
-  }
-  return null;
-}
-
 function createNestedStoredScript(
   newScript: FlatScript,
   meta: ParsedMeta,
@@ -1237,34 +1182,6 @@ function createNestedStoredScript(
     updatedAt: newScript.updatedAt ?? Date.now(),
     installedBy
   };
-}
-
-function upsertScriptStore(
-  store: ScriptStoreSnapshot,
-  newScript: FlatScript,
-  meta: ParsedMeta,
-  installedBy: string
-): StoredUserscripts {
-  if (store.mode === 'array') {
-    const scripts = Array.isArray(store.raw) ? [...store.raw] : [];
-    const idx = findArrayScriptIndex(scripts, newScript.id);
-    if (idx !== -1) {
-      scripts[idx] = { ...scripts[idx], ...newScript, updatedAt: Date.now(), installedBy };
-    } else {
-      scripts.push({ ...newScript, installedBy });
-    }
-    return scripts;
-  }
-
-  const record = !Array.isArray(store.raw) ? { ...store.raw } : {};
-  const existing = findRecordScriptEntry(record, newScript.id);
-  const key = existing?.key ?? newScript.id;
-  const position = existing
-    ? asNumber(existing.value.position) ?? store.scripts.length
-    : store.scripts.length;
-
-  record[key] = createNestedStoredScript(newScript, meta, installedBy, position, existing?.value ?? null);
-  return record;
 }
 
 function toRuntimeScriptShape(script: FlatScript, meta: ParsedMeta): FlatScript & { meta: ParsedMeta; settings: Record<string, unknown> } {
@@ -1436,27 +1353,10 @@ const HANDLERS: Record<string, HandlerFn> = {
         settings: createExternalInstallReviewSettings('public-api-external', installedBy),
       };
 
-      const store = await getScriptStore();
-      const updatedStore = upsertScriptStore(store, newScript, meta, installedBy);
-
-      // v3.0: persist through ScriptStorage so the IDB-backed store stays
-      // authoritative. The legacy `userscripts` blob is migrated on first
-      // init() and then ignored — direct chrome.storage writes would be
-      // invisible to the dashboard.
-      if (Array.isArray(updatedStore)) {
-        // Array-mode legacy path — convert to nested record on the way in.
-        await ScriptStorage.set(newScript.id, createNestedStoredScript(
-          newScript, meta, installedBy, store.scripts.length, null
-        ) as unknown as Parameters<typeof ScriptStorage.set>[1]);
-      } else {
-        const entry = updatedStore[newScript.id] ?? Object.values(updatedStore).find((v) => {
-          const n = normalizeStoredScript(v);
-          return n?.id === newScript.id;
-        });
-        if (entry) {
-          await ScriptStorage.set(newScript.id, entry as unknown as Parameters<typeof ScriptStorage.set>[1]);
-        }
-      }
+      const existingScripts = await ScriptStorage.getAll();
+      await ScriptStorage.set(newScript.id, createNestedStoredScript(
+        newScript, meta, installedBy, existingScripts.length, null
+      ) as unknown as Parameters<typeof ScriptStorage.set>[1]);
       await refreshRuntimeAfterMutation(newScript, meta);
 
       void fireWebhook('script.installed', { scriptId, name: newScript.name, version: newScript.version });
@@ -1797,24 +1697,10 @@ const WEB_HANDLERS: Record<string, WebHandlerFn> = {
         settings: createExternalInstallReviewSettings('public-api-web', installedBy),
       };
 
-      const store = await getScriptStore();
-      const updatedStore = upsertScriptStore(store, newScript, meta, installedBy);
-
-      // v3.0: route through ScriptStorage (IDB-backed) instead of writing the
-      // legacy `userscripts` blob directly.
-      if (Array.isArray(updatedStore)) {
-        await ScriptStorage.set(newScript.id, createNestedStoredScript(
-          newScript, meta, installedBy, store.scripts.length, null
-        ) as unknown as Parameters<typeof ScriptStorage.set>[1]);
-      } else {
-        const entry = updatedStore[newScript.id] ?? Object.values(updatedStore).find((v) => {
-          const n = normalizeStoredScript(v);
-          return n?.id === newScript.id;
-        });
-        if (entry) {
-          await ScriptStorage.set(newScript.id, entry as unknown as Parameters<typeof ScriptStorage.set>[1]);
-        }
-      }
+      const existingScripts = await ScriptStorage.getAll();
+      await ScriptStorage.set(newScript.id, createNestedStoredScript(
+        newScript, meta, installedBy, existingScripts.length, null
+      ) as unknown as Parameters<typeof ScriptStorage.set>[1]);
       await refreshRuntimeAfterMutation(newScript, meta);
 
       void fireWebhook('script.installed', { scriptId, name: newScript.name, version: newScript.version });

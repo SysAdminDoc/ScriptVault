@@ -962,9 +962,12 @@ console.log('mcp');`;
 
     it('round-trips scriptvault:isInstalled for a trusted origin', async () => {
       stored.clear();
-      // The web handlers read the flat 'userscripts' store, not ScriptStorage.
-      await chrome.storage.local.set({
-        userscripts: [{ id: 's1', name: 'Relay Fixture', version: '1.2.3', enabled: true, code: '// x' }],
+      stored.set('s1', {
+        id: 's1',
+        name: 'Relay Fixture',
+        version: '1.2.3',
+        enabled: true,
+        code: '// x',
       });
       PublicAPI = createFreshAPI({ ScriptStorage: makeStorage() });
       await PublicAPI.init();
@@ -979,8 +982,12 @@ console.log('mcp');`;
 
     it('ignores the same payload from an untrusted origin', async () => {
       stored.clear();
-      await chrome.storage.local.set({
-        userscripts: [{ id: 's1', name: 'Relay Fixture', version: '1.2.3', enabled: true, code: '// x' }],
+      stored.set('s1', {
+        id: 's1',
+        name: 'Relay Fixture',
+        version: '1.2.3',
+        enabled: true,
+        code: '// x',
       });
       PublicAPI = createFreshAPI({ ScriptStorage: makeStorage() });
       await PublicAPI.init();
@@ -995,6 +1002,43 @@ console.log('mcp');`;
         { type: 'scriptvault:isInstalled', name: 'Relay Fixture' },
         '',
       )).resolves.toBeNull();
+    });
+
+    it('uses the IDB-backed ScriptStorage for list, status, and web presence checks', async () => {
+      stored.clear();
+      stored.set('s1', {
+        id: 's1',
+        name: 'IDB Fixture',
+        version: '2.0.0',
+        enabled: false,
+        matches: ['https://example.test/*'],
+        code: '// idb-only',
+      });
+      PublicAPI = createFreshAPI({ ScriptStorage: makeStorage() });
+      await PublicAPI.init();
+      const extensionId = 'abcdefghijklmnopqrstuvwxyzabcdef';
+      await PublicAPI.setTrustedExtensionIds([extensionId]);
+      await PublicAPI.setTrustedOrigins(['https://trusted.example']);
+
+      const listed = await PublicAPI.handleExternalMessage(
+        { action: 'getInstalledScripts' },
+        { id: extensionId },
+      );
+      const status = await PublicAPI.handleExternalMessage(
+        { action: 'getScriptStatus', scriptId: 's1' },
+        { id: extensionId },
+      );
+      const present = await PublicAPI.handleWebMessagePayload(
+        { type: 'scriptvault:isInstalled', name: 'IDB Fixture' },
+        'https://trusted.example',
+      );
+
+      expect(listed.scripts).toEqual([
+        expect.objectContaining({ id: 's1', name: 'IDB Fixture', version: '2.0.0', enabled: false }),
+      ]);
+      expect(status).toMatchObject({ id: 's1', name: 'IDB Fixture', version: '2.0.0', enabled: false });
+      expect(present).toMatchObject({ installed: true, version: '2.0.0' });
+      expect(chrome.storage.local.get).not.toHaveBeenCalledWith('userscripts');
     });
 
     it('refuses an MCP write from an origin the bridge does not trust', async () => {

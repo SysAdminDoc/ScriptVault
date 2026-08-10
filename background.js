@@ -25653,8 +25653,8 @@ const PublicAPI = (() => {
   }
   async function getScripts() {
     try {
-      const store = await getScriptStore();
-      return store.scripts;
+      const storedScripts = await ScriptStorage.getAll();
+      return storedScripts.map(normalizeStoredScript).filter((script) => script !== null);
     } catch {
       return [];
     }
@@ -25764,42 +25764,6 @@ const PublicAPI = (() => {
       updatedAt: asNumber(script.updatedAt)
     };
   }
-  async function getScriptStore() {
-    const result = await chrome.storage.local.get("userscripts");
-    const raw = result["userscripts"];
-    if (Array.isArray(raw)) {
-      return {
-        mode: "array",
-        raw,
-        scripts: raw.map(normalizeStoredScript).filter((script) => script !== null)
-      };
-    }
-    if (raw && typeof raw === "object") {
-      const record = raw;
-      return {
-        mode: "record",
-        raw: record,
-        scripts: Object.values(record).map(normalizeStoredScript).filter((script) => script !== null)
-      };
-    }
-    return {
-      mode: "record",
-      raw: {},
-      scripts: []
-    };
-  }
-  function findArrayScriptIndex(scripts, scriptId) {
-    return scripts.findIndex((script) => script.id === scriptId || script.name === scriptId);
-  }
-  function findRecordScriptEntry(record, scriptId) {
-    for (const [key, value] of Object.entries(record)) {
-      const normalized = normalizeStoredScript(value);
-      if (normalized && (normalized.id === scriptId || normalized.name === scriptId) && value && typeof value === "object") {
-        return { key, value };
-      }
-    }
-    return null;
-  }
   function createNestedStoredScript(newScript, meta, installedBy, position, existing = null) {
     const existingRecord = existing ?? {};
     const existingMeta = existingRecord.meta && typeof existingRecord.meta === "object" ? existingRecord.meta : {};
@@ -25866,24 +25830,6 @@ const PublicAPI = (() => {
       updatedAt: newScript.updatedAt ?? Date.now(),
       installedBy
     };
-  }
-  function upsertScriptStore(store, newScript, meta, installedBy) {
-    if (store.mode === "array") {
-      const scripts = Array.isArray(store.raw) ? [...store.raw] : [];
-      const idx = findArrayScriptIndex(scripts, newScript.id);
-      if (idx !== -1) {
-        scripts[idx] = { ...scripts[idx], ...newScript, updatedAt: Date.now(), installedBy };
-      } else {
-        scripts.push({ ...newScript, installedBy });
-      }
-      return scripts;
-    }
-    const record = !Array.isArray(store.raw) ? { ...store.raw } : {};
-    const existing = findRecordScriptEntry(record, newScript.id);
-    const key = existing?.key ?? newScript.id;
-    const position = existing ? asNumber(existing.value.position) ?? store.scripts.length : store.scripts.length;
-    record[key] = createNestedStoredScript(newScript, meta, installedBy, position, existing?.value ?? null);
-    return record;
   }
   function toRuntimeScriptShape(script, meta) {
     return {
@@ -26018,25 +25964,14 @@ const PublicAPI = (() => {
           runAt: meta.runAt ?? "document_idle",
           settings: createExternalInstallReviewSettings("public-api-external", installedBy)
         };
-        const store = await getScriptStore();
-        const updatedStore = upsertScriptStore(store, newScript, meta, installedBy);
-        if (Array.isArray(updatedStore)) {
-          await ScriptStorage.set(newScript.id, createNestedStoredScript(
-            newScript,
-            meta,
-            installedBy,
-            store.scripts.length,
-            null
-          ));
-        } else {
-          const entry = updatedStore[newScript.id] ?? Object.values(updatedStore).find((v) => {
-            const n = normalizeStoredScript(v);
-            return n?.id === newScript.id;
-          });
-          if (entry) {
-            await ScriptStorage.set(newScript.id, entry);
-          }
-        }
+        const existingScripts = await ScriptStorage.getAll();
+        await ScriptStorage.set(newScript.id, createNestedStoredScript(
+          newScript,
+          meta,
+          installedBy,
+          existingScripts.length,
+          null
+        ));
         await refreshRuntimeAfterMutation(newScript, meta);
         void fireWebhook("script.installed", { scriptId, name: newScript.name, version: newScript.version });
         return { ok: true, scriptId, name: newScript.name, enabled: false, reviewRequired: true };
@@ -26316,25 +26251,14 @@ const PublicAPI = (() => {
           runAt: meta.runAt ?? "document_idle",
           settings: createExternalInstallReviewSettings("public-api-web", installedBy)
         };
-        const store = await getScriptStore();
-        const updatedStore = upsertScriptStore(store, newScript, meta, installedBy);
-        if (Array.isArray(updatedStore)) {
-          await ScriptStorage.set(newScript.id, createNestedStoredScript(
-            newScript,
-            meta,
-            installedBy,
-            store.scripts.length,
-            null
-          ));
-        } else {
-          const entry = updatedStore[newScript.id] ?? Object.values(updatedStore).find((v) => {
-            const n = normalizeStoredScript(v);
-            return n?.id === newScript.id;
-          });
-          if (entry) {
-            await ScriptStorage.set(newScript.id, entry);
-          }
-        }
+        const existingScripts = await ScriptStorage.getAll();
+        await ScriptStorage.set(newScript.id, createNestedStoredScript(
+          newScript,
+          meta,
+          installedBy,
+          existingScripts.length,
+          null
+        ));
         await refreshRuntimeAfterMutation(newScript, meta);
         void fireWebhook("script.installed", { scriptId, name: newScript.name, version: newScript.version });
         return { type: "scriptvault:install:response", ok: true, scriptId, name: newScript.name, enabled: false, reviewRequired: true };
