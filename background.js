@@ -8258,6 +8258,33 @@ const StorageModule = (() => {
       });
     },
     /**
+     * Update every script position in one transaction without rewriting the
+     * rest of any script record. The transaction re-reads the store so a
+     * concurrent save cannot be overwritten by a stale in-memory snapshot.
+     */
+    async reorderPositions(orderedIds) {
+      if (!Array.isArray(orderedIds) || orderedIds.some((id) => typeof id !== "string" || id.length === 0)) {
+        throw new TypeError("Script order must contain non-empty string IDs");
+      }
+      await openScriptDB();
+      await withTransaction(Stores.scripts, "readwrite", async (tx) => {
+        const store = tx.objectStore(Stores.scripts);
+        const rows = await reqToPromise(store.getAll()) ?? [];
+        const rowsById = new Map(rows.map((row) => [row.id, row]));
+        const submittedIds = new Set(orderedIds);
+        if (orderedIds.length !== rows.length || submittedIds.size !== rows.length || rows.some((row) => !submittedIds.has(row.id))) {
+          throw new Error("Script order must be a permutation of the stored script IDs");
+        }
+        for (const [position, id] of orderedIds.entries()) {
+          const row = rowsById.get(id);
+          if (!row) throw new Error("Script order contains an unknown script ID");
+          if (row.position === position) continue;
+          row.position = position;
+          await reqToPromise(store.put(row));
+        }
+      });
+    },
+    /**
      * Irreversibly reduce every persisted execution URL in one IDB transaction.
      * Returning only the minimized values lets ScriptStorage update its mirror
      * without re-reading (or accidentally retaining) the original full URLs.
@@ -9080,17 +9107,21 @@ const StorageModule = (() => {
     },
     async reorder(orderedIds) {
       await this.init();
-      const updates = [];
-      orderedIds.forEach((id, index) => {
-        const script = this.cache[id];
-        if (script) {
-          updates.push({ ...cloneScriptRecord(script), position: index });
-        }
-      });
-      for (const s of updates) {
-        await ScriptsDAO.put(s);
-        this.cache[s.id] = s;
+      if (!Array.isArray(orderedIds) || orderedIds.some((id) => typeof id !== "string" || id.length === 0)) {
+        throw new TypeError("Script order must contain non-empty string IDs");
       }
+      const currentIds = Object.keys(this.cache);
+      const submittedIds = new Set(orderedIds);
+      if (orderedIds.length !== currentIds.length || submittedIds.size !== currentIds.length || currentIds.some((id) => !submittedIds.has(id))) {
+        throw new Error("Script order must be a permutation of the stored script IDs");
+      }
+      await ScriptsDAO.reorderPositions(orderedIds);
+      for (const [position, id] of orderedIds.entries()) {
+        const script = this.cache[id];
+        if (!script) throw new Error("Script order cache is missing a stored script ID");
+        script.position = position;
+      }
+      notifyScriptChange();
     },
     async duplicate(id) {
       await this.init();

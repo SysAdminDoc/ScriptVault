@@ -7,6 +7,8 @@ All notable changes to ScriptVault will be documented in this file.
 - Added a document-start ordering proof that races userscripts against page
   inline scripts in Chromium and Firefox sideload smoke coverage, including a
   service-worker restart in the Chromium E2E.
+- Made script reordering a single IndexedDB position transaction with
+  permutation validation and rollback-safe cache publication.
 - Routed Public API list, status, presence, and install positioning through
   the authoritative IndexedDB-backed ScriptStorage instead of the retired
   `userscripts` storage blob.

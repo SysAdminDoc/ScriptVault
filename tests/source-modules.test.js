@@ -431,6 +431,46 @@ describe('source storage module', () => {
     expect(await ValuesDAO.getAll('script_alpha')).toEqual({});
   });
 
+  it('rejects invalid orders without mutating the stored positions', async () => {
+    const alpha = makeScript({ id: 'script_alpha', position: 0 });
+    const beta = makeScript({ id: 'script_beta', position: 1 });
+    await ScriptsDAO.bulkPut([alpha, beta]);
+    await ScriptStorage.getAll();
+
+    await expect(ScriptStorage.reorder(['script_beta', 'script_beta']))
+      .rejects.toThrow('permutation');
+    await expect(ScriptStorage.reorder(['script_beta', 'script_missing']))
+      .rejects.toThrow('permutation');
+
+    expect((await ScriptsDAO.get('script_alpha'))?.position).toBe(0);
+    expect((await ScriptsDAO.get('script_beta'))?.position).toBe(1);
+  });
+
+  it('rolls back every position when a later reorder write fails', async () => {
+    const alpha = makeScript({ id: 'script_alpha', position: 0 });
+    const beta = makeScript({ id: 'script_beta', position: 1 });
+    await ScriptsDAO.bulkPut([alpha, beta]);
+    await ScriptStorage.getAll();
+
+    await ScriptStorage.reorder(['script_beta', 'script_alpha']);
+    const originalPut = IDBObjectStore.prototype.put;
+    let writeCount = 0;
+    const putSpy = vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(function (...args) {
+      writeCount += 1;
+      if (writeCount === 2) throw new Error('injected reorder failure');
+      return originalPut.apply(this, args);
+    });
+
+    await expect(ScriptStorage.reorder(['script_alpha', 'script_beta']))
+      .rejects.toThrow('injected reorder failure');
+    putSpy.mockRestore();
+
+    expect((await ScriptsDAO.get('script_alpha'))?.position).toBe(1);
+    expect((await ScriptsDAO.get('script_beta'))?.position).toBe(0);
+    expect((await ScriptStorage.get('script_alpha'))?.position).toBe(1);
+    expect((await ScriptStorage.get('script_beta'))?.position).toBe(0);
+  });
+
   it('stores values, emits listeners, and manages folders/tab state', async () => {
     // Note: we deliberately use real timers here. fake-indexeddb's internal
     // scheduling does not play well with vi.useFakeTimers() — IDB requests

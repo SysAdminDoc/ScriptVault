@@ -348,6 +348,39 @@ export const ScriptsDAO = {
   },
 
   /**
+   * Update every script position in one transaction without rewriting the
+   * rest of any script record. The transaction re-reads the store so a
+   * concurrent save cannot be overwritten by a stale in-memory snapshot.
+   */
+  async reorderPositions(orderedIds: string[]): Promise<void> {
+    if (!Array.isArray(orderedIds) || orderedIds.some((id) => typeof id !== 'string' || id.length === 0)) {
+      throw new TypeError('Script order must contain non-empty string IDs');
+    }
+    await openScriptDB();
+    await withTransaction(Stores.scripts, 'readwrite', async (tx) => {
+      const store = tx.objectStore(Stores.scripts);
+      const rows = (await reqToPromise(store.getAll()) as StoredScriptRecord[]) ?? [];
+      const rowsById = new Map(rows.map((row) => [row.id, row]));
+      const submittedIds = new Set(orderedIds);
+      if (
+        orderedIds.length !== rows.length
+        || submittedIds.size !== rows.length
+        || rows.some((row) => !submittedIds.has(row.id))
+      ) {
+        throw new Error('Script order must be a permutation of the stored script IDs');
+      }
+
+      for (const [position, id] of orderedIds.entries()) {
+        const row = rowsById.get(id);
+        if (!row) throw new Error('Script order contains an unknown script ID');
+        if (row.position === position) continue;
+        row.position = position;
+        await reqToPromise(store.put(row));
+      }
+    });
+  },
+
+  /**
    * Irreversibly reduce every persisted execution URL in one IDB transaction.
    * Returning only the minimized values lets ScriptStorage update its mirror
    * without re-reading (or accidentally retaining) the original full URLs.

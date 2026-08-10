@@ -533,20 +533,26 @@ export const ScriptStorage = {
 
   async reorder(orderedIds: string[]): Promise<void> {
     await this.init();
-    // Build the updated list, then write per-record (each in its own IDB txn).
-    // We tolerate partial failure: any record that persists stays persisted,
-    // and the cache reflects what actually shipped.
-    const updates: Script[] = [];
-    orderedIds.forEach((id, index) => {
-      const script = this.cache![id];
-      if (script) {
-        updates.push({ ...cloneScriptRecord(script), position: index });
-      }
-    });
-    for (const s of updates) {
-      await ScriptsDAO.put(s);
-      this.cache![s.id] = s;
+    if (!Array.isArray(orderedIds) || orderedIds.some((id) => typeof id !== 'string' || id.length === 0)) {
+      throw new TypeError('Script order must contain non-empty string IDs');
     }
+    const currentIds = Object.keys(this.cache!);
+    const submittedIds = new Set(orderedIds);
+    if (
+      orderedIds.length !== currentIds.length
+      || submittedIds.size !== currentIds.length
+      || currentIds.some((id) => !submittedIds.has(id))
+    ) {
+      throw new Error('Script order must be a permutation of the stored script IDs');
+    }
+
+    await ScriptsDAO.reorderPositions(orderedIds);
+    for (const [position, id] of orderedIds.entries()) {
+      const script = this.cache![id];
+      if (!script) throw new Error('Script order cache is missing a stored script ID');
+      script.position = position;
+    }
+    notifyScriptChange();
   },
 
   async duplicate(id: string): Promise<Script | null> {
