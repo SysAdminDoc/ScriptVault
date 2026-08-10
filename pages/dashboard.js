@@ -2410,6 +2410,7 @@
         elements.btnCloseFindScripts = document.getElementById('btnCloseFindScripts');
         elements.findScriptsResults = document.getElementById('findScriptsResults');
         elements.findScriptsSourceStatus = document.getElementById('findScriptsSourceStatus');
+        elements.findScriptsSourceHealth = document.getElementById('findScriptsSourceHealth');
         elements.btnManageFindScriptsSources = document.getElementById('btnManageFindScriptsSources');
         elements.findScriptsSourcesPanel = document.getElementById('findScriptsSourcesPanel');
         elements.findScriptsCustomSources = document.getElementById('findScriptsCustomSources');
@@ -15076,11 +15077,18 @@
     // =========================================
     // Find Scripts
     // =========================================
-    const findScriptsState = { page: 1, query: '', source: 'greasyfork', loading: false };
+    const findScriptsState = { page: 1, query: '', source: 'greasyfork', loading: false, sourceHealth: Object.create(null) };
     // Requested page size for Find Scripts sources; the "Next" button shows when
     // a full page comes back. Must match the per-source limit actually requested
     // (OpenUserJS limit / GreasyFork per_page) or pagination breaks.
     const FIND_RESULTS_PAGE_SIZE = 25;
+    const FIND_SCRIPTS_HEALTH_LABELS = Object.freeze({
+        unknown: 'Not checked',
+        ok: 'Ready',
+        challenged: 'Challenge',
+        unreachable: 'Offline',
+        'http-error': 'HTTP error'
+    });
 
     function getFindScriptsSourceSettings() {
         if (typeof FindScriptSources === 'undefined') {
@@ -15101,6 +15109,85 @@
             ];
         }
         return FindScriptSources.getEnabledFindScriptSources(getFindScriptsSourceSettings());
+    }
+
+    function getFindScriptsHealthLabel(state) {
+        const key = FIND_SCRIPTS_HEALTH_LABELS[state] ? `findScriptsSourceHealth${state === 'http-error' ? 'HttpError' : state[0].toUpperCase() + state.slice(1)}` : '';
+        return key ? tDashboard(key, FIND_SCRIPTS_HEALTH_LABELS[state]) : FIND_SCRIPTS_HEALTH_LABELS.unknown;
+    }
+
+    function renderFindScriptsSourceHealth() {
+        const container = elements.findScriptsSourceHealth;
+        if (!container) return;
+        const sources = getEnabledFindScriptsSources();
+        container.replaceChildren();
+        if (!sources.length) {
+            const empty = document.createElement('span');
+            empty.className = 'find-scripts-health-empty';
+            empty.textContent = 'No sources enabled';
+            container.appendChild(empty);
+            return;
+        }
+        for (const source of sources) {
+            const health = findScriptsState.sourceHealth[source.id] || {
+                state: 'unknown',
+                kind: source.kind === 'builtin-external' || source.kind === 'custom-external' ? 'external' : 'ok',
+                message: source.kind === 'builtin-external' || source.kind === 'custom-external'
+                    ? 'Opens in a new tab; no in-panel health check.'
+                    : 'Run a search to check this catalog.',
+                host: '',
+                detail: ''
+            };
+            const item = document.createElement('span');
+            item.className = `find-scripts-health-item ${health.state}`;
+            item.dataset.sourceHealth = source.id;
+            item.dataset.healthState = health.state;
+            item.title = health.message;
+            item.setAttribute('aria-label', `${source.label}: ${getFindScriptsHealthLabel(health.state)}. ${health.message}`);
+
+            const dot = document.createElement('span');
+            dot.className = 'find-scripts-health-dot';
+            dot.setAttribute('aria-hidden', 'true');
+            const name = document.createElement('strong');
+            name.textContent = source.label;
+            const stateLabel = document.createElement('span');
+            stateLabel.className = 'find-scripts-health-state';
+            stateLabel.textContent = getFindScriptsHealthLabel(health.state);
+            item.append(dot, name, stateLabel);
+            container.appendChild(item);
+        }
+    }
+
+    function recordFindScriptsSourceHealth(source, health) {
+        findScriptsState.sourceHealth[source] = health;
+        renderFindScriptsSourceHealth();
+        return health;
+    }
+
+    function classifyFindScriptsSourceResponse(options) {
+        if (typeof FindScriptSources !== 'undefined' && typeof FindScriptSources.classifyFindScriptsSourceResponse === 'function') {
+            return FindScriptSources.classifyFindScriptsSourceResponse(options);
+        }
+        return {
+            state: options?.status >= 400 ? 'http-error' : 'ok',
+            kind: options?.status >= 400 ? 'http-status' : 'ok',
+            message: options?.status >= 400 ? `Catalog returned HTTP ${options.status}.` : 'Catalog is reachable.',
+            host: '',
+            detail: ''
+        };
+    }
+
+    function classifyFindScriptsSourceError(url, error, label) {
+        if (typeof FindScriptSources !== 'undefined' && typeof FindScriptSources.classifyFindScriptsSourceError === 'function') {
+            return FindScriptSources.classifyFindScriptsSourceError(url, error, label);
+        }
+        return {
+            state: 'unreachable',
+            kind: 'transport',
+            message: `${label || 'Catalog'} is unreachable. ${error?.message || 'The request failed.'}`,
+            host: '',
+            detail: error?.message || ''
+        };
     }
 
     function setFindScriptsCustomError(message = '') {
@@ -15168,6 +15255,7 @@
                 ? `${sources.length} source${sources.length === 1 ? '' : 's'} enabled${customCount ? ` · ${customCount} custom` : ''}`
                 : 'No search sources enabled. Manage sources to continue.';
         }
+        renderFindScriptsSourceHealth();
 
         document.querySelectorAll('[data-find-builtin-source]').forEach(input => {
             const id = input.dataset.findBuiltinSource;
@@ -15423,10 +15511,11 @@
                 await searchExternal(result.url, sourceDescriptor.label);
             }
         } catch (e) {
+            const health = e?.findScriptsHealth || findScriptsState.sourceHealth[source];
             renderFindScriptsState(
                 'error',
                 'Search failed',
-                `${getFindScriptsSourceLabel(source)} did not return results. ${e?.message || 'Try again or switch sources.'}`,
+                health?.message || `${getFindScriptsSourceLabel(source)} did not return results. ${e?.message || 'Try again or switch sources.'}`,
                 { actionLabel: 'Try Again', action: () => searchScripts(page) }
             );
         } finally {
@@ -15440,6 +15529,70 @@
         closeFindScripts();
     }
 
+    function findScriptsHealthError(health) {
+        const error = new Error(health?.message || 'Catalog request failed.');
+        error.findScriptsHealth = health;
+        return error;
+    }
+
+    async function fetchFindScriptsCatalog(source, url, label) {
+        let resp;
+        try {
+            resp = await fetchWithTimeout(url, {}, 15_000, `${label} search`);
+        } catch (error) {
+            const health = recordFindScriptsSourceHealth(
+                source,
+                classifyFindScriptsSourceError(url, error, label)
+            );
+            throw findScriptsHealthError(health);
+        }
+
+        let body = '';
+        try {
+            body = await resp.text();
+        } catch (error) {
+            const health = recordFindScriptsSourceHealth(
+                source,
+                classifyFindScriptsSourceError(url, error, label)
+            );
+            throw findScriptsHealthError(health);
+        }
+
+        if (!resp.ok) {
+            const health = recordFindScriptsSourceHealth(source, classifyFindScriptsSourceResponse({
+                url,
+                status: resp.status,
+                contentType: resp.headers.get('content-type'),
+                body,
+                label
+            }));
+            throw findScriptsHealthError(health);
+        }
+
+        let payload;
+        try {
+            payload = JSON.parse(body);
+        } catch (error) {
+            const health = recordFindScriptsSourceHealth(source, classifyFindScriptsSourceResponse({
+                url,
+                status: resp.status,
+                contentType: resp.headers.get('content-type'),
+                body,
+                parseError: error?.message || 'Invalid JSON response',
+                label
+            }));
+            throw findScriptsHealthError(health);
+        }
+
+        recordFindScriptsSourceHealth(source, classifyFindScriptsSourceResponse({
+            url,
+            status: resp.status,
+            contentType: resp.headers.get('content-type'),
+            label
+        }));
+        return payload;
+    }
+
     async function searchGreasyFork(query, page) {
         // Detect if query looks like a domain
         const isDomain = /^[a-zA-Z0-9]([a-zA-Z0-9-]*\.)+[a-zA-Z]{2,}$/.test(query);
@@ -15450,12 +15603,10 @@
             apiUrl = `https://api.greasyfork.org/en/scripts.json?q=${encodeURIComponent(query)}&page=${page}&per_page=${FIND_RESULTS_PAGE_SIZE}`;
         }
 
-        const resp = await fetchWithTimeout(apiUrl, {}, 15_000, 'Greasy Fork search');
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const scripts = await resp.json();
+        const scripts = await fetchFindScriptsCatalog('greasyfork', apiUrl, 'Greasy Fork');
 
         if (!scripts || scripts.length === 0) {
-            renderFindScriptsState('empty', 'No scripts found', `GreasyFork has no results for "${query}". Try a broader keyword or switch sources.`);
+            renderFindScriptsState('empty', 'No scripts found', `GreasyFork returned no results for "${query}". Try a broader keyword or switch sources.`);
             return;
         }
 
@@ -15465,12 +15616,10 @@
     async function searchOpenUserJS(query, page) {
         // OpenUserJS has a JSON API at /api/script/list
         const apiUrl = `https://openuserjs.org/api/script/list?q=${encodeURIComponent(query)}&p=${page}&limit=${FIND_RESULTS_PAGE_SIZE}`;
-        const resp = await fetchWithTimeout(apiUrl, {}, 15_000, 'OpenUserJS search');
-        if (!resp.ok) throw new Error(`OpenUserJS returned HTTP ${resp.status}. Try again or choose another source.`);
-        const data = await resp.json();
+        const data = await fetchFindScriptsCatalog('openuserjs', apiUrl, 'OpenUserJS');
         const scripts = data?.scripts || data || [];
         if (!Array.isArray(scripts) || scripts.length === 0) {
-            renderFindScriptsState('empty', 'No scripts found', `OpenUserJS has no results for "${query}". Try a broader keyword or switch sources.`);
+            renderFindScriptsState('empty', 'No scripts found', `OpenUserJS returned no results for "${query}". Try a broader keyword or switch sources.`);
             return;
         }
         // Normalize to same format as GreasyFork results

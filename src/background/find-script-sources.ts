@@ -2,6 +2,13 @@
 // Find Scripts source registry
 // ============================================================================
 
+import {
+  classifyFetchError,
+  classifyRemoteResponse,
+  looksLikeHostChallenge,
+} from './remote-response-classifier';
+import type { RemoteFailure } from './remote-response-classifier';
+
 export type BuiltinFindScriptsSourceId = 'greasyfork' | 'openuserjs' | 'github';
 
 export interface FindScriptsCustomSource {
@@ -33,6 +40,25 @@ export type CustomSourceUrlResult =
   | { ok: true; url: string }
   | { ok: false; error: string };
 
+export type FindScriptsSourceHealthState = 'unknown' | 'ok' | 'challenged' | 'unreachable' | 'http-error';
+
+export type FindScriptsSourceHealthKind =
+  | 'ok'
+  | 'host-challenge'
+  | 'transport'
+  | 'http-status'
+  | 'not-a-userscript'
+  | 'parse-error'
+  | 'external';
+
+export interface FindScriptsSourceHealth {
+  state: FindScriptsSourceHealthState;
+  kind: FindScriptsSourceHealthKind;
+  message: string;
+  host: string;
+  detail: string;
+}
+
 const MAX_CUSTOM_SOURCES = 10;
 const ALLOWED_TEMPLATE_TOKENS = new Set(['query', 'page']);
 
@@ -49,6 +75,82 @@ export const DEFAULT_FIND_SCRIPT_SOURCE_SETTINGS: FindScriptsSourceSettings = Ob
 
 function cleanText(value: unknown, maxLength: number): string {
   return typeof value === 'string' ? value.trim().slice(0, maxLength) : '';
+}
+
+function healthySource(label: string, host = ''): FindScriptsSourceHealth {
+  return {
+    state: 'ok',
+    kind: 'ok',
+    host,
+    detail: '',
+    message: `${label} is reachable and returned a catalog response.`,
+  };
+}
+
+function mapRemoteFailure(failure: RemoteFailure): FindScriptsSourceHealth {
+  const state: FindScriptsSourceHealthState = failure.kind === 'host-challenge'
+    ? 'challenged'
+    : failure.kind === 'transport'
+      ? 'unreachable'
+      : 'http-error';
+  return {
+    state,
+    kind: failure.kind,
+    message: failure.message,
+    host: failure.host,
+    detail: failure.detail,
+  };
+}
+
+/**
+ * Classify a catalog response without treating a healthy JSON payload as a
+ * userscript body. The shared remote classifier is intentionally userscript-
+ * aware, so only HTTP errors, HTML/challenge responses, and parse failures are
+ * inspected here; a normal JSON catalog is a healthy response.
+ */
+export function classifyFindScriptsSourceResponse(options: {
+  url?: unknown;
+  status?: unknown;
+  contentType?: unknown;
+  body?: unknown;
+  parseError?: unknown;
+  label?: string;
+}): FindScriptsSourceHealth {
+  const label = cleanText(options.label, 80) || 'Catalog';
+  const status = Number(options.status);
+  const body = typeof options.body === 'string' ? options.body : '';
+  const contentType = String(options.contentType || '');
+  const inspectBody = Boolean(options.parseError)
+    || (Number.isFinite(status) && status >= 400)
+    || /text\/html/i.test(contentType)
+    || looksLikeHostChallenge(body, status);
+  const failure = classifyRemoteResponse({
+    url: options.url,
+    status: options.status,
+    contentType,
+    body: inspectBody ? body : undefined,
+    parseError: options.parseError,
+    label,
+  });
+  return failure ? mapRemoteFailure(failure) : healthySource(label, getHost(options.url));
+}
+
+/** Classify a catalog fetch that failed before a response arrived. */
+export function classifyFindScriptsSourceError(
+  url: unknown,
+  error: unknown,
+  label = 'Catalog',
+): FindScriptsSourceHealth {
+  const cleanLabel = cleanText(label, 80) || 'Catalog';
+  return mapRemoteFailure(classifyFetchError(url, error, cleanLabel));
+}
+
+function getHost(url: unknown): string {
+  try {
+    return new URL(String(url || '')).host || '';
+  } catch {
+    return '';
+  }
 }
 
 function stableSourceId(label: string, template: string): string {
@@ -182,6 +284,8 @@ export function buildCustomFindScriptSourceUrl(sourceInput: unknown, query: unkn
 
 export const FindScriptSources = Object.freeze({
   BUILTIN_FIND_SCRIPT_SOURCES,
+  classifyFindScriptsSourceError,
+  classifyFindScriptsSourceResponse,
   DEFAULT_FIND_SCRIPT_SOURCE_SETTINGS,
   buildCustomFindScriptSourceUrl,
   getEnabledFindScriptSources,

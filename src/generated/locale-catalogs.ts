@@ -1861,6 +1861,12 @@ export const localeCatalogs = {
     "findScriptsPlaceholder": "Search by domain or keyword (e.g. youtube.com, dark mode)...",
     "findScriptsAria": "Search userscripts by domain or keyword",
     "findScriptsSourceAria": "Choose script search source",
+    "findScriptsSourceHealthLabel": "Source health",
+    "findScriptsSourceHealthUnknown": "Not checked",
+    "findScriptsSourceHealthOk": "Ready",
+    "findScriptsSourceHealthChallenged": "Challenge",
+    "findScriptsSourceHealthUnreachable": "Offline",
+    "findScriptsSourceHealthHttpError": "HTTP error",
     "manageFindScriptsSources": "Manage sources",
     "findScriptsBuiltInDirectories": "Built-in directories",
     "findScriptsCustomCatalogs": "Custom catalog searches",
@@ -3237,15 +3243,15 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 43,
     "translatedRuntimeMessages": 43,
-    "totalRuntimeMessages": 1985
+    "totalRuntimeMessages": 1991
   },
   "en": {
     "name": "English",
     "direction": "ltr",
     "translationStatus": "complete",
-    "runtimeCoverageBaseline": 1985,
-    "translatedRuntimeMessages": 1985,
-    "totalRuntimeMessages": 1985
+    "runtimeCoverageBaseline": 1991,
+    "translatedRuntimeMessages": 1991,
+    "totalRuntimeMessages": 1991
   },
   "es": {
     "name": "Español",
@@ -3253,7 +3259,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 45,
     "translatedRuntimeMessages": 45,
-    "totalRuntimeMessages": 1985
+    "totalRuntimeMessages": 1991
   },
   "fr": {
     "name": "Français",
@@ -3261,7 +3267,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 43,
     "translatedRuntimeMessages": 43,
-    "totalRuntimeMessages": 1985
+    "totalRuntimeMessages": 1991
   },
   "he": {
     "name": "עברית",
@@ -3269,7 +3275,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 58,
     "translatedRuntimeMessages": 58,
-    "totalRuntimeMessages": 1985
+    "totalRuntimeMessages": 1991
   },
   "ja": {
     "name": "日本語",
@@ -3277,7 +3283,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 71,
     "translatedRuntimeMessages": 71,
-    "totalRuntimeMessages": 1985
+    "totalRuntimeMessages": 1991
   },
   "pt": {
     "name": "Português",
@@ -3285,7 +3291,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 42,
     "translatedRuntimeMessages": 42,
-    "totalRuntimeMessages": 1985
+    "totalRuntimeMessages": 1991
   },
   "ru": {
     "name": "Русский",
@@ -3293,7 +3299,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 117,
     "translatedRuntimeMessages": 117,
-    "totalRuntimeMessages": 1985
+    "totalRuntimeMessages": 1991
   },
   "zh": {
     "name": "中文",
@@ -3301,7 +3307,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 46,
     "translatedRuntimeMessages": 46,
-    "totalRuntimeMessages": 1985
+    "totalRuntimeMessages": 1991
   }
 } as const;
 

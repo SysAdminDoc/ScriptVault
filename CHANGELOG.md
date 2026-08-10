@@ -28,6 +28,9 @@ All notable changes to ScriptVault will be documented in this file.
 - Added a headless service-worker cold-start gate covering empty and seeded
   1,000-script profiles, with p50/p99 JSON reports and release-preflight
   enforcement.
+- Added a compact per-source health rail to Find Scripts, distinguishing a
+  healthy empty catalog from browser challenges, HTTP refusals, and unreachable
+  hosts with actionable classifier messages.
 - Added a compact first-run setup tab that probes live `userScripts` access,
   deep-links to the browser's extension details when setup is required, and
   stays closed on extension updates.

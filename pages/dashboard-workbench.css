@@ -59,6 +59,82 @@ html,
   color: var(--sv-text-soft);
 }
 
+.find-scripts-source-health {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  overflow: hidden;
+}
+
+.find-scripts-health-item {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 5px;
+  border: 1px solid color-mix(in srgb, var(--sv-border) 78%, transparent);
+  border-radius: 8px;
+  color: var(--sv-text-muted);
+  font-size: 0.625rem;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.find-scripts-health-item strong {
+  max-width: 8ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.find-scripts-health-state {
+  color: var(--sv-text-soft);
+}
+
+.find-scripts-health-dot {
+  width: 5px;
+  height: 5px;
+  flex: 0 0 auto;
+  border-radius: 4px;
+  background: var(--sv-text-muted);
+}
+
+.find-scripts-health-item.ok {
+  border-color: color-mix(in srgb, var(--sv-accent) 45%, var(--sv-border));
+  color: var(--sv-accent);
+}
+
+.find-scripts-health-item.ok .find-scripts-health-dot {
+  background: var(--sv-accent);
+}
+
+.find-scripts-health-item.challenged,
+.find-scripts-health-item.http-error {
+  border-color: color-mix(in srgb, var(--sv-warning) 50%, var(--sv-border));
+  color: var(--sv-warning-text);
+}
+
+.find-scripts-health-item.challenged .find-scripts-health-dot,
+.find-scripts-health-item.http-error .find-scripts-health-dot {
+  background: var(--sv-warning);
+}
+
+.find-scripts-health-item.unreachable {
+  border-color: color-mix(in srgb, var(--sv-danger) 50%, var(--sv-border));
+  color: var(--sv-danger);
+}
+
+.find-scripts-health-item.unreachable .find-scripts-health-dot {
+  background: var(--sv-danger);
+}
+
+.find-scripts-health-empty {
+  color: var(--sv-text-muted);
+  font-size: 0.625rem;
+}
+
 .sv-workbench-statusbar #svFooterUpdateStatus {
   color: var(--sv-warning-text);
 }

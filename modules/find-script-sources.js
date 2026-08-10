@@ -32,6 +32,8 @@ const FindScriptSources = (() => {
     DEFAULT_FIND_SCRIPT_SOURCE_SETTINGS: () => DEFAULT_FIND_SCRIPT_SOURCE_SETTINGS,
     FindScriptSources: () => FindScriptSources,
     buildCustomFindScriptSourceUrl: () => buildCustomFindScriptSourceUrl,
+    classifyFindScriptsSourceError: () => classifyFindScriptsSourceError,
+    classifyFindScriptsSourceResponse: () => classifyFindScriptsSourceResponse,
     default: () => find_script_sources_default,
     getEnabledFindScriptSources: () => getEnabledFindScriptSources,
     normalizeFindScriptSourceSettings: () => normalizeFindScriptSourceSettings,
@@ -39,6 +41,136 @@ const FindScriptSources = (() => {
     validateCustomFindScriptSource: () => validateCustomFindScriptSource
   });
   module.exports = __toCommonJS(find_script_sources_exports);
+
+  // src/background/remote-response-classifier.ts
+  var CHALLENGE_MARKERS = [
+    /just a moment/i,
+    /cf[-_]?chl[-_]?(?:opt|jschl|tk)/i,
+    /cf-browser-verification/i,
+    /challenge-platform/i,
+    /_cf_chl_/i,
+    /attention required!/i,
+    /checking your browser before accessing/i,
+    /enable javascript and cookies to continue/i,
+    /ddos[- ]protection by/i,
+    /<title>\s*access denied/i
+  ];
+  var TRANSPORT_MARKERS = [
+    /failed to fetch/i,
+    /networkerror/i,
+    /err_(?:connection|name_not_resolved|internet_disconnected|timed_out|cert|ssl)/i,
+    /certificate/i,
+    /\bcert_/i,
+    /ssl|tls/i,
+    /getaddrinfo|enotfound|econnrefused|econnreset|etimedout|eai_again/i,
+    /dns/i,
+    /timed out/i,
+    /aborted/i
+  ];
+  function hostOf(url) {
+    try {
+      return new URL(String(url || "")).host || "";
+    } catch {
+      return "";
+    }
+  }
+  function firstBytes(body, limit = 4096) {
+    return typeof body === "string" ? body.slice(0, limit) : "";
+  }
+  function looksLikeHtml(body) {
+    const head = firstBytes(body).trimStart();
+    if (!head) return false;
+    return /^<(?:!doctype\s+html|html|head|body|meta|script[\s>]|title[\s>])/i.test(head) || /<html[\s>]/i.test(head);
+  }
+  function looksLikeHostChallenge(body, status) {
+    const head = firstBytes(body);
+    if (!head) return false;
+    if (CHALLENGE_MARKERS.some((marker) => marker.test(head))) return true;
+    const code = Number(status);
+    return (code === 403 || code === 429 || code === 503) && looksLikeHtml(head);
+  }
+  function isTransportError(error) {
+    const text = error instanceof Error ? `${error.name || ""} ${error.message || ""}` : String(error || "");
+    if (!text.trim()) return false;
+    return TRANSPORT_MARKERS.some((marker) => marker.test(text));
+  }
+  function classifyFetchError(url, error, label = "Update") {
+    const host = hostOf(url);
+    const detail = error instanceof Error ? error.message || String(error) : String(error || "");
+    const where = host ? ` from ${host}` : "";
+    if (isTransportError(error)) {
+      return {
+        kind: "transport",
+        hostLevel: true,
+        host,
+        detail,
+        message: `${label} could not reach${where ? where.replace(" from", "") : " the update host"}: ${detail || "the connection failed"}. This is a problem with the host or the network, not with the script.`
+      };
+    }
+    return {
+      kind: "transport",
+      hostLevel: true,
+      host,
+      detail,
+      message: `${label} request${where} failed: ${detail || "unknown error"}. This is a problem with the host, not with the script.`
+    };
+  }
+  function classifyRemoteResponse(options) {
+    const label = options.label || "Update";
+    const host = hostOf(options.url);
+    const where = host ? ` from ${host}` : "";
+    const body = options.body;
+    const status = Number(options.status);
+    if (looksLikeHostChallenge(body, options.status)) {
+      return {
+        kind: "host-challenge",
+        hostLevel: true,
+        host,
+        detail: firstBytes(body, 200),
+        message: `${host || "The update host"} returned a browser-check page instead of the script. Open ${host || "the host"} in a tab once to clear the challenge, then check again. The script itself is unchanged.`
+      };
+    }
+    if (Number.isFinite(status) && status >= 400) {
+      return {
+        kind: "http-status",
+        hostLevel: true,
+        host,
+        detail: `HTTP ${status}`,
+        message: `${label} host${where} answered HTTP ${status}. Nothing is wrong with the installed script.`
+      };
+    }
+    const declaredHtml = /text\/html/i.test(String(options.contentType || ""));
+    if (declaredHtml || looksLikeHtml(body)) {
+      return {
+        kind: "not-a-userscript",
+        hostLevel: true,
+        host,
+        detail: firstBytes(body, 200),
+        message: `${host || "The update host"} served a web page instead of a userscript. The update URL may have moved or now needs a login. The installed script is untouched.`
+      };
+    }
+    if (typeof body === "string" && !body.includes("==UserScript==")) {
+      return {
+        kind: "not-a-userscript",
+        hostLevel: true,
+        host,
+        detail: firstBytes(body, 200),
+        message: `The response${where} is not a userscript (no metadata block). The update URL may be wrong or the download was truncated.`
+      };
+    }
+    if (options.parseError) {
+      return {
+        kind: "parse-error",
+        hostLevel: false,
+        host,
+        detail: String(options.parseError),
+        message: `The updated script${where} could not be parsed: ${String(options.parseError)}`
+      };
+    }
+    return null;
+  }
+
+  // src/background/find-script-sources.ts
   var MAX_CUSTOM_SOURCES = 10;
   var ALLOWED_TEMPLATE_TOKENS = /* @__PURE__ */ new Set(["query", "page"]);
   var BUILTIN_FIND_SCRIPT_SOURCES = Object.freeze([
@@ -52,6 +184,52 @@ const FindScriptSources = (() => {
   });
   function cleanText(value, maxLength) {
     return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
+  }
+  function healthySource(label, host = "") {
+    return {
+      state: "ok",
+      kind: "ok",
+      host,
+      detail: "",
+      message: `${label} is reachable and returned a catalog response.`
+    };
+  }
+  function mapRemoteFailure(failure) {
+    const state = failure.kind === "host-challenge" ? "challenged" : failure.kind === "transport" ? "unreachable" : "http-error";
+    return {
+      state,
+      kind: failure.kind,
+      message: failure.message,
+      host: failure.host,
+      detail: failure.detail
+    };
+  }
+  function classifyFindScriptsSourceResponse(options) {
+    const label = cleanText(options.label, 80) || "Catalog";
+    const status = Number(options.status);
+    const body = typeof options.body === "string" ? options.body : "";
+    const contentType = String(options.contentType || "");
+    const inspectBody = Boolean(options.parseError) || Number.isFinite(status) && status >= 400 || /text\/html/i.test(contentType) || looksLikeHostChallenge(body, status);
+    const failure = classifyRemoteResponse({
+      url: options.url,
+      status: options.status,
+      contentType,
+      body: inspectBody ? body : void 0,
+      parseError: options.parseError,
+      label
+    });
+    return failure ? mapRemoteFailure(failure) : healthySource(label, getHost(options.url));
+  }
+  function classifyFindScriptsSourceError(url, error, label = "Catalog") {
+    const cleanLabel = cleanText(label, 80) || "Catalog";
+    return mapRemoteFailure(classifyFetchError(url, error, cleanLabel));
+  }
+  function getHost(url) {
+    try {
+      return new URL(String(url || "")).host || "";
+    } catch {
+      return "";
+    }
   }
   function stableSourceId(label, template) {
     const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 28) || "catalog";
@@ -158,6 +336,8 @@ const FindScriptSources = (() => {
   }
   var FindScriptSources = Object.freeze({
     BUILTIN_FIND_SCRIPT_SOURCES,
+    classifyFindScriptsSourceError,
+    classifyFindScriptsSourceResponse,
     DEFAULT_FIND_SCRIPT_SOURCE_SETTINGS,
     buildCustomFindScriptSourceUrl,
     getEnabledFindScriptSources,

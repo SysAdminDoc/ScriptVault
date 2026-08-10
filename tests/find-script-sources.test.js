@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
   buildCustomFindScriptSourceUrl,
+  classifyFindScriptsSourceError,
+  classifyFindScriptsSourceResponse,
   getEnabledFindScriptSources,
   normalizeFindScriptSourceSettings,
   resolveFindScriptSource,
@@ -93,5 +95,57 @@ describe('Find Scripts source registry', () => {
     expect(dashboardJs).toContain("'Search failed'");
     expect(dashboardJs).toContain("actionLabel: 'Try Again'");
     expect(dashboardJs).not.toContain('// Fallback to external');
+  });
+
+  it('distinguishes a challenged catalog from a healthy empty catalog', () => {
+    const challenged = classifyFindScriptsSourceResponse({
+      url: 'https://api.greasyfork.org/en/scripts.json?q=video',
+      status: 403,
+      contentType: 'text/html',
+      body: '<!doctype html><title>Just a moment...</title><p>Checking your browser before accessing</p>',
+      label: 'GreasyFork',
+    });
+    expect(challenged.state).toBe('challenged');
+    expect(challenged.kind).toBe('host-challenge');
+    expect(challenged.message).toContain('browser-check page');
+
+    const empty = classifyFindScriptsSourceResponse({
+      url: 'https://api.greasyfork.org/en/scripts.json?q=missing',
+      status: 200,
+      contentType: 'application/json',
+      body: '[]',
+      label: 'GreasyFork',
+    });
+    expect(empty.state).toBe('ok');
+    expect(empty.message).toContain('reachable');
+  });
+
+  it('reports transport failures as unreachable and ordinary refusals as HTTP errors', () => {
+    const unreachable = classifyFindScriptsSourceError(
+      'https://openuserjs.org/api/script/list?q=video',
+      new TypeError('Failed to fetch'),
+      'OpenUserJS',
+    );
+    expect(unreachable.state).toBe('unreachable');
+    expect(unreachable.kind).toBe('transport');
+    expect(unreachable.message).toContain('openuserjs.org');
+
+    const refused = classifyFindScriptsSourceResponse({
+      url: 'https://openuserjs.org/api/script/list?q=video',
+      status: 429,
+      contentType: 'application/json',
+      body: '{"error":"rate limited"}',
+      label: 'OpenUserJS',
+    });
+    expect(refused.state).toBe('http-error');
+    expect(refused.kind).toBe('http-status');
+    expect(refused.message).toContain('HTTP 429');
+  });
+
+  it('renders a compact health rail in the Find Scripts surface', () => {
+    expect(dashboardHtml).toContain('id="findScriptsSourceHealth"');
+    expect(dashboardHtml).toContain('data-i18n-aria-label="findScriptsSourceHealthLabel"');
+    expect(dashboardJs).toContain('dataset.sourceHealth');
+    expect(dashboardJs).toContain('findScriptsHealthError');
   });
 });

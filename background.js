@@ -6904,6 +6904,12 @@ const I18n = (() => {
       "findScriptsPlaceholder": "Search by domain or keyword (e.g. youtube.com, dark mode)...",
       "findScriptsAria": "Search userscripts by domain or keyword",
       "findScriptsSourceAria": "Choose script search source",
+      "findScriptsSourceHealthLabel": "Source health",
+      "findScriptsSourceHealthUnknown": "Not checked",
+      "findScriptsSourceHealthOk": "Ready",
+      "findScriptsSourceHealthChallenged": "Challenge",
+      "findScriptsSourceHealthUnreachable": "Offline",
+      "findScriptsSourceHealthHttpError": "HTTP error",
       "manageFindScriptsSources": "Manage sources",
       "findScriptsBuiltInDirectories": "Built-in directories",
       "findScriptsCustomCatalogs": "Custom catalog searches",
@@ -7523,15 +7529,15 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 43,
       "translatedRuntimeMessages": 43,
-      "totalRuntimeMessages": 1985
+      "totalRuntimeMessages": 1991
     },
     "en": {
       "name": "English",
       "direction": "ltr",
       "translationStatus": "complete",
-      "runtimeCoverageBaseline": 1985,
-      "translatedRuntimeMessages": 1985,
-      "totalRuntimeMessages": 1985
+      "runtimeCoverageBaseline": 1991,
+      "translatedRuntimeMessages": 1991,
+      "totalRuntimeMessages": 1991
     },
     "es": {
       "name": "Espa\xF1ol",
@@ -7539,7 +7545,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 45,
       "translatedRuntimeMessages": 45,
-      "totalRuntimeMessages": 1985
+      "totalRuntimeMessages": 1991
     },
     "fr": {
       "name": "Fran\xE7ais",
@@ -7547,7 +7553,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 43,
       "translatedRuntimeMessages": 43,
-      "totalRuntimeMessages": 1985
+      "totalRuntimeMessages": 1991
     },
     "he": {
       "name": "\u05E2\u05D1\u05E8\u05D9\u05EA",
@@ -7555,7 +7561,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 58,
       "translatedRuntimeMessages": 58,
-      "totalRuntimeMessages": 1985
+      "totalRuntimeMessages": 1991
     },
     "ja": {
       "name": "\u65E5\u672C\u8A9E",
@@ -7563,7 +7569,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 71,
       "translatedRuntimeMessages": 71,
-      "totalRuntimeMessages": 1985
+      "totalRuntimeMessages": 1991
     },
     "pt": {
       "name": "Portugu\xEAs",
@@ -7571,7 +7577,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 42,
       "translatedRuntimeMessages": 42,
-      "totalRuntimeMessages": 1985
+      "totalRuntimeMessages": 1991
     },
     "ru": {
       "name": "\u0420\u0443\u0441\u0441\u043A\u0438\u0439",
@@ -7579,7 +7585,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 117,
       "translatedRuntimeMessages": 117,
-      "totalRuntimeMessages": 1985
+      "totalRuntimeMessages": 1991
     },
     "zh": {
       "name": "\u4E2D\u6587",
@@ -7587,7 +7593,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 46,
       "translatedRuntimeMessages": 46,
-      "totalRuntimeMessages": 1985
+      "totalRuntimeMessages": 1991
     }
   };
 
@@ -9278,6 +9284,15 @@ const StorageModule = (() => {
       chrome.tabs.query({ status: "complete" }).then((tabs) => {
         for (const tab of tabs) {
           const isOriginTab = senderTabId !== null && tab.id === senderTabId;
+          const sendDirectEvent = globalThis.__svSendUserScriptEvent;
+          const deliveredPrivately = typeof sendDirectEvent === "function" ? sendDirectEvent(tab.id, "valueChanged", {
+            scriptId,
+            key,
+            newValue,
+            hasValue: newValue !== void 0,
+            remote: !isOriginTab
+          }) : false;
+          if (deliveredPrivately) continue;
           const msg = {
             action: "valueChanged",
             data: { scriptId, key, oldValue, newValue, remote: !isOriginTab }
