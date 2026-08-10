@@ -6,6 +6,13 @@ const panelJs = readFileSync(resolve(process.cwd(), 'pages/devtools-panel.js'), 
 const panelHtml = readFileSync(resolve(process.cwd(), 'pages/devtools-panel.html'), 'utf8');
 
 describe('DevTools trace export', () => {
+  function exportPrivacyHelpers() {
+    const start = panelJs.indexOf('  const EXPORT_REDACTED');
+    const end = panelJs.indexOf('  function headerValue', start);
+    if (start < 0 || end < 0) throw new Error('DevTools export privacy block not found');
+    return new Function(`${panelJs.slice(start, end)}; return { sanitizeExportUrl, sanitizeExportText, sanitizeExportHeaders, sanitizeExecutionDocumentForExport };`)();
+  }
+
   it('defines an exportTrace function in devtools-panel.js', () => {
     expect(panelJs).toContain('function exportTrace()');
   });
@@ -46,7 +53,40 @@ describe('DevTools trace export', () => {
   it('resolves HAR response content type case-insensitively', () => {
     expect(panelJs).toContain('function headerValue(headers, name)');
     expect(panelJs).toContain('String(headerName).toLowerCase() === wanted');
-    expect(panelJs).toContain("mimeType: headerValue(e.responseHeaders, 'content-type') || 'text/plain'");
+    expect(panelJs).toContain("mimeType: sanitizeExportText(headerValue(e.responseHeaders, 'content-type') || 'text/plain', 256)");
     expect(panelJs).not.toContain("(e.responseHeaders || {})['content-type']");
+  });
+
+  it('redacts credentials and query strings while preserving useful URL context', () => {
+    const { sanitizeExportUrl, sanitizeExportText } = exportPrivacyHelpers();
+    expect(sanitizeExportUrl('https://user:password@example.test/path?token=secret#section')).toBe('https://example.test/path');
+    expect(sanitizeExportUrl('https://user:password@example.test/account?token=secret', 'document')).toBe('https://example.test');
+    expect(sanitizeExportText('request failed for https://example.test/path?api_key=secret Bearer abc123')).not.toContain('secret');
+    expect(sanitizeExportText('request failed for https://example.test/path?api_key=secret Bearer abc123')).not.toContain('abc123');
+  });
+
+  it('redacts sensitive headers and rebuilds execution documents from an allowlist', () => {
+    const { sanitizeExportHeaders, sanitizeExecutionDocumentForExport } = exportPrivacyHelpers();
+    expect(sanitizeExportHeaders({
+      Authorization: 'Bearer abc123',
+      Cookie: 'session=secret',
+      'X-Request-Id': 'safe-id',
+      Referer: 'https://private.example/account?token=secret',
+    })).toEqual([
+      { name: 'Authorization', value: '[REDACTED]' },
+      { name: 'Cookie', value: '[REDACTED]' },
+      { name: 'X-Request-Id', value: 'safe-id' },
+      { name: 'Referer', value: 'https://private.example/account' },
+    ]);
+    const safe = sanitizeExecutionDocumentForExport({
+      url: 'https://private.example/account?token=secret',
+      scriptIds: ['script-1'],
+      events: [{ type: 'error', url: 'https://private.example/account?token=secret', error: 'Bearer abc123' }],
+      unexpectedSource: 'userscript source should not be copied',
+    });
+    expect(safe.url).toBe('https://private.example');
+    expect(safe.events[0]).toMatchObject({ url: 'https://private.example', error: 'Bearer [REDACTED]' });
+    expect(JSON.stringify(safe)).not.toContain('secret');
+    expect(JSON.stringify(safe)).not.toContain('unexpectedSource');
   });
 });

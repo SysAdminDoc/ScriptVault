@@ -7,6 +7,9 @@ All notable changes to ScriptVault will be documented in this file.
 - Routed Public API list, status, presence, and install positioning through
   the authoritative IndexedDB-backed ScriptStorage instead of the retired
   `userscripts` storage blob.
+- Made DevTools HAR and trace exports privacy-safe by removing URL credentials,
+  query/hash data, sensitive headers, and raw document URLs/errors while
+  preserving diagnostic status, timing, and origin context.
 - Rejected unsafe public-install and webhook redirect hops before contacting
   internal or non-HTTPS targets, while preserving safe public redirects.
 - Routed privileged XHR, WebSocket, download, and audio events through an

@@ -718,6 +718,82 @@
     `;
   }
 
+  // Exports are user-controlled downloads, not an internal transport. Keep
+  // the useful diagnostic shape while making credentials and page identity
+  // harder to leak through a copied HAR/trace file.
+  const EXPORT_REDACTED = '[REDACTED]';
+  const EXPORT_SENSITIVE_HEADER = /(?:authorization|proxy-authorization|cookie|set-cookie|api[-_]?key|auth[-_]?token|access[-_]?token|refresh[-_]?token|session|secret|password|signature|csrf|jwt)/i;
+  const EXPORT_URL_HEADER_NAMES = new Set(['origin', 'referer', 'referrer', 'location', 'content-location']);
+
+  function sanitizeExportUrl(value, scope = 'network') {
+    const raw = String(value ?? '').trim();
+    if (!raw) return '';
+    try {
+      const parsed = new URL(raw);
+      if (['blob:', 'data:', 'filesystem:'].includes(parsed.protocol)) return EXPORT_REDACTED;
+      parsed.username = '';
+      parsed.password = '';
+      parsed.search = '';
+      parsed.hash = '';
+      if (scope === 'document') return parsed.origin && parsed.origin !== 'null' ? parsed.origin : EXPORT_REDACTED;
+      if (parsed.origin === 'null') return EXPORT_REDACTED;
+      return parsed.toString();
+    } catch (_) {
+      return raw.replace(/\/\/[^/?#@]+@/, '//').replace(/[?#].*$/, '');
+    }
+  }
+
+  function sanitizeExportText(value, maxLength = 500) {
+    let text = String(value ?? '');
+    text = text.replace(/\b(Bearer|Basic)\s+[^\s,;]+/gi, '$1 ' + EXPORT_REDACTED);
+    text = text.replace(/\b(api[-_]?key|token|secret|password|signature|session(?:id)?|authorization)\s*[:=]\s*[^\s,;]+/gi, '$1=' + EXPORT_REDACTED);
+    text = text.replace(/\bhttps?:\/\/[^\s"'<>]+/gi, url => sanitizeExportUrl(url));
+    return text.slice(0, maxLength);
+  }
+
+  function sanitizeExportHeaders(headers) {
+    if (!headers || typeof headers !== 'object') return [];
+    return Object.entries(headers).slice(0, 128).map(([name, value]) => {
+      const headerName = String(name).slice(0, 256);
+      const lowerName = headerName.toLowerCase();
+      const safeValue = EXPORT_SENSITIVE_HEADER.test(headerName)
+        ? EXPORT_REDACTED
+        : EXPORT_URL_HEADER_NAMES.has(lowerName)
+          ? sanitizeExportUrl(value)
+          : sanitizeExportText(value, 2048);
+      return { name: headerName, value: safeValue };
+    });
+  }
+
+  function sanitizeExecutionDocumentForExport(document = {}) {
+    const events = Array.isArray(document.events) ? document.events.slice(-100).map(event => ({
+      type: sanitizeExportText(event?.type, 64),
+      timestamp: Number.isFinite(event?.timestamp) ? Number(event.timestamp) : 0,
+      ...(event?.scriptId ? { scriptId: sanitizeExportText(event.scriptId, 256) } : {}),
+      ...(event?.url ? { url: sanitizeExportUrl(event.url, 'document') } : {}),
+      ...(Number.isFinite(event?.duration) ? { duration: Number(event.duration) } : {}),
+      ...(event?.error ? { error: sanitizeExportText(event.error) } : {}),
+    })) : [];
+    return {
+      identity: sanitizeExportText(document.identity, 256),
+      documentId: document.documentId ? sanitizeExportText(document.documentId, 256) : null,
+      topDocumentId: document.topDocumentId ? sanitizeExportText(document.topDocumentId, 256) : null,
+      frameId: Number.isFinite(document.frameId) ? Number(document.frameId) : 0,
+      url: sanitizeExportUrl(document.url, 'document'),
+      firstSeen: Number.isFinite(document.firstSeen) ? Number(document.firstSeen) : 0,
+      lastSeen: Number.isFinite(document.lastSeen) ? Number(document.lastSeen) : 0,
+      isCurrent: Boolean(document.isCurrent),
+      stale: Boolean(document.stale),
+      runs: Number.isFinite(document.runs) ? Number(document.runs) : 0,
+      errors: Number.isFinite(document.errors) ? Number(document.errors) : 0,
+      eventCount: Number.isFinite(document.eventCount) ? Number(document.eventCount) : events.length,
+      scriptIds: Array.isArray(document.scriptIds)
+        ? document.scriptIds.slice(0, 128).map(id => sanitizeExportText(id, 256))
+        : [],
+      events,
+    };
+  }
+
   function headerValue(headers, name) {
     if (!headers || !name) return '';
     const wanted = String(name).toLowerCase();
@@ -738,9 +814,9 @@
       time: e.duration || 0,
       request: {
         method: e.method || 'GET',
-        url: e.url || '',
+        url: sanitizeExportUrl(e.url),
         httpVersion: 'HTTP/1.1',
-        headers: Object.entries(e.requestHeaders || {}).map(([n, v]) => ({ name: n, value: String(v) })),
+        headers: sanitizeExportHeaders(e.requestHeaders),
         queryString: [],
         cookies: [],
         headersSize: -1,
@@ -748,18 +824,18 @@
       },
       response: {
         status: e.status || 0,
-        statusText: e.statusText || '',
+        statusText: sanitizeExportText(e.statusText || '', 256),
         httpVersion: 'HTTP/1.1',
-        headers: Object.entries(e.responseHeaders || {}).map(([n, v]) => ({ name: n, value: String(v) })),
+        headers: sanitizeExportHeaders(e.responseHeaders),
         cookies: [],
-        content: { size: e.responseSize || 0, mimeType: headerValue(e.responseHeaders, 'content-type') || 'text/plain' },
+        content: { size: e.responseSize || 0, mimeType: sanitizeExportText(headerValue(e.responseHeaders, 'content-type') || 'text/plain', 256) },
         redirectURL: '',
         headersSize: -1,
         bodySize: e.responseSize || -1
       },
       cache: {},
       timings: { send: 0, wait: e.duration || 0, receive: 0 },
-      comment: e.scriptName || ''
+      comment: sanitizeExportText(e.scriptName || '', 256)
     }));
 
     const har = { log: { version: '1.2', creator: { name: 'ScriptVault', version: chrome.runtime.getManifest().version }, entries } };
@@ -793,17 +869,17 @@
         id: e.id,
         timestamp: e.timestamp,
         method: e.method || 'GET',
-        url: e.url || '',
+        url: sanitizeExportUrl(e.url),
         status: e.status || 0,
         duration: e.duration || 0,
         responseSize: e.responseSize || 0,
-        scriptName: e.scriptName || '',
+        scriptName: sanitizeExportText(e.scriptName || '', 256),
         type: e.type || 'xmlhttpRequest',
-        error: e.error || null,
+        error: e.error ? sanitizeExportText(e.error) : null,
       })),
       execution: executionEntries.map(s => ({
         scriptId: s.id,
-        scriptName: s.meta?.name || s.id,
+        scriptName: sanitizeExportText(s.meta?.name || s.id, 256),
         runs: s.stats.runs || 0,
         avgTime: s.stats.avgTime != null ? s.stats.avgTime : (s.stats.totalTime / s.stats.runs),
         totalTime: s.stats.totalTime || 0,
@@ -812,7 +888,7 @@
         lastDocumentId: s.stats.lastDocumentId || null,
         lastFrameId: s.stats.lastFrameId ?? null,
       })),
-      documents: documentEntries,
+      documents: documentEntries.map(sanitizeExecutionDocumentForExport),
       summary: {
         totalRequests: netLog.length,
         totalErrors: netLog.filter(e => e.error || (e.status && e.status >= 400)).length,
