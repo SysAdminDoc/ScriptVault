@@ -332,6 +332,7 @@ ${mappedCode}
   // Channel ID for communication with content script bridge
   // Extension ID is injected at build time since chrome.runtime isn't available in USER_SCRIPT world
   const CHANNEL_ID = ${JSON.stringify('ScriptVault_' + extId)};
+  const USER_SCRIPT_EVENT_PORT_NAME = 'ScriptVault:privileged-events:v1';
 
   // console.log('[ScriptVault] Script initializing:', meta.name, 'Channel:', CHANNEL_ID);
 
@@ -422,7 +423,7 @@ ${mappedCode}
   let _valueChangeListenerId = 0;
 
   // Listen for messages from content script (for menu commands, value changes, and XHR events)
-  window.addEventListener('message', (event) => {
+  const __svNetworkBridgeListener = (event) => {
     if (event.source !== window) return;
     const msg = event.data;
     if (!msg || msg.channel !== CHANNEL_ID || msg.direction !== 'to-userscript') return;
@@ -626,7 +627,8 @@ ${mappedCode}
         _webSocketHandles.delete(msg.requestId);
       }
     }
-  });
+  };
+  window.addEventListener('message', __svNetworkBridgeListener);
 
   // Bridge ready state tracking
   let _bridgeReady = false;
@@ -2188,7 +2190,7 @@ ${mappedCode}
 
   // Event listener for notification/download/tab close events from background
   // Content.js forwards these with 'type' field (not 'action') and flat structure (not nested 'data')
-  window.addEventListener('message', function __svEventHandler(event) {
+  const __svEventBridgeListener = function __svEventHandler(event) {
     if (event.source !== window) return;
     if (!event.data || event.data.channel !== CHANNEL_ID || event.data.direction !== 'to-userscript') return;
 
@@ -2226,7 +2228,8 @@ ${mappedCode}
         _openedTabs.delete(tabId);
       }
     }
-  });
+  };
+  window.addEventListener('message', __svEventBridgeListener);
 
   // GM.* Promise-based API
   const GM = {
@@ -2528,6 +2531,46 @@ ${mappedCode}
     }
   };
   window.GM_audio = GM_audio;
+
+  // Privileged network/download/audio events use the authenticated user-script
+  // runtime port. The page-visible bridge remains only a sanitized compatibility
+  // fallback; it must never carry the request or script identity needed to route
+  // these callbacks.
+  function __svHandleDirectUserScriptEvent(message) {
+    if (!message || message.channel !== CHANNEL_ID || message.direction !== 'to-userscript') return;
+    const event = { source: window, data: message };
+    try { __svNetworkBridgeListener(event); } catch (_) {}
+    try { __svEventBridgeListener(event); } catch (_) {}
+    try { if (GM_audio._msgHandler) GM_audio._msgHandler(event); } catch (_) {}
+  }
+
+  function __svConnectUserScriptEventPort() {
+    if (typeof chrome === 'undefined' || !chrome.runtime || typeof chrome.runtime.connect !== 'function') return;
+    let port;
+    try {
+      port = chrome.runtime.connect({ name: USER_SCRIPT_EVENT_PORT_NAME });
+    } catch (_) {
+      return;
+    }
+    if (!port) return;
+    const onMessage = (message) => {
+      if (!message || message.type === 'ready') return;
+      __svHandleDirectUserScriptEvent(message);
+    };
+    try { port.onMessage?.addListener(onMessage); } catch (_) {}
+    try {
+      port.onDisconnect?.addListener(() => {
+        // The service worker can restart while the page remains alive. Reconnect
+        // once after the disconnect so callbacks recover without a page reload.
+        setTimeout(__svConnectUserScriptEventPort, 1000);
+      });
+    } catch (_) {}
+    try {
+      port.postMessage({ type: 'subscribe', scriptId, scriptAuthToken });
+    } catch (_) {}
+  }
+
+  __svConnectUserScriptEventPort();
 
   // ========== DOM HELPER FUNCTIONS ==========
   // These help userscripts handle DOM timing issues gracefully

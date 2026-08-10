@@ -436,6 +436,124 @@ GM_loadScript('https://cdn.example.com/fallback.js')
     }
   });
 
+  it('delivers XHR, WebSocket, download, and audio callbacks over the private event port', async () => {
+    const originalChrome = globalThis.chrome;
+    const postMessage = vi.spyOn(window, 'postMessage');
+    let directMessageListener;
+    const port = {
+      onMessage: { addListener: vi.fn(listener => { directMessageListener = listener; }) },
+      onDisconnect: { addListener: vi.fn() },
+      postMessage: vi.fn(),
+    };
+    const script = makeWrapperScript('');
+    script.meta.grant = ['GM_xmlhttpRequest', 'GM_webSocket', 'GM_download', 'GM_audio'];
+    const scriptId = script.id;
+    const extensionId = 'private-event-port-extension';
+    const sendMessage = vi.fn(async message => {
+      if (message.action === 'GM_xmlhttpRequest') return { requestId: 'xhr_direct' };
+      if (message.action === 'GM_xmlhttpRequest_result') return { done: false };
+      if (message.action === 'GM_webSocket') return { requestId: 'ws_direct', started: true };
+      if (message.action === 'GM_download') return { downloadId: 77 };
+      return {};
+    });
+    globalThis.chrome = {
+      runtime: {
+        id: extensionId,
+        getManifest: () => ({ version: '3.27.0' }),
+        sendMessage,
+        connect: vi.fn(() => port),
+      },
+    };
+
+    let xhrControl;
+    let socket;
+    try {
+      const wrapped = buildWrappedScript(script);
+      new Function(wrapped)();
+      await vi.waitFor(() => expect(directMessageListener).toBeTypeOf('function'));
+      expect(port.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'subscribe',
+        scriptId,
+      }));
+
+      let xhrFinalUrl;
+      xhrControl = window.GM_xmlhttpRequest({
+        url: 'https://cdn.example.com/request',
+        onreadystatechange: response => {
+          if (response.readyState === 2) xhrFinalUrl = response.finalUrl;
+        },
+      });
+      await vi.waitFor(() => expect(sendMessage).toHaveBeenCalledWith(expect.objectContaining({ action: 'GM_xmlhttpRequest' })));
+      directMessageListener({
+        channel: `ScriptVault_${extensionId}`,
+        direction: 'to-userscript',
+        type: 'xhrEvent',
+        requestId: 'xhr_direct',
+        scriptId,
+        eventType: 'readystatechange',
+        data: { readyState: 2, status: 200, finalUrl: 'https://private.example/redirect?secret=1' },
+      });
+      expect(xhrFinalUrl).toBe('https://private.example/redirect?secret=1');
+
+      let socketOpened = false;
+      socket = window.GM_webSocket({
+        url: 'wss://cdn.example.com/socket',
+        onopen: () => { socketOpened = true; },
+      });
+      await vi.waitFor(() => expect(sendMessage).toHaveBeenCalledWith(expect.objectContaining({ action: 'GM_webSocket' })));
+      await new Promise(resolve => setTimeout(resolve, 0));
+      directMessageListener({
+        channel: `ScriptVault_${extensionId}`,
+        direction: 'to-userscript',
+        type: 'webSocketEvent',
+        requestId: 'ws_direct',
+        scriptId,
+        eventType: 'open',
+        data: { protocol: 'scriptvault' },
+      });
+      expect(socketOpened).toBe(true);
+
+      let downloadLoaded;
+      window.GM_download({
+        url: 'https://cdn.example.com/file.txt',
+        name: 'file.txt',
+        onload: event => { downloadLoaded = event.url; },
+      });
+      await vi.waitFor(() => expect(sendMessage).toHaveBeenCalledWith(expect.objectContaining({ action: 'GM_download' })));
+      await new Promise(resolve => setTimeout(resolve, 0));
+      directMessageListener({
+        channel: `ScriptVault_${extensionId}`,
+        direction: 'to-userscript',
+        type: 'downloadEvent',
+        scriptId,
+        downloadId: 77,
+        eventType: 'load',
+        data: { url: 'https://cdn.example.com/file.txt' },
+      });
+      expect(downloadLoaded).toBe('https://cdn.example.com/file.txt');
+
+      let audioState;
+      window.GM_audio.addStateChangeListener(state => { audioState = state; }, vi.fn());
+      directMessageListener({
+        channel: `ScriptVault_${extensionId}`,
+        direction: 'to-userscript',
+        type: 'audioStateChanged',
+        data: { scriptId, muted: true, audible: false, reason: 'user' },
+      });
+      expect(audioState).toEqual({ muted: true, audible: false, reason: 'user' });
+      expect(postMessage).not.toHaveBeenCalled();
+    } finally {
+      try { xhrControl?.abort?.(); } catch (_) {}
+      try { socket?.close?.(); } catch (_) {}
+      globalThis.chrome = originalChrome;
+      postMessage.mockRestore();
+      delete window.GM_audio;
+      delete window.GM_webSocket;
+      delete window.GM_xmlhttpRequest;
+      delete window.GM_download;
+    }
+  });
+
   it('ignores cross-frame callback events and does not expose the raw script id in styles', async () => {
     const originalChrome = globalThis.chrome;
     const script = makeWrapperScript('');
@@ -547,6 +665,8 @@ GM_loadScript('https://cdn.example.com/fallback.js')
         requestId: 'xhr_1',
         scriptId: 'script_1',
         type: 'progress',
+        url: 'https://private.example/account?token=secret',
+        finalUrl: 'https://redirected.example/private?token=secret',
         response: 'secret-body',
         responseText: 'secret-text',
         responseHeaders: 'set-cookie: secret=1',
@@ -559,8 +679,15 @@ GM_loadScript('https://cdn.example.com/fallback.js')
       channel,
       direction: 'to-userscript',
       type: 'xhrEvent',
-      data: expect.objectContaining({ requestId: 'xhr_1', loaded: 10 }),
+      data: expect.objectContaining({ loaded: 10 }),
     });
+    expect(xhrPost).not.toHaveProperty('requestId');
+    expect(xhrPost).not.toHaveProperty('scriptId');
+    expect(xhrPost.data).not.toHaveProperty('requestId');
+    expect(xhrPost.data).not.toHaveProperty('scriptId');
+    expect(xhrPost.data).not.toHaveProperty('url');
+    expect(xhrPost.data).not.toHaveProperty('finalUrl');
+    expect(xhrPost.data).toEqual({ loaded: 10 });
     expect(xhrPost.data).not.toHaveProperty('response');
     expect(xhrPost.data).not.toHaveProperty('responseText');
     expect(xhrPost.data).not.toHaveProperty('responseHeaders');
@@ -573,11 +700,19 @@ GM_loadScript('https://cdn.example.com/fallback.js')
         scriptId: 'script_1',
         type: 'message',
         eventId: 'evt_1',
+        url: 'wss://private.example/socket?token=secret',
+        finalUrl: 'wss://redirected.example/socket?token=secret',
         payload: 'secret-message',
       },
     }, {}, sendResponse);
     const wsPost = win.postMessage.mock.calls.at(-1)[0];
-    expect(wsPost.data).toEqual(expect.objectContaining({ requestId: 'ws_1', eventId: 'evt_1' }));
+    expect(wsPost).not.toHaveProperty('requestId');
+    expect(wsPost).not.toHaveProperty('scriptId');
+    expect(wsPost.data).toEqual({});
+    expect(wsPost.data).not.toHaveProperty('requestId');
+    expect(wsPost.data).not.toHaveProperty('eventId');
+    expect(wsPost.data).not.toHaveProperty('url');
+    expect(wsPost.data).not.toHaveProperty('finalUrl');
     expect(wsPost.data).not.toHaveProperty('payload');
 
     listener({
@@ -598,6 +733,36 @@ GM_loadScript('https://cdn.example.com/fallback.js')
     });
     expect(valuePost).not.toHaveProperty('oldValue');
     expect(valuePost).not.toHaveProperty('newValue');
+
+    listener({
+      action: 'downloadEvent',
+      data: {
+        downloadId: 12,
+        scriptId: 'script_1',
+        type: 'load',
+        url: 'https://private.example/download?token=secret',
+        loaded: 100,
+        total: 100,
+      },
+    }, {}, sendResponse);
+    const downloadPost = win.postMessage.mock.calls.at(-1)[0];
+    expect(downloadPost).not.toHaveProperty('scriptId');
+    expect(downloadPost).not.toHaveProperty('downloadId');
+    expect(downloadPost.data).toEqual({ loaded: 100, total: 100 });
+    expect(downloadPost.data).not.toHaveProperty('url');
+
+    listener({
+      action: 'audioStateChanged',
+      data: {
+        scriptId: 'script_1',
+        muted: true,
+        audible: false,
+        reason: 'user',
+      },
+    }, {}, sendResponse);
+    const audioPost = win.postMessage.mock.calls.at(-1)[0];
+    expect(audioPost.data).toEqual({ muted: true, audible: false });
+    expect(audioPost.data).not.toHaveProperty('scriptId');
   });
 
   it('normalizes @connect hosts before allowing privileged network calls', () => {

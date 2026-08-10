@@ -92,15 +92,28 @@
     return telemetry;
   }
 
-  function redactBridgeEventData(data) {
-    if (!data || typeof data !== 'object') return data;
-    const safe = { ...data };
-    delete safe.response;
-    delete safe.responseText;
-    delete safe.responseXML;
-    delete safe.responseHeaders;
-    delete safe.payload;
-    delete safe.streamChunk;
+  // Network/download/audio events are a compatibility fallback for runtimes
+  // without the authenticated user-script event port. This boundary is page
+  // visible, so use an allowlist rather than redacting known fields: URLs,
+  // request/script identifiers, bodies, headers, payloads, and future fields
+  // must never cross into the page world by accident.
+  const SAFE_PRIVILEGED_EVENT_FIELDS = Object.freeze({
+    xhrEvent: Object.freeze(['readyState', 'status', 'loaded', 'total', 'lengthComputable']),
+    webSocketEvent: Object.freeze(['code', 'wasClean']),
+    downloadEvent: Object.freeze(['loaded', 'total']),
+    audioStateChanged: Object.freeze(['muted', 'audible'])
+  });
+
+  function sanitizePrivilegedBridgeEventData(action, data) {
+    const source = data && typeof data === 'object' && !Array.isArray(data) ? data : {};
+    const fields = SAFE_PRIVILEGED_EVENT_FIELDS[action] || [];
+    const safe = {};
+    for (const field of fields) {
+      const value = source[field];
+      if (typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value))) {
+        safe[field] = value;
+      }
+    }
     return safe;
   }
 
@@ -262,10 +275,8 @@
         channel: CHANNEL_ID,
         direction: 'to-userscript',
         type: 'xhrEvent',
-        requestId: message.data?.requestId,
-        scriptId: message.data?.scriptId,
         eventType: message.data?.type,
-        data: redactBridgeEventData(message.data)
+        data: sanitizePrivilegedBridgeEventData('xhrEvent', message.data)
       }, '*');
       handled = true;
     }
@@ -276,10 +287,8 @@
         channel: CHANNEL_ID,
         direction: 'to-userscript',
         type: 'webSocketEvent',
-        requestId: message.data?.requestId,
-        scriptId: message.data?.scriptId,
         eventType: message.data?.type,
-        data: redactBridgeEventData(message.data)
+        data: sanitizePrivilegedBridgeEventData('webSocketEvent', message.data)
       }, '*');
       handled = true;
     }
@@ -306,10 +315,8 @@
         channel: CHANNEL_ID,
         direction: 'to-userscript',
         type: 'downloadEvent',
-        scriptId: message.data?.scriptId,
-        downloadId: message.data?.downloadId,
         eventType: message.data?.type,
-        data: message.data
+        data: sanitizePrivilegedBridgeEventData('downloadEvent', message.data)
       }, '*');
       handled = true;
     }
@@ -320,7 +327,7 @@
         channel: CHANNEL_ID,
         direction: 'to-userscript',
         type: 'audioStateChanged',
-        data: message.data
+        data: sanitizePrivilegedBridgeEventData('audioStateChanged', message.data)
       }, '*');
       handled = true;
     }

@@ -9,6 +9,8 @@ All notable changes to ScriptVault will be documented in this file.
   `userscripts` storage blob.
 - Rejected unsafe public-install and webhook redirect hops before contacting
   internal or non-HTTPS targets, while preserving safe public redirects.
+- Routed privileged XHR, WebSocket, download, and audio events through an
+  authenticated user-script port, with an identifier-free page bridge fallback.
 - Reduced the Monaco ESM surface to the editor plus JavaScript/TypeScript/CSS
   contributions, dropped the unused HTML/JSON workers, and opened UserCSS
   drafts in a CSS model with live language switching.

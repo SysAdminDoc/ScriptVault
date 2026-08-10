@@ -179,15 +179,18 @@ const GMNetworkHandler = (() => {
           request.controller = controller;
           const sendEvent = (type, eventData = {}) => {
             if (request.aborted && type !== "abort") return;
+            const data2 = {
+              requestId,
+              scriptId: ownedScriptId,
+              type,
+              ...redactXhrBridgePayload(eventData)
+            };
+            const sendDirectEvent = globalThis.__svSendUserScriptEvent;
+            if (typeof sendDirectEvent === "function" && sendDirectEvent(tabId, "xhrEvent", data2)) return;
             try {
               chrome.tabs.sendMessage(tabId, {
                 action: "xhrEvent",
-                data: {
-                  requestId,
-                  scriptId: ownedScriptId,
-                  type,
-                  ...redactXhrBridgePayload(eventData)
-                }
+                data: data2
               }).catch(() => {
               });
             } catch (_) {

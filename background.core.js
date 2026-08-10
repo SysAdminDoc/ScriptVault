@@ -5820,10 +5820,12 @@ function sendPendingDownloadEvent(downloadId, tracker, type, eventData = {}) {
   const id = _normalizeDownloadId(downloadId);
   const tabId = Number(tracker?.tabId);
   if (id == null || !Number.isFinite(tabId) || !tracker?.scriptId) return;
-  chrome.tabs.sendMessage(tabId, {
+  const data = { downloadId: id, scriptId: tracker.scriptId, type, ...eventData };
+  if (sendUserScriptEvent(tabId, 'downloadEvent', data)) return;
+  Promise.resolve(chrome.tabs.sendMessage(tabId, {
     action: 'downloadEvent',
-    data: { downloadId: id, scriptId: tracker.scriptId, type, ...eventData }
-  }).catch(() => {});
+    data,
+  })).catch(() => {});
 }
 
 function handlePendingDownloadDelta(delta = {}) {
@@ -8619,6 +8621,169 @@ function isUserScriptAllowedAction(action) {
 const USER_SCRIPT_MESSAGING_AVAILABLE = typeof chrome !== 'undefined'
   && !!(chrome.runtime && chrome.runtime.onUserScriptMessage);
 
+// Network callbacks must not travel through the page-visible content-script
+// bridge. A page can observe every window.postMessage event before a wrapper
+// checks scriptId, so keep the routing metadata on an authenticated runtime
+// Port whose sender is a specific user script.
+const USER_SCRIPT_EVENT_PORT_NAME = 'ScriptVault:privileged-events:v1';
+const _userScriptEventPorts = new Map();
+
+function _removeUserScriptEventPort(scriptId, port) {
+  const ports = _userScriptEventPorts.get(scriptId);
+  if (!ports) return;
+  ports.delete(port);
+  if (ports.size === 0) _userScriptEventPorts.delete(scriptId);
+}
+
+function _registerUserScriptEventPort(scriptId, port, onDisconnect) {
+  if (!scriptId || !port) return;
+  let ports = _userScriptEventPorts.get(scriptId);
+  if (!ports) {
+    ports = new Set();
+    _userScriptEventPorts.set(scriptId, ports);
+  }
+  ports.add(port);
+  try {
+    port.postMessage({
+      channel: `ScriptVault_${chrome.runtime.id}`,
+      direction: 'to-userscript',
+      type: 'ready',
+      scriptId,
+    });
+  } catch (_) {
+    _removeUserScriptEventPort(scriptId, port);
+    try { onDisconnect(); } catch (_) {}
+  }
+}
+
+function _createUserScriptEventMessage(action, data) {
+  const eventData = data && typeof data === 'object' && !Array.isArray(data) ? { ...data } : {};
+  const scriptId = typeof eventData.scriptId === 'string' ? eventData.scriptId : '';
+  const channel = `ScriptVault_${chrome.runtime.id}`;
+  if (action === 'xhrEvent') {
+    return {
+      channel,
+      direction: 'to-userscript',
+      type: 'xhrEvent',
+      requestId: eventData.requestId,
+      scriptId,
+      eventType: eventData.type,
+      data: eventData,
+    };
+  }
+  if (action === 'webSocketEvent') {
+    return {
+      channel,
+      direction: 'to-userscript',
+      type: 'webSocketEvent',
+      requestId: eventData.requestId,
+      scriptId,
+      eventType: eventData.type,
+      data: eventData,
+    };
+  }
+  if (action === 'downloadEvent') {
+    return {
+      channel,
+      direction: 'to-userscript',
+      type: 'downloadEvent',
+      scriptId,
+      downloadId: eventData.downloadId,
+      eventType: eventData.type,
+      data: eventData,
+    };
+  }
+  if (action === 'audioStateChanged') {
+    return {
+      channel,
+      direction: 'to-userscript',
+      type: 'audioStateChanged',
+      data: eventData,
+    };
+  }
+  return null;
+}
+
+function sendUserScriptEvent(tabId, action, data = {}) {
+  const message = _createUserScriptEventMessage(action, data);
+  const scriptId = typeof data?.scriptId === 'string' ? data.scriptId : '';
+  let delivered = false;
+  const ports = scriptId ? _userScriptEventPorts.get(scriptId) : undefined;
+  if (ports) {
+    for (const port of [...ports]) {
+      const portTabId = Number(port?.sender?.tab?.id);
+      if (!Number.isFinite(portTabId) || portTabId !== Number(tabId)) continue;
+      try {
+        port.postMessage(message);
+        delivered = true;
+      } catch (_) {
+        _removeUserScriptEventPort(scriptId, port);
+      }
+    }
+  }
+  return delivered;
+}
+
+(globalThis).__svSendUserScriptEvent = sendUserScriptEvent;
+
+function _listenForUserScriptEventPort(port) {
+  if (!port || port.name !== USER_SCRIPT_EVENT_PORT_NAME) return;
+  let registeredScriptId = '';
+  let authenticating = false;
+  const onDisconnect = () => {
+    if (registeredScriptId) _removeUserScriptEventPort(registeredScriptId, port);
+  };
+  try { port.onDisconnect?.addListener(onDisconnect); } catch (_) {}
+
+  const reject = () => {
+    try { port.disconnect?.(); } catch (_) {}
+  };
+  const register = scriptId => {
+    if (registeredScriptId || !scriptId) return;
+    registeredScriptId = scriptId;
+    _registerUserScriptEventPort(scriptId, port, onDisconnect);
+  };
+
+  try {
+    port.onMessage?.addListener(message => {
+      if (registeredScriptId || authenticating) return;
+      if (!message || message.type !== 'subscribe' || typeof message.scriptId !== 'string' || !message.scriptId) {
+        reject();
+        return;
+      }
+      const scriptId = message.scriptId;
+      const senderScriptId = typeof port.sender?.userScriptId === 'string'
+        ? port.sender.userScriptId
+        : '';
+      if (senderScriptId) {
+        if (senderScriptId !== scriptId) reject();
+        else register(scriptId);
+        return;
+      }
+
+      authenticating = true;
+      UserScriptMessagePolicy.authenticateUserScriptSender({
+        action: 'GM_getValue',
+        data: {
+          scriptId,
+          scriptAuthToken: message.scriptAuthToken,
+        },
+      }, port.sender || {})
+        .then(() => register(scriptId))
+        .catch(() => reject())
+        .finally(() => { authenticating = false; });
+    });
+  } catch (_) {
+    reject();
+  }
+}
+
+try { chrome.runtime.onUserScriptConnect?.addListener(_listenForUserScriptEventPort); } catch (_) {}
+// A few older Chromium/Firefox builds expose the user-script messaging
+// methods but deliver connect() through the generic event. The same handshake
+// and token check keeps this compatibility path authenticated.
+try { chrome.runtime.onConnect?.addListener(_listenForUserScriptEventPort); } catch (_) {}
+
 // Decide whether a chrome.runtime.onMessage sender represents a trusted
 // extension surface (popup, dashboard, install page, sidebar) versus a tab
 // context (content script or — on Chrome <131 — a user script falling back to
@@ -8824,16 +8989,18 @@ function sendGMWebSocketEvent(record, type, eventData = {}) {
     if (record._eventQueue.length > 100) record._eventQueue.splice(0, record._eventQueue.length - 100);
     bridgeEventData = { eventId };
   }
+  const data = {
+    requestId: record.requestId,
+    scriptId: record.scriptId,
+    type,
+    ...bridgeEventData
+  };
+  if (sendUserScriptEvent(record.tabId, 'webSocketEvent', data)) return;
   try {
-    chrome.tabs.sendMessage(record.tabId, {
+    Promise.resolve(chrome.tabs.sendMessage(record.tabId, {
       action: 'webSocketEvent',
-      data: {
-        requestId: record.requestId,
-        scriptId: record.scriptId,
-        type,
-        ...bridgeEventData
-      }
-    }).catch(() => {});
+      data,
+    })).catch(() => {});
   } catch (_) {
     // Tab may be gone.
   }
@@ -11182,15 +11349,17 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (('audible' in changeInfo || 'mutedInfo' in changeInfo) && audioWatchers.length > 0) {
     let changed = false;
     for (const scriptId of audioWatchers) {
+      const data = {
+        scriptId,
+        muted: tab.mutedInfo?.muted || false,
+        reason: tab.mutedInfo?.reason || 'user',
+        audible: tab.audible || false
+      };
+      if (sendUserScriptEvent(tabId, 'audioStateChanged', data)) continue;
       try {
         await chrome.tabs.sendMessage(tabId, {
           action: 'audioStateChanged',
-          data: {
-            scriptId,
-            muted: tab.mutedInfo?.muted || false,
-            reason: tab.mutedInfo?.reason || 'user',
-            audible: tab.audible || false
-          }
+          data
         });
       } catch (e) {
         // Tab may have been closed or the script may have been unregistered.
@@ -14921,6 +15090,7 @@ ${mappedCode}
   // Channel ID for communication with content script bridge
   // Extension ID is injected at build time since chrome.runtime isn't available in USER_SCRIPT world
   const CHANNEL_ID = ${JSON.stringify('ScriptVault_' + extId)};
+  const USER_SCRIPT_EVENT_PORT_NAME = 'ScriptVault:privileged-events:v1';
   
   // console.log('[ScriptVault] Script initializing:', meta.name, 'Channel:', CHANNEL_ID);
   
@@ -15019,9 +15189,9 @@ ${mappedCode}
   // Value change listeners (like Tampermonkey)
   const _valueChangeListeners = new Map(); // listenerId -> { key, callback }
   let _valueChangeListenerId = 0;
-  
+
   // Listen for messages from content script (for menu commands, value changes, and XHR events)
-  window.addEventListener('message', (event) => {
+  const __svNetworkBridgeListener = (event) => {
     if (event.source !== window) return;
     const msg = event.data;
     if (!msg || msg.channel !== CHANNEL_ID || msg.direction !== 'to-userscript') return;
@@ -15134,7 +15304,8 @@ ${mappedCode}
         _xhrRequests.delete(msg.requestId);
       }
     }
-  });
+  };
+  window.addEventListener('message', __svNetworkBridgeListener);
   
   // Bridge ready state tracking
   let _bridgeReady = false;
@@ -16651,7 +16822,7 @@ ${mappedCode}
 
   // Event listener for notification/download/tab close events from background
   // Content.js forwards these with 'type' field (not 'action') and flat structure (not nested 'data')
-  window.addEventListener('message', function __svEventHandler(event) {
+  const __svEventBridgeListener = function __svEventHandler(event) {
     if (event.source !== window) return;
     if (!event.data || event.data.channel !== CHANNEL_ID || event.data.direction !== 'to-userscript') return;
 
@@ -16693,7 +16864,8 @@ ${mappedCode}
         _openedTabs.delete(tabId);
       }
     }
-  });
+  };
+  window.addEventListener('message', __svEventBridgeListener);
 
   // GM.* Promise-based API
   const GM = {
@@ -17018,6 +17190,46 @@ ${mappedCode}
     }
   };
   window.GM_audio = GM_audio;
+
+  // Privileged network/download/audio events use the authenticated user-script
+  // runtime port. The page-visible bridge remains only a sanitized compatibility
+  // fallback; it must never carry the request or script identity needed to route
+  // these callbacks.
+  function __svHandleDirectUserScriptEvent(message) {
+    if (!message || message.channel !== CHANNEL_ID || message.direction !== 'to-userscript') return;
+    const event = { source: window, data: message };
+    try { __svNetworkBridgeListener(event); } catch (_) {}
+    try { __svEventBridgeListener(event); } catch (_) {}
+    try { if (GM_audio._msgHandler) GM_audio._msgHandler(event); } catch (_) {}
+  }
+
+  function __svConnectUserScriptEventPort() {
+    if (typeof chrome === 'undefined' || !chrome.runtime || typeof chrome.runtime.connect !== 'function') return;
+    let port;
+    try {
+      port = chrome.runtime.connect({ name: USER_SCRIPT_EVENT_PORT_NAME });
+    } catch (_) {
+      return;
+    }
+    if (!port) return;
+    const onMessage = (message) => {
+      if (!message || message.type === 'ready') return;
+      __svHandleDirectUserScriptEvent(message);
+    };
+    try { port.onMessage?.addListener(onMessage); } catch (_) {}
+    try {
+      port.onDisconnect?.addListener(() => {
+        // The service worker can restart while the page remains alive. Reconnect
+        // once after the disconnect so callbacks recover without a page reload.
+        setTimeout(__svConnectUserScriptEventPort, 1000);
+      });
+    } catch (_) {}
+    try {
+      port.postMessage({ type: 'subscribe', scriptId, scriptAuthToken });
+    } catch (_) {}
+  }
+
+  __svConnectUserScriptEventPort();
 
   // ========== DOM HELPER FUNCTIONS ==========
   // These help userscripts handle DOM timing issues gracefully

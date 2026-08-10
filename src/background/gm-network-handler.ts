@@ -246,15 +246,18 @@ export async function handleGMNetworkMessage(
 
         const sendEvent = (type: string, eventData: GMNetworkPayload = {}) => {
           if (request.aborted && type !== 'abort') return;
+          const data = {
+            requestId,
+            scriptId: ownedScriptId,
+            type,
+            ...redactXhrBridgePayload(eventData),
+          };
+          const sendDirectEvent = (globalThis as any).__svSendUserScriptEvent;
+          if (typeof sendDirectEvent === 'function' && sendDirectEvent(tabId, 'xhrEvent', data)) return;
           try {
             chrome.tabs.sendMessage(tabId, {
               action: 'xhrEvent',
-              data: {
-                requestId,
-                scriptId: ownedScriptId,
-                type,
-                ...redactXhrBridgePayload(eventData),
-              },
+              data,
             }).catch(() => {});
           } catch (_) {}
         };

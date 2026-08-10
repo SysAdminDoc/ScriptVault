@@ -36,6 +36,7 @@ const originalGlobals = {
   formatBytes: globalThis.formatBytes,
   _fetchTextBounded: globalThis._fetchTextBounded,
   _readResponseBytesBounded: globalThis._readResponseBytesBounded,
+  __svSendUserScriptEvent: globalThis.__svSendUserScriptEvent,
   GM_DOWNLOAD_FETCH_MAX_BYTES: globalThis.GM_DOWNLOAD_FETCH_MAX_BYTES,
   GM_WEBSOCKET_MAX_MESSAGE_BYTES: globalThis.GM_WEBSOCKET_MAX_MESSAGE_BYTES,
   WebSocket: globalThis.WebSocket,
@@ -238,6 +239,27 @@ describe('GM network handler', () => {
       }),
     });
     expect(globalThis.XhrManager.remove).toHaveBeenCalledWith('xhr_1');
+  });
+
+  it('uses the authenticated event dispatcher before the page-visible fallback', async () => {
+    const sendDirectEvent = vi.fn().mockReturnValue(true);
+    globalThis.__svSendUserScriptEvent = sendDirectEvent;
+
+    await expect(handleGMNetworkMessage('GM_xmlhttpRequest', {
+      scriptId: 'script-1',
+      url: 'https://api.example.com/private?token=secret',
+    }, { tab: { id: 7 } })).resolves.toEqual({ requestId: 'xhr_1', started: true });
+
+    await vi.waitFor(() => expect(sendDirectEvent).toHaveBeenCalledWith(
+      7,
+      'xhrEvent',
+      expect.objectContaining({
+        requestId: 'xhr_1',
+        scriptId: 'script-1',
+        type: 'loadstart',
+      }),
+    ));
+    expect(chrome.tabs.sendMessage).not.toHaveBeenCalledWith(7, expect.objectContaining({ action: 'xhrEvent' }));
   });
 
   // A host reachable under @connect can omit Content-Length and stream forever.
