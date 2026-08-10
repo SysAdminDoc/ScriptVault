@@ -902,6 +902,84 @@ describe('PublicAPI', () => {
       expect(log[0].action).toBe('ping');
     });
 
+    it('stores metadata-only records for source, token, body, and URL inputs', async () => {
+      const maxBytes = 5 * 1024 * 1024;
+      const header = [
+        '// ==UserScript==',
+        '// @name Audit Boundary',
+        '// @version 1.0.0',
+        '// ==/UserScript==',
+        '',
+      ].join('\n');
+      const code = header + 'x'.repeat(maxBytes - new TextEncoder().encode(header).byteLength);
+      const ScriptStorage = {
+        getAll: vi.fn().mockResolvedValue([]),
+        set: vi.fn().mockResolvedValue(),
+      };
+      PublicAPI = createFreshAPI({ ScriptStorage });
+      await PublicAPI.init();
+      await PublicAPI.setPermissions({ installScript: 'allow' });
+
+      const result = await PublicAPI.handleExternalMessage(
+        { action: 'installScript', code },
+        { url: 'https://caller.example/path?token=sender-secret' },
+      );
+      await PublicAPI.fireEvent('script.error', {
+        scriptId: 'script_audit',
+        code: 'source-secret',
+        body: 'request-body-secret',
+        token: 'bearer-token-secret',
+        url: 'https://hooks.example/private?token=query-secret',
+        error: 'network timeout while sending request',
+      });
+
+      const install = PublicAPI.getAuditLog(500).find(entry => entry.action === 'installScript');
+      const failure = PublicAPI.getAuditLog(500).find(entry => entry.action === 'fireEvent');
+      expect(result.ok).toBe(true);
+      expect(install?.details).toMatchObject({
+        codeBytes: maxBytes,
+        codeHash: expect.stringMatching(/^(sha256|fnv1a):/),
+      });
+      expect(install?.details).not.toHaveProperty('code');
+      expect(install?.sender).toBe('url:https://caller.example');
+      expect(failure?.details).toMatchObject({
+        payload: {
+          codeBytes: expect.any(Number),
+          bodyBytes: expect.any(Number),
+          tokenBytes: expect.any(Number),
+          errorCode: 'timeout',
+          url: { protocol: 'https', host: 'hooks.example' },
+        },
+      });
+      const serialized = JSON.stringify([install, failure]);
+      expect(serialized).not.toContain('source-secret');
+      expect(serialized).not.toContain('request-body-secret');
+      expect(serialized).not.toContain('bearer-token-secret');
+      expect(serialized).not.toContain('query-secret');
+    });
+
+    it('keeps persisted audit history within count and UTF-8 byte budgets', async () => {
+      const long = 'a'.repeat(160);
+      for (let index = 0; index < 500; index += 1) {
+        await PublicAPI.fireEvent('script.error', {
+          scriptId: `${long}-${index}`,
+          name: long,
+          version: long,
+          status: long,
+          outcome: long,
+          requestId: long,
+          body: 'body-secret',
+        });
+      }
+      await new Promise(resolve => setTimeout(resolve, 0));
+      const stored = (await chrome.storage.local.get('publicapi_audit')).publicapi_audit || [];
+      const serializedBytes = new TextEncoder().encode(JSON.stringify(stored)).byteLength;
+      expect(stored.length).toBeLessThanOrEqual(500);
+      expect(stored.length).toBeLessThan(500);
+      expect(serializedBytes).toBeLessThanOrEqual(256 * 1024);
+      expect(JSON.stringify(stored)).not.toContain('body-secret');
+    });
+
     it('clearAuditLog empties the log', async () => {
       await PublicAPI.handleExternalMessage({ action: 'ping' }, { id: 'test' });
       await PublicAPI.clearAuditLog();

@@ -9,6 +9,9 @@ All notable changes to ScriptVault will be documented in this file.
   service-worker restart in the Chromium E2E.
 - Made script reordering a single IndexedDB position transaction with
   permutation validation and rollback-safe cache publication.
+- Replaced Public API audit payloads with allowlisted metadata, UTF-8 byte and
+  count budgets, deterministic oldest-first eviction, and URL/token/body
+  redaction with hashes and bounded error codes.
 - Routed Public API list, status, presence, and install positioning through
   the authoritative IndexedDB-backed ScriptStorage instead of the retired
   `userscripts` storage blob.

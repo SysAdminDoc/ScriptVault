@@ -89,6 +89,9 @@ const PublicAPI = (() => {
   var STORAGE_KEY_TRUSTED_EXTENSIONS = "publicapi_trusted_extension_ids";
   var STORAGE_KEY_LOCAL_MCP = "publicapi_local_mcp_bridge";
   var MAX_AUDIT_ENTRIES = 500;
+  var MAX_AUDIT_BYTES = 256 * 1024;
+  var MAX_AUDIT_TEXT_LENGTH = 160;
+  var MAX_AUDIT_ERROR_LENGTH = 80;
   var RATE_LIMIT_WINDOW = 1e3;
   var RATE_LIMIT_MAX = 10;
   var RATE_LIMIT_SENDER_CAP = 200;
@@ -120,6 +123,7 @@ const PublicAPI = (() => {
   var _localMcpBridge = { ...DEFAULT_LOCAL_MCP_BRIDGE };
   var _initialized = false;
   var _initPromise = null;
+  var _auditSaveChain = Promise.resolve();
   var _rateLimitMap = /* @__PURE__ */ new Map();
   var MAX_CODE_SIZE = 5 * 1024 * 1024;
   var MAX_FETCH_SIZE = 5 * 1024 * 1024;
@@ -601,7 +605,14 @@ const PublicAPI = (() => {
         ...DEFAULT_PERMISSIONS,
         ...result[STORAGE_KEY_PERMS] ?? {}
       };
-      _auditLog = result[STORAGE_KEY_AUDIT] ?? [];
+      const storedAudit = Array.isArray(result[STORAGE_KEY_AUDIT]) ? result[STORAGE_KEY_AUDIT] : [];
+      const sanitizedAudit = [];
+      for (const entry of storedAudit.slice(-MAX_AUDIT_ENTRIES)) {
+        const safeEntry = await sanitizeStoredAuditEntry(entry);
+        if (safeEntry) sanitizedAudit.push(safeEntry);
+      }
+      _auditLog = trimAuditLog(sanitizedAudit);
+      if (storedAudit.length > 0) void saveAuditLog();
       _webhooks = result[STORAGE_KEY_WEBHOOKS] ?? {};
       _trustedOrigins = normalizeStoredTrustedOrigins(result[STORAGE_KEY_ORIGINS]);
       _trustedExtensionIds = normalizeStoredTrustedExtensionIds(result[STORAGE_KEY_TRUSTED_EXTENSIONS]);
@@ -623,11 +634,15 @@ const PublicAPI = (() => {
     }
   }
   async function saveAuditLog() {
+    const run = async () => {
+      _auditLog = trimAuditLog(_auditLog);
+      const snapshot = _auditLog.map(cloneAuditEntry);
+      await chrome.storage.local.set({ [STORAGE_KEY_AUDIT]: snapshot });
+    };
+    const pending = _auditSaveChain.then(run, run);
+    _auditSaveChain = pending.then(() => void 0, () => void 0);
     try {
-      if (_auditLog.length > MAX_AUDIT_ENTRIES) {
-        _auditLog = _auditLog.slice(-MAX_AUDIT_ENTRIES);
-      }
-      await chrome.storage.local.set({ [STORAGE_KEY_AUDIT]: _auditLog });
+      await pending;
     } catch (e) {
       console.warn("[PublicAPI] save audit failed:", e);
     }
@@ -691,13 +706,209 @@ const PublicAPI = (() => {
     await saveLocalMcpBridgeConfig();
     return publicLocalMcpConfig();
   }
-  function audit(action, sender, details, result) {
+  function auditRecord(value) {
+    return value && typeof value === "object" && !Array.isArray(value) ? value : null;
+  }
+  function boundedAuditText(value, maxLength = MAX_AUDIT_TEXT_LENGTH) {
+    if (typeof value !== "string") return null;
+    const normalized = value.replace(/[\u0000-\u001f\u007f]/g, " ").trim();
+    return normalized ? normalized.slice(0, maxLength) : null;
+  }
+  function auditUrlMetadata(value) {
+    if (typeof value !== "string" || !value) return null;
+    try {
+      const parsed = new URL(value);
+      return {
+        protocol: parsed.protocol.replace(":", ""),
+        host: parsed.host.slice(0, MAX_AUDIT_TEXT_LENGTH)
+      };
+    } catch {
+      return { protocol: "invalid", host: "" };
+    }
+  }
+  function auditErrorCode(value) {
+    const text = typeof value === "string" ? value.toLowerCase() : "";
+    if (text.includes("timeout")) return "timeout";
+    if (text.includes("abort")) return "aborted";
+    if (text.includes("quota") || text.includes("storage")) return "storage_error";
+    if (text.includes("permission") || text.includes("denied")) return "permission_denied";
+    if (text.includes("http 4")) return "http_4xx";
+    if (text.includes("http 5")) return "http_5xx";
+    if (text.includes("network") || text.includes("fetch") || text.includes("connect")) return "network_error";
+    return "error";
+  }
+  function serializeAuditValue(value) {
+    if (typeof value === "string") return value;
+    try {
+      const serialized = JSON.stringify(value);
+      return typeof serialized === "string" ? serialized : String(value);
+    } catch {
+      return Object.prototype.toString.call(value);
+    }
+  }
+  function fallbackAuditHash(value) {
+    let hash = 2166136261;
+    for (let index = 0; index < value.length; index += 1) {
+      hash ^= value.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return `fnv1a:${(hash >>> 0).toString(16).padStart(8, "0")}`;
+  }
+  async function hashAuditValue(value) {
+    try {
+      if (crypto?.subtle?.digest) {
+        const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+        return `sha256:${bytesToHex(digest)}`;
+      }
+    } catch {
+    }
+    return fallbackAuditHash(value);
+  }
+  async function summarizeAuditValue(value) {
+    const serialized = serializeAuditValue(value);
+    return {
+      bytes: measuredUtf8Length(serialized),
+      hash: await hashAuditValue(serialized)
+    };
+  }
+  function addAuditReference(safe, raw, key) {
+    const value = boundedAuditText(raw[key]);
+    if (value) safe[key] = value;
+  }
+  function copyAuditUrlMetadata(safe, raw, key) {
+    const value = raw[key];
+    const stored = auditRecord(value);
+    if (stored && typeof stored.protocol === "string" && typeof stored.host === "string") {
+      safe[key] = {
+        protocol: boundedAuditText(stored.protocol, 16) || "invalid",
+        host: boundedAuditText(stored.host) || ""
+      };
+      return;
+    }
+    const url = auditUrlMetadata(value);
+    if (url) safe[key] = url;
+  }
+  function preserveAuditSummary(safe, raw, key) {
+    const bytes = raw[`${key}Bytes`];
+    const hash = raw[`${key}Hash`];
+    if (typeof bytes === "number" && Number.isFinite(bytes) && bytes >= 0 && typeof hash === "string") {
+      safe[`${key}Bytes`] = Math.floor(bytes);
+      safe[`${key}Hash`] = boundedAuditText(hash, 96) || "unavailable";
+    }
+  }
+  async function addAuditSensitiveField(safe, raw, key) {
+    if (!Object.prototype.hasOwnProperty.call(raw, key)) return;
+    const summary = await summarizeAuditValue(raw[key]);
+    safe[`${key}Bytes`] = summary.bytes;
+    safe[`${key}Hash`] = summary.hash;
+  }
+  async function sanitizeAuditPayload(payload) {
+    const safe = {};
+    for (const key of ["scriptId", "name", "version", "status", "outcome", "requestId"]) {
+      addAuditReference(safe, payload, key);
+    }
+    if (payload.url !== void 0) {
+      copyAuditUrlMetadata(safe, payload, "url");
+    }
+    if (payload.errorCode !== void 0) {
+      safe.errorCode = boundedAuditText(payload.errorCode, MAX_AUDIT_ERROR_LENGTH) || "error";
+    } else if (payload.error !== void 0) {
+      safe.errorCode = auditErrorCode(payload.error);
+    }
+    for (const key of ["code", "source", "body", "token", "content", "headers", "query", "payload", "data"]) {
+      preserveAuditSummary(safe, payload, key);
+      await addAuditSensitiveField(safe, payload, key);
+    }
+    return safe;
+  }
+  async function sanitizeAuditDetails(action, details) {
+    const raw = auditRecord(details);
+    if (!raw) return null;
+    const safe = {};
+    if (action === "installScript" || action === "scriptvault:install") {
+      addAuditReference(safe, raw, "scriptId");
+      addAuditReference(safe, raw, "requestId");
+      if (raw.url !== void 0) {
+        copyAuditUrlMetadata(safe, raw, "url");
+      }
+      preserveAuditSummary(safe, raw, "code");
+      await addAuditSensitiveField(safe, raw, "code");
+      return Object.keys(safe).length > 0 ? safe : null;
+    }
+    if (action === "toggleScript" || action === "getScriptStatus") {
+      addAuditReference(safe, raw, "scriptId");
+      addAuditReference(safe, raw, "id");
+      if (typeof raw.enabled === "boolean") safe.enabled = raw.enabled;
+      addAuditReference(safe, raw, "requestId");
+      return Object.keys(safe).length > 0 ? safe : null;
+    }
+    if (action === "scriptvault:isInstalled") {
+      addAuditReference(safe, raw, "name");
+      return Object.keys(safe).length > 0 ? safe : null;
+    }
+    if (action === "fireEvent") {
+      addAuditReference(safe, raw, "eventType");
+      const payload = auditRecord(raw.payload);
+      if (payload) safe.payload = await sanitizeAuditPayload(payload);
+      return Object.keys(safe).length > 0 ? safe : null;
+    }
+    addAuditReference(safe, raw, "requestId");
+    addAuditReference(safe, raw, "scriptId");
+    return Object.keys(safe).length > 0 ? safe : null;
+  }
+  function sanitizeStoredSender(value) {
+    if (typeof value !== "string") return "unknown";
+    if (value.startsWith("extension:")) {
+      return `extension:${boundedAuditText(value.slice("extension:".length), MAX_EXTENSION_ID_LENGTH) || "unknown"}`;
+    }
+    if (value.startsWith("origin:")) {
+      return describeSender({ origin: value.slice("origin:".length) });
+    }
+    if (value.startsWith("url:")) {
+      return describeSender({ url: value.slice("url:".length) });
+    }
+    return "unknown";
+  }
+  async function sanitizeStoredAuditEntry(value) {
+    const raw = auditRecord(value);
+    if (!raw) return null;
+    const timestamp = typeof raw.timestamp === "number" && Number.isFinite(raw.timestamp) ? raw.timestamp : Date.now();
+    const action = boundedAuditText(raw.action, MAX_AUDIT_TEXT_LENGTH) || "unknown";
+    return {
+      timestamp,
+      action,
+      sender: sanitizeStoredSender(raw.sender),
+      details: await sanitizeAuditDetails(action, raw.details),
+      result: boundedAuditText(raw.result, MAX_AUDIT_ERROR_LENGTH) || "ok"
+    };
+  }
+  function auditSerializedBytes(entries) {
+    try {
+      return measuredUtf8Length(JSON.stringify(entries));
+    } catch {
+      return Number.POSITIVE_INFINITY;
+    }
+  }
+  function trimAuditLog(entries) {
+    const bounded = entries.slice(-MAX_AUDIT_ENTRIES);
+    while (bounded.length > 0 && auditSerializedBytes(bounded) > MAX_AUDIT_BYTES) {
+      bounded.shift();
+    }
+    return bounded;
+  }
+  function cloneAuditEntry(entry) {
+    return {
+      ...entry,
+      details: entry.details && typeof entry.details === "object" ? JSON.parse(JSON.stringify(entry.details)) : entry.details
+    };
+  }
+  async function audit(action, sender, details, result) {
     const entry = {
       timestamp: Date.now(),
-      action,
+      action: boundedAuditText(action, MAX_AUDIT_TEXT_LENGTH) || "unknown",
       sender: describeSender(sender),
-      details: details ?? null,
-      result: result || "ok"
+      details: await sanitizeAuditDetails(action, details),
+      result: boundedAuditText(result, MAX_AUDIT_ERROR_LENGTH) || "ok"
     };
     _auditLog.push(entry);
     void saveAuditLog();
@@ -705,9 +916,15 @@ const PublicAPI = (() => {
   }
   function describeSender(sender) {
     if (!sender) return "unknown";
-    if (sender.id) return `extension:${sender.id}`;
-    if (sender.origin) return `origin:${sender.origin}`;
-    if (sender.url) return `url:${sender.url}`;
+    if (sender.id) return `extension:${boundedAuditText(sender.id, MAX_EXTENSION_ID_LENGTH) || "unknown"}`;
+    if (sender.origin) {
+      const metadata = auditUrlMetadata(sender.origin);
+      return metadata?.host ? `origin:${metadata.protocol}://${metadata.host}` : "origin:invalid";
+    }
+    if (sender.url) {
+      const metadata = auditUrlMetadata(sender.url);
+      return metadata?.host ? `url:${metadata.protocol}://${metadata.host}` : "url:invalid";
+    }
     return "unknown";
   }
   function checkRateLimit(senderId) {
@@ -1358,20 +1575,20 @@ const PublicAPI = (() => {
     const auth = await authorizeLocalMcpMessage(msg, rawOrigin);
     const sender = { origin: rawOrigin };
     if (!auth.ok) {
-      audit(msg.type, sender, null, auth.result);
+      await audit(msg.type, sender, null, auth.result);
       return mcpEnvelope(msg, { error: auth.error });
     }
     const senderId = `mcp:${auth.origin}`;
     if (!checkRateLimit(senderId)) {
-      audit(msg.type, { origin: auth.origin }, null, "rate_limited");
+      await audit(msg.type, { origin: auth.origin }, null, "rate_limited");
       return mcpEnvelope(msg, { error: "Rate limited. Max 10 requests per second." });
     }
     try {
       const result = await handler(msg, auth.origin);
-      audit(msg.type, { origin: auth.origin }, { requestId: msg.requestId ?? null }, result?.error ? "error" : "ok");
+      await audit(msg.type, { origin: auth.origin }, { requestId: msg.requestId ?? null }, result?.error ? "error" : "ok");
       return mcpEnvelope(msg, result);
     } catch (e) {
-      audit(msg.type, { origin: auth.origin }, { requestId: msg.requestId ?? null }, "exception");
+      await audit(msg.type, { origin: auth.origin }, { requestId: msg.requestId ?? null }, "exception");
       console.warn("[PublicAPI] Local MCP handler exception:", msg.type, e);
       return mcpEnvelope(msg, { error: "Internal error" });
     }
@@ -1545,28 +1762,28 @@ const PublicAPI = (() => {
       return { error: `Unknown action: ${action}`, availableActions: Object.keys(HANDLERS) };
     }
     if (sender?.id && !HANDSHAKE_ACTIONS.has(action) && !isExtensionSenderTrusted(sender)) {
-      audit(action, sender, null, "untrusted_extension");
+      await audit(action, sender, null, "untrusted_extension");
       return { error: "Extension not trusted. Add this extension ID to trusted extensions in ScriptVault settings.", extensionId: sender.id };
     }
     const senderId = describeSender(sender);
     const endpoint = API_SCHEMA.endpoints[action];
     if (endpoint?.rateLimit !== false) {
       if (!checkRateLimit(senderId)) {
-        audit(action, sender, null, "rate_limited");
+        await audit(action, sender, null, "rate_limited");
         return { error: "Rate limited. Max 10 requests per second." };
       }
     }
     const perm = getPermission(action);
     if (perm === "deny") {
-      audit(action, sender, null, "denied");
+      await audit(action, sender, null, "denied");
       return { error: "Permission denied", action };
     }
     try {
       const result = await handler(message, sender);
-      audit(action, sender, message, result?.["error"] ? "error" : "ok");
+      await audit(action, sender, message, result?.["error"] ? "error" : "ok");
       return result;
     } catch (e) {
-      audit(action, sender, message, "exception");
+      await audit(action, sender, message, "exception");
       console.warn("[PublicAPI] external handler exception:", action, e);
       return { error: "Internal error" };
     }
@@ -1603,7 +1820,7 @@ const PublicAPI = (() => {
     }
     const handler = WEB_HANDLERS[msg.type];
     if (!handler) return null;
-    audit(msg.type, { origin }, msg, "processing");
+    await audit(msg.type, { origin }, msg, "processing");
     try {
       return await handler(msg, origin);
     } catch (e) {
@@ -1700,8 +1917,9 @@ const PublicAPI = (() => {
      * Return the audit log (most recent entries).
      */
     getAuditLog(limit = 50) {
-      const start = Math.max(0, _auditLog.length - limit);
-      return _auditLog.slice(start);
+      const boundedLimit = Number.isFinite(limit) ? Math.max(0, Math.min(MAX_AUDIT_ENTRIES, Math.floor(limit))) : 50;
+      const start = Math.max(0, _auditLog.length - boundedLimit);
+      return _auditLog.slice(start).map(cloneAuditEntry);
     },
     /**
      * Set permissions for API actions.
@@ -1789,7 +2007,7 @@ const PublicAPI = (() => {
      * Fire a webhook event programmatically (used by other modules).
      */
     async fireEvent(eventType, payload) {
-      audit("fireEvent", { id: "internal" }, { eventType, payload }, "ok");
+      await audit("fireEvent", { id: "internal" }, { eventType, payload }, "ok");
       await fireWebhook(eventType, payload);
     },
     /**

@@ -176,6 +176,9 @@ const STORAGE_KEY_ORIGINS = 'publicapi_trusted_origins';
 const STORAGE_KEY_TRUSTED_EXTENSIONS = 'publicapi_trusted_extension_ids';
 const STORAGE_KEY_LOCAL_MCP = 'publicapi_local_mcp_bridge';
 const MAX_AUDIT_ENTRIES = 500;
+const MAX_AUDIT_BYTES = 256 * 1024;
+const MAX_AUDIT_TEXT_LENGTH = 160;
+const MAX_AUDIT_ERROR_LENGTH = 80;
 const RATE_LIMIT_WINDOW = 1000; // ms
 const RATE_LIMIT_MAX = 10;      // requests per window
 const RATE_LIMIT_SENDER_CAP = 200;
@@ -212,6 +215,7 @@ let _trustedExtensionIds: string[] = [];
 let _localMcpBridge: LocalMcpBridgeConfig = { ...DEFAULT_LOCAL_MCP_BRIDGE };
 let _initialized = false;
 let _initPromise: Promise<void> | null = null;
+let _auditSaveChain: Promise<void> = Promise.resolve();
 const _rateLimitMap = new Map<string, number[]>();
 
 // Max size for externally-supplied script code (5 MB)
@@ -781,7 +785,16 @@ async function loadState(): Promise<void> {
       ...DEFAULT_PERMISSIONS,
       ...((result[STORAGE_KEY_PERMS] as Record<string, PermissionLevel> | undefined) ?? {})
     };
-    _auditLog = (result[STORAGE_KEY_AUDIT] as AuditEntry[] | undefined) ?? [];
+    const storedAudit = Array.isArray(result[STORAGE_KEY_AUDIT])
+      ? result[STORAGE_KEY_AUDIT] as unknown[]
+      : [];
+    const sanitizedAudit: AuditEntry[] = [];
+    for (const entry of storedAudit.slice(-MAX_AUDIT_ENTRIES)) {
+      const safeEntry = await sanitizeStoredAuditEntry(entry);
+      if (safeEntry) sanitizedAudit.push(safeEntry);
+    }
+    _auditLog = trimAuditLog(sanitizedAudit);
+    if (storedAudit.length > 0) void saveAuditLog();
     _webhooks = (result[STORAGE_KEY_WEBHOOKS] as Record<string, WebhookConfig> | undefined) ?? {};
     _trustedOrigins = normalizeStoredTrustedOrigins(result[STORAGE_KEY_ORIGINS]);
     _trustedExtensionIds = normalizeStoredTrustedExtensionIds(result[STORAGE_KEY_TRUSTED_EXTENSIONS]);
@@ -805,12 +818,15 @@ async function savePermissions(): Promise<void> {
 }
 
 async function saveAuditLog(): Promise<void> {
+  const run = async (): Promise<void> => {
+    _auditLog = trimAuditLog(_auditLog);
+    const snapshot = _auditLog.map(cloneAuditEntry);
+    await chrome.storage.local.set({ [STORAGE_KEY_AUDIT]: snapshot });
+  };
+  const pending = _auditSaveChain.then(run, run);
+  _auditSaveChain = pending.then(() => undefined, () => undefined);
   try {
-    // Trim to max entries
-    if (_auditLog.length > MAX_AUDIT_ENTRIES) {
-      _auditLog = _auditLog.slice(-MAX_AUDIT_ENTRIES);
-    }
-    await chrome.storage.local.set({ [STORAGE_KEY_AUDIT]: _auditLog });
+    await pending;
   } catch (e: unknown) {
     console.warn('[PublicAPI] save audit failed:', e);
   }
@@ -891,25 +907,265 @@ async function configureLocalMcpBridge(config: {
 /*  Audit Logging                                                      */
 /* ------------------------------------------------------------------ */
 
-function audit(action: string, sender: SenderLike | null, details: unknown, result: string): AuditEntry {
+function auditRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function boundedAuditText(value: unknown, maxLength = MAX_AUDIT_TEXT_LENGTH): string | null {
+  if (typeof value !== 'string') return null;
+  const normalized = value.replace(/[\u0000-\u001f\u007f]/g, ' ').trim();
+  return normalized ? normalized.slice(0, maxLength) : null;
+}
+
+function auditUrlMetadata(value: unknown): { protocol: string; host: string } | null {
+  if (typeof value !== 'string' || !value) return null;
+  try {
+    const parsed = new URL(value);
+    return {
+      protocol: parsed.protocol.replace(':', ''),
+      host: parsed.host.slice(0, MAX_AUDIT_TEXT_LENGTH),
+    };
+  } catch {
+    return { protocol: 'invalid', host: '' };
+  }
+}
+
+function auditErrorCode(value: unknown): string {
+  const text = typeof value === 'string' ? value.toLowerCase() : '';
+  if (text.includes('timeout')) return 'timeout';
+  if (text.includes('abort')) return 'aborted';
+  if (text.includes('quota') || text.includes('storage')) return 'storage_error';
+  if (text.includes('permission') || text.includes('denied')) return 'permission_denied';
+  if (text.includes('http 4')) return 'http_4xx';
+  if (text.includes('http 5')) return 'http_5xx';
+  if (text.includes('network') || text.includes('fetch') || text.includes('connect')) return 'network_error';
+  return 'error';
+}
+
+function serializeAuditValue(value: unknown): string {
+  if (typeof value === 'string') return value;
+  try {
+    const serialized = JSON.stringify(value);
+    return typeof serialized === 'string' ? serialized : String(value);
+  } catch {
+    return Object.prototype.toString.call(value);
+  }
+}
+
+function fallbackAuditHash(value: string): string {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `fnv1a:${(hash >>> 0).toString(16).padStart(8, '0')}`;
+}
+
+async function hashAuditValue(value: string): Promise<string> {
+  try {
+    if (crypto?.subtle?.digest) {
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+      return `sha256:${bytesToHex(digest)}`;
+    }
+  } catch {
+    // Fall through to a deterministic non-secret fallback. The raw value is
+    // never returned or persisted even when Web Crypto is unavailable.
+  }
+  return fallbackAuditHash(value);
+}
+
+async function summarizeAuditValue(value: unknown): Promise<{ bytes: number; hash: string }> {
+  const serialized = serializeAuditValue(value);
+  return {
+    bytes: measuredUtf8Length(serialized),
+    hash: await hashAuditValue(serialized),
+  };
+}
+
+function addAuditReference(safe: Record<string, unknown>, raw: Record<string, unknown>, key: string): void {
+  const value = boundedAuditText(raw[key]);
+  if (value) safe[key] = value;
+}
+
+function copyAuditUrlMetadata(safe: Record<string, unknown>, raw: Record<string, unknown>, key: string): void {
+  const value = raw[key];
+  const stored = auditRecord(value);
+  if (stored && typeof stored.protocol === 'string' && typeof stored.host === 'string') {
+    safe[key] = {
+      protocol: boundedAuditText(stored.protocol, 16) || 'invalid',
+      host: boundedAuditText(stored.host) || '',
+    };
+    return;
+  }
+  const url = auditUrlMetadata(value);
+  if (url) safe[key] = url;
+}
+
+function preserveAuditSummary(safe: Record<string, unknown>, raw: Record<string, unknown>, key: string): void {
+  const bytes = raw[`${key}Bytes`];
+  const hash = raw[`${key}Hash`];
+  if (typeof bytes === 'number' && Number.isFinite(bytes) && bytes >= 0 && typeof hash === 'string') {
+    safe[`${key}Bytes`] = Math.floor(bytes);
+    safe[`${key}Hash`] = boundedAuditText(hash, 96) || 'unavailable';
+  }
+}
+
+async function addAuditSensitiveField(
+  safe: Record<string, unknown>,
+  raw: Record<string, unknown>,
+  key: string,
+): Promise<void> {
+  if (!Object.prototype.hasOwnProperty.call(raw, key)) return;
+  const summary = await summarizeAuditValue(raw[key]);
+  safe[`${key}Bytes`] = summary.bytes;
+  safe[`${key}Hash`] = summary.hash;
+}
+
+async function sanitizeAuditPayload(payload: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const safe: Record<string, unknown> = {};
+  for (const key of ['scriptId', 'name', 'version', 'status', 'outcome', 'requestId']) {
+    addAuditReference(safe, payload, key);
+  }
+  if (payload.url !== undefined) {
+    copyAuditUrlMetadata(safe, payload, 'url');
+  }
+  if (payload.errorCode !== undefined) {
+    safe.errorCode = boundedAuditText(payload.errorCode, MAX_AUDIT_ERROR_LENGTH) || 'error';
+  } else if (payload.error !== undefined) {
+    safe.errorCode = auditErrorCode(payload.error);
+  }
+  for (const key of ['code', 'source', 'body', 'token', 'content', 'headers', 'query', 'payload', 'data']) {
+    preserveAuditSummary(safe, payload, key);
+    await addAuditSensitiveField(safe, payload, key);
+  }
+  return safe;
+}
+
+async function sanitizeAuditDetails(action: string, details: unknown): Promise<Record<string, unknown> | null> {
+  const raw = auditRecord(details);
+  if (!raw) return null;
+  const safe: Record<string, unknown> = {};
+
+  if (action === 'installScript' || action === 'scriptvault:install') {
+    addAuditReference(safe, raw, 'scriptId');
+    addAuditReference(safe, raw, 'requestId');
+    if (raw.url !== undefined) {
+      copyAuditUrlMetadata(safe, raw, 'url');
+    }
+    preserveAuditSummary(safe, raw, 'code');
+    await addAuditSensitiveField(safe, raw, 'code');
+    return Object.keys(safe).length > 0 ? safe : null;
+  }
+
+  if (action === 'toggleScript' || action === 'getScriptStatus') {
+    addAuditReference(safe, raw, 'scriptId');
+    addAuditReference(safe, raw, 'id');
+    if (typeof raw.enabled === 'boolean') safe.enabled = raw.enabled;
+    addAuditReference(safe, raw, 'requestId');
+    return Object.keys(safe).length > 0 ? safe : null;
+  }
+
+  if (action === 'scriptvault:isInstalled') {
+    addAuditReference(safe, raw, 'name');
+    return Object.keys(safe).length > 0 ? safe : null;
+  }
+
+  if (action === 'fireEvent') {
+    addAuditReference(safe, raw, 'eventType');
+    const payload = auditRecord(raw.payload);
+    if (payload) safe.payload = await sanitizeAuditPayload(payload);
+    return Object.keys(safe).length > 0 ? safe : null;
+  }
+
+  addAuditReference(safe, raw, 'requestId');
+  addAuditReference(safe, raw, 'scriptId');
+  return Object.keys(safe).length > 0 ? safe : null;
+}
+
+function sanitizeStoredSender(value: unknown): string {
+  if (typeof value !== 'string') return 'unknown';
+  if (value.startsWith('extension:')) {
+    return `extension:${boundedAuditText(value.slice('extension:'.length), MAX_EXTENSION_ID_LENGTH) || 'unknown'}`;
+  }
+  if (value.startsWith('origin:')) {
+    return describeSender({ origin: value.slice('origin:'.length) });
+  }
+  if (value.startsWith('url:')) {
+    return describeSender({ url: value.slice('url:'.length) });
+  }
+  return 'unknown';
+}
+
+async function sanitizeStoredAuditEntry(value: unknown): Promise<AuditEntry | null> {
+  const raw = auditRecord(value);
+  if (!raw) return null;
+  const timestamp = typeof raw.timestamp === 'number' && Number.isFinite(raw.timestamp)
+    ? raw.timestamp
+    : Date.now();
+  const action = boundedAuditText(raw.action, MAX_AUDIT_TEXT_LENGTH) || 'unknown';
+  return {
+    timestamp,
+    action,
+    sender: sanitizeStoredSender(raw.sender),
+    details: await sanitizeAuditDetails(action, raw.details),
+    result: boundedAuditText(raw.result, MAX_AUDIT_ERROR_LENGTH) || 'ok',
+  };
+}
+
+function auditSerializedBytes(entries: AuditEntry[]): number {
+  try {
+    return measuredUtf8Length(JSON.stringify(entries));
+  } catch {
+    return Number.POSITIVE_INFINITY;
+  }
+}
+
+function trimAuditLog(entries: AuditEntry[]): AuditEntry[] {
+  const bounded = entries.slice(-MAX_AUDIT_ENTRIES);
+  while (bounded.length > 0 && auditSerializedBytes(bounded) > MAX_AUDIT_BYTES) {
+    bounded.shift();
+  }
+  return bounded;
+}
+
+function cloneAuditEntry(entry: AuditEntry): AuditEntry {
+  return {
+    ...entry,
+    details: entry.details && typeof entry.details === 'object'
+      ? JSON.parse(JSON.stringify(entry.details))
+      : entry.details,
+  };
+}
+
+async function audit(action: string, sender: SenderLike | null, details: unknown, result: string): Promise<AuditEntry> {
   const entry: AuditEntry = {
     timestamp: Date.now(),
-    action,
+    action: boundedAuditText(action, MAX_AUDIT_TEXT_LENGTH) || 'unknown',
     sender: describeSender(sender),
-    details: details ?? null,
-    result: result || 'ok'
+    details: await sanitizeAuditDetails(action, details),
+    result: boundedAuditText(result, MAX_AUDIT_ERROR_LENGTH) || 'ok'
   };
   _auditLog.push(entry);
-  // Async save, don't await in hot path
+  // Persist through the serialized, bounded writer. The entry already has
+  // metadata-only details, so no caller-supplied source or token reaches the
+  // in-memory log even while the write is queued.
   void saveAuditLog();
   return entry;
 }
 
 function describeSender(sender: SenderLike | null | undefined): string {
   if (!sender) return 'unknown';
-  if (sender.id) return `extension:${sender.id}`;
-  if (sender.origin) return `origin:${sender.origin}`;
-  if (sender.url) return `url:${sender.url}`;
+  if (sender.id) return `extension:${boundedAuditText(sender.id, MAX_EXTENSION_ID_LENGTH) || 'unknown'}`;
+  if (sender.origin) {
+    const metadata = auditUrlMetadata(sender.origin);
+    return metadata?.host ? `origin:${metadata.protocol}://${metadata.host}` : 'origin:invalid';
+  }
+  if (sender.url) {
+    const metadata = auditUrlMetadata(sender.url);
+    return metadata?.host ? `url:${metadata.protocol}://${metadata.host}` : 'url:invalid';
+  }
   return 'unknown';
 }
 
@@ -1757,22 +2013,22 @@ async function dispatchLocalMcpMessage(msg: WebPageMessage, rawOrigin: string): 
   const auth = await authorizeLocalMcpMessage(msg, rawOrigin);
   const sender = { origin: rawOrigin };
   if (!auth.ok) {
-    audit(msg.type, sender, null, auth.result);
+    await audit(msg.type, sender, null, auth.result);
     return mcpEnvelope(msg, { error: auth.error });
   }
 
   const senderId = `mcp:${auth.origin}`;
   if (!checkRateLimit(senderId)) {
-    audit(msg.type, { origin: auth.origin }, null, 'rate_limited');
+    await audit(msg.type, { origin: auth.origin }, null, 'rate_limited');
     return mcpEnvelope(msg, { error: 'Rate limited. Max 10 requests per second.' });
   }
 
   try {
     const result = await handler(msg, auth.origin);
-    audit(msg.type, { origin: auth.origin }, { requestId: msg.requestId ?? null }, result?.error ? 'error' : 'ok');
+    await audit(msg.type, { origin: auth.origin }, { requestId: msg.requestId ?? null }, result?.error ? 'error' : 'ok');
     return mcpEnvelope(msg, result);
   } catch (e: unknown) {
-    audit(msg.type, { origin: auth.origin }, { requestId: msg.requestId ?? null }, 'exception');
+    await audit(msg.type, { origin: auth.origin }, { requestId: msg.requestId ?? null }, 'exception');
     console.warn('[PublicAPI] Local MCP handler exception:', msg.type, e);
     return mcpEnvelope(msg, { error: 'Internal error' });
   }
@@ -1986,7 +2242,7 @@ async function dispatchExternal(message: ExternalMessage, sender: SenderLike): P
   // extension ID when the sender is an extension (sender.id is set).
   // This prevents unknown extensions from reading script inventory.
   if (sender?.id && !HANDSHAKE_ACTIONS.has(action) && !isExtensionSenderTrusted(sender)) {
-    audit(action, sender, null, 'untrusted_extension');
+    await audit(action, sender, null, 'untrusted_extension');
     return { error: 'Extension not trusted. Add this extension ID to trusted extensions in ScriptVault settings.', extensionId: sender.id };
   }
 
@@ -1995,7 +2251,7 @@ async function dispatchExternal(message: ExternalMessage, sender: SenderLike): P
   const endpoint = API_SCHEMA.endpoints[action];
   if (endpoint?.rateLimit !== false) {
     if (!checkRateLimit(senderId)) {
-      audit(action, sender, null, 'rate_limited');
+      await audit(action, sender, null, 'rate_limited');
       return { error: 'Rate limited. Max 10 requests per second.' };
     }
   }
@@ -2003,17 +2259,17 @@ async function dispatchExternal(message: ExternalMessage, sender: SenderLike): P
   // Permission check (ping, getVersion, getAPISchema are always allowed)
   const perm = getPermission(action);
   if (perm === 'deny') {
-    audit(action, sender, null, 'denied');
+    await audit(action, sender, null, 'denied');
     return { error: 'Permission denied', action };
   }
 
   // Execute
   try {
     const result = await handler(message, sender);
-    audit(action, sender, message, result?.['error'] ? 'error' : 'ok');
+    await audit(action, sender, message, result?.['error'] ? 'error' : 'ok');
     return result;
   } catch (e: unknown) {
-    audit(action, sender, message, 'exception');
+    await audit(action, sender, message, 'exception');
     // Don't leak internal error details to external callers — log locally
     // for the operator and return a generic message so an external page
     // can't probe for stack frames / file paths / token hints via error text.
@@ -2066,7 +2322,7 @@ async function dispatchWebMessagePayload(data: unknown, rawOrigin: string): Prom
   const handler = WEB_HANDLERS[msg.type];
   if (!handler) return null;
 
-  audit(msg.type, { origin }, msg, 'processing');
+  await audit(msg.type, { origin }, msg, 'processing');
 
   try {
     return await handler(msg, origin);
@@ -2187,8 +2443,11 @@ const PublicAPI = {
    * Return the audit log (most recent entries).
    */
   getAuditLog(limit = 50): AuditEntry[] {
-    const start = Math.max(0, _auditLog.length - limit);
-    return _auditLog.slice(start);
+    const boundedLimit = Number.isFinite(limit)
+      ? Math.max(0, Math.min(MAX_AUDIT_ENTRIES, Math.floor(limit)))
+      : 50;
+    const start = Math.max(0, _auditLog.length - boundedLimit);
+    return _auditLog.slice(start).map(cloneAuditEntry);
   },
 
   /**
@@ -2296,7 +2555,7 @@ const PublicAPI = {
    * Fire a webhook event programmatically (used by other modules).
    */
   async fireEvent(eventType: string, payload: Record<string, unknown>): Promise<void> {
-    audit('fireEvent', { id: 'internal' }, { eventType, payload }, 'ok');
+    await audit('fireEvent', { id: 'internal' }, { eventType, payload }, 'ok');
     await fireWebhook(eventType, payload);
   },
 
