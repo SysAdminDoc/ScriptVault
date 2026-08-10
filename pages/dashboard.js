@@ -7691,7 +7691,40 @@
                 const button = item.querySelector('[data-trash-restore]');
                 await runButtonTask(button, async () => {
                     try {
-                        const response = await chrome.runtime.sendMessage({ action: 'restoreFromTrash', scriptId: script.id });
+                        let response = await chrome.runtime.sendMessage({ action: 'restoreFromTrash', scriptId: script.id });
+                        if (response?.code === 'RESTORE_COLLISION') {
+                            const formatSnapshot = snapshot => {
+                                const name = snapshot?.name || snapshot?.id || tDashboard('unknownScript', 'Unknown script');
+                                const version = snapshot?.version ? `v${snapshot.version}` : tDashboard('unknownVersion', 'unknown version');
+                                return `${name} (${version})`;
+                            };
+                            const currentLabel = formatSnapshot(response.current);
+                            const trashedLabel = formatSnapshot(response.trashed);
+                            const conflictMessage = tDashboard(
+                                'trashRestoreConflictMessage',
+                                'An active script already uses this ID. Current: {current}. Trashed copy: {trashed}. Replace the active script with the trashed copy?',
+                                { current: currentLabel, trashed: trashedLabel }
+                            )
+                                .replace(/\{current\}/g, currentLabel)
+                                .replace(/\{trashed\}/g, trashedLabel);
+                            const replace = await showConfirmModal(
+                                tDashboard('trashRestoreConflictTitle', 'Restore conflict'),
+                                conflictMessage,
+                                {
+                                    confirmLabel: tDashboard('trashRestoreConflictAction', 'Replace active script'),
+                                    tone: 'danger'
+                                }
+                            );
+                            if (!replace) {
+                                showToast(tDashboard('trashRestoreConflictCancel', 'Restore canceled; both versions are unchanged.'), 'info');
+                                return;
+                            }
+                            response = await chrome.runtime.sendMessage({
+                                action: 'restoreFromTrash',
+                                scriptId: script.id,
+                                replaceExisting: true
+                            });
+                        }
                         if (response?.error) {
                             showToast(response.error, 'error');
                             return;

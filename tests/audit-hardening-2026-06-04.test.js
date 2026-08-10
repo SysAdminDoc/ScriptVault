@@ -135,15 +135,17 @@ describe('restoreFromTrash tombstone cleanup (2026-06-04)', () => {
   it('clears sync tombstone on restore', () => {
     const src = fs.readFileSync(path.join(ROOT, 'background.core.js'), 'utf8');
     const restoreBlock = src.slice(
-      src.indexOf('restoreFromTrash: async scriptId'),
+      src.indexOf('restoreFromTrash: async (scriptId, replaceExisting = false)'),
       src.indexOf('emptyTrash: async')
     );
     expect(restoreBlock).toContain('syncTombstones');
     expect(restoreBlock).toContain('delete tombstones[scriptId]');
     // The script must be persisted before it is removed from trash so an SW
     // crash mid-restore can't lose it from both stores.
-    expect(restoreBlock.indexOf('ScriptStorage.set(script.id, script)'))
+    expect(restoreBlock.indexOf('ScriptStorage.restore(script, replaceExisting === true)'))
       .toBeLessThan(restoreBlock.indexOf('trash.splice(index, 1)'));
+    expect(restoreBlock).toContain("code: 'RESTORE_COLLISION'");
+    expect(restoreBlock).toContain('replaceExisting === true');
   });
 });
 

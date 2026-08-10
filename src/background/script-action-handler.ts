@@ -41,7 +41,7 @@ export interface ScriptActionDependencies {
   createScript(code: string): Promise<ResponseMap['createScript']>;
   deleteScript(scriptId?: string): Promise<ResponseMap['deleteScript']>;
   getTrash(): Promise<ResponseMap['getTrash']>;
-  restoreFromTrash(scriptId: string): Promise<ResponseMap['restoreFromTrash']>;
+  restoreFromTrash(scriptId: string, replaceExisting?: boolean): Promise<ResponseMap['restoreFromTrash']>;
   emptyTrash(): Promise<ResponseMap['emptyTrash']>;
   rescheduleScript(scriptId: string): Promise<ResponseMap['rescheduleScript']>;
   restart(): Promise<ResponseMap['restart']> | ResponseMap['restart'];
@@ -64,7 +64,7 @@ export function createScriptActionHandlers(
     createScript: ({ message }) => dependencies.createScript(message.code),
     deleteScript: ({ message }) => dependencies.deleteScript(message.id || message.scriptId),
     getTrash: () => dependencies.getTrash(),
-    restoreFromTrash: ({ message }) => dependencies.restoreFromTrash(message.scriptId),
+    restoreFromTrash: ({ message }) => dependencies.restoreFromTrash(message.scriptId, message.replaceExisting === true),
     emptyTrash: () => dependencies.emptyTrash(),
     rescheduleScript: ({ message }) => dependencies.rescheduleScript(message.scriptId),
     restart: () => dependencies.restart(),

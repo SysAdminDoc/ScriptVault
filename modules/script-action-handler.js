@@ -63,7 +63,7 @@ const ScriptActionHandler = (() => {
       createScript: ({ message }) => dependencies.createScript(message.code),
       deleteScript: ({ message }) => dependencies.deleteScript(message.id || message.scriptId),
       getTrash: () => dependencies.getTrash(),
-      restoreFromTrash: ({ message }) => dependencies.restoreFromTrash(message.scriptId),
+      restoreFromTrash: ({ message }) => dependencies.restoreFromTrash(message.scriptId, message.replaceExisting === true),
       emptyTrash: () => dependencies.emptyTrash(),
       rescheduleScript: ({ message }) => dependencies.rescheduleScript(message.scriptId),
       restart: () => dependencies.restart(),

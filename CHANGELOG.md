@@ -17,6 +17,8 @@ All notable changes to ScriptVault will be documented in this file.
 - Bounded Trash retention to 100 entries and 6 MiB of UTF-8 serialized data,
   evicting the oldest recovery records deterministically and surfacing the
   unavailable items in the dashboard.
+- Added an atomic IndexedDB collision check to Trash restore, with a
+  current-versus-trashed comparison and explicit replacement confirmation.
 - Routed Public API list, status, presence, and install positioning through
   the authoritative IndexedDB-backed ScriptStorage instead of the retired
   `userscripts` storage blob.

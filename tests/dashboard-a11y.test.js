@@ -704,7 +704,9 @@ describe("dashboard accessibility markup", () => {
     expect(dashboardJs).toMatch(/function getTrashPurgeTimestamp\(script\)/);
     expect(dashboardJs).toMatch(/Will auto-delete on/);
     expect(dashboardJs).toMatch(/next automatic purge is/);
-    expect(dashboardJs).toMatch(/runButtonTask\(button, async \(\) => \{\s*try \{\s*const response = await chrome\.runtime\.sendMessage\(\{ action: 'restoreFromTrash', scriptId: script\.id \}\);/);
+    expect(dashboardJs).toMatch(/runButtonTask\(button, async \(\) => \{\s*try \{\s*let response = await chrome\.runtime\.sendMessage\(\{ action: 'restoreFromTrash', scriptId: script\.id \}\);/);
+    expect(dashboardJs).toContain("response?.code === 'RESTORE_COLLISION'");
+    expect(dashboardJs).toContain('replaceExisting: true');
     expect(dashboardJs).toMatch(/await Promise\.all\(\[loadTrash\(\), loadScripts\(\)\]\);\s*updateStats\(\);\s*showToast\(tDashboard\('scriptRestored', 'Script restored'\), 'success'\);/);
     expect(dashboardJs).toMatch(/runButtonTask\(button, async \(\) => \{\s*const confirm = await showConfirmModal\(\s*tDashboard\('deleteForever', 'Delete Forever'\)/);
     expect(dashboardJs).toMatch(/role="listitem"\$\{ws\.id === active \? ' aria-current="true"' : ''\}/);

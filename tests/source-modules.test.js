@@ -431,6 +431,28 @@ describe('source storage module', () => {
     expect(await ValuesDAO.getAll('script_alpha')).toEqual({});
   });
 
+  it('detects restore ID collisions atomically and only replaces after explicit choice', async () => {
+    const active = makeScript({
+      meta: { ...makeScript().meta, name: 'Current copy', version: '2.0.0' },
+      updatedAt: 20,
+    });
+    const trashed = makeScript({
+      code: '// older restored copy',
+      meta: { ...makeScript().meta, name: 'Trashed copy', version: '1.0.0' },
+      updatedAt: 10,
+    });
+    await ScriptStorage.set(active.id, active);
+
+    const collision = await ScriptStorage.restore(trashed);
+    expect(collision.collision).toBe(true);
+    expect(collision.existing).toMatchObject({ id: active.id, meta: { name: 'Current copy', version: '2.0.0' } });
+    expect(await ScriptStorage.get(active.id)).toMatchObject({ code: active.code, meta: { name: 'Current copy' } });
+
+    const replaced = await ScriptStorage.restore(trashed, true);
+    expect(replaced).toEqual({ collision: false });
+    expect(await ScriptStorage.get(active.id)).toMatchObject({ code: '// older restored copy', meta: { name: 'Trashed copy' } });
+  });
+
   it('rejects invalid orders without mutating the stored positions', async () => {
     const alpha = makeScript({ id: 'script_alpha', position: 0 });
     const beta = makeScript({ id: 'script_beta', position: 1 });

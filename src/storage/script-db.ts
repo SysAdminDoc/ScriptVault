@@ -89,6 +89,11 @@ export interface StatsUrlRewriteResult {
   lastUrl?: string;
 }
 
+export interface ScriptRestoreResult {
+  collision: boolean;
+  existing?: Record<string, unknown>;
+}
+
 function retainStatsUrl(url: unknown, mode: StatsUrlRetentionMode): string | undefined {
   if (mode === 'none' || typeof url !== 'string' || !url) return undefined;
   try {
@@ -344,6 +349,25 @@ export const ScriptsDAO = {
     const row = await encodeScriptForStorage(script);
     await withTransaction(Stores.scripts, 'readwrite', async (tx) => {
       await reqToPromise(tx.objectStore(Stores.scripts).put(row));
+    });
+  },
+
+  /**
+   * Restore a script with an atomic collision check in the scripts store.
+   * Returning the current raw row keeps the check inside the transaction;
+   * callers only need its metadata when a replace decision is required.
+   */
+  async restore(script: Script, replaceExisting = false): Promise<ScriptRestoreResult> {
+    await openScriptDB();
+    const row = await encodeScriptForStorage(script);
+    return withTransaction(Stores.scripts, 'readwrite', async (tx) => {
+      const store = tx.objectStore(Stores.scripts);
+      const existing = await reqToPromise(store.get(script.id)) as StoredScriptRecord | undefined;
+      if (existing && !replaceExisting) {
+        return { collision: true, existing: { ...existing } };
+      }
+      await reqToPromise(store.put(row));
+      return { collision: false };
     });
   },
 

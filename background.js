@@ -6549,6 +6549,10 @@ const I18n = (() => {
       "trashDayPlural": "days",
       "trashRetentionBannerDefault": "Deleted scripts stay here for the configured retention window before permanent cleanup.",
       "trashBudgetNotice": "Trash storage limit reached; {count} older recovery items are no longer available.",
+      "trashRestoreConflictTitle": "Restore conflict",
+      "trashRestoreConflictMessage": "An active script already uses this ID. Current: {current}. Trashed copy: {trashed}. Replace the active script with the trashed copy?",
+      "trashRestoreConflictAction": "Replace active script",
+      "trashRestoreConflictCancel": "Restore canceled; both versions are unchanged.",
       "trashSearchLabel": "Search",
       "trashSearchPlaceholder": "Filter deleted scripts by name, author, or version",
       "trashTimeFilters": "Trash time filters",
@@ -7530,15 +7534,15 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 43,
       "translatedRuntimeMessages": 43,
-      "totalRuntimeMessages": 1992
+      "totalRuntimeMessages": 1996
     },
     "en": {
       "name": "English",
       "direction": "ltr",
       "translationStatus": "complete",
-      "runtimeCoverageBaseline": 1992,
-      "translatedRuntimeMessages": 1992,
-      "totalRuntimeMessages": 1992
+      "runtimeCoverageBaseline": 1996,
+      "translatedRuntimeMessages": 1996,
+      "totalRuntimeMessages": 1996
     },
     "es": {
       "name": "Espa\xF1ol",
@@ -7546,7 +7550,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 45,
       "translatedRuntimeMessages": 45,
-      "totalRuntimeMessages": 1992
+      "totalRuntimeMessages": 1996
     },
     "fr": {
       "name": "Fran\xE7ais",
@@ -7554,7 +7558,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 43,
       "translatedRuntimeMessages": 43,
-      "totalRuntimeMessages": 1992
+      "totalRuntimeMessages": 1996
     },
     "he": {
       "name": "\u05E2\u05D1\u05E8\u05D9\u05EA",
@@ -7562,7 +7566,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 58,
       "translatedRuntimeMessages": 58,
-      "totalRuntimeMessages": 1992
+      "totalRuntimeMessages": 1996
     },
     "ja": {
       "name": "\u65E5\u672C\u8A9E",
@@ -7570,7 +7574,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 71,
       "translatedRuntimeMessages": 71,
-      "totalRuntimeMessages": 1992
+      "totalRuntimeMessages": 1996
     },
     "pt": {
       "name": "Portugu\xEAs",
@@ -7578,7 +7582,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 42,
       "translatedRuntimeMessages": 42,
-      "totalRuntimeMessages": 1992
+      "totalRuntimeMessages": 1996
     },
     "ru": {
       "name": "\u0420\u0443\u0441\u0441\u043A\u0438\u0439",
@@ -7586,7 +7590,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 117,
       "translatedRuntimeMessages": 117,
-      "totalRuntimeMessages": 1992
+      "totalRuntimeMessages": 1996
     },
     "zh": {
       "name": "\u4E2D\u6587",
@@ -7594,7 +7598,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 46,
       "translatedRuntimeMessages": 46,
-      "totalRuntimeMessages": 1992
+      "totalRuntimeMessages": 1996
     }
   };
 
@@ -8256,6 +8260,24 @@ const StorageModule = (() => {
       const row = await encodeScriptForStorage(script);
       await withTransaction(Stores.scripts, "readwrite", async (tx) => {
         await reqToPromise(tx.objectStore(Stores.scripts).put(row));
+      });
+    },
+    /**
+     * Restore a script with an atomic collision check in the scripts store.
+     * Returning the current raw row keeps the check inside the transaction;
+     * callers only need its metadata when a replace decision is required.
+     */
+    async restore(script, replaceExisting = false) {
+      await openScriptDB();
+      const row = await encodeScriptForStorage(script);
+      return withTransaction(Stores.scripts, "readwrite", async (tx) => {
+        const store = tx.objectStore(Stores.scripts);
+        const existing = await reqToPromise(store.get(script.id));
+        if (existing && !replaceExisting) {
+          return { collision: true, existing: { ...existing } };
+        }
+        await reqToPromise(store.put(row));
+        return { collision: false };
       });
     },
     /**
@@ -9059,6 +9081,15 @@ const StorageModule = (() => {
       void prev;
       notifyScriptChange();
       return cloneScriptRecord(nextScript);
+    },
+    async restore(script, replaceExisting = false) {
+      await this.init();
+      const nextScript = cloneScriptRecord(script);
+      const result = await ScriptsDAO.restore(nextScript, replaceExisting);
+      if (result.collision) return result;
+      this.cache[nextScript.id] = nextScript;
+      notifyScriptChange();
+      return result;
     },
     async delete(id) {
       await this.init();
@@ -12013,7 +12044,7 @@ const ScriptActionHandler = (() => {
       createScript: ({ message }) => dependencies.createScript(message.code),
       deleteScript: ({ message }) => dependencies.deleteScript(message.id || message.scriptId),
       getTrash: () => dependencies.getTrash(),
-      restoreFromTrash: ({ message }) => dependencies.restoreFromTrash(message.scriptId),
+      restoreFromTrash: ({ message }) => dependencies.restoreFromTrash(message.scriptId, message.replaceExisting === true),
       emptyTrash: () => dependencies.emptyTrash(),
       rescheduleScript: ({ message }) => dependencies.rescheduleScript(message.scriptId),
       restart: () => dependencies.restart(),
@@ -32121,6 +32152,19 @@ function _trashEvictionSummary(entry) {
   };
 }
 
+function _restoreConflictSnapshot(script) {
+  const meta = script?.meta || script?.metadata || {};
+  const id = typeof script?.id === 'string' ? script.id.slice(0, 160) : '';
+  const name = typeof meta?.name === 'string' && meta.name.trim()
+    ? meta.name.trim().slice(0, 200)
+    : id || 'Untitled script';
+  const version = typeof meta?.version === 'string' ? meta.version.trim().slice(0, 80) : '';
+  const updatedAt = Number(script?.updatedAt);
+  return Number.isFinite(updatedAt) && updatedAt > 0
+    ? { id, name, version, updatedAt }
+    : { id, name, version };
+}
+
 function _enforceTrashBudget(trash) {
   const records = (Array.isArray(trash) ? trash : []).map((entry, index) => ({
     entry,
@@ -38809,7 +38853,7 @@ backgroundActionRegistry.registerHandlers(ScriptActionHandler.createScriptAction
     });
     return valid;
   },
-  restoreFromTrash: async scriptId => {
+  restoreFromTrash: async (scriptId, replaceExisting = false) => {
     if (!scriptId) return { error: 'Missing script ID' };
     return await _runExclusiveScriptOperation(scriptId, async () => {
       return await _runExclusiveTrashMutation(async () => {
@@ -38826,7 +38870,15 @@ backgroundActionRegistry.registerHandlers(ScriptActionHandler.createScriptAction
         if (parsed.error) return { error: 'Corrupt trash entry: ' + parsed.error };
         script.meta = parsed.meta;
         delete script.trashedAt;
-        await ScriptStorage.set(script.id, script);
+        const restoreResult = await ScriptStorage.restore(script, replaceExisting === true);
+        if (restoreResult.collision) {
+          return {
+            error: 'An active script already uses this ID.',
+            code: 'RESTORE_COLLISION',
+            current: _restoreConflictSnapshot(restoreResult.existing),
+            trashed: _restoreConflictSnapshot(script)
+          };
+        }
         const tombstoneData = await chrome.storage.local.get('syncTombstones');
         const tombstones = tombstoneData.syncTombstones || {};
         if (tombstones[scriptId]) {

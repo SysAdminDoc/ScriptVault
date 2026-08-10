@@ -1390,6 +1390,19 @@ function _trashEvictionSummary(entry) {
   };
 }
 
+function _restoreConflictSnapshot(script) {
+  const meta = script?.meta || script?.metadata || {};
+  const id = typeof script?.id === 'string' ? script.id.slice(0, 160) : '';
+  const name = typeof meta?.name === 'string' && meta.name.trim()
+    ? meta.name.trim().slice(0, 200)
+    : id || 'Untitled script';
+  const version = typeof meta?.version === 'string' ? meta.version.trim().slice(0, 80) : '';
+  const updatedAt = Number(script?.updatedAt);
+  return Number.isFinite(updatedAt) && updatedAt > 0
+    ? { id, name, version, updatedAt }
+    : { id, name, version };
+}
+
 function _enforceTrashBudget(trash) {
   const records = (Array.isArray(trash) ? trash : []).map((entry, index) => ({
     entry,
@@ -8078,7 +8091,7 @@ backgroundActionRegistry.registerHandlers(ScriptActionHandler.createScriptAction
     });
     return valid;
   },
-  restoreFromTrash: async scriptId => {
+  restoreFromTrash: async (scriptId, replaceExisting = false) => {
     if (!scriptId) return { error: 'Missing script ID' };
     return await _runExclusiveScriptOperation(scriptId, async () => {
       return await _runExclusiveTrashMutation(async () => {
@@ -8095,7 +8108,15 @@ backgroundActionRegistry.registerHandlers(ScriptActionHandler.createScriptAction
         if (parsed.error) return { error: 'Corrupt trash entry: ' + parsed.error };
         script.meta = parsed.meta;
         delete script.trashedAt;
-        await ScriptStorage.set(script.id, script);
+        const restoreResult = await ScriptStorage.restore(script, replaceExisting === true);
+        if (restoreResult.collision) {
+          return {
+            error: 'An active script already uses this ID.',
+            code: 'RESTORE_COLLISION',
+            current: _restoreConflictSnapshot(restoreResult.existing),
+            trashed: _restoreConflictSnapshot(script)
+          };
+        }
         const tombstoneData = await chrome.storage.local.get('syncTombstones');
         const tombstones = tombstoneData.syncTombstones || {};
         if (tombstones[scriptId]) {

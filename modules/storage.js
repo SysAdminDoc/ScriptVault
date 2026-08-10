@@ -533,6 +533,24 @@ const StorageModule = (() => {
       });
     },
     /**
+     * Restore a script with an atomic collision check in the scripts store.
+     * Returning the current raw row keeps the check inside the transaction;
+     * callers only need its metadata when a replace decision is required.
+     */
+    async restore(script, replaceExisting = false) {
+      await openScriptDB();
+      const row = await encodeScriptForStorage(script);
+      return withTransaction(Stores.scripts, "readwrite", async (tx) => {
+        const store = tx.objectStore(Stores.scripts);
+        const existing = await reqToPromise(store.get(script.id));
+        if (existing && !replaceExisting) {
+          return { collision: true, existing: { ...existing } };
+        }
+        await reqToPromise(store.put(row));
+        return { collision: false };
+      });
+    },
+    /**
      * Update every script position in one transaction without rewriting the
      * rest of any script record. The transaction re-reads the store so a
      * concurrent save cannot be overwritten by a stale in-memory snapshot.
@@ -1333,6 +1351,15 @@ const StorageModule = (() => {
       void prev;
       notifyScriptChange();
       return cloneScriptRecord(nextScript);
+    },
+    async restore(script, replaceExisting = false) {
+      await this.init();
+      const nextScript = cloneScriptRecord(script);
+      const result = await ScriptsDAO.restore(nextScript, replaceExisting);
+      if (result.collision) return result;
+      this.cache[nextScript.id] = nextScript;
+      notifyScriptChange();
+      return result;
     },
     async delete(id) {
       await this.init();

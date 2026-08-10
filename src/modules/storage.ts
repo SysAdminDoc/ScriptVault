@@ -12,6 +12,7 @@ import {
   ValuesDAO,
   type StatsUrlRetentionMode,
   type StatsUrlRewriteResult,
+  type ScriptRestoreResult,
 } from '../storage/script-db';
 import { ensureV3Migration } from '../storage/migration-v3';
 
@@ -470,6 +471,16 @@ export const ScriptStorage = {
     void prev; // explicit no-op to keep diff readable; cache now matches IDB
     notifyScriptChange();
     return cloneScriptRecord(nextScript);
+  },
+
+  async restore(script: Script, replaceExisting = false): Promise<ScriptRestoreResult> {
+    await this.init();
+    const nextScript = cloneScriptRecord(script);
+    const result = await ScriptsDAO.restore(nextScript, replaceExisting);
+    if (result.collision) return result;
+    this.cache![nextScript.id] = nextScript;
+    notifyScriptChange();
+    return result;
   },
 
   async delete(id: string): Promise<void> {

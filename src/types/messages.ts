@@ -259,6 +259,18 @@ interface TrashEvictionSummary {
   name: string;
   trashedAt: number;
 }
+interface TrashRestoreSnapshot {
+  id: string;
+  name: string;
+  version: string;
+  updatedAt?: number;
+}
+interface RestoreCollisionResponse {
+  error: string;
+  code: 'RESTORE_COLLISION';
+  current: TrashRestoreSnapshot;
+  trashed: TrashRestoreSnapshot;
+}
 interface GetTrashResponse {
   trash: Script[];
   evicted?: TrashEvictionSummary[];
@@ -268,6 +280,7 @@ interface GetTrashResponse {
 interface RestoreFromTrash {
   action: 'restoreFromTrash';
   scriptId: string;
+  replaceExisting?: boolean;
 }
 
 interface EmptyTrash {
@@ -2015,7 +2028,7 @@ export interface ResponseMap {
 
   // ── Trash ──────────────────────────────────────────────────────────
   getTrash: GetTrashResponse;
-  restoreFromTrash: SuccessResponse | ErrorResponse;
+  restoreFromTrash: SuccessResponse | ErrorResponse | RestoreCollisionResponse;
   emptyTrash: SuccessResponse;
   rescheduleScript: SuccessResponse | ErrorResponse;
   permanentlyDelete: SuccessResponse;

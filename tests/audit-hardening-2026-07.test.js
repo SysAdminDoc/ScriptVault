@@ -450,8 +450,8 @@ describe('Easy Cloud reacts to real script mutations (2026-07 P2 regression)', (
   });
 
   it('notifies Easy Cloud after adjacent script-state mutation paths persist', () => {
-    const restoreBlock = core.slice(core.indexOf('restoreFromTrash: async scriptId'), core.indexOf('emptyTrash: async'));
-    expectNotifyAfter(restoreBlock, 'await ScriptStorage.set(script.id, script);', 'notifyEasyCloudScriptSaved(script.id);');
+    const restoreBlock = core.slice(core.indexOf('restoreFromTrash: async (scriptId, replaceExisting = false)'), core.indexOf('emptyTrash: async'));
+    expectNotifyAfter(restoreBlock, 'const restoreResult = await ScriptStorage.restore(script, replaceExisting === true);', 'notifyEasyCloudScriptSaved(script.id);');
 
     const toggleBlock = core.slice(core.indexOf('toggleScript: async message'), core.indexOf('duplicateScript: async id'));
     expectNotifyAfter(toggleBlock, 'await ScriptStorage.set(scriptId, script);', 'notifyEasyCloudScriptSaved(scriptId);');
