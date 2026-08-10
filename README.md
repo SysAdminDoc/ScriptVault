@@ -501,11 +501,16 @@ that script in the dashboard editor.
 
 | Value | Timing |
 |-------|--------|
-| `document-start` | Before DOM loads |
+| `document-start` | Before page inline scripts in the tested Chrome MV3 and Firefox sideload paths |
 | `document-body` | When `<body>` exists |
 | `document-end` | When DOM is complete (default) |
 | `document-idle` | When page is fully loaded |
 | `context-menu` | On right-click context menu |
+
+The document-start ordering guarantee is exercised against a page inline-script
+race in `tests/e2e/document-start.spec.js` and `scripts/smoke-firefox-sideload.mjs`.
+The Chromium test covers a warm worker and a worker restart; the Firefox smoke
+covers the sideloaded extension path. This behavior was measured on 2026-08-10.
 
 ---
 

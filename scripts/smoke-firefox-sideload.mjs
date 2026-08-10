@@ -159,6 +159,54 @@ async function smokePageServer() {
   };
 }
 
+async function documentStartPageServer() {
+  const server = createServer((request, response) => {
+    response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+    response.end(`<!doctype html>
+      <html>
+        <head>
+          <title>ScriptVault Firefox Document Start Target</title>
+          <script>
+            const sawDocumentStart = document.documentElement.getAttribute('data-sv-document-start') === 'true';
+            document.documentElement.setAttribute(
+              'data-sv-inline-observed',
+              sawDocumentStart ? 'user-script-first' : 'page-first'
+            );
+          </script>
+        </head>
+        <body><main id="target">Firefox document-start target</main></body>
+      </html>`);
+  });
+  await new Promise((resolveServer, reject) => {
+    server.on('error', reject);
+    server.listen(0, '127.0.0.1', resolveServer);
+  });
+  const address = server.address();
+  const port = address && typeof address === 'object' ? address.port : null;
+  if (!port) {
+    server.close();
+    fail('Could not start the Firefox document-start target server');
+  }
+  return {
+    url: `http://127.0.0.1:${port}/document-start-target`,
+    close: () => new Promise(resolveClose => server.close(resolveClose)),
+  };
+}
+
+const FIREFOX_DOCUMENT_START_SCRIPT = [
+  '// ==UserScript==',
+  '// @name ScriptVault Firefox Document Start Smoke',
+  '// @namespace scriptvault/firefox-document-start',
+  '// @version 1.0.0',
+  '// @match http://127.0.0.1/*',
+  '// @run-at document-start',
+  '// @grant none',
+  '// ==/UserScript==',
+  '',
+  'document.documentElement.setAttribute("data-sv-document-start", "true");',
+  '',
+].join('\n');
+
 // Userscript for the SPA smoke. It only listens; every navigation is driven from
 // the page world so the assertion proves cross-world reach, not self-dispatch.
 export const SPA_URL_CHANGE_SCRIPT = [
@@ -905,6 +953,37 @@ async function scriptRoundTripSmoke(baseUrl, sessionId, dashboardUrl) {
   };
 }
 
+async function documentStartSmoke(baseUrl, sessionId, dashboardUrl) {
+  await navigate(baseUrl, sessionId, dashboardUrl);
+  const save = await runtimeMessage(baseUrl, sessionId, {
+    action: 'saveScript',
+    id: 'scriptvault_firefox_document_start',
+    code: FIREFOX_DOCUMENT_START_SCRIPT,
+    enabled: true,
+  }, 60000);
+  if (!save?.success) {
+    fail(`document-start smoke script could not be saved: ${save?.error || JSON.stringify(save)}`);
+  }
+
+  const target = await documentStartPageServer();
+  try {
+    await navigate(baseUrl, sessionId, target.url);
+    const result = await waitFor(baseUrl, sessionId, 'Firefox document-start ordering', `
+      return {
+        ok: document.documentElement.dataset.svInlineObserved === 'user-script-first',
+        observed: document.documentElement.dataset.svInlineObserved || '',
+        marker: document.documentElement.dataset.svDocumentStart || ''
+      };
+    `, 20000);
+    if (!result.ok) {
+      fail(`Firefox document-start userscript ran after the page inline script (observed=${result.observed || 'missing'}, marker=${result.marker || 'missing'})`);
+    }
+    return { ranBeforePageInlineScript: true };
+  } finally {
+    await target.close();
+  }
+}
+
 async function waitForSpaUrlChange(baseUrl, sessionId, label, fragment) {
   const needle = JSON.stringify(fragment);
   return waitFor(baseUrl, sessionId, `SPA urlchange dispatch after ${label}`, `
@@ -1557,6 +1636,7 @@ async function main() {
     const dashboardResult = await dashboardSmoke(baseUrl, sessionId, dashboard.uri);
     const popupResult = await popupSmoke(baseUrl, sessionId, popup.uri);
     const scriptResult = await scriptRoundTripSmoke(baseUrl, sessionId, dashboard.uri);
+    const documentStartResult = await documentStartSmoke(baseUrl, sessionId, dashboard.uri);
     const spaResult = await spaUrlChangeSmoke(baseUrl, sessionId, dashboard.uri);
     const parityResult = await runtimeParitySmoke(baseUrl, sessionId, dashboard.uri);
     const webDavResult = await webDavSyncSmoke(baseUrl, sessionId, dashboard.uri);
@@ -1573,6 +1653,7 @@ async function main() {
       dashboard: dashboardResult,
       popup: popupResult,
       script: scriptResult,
+      documentStart: documentStartResult,
       spaUrlChange: spaResult,
       parity: parityResult,
       webdav: webDavResult,
