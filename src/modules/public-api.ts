@@ -216,6 +216,8 @@ const MAX_CODE_SIZE = 5 * 1024 * 1024;
 const MAX_FETCH_SIZE = 5 * 1024 * 1024;
 const FETCH_TIMEOUT_MS = 15_000;
 const WEBHOOK_TIMEOUT_MS = 10_000;
+const MAX_SAFE_REDIRECTS = 5;
+const REDIRECT_STATUS_CODES = new Set([301, 302, 303, 307, 308]);
 const SCRIPT_SIZE_ERROR = 'Script file exceeds maximum allowed size (5 MB)';
 
 function getRuntimeHooks(): RuntimeHooks {
@@ -490,6 +492,66 @@ function isInternalWebhookUrl(url: string): string | null {
   if (host.includes(':')) return 'IPv6 loopback/internal';
   if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return 'IPv4 private/loopback/CGNAT';
   return 'internal host';
+}
+
+function validateWebhookFetchUrl(url: string): string | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return 'malformed URL';
+  }
+  if (parsed.protocol !== 'https:') return 'Webhook URL must use https://';
+  return isInternalWebhookUrl(url);
+}
+
+type FetchUrlValidator = (url: string) => string | null;
+
+async function fetchWithSafeRedirects(
+  initialUrl: string,
+  init: RequestInit,
+  validateUrl: FetchUrlValidator,
+): Promise<Response> {
+  let currentUrl = initialUrl;
+
+  for (let redirectCount = 0; redirectCount <= MAX_SAFE_REDIRECTS; redirectCount++) {
+    const currentUrlError = validateUrl(currentUrl);
+    if (currentUrlError) throw new Error(currentUrlError);
+
+    const response: Response = await fetch(currentUrl, {
+      ...init,
+      redirect: 'manual',
+    });
+
+    if (!REDIRECT_STATUS_CODES.has(response.status)) {
+      const finalUrl = response.url;
+      if (finalUrl) {
+        const finalUrlError = validateUrl(finalUrl);
+        if (finalUrlError) throw new Error(finalUrlError);
+      }
+      return response;
+    }
+
+    if (redirectCount === MAX_SAFE_REDIRECTS) {
+      throw new Error('Too many redirects');
+    }
+
+    const location = response.headers?.get?.('location');
+    if (!location) throw new Error('Redirect response missing Location header');
+
+    let nextUrl: string;
+    try {
+      nextUrl = new URL(location, currentUrl).href;
+    } catch {
+      throw new Error('Invalid redirect URL');
+    }
+
+    const nextUrlError = validateUrl(nextUrl);
+    if (nextUrlError) throw new Error(nextUrlError);
+    currentUrl = nextUrl;
+  }
+
+  throw new Error('Too many redirects');
 }
 
 function generateExternalScriptId(): string {
@@ -1660,13 +1722,8 @@ const WEB_HANDLERS: Record<string, WebHandlerFn> = {
       const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
       let code = '';
       try {
-        const resp: Response = await fetch(url, { signal: controller.signal });
+        const resp = await fetchWithSafeRedirects(url, { signal: controller.signal }, validateWebInstallUrl);
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-
-        if (resp.url) {
-          const finalUrlError = validateWebInstallUrl(resp.url);
-          if (finalUrlError) throw new Error(finalUrlError);
-        }
         code = await readResponseTextBounded(resp, MAX_FETCH_SIZE);
       } finally {
         clearTimeout(timeoutId);
@@ -1719,7 +1776,7 @@ async function fireWebhook(eventType: string, payload: Record<string, unknown>):
   const hook = _webhooks[eventType];
   if (!hook?.enabled || !hook.url) return;
 
-  const guardReason = isInternalWebhookUrl(hook.url);
+  const guardReason = validateWebhookFetchUrl(hook.url);
   if (guardReason) {
     console.warn(`[PublicAPI] webhook ${eventType} blocked at fire time: ${guardReason}`);
     return;
@@ -1742,12 +1799,12 @@ async function fireWebhook(eventType: string, payload: Record<string, unknown>):
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), WEBHOOK_TIMEOUT_MS);
   try {
-    await fetch(hook.url, {
+    await fetchWithSafeRedirects(hook.url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body,
       signal: controller.signal
-    });
+    }, validateWebhookFetchUrl);
   } catch (e: unknown) {
     console.warn(`[PublicAPI] webhook ${eventType} failed:`, e);
   } finally {
@@ -2061,7 +2118,7 @@ const PublicAPI = {
       // hosts. Webhooks fire from the extension's network context, so a URL
       // pointing at the user's LAN is an SSRF vector for any web origin
       // that obtains capability-token access via PublicAPI.
-      const reason = isInternalWebhookUrl(url);
+      const reason = validateWebhookFetchUrl(url);
       if (reason) {
         throw new Error('Webhook URL points at internal/loopback host: ' + reason);
       }

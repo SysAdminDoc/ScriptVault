@@ -25060,6 +25060,8 @@ const PublicAPI = (() => {
   var MAX_FETCH_SIZE = 5 * 1024 * 1024;
   var FETCH_TIMEOUT_MS = 15e3;
   var WEBHOOK_TIMEOUT_MS = 1e4;
+  var MAX_SAFE_REDIRECTS = 5;
+  var REDIRECT_STATUS_CODES = /* @__PURE__ */ new Set([301, 302, 303, 307, 308]);
   var SCRIPT_SIZE_ERROR = "Script file exceeds maximum allowed size (5 MB)";
   function getRuntimeHooks() {
     return globalThis;
@@ -25293,6 +25295,50 @@ const PublicAPI = (() => {
     if (host.includes(":")) return "IPv6 loopback/internal";
     if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return "IPv4 private/loopback/CGNAT";
     return "internal host";
+  }
+  function validateWebhookFetchUrl(url) {
+    let parsed;
+    try {
+      parsed = new URL(url);
+    } catch {
+      return "malformed URL";
+    }
+    if (parsed.protocol !== "https:") return "Webhook URL must use https://";
+    return isInternalWebhookUrl(url);
+  }
+  async function fetchWithSafeRedirects(initialUrl, init, validateUrl) {
+    let currentUrl = initialUrl;
+    for (let redirectCount = 0; redirectCount <= MAX_SAFE_REDIRECTS; redirectCount++) {
+      const currentUrlError = validateUrl(currentUrl);
+      if (currentUrlError) throw new Error(currentUrlError);
+      const response = await fetch(currentUrl, {
+        ...init,
+        redirect: "manual"
+      });
+      if (!REDIRECT_STATUS_CODES.has(response.status)) {
+        const finalUrl = response.url;
+        if (finalUrl) {
+          const finalUrlError = validateUrl(finalUrl);
+          if (finalUrlError) throw new Error(finalUrlError);
+        }
+        return response;
+      }
+      if (redirectCount === MAX_SAFE_REDIRECTS) {
+        throw new Error("Too many redirects");
+      }
+      const location = response.headers?.get?.("location");
+      if (!location) throw new Error("Redirect response missing Location header");
+      let nextUrl;
+      try {
+        nextUrl = new URL(location, currentUrl).href;
+      } catch {
+        throw new Error("Invalid redirect URL");
+      }
+      const nextUrlError = validateUrl(nextUrl);
+      if (nextUrlError) throw new Error(nextUrlError);
+      currentUrl = nextUrl;
+    }
+    throw new Error("Too many redirects");
   }
   function generateExternalScriptId() {
     if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -26221,12 +26267,8 @@ const PublicAPI = (() => {
         const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
         let code = "";
         try {
-          const resp = await fetch(url, { signal: controller.signal });
+          const resp = await fetchWithSafeRedirects(url, { signal: controller.signal }, validateWebInstallUrl);
           if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-          if (resp.url) {
-            const finalUrlError = validateWebInstallUrl(resp.url);
-            if (finalUrlError) throw new Error(finalUrlError);
-          }
           code = await readResponseTextBounded(resp, MAX_FETCH_SIZE);
         } finally {
           clearTimeout(timeoutId);
@@ -26270,7 +26312,7 @@ const PublicAPI = (() => {
   async function fireWebhook(eventType, payload) {
     const hook = _webhooks[eventType];
     if (!hook?.enabled || !hook.url) return;
-    const guardReason = isInternalWebhookUrl(hook.url);
+    const guardReason = validateWebhookFetchUrl(hook.url);
     if (guardReason) {
       console.warn(`[PublicAPI] webhook ${eventType} blocked at fire time: ${guardReason}`);
       return;
@@ -26291,12 +26333,12 @@ const PublicAPI = (() => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), WEBHOOK_TIMEOUT_MS);
     try {
-      await fetch(hook.url, {
+      await fetchWithSafeRedirects(hook.url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body,
         signal: controller.signal
-      });
+      }, validateWebhookFetchUrl);
     } catch (e) {
       console.warn(`[PublicAPI] webhook ${eventType} failed:`, e);
     } finally {
@@ -26536,7 +26578,7 @@ const PublicAPI = (() => {
         if (!url.startsWith("https://")) {
           throw new Error("Webhook URL must use https://");
         }
-        const reason = isInternalWebhookUrl(url);
+        const reason = validateWebhookFetchUrl(url);
         if (reason) {
           throw new Error("Webhook URL points at internal/loopback host: " + reason);
         }

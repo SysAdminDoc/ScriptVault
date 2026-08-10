@@ -354,6 +354,28 @@ describe('PublicAPI', () => {
       expect(PublicAPI.getWebhooks()['script.installed'].url).toContain('8.8.8.8');
     });
 
+    it('blocks webhook redirects before contacting an internal target', async () => {
+      const fetchMock = vi.fn().mockResolvedValue({
+        status: 307,
+        ok: false,
+        headers: { get: vi.fn(() => 'https://127.0.0.1/hook') },
+      });
+      PublicAPI = createFreshAPI({ fetchMock });
+      await PublicAPI.init();
+      await PublicAPI.setWebhook('script.installed', {
+        url: 'https://hooks.example.org/v1/notify',
+        enabled: true,
+      });
+
+      await PublicAPI.fireEvent('script.installed', { scriptId: 'redirect-test' });
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://hooks.example.org/v1/notify',
+        expect.objectContaining({ method: 'POST', redirect: 'manual' }),
+      );
+    });
+
     it('rejects empty webhook URL host (malformed)', async () => {
       await PublicAPI.init();
       // `https://` with no host — URL constructor will fail or produce empty
@@ -628,6 +650,95 @@ describe('PublicAPI', () => {
           type: 'scriptvault:install:response',
           error: 'Fetch failed',
           detail: 'Internal URLs are not allowed',
+        }),
+        'https://trusted.example',
+      );
+    });
+
+    it('blocks an internal redirect hop before contacting the target', async () => {
+      const redirect = {
+        status: 302,
+        ok: false,
+        headers: { get: vi.fn(() => 'https://127.0.0.1/redirected.user.js') },
+      };
+      const fetchMock = vi.fn().mockResolvedValue(redirect);
+      PublicAPI = createFreshAPI({ fetchMock });
+      const source = { postMessage: vi.fn() };
+
+      await PublicAPI.init();
+      await PublicAPI.setPermissions({ installScript: 'allow' });
+      await PublicAPI.setTrustedOrigins(['https://trusted.example']);
+      PublicAPI.handleWebMessage({
+        origin: 'https://trusted.example',
+        data: {
+          type: 'scriptvault:install',
+          url: 'https://cdn.example/redirect.user.js',
+        },
+        source,
+      });
+      await flushPromises();
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://cdn.example/redirect.user.js',
+        expect.objectContaining({ redirect: 'manual' }),
+      );
+      expect(source.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'scriptvault:install:response',
+          error: 'Fetch failed',
+          detail: 'Internal URLs are not allowed',
+        }),
+        'https://trusted.example',
+      );
+    });
+
+    it('follows safe public redirects without reading the redirect response body', async () => {
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce({
+          status: 302,
+          ok: false,
+          headers: { get: vi.fn(() => 'https://cdn.example/final.user.js') },
+        })
+        .mockResolvedValueOnce({
+          status: 200,
+          ok: true,
+          url: 'https://cdn.example/final.user.js',
+          headers: { get: vi.fn(() => null) },
+          text: vi.fn().mockResolvedValue([
+            '// ==UserScript==',
+            '// @name Safe Redirect',
+            '// ==/UserScript==',
+            'console.log("safe redirect");',
+          ].join('\n')),
+        });
+      const ScriptStorage = {
+        getAll: vi.fn().mockResolvedValue([]),
+        set: vi.fn().mockResolvedValue(),
+      };
+      PublicAPI = createFreshAPI({ fetchMock, ScriptStorage });
+      const source = { postMessage: vi.fn() };
+
+      await PublicAPI.init();
+      await PublicAPI.setPermissions({ installScript: 'allow' });
+      await PublicAPI.setTrustedOrigins(['https://trusted.example']);
+      PublicAPI.handleWebMessage({
+        origin: 'https://trusted.example',
+        data: {
+          type: 'scriptvault:install',
+          url: 'https://cdn.example/start.user.js',
+        },
+        source,
+      });
+      await flushPromises();
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(fetchMock.mock.calls[1][0]).toBe('https://cdn.example/final.user.js');
+      expect(source.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'scriptvault:install:response',
+          ok: true,
+          reviewRequired: true,
         }),
         'https://trusted.example',
       );

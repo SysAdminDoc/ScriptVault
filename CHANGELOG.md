@@ -7,6 +7,8 @@ All notable changes to ScriptVault will be documented in this file.
 - Routed Public API list, status, presence, and install positioning through
   the authoritative IndexedDB-backed ScriptStorage instead of the retired
   `userscripts` storage blob.
+- Rejected unsafe public-install and webhook redirect hops before contacting
+  internal or non-HTTPS targets, while preserving safe public redirects.
 - Reduced the Monaco ESM surface to the editor plus JavaScript/TypeScript/CSS
   contributions, dropped the unused HTML/JSON workers, and opened UserCSS
   drafts in a CSS model with live language switching.
