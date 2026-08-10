@@ -121,6 +121,58 @@ describe('PublicAPI', () => {
       expect(oversized.error).toContain('exceeds maximum allowed size');
     });
 
+    it('applies the 5 MiB limit to UTF-8 bytes for external and Local MCP writes', async () => {
+      const maxBytes = 5 * 1024 * 1024;
+      const header = [
+        '// ==UserScript==',
+        '// @name Byte Boundary',
+        '// @version 1.0.0',
+        '// ==/UserScript==',
+        '',
+      ].join('\n');
+      const headerBytes = new TextEncoder().encode(header).byteLength;
+      const exactAscii = header + 'a'.repeat(maxBytes - headerBytes);
+      const oversizedUnicode = header + '界'.repeat(Math.floor((maxBytes - headerBytes) / 3) + 1);
+      expect(new TextEncoder().encode(exactAscii).byteLength).toBe(maxBytes);
+      expect(new TextEncoder().encode(oversizedUnicode).byteLength).toBeGreaterThan(maxBytes);
+      expect(oversizedUnicode.length).toBeLessThan(maxBytes);
+
+      const ScriptStorage = {
+        getAll: vi.fn().mockResolvedValue([]),
+        get: vi.fn().mockResolvedValue(null),
+        set: vi.fn().mockResolvedValue(),
+      };
+      PublicAPI = createFreshAPI({ ScriptStorage });
+      await PublicAPI.init();
+      await PublicAPI.setPermissions({ installScript: 'allow' });
+
+      const externalExact = await PublicAPI.handleExternalMessage(
+        { action: 'installScript', code: exactAscii },
+        { origin: 'https://byte-boundary.example' },
+      );
+      const externalOversized = await PublicAPI.handleExternalMessage(
+        { action: 'installScript', code: oversizedUnicode },
+        { origin: 'https://byte-boundary.example' },
+      );
+
+      const token = 'local-mcp-byte-boundary-token';
+      const origin = 'http://127.0.0.1:38123';
+      await PublicAPI.setLocalMcpBridgeConfig({ enabled: true, origins: [origin], token });
+      const mcpExact = await PublicAPI.handleLocalMcpMessage(
+        { type: 'scriptvault:mcp:writeScript', token, code: exactAscii },
+        origin,
+      );
+      const mcpOversized = await PublicAPI.handleLocalMcpMessage(
+        { type: 'scriptvault:mcp:writeScript', token, code: oversizedUnicode },
+        origin,
+      );
+
+      expect(externalExact).toMatchObject({ ok: true });
+      expect(mcpExact).toMatchObject({ ok: true });
+      expect(externalOversized.error).toContain('exceeds maximum allowed size');
+      expect(mcpOversized.error).toContain('exceeds maximum allowed size');
+    });
+
     it('preserves common userscript metadata when installing through the external API', async () => {
       const ScriptStorage = {
         getAll: vi.fn().mockResolvedValue([]),

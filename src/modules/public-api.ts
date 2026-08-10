@@ -158,6 +158,10 @@ interface RuntimeHooks {
   registerAllScripts?: () => Promise<void>;
   updateBadge?: (tabId?: number | null) => Promise<void>;
   autoReloadMatchingTabs?: (script: FlatScript & { meta?: ParsedMeta; settings?: Record<string, unknown> }) => Promise<void>;
+  scriptMutationService?: {
+    saveScript?: (message: Record<string, unknown>) => Promise<Record<string, unknown>>;
+    toggleScript?: (message: Record<string, unknown>) => Promise<Record<string, unknown>>;
+  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -1301,6 +1305,23 @@ async function refreshRuntimeAfterMutation(
   }
 }
 
+type CoreScriptMutationAction = 'saveScript' | 'toggleScript';
+
+async function runCoreScriptMutation(
+  action: CoreScriptMutationAction,
+  message: Record<string, unknown>,
+): Promise<Record<string, unknown> | null> {
+  const service = getRuntimeHooks().scriptMutationService;
+  const handler = service?.[action];
+  if (typeof handler !== 'function') return null;
+
+  const result = await handler(message);
+  if (!result || typeof result !== 'object' || Array.isArray(result)) {
+    return { error: 'Core script mutation returned an invalid response' };
+  }
+  return result;
+}
+
 async function getExtensionVersion(): Promise<string> {
   try {
     const manifest = chrome.runtime.getManifest();
@@ -1363,6 +1384,21 @@ const HANDLERS: Record<string, HandlerFn> = {
     if (!allowed) return { error: 'Permission denied', action: 'toggleScript' };
 
     try {
+      const coreResult = await runCoreScriptMutation('toggleScript', { scriptId, enabled });
+      if (coreResult) {
+        if (coreResult.error) {
+          return { error: 'Failed to toggle script', detail: String(coreResult.error) };
+        }
+        const coreScript = coreResult.script && typeof coreResult.script === 'object'
+          ? coreResult.script as Record<string, unknown>
+          : {};
+        const appliedEnabled = typeof coreScript.enabled === 'boolean'
+          ? coreScript.enabled
+          : enabled;
+        void fireWebhook('script.toggled', { scriptId, enabled: appliedEnabled });
+        return { ok: true, scriptId, enabled: appliedEnabled };
+      }
+
       // Use ScriptStorage to keep the in-memory cache coherent.
       // Direct chrome.storage.local writes would leave the cache stale, causing
       // registerAllScripts() to re-register scripts with the old enabled value.
@@ -1387,7 +1423,7 @@ const HANDLERS: Record<string, HandlerFn> = {
   async installScript(msg: ExternalMessage, sender: SenderLike): Promise<Record<string, unknown>> {
     const code = msg.code;
     if (!code || typeof code !== 'string') return { error: 'Missing or invalid code parameter' };
-    if (code.length > MAX_CODE_SIZE) return { error: 'Script code exceeds maximum allowed size (5 MB)' };
+    if (measuredUtf8Length(code) > MAX_CODE_SIZE) return { error: 'Script code exceeds maximum allowed size (5 MB)' };
     if (!code.includes('==UserScript==')) return { error: 'Not a valid userscript (missing ==UserScript== header)' };
 
     const allowed = await authorize('installScript', sender);
@@ -1400,6 +1436,47 @@ const HANDLERS: Record<string, HandlerFn> = {
       const matches = selectInstallMatches(meta, externalFallbackMatches(sender));
 
       const scriptId = generateExternalScriptId();
+
+      const coreResult = await runCoreScriptMutation('saveScript', {
+        id: scriptId,
+        code,
+        enabled: false,
+        publicApi: {
+          review: 'quarantine',
+          source: 'public-api-external',
+          sourceLabel: installedBy,
+          fallbackMatches: matches,
+        },
+        trust: {
+          recordReceipt: true,
+          sourceKind: 'local-import',
+          sourceLabel: installedBy,
+          suppressMetadataSourceFallback: true,
+        },
+      });
+      if (coreResult) {
+        if (coreResult.error) {
+          return { error: 'Failed to install script', detail: String(coreResult.error) };
+        }
+        const storedScript = coreResult.script && typeof coreResult.script === 'object'
+          ? coreResult.script as Record<string, unknown>
+          : {};
+        const storedMeta = storedScript.meta && typeof storedScript.meta === 'object'
+          ? storedScript.meta as Record<string, unknown>
+          : {};
+        void fireWebhook('script.installed', {
+          scriptId,
+          name: typeof storedMeta.name === 'string' ? storedMeta.name : scriptId,
+          version: typeof storedMeta.version === 'string' ? storedMeta.version : '1.0',
+        });
+        return {
+          ok: true,
+          scriptId,
+          name: typeof storedMeta.name === 'string' ? storedMeta.name : scriptId,
+          enabled: storedScript.enabled === true,
+          reviewRequired: !!(storedScript.settings as Record<string, unknown> | undefined)?._importQuarantine,
+        };
+      }
 
       const newScript: FlatScript = {
         id: scriptId,
@@ -1571,21 +1648,58 @@ const LOCAL_MCP_HANDLERS: Record<string, LocalMcpHandlerFn> = {
   'scriptvault:mcp:writeScript': async (data: WebPageMessage, origin: string): Promise<Record<string, unknown>> => {
     const code = data.code;
     if (!code || typeof code !== 'string') return { error: 'Missing or invalid code parameter' };
-    if (code.length > MAX_CODE_SIZE) return { error: 'Script code exceeds maximum allowed size (5 MB)' };
+    if (measuredUtf8Length(code) > MAX_CODE_SIZE) return { error: 'Script code exceeds maximum allowed size (5 MB)' };
     if (!code.includes('==UserScript==')) return { error: 'Not a valid userscript (missing ==UserScript== header)' };
 
     const requestedId = typeof data.scriptId === 'string' && data.scriptId.trim() ? data.scriptId.trim() : '';
+    const scriptId = requestedId || generateExternalScriptId();
+    const installedBy = `local-mcp:${origin}`;
+    const coreResult = await runCoreScriptMutation('saveScript', {
+      id: scriptId,
+      code,
+      ...(typeof data.enabled === 'boolean' || !requestedId ? { enabled: requestedId ? data.enabled : false } : {}),
+      publicApi: {
+        requireExisting: !!requestedId,
+        preserveExistingMatches: !!requestedId,
+        review: requestedId ? undefined : 'quarantine',
+        source: 'public-api-local-mcp',
+        sourceLabel: installedBy,
+      },
+      trust: {
+        recordReceipt: true,
+        sourceKind: 'local-editor',
+        sourceLabel: installedBy,
+        suppressMetadataSourceFallback: true,
+      },
+    });
+    if (coreResult) {
+      if (coreResult.error) return { error: String(coreResult.error), scriptId: requestedId || undefined };
+      const storedScript = coreResult.script && typeof coreResult.script === 'object'
+        ? coreResult.script as Record<string, unknown>
+        : {};
+      const storedMeta = storedScript.meta && typeof storedScript.meta === 'object'
+        ? storedScript.meta as Record<string, unknown>
+        : {};
+      const created = coreResult.created === true || (!requestedId && coreResult.success === true);
+      return {
+        ok: true,
+        scriptId: typeof coreResult.scriptId === 'string' ? coreResult.scriptId : scriptId,
+        name: typeof storedMeta.name === 'string' ? storedMeta.name : scriptId,
+        enabled: storedScript.enabled !== false,
+        created,
+        reviewRequired: !!(storedScript.settings as Record<string, unknown> | undefined)?._importQuarantine,
+      };
+    }
+
     const existing = requestedId ? await ScriptStorage.get(requestedId) : null;
     if (requestedId && !existing) return { error: 'Script not found', scriptId: requestedId };
 
     const allScripts = await ScriptStorage.getAll();
-    const scriptId = requestedId || generateExternalScriptId();
     const meta = parseUserscriptMeta(code);
     const existingMeta = existing?.meta && typeof existing.meta === 'object'
       ? existing.meta as Record<string, unknown>
       : {};
     const matches = selectInstallMatches(meta, asStringArray(existingMeta.match));
-    const installedBy = `local-mcp:${origin}`;
     const position = requestedId
       ? Math.max(0, allScripts.findIndex(script => script.id === scriptId))
       : allScripts.length;
@@ -1739,6 +1853,47 @@ const WEB_HANDLERS: Record<string, WebHandlerFn> = {
       const matches = selectInstallMatches(meta, webFallbackMatches(origin));
 
       const scriptId = generateExternalScriptId();
+      const coreResult = await runCoreScriptMutation('saveScript', {
+        id: scriptId,
+        code,
+        enabled: false,
+        publicApi: {
+          review: 'quarantine',
+          source: 'public-api-web',
+          sourceLabel: `origin:${origin}`,
+          fallbackMatches: matches,
+        },
+        trust: {
+          recordReceipt: true,
+          sourceKind: 'remote',
+          sourceUrl: url,
+          sourceLabel: `origin:${origin}`,
+        },
+      });
+      if (coreResult) {
+        if (coreResult.error) {
+          throw new Error(String(coreResult.error));
+        }
+        const storedScript = coreResult.script && typeof coreResult.script === 'object'
+          ? coreResult.script as Record<string, unknown>
+          : {};
+        const storedMeta = storedScript.meta && typeof storedScript.meta === 'object'
+          ? storedScript.meta as Record<string, unknown>
+          : {};
+        void fireWebhook('script.installed', {
+          scriptId,
+          name: typeof storedMeta.name === 'string' ? storedMeta.name : scriptId,
+          version: typeof storedMeta.version === 'string' ? storedMeta.version : '1.0',
+        });
+        return {
+          type: 'scriptvault:install:response',
+          ok: true,
+          scriptId,
+          name: typeof storedMeta.name === 'string' ? storedMeta.name : scriptId,
+          enabled: storedScript.enabled === true,
+          reviewRequired: !!(storedScript.settings as Record<string, unknown> | undefined)?._importQuarantine,
+        };
+      }
 
       const newScript: FlatScript = {
         id: scriptId,

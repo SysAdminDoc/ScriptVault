@@ -7653,13 +7653,47 @@ backgroundActionRegistry.registerHandlers(ScriptActionHandler.createScriptAction
     }
 
     const id = message.id || message.scriptId || generateId();
+    const publicApiOptions = message.publicApi && typeof message.publicApi === 'object'
+      ? message.publicApi
+      : null;
     return await _runExclusiveScriptOperation(id, async () => {
       const existing = await ScriptStorage.get(id);
+      if (publicApiOptions?.requireExisting && !existing) {
+        return { error: 'Script not found', scriptId: id };
+      }
+
+      if (!Array.isArray(parsed.meta.match) || parsed.meta.match.length === 0) {
+        const requestedFallbacks = publicApiOptions?.preserveExistingMatches
+          ? existing?.meta?.match
+          : publicApiOptions?.fallbackMatches;
+        const fallbackMatches = Array.isArray(requestedFallbacks)
+          ? requestedFallbacks
+              .filter((match: any) => typeof match === 'string' && match.trim())
+              .map((match: string) => match.trim())
+              .slice(0, 100)
+          : [];
+        if (fallbackMatches.length > 0) parsed.meta.match = fallbackMatches;
+      }
+
       const scriptSettings = { ...(existing?.settings || {}) };
       delete scriptSettings.mergeConflict;
       if (message.markModified) scriptSettings.userModified = true;
       if (message.settings && typeof message.settings === 'object' && 'allowBroadHostAccess' in message.settings) {
         scriptSettings.allowBroadHostAccess = message.settings.allowBroadHostAccess === true;
+      }
+      if (!existing && publicApiOptions?.review === 'quarantine') {
+        const source = typeof publicApiOptions.source === 'string' && publicApiOptions.source.trim()
+          ? publicApiOptions.source.trim().slice(0, 80)
+          : 'public-api';
+        const sourceLabel = typeof publicApiOptions.sourceLabel === 'string'
+          ? publicApiOptions.sourceLabel.trim().replace(/\s+/g, ' ').slice(0, 80)
+          : '';
+        scriptSettings._importQuarantine = {
+          source,
+          sourceLabel,
+          importedAt: Date.now(),
+          archiveEnabled: true,
+        };
       }
       const shouldRecordReceipt = !!receiptOptions?.recordReceipt
         || !!receiptOptions?.operation
@@ -7804,7 +7838,7 @@ backgroundActionRegistry.registerHandlers(ScriptActionHandler.createScriptAction
           message: `${script.meta.name} v${script.meta.version}`
         });
       }
-      return { success: true, scriptId: id, script: { ...script, metadata: script.meta } };
+      return { success: true, scriptId: id, created: !existing, script: { ...script, metadata: script.meta } };
     });
   },
   createScript: async (code: any) => {
@@ -8005,6 +8039,35 @@ backgroundActionRegistry.registerHandlers(ScriptActionHandler.createScriptAction
     return { success: true };
   }
 }));
+
+// Public API and Local MCP writes must use the same serialized mutation
+// handlers as dashboard/background callers. Keep this surface deliberately
+// narrow: callers can request only the existing save/toggle actions, while the
+// core handler retains ownership of locking, receipt creation, quarantine, and
+// runtime registration.
+const publicScriptMutationService = Object.freeze({
+  saveScript: async (message: any) => {
+    const routed = await backgroundActionRegistry.dispatch(
+      { ...(message || {}), action: 'saveScript' },
+      { id: 'scriptvault-public-api' },
+    );
+    return routed.handled ? routed.response : { error: 'Core save handler unavailable' };
+  },
+  toggleScript: async (message: any) => {
+    const routed = await backgroundActionRegistry.dispatch(
+      { ...(message || {}), action: 'toggleScript' },
+      { id: 'scriptvault-public-api' },
+    );
+    return routed.handled ? routed.response : { error: 'Core toggle handler unavailable' };
+  },
+});
+Object.defineProperty(globalThis, '__svScriptMutationService', {
+  configurable: false,
+  enumerable: false,
+  writable: false,
+  value: publicScriptMutationService,
+});
+
 backgroundActionRegistry.registerHandlers(DataActionHandler.createDataActionHandlers({
   prefetchResources: async (resources: any) => {
     await ResourceCache.prefetchResources(resources);

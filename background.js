@@ -25937,6 +25937,16 @@ const PublicAPI = (() => {
       }
     }
   }
+  async function runCoreScriptMutation(action, message) {
+    const service = getRuntimeHooks().scriptMutationService;
+    const handler = service?.[action];
+    if (typeof handler !== "function") return null;
+    const result = await handler(message);
+    if (!result || typeof result !== "object" || Array.isArray(result)) {
+      return { error: "Core script mutation returned an invalid response" };
+    }
+    return result;
+  }
   async function getExtensionVersion() {
     try {
       const manifest = chrome.runtime.getManifest();
@@ -25986,6 +25996,16 @@ const PublicAPI = (() => {
       const allowed = await authorize("toggleScript", sender);
       if (!allowed) return { error: "Permission denied", action: "toggleScript" };
       try {
+        const coreResult = await runCoreScriptMutation("toggleScript", { scriptId, enabled });
+        if (coreResult) {
+          if (coreResult.error) {
+            return { error: "Failed to toggle script", detail: String(coreResult.error) };
+          }
+          const coreScript = coreResult.script && typeof coreResult.script === "object" ? coreResult.script : {};
+          const appliedEnabled = typeof coreScript.enabled === "boolean" ? coreScript.enabled : enabled;
+          void fireWebhook("script.toggled", { scriptId, enabled: appliedEnabled });
+          return { ok: true, scriptId, enabled: appliedEnabled };
+        }
         const script = await ScriptStorage.get(scriptId);
         if (!script) {
           return { error: "Script not found", scriptId };
@@ -26001,7 +26021,7 @@ const PublicAPI = (() => {
     async installScript(msg, sender) {
       const code = msg.code;
       if (!code || typeof code !== "string") return { error: "Missing or invalid code parameter" };
-      if (code.length > MAX_CODE_SIZE) return { error: "Script code exceeds maximum allowed size (5 MB)" };
+      if (measuredUtf8Length(code) > MAX_CODE_SIZE) return { error: "Script code exceeds maximum allowed size (5 MB)" };
       if (!code.includes("==UserScript==")) return { error: "Not a valid userscript (missing ==UserScript== header)" };
       const allowed = await authorize("installScript", sender);
       if (!allowed) return { error: "Permission denied", action: "installScript" };
@@ -26010,6 +26030,42 @@ const PublicAPI = (() => {
         const installedBy = describeSender(sender);
         const matches = selectInstallMatches(meta, externalFallbackMatches(sender));
         const scriptId = generateExternalScriptId();
+        const coreResult = await runCoreScriptMutation("saveScript", {
+          id: scriptId,
+          code,
+          enabled: false,
+          publicApi: {
+            review: "quarantine",
+            source: "public-api-external",
+            sourceLabel: installedBy,
+            fallbackMatches: matches
+          },
+          trust: {
+            recordReceipt: true,
+            sourceKind: "local-import",
+            sourceLabel: installedBy,
+            suppressMetadataSourceFallback: true
+          }
+        });
+        if (coreResult) {
+          if (coreResult.error) {
+            return { error: "Failed to install script", detail: String(coreResult.error) };
+          }
+          const storedScript = coreResult.script && typeof coreResult.script === "object" ? coreResult.script : {};
+          const storedMeta = storedScript.meta && typeof storedScript.meta === "object" ? storedScript.meta : {};
+          void fireWebhook("script.installed", {
+            scriptId,
+            name: typeof storedMeta.name === "string" ? storedMeta.name : scriptId,
+            version: typeof storedMeta.version === "string" ? storedMeta.version : "1.0"
+          });
+          return {
+            ok: true,
+            scriptId,
+            name: typeof storedMeta.name === "string" ? storedMeta.name : scriptId,
+            enabled: storedScript.enabled === true,
+            reviewRequired: !!storedScript.settings?._importQuarantine
+          };
+        }
         const newScript = {
           id: scriptId,
           name: meta.name ?? scriptId,
@@ -26160,17 +26216,49 @@ const PublicAPI = (() => {
     "scriptvault:mcp:writeScript": async (data, origin) => {
       const code = data.code;
       if (!code || typeof code !== "string") return { error: "Missing or invalid code parameter" };
-      if (code.length > MAX_CODE_SIZE) return { error: "Script code exceeds maximum allowed size (5 MB)" };
+      if (measuredUtf8Length(code) > MAX_CODE_SIZE) return { error: "Script code exceeds maximum allowed size (5 MB)" };
       if (!code.includes("==UserScript==")) return { error: "Not a valid userscript (missing ==UserScript== header)" };
       const requestedId = typeof data.scriptId === "string" && data.scriptId.trim() ? data.scriptId.trim() : "";
+      const scriptId = requestedId || generateExternalScriptId();
+      const installedBy = `local-mcp:${origin}`;
+      const coreResult = await runCoreScriptMutation("saveScript", {
+        id: scriptId,
+        code,
+        ...typeof data.enabled === "boolean" || !requestedId ? { enabled: requestedId ? data.enabled : false } : {},
+        publicApi: {
+          requireExisting: !!requestedId,
+          preserveExistingMatches: !!requestedId,
+          review: requestedId ? void 0 : "quarantine",
+          source: "public-api-local-mcp",
+          sourceLabel: installedBy
+        },
+        trust: {
+          recordReceipt: true,
+          sourceKind: "local-editor",
+          sourceLabel: installedBy,
+          suppressMetadataSourceFallback: true
+        }
+      });
+      if (coreResult) {
+        if (coreResult.error) return { error: String(coreResult.error), scriptId: requestedId || void 0 };
+        const storedScript = coreResult.script && typeof coreResult.script === "object" ? coreResult.script : {};
+        const storedMeta = storedScript.meta && typeof storedScript.meta === "object" ? storedScript.meta : {};
+        const created = coreResult.created === true || !requestedId && coreResult.success === true;
+        return {
+          ok: true,
+          scriptId: typeof coreResult.scriptId === "string" ? coreResult.scriptId : scriptId,
+          name: typeof storedMeta.name === "string" ? storedMeta.name : scriptId,
+          enabled: storedScript.enabled !== false,
+          created,
+          reviewRequired: !!storedScript.settings?._importQuarantine
+        };
+      }
       const existing = requestedId ? await ScriptStorage.get(requestedId) : null;
       if (requestedId && !existing) return { error: "Script not found", scriptId: requestedId };
       const allScripts = await ScriptStorage.getAll();
-      const scriptId = requestedId || generateExternalScriptId();
       const meta = parseUserscriptMeta(code);
       const existingMeta = existing?.meta && typeof existing.meta === "object" ? existing.meta : {};
       const matches = selectInstallMatches(meta, asStringArray(existingMeta.match));
-      const installedBy = `local-mcp:${origin}`;
       const position = requestedId ? Math.max(0, allScripts.findIndex((script) => script.id === scriptId)) : allScripts.length;
       const enabled = existing ? typeof data.enabled === "boolean" ? data.enabled : existing.enabled !== false : false;
       const now = Date.now();
@@ -26293,6 +26381,43 @@ const PublicAPI = (() => {
         const installedBy = `origin:${origin}`;
         const matches = selectInstallMatches(meta, webFallbackMatches(origin));
         const scriptId = generateExternalScriptId();
+        const coreResult = await runCoreScriptMutation("saveScript", {
+          id: scriptId,
+          code,
+          enabled: false,
+          publicApi: {
+            review: "quarantine",
+            source: "public-api-web",
+            sourceLabel: `origin:${origin}`,
+            fallbackMatches: matches
+          },
+          trust: {
+            recordReceipt: true,
+            sourceKind: "remote",
+            sourceUrl: url,
+            sourceLabel: `origin:${origin}`
+          }
+        });
+        if (coreResult) {
+          if (coreResult.error) {
+            throw new Error(String(coreResult.error));
+          }
+          const storedScript = coreResult.script && typeof coreResult.script === "object" ? coreResult.script : {};
+          const storedMeta = storedScript.meta && typeof storedScript.meta === "object" ? storedScript.meta : {};
+          void fireWebhook("script.installed", {
+            scriptId,
+            name: typeof storedMeta.name === "string" ? storedMeta.name : scriptId,
+            version: typeof storedMeta.version === "string" ? storedMeta.version : "1.0"
+          });
+          return {
+            type: "scriptvault:install:response",
+            ok: true,
+            scriptId,
+            name: typeof storedMeta.name === "string" ? storedMeta.name : scriptId,
+            enabled: storedScript.enabled === true,
+            reviewRequired: !!storedScript.settings?._importQuarantine
+          };
+        }
         const newScript = {
           id: scriptId,
           name: meta.name ?? scriptId,
@@ -37999,13 +38124,47 @@ backgroundActionRegistry.registerHandlers(ScriptActionHandler.createScriptAction
     }
 
     const id = message.id || message.scriptId || generateId();
+    const publicApiOptions = message.publicApi && typeof message.publicApi === 'object'
+      ? message.publicApi
+      : null;
     return await _runExclusiveScriptOperation(id, async () => {
       const existing = await ScriptStorage.get(id);
+      if (publicApiOptions?.requireExisting && !existing) {
+        return { error: 'Script not found', scriptId: id };
+      }
+
+      if (!Array.isArray(parsed.meta.match) || parsed.meta.match.length === 0) {
+        const requestedFallbacks = publicApiOptions?.preserveExistingMatches
+          ? existing?.meta?.match
+          : publicApiOptions?.fallbackMatches;
+        const fallbackMatches = Array.isArray(requestedFallbacks)
+          ? requestedFallbacks
+              .filter(match => typeof match === 'string' && match.trim())
+              .map(match => match.trim())
+              .slice(0, 100)
+          : [];
+        if (fallbackMatches.length > 0) parsed.meta.match = fallbackMatches;
+      }
+
       const scriptSettings = { ...(existing?.settings || {}) };
       delete scriptSettings.mergeConflict;
       if (message.markModified) scriptSettings.userModified = true;
       if (message.settings && typeof message.settings === 'object' && 'allowBroadHostAccess' in message.settings) {
         scriptSettings.allowBroadHostAccess = message.settings.allowBroadHostAccess === true;
+      }
+      if (!existing && publicApiOptions?.review === 'quarantine') {
+        const source = typeof publicApiOptions.source === 'string' && publicApiOptions.source.trim()
+          ? publicApiOptions.source.trim().slice(0, 80)
+          : 'public-api';
+        const sourceLabel = typeof publicApiOptions.sourceLabel === 'string'
+          ? publicApiOptions.sourceLabel.trim().replace(/\s+/g, ' ').slice(0, 80)
+          : '';
+        scriptSettings._importQuarantine = {
+          source,
+          sourceLabel,
+          importedAt: Date.now(),
+          archiveEnabled: true,
+        };
       }
       const shouldRecordReceipt = !!receiptOptions?.recordReceipt
         || !!receiptOptions?.operation
@@ -38150,7 +38309,7 @@ backgroundActionRegistry.registerHandlers(ScriptActionHandler.createScriptAction
           message: `${script.meta.name} v${script.meta.version}`
         });
       }
-      return { success: true, scriptId: id, script: { ...script, metadata: script.meta } };
+      return { success: true, scriptId: id, created: !existing, script: { ...script, metadata: script.meta } };
     });
   },
   createScript: async code => {
@@ -38351,6 +38510,35 @@ backgroundActionRegistry.registerHandlers(ScriptActionHandler.createScriptAction
     return { success: true };
   }
 }));
+
+// Public API and Local MCP writes must use the same serialized mutation
+// handlers as dashboard/background callers. Keep this surface deliberately
+// narrow: callers can request only the existing save/toggle actions, while the
+// core handler retains ownership of locking, receipt creation, quarantine, and
+// runtime registration.
+const publicScriptMutationService = Object.freeze({
+  saveScript: async message => {
+    const routed = await backgroundActionRegistry.dispatch(
+      { ...(message || {}), action: 'saveScript' },
+      { id: 'scriptvault-public-api' },
+    );
+    return routed.handled ? routed.response : { error: 'Core save handler unavailable' };
+  },
+  toggleScript: async message => {
+    const routed = await backgroundActionRegistry.dispatch(
+      { ...(message || {}), action: 'toggleScript' },
+      { id: 'scriptvault-public-api' },
+    );
+    return routed.handled ? routed.response : { error: 'Core toggle handler unavailable' };
+  },
+});
+Object.defineProperty(globalThis, '__svScriptMutationService', {
+  configurable: false,
+  enumerable: false,
+  writable: false,
+  value: publicScriptMutationService,
+});
+
 backgroundActionRegistry.registerHandlers(DataActionHandler.createDataActionHandlers({
   prefetchResources: async resources => {
     await ResourceCache.prefetchResources(resources);

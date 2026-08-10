@@ -10,6 +10,11 @@ All notable changes to ScriptVault will be documented in this file.
 - Made DevTools HAR and trace exports privacy-safe by removing URL credentials,
   query/hash data, sensitive headers, and raw document URLs/errors while
   preserving diagnostic status, timing, and origin context.
+- Routed external API, Local MCP, and trusted web installs through the core
+  serialized save/toggle pipeline so version history, trust receipts, review
+  quarantine, and runtime registration stay consistent across callers.
+- Enforced the public 5 MiB script limit using serialized UTF-8 bytes at
+  external API and Local MCP boundaries.
 - Rejected unsafe public-install and webhook redirect hops before contacting
   internal or non-HTTPS targets, while preserving safe public redirects.
 - Routed privileged XHR, WebSocket, download, and audio events through an
