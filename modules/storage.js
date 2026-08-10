@@ -1559,6 +1559,15 @@ const StorageModule = (() => {
       chrome.tabs.query({ status: "complete" }).then((tabs) => {
         for (const tab of tabs) {
           const isOriginTab = senderTabId !== null && tab.id === senderTabId;
+          const sendDirectEvent = globalThis.__svSendUserScriptEvent;
+          const deliveredPrivately = typeof sendDirectEvent === "function" ? sendDirectEvent(tab.id, "valueChanged", {
+            scriptId,
+            key,
+            newValue,
+            hasValue: newValue !== void 0,
+            remote: !isOriginTab
+          }) : false;
+          if (deliveredPrivately) continue;
           const msg = {
             action: "valueChanged",
             data: { scriptId, key, oldValue, newValue, remote: !isOriginTab }

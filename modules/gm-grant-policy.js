@@ -40,7 +40,17 @@ const GMGrantPolicy = (() => {
   module.exports = __toCommonJS(gm_grant_policy_exports);
   var ACTION_GRANTS = Object.freeze({
     // Value store
-    GM_getValue: ["GM_getValue", "GM.getValue"],
+    // A value-change listener receives the changed value as part of its public
+    // callback contract. On runtimes without the private event port, the wrapper
+    // obtains that value through this authenticated read action, so the listener
+    // grant must authorize the same narrow read without exposing GM_getValue in
+    // the wrapper when the script did not request it.
+    GM_getValue: [
+      "GM_getValue",
+      "GM.getValue",
+      "GM_addValueChangeListener",
+      "GM.addValueChangeListener"
+    ],
     GM_getValues: ["GM_getValues", "GM.getValues", "GM_getValue", "GM.getValue"],
     GM_setValue: ["GM_setValue", "GM.setValue"],
     GM_setValues: ["GM_setValues", "GM.setValues", "GM_setValue", "GM.setValue"],

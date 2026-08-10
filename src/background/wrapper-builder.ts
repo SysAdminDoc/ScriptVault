@@ -437,7 +437,11 @@ ${mappedCode}
     // Handle value change notifications (cross-tab sync)
     if (msg.type === 'valueChanged' && msg.scriptId === scriptId) {
       const oldValue = _cache[msg.key];
-      sendToBackground('GM_getValue', { scriptId, key: msg.key }).then((newValue) => {
+      const hasPrivateValue = msg.hasValue === true;
+      const newValuePromise = hasPrivateValue
+        ? Promise.resolve(msg.newValue)
+        : sendToBackground('GM_getValue', { scriptId, key: msg.key });
+      newValuePromise.then((newValue) => {
         if (newValue === undefined) {
           delete _cache[msg.key];
         } else {
@@ -762,8 +766,15 @@ ${mappedCode}
     if (_cacheReady) return;
 
     try {
+      const canReadValues = hasGrant('GM_getValue') || hasGrant('GM.getValue')
+        || hasGrant('GM_getValues') || hasGrant('GM.getValues');
+      if (!canReadValues) {
+        _cacheReady = true;
+        if (_cacheReadyResolve) _cacheReadyResolve();
+        return;
+      }
       const freshValues = await sendToBackground('GM_getValues', { scriptId });
-      if (freshValues && typeof freshValues === 'object') {
+      if (freshValues && typeof freshValues === 'object' && !Array.isArray(freshValues)) {
         // Merge fresh values with any local changes made before refresh completed
         _cache = { ..._cache, ...freshValues };
       }

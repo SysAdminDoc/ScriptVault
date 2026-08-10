@@ -11,6 +11,9 @@ All notable changes to ScriptVault will be documented in this file.
   internal or non-HTTPS targets, while preserving safe public redirects.
 - Routed privileged XHR, WebSocket, download, and audio events through an
   authenticated user-script port, with an identifier-free page bridge fallback.
+- Delivered GM value-change payloads over the authenticated user-script port,
+  preserving raw values for listener callbacks and keeping the page bridge
+  value-redacted.
 - Reduced the Monaco ESM surface to the editor plus JavaScript/TypeScript/CSS
   contributions, dropped the unused HTML/JSON workers, and opened UserCSS
   drafts in a CSS model with live language switching.

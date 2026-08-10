@@ -808,6 +808,18 @@ export const ScriptValues = {
       .then((tabs) => {
         for (const tab of tabs) {
           const isOriginTab = senderTabId !== null && tab.id === senderTabId;
+          const sendDirectEvent = (globalThis as any).__svSendUserScriptEvent;
+          const deliveredPrivately = typeof sendDirectEvent === 'function'
+            ? sendDirectEvent(tab.id, 'valueChanged', {
+              scriptId,
+              key,
+              newValue,
+              hasValue: newValue !== undefined,
+              remote: !isOriginTab,
+            })
+            : false;
+          if (deliveredPrivately) continue;
+
           const msg = {
             action: 'valueChanged',
             data: { scriptId, key, oldValue, newValue, remote: !isOriginTab },

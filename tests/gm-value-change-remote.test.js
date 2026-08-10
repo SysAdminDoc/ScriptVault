@@ -167,16 +167,42 @@ GM_addValueChangeListener('count', (name, oldValue, newValue, remote) => {
     ]);
   });
 
+  it('uses a private raw value payload without a second privileged read', async () => {
+    const wrapped = buildWrappedScript(makeScript(`
+window.__scriptVaultRemoteEvents = [];
+GM_addValueChangeListener('count', (name, oldValue, newValue, remote) => {
+  window.__scriptVaultRemoteEvents.push([name, oldValue, newValue, remote]);
+});
+`), [], { count: 1 });
+
+    chrome.runtime.sendMessage.mockImplementation(() => Promise.reject(new Error('read should not be needed')));
+    try { const vm = require('node:vm'); vm.compileFunction(wrapped, [], { filename: resolve(ROOT, 'src/background/wrapper-builder.ts') })(); } catch { new Function(wrapped)(); }
+    await waitForUserscriptBody();
+
+    const rawValue = { nested: ['value', 42] };
+    postValueChanged({ oldValue: 1, newValue: rawValue, hasValue: true, remote: true });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(window.__scriptVaultRemoteEvents).toEqual([
+      ['count', 1, rawValue, true],
+    ]);
+    expect(chrome.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({
+      action: 'GM_getValue',
+    }));
+  });
+
   it('keeps background tab fan-out and wrapper remote guards aligned', () => {
     for (const path of ['src/modules/storage.ts', 'modules/storage.js']) {
       const source = readSource(path);
       expect(source).toContain('const isOriginTab = senderTabId !== null && tab.id === senderTabId;');
       expect(source).toContain('remote: !isOriginTab');
+      expect(source).toMatch(/sendDirectEvent\(tab\.id, ['"]valueChanged['"]/);
     }
 
     for (const path of ['src/background/wrapper-builder.ts', 'src/background/core.ts', 'background.core.js']) {
       const source = readSource(path);
       expect(source).toContain("sendToBackground('GM_getValue', { scriptId, key: msg.key })");
+      expect(source).toContain('const hasPrivateValue = msg.hasValue === true;');
       expect(source).toContain('listener.callback(msg.key, oldValue, newValue, msg.remote !== false);');
     }
   });

@@ -2252,12 +2252,12 @@ export interface ResponseMap {
 
   // ── GM_* APIs (proxied from USER_SCRIPT world via the wrapper) ────
   GM_setValue: SuccessOrError;
-  GM_getValue: { value: unknown };
+  GM_getValue: unknown;
   GM_deleteValue: SuccessOrError;
   GM_setValues: SuccessOrError;
-  GM_getValues: { values: Record<string, unknown> };
+  GM_getValues: Record<string, unknown>;
   GM_deleteValues: SuccessOrError;
-  GM_listValues: { keys: string[] };
+  GM_listValues: string[];
   GM_xmlhttpRequest: SuccessOrError<{ requestId: string }>;
   GM_xmlhttpRequest_abort: SuccessResponse;
   GM_xmlhttpRequest_result: {

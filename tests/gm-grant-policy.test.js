@@ -54,6 +54,10 @@ describe('GM grant policy', () => {
     // Read does not imply write.
     expect(isActionGrantedByList('GM_setValue', ['GM_getValue'])).toBe(false);
     expect(isActionGrantedByList('GM_deleteValue', ['GM_getValue'])).toBe(false);
+    // Listener callbacks include the new value. Its grant authorizes only the
+    // internal read needed for that callback, never writes or deletes.
+    expect(isActionGrantedByList('GM_getValue', ['GM_addValueChangeListener'])).toBe(true);
+    expect(isActionGrantedByList('GM_setValue', ['GM_addValueChangeListener'])).toBe(false);
     // Cookie access is a single grant covering all three verbs, as the wrapper
     // gates them — but nothing else grants it.
     expect(isActionGrantedByList('GM_cookie_delete', ['GM_cookie'])).toBe(true);

@@ -721,6 +721,28 @@ describe('ScriptValues', () => {
     });
   });
 
+  it('prefers the authenticated user-script event dispatcher over the page bridge', async () => {
+    const sendDirectEvent = vi.fn().mockReturnValue(true);
+    globalThis.__svSendUserScriptEvent = sendDirectEvent;
+    chrome.tabs.query.mockResolvedValue([{ id: 10 }]);
+
+    try {
+      await ScriptValues.set('s1', 'count', 1, 10);
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    } finally {
+      delete globalThis.__svSendUserScriptEvent;
+    }
+
+    expect(sendDirectEvent).toHaveBeenCalledWith(10, 'valueChanged', {
+      scriptId: 's1',
+      key: 'count',
+      newValue: 1,
+      hasValue: true,
+      remote: false,
+    });
+    expect(chrome.tabs.sendMessage).not.toHaveBeenCalled();
+  });
+
   it('reports UTF-8 storage size', async () => {
     await ScriptValues.setAll('s1', { ascii: 'abc', unicode: '✓' });
 

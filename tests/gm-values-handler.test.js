@@ -12,10 +12,10 @@ beforeEach(() => {
   globalThis.ScriptValues = {
     delete: vi.fn().mockResolvedValue(),
     deleteMultiple: vi.fn().mockResolvedValue(),
-    get: vi.fn().mockResolvedValue({ value: 'stored' }),
+    get: vi.fn().mockResolvedValue('stored'),
     getAll: vi.fn().mockResolvedValue({ theme: 'dark' }),
-    getStorageSize: vi.fn().mockResolvedValue({ bytes: 42 }),
-    list: vi.fn().mockResolvedValue({ keys: ['theme'] }),
+    getStorageSize: vi.fn().mockResolvedValue(42),
+    list: vi.fn().mockResolvedValue(['theme']),
     set: vi.fn().mockResolvedValue({ success: true }),
     setAll: vi.fn().mockResolvedValue(),
   };
@@ -50,7 +50,7 @@ describe('GM values handler', () => {
       scriptId: 'script-1',
       key: 'theme',
       defaultValue: 'light',
-    })).resolves.toEqual({ value: 'stored' });
+    })).resolves.toBe('stored');
     expect(globalThis.ScriptValues.get).toHaveBeenCalledWith('script-1', 'theme', 'light');
 
     await expect(handleGMValuesMessage(
@@ -70,7 +70,7 @@ describe('GM values handler', () => {
 
   it('handles multi-value GM operations', async () => {
     await expect(handleGMValuesMessage('GM_listValues', { scriptId: 'script-1' }))
-      .resolves.toEqual({ keys: ['theme'] });
+      .resolves.toEqual(['theme']);
     await expect(handleGMValuesMessage('GM_getValues', { scriptId: 'script-1' }))
       .resolves.toEqual({ theme: 'dark' });
 
@@ -87,6 +87,22 @@ describe('GM values handler', () => {
       { tab: { id: 9 } },
     )).resolves.toEqual({ success: true });
     expect(globalThis.ScriptValues.deleteMultiple).toHaveBeenCalledWith('script-1', ['theme'], 9);
+  });
+
+  it.each([
+    ['a string', 'stored'],
+    ['a number', 42],
+    ['a boolean', false],
+    ['null', null],
+    ['an object', { value: 42 }],
+    ['an array', ['value', 42]],
+  ])('returns %s as the raw GM_getValue response', async (_label, value) => {
+    globalThis.ScriptValues.get.mockResolvedValueOnce(value);
+
+    await expect(handleGMValuesMessage('GM_getValue', {
+      scriptId: 'script-1',
+      key: 'value',
+    })).resolves.toEqual(value);
   });
 
   it('binds GM_* value ops to the authenticated userScriptId, ignoring a forged data.scriptId', async () => {
@@ -138,6 +154,6 @@ describe('GM values handler', () => {
     expect(globalThis.ScriptValues.delete).toHaveBeenLastCalledWith('script-1', 'count');
 
     await expect(handleGMValuesMessage('getStorageSize', { scriptId: 'script-1' }))
-      .resolves.toEqual({ bytes: 42 });
+      .resolves.toBe(42);
   });
 });
