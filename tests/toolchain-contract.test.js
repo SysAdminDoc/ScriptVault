@@ -11,18 +11,18 @@ import {
 const ROOT = process.cwd();
 const SCRIPT = resolve(ROOT, 'scripts/check-toolchain-contract.mjs');
 
-function makeFixture({ nodeVersion = '24.16.0', runbookNodeVersion = '24.16.0' } = {}) {
+function makeFixture({ nodeVersion = '24.18.1', runbookNodeVersion = '24.18.1' } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'scriptvault-toolchain-'));
   mkdirSync(resolve(root, 'docs'), { recursive: true });
 
   writeFileSync(resolve(root, '.node-version'), `${nodeVersion}\n`);
   writeFileSync(resolve(root, '.nvmrc'), `${nodeVersion}\n`);
   writeFileSync(resolve(root, '.npmrc'), 'engine-strict=true\n');
-  writeFileSync(resolve(root, 'CONTRIBUTING.md'), 'Install the Node.js version in `.node-version` (currently 24.16.0) with npm 11.13.0 or newer.\n');
-  writeFileSync(resolve(root, 'docs/release-runbook.md'), `ScriptVault itself requires Node ${runbookNodeVersion}+ / npm 11.13.0+.\n`);
+  writeFileSync(resolve(root, 'CONTRIBUTING.md'), 'Install the Node.js version in `.node-version` (currently 24.18.1) with npm 11.16.0 or newer.\n');
+  writeFileSync(resolve(root, 'docs/release-runbook.md'), `ScriptVault itself requires Node ${runbookNodeVersion}+ / npm 11.16.0+.\n`);
   writeFileSync(resolve(root, 'AMO-SOURCE-README.md'), 'Reviewer baseline: Node.js **24.14.0** with **npm 11.9.0**.\n');
   writeFileSync(resolve(root, 'package.json'), JSON.stringify({
-    packageManager: 'npm@11.13.0',
+    packageManager: 'npm@11.16.0',
     engines: {
       node: '>=24.14.0',
       npm: '>=11.9.0',
@@ -47,22 +47,22 @@ describe('toolchain contract gate', () => {
     const report = analyzeToolchainContract({ rootDir: ROOT });
 
     expect(report.ok).toBe(true);
-    expect(formatToolchainReport(report)).toContain('Node 24.16.0+');
+    expect(formatToolchainReport(report)).toContain('Node 24.18.1+');
   });
 
   it('detects version drift across local version files', () => {
     const report = analyzeToolchainContract({ rootDir: makeFixture({ nodeVersion: '22.0.0' }) });
 
     expect(report.ok).toBe(false);
-    expect(report.errors).toContain('.node-version: expected 24.16.0, got 22.0.0');
-    expect(report.errors).toContain('.nvmrc: expected 24.16.0, got 22.0.0');
+    expect(report.errors).toContain('.node-version: expected 24.18.1, got 22.0.0');
+    expect(report.errors).toContain('.nvmrc: expected 24.18.1, got 22.0.0');
   });
 
   it('detects release runbook toolchain drift', () => {
     const report = analyzeToolchainContract({ rootDir: makeFixture({ runbookNodeVersion: '22.0.0' }) });
 
     expect(report.ok).toBe(false);
-    expect(report.errors).toContain('docs/release-runbook.md: missing Node 24.16.0+ / npm 11.13.0+');
+    expect(report.errors).toContain('docs/release-runbook.md: missing Node 24.18.1+ / npm 11.16.0+');
   });
 
   it('returns a non-zero CLI exit code when the repository contract drifts', () => {

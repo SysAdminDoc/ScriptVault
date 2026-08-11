@@ -129,6 +129,7 @@ describe('CRA SBOM gate', () => {
       "name: 'fflate'",
       'scriptvault:packaged-sha256',
     ]) expect(releaseTrust).toContain(needle);
+    expect(releaseTrust).toContain("npm audit signatures --min-release-age=0");
     expect(releaseTrust).toContain('dependencies,');
 
     const runbook = read('docs/release-runbook.md');

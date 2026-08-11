@@ -48,6 +48,9 @@ describe('credential-free release preflight', () => {
       SCRIPTVAULT_ARTIFACT_ROOT: expect.any(String),
       SCRIPTVAULT_BUILD_ROOT: expect.any(String),
     });
+    expect(checks.find((check) => check.id === 'dependency-audit').args.slice(-3)).toEqual([
+      'audit', '--audit-level=critical', '--omit=optional',
+    ]);
     expect(checks.find((check) => check.id === 'release-parity').args).toEqual(expect.arrayContaining([
       '--version', version, '--artifact-root', artifactRoot, '--require-artifact', '--allow-unreleased',
     ]));

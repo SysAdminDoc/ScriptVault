@@ -26,7 +26,7 @@ describe('check-readme-claims.mjs', () => {
     expect(parsed.registryProviders).toContain('webdav');
     expect(parsed.registryProviders).toContain('google drive');
     expect(parsed.registryProviders).toContain('s3-compatible');
-    expect(parsed.projectFacts.toolchain).toEqual({ node: '24.16.0', npm: '11.13.0' });
+    expect(parsed.projectFacts.toolchain).toEqual({ node: '24.18.1', npm: '11.16.0' });
     expect(parsed.projectFacts.tools).toEqual({
       typescript: '7.0.2',
       monaco: '0.56.0',

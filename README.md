@@ -375,11 +375,13 @@ exists.
    cd ScriptVault
    ```
 
-2. Open Chrome and navigate to `chrome://extensions`
+2. For source builds, use Node.js **24.18.1** and npm **11.16.0** (the versions pinned by `.node-version` and `packageManager`), then run `npm ci`.
 
-3. Enable **Developer mode** (toggle in top right), then click **Load unpacked** and select the repository folder.
+3. Open Chrome and navigate to `chrome://extensions`
 
-4. Enable userscript execution for your Chrome version:
+4. Enable **Developer mode** (toggle in top right), then click **Load unpacked** and select the repository folder.
+
+5. Enable userscript execution for your Chrome version:
    - **Chrome 138+**: Click ScriptVault's **Details** button and enable **Allow User Scripts**.
    - **Chrome 120-137**: Keep the global **Developer mode** toggle enabled.
 

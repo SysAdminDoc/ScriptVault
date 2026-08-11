@@ -3,8 +3,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const NODE_VERSION = '24.16.0';
-const NPM_VERSION = '11.13.0';
+const NODE_VERSION = '24.18.1';
+const NPM_VERSION = '11.16.0';
 const AMO_NODE_VERSION = '24.14.0';
 const AMO_NPM_VERSION = '11.9.0';
 const NODE_ENGINE = `>=${AMO_NODE_VERSION}`;

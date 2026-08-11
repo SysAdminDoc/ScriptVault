@@ -355,6 +355,27 @@ function signChecksumManifest(checksumPath, version) {
   return signingReport;
 }
 
+function verifyNpmAuditSignatures() {
+  const command = 'npm audit signatures --min-release-age=0';
+  try {
+    const npmCli = process.env.npm_execpath || join(dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js');
+    const output = run(process.execPath, [npmCli, 'audit', 'signatures', '--min-release-age=0']);
+    const registryMatch = output.match(/(\d+) packages have verified registry signatures/);
+    const attestationMatch = output.match(/(\d+) packages have verified attestations/);
+    return {
+      command,
+      status: 'passed',
+      registrySignatures: registryMatch ? Number(registryMatch[1]) : null,
+      attestations: attestationMatch ? Number(attestationMatch[1]) : null,
+    };
+  } catch (error) {
+    const stderr = Buffer.from(error?.stderr || '').toString('utf8').trim();
+    const detail = (stderr || error?.message || 'unknown npm error').split(/\r?\n/)[0].slice(0, 512);
+    fail(`${command} failed: ${detail}`);
+    return { command, status: 'failed' };
+  }
+}
+
 function main() {
   const pkg = readJson('package.json');
   const manifest = readJson('manifest.json');
@@ -367,6 +388,7 @@ function main() {
   if (manifest.version !== version) fail(`manifest.json version ${manifest.version} does not match package.json ${version}`);
   if (firefoxManifest.version !== version) fail(`manifest-firefox.json version ${firefoxManifest.version} does not match package.json ${version}`);
   if (!existsSync(artifactPath)) fail(`${artifactName} is missing; run bash build.sh before npm run release:trust`);
+  const auditSignatures = verifyNpmAuditSignatures();
   if (failures.length > 0) return finish();
 
   rmSync(outDir, { recursive: true, force: true });
@@ -543,6 +565,7 @@ function main() {
       provenancePath,
       signingPath,
     ].map((path) => relative(projectRoot, path).replace(/\\/g, '/')),
+    auditSignatures,
     signing: signingReport,
     git,
   };

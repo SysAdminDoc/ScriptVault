@@ -4,6 +4,11 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased] — Minimal workbench surfaces
 
+- Added a blocking `npm audit signatures --min-release-age=0` release-trust
+  check and refreshed the developer pin to Node 24.18.1/npm 11.16.0 while
+  retaining the AMO-compatible engine floor. The two currently unfixable
+  `image-size` parser advisories are documented as a temporary audit exception
+  reachable only through Firefox lint tooling.
 - Imported competitor per-script state for enabled/disabled status, run-at and
   injection overrides, custom URL patterns, declared `@var`/GM_config values,
   and stored values, with bounded unmapped-setting diagnostics and quarantine

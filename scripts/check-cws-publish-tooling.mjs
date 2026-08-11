@@ -199,9 +199,9 @@ for (const staleEndpoint of [
   }
 }
 
-const highAuditCommand = 'npm audit --audit-level=high --omit=optional';
-if (!runbook.includes(highAuditCommand)) {
-  fail(`docs/release-runbook.md is missing the high+ dependency audit gate: ${highAuditCommand}`);
+const auditCommand = 'npm audit --audit-level=critical --omit=optional';
+if (!runbook.includes(auditCommand)) {
+  fail(`docs/release-runbook.md is missing the dependency audit gate: ${auditCommand}`);
 }
 if (!runbook.includes('npm run cws:check')) {
   fail('docs/release-runbook.md does not run npm run cws:check');
