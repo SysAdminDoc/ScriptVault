@@ -20,6 +20,9 @@ All notable changes to ScriptVault will be documented in this file.
 - Deferred force-directed layouts above 1,200 scripts and replaced them with an
   exact relationship-count summary so large libraries keep the dashboard
   responsive.
+- Added a keyboard-accessible dependency-graph script list with per-node
+  relationship summaries, editor actions, focusable canvas controls, and
+  synchronized visual selection.
 - Serialized subscription feed, bundle, removal, and refresh-result writes
   through a fresh-read queue so concurrent dashboard and alarm mutations keep
   unrelated records and validator/error state intact.

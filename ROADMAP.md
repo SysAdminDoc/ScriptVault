@@ -180,16 +180,6 @@ _Scope not covered by the 2026-08-02 pass. Not findings; each needs its own audi
   Acceptance: a PR is open against awesome-userscripts adding ScriptVault with an accurate one-line description and the four missing managers; the release runbook records where the product is indexed so the list does not go stale again.
   Complexity: S
 
-- [ ] P2 — Give dependency-graph nodes a keyboard and screen-reader equivalent
-  Category: a11y
-  Where: `pages/dashboard-depgraph.js:788-861,1008-1108`
-  Problem: The graph is a canvas with mouse-only pan, zoom, and double-click handlers. It has no accessible name, focus target, keyboard interaction, or semantic representation of nodes/edges, so keyboard and screen-reader users cannot select a script, inspect its relationships, or open its editor.
-  Evidence: The implementation attaches `mousedown`, `mousemove`, wheel, and `dblclick` listeners only; the canvas has no `role`, `tabindex`, or `aria-label`, and the rendered node/edge data is not exposed as DOM controls. The toolbar buttons do not provide an alternative for selecting individual nodes.
-  Fix: Add a labeled, focusable graph region plus an accessible list/table of scripts and relationship summaries, with keyboard selection/open actions and live selection details. Keep the canvas as the visual enhancement and synchronize selection between both representations.
-  Acceptance: Keyboard-only navigation can reach every graph item, select it, read its dependency/conflict summary, and open the editor; a screen reader sees the graph name and relationship count; automated accessibility coverage finds no unlabeled interactive surface.
-  Confidence: Verified
-  Effort: M
-
 - [ ] P2 — Make the editor smoke command fail fast and clean up its browser on timeout (pre-existing baseline)
   Category: testing
   Where: `scripts/smoke-editor.mjs:105-245`; npm script `smoke:editor`

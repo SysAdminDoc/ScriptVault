@@ -21,11 +21,15 @@ const DependencyGraph = (() => {
         ctx: null,
         emptyState: null,
         sidebar: null,
+        nodeList: null,
+        nodeCountLabel: null,
+        nodeButtonById: new Map(),
         toolbar: null,
         scripts: [],
         nodes: [],
         edges: [],
         nodeMap: new Map(),
+        nodeRelationshipCounts: new Map(),
         selectedNode: null,
         hoveredNode: null,
         dragNode: null,
@@ -104,6 +108,10 @@ const DependencyGraph = (() => {
 }
 .dg-canvas-area canvas.dg-dragging {
     cursor: grabbing;
+}
+.dg-canvas-area canvas:focus-visible {
+    outline: 2px solid var(--accent-blue);
+    outline-offset: -2px;
 }
 .dg-canvas-empty {
     position: absolute;
@@ -186,6 +194,86 @@ const DependencyGraph = (() => {
     flex-direction: column;
     overflow: hidden;
     transition: width 0.2s, min-width 0.2s;
+}
+.dg-sidebar-nav {
+    flex: 0 1 42%;
+    min-height: 120px;
+    display: flex;
+    flex-direction: column;
+    border-bottom: 1px solid var(--border-color);
+}
+.dg-sidebar-nav-header {
+    padding: 10px 12px 8px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+.dg-node-list {
+    overflow-y: auto;
+    padding: 0 6px 8px;
+}
+.dg-node-row {
+    display: flex;
+    align-items: stretch;
+    gap: 4px;
+    margin-bottom: 3px;
+}
+.dg-node-button,
+.dg-node-open {
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-secondary);
+    border-radius: var(--sv-radius-sm);
+    cursor: pointer;
+    font: inherit;
+}
+.dg-node-button {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 7px;
+    text-align: start;
+}
+.dg-node-button:hover,
+.dg-node-button:focus-visible,
+.dg-node-open:hover,
+.dg-node-open:focus-visible {
+    background: var(--bg-row-hover);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+    outline: none;
+}
+.dg-node-button[aria-pressed="true"] {
+    background: color-mix(in srgb, var(--accent-blue) 16%, transparent);
+    border-color: var(--accent-blue);
+    color: var(--text-primary);
+}
+.dg-node-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.dg-node-count {
+    flex-shrink: 0;
+    color: var(--text-muted);
+    font-size: 0.6875rem;
+}
+.dg-node-open {
+    flex: 0 0 30px;
+    padding: 4px;
+    font-size: 0.875rem;
+}
+.dg-sidebar-nav[hidden] {
+    display: none;
 }
 .dg-sidebar.dg-collapsed {
     width: 0;
@@ -884,6 +972,43 @@ const DependencyGraph = (() => {
     function bindCanvasEvents() {
         const canvas = _state.canvas;
 
+        canvas.addEventListener('keydown', (event) => {
+            const step = 40;
+            let handled = true;
+            switch (event.key) {
+                case 'ArrowLeft': _state.camera.x += step; break;
+                case 'ArrowRight': _state.camera.x -= step; break;
+                case 'ArrowUp': _state.camera.y += step; break;
+                case 'ArrowDown': _state.camera.y -= step; break;
+                case '+':
+                case '=':
+                    _state.camera.zoom = Math.min(5, _state.camera.zoom * 1.1);
+                    break;
+                case '-':
+                    _state.camera.zoom = Math.max(0.1, _state.camera.zoom * 0.9);
+                    break;
+                case '0':
+                    _state.camera = { x: 0, y: 0, zoom: 1 };
+                    break;
+                case 'r':
+                case 'R':
+                    if (!_state.layoutDeferred) {
+                        _state.simulationAlpha = 1;
+                        _state.simulationRunning = true;
+                    }
+                    break;
+                case 'Home':
+                    _state.nodeButtonById.values().next().value?.focus();
+                    break;
+                default:
+                    handled = false;
+            }
+            if (handled) {
+                event.preventDefault();
+                _state.needsRender = true;
+            }
+        });
+
         canvas.addEventListener('mousedown', (e) => {
             const node = getNodeAt(e.clientX, e.clientY);
             if (node) {
@@ -986,9 +1111,130 @@ const DependencyGraph = (() => {
         }
     }
 
+    function buildNodeRelationshipCounts() {
+        const counts = new Map(_state.nodes.map(node => [node.id, {
+            total: 0,
+            conflicts: 0,
+            byType: {}
+        }]));
+        for (const edge of _state.edges) {
+            for (const nodeId of [edge.source, edge.target]) {
+                const entry = counts.get(nodeId);
+                if (!entry) continue;
+                entry.total++;
+                entry.byType[edge.type] = (entry.byType[edge.type] || 0) + 1;
+                if (edge.type === 'match') {
+                    const source = _state.nodeMap.get(edge.source);
+                    const target = _state.nodeMap.get(edge.target);
+                    if (source?.enabled && target?.enabled) entry.conflicts++;
+                }
+            }
+        }
+        return counts;
+    }
+
+    function formatNodeRelationshipSummary(node) {
+        const counts = _state.nodeRelationshipCounts.get(node.id);
+        if (!counts || counts.total === 0) return 'No relationships';
+        const typeLabels = {
+            require: 'require',
+            match: 'match',
+            resource: 'resource',
+            connect: 'connect'
+        };
+        const breakdown = Object.entries(counts.byType)
+            .map(([type, count]) => `${count} ${typeLabels[type] || type}`)
+            .join(', ');
+        const conflictLabel = counts.conflicts > 0 ? `, ${counts.conflicts} conflicts` : '';
+        return `${counts.total} relationship${counts.total === 1 ? '' : 's'} (${breakdown}${conflictLabel})`;
+    }
+
+    function getGraphAccessibilityLabel() {
+        const relationshipLabel = _state.edges.length === 1 ? '1 relationship' : `${_state.edges.length} relationships`;
+        return `Dependency graph: ${_state.nodes.length} scripts, ${relationshipLabel}. Use the Scripts list to select a script and open its editor.`;
+    }
+
+    function updateNodeListSelection() {
+        for (const [nodeId, button] of _state.nodeButtonById) {
+            button.setAttribute('aria-pressed', String(_state.selectedNode?.id === nodeId));
+        }
+    }
+
+    function renderNodeList() {
+        const list = _state.nodeList;
+        if (!list) return;
+        list.replaceChildren();
+        _state.nodeButtonById = new Map();
+
+        if (_state.nodes.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'dg-empty';
+            empty.textContent = 'No scripts available.';
+            list.appendChild(empty);
+            if (_state.nodeCountLabel) _state.nodeCountLabel.textContent = '0';
+            return;
+        }
+
+        const fragment = document.createDocumentFragment();
+        for (const node of _state.nodes) {
+            const row = document.createElement('div');
+            row.className = 'dg-node-row';
+            row.setAttribute('role', 'listitem');
+
+            const selectButton = document.createElement('button');
+            selectButton.className = 'dg-node-button';
+            selectButton.type = 'button';
+            selectButton.setAttribute('aria-pressed', String(_state.selectedNode?.id === node.id));
+            const relationshipSummary = formatNodeRelationshipSummary(node);
+            selectButton.setAttribute('aria-label', `${node.label}. ${relationshipSummary}`);
+            selectButton.title = relationshipSummary;
+
+            const label = document.createElement('span');
+            label.className = 'dg-node-label';
+            label.textContent = node.label;
+            const count = document.createElement('span');
+            count.className = 'dg-node-count';
+            count.textContent = relationshipSummary;
+            selectButton.append(label, count);
+            selectButton.addEventListener('click', () => selectNode(node));
+            selectButton.addEventListener('keydown', (event) => {
+                if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+                event.preventDefault();
+                const buttons = [...list.querySelectorAll('.dg-node-button')];
+                const currentIndex = buttons.indexOf(selectButton);
+                const nextIndex = event.key === 'ArrowDown' ? currentIndex + 1 : currentIndex - 1;
+                buttons[nextIndex]?.focus();
+            });
+            _state.nodeButtonById.set(node.id, selectButton);
+
+            const openButton = document.createElement('button');
+            openButton.className = 'dg-node-open';
+            openButton.type = 'button';
+            openButton.textContent = '\u2197';
+            openButton.setAttribute('aria-label', `Open ${node.label} in editor`);
+            openButton.title = `Open ${node.label} in editor`;
+            openButton.addEventListener('click', () => {
+                selectNode(node);
+                if (typeof _state.onOpenEditor === 'function') _state.onOpenEditor(node.id);
+            });
+
+            row.append(selectButton, openButton);
+            fragment.appendChild(row);
+        }
+        list.appendChild(fragment);
+        if (_state.nodeCountLabel) _state.nodeCountLabel.textContent = _state.nodes.length.toLocaleString();
+    }
+
+    function updateGraphAccessibility() {
+        if (_state.canvas) _state.canvas.setAttribute('aria-label', getGraphAccessibilityLabel());
+        if (_state.nodeList) _state.nodeList.setAttribute('aria-label', `Dependency graph scripts (${_state.nodes.length})`);
+    }
+
     function selectNode(node) {
         _state.selectedNode = node;
+        updateNodeListSelection();
         renderSidebar();
+        _state.needsRender = true;
     }
 
     // =========================================
@@ -1028,6 +1274,11 @@ const DependencyGraph = (() => {
         if (meta.description) html += `<div class="dg-value" style="color:var(--text-muted);margin-top:4px;font-size:0.75rem;">${escapeHtml(meta.description)}</div>`;
         html += `<div class="dg-value" style="color:var(--text-muted);margin-top:4px;font-size:0.6875rem;">${meta.lineCount} lines</div>`;
         html += `</div>`;
+
+        html += `<div class="dg-detail-section">
+            <h4>Relationships</h4>
+            <div class="dg-value">${escapeHtml(formatNodeRelationshipSummary(node))}</div>
+        </div>`;
 
         // Conflicts
         if (node.conflicts.length > 0 && node.enabled) {
@@ -1160,6 +1411,9 @@ const DependencyGraph = (() => {
         canvasArea.className = 'dg-canvas-area';
 
         const canvas = document.createElement('canvas');
+        canvas.setAttribute('role', 'img');
+        canvas.tabIndex = 0;
+        canvas.setAttribute('aria-label', 'Dependency graph: no scripts loaded.');
         canvasArea.appendChild(canvas);
 
         const emptyState = document.createElement('div');
@@ -1202,6 +1456,13 @@ const DependencyGraph = (() => {
                 <span>Details</span>
                 <button data-action="toggle-sidebar" title="Toggle sidebar" type="button" aria-label="Close details panel">\u2715</button>
             </div>
+            <div class="dg-sidebar-nav" aria-label="Dependency graph scripts">
+                <div class="dg-sidebar-nav-header">
+                    <span>Scripts</span>
+                    <span data-node-count>0</span>
+                </div>
+                <div class="dg-node-list" role="list" aria-label="Dependency graph scripts"></div>
+            </div>
             <div class="dg-sidebar-body">
                 <div class="dg-empty">Select a node to view details</div>
             </div>
@@ -1213,8 +1474,12 @@ const DependencyGraph = (() => {
         _state.container = wrapper;
         _state.canvas = canvas;
         _state.sidebar = sidebar;
+        _state.nodeList = sidebar.querySelector('.dg-node-list');
+        _state.nodeCountLabel = sidebar.querySelector('[data-node-count]');
         _state.toolbar = toolbar;
         _state.emptyState = emptyState;
+        updateGraphAccessibility();
+        renderNodeList();
 
         // Resize canvas
         resizeCanvas();
@@ -1418,11 +1683,14 @@ const DependencyGraph = (() => {
         _state.nodes = result.nodes;
         _state.edges = result.edges;
         _state.nodeMap = new Map(_state.nodes.map(node => [node.id, node]));
+        _state.nodeRelationshipCounts = buildNodeRelationshipCounts();
         _state.layoutDeferred = _state.nodes.length > MAX_FULL_LAYOUT_NODES;
         _state.simulationAlpha = 1;
         _state.simulationRunning = !_state.layoutDeferred && _state.nodes.length > 0;
         updateLayoutSummary();
         updateLayoutControls();
+        renderNodeList();
+        updateGraphAccessibility();
         renderSidebar();
         _state.needsRender = true;
     }
@@ -1457,10 +1725,14 @@ const DependencyGraph = (() => {
         _state.ctx = null;
         _state.emptyState = null;
         _state.sidebar = null;
+        _state.nodeList = null;
+        _state.nodeCountLabel = null;
+        _state.nodeButtonById = new Map();
         _state.toolbar = null;
         _state.nodes = [];
         _state.edges = [];
         _state.nodeMap = new Map();
+        _state.nodeRelationshipCounts = new Map();
         _state.layoutDeferred = false;
         _state.selectedNode = null;
         _state.hoveredNode = null;

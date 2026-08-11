@@ -82,6 +82,17 @@ describe('DependencyGraph module source contracts', () => {
     expect(depgraphCode).toContain('Full graph layout is deferred above');
   });
 
+  it('exposes the canvas and every script through keyboard-accessible controls', () => {
+    expect(depgraphCode).toContain("canvas.setAttribute('role', 'img')");
+    expect(depgraphCode).toContain('canvas.tabIndex = 0');
+    expect(depgraphCode).toContain("canvas.setAttribute('aria-label'");
+    expect(depgraphCode).toContain('class="dg-node-list" role="list"');
+    expect(depgraphCode).toContain("selectButton.setAttribute('aria-pressed'");
+    expect(depgraphCode).toContain("openButton.setAttribute('aria-label', `Open ${node.label} in editor`)");
+    expect(depgraphCode).toContain('function buildNodeRelationshipCounts');
+    expect(depgraphCode).toContain('function formatNodeRelationshipSummary');
+  });
+
   it('renders a clear empty state when there are no scripts to graph', () => {
     expect(depgraphCode).toContain('No scripts to graph yet — install a script to see its dependencies and match overlaps.');
     expect(depgraphCode).toContain('function updateLayoutSummary');
