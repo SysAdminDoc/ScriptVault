@@ -15,6 +15,11 @@ All notable changes to ScriptVault will be documented in this file.
   budget to ActivityHeatmap.
 - Serialized ActivityHeatmap writes, retained in-memory increments after quota
   failures, and added a non-blocking retry status to the dashboard.
+- Indexed dependency-graph relationship candidates by shared metadata keys,
+  preserving exact edge details while avoiding unrelated script-pair scans.
+- Deferred force-directed layouts above 1,200 scripts and replaced them with an
+  exact relationship-count summary so large libraries keep the dashboard
+  responsive.
 - Serialized subscription feed, bundle, removal, and refresh-result writes
   through a fresh-read queue so concurrent dashboard and alarm mutations keep
   unrelated records and validator/error state intact.

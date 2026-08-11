@@ -180,16 +180,6 @@ _Scope not covered by the 2026-08-02 pass. Not findings; each needs its own audi
   Acceptance: a PR is open against awesome-userscripts adding ScriptVault with an accurate one-line description and the four missing managers; the release runbook records where the product is indexed so the list does not go stale again.
   Complexity: S
 
-- [ ] P2 — Prevent the dependency graph from blocking the main thread quadratically
-  Category: perf
-  Where: `pages/dashboard-depgraph.js:362-451,520-589`; `pages/dashboard.js:3291-3297`; `scripts/smoke-large-library.mjs:349-350`
-  Problem: Relationship analysis compares every script pair and the force-layout repulsion compares every node pair on every animation frame. The graph refresh therefore becomes unusable as a library grows even though edge lookup/rendering is optimized separately.
-  Evidence: Headless measurement of `DependencyGraph.refresh` after loading the Utilities graph took about 332 ms for 1,000 scripts and 3.18 s for 3,000 scripts; the repository's large-library smoke fixtures go to 10,000. The nested pair loops remain in both analysis and simulation paths.
-  Fix: Index normalized requires/matches/resources by key and generate candidate pairs from shared buckets; use a Barnes-Hut/grid approximation or cap/defer layout work for large graphs, and move bulk analysis off the UI thread where possible. Show a clear large-library summary when full visualization is deferred.
-  Acceptance: A 3,000-script fixture refreshes without a multi-second main-thread block, a 10,000-script fixture remains interactive or intentionally switches to a bounded summary, and relationship counts remain equivalent to the current algorithm for a reference fixture.
-  Confidence: Verified
-  Effort: L
-
 - [ ] P2 — Give dependency-graph nodes a keyboard and screen-reader equivalent
   Category: a11y
   Where: `pages/dashboard-depgraph.js:788-861,1008-1108`

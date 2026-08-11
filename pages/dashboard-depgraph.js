@@ -6,6 +6,11 @@
 const DependencyGraph = (() => {
     'use strict';
 
+    // Force layout is deliberately bounded. Relationship analysis still keeps
+    // the complete result, but a canvas simulation for a very large library is
+    // less useful than a responsive summary with exact counts.
+    const MAX_FULL_LAYOUT_NODES = 1200;
+
     // =========================================
     // State
     // =========================================
@@ -20,6 +25,7 @@ const DependencyGraph = (() => {
         scripts: [],
         nodes: [],
         edges: [],
+        nodeMap: new Map(),
         selectedNode: null,
         hoveredNode: null,
         dragNode: null,
@@ -30,6 +36,7 @@ const DependencyGraph = (() => {
         animFrameId: null,
         simulationRunning: false,
         simulationAlpha: 1,
+        layoutDeferred: false,
         width: 0,
         height: 0,
         edgeTypeColors: {},
@@ -135,6 +142,10 @@ const DependencyGraph = (() => {
 }
 .dg-toolbar button:hover {
     background: var(--bg-row-hover);
+}
+.dg-toolbar button:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
 }
 .dg-toolbar button.dg-active {
     background: var(--accent-green-dark);
@@ -359,6 +370,89 @@ const DependencyGraph = (() => {
     // =========================================
     // Dependency Analysis
     // =========================================
+    function parseResourceUrl(resource) {
+        const parts = String(resource || '').split(/\s+/);
+        return parts.length > 1 ? parts[parts.length - 1] : parts[0];
+    }
+
+    function addCandidatePair(candidates, a, b) {
+        if (a === b) return;
+        const first = Math.min(a, b);
+        const second = Math.max(a, b);
+        candidates.add(`${first}:${second}`);
+    }
+
+    function addBucketCandidates(candidates, valuesByScript, keyForValue) {
+        const buckets = new Map();
+        for (let index = 0; index < valuesByScript.length; index++) {
+            const keys = new Set();
+            for (const value of valuesByScript[index]) {
+                const key = keyForValue(value);
+                if (key != null && key !== '') keys.add(key);
+            }
+            for (const key of keys) {
+                const bucket = buckets.get(key);
+                if (bucket) {
+                    for (const previous of bucket) addCandidatePair(candidates, previous, index);
+                }
+                if (bucket) bucket.push(index);
+                else buckets.set(key, [index]);
+            }
+        }
+    }
+
+    function addMatchCandidates(candidates, matchesByScript) {
+        const buckets = new Map();
+        const wildcardIndexes = [];
+        for (let index = 0; index < matchesByScript.length; index++) {
+            // A global wildcard overlaps every earlier pattern, while a later
+            // pattern must also be paired with any earlier wildcard.
+            for (const previous of wildcardIndexes) addCandidatePair(candidates, previous, index);
+
+            const keys = new Set();
+            for (const pattern of matchesByScript[index]) {
+                const normalized = normalizePattern(pattern);
+                if (normalized === '*') {
+                    for (let previous = 0; previous < index; previous++) {
+                        addCandidatePair(candidates, previous, index);
+                    }
+                    wildcardIndexes.push(index);
+                    continue;
+                }
+                keys.add(`pattern:${normalized}`);
+                const domain = extractDomain(pattern);
+                if (domain) keys.add(`domain:${domain}`);
+            }
+
+            for (const key of keys) {
+                const bucket = buckets.get(key);
+                if (bucket) {
+                    for (const previous of bucket) addCandidatePair(candidates, previous, index);
+                    bucket.push(index);
+                } else {
+                    buckets.set(key, [index]);
+                }
+            }
+        }
+    }
+
+    function buildCandidatePairs(metas) {
+        const candidates = new Set();
+        addBucketCandidates(candidates, metas.map(meta => meta.requires), value => `require:${value}`);
+        addMatchCandidates(candidates, metas.map(meta => meta.matches));
+        addBucketCandidates(candidates, metas.map(meta => meta.resources), value => `resource:${parseResourceUrl(value)}`);
+        addBucketCandidates(candidates, metas.map(meta => meta.connects), value => `connect:${value}`);
+
+        return [...candidates]
+            .map(key => key.split(':').map(Number))
+            .sort(([aIndex, aTarget], [bIndex, bTarget]) => aIndex - bIndex || aTarget - bTarget);
+    }
+
+    function findSharedValues(valuesA, valuesB) {
+        const valuesBSet = new Set(valuesB);
+        return valuesA.filter(value => valuesBSet.has(value));
+    }
+
     function analyzeRelationships(scripts) {
         const nodes = [];
         const edges = [];
@@ -386,65 +480,66 @@ const DependencyGraph = (() => {
 
         const ids = [...metaMap.keys()];
         const nodeById = new Map(nodes.map(n => [n.id, n]));
+        const metas = ids.map(id => metaMap.get(id));
 
-        // Compare every pair
-        for (let i = 0; i < ids.length; i++) {
-            for (let j = i + 1; j < ids.length; j++) {
-                const a = metaMap.get(ids[i]);
-                const b = metaMap.get(ids[j]);
+        // Only compare pairs that share a relationship key. The overlap
+        // functions remain the source of truth for exact details and preserve
+        // the previous edge semantics for every candidate pair.
+        for (const [i, j] of buildCandidatePairs(metas)) {
+            const a = metas[i];
+            const b = metas[j];
 
-                // @require overlap
-                const sharedReqs = a.requires.filter(r => b.requires.includes(r));
-                if (sharedReqs.length > 0) {
-                    edges.push({
-                        source: ids[i],
-                        target: ids[j],
-                        type: 'require',
-                        detail: sharedReqs
-                    });
-                }
+            // @require overlap
+            const sharedReqs = findSharedValues(a.requires, b.requires);
+            if (sharedReqs.length > 0) {
+                edges.push({
+                    source: ids[i],
+                    target: ids[j],
+                    type: 'require',
+                    detail: sharedReqs
+                });
+            }
 
-                // @match overlap
-                const sharedMatches = findMatchOverlaps(a.matches, b.matches);
-                if (sharedMatches.length > 0) {
-                    edges.push({
-                        source: ids[i],
-                        target: ids[j],
-                        type: 'match',
-                        detail: sharedMatches
-                    });
-                    // Mark conflict if both enabled
-                    if (a.enabled && b.enabled) {
-                        const nodeA = nodeById.get(ids[i]);
-                        const nodeB = nodeById.get(ids[j]);
-                        if (nodeA && nodeB) {
-                            nodeA.conflicts.push(ids[j]);
-                            nodeB.conflicts.push(ids[i]);
-                        }
+            // @match overlap
+            const sharedMatches = findMatchOverlaps(a.matches, b.matches);
+            if (sharedMatches.length > 0) {
+                edges.push({
+                    source: ids[i],
+                    target: ids[j],
+                    type: 'match',
+                    detail: sharedMatches
+                });
+                // Mark conflict if both enabled
+                if (a.enabled && b.enabled) {
+                    const nodeA = nodeById.get(ids[i]);
+                    const nodeB = nodeById.get(ids[j]);
+                    if (nodeA && nodeB) {
+                        nodeA.conflicts.push(ids[j]);
+                        nodeB.conflicts.push(ids[i]);
                     }
                 }
+            }
 
-                // @resource overlap
-                const sharedRes = findResourceOverlaps(a.resources, b.resources);
-                if (sharedRes.length > 0) {
-                    edges.push({
-                        source: ids[i],
-                        target: ids[j],
-                        type: 'resource',
-                        detail: sharedRes
-                    });
-                }
+            // @resource overlap
+            const sharedRes = findResourceOverlaps(a.resources, b.resources);
+            if (sharedRes.length > 0) {
+                edges.push({
+                    source: ids[i],
+                    target: ids[j],
+                    type: 'resource',
+                    detail: sharedRes
+                });
+            }
 
-                // @connect overlap
-                const sharedConn = a.connects.filter(c => b.connects.includes(c));
-                if (sharedConn.length > 0) {
-                    edges.push({
-                        source: ids[i],
-                        target: ids[j],
-                        type: 'connect',
-                        detail: sharedConn
-                    });
-                }
+            // @connect overlap
+            const sharedConn = findSharedValues(a.connects, b.connects);
+            if (sharedConn.length > 0) {
+                edges.push({
+                    source: ids[i],
+                    target: ids[j],
+                    type: 'connect',
+                    detail: sharedConn
+                });
             }
         }
 
@@ -500,12 +595,8 @@ const DependencyGraph = (() => {
 
     function findResourceOverlaps(resA, resB) {
         const overlaps = [];
-        const parseRes = (r) => {
-            const parts = r.split(/\s+/);
-            return parts.length > 1 ? parts[parts.length - 1] : parts[0];
-        };
-        const urlsA = resA.map(parseRes);
-        const urlsB = resB.map(parseRes);
+        const urlsA = resA.map(parseResourceUrl);
+        const urlsB = resB.map(parseResourceUrl);
         for (const a of urlsA) {
             for (const b of urlsB) {
                 if (a === b) overlaps.push(a);
@@ -519,9 +610,14 @@ const DependencyGraph = (() => {
     // =========================================
     function simulationStep() {
         const { nodes, edges } = _state;
-        // Build lookup map for O(1) node access by edge endpoints
-        const nodeMap = new Map(nodes.map(n => [n.id, n]));
+        // Use the refresh-populated lookup map for O(1) edge endpoint access.
+        const nodeMap = _state.nodeMap;
         if (nodes.length === 0) return;
+
+        if (_state.layoutDeferred) {
+            _state.simulationRunning = false;
+            return;
+        }
 
         const alpha = _state.simulationAlpha;
         if (alpha < 0.001) {
@@ -593,7 +689,7 @@ const DependencyGraph = (() => {
     // =========================================
     function render() {
         const { ctx, canvas, nodes, edges, camera, selectedNode, hoveredNode } = _state;
-        if (!ctx || !canvas) return;
+        if (!ctx || !canvas || _state.layoutDeferred) return;
 
         const w = canvas.width;
         const h = canvas.height;
@@ -608,7 +704,7 @@ const DependencyGraph = (() => {
         ctx.scale(camera.zoom, camera.zoom);
 
         // Draw edges (O(E) via Map lookup)
-        const nodeMap = new Map(nodes.map(n => [n.id, n]));
+        const nodeMap = _state.nodeMap;
         for (const edge of edges) {
             const a = nodeMap.get(edge.source);
             const b = nodeMap.get(edge.target);
@@ -746,10 +842,10 @@ const DependencyGraph = (() => {
         let shouldRender = false;
         if (_state.simulationRunning) {
             simulationStep();
-            shouldRender = true;
+            shouldRender = !_state.layoutDeferred;
         }
         if (_state.needsRender) {
-            shouldRender = true;
+            shouldRender = !_state.layoutDeferred;
             _state.needsRender = false;
         }
         if (shouldRender) render();
@@ -1002,6 +1098,54 @@ const DependencyGraph = (() => {
             .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
+    function updateLayoutSummary() {
+        if (!_state.emptyState) return;
+        if (_state.nodes.length === 0) {
+            _state.emptyState.textContent = 'No scripts to graph yet — install a script to see its dependencies and match overlaps.';
+            _state.emptyState.hidden = false;
+            return;
+        }
+        if (_state.layoutDeferred) {
+            const edgeCounts = _state.edges.reduce((counts, edge) => {
+                counts[edge.type] = (counts[edge.type] || 0) + 1;
+                return counts;
+            }, {});
+            const breakdown = ['require', 'match', 'resource', 'connect']
+                .filter(type => edgeCounts[type])
+                .map(type => `${edgeCounts[type].toLocaleString()} ${type}`)
+                .join(', ');
+            const relationshipLabel = breakdown
+                ? `${_state.edges.length.toLocaleString()} relationships (${breakdown})`
+                : 'no relationships';
+            _state.emptyState.textContent = `${_state.nodes.length.toLocaleString()} scripts analyzed; ${relationshipLabel}. Full graph layout is deferred above ${MAX_FULL_LAYOUT_NODES.toLocaleString()} scripts to keep the dashboard responsive. Open Scripts to inspect individual entries.`;
+            _state.emptyState.hidden = false;
+            return;
+        }
+        _state.emptyState.textContent = 'No scripts to graph yet — install a script to see its dependencies and match overlaps.';
+        _state.emptyState.hidden = true;
+    }
+
+    function updateLayoutControls() {
+        if (!_state.toolbar) return;
+        const deferred = _state.layoutDeferred;
+        const reheat = _state.toolbar.querySelector('[data-action="reheat"]');
+        if (reheat) {
+            reheat.disabled = deferred;
+            reheat.title = deferred
+                ? `Full layout is deferred above ${MAX_FULL_LAYOUT_NODES.toLocaleString()} scripts`
+                : 'Re-run layout';
+        }
+        for (const action of ['export-png', 'export-svg']) {
+            const button = _state.toolbar.querySelector(`[data-action="${action}"]`);
+            if (button) {
+                button.disabled = deferred;
+                button.title = deferred
+                    ? 'Export is unavailable while full layout is deferred'
+                    : (action === 'export-png' ? 'Export as PNG' : 'Export as SVG');
+            }
+        }
+    }
+
     // =========================================
     // Build DOM
     // =========================================
@@ -1085,6 +1229,7 @@ const DependencyGraph = (() => {
                     _state.camera = { x: 0, y: 0, zoom: 1 };
                     break;
                 case 'reheat':
+                    if (_state.layoutDeferred) break;
                     _state.simulationAlpha = 1;
                     _state.simulationRunning = true;
                     break;
@@ -1170,8 +1315,8 @@ const DependencyGraph = (() => {
 
         // Edges
         for (const edge of _state.edges) {
-            const a = _state.nodes.find(n => n.id === edge.source);
-            const b = _state.nodes.find(n => n.id === edge.target);
+            const a = _state.nodeMap.get(edge.source);
+            const b = _state.nodeMap.get(edge.target);
             if (!a || !b) continue;
             const isConflict = edge.type === 'match' && a.enabled && b.enabled;
             const color = isConflict ? _state.conflictColor : (_state.edgeTypeColors[edge.type] || _state.fallbackEdgeColor);
@@ -1215,11 +1360,12 @@ const DependencyGraph = (() => {
 
     function renderToContext(ctx) {
         const { nodes, edges } = _state;
+        const nodeMap = _state.nodeMap;
 
         // Edges
         for (const edge of edges) {
-            const a = nodes.find(n => n.id === edge.source);
-            const b = nodes.find(n => n.id === edge.target);
+            const a = nodeMap.get(edge.source);
+            const b = nodeMap.get(edge.target);
             if (!a || !b) continue;
             const isConflict = edge.type === 'match' && a.enabled && b.enabled;
             ctx.beginPath();
@@ -1271,10 +1417,14 @@ const DependencyGraph = (() => {
         const result = analyzeRelationships(_state.scripts);
         _state.nodes = result.nodes;
         _state.edges = result.edges;
-        if (_state.emptyState) _state.emptyState.hidden = _state.nodes.length > 0;
+        _state.nodeMap = new Map(_state.nodes.map(node => [node.id, node]));
+        _state.layoutDeferred = _state.nodes.length > MAX_FULL_LAYOUT_NODES;
         _state.simulationAlpha = 1;
-        _state.simulationRunning = true;
+        _state.simulationRunning = !_state.layoutDeferred && _state.nodes.length > 0;
+        updateLayoutSummary();
+        updateLayoutControls();
         renderSidebar();
+        _state.needsRender = true;
     }
 
     function highlightScript(scriptId) {
@@ -1310,6 +1460,8 @@ const DependencyGraph = (() => {
         _state.toolbar = null;
         _state.nodes = [];
         _state.edges = [];
+        _state.nodeMap = new Map();
+        _state.layoutDeferred = false;
         _state.selectedNode = null;
         _state.hoveredNode = null;
         _state.scripts = [];
@@ -1321,6 +1473,12 @@ const DependencyGraph = (() => {
         highlightScript,
         exportPNG,
         exportSVG,
-        destroy
+        destroy,
+        _analyzeRelationships: analyzeRelationships,
+        _getLayoutState: () => ({
+            deferred: _state.layoutDeferred,
+            nodeCount: _state.nodes.length,
+            edgeCount: _state.edges.length
+        })
     };
 })();

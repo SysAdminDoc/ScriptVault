@@ -1,8 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import vm from 'node:vm';
 
 const depgraphCode = readFileSync(resolve(process.cwd(), 'pages/dashboard-depgraph.js'), 'utf8');
+
+function loadDependencyGraph() {
+  const context = { window: {}, Math, Map, Set };
+  vm.runInNewContext(`${depgraphCode}\nthis.__dependencyGraph = DependencyGraph;`, context);
+  return context.__dependencyGraph;
+}
+
+function userscriptMetadata(lines) {
+  return [
+    '// ==UserScript==',
+    ...lines.map(line => `// ${line}`),
+    '// ==/UserScript==',
+    'void 0;'
+  ].join('\n');
+}
 
 describe('DependencyGraph module source contracts', () => {
   it('parseMetadata extracts all required metadata fields', () => {
@@ -59,9 +75,76 @@ describe('DependencyGraph module source contracts', () => {
     expect(depgraphCode).toContain('vy *= damping');
   });
 
+  it('indexes relationship candidates and defers very large force layouts', () => {
+    expect(depgraphCode).toContain('function buildCandidatePairs');
+    expect(depgraphCode).toContain('function addBucketCandidates');
+    expect(depgraphCode).toContain('const MAX_FULL_LAYOUT_NODES = 1200');
+    expect(depgraphCode).toContain('Full graph layout is deferred above');
+  });
+
   it('renders a clear empty state when there are no scripts to graph', () => {
     expect(depgraphCode).toContain('No scripts to graph yet — install a script to see its dependencies and match overlaps.');
-    expect(depgraphCode).toContain("emptyState.hidden = _state.nodes.length > 0");
+    expect(depgraphCode).toContain('function updateLayoutSummary');
+    expect(depgraphCode).toContain('_state.emptyState.hidden = false');
     expect(depgraphCode).toContain('.dg-canvas-empty[hidden]');
+  });
+
+  it('preserves relationship edges across indexed require, match, resource, and connect candidates', () => {
+    const graph = loadDependencyGraph();
+    const result = graph._analyzeRelationships([
+      {
+        id: 'alpha',
+        enabled: true,
+        code: userscriptMetadata([
+          '@name Alpha',
+          '@require https://cdn.example/shared.js',
+          '@match https://example.com/*',
+          '@resource icon https://cdn.example/icon.svg',
+          '@connect api.example.com'
+        ])
+      },
+      {
+        id: 'beta',
+        enabled: true,
+        code: userscriptMetadata([
+          '@name Beta',
+          '@require https://cdn.example/shared.js',
+          '@match https://example.com/users/*',
+          '@resource icon https://cdn.example/icon.svg',
+          '@connect api.example.com'
+        ])
+      },
+      {
+        id: 'gamma',
+        enabled: true,
+        code: userscriptMetadata(['@name Gamma', '@match *'])
+      }
+    ]);
+
+    expect(result.nodes).toHaveLength(3);
+    expect(result.edges).toHaveLength(6);
+    expect(result.edges.reduce((counts, edge) => {
+      counts[edge.type] = (counts[edge.type] || 0) + 1;
+      return counts;
+    }, {})).toEqual({ require: 1, match: 3, resource: 1, connect: 1 });
+    expect(result.edges.find(edge => edge.type === 'match').detail).toEqual([
+      'https://example.com/* <-> https://example.com/users/*'
+    ]);
+  });
+
+  it('analyzes a 3,000-script unrelated fixture without pairwise work', () => {
+    const graph = loadDependencyGraph();
+    const scripts = Array.from({ length: 3000 }, (_, index) => ({
+      id: `script-${index}`,
+      enabled: true,
+      code: userscriptMetadata([`@name Script ${index}`])
+    }));
+    const started = performance.now();
+    graph.refresh(scripts);
+    const elapsed = performance.now() - started;
+    const layoutState = graph._getLayoutState();
+
+    expect(layoutState).toEqual({ deferred: true, nodeCount: 3000, edgeCount: 0 });
+    expect(elapsed).toBeLessThan(1500);
   });
 });
