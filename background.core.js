@@ -955,6 +955,7 @@ function parseUserSubscribe(code, baseUrl = '') {
  * @returns {{ meta?: Object, code?: string, metaBlock?: string, error?: string }} Parsed result or error
  */
 function parseUserscript(code) {
+  if (typeof code !== 'string') return { error: 'Script source must be a string.' };
   const metaBlockMatch = code.match(/\/\/\s*==UserScript==([\s\S]*?)\/\/\s*==\/UserScript==/);
   if (!metaBlockMatch) {
     return { error: 'No metadata block found. Scripts must include ==UserScript== header.' };
@@ -5184,8 +5185,10 @@ function archiveInputToBytes(input) {
     }
   } else if (input instanceof ArrayBuffer) {
     zipBytes = new Uint8Array(input);
-  } else {
+  } else if (input instanceof Uint8Array) {
     zipBytes = input;
+  } else {
+    throw archiveIntakeError('compressed payload must be base64 or bytes.');
   }
   if (zipBytes.byteLength > ARCHIVE_MAX_COMPRESSED_BYTES) {
     throw archiveIntakeError(`compressed payload exceeds ${formatArchiveBytes(ARCHIVE_MAX_COMPRESSED_BYTES)}.`);
@@ -6360,7 +6363,7 @@ async function importScripts(data, options = {}) {
     trustedEnabledScripts: 0
   };
 
-  if (!data.scripts || !Array.isArray(data.scripts)) {
+  if (!data || typeof data !== 'object' || Array.isArray(data) || !Array.isArray(data.scripts)) {
     return { error: 'Invalid import format' };
   }
   const budgetError = validateJsonImportBudget(data);

@@ -1905,6 +1905,9 @@ const PublicAPI = (() => {
      */
     async handleLocalMcpMessage(message, origin) {
       if (!_initialized) await this.init();
+      if (!message || typeof message !== "object" || Array.isArray(message)) {
+        return { error: "Invalid Local MCP message" };
+      }
       return dispatchLocalMcpMessage(message, origin);
     },
     /**

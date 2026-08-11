@@ -50,6 +50,7 @@ export type UserSubscribeParseResult = UserSubscribeParseSuccess | UserSubscribe
  * go through the normal install guards and per-script review path.
  */
 export function parseUserSubscribe(code: string, baseUrl = ''): UserSubscribeParseResult {
+  if (typeof code !== 'string') return { error: 'Subscription source must be a string.' };
   const match = code.match(/\/\/\s*==UserSubscribe==([\s\S]*?)\/\/\s*==\/UserSubscribe==/);
   if (!match) return { error: 'No UserSubscribe metadata block found.' };
   if (baseUrl) {
@@ -315,6 +316,9 @@ function attachRequireMetadataMaps(meta: ScriptMeta): void {
  * @returns Parsed metadata + original code, or an error message
  */
 export function parseUserscript(code: string): ParseResult {
+  if (typeof code !== 'string') {
+    return { error: 'Script source must be a string.' };
+  }
   const metaBlockMatch: RegExpMatchArray | null = code.match(
     /\/\/\s*==UserScript==([\s\S]*?)\/\/\s*==\/UserScript==/,
   );

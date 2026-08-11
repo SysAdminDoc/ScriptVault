@@ -241,6 +241,10 @@
   
   // Listen for messages from background script (menu commands, value changes, XHR events)
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (!message || typeof message !== 'object' || Array.isArray(message)) {
+      try { sendResponse({ success: false, error: 'Invalid bridge message' }); } catch (_) {}
+      return false;
+    }
     // Track if we handled the message
     let handled = false;
     

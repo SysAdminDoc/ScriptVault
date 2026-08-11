@@ -183,6 +183,8 @@ export async function handleGMNetworkMessage(
   data: GMNetworkPayload = {},
   sender: RuntimeMessageSender = {},
 ): Promise<Record<string, any>> {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) data = {};
+  if (!sender || typeof sender !== 'object' || Array.isArray(sender)) sender = {};
   // Bind every network operation to the authenticated caller. sender.userScriptId
   // is set by Chrome for onUserScriptMessage and cannot be spoofed; it overrides
   // any data.scriptId a malicious script passes to borrow another script's

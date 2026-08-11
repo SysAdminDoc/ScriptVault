@@ -128,6 +128,8 @@ const GMNetworkHandler = (() => {
     return typeof action === "string" && GM_NETWORK_ACTION_SET.has(action);
   }
   async function handleGMNetworkMessage(action, data = {}, sender = {}) {
+    if (!data || typeof data !== "object" || Array.isArray(data)) data = {};
+    if (!sender || typeof sender !== "object" || Array.isArray(sender)) sender = {};
     const ownedScriptId = sender.userScriptId || data.scriptId;
     switch (action) {
       case "GM_xmlhttpRequest": {

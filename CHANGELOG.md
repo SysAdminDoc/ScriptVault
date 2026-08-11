@@ -8,6 +8,9 @@ All notable changes to ScriptVault will be documented in this file.
   with stable path-to-script mapping, restart reconnection, bounded scan/watch
   updates, explicit add/rename/delete/change/conflict decisions, and redacted
   project metadata outside local storage.
+- Added a deterministic, bounded trust-boundary fuzz corpus for metadata,
+  JSON/ZIP imports, public API/MCP and page bridge messages, and network
+  errors/timeouts; failures report their boundary and seed.
 - Persisted a bounded, redacted execution journal across service-worker
   restarts, surfaced latest age/stale outcomes in diagnostics surfaces, and
   sanitized journal trace exports.

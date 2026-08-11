@@ -950,7 +950,8 @@ function parseUserSubscribe(code: any, baseUrl: any = '') {
  * @returns {{ meta?: Object, code?: string, metaBlock?: string, error?: string }} Parsed result or error
  */
 function parseUserscript(code: any) {
-  const metaBlockMatch = code.match(/\/\/\s*==UserScript==([\s\S]*?)\/\/\s*==\/UserScript==/);
+  if (typeof code !== 'string') return { error: 'Script source must be a string.' };
+  const metaBlockMatch: any = code.match(/\/\/\s*==UserScript==([\s\S]*?)\/\/\s*==\/UserScript==/);
   if (!metaBlockMatch) {
     return { error: 'No metadata block found. Scripts must include ==UserScript== header.' };
   }
@@ -1013,7 +1014,7 @@ function parseUserscript(code: any) {
   const lines = metaBlock.split('\n');
 
   for (const line of lines) {
-    const match = line.match(/\/\/\s*@(\S+)(?:\s+(.*))?/);
+    const match: any = line.match(/\/\/\s*@(\S+)(?:\s+(.*))?/);
     if (!match) continue;
 
     const key = match[1].trim();
@@ -1106,7 +1107,7 @@ function parseUserscript(code: any) {
         break;
       }
       case 'resource':
-        const resourceMatch = value.match(/^(\S+)\s+(.+)$/);
+        const resourceMatch: any = value.match(/^(\S+)\s+(.+)$/);
         if (resourceMatch) {
           meta.resource[resourceMatch[1]] = resourceMatch[2];
         }
@@ -5179,8 +5180,10 @@ function archiveInputToBytes(input: any) {
     }
   } else if (input instanceof ArrayBuffer) {
     zipBytes = new Uint8Array(input);
-  } else {
+  } else if (input instanceof Uint8Array) {
     zipBytes = input;
+  } else {
+    throw archiveIntakeError('compressed payload must be base64 or bytes.');
   }
   if (zipBytes.byteLength > ARCHIVE_MAX_COMPRESSED_BYTES) {
     throw archiveIntakeError(`compressed payload exceeds ${formatArchiveBytes(ARCHIVE_MAX_COMPRESSED_BYTES)}.`);
@@ -6355,7 +6358,7 @@ async function importScripts(data: any, options: any = {}) {
     trustedEnabledScripts: 0
   };
 
-  if (!data.scripts || !Array.isArray(data.scripts)) {
+  if (!data || typeof data !== 'object' || Array.isArray(data) || !Array.isArray(data.scripts)) {
     return { error: 'Invalid import format' };
   }
   const budgetError = validateJsonImportBudget(data);

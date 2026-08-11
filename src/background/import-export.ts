@@ -253,8 +253,10 @@ function archiveInputToBytes(input: string | ArrayBuffer | Uint8Array): Uint8Arr
     }
   } else if (input instanceof ArrayBuffer) {
     zipBytes = new Uint8Array(input);
-  } else {
+  } else if (input instanceof Uint8Array) {
     zipBytes = input;
+  } else {
+    throw archiveIntakeError('compressed payload must be base64 or bytes.');
   }
   if (zipBytes.byteLength > ARCHIVE_MAX_COMPRESSED_BYTES) {
     throw archiveIntakeError(`compressed payload exceeds ${formatArchiveBytes(ARCHIVE_MAX_COMPRESSED_BYTES)}.`);
@@ -668,7 +670,7 @@ export async function importScripts(
     trustedEnabledScripts: 0,
   };
 
-  if (!data.scripts || !Array.isArray(data.scripts)) {
+  if (!data || typeof data !== 'object' || Array.isArray(data) || !Array.isArray(data.scripts)) {
     return { error: 'Invalid import format' };
   }
   const budgetError = validateJsonImportBudget(data);
