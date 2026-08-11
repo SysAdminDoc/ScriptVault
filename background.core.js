@@ -1986,6 +1986,9 @@ const UpdateSystem = {
   // memory and storage write cost even when unlimitedStorage is enabled.
   _MAX_PENDING_TOTAL_BYTES: 8 * 1024 * 1024,
   _pendingUpdates: null,
+  // Queue and alarm handlers share this service worker, so every mutation
+  // must re-read and publish one complete snapshot before the next begins.
+  _pendingUpdatesMutation: Promise.resolve(),
 
   /** Compute the next-check timestamp for a failure-count value. */
   _nextRetryAt(failures) {
@@ -2408,13 +2411,33 @@ const UpdateSystem = {
   // dashboard via the `getRecentUpdates` background message. Capped at 20.
   _recentUpdates: [],
 
-  async _loadPendingUpdates() {
-    if (Array.isArray(this._pendingUpdates)) return this._pendingUpdates;
+  async _loadPendingUpdates({ fresh = false } = {}) {
+    if (!fresh && Array.isArray(this._pendingUpdates)) return this._pendingUpdates;
     const data = await chrome.storage.local.get(this._PENDING_UPDATES_KEY);
     this._pendingUpdates = Array.isArray(data[this._PENDING_UPDATES_KEY])
       ? data[this._PENDING_UPDATES_KEY].filter(item => item && item.id && typeof item.code === 'string')
       : [];
     return this._pendingUpdates;
+  },
+
+  async _mutatePendingUpdates(mutator) {
+    const execute = async () => {
+      // The in-memory snapshot may predate a mutation that just committed.
+      const existing = await this._loadPendingUpdates({ fresh: true });
+      const mutation = await mutator(existing.slice());
+      const pendingUpdates = await this._savePendingUpdates(mutation.next);
+      return {
+        ...(mutation.result || {}),
+        pendingUpdates
+      };
+    };
+
+    const previous = this._pendingUpdatesMutation || Promise.resolve();
+    const operation = previous.catch(() => undefined).then(execute);
+    // Keep later mutations usable after a failed storage write while preserving
+    // the rejection for the operation that encountered it.
+    this._pendingUpdatesMutation = operation.catch(() => undefined);
+    return await operation;
   },
 
   async _savePendingUpdates(list = this._pendingUpdates) {
@@ -2437,8 +2460,8 @@ const UpdateSystem = {
     if (evicted > 0) {
       console.warn(`[ScriptVault] pendingUpdates exceeded ${this._MAX_PENDING_TOTAL_BYTES} bytes; dropped ${evicted} queued update(s) to stay within the bounded storage budget.`);
     }
-    this._pendingUpdates = normalized;
     await chrome.storage.local.set({ [this._PENDING_UPDATES_KEY]: normalized });
+    this._pendingUpdates = normalized;
     return normalized.slice();
   },
 
@@ -2666,36 +2689,38 @@ const UpdateSystem = {
 
   async queueUpdates(updates = [], { source = 'manual-check' } = {}) {
     const incoming = Array.isArray(updates) ? updates : [];
-    const existing = await this._loadPendingUpdates();
-    const existingById = new Map(existing.map(item => [item.id, item]));
-    const incomingIds = new Set(incoming.map(update => update?.id).filter(Boolean));
-    const retained = existing.filter(item => !incomingIds.has(item.id));
-    const queued = [];
-    const refreshed = [];
+    const mutation = await this._mutatePendingUpdates(async existing => {
+      const existingById = new Map(existing.map(item => [item.id, item]));
+      const incomingIds = new Set(incoming.map(update => update?.id).filter(Boolean));
+      const retained = existing.filter(item => !incomingIds.has(item.id));
+      const queued = [];
+      const refreshed = [];
 
-    for (const update of incoming) {
-      try {
-        const pending = await this._buildPendingUpdate(update, source);
-        if (!pending) continue;
-        const previous = existingById.get(pending.id);
-        if (previous && previous.kind === pending.kind && previous.newVersion === pending.newVersion) {
-          // Keep the original queue timestamp for an unchanged version. The
-          // periodic check still refreshes the receipt/code, but auto-update
-          // can distinguish a new queue entry from the same pending update.
-          pending.queuedAt = Number.isFinite(previous.queuedAt) ? previous.queuedAt : pending.queuedAt;
-          refreshed.push(pending);
-        } else {
-          queued.push(pending);
+      for (const update of incoming) {
+        try {
+          const pending = await this._buildPendingUpdate(update, source);
+          if (!pending) continue;
+          const previous = existingById.get(pending.id);
+          if (previous && previous.kind === pending.kind && previous.newVersion === pending.newVersion) {
+            // Keep the original queue timestamp for an unchanged version. The
+            // periodic check still refreshes the receipt/code, but auto-update
+            // can distinguish a new queue entry from the same pending update.
+            pending.queuedAt = Number.isFinite(previous.queuedAt) ? previous.queuedAt : pending.queuedAt;
+            refreshed.push(pending);
+          } else {
+            queued.push(pending);
+          }
+        } catch (error) {
+          console.warn('[ScriptVault] Failed to queue update:', update?.name || update?.id, error?.message || error);
         }
-      } catch (error) {
-        console.warn('[ScriptVault] Failed to queue update:', update?.name || update?.id, error?.message || error);
       }
-    }
 
-    const pendingUpdates = await this._savePendingUpdates([...queued, ...refreshed, ...retained]);
+      return { next: [...queued, ...refreshed, ...retained], result: { queued: queued.length } };
+    });
+    const pendingUpdates = mutation.pendingUpdates;
     return {
       success: true,
-      queued: queued.length,
+      queued: mutation.queued,
       pendingUpdates,
       safeCount: pendingUpdates.filter(item => item.safeToApply).length,
       reviewCount: pendingUpdates.filter(item => !item.safeToApply).length
@@ -2704,24 +2729,26 @@ const UpdateSystem = {
 
   async queueSubscriptionInstalls(installs = [], { source = 'subscription' } = {}) {
     const incoming = Array.isArray(installs) ? installs : [];
-    const existing = await this._loadPendingUpdates();
-    const incomingIds = new Set(incoming.map(update => update?.id).filter(Boolean));
-    const retained = existing.filter(item => !incomingIds.has(item.id));
-    const queued = [];
+    const mutation = await this._mutatePendingUpdates(async existing => {
+      const incomingIds = new Set(incoming.map(update => update?.id).filter(Boolean));
+      const retained = existing.filter(item => !incomingIds.has(item.id));
+      const queued = [];
 
-    for (const install of incoming) {
-      try {
-        const pending = await this._buildPendingSubscriptionInstall(install, source);
-        if (pending) queued.push(pending);
-      } catch (error) {
-        console.warn('[ScriptVault] Failed to queue subscription script:', install?.name || install?.id, error?.message || error);
+      for (const install of incoming) {
+        try {
+          const pending = await this._buildPendingSubscriptionInstall(install, source);
+          if (pending) queued.push(pending);
+        } catch (error) {
+          console.warn('[ScriptVault] Failed to queue subscription script:', install?.name || install?.id, error?.message || error);
+        }
       }
-    }
 
-    const pendingUpdates = await this._savePendingUpdates([...queued, ...retained]);
+      return { next: [...queued, ...retained], result: { queued: queued.length } };
+    });
+    const pendingUpdates = mutation.pendingUpdates;
     return {
       success: true,
-      queued: queued.length,
+      queued: mutation.queued,
       pendingUpdates,
       safeCount: pendingUpdates.filter(item => item.safeToApply).length,
       reviewCount: pendingUpdates.filter(item => !item.safeToApply).length
@@ -2730,34 +2757,36 @@ const UpdateSystem = {
 
   async queueSubscriptionRemovals(removals = [], { source = 'subscription' } = {}) {
     const incoming = Array.isArray(removals) ? removals : [];
-    const existing = await this._loadPendingUpdates();
-    const incomingIds = new Set(incoming.map(update => update?.id).filter(Boolean));
-    const retained = existing.filter(item => !incomingIds.has(item.id));
-    const queued = incoming
-      .filter(item => item?.id && item?.scriptId)
-      .map(item => ({
-        kind: 'subscription-remove',
-        id: item.id,
-        scriptId: item.scriptId,
-        name: item.name || item.scriptId,
-        currentVersion: '',
-        newVersion: '',
-        code: '',
-        sourceUrl: item.sourceUrl || '',
-        source,
-        queuedAt: Date.now(),
-        checkedAt: Date.now(),
-        safeToApply: false,
-        reviewReasons: ['Removed from subscription; review uninstall'],
-        sourceIdentityChanged: false,
-        subscriptionId: item.subscriptionId || '',
-        subscriptionName: item.subscriptionName || '',
-        diff: { previousLines: 0, nextLines: 0, addedLines: 0, removedLines: 0 }
-      }));
-    const pendingUpdates = await this._savePendingUpdates([...queued, ...retained]);
+    const mutation = await this._mutatePendingUpdates(async existing => {
+      const incomingIds = new Set(incoming.map(update => update?.id).filter(Boolean));
+      const retained = existing.filter(item => !incomingIds.has(item.id));
+      const queued = incoming
+        .filter(item => item?.id && item?.scriptId)
+        .map(item => ({
+          kind: 'subscription-remove',
+          id: item.id,
+          scriptId: item.scriptId,
+          name: item.name || item.scriptId,
+          currentVersion: '',
+          newVersion: '',
+          code: '',
+          sourceUrl: item.sourceUrl || '',
+          source,
+          queuedAt: Date.now(),
+          checkedAt: Date.now(),
+          safeToApply: false,
+          reviewReasons: ['Removed from subscription; review uninstall'],
+          sourceIdentityChanged: false,
+          subscriptionId: item.subscriptionId || '',
+          subscriptionName: item.subscriptionName || '',
+          diff: { previousLines: 0, nextLines: 0, addedLines: 0, removedLines: 0 }
+        }));
+      return { next: [...queued, ...retained], result: { queued: queued.length } };
+    });
+    const pendingUpdates = mutation.pendingUpdates;
     return {
       success: true,
-      queued: queued.length,
+      queued: mutation.queued,
       pendingUpdates,
       safeCount: pendingUpdates.filter(item => item.safeToApply).length,
       reviewCount: pendingUpdates.filter(item => !item.safeToApply).length
@@ -2765,18 +2794,17 @@ const UpdateSystem = {
   },
 
   async getPendingUpdates() {
+    await (this._pendingUpdatesMutation || Promise.resolve());
     return (await this._loadPendingUpdates()).slice();
   },
 
   async clearPendingUpdates(scriptId = null) {
-    if (!scriptId) {
-      await this._savePendingUpdates([]);
-      return { success: true, cleared: 'all', pendingUpdates: [] };
-    }
-    const existing = await this._loadPendingUpdates();
-    const next = existing.filter(item => item.id !== scriptId);
-    const pendingUpdates = await this._savePendingUpdates(next);
-    return { success: true, cleared: existing.length - next.length, pendingUpdates };
+    const mutation = await this._mutatePendingUpdates(async existing => {
+      if (!scriptId) return { next: [], result: { cleared: 'all' } };
+      const next = existing.filter(item => item.id !== scriptId);
+      return { next, result: { cleared: existing.length - next.length } };
+    });
+    return { success: true, ...mutation };
   },
 
   _recordRecentUpdates(entries) {
@@ -2786,6 +2814,7 @@ const UpdateSystem = {
   },
 
   async applyPendingUpdate(scriptId, { force = false } = {}) {
+    await (this._pendingUpdatesMutation || Promise.resolve());
     const pendingUpdates = await this._loadPendingUpdates();
     const item = pendingUpdates.find(update => update.id === scriptId);
     if (!item) return { error: 'Pending update not found' };
@@ -2839,6 +2868,7 @@ const UpdateSystem = {
 
   async applySafePendingUpdates(scriptIds = null) {
     const idSet = Array.isArray(scriptIds) && scriptIds.length > 0 ? new Set(scriptIds) : null;
+    await (this._pendingUpdatesMutation || Promise.resolve());
     const pendingUpdates = await this._loadPendingUpdates();
     const candidates = pendingUpdates.filter(item => item.safeToApply && (!idSet || idSet.has(item.id)));
     const results = [];

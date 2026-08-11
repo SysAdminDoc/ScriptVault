@@ -4,6 +4,9 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased] — Minimal workbench surfaces
 
+- Serialized pending-update, subscription, and clear mutations through a
+  fresh-read promise chain so overlapping manual, alarm, and review actions
+  cannot drop queued entries or resurrect cleared updates.
 - Added a document-start ordering proof that races userscripts against page
   inline scripts in Chromium and Firefox sideload smoke coverage, including a
   service-worker restart in the Chromium E2E.

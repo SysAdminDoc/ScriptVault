@@ -180,16 +180,6 @@ _Scope not covered by the 2026-08-02 pass. Not findings; each needs its own audi
   Acceptance: a PR is open against awesome-userscripts adding ScriptVault with an accurate one-line description and the four missing managers; the release runbook records where the product is indexed so the list does not go stale again.
   Complexity: S
 
-- [ ] P2 — Serialize pending-update queue mutations
-  Category: reliability
-  Where: `src/background/core.ts:2275-2306,2531-2643`; callers `src/background/core.ts:2739,4652-4675`; `pages/dashboard.js:3861-3874`; `pages/popup.js:1861-1865`
-  Problem: Pending updates, subscription installs/removals, and clear operations read and rewrite one whole-array snapshot without a mutation mutex or transaction. Manual actions, alarms, auto-checks, and subscription refreshes can overlap; the last write drops entries added or removed by another caller.
-  Evidence: `_loadPendingUpdates` has no in-flight promise/lock, and each queue/clear method computes a new array then calls `_savePendingUpdates`. The listed callers run from independent UI and scheduled paths in the same service worker.
-  Fix: Use a promise-chain mutation queue or keyed transactional store for every pending-update operation. Re-read inside the serialized section, apply the operation, enforce the existing byte/count bounds, and publish one committed snapshot.
-  Acceptance: A delayed storage test overlaps manual queueing, automatic queueing, subscription install/removal, and clear; the resulting queue contains exactly the operations whose serialized order dictates, with no lost entry and no resurrection after clear.
-  Confidence: Likely
-  Effort: M
-
 - [ ] P2 — Serialize subscription record mutations
   Category: reliability
   Where: `src/modules/subscriptions.ts:304-318,377-478`; callers `src/background/core.ts:4575-4807,10304-10306`

@@ -604,6 +604,100 @@ describe('pending update queue', () => {
     expect(globalThis.ScriptStorage.set).toHaveBeenCalledTimes(2);
   });
 
+  it('serializes overlapping queue writers and does not resurrect a cleared entry', async () => {
+    const scripts = new Map([
+      ['manual', makeScript('manual')],
+      ['automatic', makeScript('automatic')],
+    ]);
+    installStorage(scripts);
+
+    const seed = {
+      id: 'seed',
+      kind: 'update',
+      name: 'Seed',
+      currentVersion: '1.0.0',
+      newVersion: '2.0.0',
+      code: makeCode('Seed', '2.0.0'),
+      sourceUrl: 'https://cdn.example.com/seed.user.js',
+      source: 'seed',
+      queuedAt: 1,
+      checkedAt: 1,
+      safeToApply: true,
+      reviewReasons: [],
+      sourceIdentityChanged: false,
+    };
+    let storedQueue = [seed];
+    const originalGet = chrome.storage.local.get;
+    const originalSet = chrome.storage.local.set;
+    const delay = () => new Promise(resolve => setTimeout(resolve, 2));
+    const clone = value => JSON.parse(JSON.stringify(value));
+    chrome.storage.local.get = vi.fn(async () => {
+      await delay();
+      return { pendingUpdates: clone(storedQueue) };
+    });
+    chrome.storage.local.set = vi.fn(async ({ pendingUpdates }) => {
+      await delay();
+      storedQueue = clone(pendingUpdates);
+    });
+    UpdateSystem._pendingUpdates = null;
+    UpdateSystem._pendingUpdatesMutation = Promise.resolve();
+
+    try {
+      const operations = [
+        UpdateSystem.queueUpdates([{
+          id: 'manual',
+          name: 'Manual',
+          currentVersion: '1.0.0',
+          newVersion: '2.0.0',
+          code: makeCode('Manual', '2.0.0'),
+          sourceUrl: 'https://cdn.example.com/manual.user.js',
+        }], { source: 'manual-check' }),
+        UpdateSystem.queueUpdates([{
+          id: 'automatic',
+          name: 'Automatic',
+          currentVersion: '1.0.0',
+          newVersion: '2.0.0',
+          code: makeCode('Automatic', '2.0.0'),
+          sourceUrl: 'https://cdn.example.com/automatic.user.js',
+        }], { source: 'auto-check' }),
+        UpdateSystem.queueSubscriptionInstalls([{
+          id: 'subscription-install',
+          code: makeCode('Subscription', '1.0.0'),
+          sourceUrl: 'https://cdn.example.com/subscription.user.js',
+          subscriptionId: 'feed-1',
+        }]),
+        UpdateSystem.queueSubscriptionRemovals([{
+          id: 'subscription-remove',
+          scriptId: 'seed',
+          subscriptionId: 'feed-1',
+        }]),
+        UpdateSystem.clearPendingUpdates('seed'),
+      ];
+      const results = await Promise.all(operations);
+      const pendingUpdates = await UpdateSystem.getPendingUpdates();
+
+      expect(pendingUpdates.map(item => item.id)).toEqual([
+        'subscription-remove',
+        'subscription-install',
+        'automatic',
+        'manual',
+      ]);
+      expect(pendingUpdates).toHaveLength(4);
+      expect(results.at(-1)).toMatchObject({ success: true, cleared: 1 });
+      expect(storedQueue.map(item => item.id)).toEqual(pendingUpdates.map(item => item.id));
+      expect(chrome.storage.local.set).toHaveBeenCalledTimes(5);
+
+      // The shipped bridge has the same mutation gate as the tested TypeScript
+      // mirror, so this test cannot pass while runtime core remains racy.
+      const coreSource = readFileSync(resolve(process.cwd(), 'src/background/core.ts'), 'utf8');
+      expect(coreSource).toContain('_pendingUpdatesMutation');
+      expect(coreSource).toContain('_mutatePendingUpdates');
+    } finally {
+      chrome.storage.local.get = originalGet;
+      chrome.storage.local.set = originalSet;
+    }
+  });
+
   it('normalizes malformed persisted queue state before any safe apply decision', async () => {
     const malformed = [
       null,
