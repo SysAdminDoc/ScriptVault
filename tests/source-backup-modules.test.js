@@ -193,6 +193,7 @@ async function loadFreshImportExportHarness(
   globalThis.generateId = vi.fn(() => `generated_script_${generatedIdCounter++}`);
   globalThis.registerAllScripts = vi.fn().mockResolvedValue();
   globalThis.updateBadge = vi.fn().mockResolvedValue();
+  globalThis.ensurePersistentStorageForScriptWrite = vi.fn().mockResolvedValue();
 
   const scriptCache = new Map(existingScripts.map((script) => [script.id, structuredClone(script)]));
   const valueCache = new Map(Object.entries(storedValuesByScript).map(([key, value]) => [key, structuredClone(value)]));
@@ -248,6 +249,7 @@ afterEach(() => {
   Reflect.deleteProperty(globalThis, 'generateId');
   Reflect.deleteProperty(globalThis, 'registerAllScripts');
   Reflect.deleteProperty(globalThis, 'updateBadge');
+  Reflect.deleteProperty(globalThis, 'ensurePersistentStorageForScriptWrite');
   Reflect.deleteProperty(globalThis, 'ScriptStorage');
   Reflect.deleteProperty(globalThis, 'ScriptValues');
   Reflect.deleteProperty(globalThis, 'SettingsManager');
@@ -854,5 +856,47 @@ describe('source import/export module', () => {
 
     expect(result.error).toMatch(/compression ratio is too high/);
     expect(harness.ScriptStorage.set).not.toHaveBeenCalled();
+  });
+
+  it('maps competitor config values and reports unsupported settings', async () => {
+    const harness = await loadFreshImportExportHarness();
+    const code = [
+      '// ==UserScript==',
+      '// @name Source VM Configured',
+      '// @namespace scriptvault/source-vm',
+      '// @version 1.0.0',
+      '// @match https://example.com/*',
+      '// @var text theme "Theme" "light"',
+      '// ==/UserScript==',
+      'console.log("source");',
+    ].join('\n');
+
+    const result = await harness.importVendorBackup('violentmonkey', JSON.stringify({
+      scripts: [{
+        props: { name: 'Source VM Configured' },
+        config: {
+          enabled: true,
+          runAt: 'document-end',
+          userIncludes: ['https://example.com/custom/*'],
+          userExcludes: ['https://example.com/private/*'],
+          userConfig: { theme: 'dark' },
+          unsupportedSetting: 'kept-visible',
+        },
+        values: { remembered: 7 },
+        code,
+      }],
+    }), { overwrite: true });
+
+    const imported = Array.from(harness.scriptCache.values())[0];
+    expect(result).toMatchObject({ imported: 1, quarantinedScripts: 1, storageImported: 1 });
+    expect(result.unmappedSettings?.[0]?.keys).toContain('unsupportedSetting');
+    expect(imported.settings).toMatchObject({
+      runAt: 'document-end',
+      userIncludes: ['https://example.com/custom/*'],
+      userExcludes: ['https://example.com/private/*'],
+      userConfig: { theme: 'dark' },
+      _importQuarantine: expect.any(Object),
+    });
+    expect(harness.valueCache.get(imported.id)).toEqual({ remembered: 7 });
   });
 });

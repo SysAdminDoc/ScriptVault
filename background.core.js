@@ -6339,6 +6339,241 @@ function countImportTrustDisposition(results, disposition) {
   }
 }
 
+const IMPORT_RUN_AT_VALUES = new Set([
+  'default', 'document-start', 'document-body', 'document-end', 'document-idle', 'context-menu'
+]);
+const IMPORT_INJECT_INTO_VALUES = new Set(['auto', 'page', 'content']);
+const IMPORT_SETTING_ALIASES = {
+  runAt: ['runAt', 'run-at', 'run_at'],
+  injectInto: ['injectInto', 'inject-into', 'inject_into'],
+  frameMode: ['frameMode', 'frame-mode', 'frame_mode'],
+  autoUpdate: ['autoUpdate', 'shouldUpdate', 'should-update'],
+  notifyUpdates: ['notifyUpdates', 'notify-updates'],
+  notifyErrors: ['notifyErrors', 'notify-errors'],
+  useOriginalMatches: ['useOriginalMatches', 'use-original-matches', 'merge_matches', 'mergeMatches'],
+  useOriginalIncludes: ['useOriginalIncludes', 'use-original-includes', 'merge_includes', 'mergeIncludes'],
+  useOriginalExcludes: ['useOriginalExcludes', 'use-original-excludes', 'merge_excludes', 'mergeExcludes'],
+  userMatches: ['userMatches', 'user_matches', 'customMatches', 'use_matches'],
+  userIncludes: ['userIncludes', 'user_includes', 'customIncludes', 'use_includes'],
+  userExcludes: ['userExcludes', 'user_excludes', 'customExcludes', 'use_excludes'],
+};
+const IMPORT_RECOGNIZED_SETTING_KEYS = new Set([
+  'enabled', 'position', 'id', 'scriptId', 'createdAt', 'updatedAt', 'schemaVersion',
+  'runAt', 'run-at', 'run_at', 'injectInto', 'inject-into', 'inject_into',
+  'frameMode', 'frame-mode', 'frame_mode', 'autoUpdate', 'shouldUpdate', 'should-update',
+  'notifyUpdates', 'notify-updates', 'notifyErrors', 'notify-errors', 'noframes',
+  'useOriginalMatches', 'use-original-matches', 'merge_matches', 'mergeMatches',
+  'useOriginalIncludes', 'use-original-includes', 'merge_includes', 'mergeIncludes',
+  'useOriginalExcludes', 'use-original-excludes', 'merge_excludes', 'mergeExcludes',
+  'userMatches', 'user_matches', 'customMatches', 'use_matches',
+  'userIncludes', 'user_includes', 'customIncludes', 'use_includes',
+  'userExcludes', 'user_excludes', 'customExcludes', 'use_excludes',
+  'config', 'custom', 'options', 'settings', 'storage', 'userConfig', 'values', 'vars',
+  'override', 'overrides', 'scriptVault', 'meta', 'props', 'code', 'source', 'content',
+]);
+
+function isImportRecord(value) {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function collectImportSettingRecords(sources) {
+  const records = [];
+  const visited = new Set();
+  let visitedObjects = 0;
+  const visit = (value, label, depth) => {
+    if (!isImportRecord(value) || depth > 3 || visitedObjects >= 64 || visited.has(value)) return;
+    visited.add(value);
+    visitedObjects++;
+    records.push({ value, label });
+    for (const key of ['config', 'settings', 'options', 'custom', 'override', 'overrides']) {
+      if (isImportRecord(value[key])) visit(value[key], key, depth + 1);
+    }
+  };
+  for (const source of sources) {
+    if (source && isImportRecord(source.value)) visit(source.value, source.label || 'source', 0);
+    else visit(source, 'source', 0);
+  }
+  return records;
+}
+
+function findImportSetting(records, aliases) {
+  for (const record of records) {
+    for (const key of aliases) {
+      if (Object.prototype.hasOwnProperty.call(record.value, key)) {
+        return { found: true, key, value: record.value[key], label: record.label };
+      }
+    }
+  }
+  return { found: false, key: '', value: undefined, label: '' };
+}
+
+function importPatternList(value, label, warnings) {
+  if (typeof value === 'boolean' && /^use_/.test(label)) return null;
+  if (typeof value === 'string') value = [value];
+  if (!Array.isArray(value)) {
+    warnings.push(`${label} must be an array or string`);
+    return null;
+  }
+  const result = [];
+  for (const entry of value.slice(0, 200)) {
+    if (typeof entry !== 'string' || !entry.trim() || entry.length > 2048) {
+      warnings.push(`${label} contains an invalid pattern`);
+      continue;
+    }
+    result.push(entry.trim());
+  }
+  if (value.length > 200) warnings.push(`${label} contains more than 200 patterns; extras were ignored`);
+  return result;
+}
+
+function fallbackImportedConfigValues(meta, sources) {
+  const variables = Array.isArray(meta?.config) ? meta.config : [];
+  const names = new Set(variables
+    .filter(variable => variable && typeof variable.name === 'string')
+    .map(variable => variable.name)
+    .filter(name => name && !['__proto__', 'constructor', 'prototype'].includes(name)));
+  const raw = {};
+  const matchedKeys = new Set();
+  const invalidKeys = new Set();
+  const rejectedKeys = new Set();
+  const visited = new Set();
+  let visitedObjects = 0;
+  const visit = (value, depth) => {
+    if (!isImportRecord(value) || depth > 3 || visitedObjects >= 64 || visited.has(value)) return;
+    visited.add(value);
+    visitedObjects++;
+    for (const [key, entryValue] of Object.entries(value).slice(0, 512)) {
+      if (['__proto__', 'constructor', 'prototype'].includes(key)) {
+        rejectedKeys.add(key);
+      } else if (names.has(key)) {
+        if ((typeof entryValue === 'string' && entryValue.length <= 256)
+          || (typeof entryValue === 'number' && Number.isFinite(entryValue))
+          || typeof entryValue === 'boolean') {
+          raw[key] = entryValue;
+          matchedKeys.add(key);
+          invalidKeys.delete(key);
+        } else if (!Object.prototype.hasOwnProperty.call(raw, key)) {
+          invalidKeys.add(key);
+        }
+      } else if (depth < 3 && ['config', 'custom', 'options', 'settings', 'storage', 'userConfig', 'values', 'vars'].includes(key)) {
+        visit(entryValue, depth + 1);
+      }
+    }
+  };
+  sources.forEach(source => visit(source, 0));
+  const values = {};
+  for (const key of matchedKeys) values[key] = raw[key];
+  return { values, matchedKeys: [...matchedKeys], invalidKeys: [...invalidKeys], rejectedKeys: [...rejectedKeys] };
+}
+
+function mapImportedScriptSettings(meta, sources) {
+  const records = collectImportSettingRecords(sources);
+  const settings = {};
+  const warnings = [];
+  const unmappedKeys = new Set();
+  const variableNames = new Set((Array.isArray(meta?.config) ? meta.config : [])
+    .map(variable => variable?.name)
+    .filter(name => typeof name === 'string'));
+
+  const mapBoolean = (settingKey, aliases) => {
+    const field = findImportSetting(records, aliases);
+    if (!field.found) return;
+    if (typeof field.value !== 'boolean') {
+      warnings.push(`${field.key} must be a boolean`);
+      unmappedKeys.add(field.key);
+      return;
+    }
+    settings[settingKey] = field.value;
+  };
+  const mapString = (settingKey, aliases, allowed) => {
+    const field = findImportSetting(records, aliases);
+    if (!field.found) return;
+    if (typeof field.value !== 'string' || !allowed.has(field.value)) {
+      warnings.push(`${field.key} has an unsupported value`);
+      unmappedKeys.add(field.key);
+      return;
+    }
+    settings[settingKey] = field.value;
+  };
+  const mapPatterns = (settingKey, aliases) => {
+    const field = findImportSetting(records, aliases);
+    if (!field.found) return;
+    if (typeof field.value === 'boolean' && /^use_/.test(field.key)) return;
+    const patterns = importPatternList(field.value, field.key, warnings);
+    if (patterns) settings[settingKey] = patterns;
+    else unmappedKeys.add(field.key);
+  };
+
+  mapString('runAt', IMPORT_SETTING_ALIASES.runAt, IMPORT_RUN_AT_VALUES);
+  mapString('injectInto', IMPORT_SETTING_ALIASES.injectInto, IMPORT_INJECT_INTO_VALUES);
+  mapString('frameMode', IMPORT_SETTING_ALIASES.frameMode, new Set(['default', 'top', 'all']));
+  mapBoolean('autoUpdate', IMPORT_SETTING_ALIASES.autoUpdate);
+  mapBoolean('notifyUpdates', IMPORT_SETTING_ALIASES.notifyUpdates);
+  mapBoolean('notifyErrors', IMPORT_SETTING_ALIASES.notifyErrors);
+  mapBoolean('useOriginalMatches', IMPORT_SETTING_ALIASES.useOriginalMatches);
+  mapBoolean('useOriginalIncludes', IMPORT_SETTING_ALIASES.useOriginalIncludes);
+  mapBoolean('useOriginalExcludes', IMPORT_SETTING_ALIASES.useOriginalExcludes);
+  mapPatterns('userMatches', IMPORT_SETTING_ALIASES.userMatches);
+  mapPatterns('userIncludes', IMPORT_SETTING_ALIASES.userIncludes);
+  mapPatterns('userExcludes', IMPORT_SETTING_ALIASES.userExcludes);
+
+  const noframes = findImportSetting(records, ['noframes']);
+  if (noframes.found) {
+    if (typeof noframes.value === 'boolean') {
+      if (noframes.value && !Object.prototype.hasOwnProperty.call(settings, 'frameMode')) settings.frameMode = 'top';
+    } else {
+      warnings.push('noframes must be a boolean');
+      unmappedKeys.add(noframes.key);
+    }
+  }
+
+  const configSources = sources.map(source => source && isImportRecord(source.value) ? source.value : source);
+  const configResult = typeof ScriptConfig !== 'undefined' && typeof ScriptConfig?.importValues === 'function'
+    ? ScriptConfig.importValues(Array.isArray(meta?.config) ? meta.config : [], configSources)
+    : fallbackImportedConfigValues(meta, configSources);
+  if (configResult.matchedKeys.length > 0) settings.userConfig = configResult.values;
+  for (const key of configResult.invalidKeys) {
+    warnings.push(`${key} has an invalid @var value`);
+    unmappedKeys.add(key);
+  }
+  if (configResult.rejectedKeys.length > 0) {
+    warnings.push(`prototype-polluting config keys rejected: ${configResult.rejectedKeys.join(', ')}`);
+  }
+
+  for (const record of records) {
+    if (!['config', 'settings', 'custom', 'options', 'override', 'overrides'].includes(record.label)) continue;
+    for (const key of Object.keys(record.value)) {
+      if (IMPORT_RECOGNIZED_SETTING_KEYS.has(key) || variableNames.has(key)) continue;
+      unmappedKeys.add(key);
+    }
+  }
+
+  return { settings, warnings, unmappedKeys: [...unmappedKeys].sort() };
+}
+
+function addImportDiagnostics(results, name, mapped) {
+  if (!Array.isArray(results.warnings)) results.warnings = [];
+  if (!Array.isArray(results.unmappedSettings)) results.unmappedSettings = [];
+  for (const warning of mapped.warnings || []) {
+    if (results.warnings.length < 200) results.warnings.push({ name, warning });
+  }
+  if (mapped.unmappedKeys?.length && results.unmappedSettings.length < 200) {
+    results.unmappedSettings.push({ name, keys: mapped.unmappedKeys.slice(0, 100) });
+  }
+}
+
+function addImportStorageDiagnostics(results, name, values, sourcePresent) {
+  if (!sourcePresent) return;
+  if (!isImportRecord(values)) {
+    addImportDiagnostics(results, name, {
+      warnings: ['stored values were present but were not an object and were ignored'],
+      unmappedKeys: ['storage'],
+    });
+    return;
+  }
+  if (Object.keys(values).length > 0) results.storageImported = (results.storageImported || 0) + 1;
+}
+
 async function importScripts(data, options = {}) {
   const {
     overwrite = false,
@@ -6674,6 +6909,9 @@ async function importFromZip(zipData, options = {}) {
     imported: 0,
     skipped: 0,
     errors: [],
+    warnings: [],
+    unmappedSettings: [],
+    storageImported: 0,
     replacedScripts: [],
     quarantinedScripts: 0,
     preservedDisabledScripts: 0,
@@ -6731,11 +6969,13 @@ async function importFromZip(zipData, options = {}) {
         let importedCreatedAt = null;
         let importedUpdatedAt = null;
         let importedPosition = null;
+        let optionsData = null;
+        let importedSettings = {};
         
         // Parse options file if exists
         if (optionsFileData) {
           try {
-            const optionsData = parseArchiveJson(unzipped, `${baseName}.options.json`, ARCHIVE_MAX_OPTIONS_BYTES);
+            optionsData = parseArchiveJson(unzipped, `${baseName}.options.json`, ARCHIVE_MAX_OPTIONS_BYTES);
             enabled = optionsData.settings?.enabled !== false;
             preferredScriptId = isSafeImportedScriptId(optionsData.scriptId) ? optionsData.scriptId : '';
             const scriptVault = optionsData.scriptVault && typeof optionsData.scriptVault === 'object'
@@ -6746,6 +6986,10 @@ async function importFromZip(zipData, options = {}) {
             importedPosition = finiteBackupNumber(scriptVault.position ?? optionsData.position);
           } catch (e) {
             console.warn('Failed to parse options file:', e);
+            addImportDiagnostics(results, filename, {
+              warnings: ['options metadata could not be parsed and was ignored'],
+              unmappedKeys: ['options'],
+            });
           }
         }
         
@@ -6757,10 +7001,28 @@ async function importFromZip(zipData, options = {}) {
               `${baseName}.storage.json`,
               ARCHIVE_MAX_JSON_ENTRY_BYTES
             ));
+            addImportStorageDiagnostics(results, filename, storedValues, true);
           } catch (e) {
             console.warn('Failed to parse storage file:', e);
+            addImportDiagnostics(results, filename, {
+              warnings: ['stored values could not be parsed and were ignored'],
+              unmappedKeys: ['storage'],
+            });
           }
         }
+
+        const isScriptVaultArchive = optionsData?.scriptVault?.schemaVersion === 1;
+        const settingSources = optionsData
+          ? (isScriptVaultArchive
+            ? [{ value: optionsData.scriptVault?.settings || {}, label: 'scriptVault' }]
+            : [{ value: optionsData, label: 'options' }])
+          : [];
+        const mapped = mapImportedScriptSettings(parsed.meta, [
+          ...settingSources,
+          { value: storedValues, label: 'storage' },
+        ]);
+        importedSettings = mapped.settings;
+        addImportDiagnostics(results, filename, mapped);
 
         // Prefer ScriptVault's stable scriptId metadata when present. Name or
         // namespace can change over time, but backup restore should still
@@ -6791,7 +7053,17 @@ async function importFromZip(zipData, options = {}) {
         // backup restore (or ZIP re-import) over an installed script preserves
         // its per-script settings — userIncludes/userMatches/userExcludes, notes,
         // tags, pinned, runAt override, syncValues — instead of wiping them.
-        const trustState = applyImportedScriptTrust({ ...(existing?.settings || {}) }, enabled, {
+        const nextImportedSettings = {
+          ...(existing?.settings || {}),
+          ...importedSettings,
+        };
+        if (existing?.settings?.userConfig && importedSettings.userConfig) {
+          nextImportedSettings.userConfig = {
+            ...existing.settings.userConfig,
+            ...importedSettings.userConfig,
+          };
+        }
+        const trustState = applyImportedScriptTrust(nextImportedSettings, enabled, {
           trustImportedScripts,
           source: 'import-zip',
           sourceLabel
@@ -6973,7 +7245,11 @@ function parseVendorBackupCandidates(vendor, text) {
         return parsed.scripts.map(script => ({
           code: script?.code || script?.custom?.code || '',
           archiveEnabled: script?.config?.enabled !== false,
-          sourceName: script?.props?.name || ''
+          sourceName: script?.props?.name || '',
+          settings: script?.config || {},
+          custom: script?.custom || {},
+          values: script?.values || script?.storage || script?.config?.values || {},
+          raw: script,
         }));
       }
     } catch (_) { /* Text exports use the shared userscript-block parser. */ }
@@ -6986,7 +7262,11 @@ function parseVendorBackupCandidates(vendor, text) {
     return scripts.map(script => ({
       code: script?.source || script?.code || script?.content || '',
       archiveEnabled: script?.enabled !== false,
-      sourceName: script?.name || ''
+      sourceName: script?.name || '',
+      settings: script?.settings || script?.config || {},
+      custom: script?.custom || {},
+      values: script?.values || script?.storage || {},
+      raw: script,
     }));
   }
   throw new Error('Unsupported vendor backup type');
@@ -7002,6 +7282,9 @@ async function importVendorBackup(vendor, text, options = {}) {
     imported: 0,
     skipped: 0,
     errors: [],
+    warnings: [],
+    unmappedSettings: [],
+    storageImported: 0,
     quarantinedScripts: 0,
     preservedDisabledScripts: 0,
     trustedEnabledScripts: 0
@@ -7066,7 +7349,26 @@ async function importVendorBackup(vendor, text, options = {}) {
         continue;
       }
       const id = existing?.id || generateId();
-      const trustState = applyImportedScriptTrust(existing?.settings, candidate.archiveEnabled !== false, {
+      const mapped = mapImportedScriptSettings(parsed.meta, [
+        { value: candidate.settings, label: 'settings' },
+        { value: candidate.custom, label: 'custom' },
+        { value: candidate.raw, label: 'candidate' },
+        { value: candidate.values, label: 'storage' },
+      ]);
+      addImportDiagnostics(results, sourceName, mapped);
+      const importedValues = sanitizeImportedValueMap(candidate.values);
+      addImportStorageDiagnostics(results, sourceName, importedValues, candidate.values !== undefined);
+      const nextImportedSettings = {
+        ...(existing?.settings || {}),
+        ...mapped.settings,
+      };
+      if (existing?.settings?.userConfig && mapped.settings.userConfig) {
+        nextImportedSettings.userConfig = {
+          ...existing.settings.userConfig,
+          ...mapped.settings.userConfig,
+        };
+      }
+      const trustState = applyImportedScriptTrust(nextImportedSettings, candidate.archiveEnabled !== false, {
         trustImportedScripts: options.trustImportedScripts === true,
         source: `import-${vendor}`,
         sourceLabel
@@ -7085,6 +7387,7 @@ async function importVendorBackup(vendor, text, options = {}) {
       };
       await ensurePersistentStorageForScriptWrite(existing ? `${vendor}-import-update` : `${vendor}-import`, code);
       await ScriptStorage.set(id, importedScript);
+      if (Object.keys(importedValues).length > 0) await ScriptValues.setAll(id, importedValues);
       byIdentity.set(identity, importedScript);
       results.imported++;
     } catch (error) {

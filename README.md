@@ -712,7 +712,7 @@ the current MV3 beta/test builds:
 3. Drop the exported `.zip` file onto the dashboard (or use Import &rarr; File)
 4. Review the imported scripts in the quarantine/review flow
 
-ScriptVault reads the VM JSON export format (`scripts[].code`, `scripts[].config.enabled`, `scripts[].props`). Enabled/disabled state is preserved. Scripts with empty code are skipped. `@grant`, `@match`, and other metadata are parsed from the script header.
+ScriptVault reads the VM JSON export format (`scripts[].code`, `scripts[].config.enabled`, `scripts[].props`). Enabled/disabled state is preserved through the review quarantine. Per-script `runAt`, custom includes/matches/excludes, declared `@var`/GM_config values, and stored values are restored when their source fields are present. Unsupported settings are reported in the import summary instead of being silently discarded. Scripts with empty code are skipped. `@grant`, `@match`, and other metadata are parsed from the script header.
 
 ### From Tampermonkey
 

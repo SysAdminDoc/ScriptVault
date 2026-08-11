@@ -21,8 +21,18 @@ interface ScriptConfigVariable {
 type ScriptConfigValue = string | number | boolean;
 type ScriptConfigValues = Record<string, ScriptConfigValue>;
 
+interface ImportedScriptConfigResult {
+  values: ScriptConfigValues;
+  matchedKeys: string[];
+  invalidKeys: string[];
+  rejectedKeys: string[];
+}
+
 const VAR_TYPES: ScriptConfigVarType[] = ['color', 'text', 'number', 'select', 'checkbox', 'range'];
 const POLLUTED_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+const IMPORT_VALUE_CONTAINER_KEYS = new Set([
+  'config', 'custom', 'options', 'settings', 'storage', 'userConfig', 'values', 'vars',
+]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -196,6 +206,83 @@ function normalizeValues(
   return result;
 }
 
+function isImportableConfigValue(value: unknown): value is ScriptConfigValue {
+  return (typeof value === 'string' && value.length <= 256)
+    || (typeof value === 'number' && Number.isFinite(value))
+    || typeof value === 'boolean';
+}
+
+/**
+ * Extract saved @var values from competitor backup containers.
+ *
+ * Backups disagree about whether values live in `config`, `custom`, `vars`,
+ * or a nested `values` object. Only names declared by this script are copied;
+ * manager settings and arbitrary objects never cross the import boundary.
+ * The traversal is deliberately bounded because the input is an untrusted
+ * backup, and prototype names are rejected before any assignment occurs.
+ */
+function importValues(
+  variables: ScriptConfigVariable[] | undefined,
+  sources: unknown[] = [],
+): ImportedScriptConfigResult {
+  const variableNames = new Set(
+    (variables ?? [])
+      .filter((variable) => variable && isSafeConfigName(variable.name))
+      .map((variable) => variable.name),
+  );
+  const raw: Record<string, unknown> = {};
+  const matchedKeys = new Set<string>();
+  const invalidKeys = new Set<string>();
+  const rejectedKeys = new Set<string>();
+  const visited = new Set<object>();
+  let visitedObjects = 0;
+
+  const visit = (value: unknown, depth: number): void => {
+    if (!isRecord(value) || depth > 3 || visitedObjects >= 64 || visited.has(value)) return;
+    visited.add(value);
+    visitedObjects++;
+
+    for (const [key, entryValue] of Object.entries(value).slice(0, 512)) {
+      if (POLLUTED_KEYS.has(key)) {
+        rejectedKeys.add(key);
+        continue;
+      }
+      if (variableNames.has(key)) {
+        if (isImportableConfigValue(entryValue)) {
+          raw[key] = entryValue;
+          matchedKeys.add(key);
+          invalidKeys.delete(key);
+        } else if (!Object.prototype.hasOwnProperty.call(raw, key)) {
+          invalidKeys.add(key);
+        }
+        continue;
+      }
+      if (
+        depth < 3
+        && IMPORT_VALUE_CONTAINER_KEYS.has(key)
+        && isRecord(entryValue)
+      ) {
+        visit(entryValue, depth + 1);
+      }
+    }
+  };
+
+  for (const source of sources) visit(source, 0);
+
+  const normalized = normalizeValues(variables, raw);
+  const values: ScriptConfigValues = {};
+  for (const key of matchedKeys) {
+    if (Object.prototype.hasOwnProperty.call(normalized, key)) values[key] = normalized[key]!;
+  }
+
+  return {
+    values,
+    matchedKeys: [...matchedKeys].sort(),
+    invalidKeys: [...invalidKeys].sort(),
+    rejectedKeys: [...rejectedKeys].sort(),
+  };
+}
+
 function createInput(variable: ScriptConfigVariable, value: ScriptConfigValue): HTMLInputElement | HTMLSelectElement {
   if (variable.type === 'select') {
     const select = document.createElement('select');
@@ -300,6 +387,7 @@ export const ScriptConfig = {
   VAR_TYPES,
   parseDirective,
   normalizeValues,
+  importValues,
   coerceValue,
   renderFields,
   readFields,
@@ -310,4 +398,5 @@ export type {
   ScriptConfigVariable,
   ScriptConfigValues,
   ScriptConfigValue,
+  ImportedScriptConfigResult,
 };

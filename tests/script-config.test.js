@@ -69,6 +69,23 @@ describe.each(implementations)('ScriptConfig userscript @var helpers ($label)', 
     });
   });
 
+  it('extracts declared backup values while rejecting unsafe and malformed entries', () => {
+    const variables = [
+      ScriptConfig.parseDirective('text theme "Theme" "light"'),
+      ScriptConfig.parseDirective('number retries "Retries" 2'),
+    ].filter(Boolean);
+    const imported = ScriptConfig.importValues(variables, [
+      { config: { values: { theme: 'dark', retries: 4, ignored: true } } },
+      JSON.parse('{"custom":{"__proto__":{"polluted":true},"retries":{"bad":true}}}'),
+    ]);
+
+    expect(imported.values).toEqual({ theme: 'dark', retries: 4 });
+    expect(imported.matchedKeys).toEqual(['retries', 'theme']);
+    expect(imported.invalidKeys).toEqual([]);
+    expect(imported.rejectedKeys).toEqual(['__proto__']);
+    expect({}.polluted).toBeUndefined();
+  });
+
   it('rejects prototype-polluting variable names', () => {
     expect(ScriptConfig.parseDirective('text __proto__ "Unsafe" "x"')).toBeNull();
     expect(ScriptConfig.parseDirective('text constructor "Unsafe" "x"')).toBeNull();

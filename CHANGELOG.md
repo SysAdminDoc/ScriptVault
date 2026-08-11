@@ -4,6 +4,10 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased] — Minimal workbench surfaces
 
+- Imported competitor per-script state for enabled/disabled status, run-at and
+  injection overrides, custom URL patterns, declared `@var`/GM_config values,
+  and stored values, with bounded unmapped-setting diagnostics and quarantine
+  preserved across VM/GM/ZIP restore paths.
 - Added editor and dashboard warnings for unrecognized userscript metadata
   keys, localized-key normalization, nearest-key suggestions, and explicit
   `@scriptvault-ignore` suppression for intentional custom directives.

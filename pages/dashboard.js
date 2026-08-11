@@ -1778,6 +1778,11 @@
         const trustedEnabled = Number(result?.trustedEnabledScripts || 0);
         const failed = Array.isArray(result?.errors) ? result.errors.length : 0;
         const replaced = Array.isArray(result?.replacedScripts) ? result.replacedScripts.length : 0;
+        const storedValueSets = Number(result?.storageImported || 0);
+        const unmappedSettingKeys = Array.isArray(result?.unmappedSettings)
+            ? result.unmappedSettings.reduce((total, entry) => total + (Array.isArray(entry?.keys) ? entry.keys.length : 0), 0)
+            : 0;
+        const importWarnings = Array.isArray(result?.warnings) ? result.warnings.length : 0;
         const parts = [];
         if (imported) parts.push(`${numberFormatter.format(imported)} imported`);
         if (replaced) parts.push(`${numberFormatter.format(replaced)} replaced`);
@@ -1799,6 +1804,9 @@
         const skippedSettingsCount = (Array.isArray(result?.skippedSettingsUnknownKeys) ? result.skippedSettingsUnknownKeys.length : 0)
             + (Array.isArray(result?.skippedSettingsTypeKeys) ? result.skippedSettingsTypeKeys.length : 0);
         if (skippedSettingsCount) parts.push(`${numberFormatter.format(skippedSettingsCount)} unsupported settings skipped`);
+        if (storedValueSets) parts.push(`${numberFormatter.format(storedValueSets)} stored value set${storedValueSets === 1 ? '' : 's'} restored`);
+        if (unmappedSettingKeys) parts.push(`${numberFormatter.format(unmappedSettingKeys)} per-script setting key${unmappedSettingKeys === 1 ? '' : 's'} not mapped`);
+        else if (importWarnings) parts.push(`${numberFormatter.format(importWarnings)} import warning${importWarnings === 1 ? '' : 's'}`);
         if (result?.restoredFolders) parts.push('folders restored');
         if (result?.restoredWorkspaces) parts.push('workspaces restored');
         return parts.join(', ');
@@ -1809,8 +1817,11 @@
         const imported = Number(result?.imported || 0);
         const failed = Array.isArray(result?.errors) ? result.errors.length : 0;
         const restoredVaultState = !!(result?.settingsImported || result?.restoredFolders || result?.restoredWorkspaces);
+        const hasImportDiagnostics = (Array.isArray(result?.warnings) && result.warnings.length > 0)
+            || (Array.isArray(result?.unmappedSettings) && result.unmappedSettings.length > 0);
         if (failed > 0 && imported === 0 && !restoredVaultState) return 'error';
         if (failed > 0) return 'warning';
+        if (hasImportDiagnostics) return 'warning';
         if (Number(result?.skipped || 0) > 0 && imported === 0 && !restoredVaultState) return 'info';
         return 'success';
     }
@@ -1881,6 +1892,11 @@
         const preservedDisabled = Number(result?.preservedDisabledScripts || 0);
         const trustedEnabled = Number(result?.trustedEnabledScripts || 0);
         const failed = Array.isArray(result?.errors) ? result.errors.length : 0;
+        const storedValueSets = Number(result?.storageImported || 0);
+        const unmappedSettingKeys = Array.isArray(result?.unmappedSettings)
+            ? result.unmappedSettings.reduce((total, entry) => total + (Array.isArray(entry?.keys) ? entry.keys.length : 0), 0)
+            : 0;
+        const importWarnings = Array.isArray(result?.warnings) ? result.warnings.length : 0;
         const parts = [];
         if (restoredScripts) parts.push(`${numberFormatter.format(restoredScripts)} scripts restored`);
         if (skippedScripts) parts.push(`${numberFormatter.format(skippedScripts)} skipped`);
@@ -1899,6 +1915,9 @@
         const skippedSettingsCount = (Array.isArray(result?.skippedSettingsUnknownKeys) ? result.skippedSettingsUnknownKeys.length : 0)
             + (Array.isArray(result?.skippedSettingsTypeKeys) ? result.skippedSettingsTypeKeys.length : 0);
         if (skippedSettingsCount) parts.push(`${numberFormatter.format(skippedSettingsCount)} unsupported settings skipped`);
+        if (storedValueSets) parts.push(`${numberFormatter.format(storedValueSets)} stored value set${storedValueSets === 1 ? '' : 's'} restored`);
+        if (unmappedSettingKeys) parts.push(`${numberFormatter.format(unmappedSettingKeys)} per-script setting key${unmappedSettingKeys === 1 ? '' : 's'} not mapped`);
+        else if (importWarnings) parts.push(`${numberFormatter.format(importWarnings)} import warning${importWarnings === 1 ? '' : 's'}`);
         if (result?.restoredFolders) parts.push('folders restored');
         if (result?.restoredWorkspaces) parts.push('workspaces restored');
         if (failed) parts.push(`${numberFormatter.format(failed)} issues`);
@@ -1911,8 +1930,11 @@
         const restored = Number(result?.restoredScripts || 0);
         const failed = Array.isArray(result?.errors) ? result.errors.length : 0;
         const restoredGlobal = !!(result?.restoredSettings || result?.restoredFolders || result?.restoredWorkspaces);
+        const hasImportDiagnostics = (Array.isArray(result?.warnings) && result.warnings.length > 0)
+            || (Array.isArray(result?.unmappedSettings) && result.unmappedSettings.length > 0);
         if (failed > 0 && !restored && !restoredGlobal) return 'error';
         if (failed > 0) return 'warning';
+        if (hasImportDiagnostics) return 'warning';
         return restored || restoredGlobal ? 'success' : 'info';
     }
 

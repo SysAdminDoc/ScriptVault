@@ -5,6 +5,7 @@ import {
   normalizeLocalLibrarySnapshots,
   verifyLocalLibrarySnapshots,
 } from '../src/background/local-libraries.ts';
+import { ScriptConfig } from '../src/modules/script-config.ts';
 
 const backgroundCoreCode = readFileSync(resolve(process.cwd(), 'background.core.js'), 'utf8');
 const encoder = new TextEncoder();
@@ -195,7 +196,7 @@ function createRuntimeHarness(existingScripts = [], storedValuesByScript = {}, s
 
   const _body = `${extractRuntimeImportExportCode()}; return { exportAllScripts, exportToZip, importFromZip, importScripts, importVendorBackup, recordImportedScriptTrustReview };`;
   let fn;
-  try { const vm = require('node:vm'); fn = vm.compileFunction(_body, ['fflate', 'ScriptStorage', 'ScriptValues', 'SettingsManager', 'registerAllScripts', 'updateBadge', 'generateId', 'chrome', 'LocalLibraries', 'console'], { filename: resolve(process.cwd(), 'background.core.js') }); } catch { fn = new Function('fflate', 'ScriptStorage', 'ScriptValues', 'SettingsManager', 'registerAllScripts', 'updateBadge', 'generateId', 'chrome', 'LocalLibraries', 'console', _body); }
+  try { const vm = require('node:vm'); fn = vm.compileFunction(_body, ['fflate', 'ScriptStorage', 'ScriptValues', 'SettingsManager', 'registerAllScripts', 'updateBadge', 'generateId', 'chrome', 'LocalLibraries', 'ScriptConfig', 'console'], { filename: resolve(process.cwd(), 'background.core.js') }); } catch { fn = new Function('fflate', 'ScriptStorage', 'ScriptValues', 'SettingsManager', 'registerAllScripts', 'updateBadge', 'generateId', 'chrome', 'LocalLibraries', 'ScriptConfig', 'console', _body); }
 
   return {
     ...fn(
@@ -208,6 +209,7 @@ function createRuntimeHarness(existingScripts = [], storedValuesByScript = {}, s
       generateId,
       chrome,
       { normalizeLocalLibrarySnapshots, verifyLocalLibrarySnapshots },
+      ScriptConfig,
       runtimeConsole,
     ),
     fakeFflate,
@@ -366,6 +368,59 @@ describe('vendor backup import trust boundary', () => {
         _importQuarantine: expect.any(Object),
       },
     });
+  });
+
+  it('maps VM per-script state and reports unsupported or prototype-polluting fields', async () => {
+    const harness = createRuntimeHarness();
+    const code = userscriptText('VM Configured').replace(
+      '// @match https://example.com/*',
+      [
+        '// @match https://example.com/*',
+        '// @var text theme "Theme" "light"',
+      ].join('\n'),
+    );
+    const custom = JSON.parse('{"theme":"dark","__proto__":{"polluted":true}}');
+    const result = await harness.importVendorBackup('violentmonkey', JSON.stringify({
+      scripts: [{
+        props: { name: 'VM Configured' },
+        config: {
+          enabled: true,
+          runAt: 'document-start',
+          userIncludes: ['https://example.com/custom/*'],
+          userExcludes: ['https://example.com/custom/private/*'],
+          userMatches: ['https://example.com/custom-match/*'],
+          userConfig: { theme: 'dark' },
+          unsupportedSetting: true,
+        },
+        custom,
+        values: { remembered: 'yes' },
+        code,
+      }],
+    }), { overwrite: true });
+
+    const imported = Array.from(harness.scriptCache.values())[0];
+    expect(result).toMatchObject({
+      imported: 1,
+      quarantinedScripts: 1,
+      storageImported: 1,
+      unmappedSettings: [expect.objectContaining({ keys: expect.arrayContaining(['unsupportedSetting']) })],
+    });
+    expect(result.warnings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ warning: expect.stringContaining('prototype-polluting config keys rejected') }),
+    ]));
+    expect(imported).toMatchObject({
+      enabled: false,
+      settings: {
+        runAt: 'document-start',
+        userIncludes: ['https://example.com/custom/*'],
+        userExcludes: ['https://example.com/custom/private/*'],
+        userMatches: ['https://example.com/custom-match/*'],
+        userConfig: { theme: 'dark' },
+        _importQuarantine: expect.any(Object),
+      },
+    });
+    expect(harness.valueCache.get(imported.id)).toEqual({ remembered: 'yes' });
+    expect({}.polluted).toBeUndefined();
   });
 });
 

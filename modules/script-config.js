@@ -33,6 +33,16 @@ const ScriptConfig = (() => {
   module.exports = __toCommonJS(script_config_exports);
   var VAR_TYPES = ["color", "text", "number", "select", "checkbox", "range"];
   var POLLUTED_KEYS = /* @__PURE__ */ new Set(["__proto__", "constructor", "prototype"]);
+  var IMPORT_VALUE_CONTAINER_KEYS = /* @__PURE__ */ new Set([
+    "config",
+    "custom",
+    "options",
+    "settings",
+    "storage",
+    "userConfig",
+    "values",
+    "vars"
+  ]);
   function isRecord(value) {
     return !!value && typeof value === "object" && !Array.isArray(value);
   }
@@ -181,6 +191,56 @@ const ScriptConfig = (() => {
     }
     return result;
   }
+  function isImportableConfigValue(value) {
+    return typeof value === "string" && value.length <= 256 || typeof value === "number" && Number.isFinite(value) || typeof value === "boolean";
+  }
+  function importValues(variables, sources = []) {
+    const variableNames = new Set(
+      (variables ?? []).filter((variable) => variable && isSafeConfigName(variable.name)).map((variable) => variable.name)
+    );
+    const raw = {};
+    const matchedKeys = /* @__PURE__ */ new Set();
+    const invalidKeys = /* @__PURE__ */ new Set();
+    const rejectedKeys = /* @__PURE__ */ new Set();
+    const visited = /* @__PURE__ */ new Set();
+    let visitedObjects = 0;
+    const visit = (value, depth) => {
+      if (!isRecord(value) || depth > 3 || visitedObjects >= 64 || visited.has(value)) return;
+      visited.add(value);
+      visitedObjects++;
+      for (const [key, entryValue] of Object.entries(value).slice(0, 512)) {
+        if (POLLUTED_KEYS.has(key)) {
+          rejectedKeys.add(key);
+          continue;
+        }
+        if (variableNames.has(key)) {
+          if (isImportableConfigValue(entryValue)) {
+            raw[key] = entryValue;
+            matchedKeys.add(key);
+            invalidKeys.delete(key);
+          } else if (!Object.prototype.hasOwnProperty.call(raw, key)) {
+            invalidKeys.add(key);
+          }
+          continue;
+        }
+        if (depth < 3 && IMPORT_VALUE_CONTAINER_KEYS.has(key) && isRecord(entryValue)) {
+          visit(entryValue, depth + 1);
+        }
+      }
+    };
+    for (const source of sources) visit(source, 0);
+    const normalized = normalizeValues(variables, raw);
+    const values = {};
+    for (const key of matchedKeys) {
+      if (Object.prototype.hasOwnProperty.call(normalized, key)) values[key] = normalized[key];
+    }
+    return {
+      values,
+      matchedKeys: [...matchedKeys].sort(),
+      invalidKeys: [...invalidKeys].sort(),
+      rejectedKeys: [...rejectedKeys].sort()
+    };
+  }
   function createInput(variable, value) {
     if (variable.type === "select") {
       const select = document.createElement("select");
@@ -267,6 +327,7 @@ const ScriptConfig = (() => {
     VAR_TYPES,
     parseDirective,
     normalizeValues,
+    importValues,
     coerceValue,
     renderFields,
     readFields
