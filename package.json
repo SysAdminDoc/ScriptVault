@@ -33,6 +33,8 @@
     "test:fuzz": "vitest run tests/trust-boundary-fuzz.test.js --pool=vmThreads --maxWorkers=1",
     "test:visual": "vitest run --config vitest.visual.config.mjs",
     "test:e2e": "node scripts/run-e2e.mjs capability",
+    "test:e2e:compatibility": "node scripts/run-e2e.mjs capability tests/e2e/userscript-compatibility.spec.js",
+    "test:e2e:compatibility:release": "node scripts/run-e2e.mjs release tests/e2e/userscript-compatibility.spec.js",
     "test:e2e:release": "node scripts/run-e2e.mjs release",
     "test:a11y": "node scripts/check-readability.mjs --check && vitest run tests/dashboard-a11y.test.js tests/popup-a11y.test.js tests/gui-ux-audit.test.js tests/accessibility-surface-pass.test.js && node scripts/run-e2e.mjs release tests/e2e/accessibility.spec.js",
     "smoke:dashboard": "node scripts/smoke-dashboard.mjs",

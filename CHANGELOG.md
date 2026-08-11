@@ -8,6 +8,10 @@ All notable changes to ScriptVault will be documented in this file.
   bounded TTL conflict retention, passive dashboard conflict counts, and
   per-device `hlc`/local/remote resolution policy across CloudSync and
   EasyCloud.
+- Added a hash-pinned, local-only real-world userscript compatibility corpus
+  with Greasemonkey storage, Better xCloud, and Vite Plugin Monkey Worker
+  fixtures; the headless gate records GM calls and fails closed on execution
+  or Worker regressions without contacting target sites.
 - Added reviewable local folder projects for `.user.js` and `.user.css` files,
   with stable path-to-script mapping, restart reconnection, bounded scan/watch
   updates, explicit add/rename/delete/change/conflict decisions, and redacted

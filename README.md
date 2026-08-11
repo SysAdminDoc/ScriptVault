@@ -585,6 +585,8 @@ accessibility work are.
 ```bash
 npm run test:e2e          # Labeled capability report; unsupported browser capabilities may skip
 npm run test:e2e:release  # Release gate; required userScripts/OPFS capabilities fail closed
+npm run test:e2e:compatibility  # Local-only real-world userscript GM/Worker corpus
+npm run test:e2e:compatibility:release  # Same corpus with fail-closed capability policy
 npm run smoke:editor      # Headless editor hit-test and diagnostics smoke
 ```
 
@@ -592,6 +594,9 @@ Both commands use an isolated temporary headless Chromium profile. The release
 lane must execute local-workspace apply, service-worker rehydration, cross-tab
 value changes, extension-upgrade registration rehydration, and GM XHR FormData;
 it never treats a capability skip as proof.
+The compatibility lane installs pinned Greasemonkey, Better xCloud, and Vite Plugin
+Monkey-shaped fixtures against a local target only, records their GM calls, and verifies
+the Worker path without contacting their target sites.
 The editor smoke has a 90-second wall-clock deadline and reports the active stage
 and extension URL before cleaning up its browser and temporary profile. Set
 `SCRIPT_VAULT_EDITOR_SMOKE_TIMEOUT_MS` only when diagnosing a slower environment.

@@ -1,0 +1,56 @@
+{
+  "schema": "scriptvault/userscript-compatibility/v1",
+  "policy": {
+    "target": "local-only",
+    "network": "no live network calls",
+    "sourcePin": "Every fixture is tied to a repository commit and content hash."
+  },
+  "fixtures": [
+    {
+      "id": "greasemonkey-storage",
+      "path": "greasemonkey-storage.user.js",
+      "sourceUrl": "https://github.com/greasemonkey/greasemonkey/blob/6080f9161d8f87780a1fc652e8418f9fd4627974/test/scripts/api-gm-storage.user.js",
+      "sourceCommit": "6080f9161d8f87780a1fc652e8418f9fd4627974",
+      "license": "GPL-3.0-only",
+      "licenseUrl": "https://github.com/greasemonkey/greasemonkey/blob/6080f9161d8f87780a1fc652e8418f9fd4627974/LICENSE",
+      "adaptation": "Upstream storage conformance flow; local @match, namespace, and terminal marker added.",
+      "expectedApiCalls": [
+        "GM.getValue",
+        "GM.setValue",
+        "GM.listValues",
+        "GM.deleteValue"
+      ],
+      "readyMarker": "data-sv-gm-storage-fixture",
+      "sha256": "484f56ace3b5d3489c57cd3f5dc53b0e61a8b0325b74d0d1d18cd658454263ce"
+    },
+    {
+      "id": "better-xcloud-custom-flags",
+      "path": "better-xcloud-custom-flags.user.js",
+      "sourceUrl": "https://github.com/redphx/better-xcloud/blob/f8397043f6d2148d2345d508902a38c69cf1ee20/scripts/custom-flags.user.js",
+      "sourceCommit": "f8397043f6d2148d2345d508902a38c69cf1ee20",
+      "license": "MIT",
+      "licenseUrl": "https://github.com/redphx/better-xcloud/blob/f8397043f6d2148d2345d508902a38c69cf1ee20/LICENSE",
+      "adaptation": "Upstream custom-flags companion; local @match and terminal marker added; no GM APIs are requested by the source.",
+      "expectedApiCalls": [],
+      "readyMarker": "data-sv-better-xcloud-fixture",
+      "sha256": "c16251e0a54a6ba035e8fdc5c00e5827183b3316aaa51fda7c88743825a6b3dd"
+    },
+    {
+      "id": "vite-monkey-worker",
+      "path": "vite-monkey-worker.user.js",
+      "sourceUrl": "https://github.com/lisonge/vite-plugin-monkey/releases/tag/v8.1.0",
+      "sourceCommit": "37b0c043545aaf87524351bff112c631ab486eb7",
+      "license": "MIT",
+      "licenseUrl": "https://github.com/lisonge/vite-plugin-monkey/blob/37b0c043545aaf87524351bff112c631ab486eb7/LICENCE",
+      "adaptation": "Deterministic local probe derived from the v8 generated USER_SCRIPT shape; external @require/@resource and site UI were removed, while Promise GM calls and Blob Worker creation remain.",
+      "expectedApiCalls": [
+        "GM.getValue",
+        "GM.setValue",
+        "GM.addStyle",
+        "GM.addElement"
+      ],
+      "readyMarker": "data-sv-vite-worker-fixture",
+      "sha256": "03abefcc2fdec16357402fa6e5a866fbe28c4d6d73ef26705c5e0972d9c11f54"
+    }
+  ]
+}
