@@ -9,7 +9,7 @@ export { failReleaseIfUnsupported, isReleaseE2EMode } from './e2e-mode.js';
 
 const extensionPath = resolve(process.cwd());
 
-function assertExtensionFiles() {
+function assertExtensionFiles(root = extensionPath) {
   const requiredFiles = [
     'manifest.json',
     'background.js',
@@ -20,7 +20,7 @@ function assertExtensionFiles() {
     'lib/monaco-esm/editor.css',
     'lib/monaco-esm/editor.js',
   ];
-  const missing = requiredFiles.filter(file => !existsSync(join(extensionPath, file)));
+  const missing = requiredFiles.filter(file => !existsSync(join(root, file)));
   if (missing.length > 0) {
     throw new Error(`Missing extension files: ${missing.join(', ')}. Run npm run build before npm run test:e2e.`);
   }
@@ -37,16 +37,18 @@ async function findExtensionId(context) {
   return extensionId;
 }
 
-export async function launchScriptVault() {
-  assertExtensionFiles();
-  const userDataDir = await mkdtemp(join(tmpdir(), 'scriptvault-pw-'));
+export async function launchScriptVault(options = {}) {
+  const root = options.extensionPath || extensionPath;
+  assertExtensionFiles(root);
+  const ownsUserDataDir = !options.userDataDir;
+  const userDataDir = options.userDataDir || await mkdtemp(join(tmpdir(), 'scriptvault-pw-'));
   const channel = process.env.SCRIPT_VAULT_PLAYWRIGHT_CHANNEL || 'chromium';
   const context = await chromium.launchPersistentContext(userDataDir, {
     channel,
     headless: true,
     args: [
-      `--disable-extensions-except=${extensionPath}`,
-      `--load-extension=${extensionPath}`,
+      `--disable-extensions-except=${root}`,
+      `--load-extension=${root}`,
       '--disable-dev-shm-usage',
       '--no-default-browser-check',
       '--no-first-run',
@@ -59,10 +61,12 @@ export async function launchScriptVault() {
     context,
     channel,
     extensionId,
+    extensionPath: root,
+    userDataDir,
     url: path => `chrome-extension://${extensionId}/${path.replace(/^\/+/, '')}`,
     async close() {
       await context.close().catch(() => {});
-      await rm(userDataDir, { recursive: true, force: true });
+      if (ownsUserDataDir) await rm(userDataDir, { recursive: true, force: true });
     },
   };
 }

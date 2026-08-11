@@ -589,7 +589,8 @@ npm run smoke:editor      # Headless editor hit-test and diagnostics smoke
 
 Both commands use an isolated temporary headless Chromium profile. The release
 lane must execute local-workspace apply, service-worker rehydration, cross-tab
-value changes, and GM XHR FormData; it never treats a capability skip as proof.
+value changes, extension-upgrade registration rehydration, and GM XHR FormData;
+it never treats a capability skip as proof.
 The editor smoke has a 90-second wall-clock deadline and reports the active stage
 and extension URL before cleaning up its browser and temporary profile. Set
 `SCRIPT_VAULT_EDITOR_SMOKE_TIMEOUT_MS` only when diagnosing a slower environment.

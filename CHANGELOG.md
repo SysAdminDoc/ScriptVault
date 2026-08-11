@@ -26,6 +26,9 @@ All notable changes to ScriptVault will be documented in this file.
 - Bounded the editor smoke harness to 90 seconds, standardized its wait
   diagnostics, and reports the active stage/URL while cleaning up timed-out
   browser profiles.
+- Added an isolated Chromium extension-update E2E gate that verifies enabled,
+  disabled, stale, and failed user-script registrations plus local health
+  evidence; Firefox coverage is explicitly capability-gated.
 - Serialized subscription feed, bundle, removal, and refresh-result writes
   through a fresh-read queue so concurrent dashboard and alarm mutations keep
   unrelated records and validator/error state intact.

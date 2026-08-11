@@ -180,13 +180,6 @@ _Scope not covered by the 2026-08-02 pass. Not findings; each needs its own audi
   Acceptance: a PR is open against awesome-userscripts adding ScriptVault with an accurate one-line description and the four missing managers; the release runbook records where the product is indexed so the list does not go stale again.
   Complexity: S
 
-- [ ] P2 — Add a real extension-upgrade registration rehydration gate
-  Why: The runtime has version-marker/force-reregister logic, but the existing E2E test proves only service-worker restart; a broken release can therefore pass current coverage while losing enabled user-script registrations during an actual extension update.
-  Evidence: `src/background/core.ts:12024-12126,13069+` compares the manifest version and re-registers scripts, while `tests/e2e/service-worker-rehydration.spec.js:70-93` only closes/reopens the worker. Chrome and MDN document that user-script registrations are cleared on extension update and must be restored on an update install path: https://developer.chrome.com/docs/extensions/reference/api/userScripts, https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/userScripts, https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/userScripts/update
-  Touches: `tests/e2e/service-worker-rehydration.spec.js` or a dedicated upgrade spec, extension fixture/profile helpers, `src/background/core.ts`, generated runtime parity checks, and Firefox smoke coverage where `userScripts` is available.
-  Acceptance: An isolated Chrome update test installs version N, seeds enabled/disabled scripts and registrations, replaces the package with version N+1, and verifies every eligible script is registered exactly once, stale registrations are removed, disabled scripts remain absent, and a failed registration is surfaced in the existing health evidence; retain the separate worker-restart test and add the equivalent Firefox case or an explicit capability-gated result.
-  Complexity: M
-
 - [ ] P2 — Persist a bounded, redacted execution journal across service-worker restarts
   Why: The current live diagnostics store is bounded but intentionally lasts only for the current service-worker lifetime, so the context for a failed run disappears when MV3 suspends or restarts the worker.
   Evidence: `src/background/execution-diagnostics.ts:85-99,145-294` keeps tabs/documents/events in memory with count caps, and `src/background/core.ts:7309-7316` documents the lifetime boundary. Popup, side panel, and DevTools already consume live diagnostics; this item extends continuity rather than adding another “why did it not run?” surface. The unified uBlock Origin logger is a comparable observability model: https://github.com/gorhill/uBlock/wiki/The-logger
