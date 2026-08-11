@@ -119,23 +119,31 @@ const english = localeSources.en;
 if (!english) {
   report.drifts.push({ kind: 'locale-source-error', locale: 'en', error: 'src/locales/en.json is required' });
 } else {
-  const total = Object.keys(english.runtime).length;
+  const englishKeys = new Set(Object.keys(english.runtime));
+  const total = englishKeys.size;
+  report.sources.englishRuntimeKeyCount = total;
   for (const code of sourceCodes) {
     const source = localeSources[code];
-    const translated = code === 'en' ? total : Object.keys(source.runtime || {}).length;
+    const translatedKeys = Object.keys(source.runtime || {}).filter(key => englishKeys.has(key));
+    const translated = code === 'en' ? total : translatedKeys.length;
     const baseline = source.runtimeCoverageBaseline;
     const status = source.translationStatus;
+    const percent = Number(((translated / total) * 100).toFixed(1));
+    const baselinePercent = Number(((baseline / total) * 100).toFixed(1));
     const coverage = {
       locale: code,
       status,
       direction: source.direction,
       translated,
       total,
+      englishKeyCount: total,
       baseline,
-      percent: Number(((translated / total) * 100).toFixed(1)),
+      baselinePercent,
+      percent,
+      coveragePercent: percent,
     };
     report.coverage.push(coverage);
-    if (!Number.isInteger(baseline) || translated < baseline) {
+    if (!Number.isInteger(baseline) || baseline < 0 || baseline > total || translated < baseline) {
       report.drifts.push({ kind: 'runtime-coverage-regression', locale: code, translated, baseline });
     }
     if (code !== 'en' && status !== 'partial' && translated < total) {
@@ -192,8 +200,9 @@ if (wantJson) {
   console.log('  Runtime coverage:');
   for (const coverage of report.coverage) {
     const label = coverage.status === 'partial' ? 'partial' : 'complete';
-    console.log(`    ${coverage.locale.padEnd(3)} ${String(coverage.translated).padStart(4)}/${coverage.total} ` +
-      `(${String(coverage.percent).padStart(4)}%) ${label}; baseline ${coverage.baseline}`);
+    console.log(`    ${coverage.locale.padEnd(3)} ${String(coverage.translated).padStart(4)}/${coverage.englishKeyCount} English keys ` +
+      `(${String(coverage.coveragePercent).padStart(4)}%) ${label}; ` +
+      `ratchet ${coverage.baseline} (${String(coverage.baselinePercent).padStart(4)}%)`);
   }
   console.log('');
   console.log('  Localized surfaces:');

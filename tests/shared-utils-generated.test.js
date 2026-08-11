@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import vm from 'node:vm';
 
 const code = readFileSync(resolve(process.cwd(), 'shared/utils.js'), 'utf8');
-const _body = `${code}\nreturn { escapeHtml, generateId, sanitizeUrl, installBrowserNamespaceAlias, classifyInstallSource, formatBytes };`;
+const _body = `${code}\nreturn { escapeHtml, generateId, sanitizeUrl, installBrowserNamespaceAlias, classifyInstallSource, formatBytes, getLocalizedScriptMetadataValue };`;
 let _compiledFn;
 try { const vm2 = require('node:vm'); _compiledFn = vm2.compileFunction(_body, ['crypto', 'globalThis'], { filename: resolve(process.cwd(), 'shared/utils.js') }); } catch { _compiledFn = new Function('crypto', 'globalThis', _body); }
 
@@ -21,6 +21,8 @@ describe('generated shared utilities runtime', () => {
     expect(utils.generateId()).toBe('script_uuid-123');
     expect(utils.formatBytes(1024 ** 4)).toBe('1 TB');
     expect(typeof utils.installBrowserNamespaceAlias).toBe('function');
+    expect(utils.getLocalizedScriptMetadataValue({ name: 'Base', localized: { ja: { name: '日本語' } } }, 'name', 'ja'))
+      .toBe('日本語');
   });
 
   it('auto-installs browser alias in generated extension contexts', () => {

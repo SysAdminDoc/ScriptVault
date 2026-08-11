@@ -27,6 +27,15 @@
         return message && message !== key ? message : formatPopupI18nFallback(fallback, placeholders);
     }
 
+    function getDisplayMetadataValue(source, key) {
+        const metadata = source?.metadata || source?.meta || source || {};
+        if (typeof getLocalizedScriptMetadataValue === 'function') {
+            const localized = getLocalizedScriptMetadataValue(metadata, key, getPopupI18n()?.getLocale?.());
+            if (localized) return localized;
+        }
+        return metadata?.[key] || '';
+    }
+
     const DIAGNOSTIC_STATUS_LABELS = {
         running: ['popupDiagnosticStatusRunning', 'Running'],
         'matched-disabled': ['popupDiagnosticStatusMatchedDisabled', 'Matched · disabled'],
@@ -1047,7 +1056,7 @@
         if (!dropdown) return;
         const script = pageScripts.find((item) => item.id === scriptId) || allScripts.find((item) => item.id === scriptId);
         const meta = script?.metadata || script?.meta || {};
-        const name = meta.name || 'this script';
+        const name = getDisplayMetadataValue(meta, 'name') || 'this script';
         const hasUpdateUrl = Boolean(meta.updateURL || meta.downloadURL);
         const installUrl = meta.downloadURL || meta.updateURL || '';
         const updateBtn = dropdown.querySelector('[data-action="update"]');
@@ -1152,7 +1161,7 @@
         count.textContent = String(ctxScripts.length);
         safeSetHtml(list, ctxScripts.map((script) => {
             const meta = script.metadata || script.meta || {};
-            const name = meta.name || tPopup('popupUnnamedScript', 'Unnamed Script');
+            const name = getDisplayMetadataValue(meta, 'name') || tPopup('popupUnnamedScript', 'Unnamed Script');
             const icon = getScriptIcon(script);
             const idAttr = escapeHtml(script.id);
             return `
@@ -1209,8 +1218,8 @@
         const order = settings.scriptOrder || 'auto';
         if (order === 'alpha') {
             displayScripts.sort((a, b) => {
-                const na = (a.metadata || a.meta || {}).name || '';
-                const nb = (b.metadata || b.meta || {}).name || '';
+                const na = getDisplayMetadataValue(a, 'name');
+                const nb = getDisplayMetadataValue(b, 'name');
                 return na.localeCompare(nb);
             });
         } else if (order === 'last-updated') {
@@ -1243,7 +1252,7 @@
 
         safeSetHtml(elements.scriptList, displayScripts.map((script, i) => {
             const meta = script.metadata || script.meta || {};
-            const name = meta.name || tPopup('popupUnnamedScript', 'Unnamed Script');
+            const name = getDisplayMetadataValue(meta, 'name') || tPopup('popupUnnamedScript', 'Unnamed Script');
             const version = meta.version || '';
             const enabled = script.enabled !== false;
             const icon = getScriptIcon(script);
@@ -1529,7 +1538,7 @@
                 if (!activeDropdownScriptId) return;
                 const scriptId = activeDropdownScriptId;
                 const script = pageScripts.find(s => s.id === scriptId);
-                const name = (script?.metadata || script?.meta || {}).name || 'this script';
+                const name = getDisplayMetadataValue(script, 'name') || 'this script';
                 if (pendingDeleteScriptId !== scriptId) {
                     armDropdownDelete(scriptId, name);
                     return;
@@ -1617,8 +1626,8 @@
         const maxLetters = mode === 'duckduckgo' ? 1 : 2;
         const label = domain
             ? getDomainBadgeLabel(domain, maxLetters)
-            : getScriptBadgeLabel(meta.name || script.id, maxLetters);
-        const hue = hashMarkerSeed(domain || meta.name || script.id);
+            : getScriptBadgeLabel(getDisplayMetadataValue(meta, 'name') || script.id, maxLetters);
+        const hue = hashMarkerSeed(domain || getDisplayMetadataValue(meta, 'name') || script.id);
 
         const safeIconUrl = iconUrl ? sanitizeUrl(iconUrl) : '';
         if (safeIconUrl) {

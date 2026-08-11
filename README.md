@@ -280,8 +280,25 @@ locale's `Intl.PluralRules` categories.
 
 Contributors edit one source per language under `src/locales/`; `npm run
 locale:generate` produces both the typed runtime catalog and `_locales`
-messages. `npm run locale:check:gate` rejects stale generated files, locale-set
-drift, and any drop below the recorded per-language coverage baseline.
+messages. `npm run locale:check:gate` reports each locale against the complete
+English runtime key set (2,001 keys) and rejects stale generated files,
+locale-set drift, or any drop below the reviewed per-language ratchet:
+
+| Locale | Runtime coverage | Ratchet |
+| --- | ---: | ---: |
+| German | 43 / 2,001 (2.1%) | 43 |
+| Spanish | 45 / 2,001 (2.2%) | 45 |
+| French | 43 / 2,001 (2.1%) | 43 |
+| Hebrew | 58 / 2,001 (2.9%) | 58 |
+| Japanese | 71 / 2,001 (3.5%) | 71 |
+| Portuguese | 42 / 2,001 (2.1%) | 42 |
+| Russian | 117 / 2,001 (5.8%) | 117 |
+| Chinese | 46 / 2,001 (2.3%) | 46 |
+
+The dashboard and popup prefer `@name:<ui-locale>` and
+`@description:<ui-locale>` metadata, including regional keys such as
+`@name:zh-Hans`, and fall back to the base directive when no localized value
+exists.
 
 ### v2.0 — New Features
 

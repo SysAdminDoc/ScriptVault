@@ -33,6 +33,7 @@ const SharedUtils = (() => {
     formatBytes: () => formatBytes,
     generateId: () => generateId,
     getDomainRoot: () => getDomainRoot,
+    getLocalizedScriptMetadataValue: () => getLocalizedScriptMetadataValue,
     installBrowserNamespaceAlias: () => installBrowserNamespaceAlias,
     sanitizeUrl: () => sanitizeUrl
   });
@@ -40,6 +41,36 @@ const SharedUtils = (() => {
   function escapeHtml(str) {
     if (!str) return "";
     return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+  function metadataLocaleCandidates(locale) {
+    let rawLocale = String(locale || "").trim();
+    if (!rawLocale) {
+      try {
+        const root = globalThis;
+        rawLocale = root.I18n?.getLocale?.() || root.chrome?.i18n?.getUILanguage?.() || root.browser?.i18n?.getUILanguage?.() || root.navigator?.language || root.navigator?.userLanguage || "en";
+      } catch (_) {
+        rawLocale = "en";
+      }
+    }
+    const normalized = rawLocale.replace(/_/g, "-").toLowerCase();
+    const parts = normalized.split("-").filter(Boolean);
+    const candidates = [];
+    for (let length = parts.length; length > 0; length -= 1) {
+      candidates.push(parts.slice(0, length).join("-"));
+    }
+    if (candidates.length === 0) candidates.push("en");
+    return [...new Set(candidates)];
+  }
+  function getLocalizedScriptMetadataValue(metadata, key, locale) {
+    const fallback = typeof metadata?.[key] === "string" ? metadata[key] : "";
+    const localized = metadata?.localized;
+    if (!localized || typeof localized !== "object") return fallback;
+    for (const candidate of metadataLocaleCandidates(locale)) {
+      const matchingLocale = Object.keys(localized).find((entry) => entry.toLowerCase() === candidate);
+      const value = matchingLocale ? localized[matchingLocale]?.[key] : void 0;
+      if (typeof value === "string" && value.trim()) return value;
+    }
+    return fallback;
   }
   function generateId() {
     return "script_" + crypto.randomUUID();
@@ -172,6 +203,7 @@ const generateId = SharedUtils.generateId;
 const sanitizeUrl = SharedUtils.sanitizeUrl;
 const installBrowserNamespaceAlias = SharedUtils.installBrowserNamespaceAlias;
 const classifyInstallSource = SharedUtils.classifyInstallSource;
+const getLocalizedScriptMetadataValue = SharedUtils.getLocalizedScriptMetadataValue;
 const formatBytes = SharedUtils.formatBytes;
 
 try {

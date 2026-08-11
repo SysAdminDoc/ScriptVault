@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { escapeHtml, generateId, sanitizeUrl, formatBytes } from '../src/shared/utils.ts';
+import {
+  escapeHtml,
+  formatBytes,
+  generateId,
+  getLocalizedScriptMetadataValue,
+  sanitizeUrl,
+} from '../src/shared/utils.ts';
 
 // ── escapeHtml ──────────────────────────────────────────────────────────────
 
@@ -195,6 +201,29 @@ describe('formatBytes', () => {
   it('formats TB-scale values', () => {
     const oneTB = Math.pow(1024, 4);
     expect(formatBytes(oneTB)).toBe('1 TB');
+  });
+});
+
+describe('getLocalizedScriptMetadataValue', () => {
+  const metadata = {
+    name: 'Base name',
+    description: 'Base description',
+    localized: {
+      ja: { name: '日本語名' },
+      'zh-Hans': { name: '简体中文名', description: '简体中文描述' },
+    },
+  };
+
+  it('prefers an exact regional locale before its language fallback', () => {
+    expect(getLocalizedScriptMetadataValue({
+      ...metadata,
+      localized: { ja: { name: '日本語名' }, 'ja-JP': { name: '日本語（日本）' } },
+    }, 'name', 'ja-JP')).toBe('日本語（日本）');
+  });
+
+  it('matches locale casing and falls back to the base directive', () => {
+    expect(getLocalizedScriptMetadataValue(metadata, 'name', 'zh-Hans-CN')).toBe('简体中文名');
+    expect(getLocalizedScriptMetadataValue(metadata, 'description', 'fr')).toBe('Base description');
   });
 });
 

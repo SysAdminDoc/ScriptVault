@@ -7,6 +7,9 @@ All notable changes to ScriptVault will be documented in this file.
 - Added editor and dashboard warnings for unrecognized userscript metadata
   keys, localized-key normalization, nearest-key suggestions, and explicit
   `@scriptvault-ignore` suppression for intentional custom directives.
+- Made locale coverage reports use the complete English runtime key set with
+  explicit percentages and ratchets, and display localized `@name`/
+  `@description` metadata in dashboard and popup script lists.
 - Added grant-gated `GM.withLock` and `GM_withLock` userscript APIs backed by
   Web Locks, with per-script cross-tab namespacing, abort-signal forwarding,
   generated TypeScript declarations, and editor grant completion.

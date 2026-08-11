@@ -1557,7 +1557,7 @@
         const html = scriptIds.map(scriptId => {
             const script = state.scripts.find(s => s.id === scriptId) || null;
             const headerTab = getScriptTabElement(scriptId);
-            const name = script?.metadata?.name || headerTab?.dataset.scriptName || 'Untitled script';
+            const name = getDisplayMetadataValue(script, 'name') || headerTab?.dataset.scriptName || 'Untitled script';
             const isActive = state.currentScriptId === scriptId;
             const isDirty = !!state.openTabs[scriptId]?.unsaved;
             const label = [
@@ -2630,6 +2630,15 @@
         return translated && translated !== key ? translated : fallback;
     }
 
+    function getDisplayMetadataValue(source, key) {
+        const metadata = source?.metadata || source?.meta || source || {};
+        if (typeof getLocalizedScriptMetadataValue === 'function') {
+            const localized = getLocalizedScriptMetadataValue(metadata, key, getDashboardI18n()?.getLocale?.());
+            if (localized) return localized;
+        }
+        return metadata?.[key] || '';
+    }
+
     const DASHBOARD_PLURAL_FAMILIES = Object.freeze({
         editorTargetSingular: 'targetNoun',
         scriptSingular: 'scriptNoun',
@@ -3291,7 +3300,7 @@
         for (const script of state.scripts) {
             const option = document.createElement('option');
             option.value = script.id;
-            option.textContent = script.metadata?.name || script.id;
+            option.textContent = getDisplayMetadataValue(script, 'name') || script.id;
             select.appendChild(option);
         }
         if (current && state.scripts.some(script => script.id === current)) {
@@ -3463,7 +3472,7 @@
                             onDelete: async (id, options = {}) => {
                                 const deleteTask = async () => {
                                     const script = state.scripts.find(s => s.id === id);
-                                    const name = script?.metadata?.name || id;
+                                    const name = getDisplayMetadataValue(script, 'name') || id;
                                     const deleteCopy = getSingleDeleteDialogCopy(name);
                                     if (await showConfirmModal(deleteCopy.title, deleteCopy.message, { confirmLabel: 'Move to Trash' })) {
                                         await deleteScript(id);
@@ -7506,7 +7515,7 @@
                     const provenance = describeScriptProvenance(script);
                     return {
                         id: script.id,
-                        name: script.metadata?.name || script.id,
+                        name: getDisplayMetadataValue(script, 'name') || script.id,
                         version: script.metadata?.version || null,
                         enabled: script.enabled !== false,
                         provenance: provenance.label,
@@ -7733,10 +7742,10 @@
     function getTrashMetadata(script) {
         const metadata = script?.metadata || script?.meta || {};
         return {
-            name: metadata.name || tDashboard('unnamedScript', 'Unnamed'),
+            name: getDisplayMetadataValue(metadata, 'name') || tDashboard('unnamedScript', 'Unnamed'),
             version: metadata.version || tDashboard('noVersion', 'No version'),
             author: metadata.author || '',
-            description: metadata.description || ''
+            description: getDisplayMetadataValue(metadata, 'description') || ''
         };
     }
 
@@ -8277,8 +8286,8 @@
             const str = String(value).trim();
             if (str) parts.push(str);
         };
-        push(meta.name);
-        push(meta.description);
+        push(getDisplayMetadataValue(meta, 'name'));
+        push(getDisplayMetadataValue(meta, 'description'));
         push(meta.author);
         push(meta.namespace);
         push(meta.version);
@@ -9175,7 +9184,8 @@
         const grants = normalizeMetadataList(metadata.grant);
         const domains = extractDomainsFromPatterns(matches);
         const stats = script.stats || {};
-        const name = metadata.name || tDashboard('inspectorUnnamedScript', 'Unnamed Script');
+        const name = getDisplayMetadataValue(metadata, 'name') || tDashboard('inspectorUnnamedScript', 'Unnamed Script');
+        const description = getDisplayMetadataValue(metadata, 'description');
         const version = metadata.version || '1.0';
         const runs = Number(stats.runs || 0);
         const avgTime = Number(stats.avgTime || 0);
@@ -9192,7 +9202,7 @@
         elements.scriptInspectorPanel.dataset.state = 'ready';
         elements.scriptInspectorPanel.dataset.scriptId = script.id;
         setInspectorText(elements.scriptInspectorTitle, name);
-        setInspectorText(elements.scriptInspectorSubtitle, metadata.description || metadata.author || tDashboard('inspectorLocalUserscript', 'Local userscript'));
+        setInspectorText(elements.scriptInspectorSubtitle, description || metadata.author || tDashboard('inspectorLocalUserscript', 'Local userscript'));
         setInspectorText(elements.scriptInspectorTrustScore, `${trust.score}%`);
         setInspectorText(elements.scriptInspectorTrustSummary, trust.summary);
         setInspectorText(elements.scriptInspectorStatus, script.enabled !== false
@@ -9440,8 +9450,8 @@
 
     function createScriptRow(script, index) {
         const tr = document.createElement('tr');
-        const metadata = script.metadata || {};
-        const name = metadata.name || 'Unnamed Script';
+        const metadata = script.metadata || script.meta || {};
+        const name = getDisplayMetadataValue(metadata, 'name') || 'Unnamed Script';
         const version = metadata.version || '1.0';
         const enabled = script.enabled !== false;
         const size = formatBytes((script.code || '').length);
@@ -9583,7 +9593,7 @@
                     ${faviconHtml}
                     <div class="script-name-stack">
                         <div class="script-name-row">
-                            <button type="button" class="script-name-button" data-id="${scriptIdAttr}" title="${escapeHtml(metadata.description || '')}" aria-label="Open ${escapeHtml(name)} in the editor">
+                            <button type="button" class="script-name-button" data-id="${scriptIdAttr}" title="${escapeHtml(getDisplayMetadataValue(metadata, 'description'))}" aria-label="Open ${escapeHtml(name)} in the editor">
                                 <span class="script-name-button-text">${escapeHtml(name)}${isBroadMatch(matches) ? ' <span title="Runs on all or most sites" style="opacity:0.58">🌐</span>' : ''}</span>
                             </button>
                             <span class="script-version-inline">v${escapeHtml(String(version).replace(/^v/i, ''))}</span>
@@ -9741,7 +9751,7 @@
             await runButtonTask(e.currentTarget, () => runScriptOnceOnTab(script.id), { busyLabel: tDashboard('runningEllipsis', 'Running...') });
         });
         tr.querySelector('[data-action="delete"]')?.addEventListener('click', async () => {
-            const name = script.metadata?.name || script.id;
+            const name = getDisplayMetadataValue(script, 'name') || script.id;
             const deleteCopy = getSingleDeleteDialogCopy(name);
             if (await showConfirmModal(deleteCopy.title, deleteCopy.message, { confirmLabel: 'Move to Trash' })) {
                 deleteScript(script.id);
@@ -10672,7 +10682,7 @@
                 lastSavedAt: script.updatedAt || null,
                 saveError: ''
             };
-            createScriptTab(scriptId, script.metadata?.name || 'Unnamed Script');
+            createScriptTab(scriptId, getDisplayMetadataValue(script, 'name') || 'Unnamed Script');
         }
 
         // Activate this script tab
@@ -11484,7 +11494,7 @@
                 : 'No high-signal patterns were detected, but automated checks cannot prove this helper is safe.';
             const html = `
                 <div class="local-library-review-warning">
-                    This helper runs after remote @require code and before <strong>${escapeHtml(script?.metadata?.name || script?.meta?.name || 'this userscript')}</strong> on every matched page. Review every change before attaching it.
+                    This helper runs after remote @require code and before <strong>${escapeHtml(getDisplayMetadataValue(script, 'name') || 'this userscript')}</strong> on every matched page. Review every change before attaching it.
                 </div>
                 <div class="panel-empty-inline" style="margin:10px 0">
                     ${escapeHtml(signalCopy)} The reviewed code snapshot can travel in JSON backups and sync. The file handle and local path stay only on this device.
@@ -13279,7 +13289,7 @@
                 : tDashboard('editorUserscriptEditor', 'Userscript Editor');
         }
         if (elements.editorTitle) {
-            elements.editorTitle.textContent = metadata.name || tDashboard('editorEditScript', 'Edit Script');
+            elements.editorTitle.textContent = getDisplayMetadataValue(metadata, 'name') || tDashboard('editorEditScript', 'Edit Script');
             // The subtitle is display:none to maximize code-pane height; keep
             // its enabled/version/author summary reachable as a hover tooltip.
             elements.editorTitle.title = subtitleParts.join(' • ');
@@ -14231,7 +14241,7 @@
             const script = state.scripts.find(s => s.id === savingScriptId);
             if (script) {
                 if (state.currentScriptId === savingScriptId) loadScriptInfo(script);
-                const name = script.metadata?.name || 'Edit Script';
+                const name = getDisplayMetadataValue(script, 'name') || 'Edit Script';
                 if (state.currentScriptId === savingScriptId && elements.editorTitle) elements.editorTitle.textContent = name;
                 // Update tab name
                 const tab = getScriptTabElement(savingScriptId);
@@ -14347,7 +14357,7 @@
         _updateCheckInFlight.add(scriptId);
         try {
             const script = state.scripts.find(s => s.id === scriptId);
-            const name = script?.metadata?.name || scriptId;
+            const name = getDisplayMetadataValue(script, 'name') || scriptId;
             const oldVersion = script?.metadata?.version || '?';
 
             if (triggerEl) {
@@ -14450,7 +14460,7 @@
 
     async function checkScriptForUpdates(scriptId, { force = false, triggerEl = null } = {}) {
         const script = state.scripts.find(s => s.id === scriptId);
-        const name = script?.metadata?.name || scriptId;
+        const name = getDisplayMetadataValue(script, 'name') || scriptId;
         const originalText = triggerEl?.matches('.updated-link') ? triggerEl.textContent : '';
 
         if (triggerEl) {
@@ -15514,15 +15524,16 @@
 
     function exportSingleScript(script) {
         const meta = script.metadata || {};
-        const name = (meta.name || 'script').replace(/[^a-zA-Z0-9_-]/g, '_');
+        const displayName = getDisplayMetadataValue(meta, 'name') || 'script';
+        const name = displayName.replace(/[^a-zA-Z0-9_-]/g, '_');
         const blob = new Blob([script.code || ''], { type: 'text/javascript' });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
         a.download = `${name}.user.js`;
         a.click();
         setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-        publishDashboardTelemetry('scriptShared', { scriptId: script.id, scriptName: meta.name || 'script' });
-        showToast(`Exported ${meta.name || 'script'}`, 'success');
+        publishDashboardTelemetry('scriptShared', { scriptId: script.id, scriptName: displayName });
+        showToast(`Exported ${displayName}`, 'success');
     }
 
     async function exportToZip() {
@@ -17492,7 +17503,7 @@
             // state.scripts already carries the metadata.
             getScriptName: (scriptId) => {
                 const script = state.scripts?.find(s => s.id === scriptId);
-                return script?.metadata?.name || script?.meta?.name || '';
+                return getDisplayMetadataValue(script, 'name') || script?.metadata?.name || script?.meta?.name || '';
             },
             onJumpToLine: (scriptId, lineNumber) => {
                 hideModal();
@@ -18019,7 +18030,7 @@
         elements.btnEditorDelete?.addEventListener('click', async () => {
             if (!state.currentScriptId) return;
             const script = state.scripts.find(s => s.id === state.currentScriptId);
-            const name = script?.metadata?.name || 'this script';
+            const name = getDisplayMetadataValue(script, 'name') || 'this script';
             const scriptId = state.currentScriptId;
             const deleteCopy = getSingleDeleteDialogCopy(name);
             if (await showConfirmModal(deleteCopy.title, deleteCopy.message, { confirmLabel: 'Move to Trash' })) {

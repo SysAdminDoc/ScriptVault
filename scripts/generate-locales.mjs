@@ -83,6 +83,9 @@ async function loadSources(rootDir) {
     assert(Object.keys(source.runtime).length >= source.runtimeCoverageBaseline,
       `${SOURCE_DIR}/${source.code}.json: translated runtime coverage regressed below ` +
       `${source.runtimeCoverageBaseline}`);
+    assert(source.runtimeCoverageBaseline <= runtimeKeys.size,
+      `${SOURCE_DIR}/${source.code}.json: runtimeCoverageBaseline cannot exceed the English runtime key count ` +
+      `${runtimeKeys.size}`);
     if (source.translationStatus === 'complete') {
       assert(source.code === 'en' || Object.keys(source.runtime).length === runtimeKeys.size,
         `${SOURCE_DIR}/${source.code}.json: complete locales must translate every runtime key`);

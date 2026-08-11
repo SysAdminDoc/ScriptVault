@@ -15,6 +15,64 @@ export function escapeHtml(str: string): string {
     .replace(/'/g, '&#39;');
 }
 
+type ScriptMetadataRecord = Record<string, unknown> & {
+  localized?: Record<string, Record<string, unknown>>;
+};
+
+function metadataLocaleCandidates(locale?: string): string[] {
+  let rawLocale = String(locale || '').trim();
+  if (!rawLocale) {
+    try {
+      const root = globalThis as typeof globalThis & {
+        I18n?: { getLocale?: () => string };
+        browser?: { i18n?: { getUILanguage?: () => string } };
+        chrome?: { i18n?: { getUILanguage?: () => string } };
+        navigator?: { language?: string; userLanguage?: string };
+      };
+      rawLocale = root.I18n?.getLocale?.() ||
+        root.chrome?.i18n?.getUILanguage?.() ||
+        root.browser?.i18n?.getUILanguage?.() ||
+        root.navigator?.language ||
+        root.navigator?.userLanguage ||
+        'en';
+    } catch (_) {
+      rawLocale = 'en';
+    }
+  }
+
+  const normalized = rawLocale.replace(/_/g, '-').toLowerCase();
+  const parts = normalized.split('-').filter(Boolean);
+  const candidates = [];
+  for (let length = parts.length; length > 0; length -= 1) {
+    candidates.push(parts.slice(0, length).join('-'));
+  }
+  if (candidates.length === 0) candidates.push('en');
+  return [...new Set(candidates)];
+}
+
+/**
+ * Resolve a display string from localized userscript metadata, falling back
+ * to the base directive. Locale keys are matched case-insensitively so
+ * `zh-Hans` metadata works with browser locale strings normalized to lower
+ * case, while the language-only fallback keeps `@name:ja` useful for `ja-JP`.
+ */
+export function getLocalizedScriptMetadataValue(
+  metadata: ScriptMetadataRecord | null | undefined,
+  key: string,
+  locale?: string,
+): string {
+  const fallback = typeof metadata?.[key] === 'string' ? metadata[key] as string : '';
+  const localized = metadata?.localized;
+  if (!localized || typeof localized !== 'object') return fallback;
+
+  for (const candidate of metadataLocaleCandidates(locale)) {
+    const matchingLocale = Object.keys(localized).find(entry => entry.toLowerCase() === candidate);
+    const value = matchingLocale ? localized[matchingLocale]?.[key] : undefined;
+    if (typeof value === 'string' && value.trim()) return value;
+  }
+  return fallback;
+}
+
 /**
  * Generate a unique script ID using crypto.randomUUID().
  */
