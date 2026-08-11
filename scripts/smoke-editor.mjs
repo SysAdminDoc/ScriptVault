@@ -11,6 +11,17 @@ import puppeteer from 'puppeteer-core';
 import { closeBrowserWithFallback, removeTempProfileDir } from './browser-smoke-utils.mjs';
 
 const extensionPath = resolve(process.cwd());
+// The editor smoke has a 90-second wall-clock budget. Override it only when
+// diagnosing a slower environment with SCRIPT_VAULT_EDITOR_SMOKE_TIMEOUT_MS.
+const DEFAULT_SMOKE_TIMEOUT_MS = 90000;
+const configuredSmokeTimeoutMs = Number.parseInt(
+    process.env.SCRIPT_VAULT_EDITOR_SMOKE_TIMEOUT_MS || String(DEFAULT_SMOKE_TIMEOUT_MS),
+    10,
+);
+const SMOKE_TIMEOUT_MS = Number.isFinite(configuredSmokeTimeoutMs) && configuredSmokeTimeoutMs > 0
+    ? configuredSmokeTimeoutMs
+    : DEFAULT_SMOKE_TIMEOUT_MS;
+const WAIT_TIMEOUT_MS = 15000;
 
 function chromeCandidates() {
     const envPaths = [
@@ -65,7 +76,7 @@ async function findExtensionId(browser) {
         return url.startsWith('chrome-extension://') && url.endsWith('/background.js');
     };
     const existing = browser.targets().find(isScriptVaultTarget);
-    const target = existing || await browser.waitForTarget(isScriptVaultTarget, { timeout: 15000 });
+    const target = existing || await browser.waitForTarget(isScriptVaultTarget, { timeout: WAIT_TIMEOUT_MS });
     const [, extensionId] = target.url().match(/^chrome-extension:\/\/([^/]+)/) || [];
     if (!extensionId) {
         throw new Error(`Could not resolve extension id from target URL: ${target.url()}`);
@@ -73,14 +84,64 @@ async function findExtensionId(browser) {
     return extensionId;
 }
 
-const executablePath = findChromeExecutable();
 const userDataDir = await mkdtemp(join(tmpdir(), 'scriptvault-editor-smoke-'));
 const pageErrors = [];
+let executablePath;
 let browser;
+let activePage = null;
+let currentStage = 'initializing';
+let hardTimeout = null;
+let timeoutTriggered = false;
+let cleanupPromise = null;
+
+function currentUrl() {
+    try {
+        return activePage?.url() || '(no page loaded)';
+    } catch {
+        return '(page URL unavailable)';
+    }
+}
+
+async function cleanupResources() {
+    if (!cleanupPromise) {
+        cleanupPromise = (async () => {
+            await closeBrowserWithFallback(browser, 'Editor smoke');
+            await removeTempProfileDir(userDataDir, 'Editor smoke');
+        })();
+    }
+    return cleanupPromise;
+}
+
+async function runStage(name, operation) {
+    currentStage = name;
+    try {
+        return await operation();
+    } catch (error) {
+        const detail = error?.message || String(error);
+        throw new Error(`${name} failed at ${currentUrl()}: ${detail}`, { cause: error });
+    }
+}
+
+async function abortHungSmoke() {
+    if (timeoutTriggered) return;
+    timeoutTriggered = true;
+    console.error(`[editor-smoke] timed out after ${SMOKE_TIMEOUT_MS}ms at stage "${currentStage}" URL "${currentUrl()}"; cleaning up the temporary profile.`);
+    await cleanupResources();
+    process.exit(1);
+}
+
+hardTimeout = setTimeout(() => {
+    abortHungSmoke().catch(error => {
+        console.error(error?.stack || error?.message || error);
+        process.exit(1);
+    });
+}, SMOKE_TIMEOUT_MS);
 
 try {
-    browser = await puppeteer.launch({
+    executablePath = await runStage('locate Chrome executable', () => findChromeExecutable());
+    browser = await runStage('launch headless Chrome', () => puppeteer.launch({
         executablePath,
+        timeout: WAIT_TIMEOUT_MS,
         headless: true,
         userDataDir,
         pipe: true,
@@ -93,49 +154,60 @@ try {
             '--window-size=1440,900',
         ],
         defaultViewport: { width: 1440, height: 900 },
-    });
+    }));
 
-    const extensionId = await findExtensionId(browser);
-    const page = await browser.newPage();
+    const extensionId = await runStage('resolve extension id', () => findExtensionId(browser));
+    const page = await runStage('create dashboard page', () => browser.newPage());
+    activePage = page;
     page.on('pageerror', error => pageErrors.push(error.message));
     page.on('console', message => {
         if (message.type() === 'error') pageErrors.push(message.text());
     });
 
-    await page.goto(`chrome-extension://${extensionId}/pages/dashboard.html`, {
+    await runStage('load dashboard', () => page.goto(`chrome-extension://${extensionId}/pages/dashboard.html`, {
         waitUntil: 'domcontentloaded',
-        timeout: 20000,
-    });
-    await page.waitForSelector('#scriptsPanel.tm-panel.active', { timeout: 15000 });
-    await page.waitForSelector('#btnNewScript', { visible: true, timeout: 15000 });
+        timeout: WAIT_TIMEOUT_MS,
+    }));
+    await runStage('wait for scripts panel', () => page.waitForSelector('#scriptsPanel.tm-panel.active', { timeout: WAIT_TIMEOUT_MS }));
+    await runStage('wait for New Script control', () => page.waitForSelector('#btnNewScript', { visible: true, timeout: WAIT_TIMEOUT_MS }));
 
     // First open after a version bump shows the What's New modal — it renders
     // asynchronously, so wait for it briefly and dismiss it the way a user
     // would before interacting with the dashboard.
-    const whatsNewDismiss = await page.waitForSelector('#svWnDismiss', { timeout: 4000 }).catch(() => null);
+    const whatsNewDismiss = await runStage("wait for What's New dialog", () => page.waitForSelector('#svWnDismiss', { timeout: WAIT_TIMEOUT_MS }).catch(() => null));
     if (whatsNewDismiss) {
-        await whatsNewDismiss.click();
-        await page.waitForFunction(() => !document.querySelector('.sv-wn-overlay'), { timeout: 5000 });
+        await runStage("dismiss What's New dialog", () => page.evaluate(() => {
+            const button = document.querySelector('#svWnDismiss');
+            if (!button) return false;
+            button.click();
+            return true;
+        }));
+        await runStage("wait for What's New dialog to close", () => page.waitForFunction(() => !document.querySelector('.sv-wn-overlay'), { timeout: WAIT_TIMEOUT_MS }));
     }
 
     // New Script must open the editor directly — no template modal in between.
-    await page.click('#btnNewScript');
-    await page.waitForSelector('#editorOverlay.active', { timeout: 15000 });
+    await runStage('open New Script editor', () => page.evaluate(() => {
+        const button = document.getElementById('btnNewScript');
+        if (!button) return false;
+        button.click();
+        return true;
+    }));
+    await runStage('wait for editor overlay', () => page.waitForSelector('#editorOverlay.active', { timeout: WAIT_TIMEOUT_MS }));
     // The dashboard uses same-document View Transitions for editor entry. During
     // that short snapshot phase Chrome intentionally hit-tests the transition
     // root, so wait for the live editor DOM before asserting z-index coverage.
-    await page.waitForFunction(
+    await runStage('wait for editor transition to settle', () => page.waitForFunction(
         () => !document.documentElement.classList.contains('sv-vt-editor'),
-        { timeout: 5000 }
-    );
+        { timeout: WAIT_TIMEOUT_MS }
+    ));
 
     // Exercise the local userscript language server through the real sandbox,
     // worker transport, Monaco model bridge, and rendered diagnostic layer.
-    const editorFrame = await page.waitForFrame(
+    const editorFrame = await runStage('wait for editor sandbox frame', () => page.waitForFrame(
         frame => frame.url().includes('/pages/editor-sandbox.html'),
-        { timeout: 15000 }
-    );
-    await editorFrame.waitForSelector('.monaco-editor', { timeout: 15000 });
+        { timeout: WAIT_TIMEOUT_MS }
+    ));
+    await runStage('wait for Monaco editor', () => editorFrame.waitForSelector('.monaco-editor', { timeout: WAIT_TIMEOUT_MS }));
     const diagnosticFixture = [
         '// ==UserScript==',
         '// @name Smoke test',
@@ -144,22 +216,22 @@ try {
         '// @connect *',
         '// ==/UserScript==',
     ].join('\n');
-    await page.evaluate(value => {
+    await runStage('send diagnostic fixture to editor', () => page.evaluate(value => {
         document.getElementById('monacoFrame').contentWindow.postMessage({
             type: 'set-value',
             value,
             scriptId: 'editor-smoke-lsp',
         }, '*');
-    }, diagnosticFixture);
-    await editorFrame.waitForFunction(
+    }, diagnosticFixture));
+    await runStage('wait for editor diagnostics', () => editorFrame.waitForFunction(
         () => document.querySelectorAll('.squiggly-warning').length >= 4,
-        { timeout: 15000 }
-    );
-    const diagnosticCount = await editorFrame.evaluate(
+        { timeout: WAIT_TIMEOUT_MS }
+    ));
+    const diagnosticCount = await runStage('read editor diagnostics', () => editorFrame.evaluate(
         () => document.querySelectorAll('.squiggly-warning').length
-    );
+    ));
 
-    const geometry = await page.evaluate(() => {
+    const geometry = await runStage('measure editor control hit-testing', () => page.evaluate(() => {
         const rect = id => {
             const el = document.getElementById(id) || document.querySelector(id);
             if (!el) return null;
@@ -205,33 +277,39 @@ try {
                 share: hit('tbtnShare'),
             },
         };
+    }));
+
+    await runStage('validate editor geometry and diagnostics', async () => {
+        const failures = [];
+        if (geometry.modalOpen) failures.push('a template/modal popup opened on New Script');
+        if (geometry.overlayTop !== 0) failures.push(`editor overlay does not start at top of viewport (top=${geometry.overlayTop})`);
+        if (Math.abs(geometry.overlayHeight - geometry.viewport.h) > 2) failures.push(`editor overlay does not fill viewport height (${geometry.overlayHeight}/${geometry.viewport.h})`);
+        if (geometry.codePaneShare < 0.7) failures.push(`code pane uses only ${(geometry.codePaneShare * 100).toFixed(0)}% of viewport height (expected >= 70%)`);
+        for (const [name, result] of Object.entries(geometry.hits)) {
+            if (result !== 'ok') failures.push(`${name} control not clickable: ${result}`);
+        }
+        const workerErrors = pageErrors.filter(error =>
+            error.includes("Failed to construct 'Worker'") ||
+            error.includes('lib/monaco-esm/workers/')
+        );
+        if (workerErrors.length > 0) {
+            failures.push(`Monaco worker errors observed: ${workerErrors.slice(0, 2).join(' | ')}`);
+        }
+        if (failures.length > 0) {
+            throw new Error(`Editor smoke failed: ${failures.join('; ')}`);
+        }
     });
 
-    const failures = [];
-    if (geometry.modalOpen) failures.push('a template/modal popup opened on New Script');
-    if (geometry.overlayTop !== 0) failures.push(`editor overlay does not start at top of viewport (top=${geometry.overlayTop})`);
-    if (Math.abs(geometry.overlayHeight - geometry.viewport.h) > 2) failures.push(`editor overlay does not fill viewport height (${geometry.overlayHeight}/${geometry.viewport.h})`);
-    if (geometry.codePaneShare < 0.7) failures.push(`code pane uses only ${(geometry.codePaneShare * 100).toFixed(0)}% of viewport height (expected >= 70%)`);
-    for (const [name, result] of Object.entries(geometry.hits)) {
-        if (result !== 'ok') failures.push(`${name} control not clickable: ${result}`);
-    }
-    const workerErrors = pageErrors.filter(error =>
-        error.includes("Failed to construct 'Worker'") ||
-        error.includes('lib/monaco-esm/workers/')
-    );
-    if (workerErrors.length > 0) {
-        failures.push(`Monaco worker errors observed: ${workerErrors.slice(0, 2).join(' | ')}`);
-    }
-
-    await page.screenshot({ path: join(extensionPath, 'smoke-editor.png') });
+    await runStage('capture editor smoke screenshot', () => page.screenshot({ path: join(extensionPath, 'smoke-editor.png') }));
 
     // Close must work with a plain click.
-    await page.click('#btnEditorClose');
-    await page.waitForFunction(() => !document.getElementById('editorOverlay').classList.contains('active'), { timeout: 10000 });
-
-    if (failures.length > 0) {
-        throw new Error(`Editor smoke failed: ${failures.join('; ')}`);
-    }
+    await runStage('close editor', () => page.evaluate(() => {
+        const button = document.getElementById('btnEditorClose');
+        if (!button) return false;
+        button.click();
+        return true;
+    }));
+    await runStage('wait for editor to close', () => page.waitForFunction(() => !document.getElementById('editorOverlay').classList.contains('active'), { timeout: WAIT_TIMEOUT_MS }));
 
     console.log(`Editor smoke passed: overlay full-viewport, code pane ${(geometry.codePaneShare * 100).toFixed(0)}% of viewport, all ${Object.keys(geometry.hits).length} controls hit-testable, ${diagnosticCount} userscript warnings rendered, close works.`);
     console.log('Screenshot: smoke-editor.png');
@@ -239,7 +317,12 @@ try {
         console.warn(`Editor smoke observed ${pageErrors.length} console/page error(s):`);
         pageErrors.slice(0, 5).forEach(error => console.warn(`- ${error}`));
     }
+} catch (error) {
+    if (!timeoutTriggered) {
+        process.exitCode = 1;
+        console.error(`[editor-smoke] ${error?.stack || error?.message || error}`);
+    }
 } finally {
-    await closeBrowserWithFallback(browser, 'Editor smoke');
-    await removeTempProfileDir(userDataDir, 'Editor smoke');
+    if (hardTimeout) clearTimeout(hardTimeout);
+    await cleanupResources();
 }

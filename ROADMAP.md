@@ -180,16 +180,6 @@ _Scope not covered by the 2026-08-02 pass. Not findings; each needs its own audi
   Acceptance: a PR is open against awesome-userscripts adding ScriptVault with an accurate one-line description and the four missing managers; the release runbook records where the product is indexed so the list does not go stale again.
   Complexity: S
 
-- [ ] P2 — Make the editor smoke command fail fast and clean up its browser on timeout (pre-existing baseline)
-  Category: testing
-  Where: `scripts/smoke-editor.mjs:105-245`; npm script `smoke:editor`
-  Problem: The mandated headless editor smoke command did not produce a pass/fail result within the shell's 120-second execution window and left child browser processes requiring targeted cleanup. This makes release verification unable to distinguish a product hang from a harness hang and risks leaking automation processes in CI.
-  Evidence: `npm run smoke:editor` was run against the current build with headless Chrome; it timed out after about 124 seconds without a stage result. The script's waits cover dashboard load, What's New dismissal, editor overlay, sandbox frame, Monaco, diagnostics, screenshot, and close, but there is no global deadline/reporting wrapper around the sequence.
-  Fix: Add a bounded overall timeout with the current stage and URL in the failure message, ensure `browser.close()`/temporary-profile cleanup runs from a process-level `finally` even on timeout, and make each wait use a consistent diagnostic timeout. Do not hide a product failure; preserve the first failing stage.
-  Acceptance: `npm run smoke:editor` always exits with a useful pass/fail result within a documented limit, leaves no matching Chrome/Node children or temporary profile, and reports the exact editor stage when a regression occurs.
-  Confidence: Needs-repro
-  Effort: M
-
 - [ ] P2 — Add a real extension-upgrade registration rehydration gate
   Why: The runtime has version-marker/force-reregister logic, but the existing E2E test proves only service-worker restart; a broken release can therefore pass current coverage while losing enabled user-script registrations during an actual extension update.
   Evidence: `src/background/core.ts:12024-12126,13069+` compares the manifest version and re-registers scripts, while `tests/e2e/service-worker-rehydration.spec.js:70-93` only closes/reopens the worker. Chrome and MDN document that user-script registrations are cleared on extension update and must be restored on an update install path: https://developer.chrome.com/docs/extensions/reference/api/userScripts, https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/userScripts, https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/userScripts/update

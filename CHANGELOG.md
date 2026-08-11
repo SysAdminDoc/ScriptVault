@@ -23,6 +23,9 @@ All notable changes to ScriptVault will be documented in this file.
 - Added a keyboard-accessible dependency-graph script list with per-node
   relationship summaries, editor actions, focusable canvas controls, and
   synchronized visual selection.
+- Bounded the editor smoke harness to 90 seconds, standardized its wait
+  diagnostics, and reports the active stage/URL while cleaning up timed-out
+  browser profiles.
 - Serialized subscription feed, bundle, removal, and refresh-result writes
   through a fresh-read queue so concurrent dashboard and alarm mutations keep
   unrelated records and validator/error state intact.
