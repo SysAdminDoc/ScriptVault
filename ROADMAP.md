@@ -180,16 +180,6 @@ _Scope not covered by the 2026-08-02 pass. Not findings; each needs its own audi
   Acceptance: a PR is open against awesome-userscripts adding ScriptVault with an accurate one-line description and the four missing managers; the release runbook records where the product is indexed so the list does not go stale again.
   Complexity: S
 
-- [ ] P2 — Serialize subscription record mutations
-  Category: reliability
-  Where: `src/modules/subscriptions.ts:304-318,377-478`; callers `src/background/core.ts:4575-4807,10304-10306`
-  Problem: `upsertFromFeed`, `upsertBundle`, `remove`, and `markRefreshResult` each read the complete subscription array and write it back without a shared lock. Manual add/remove/refresh can overlap the alarm refresh sweep, causing one subscription or its validator/error state to disappear.
-  Evidence: `readAll()`/`writeAll()` wrap a whole-array storage key, and every mutation follows read-modify-write independently. The background exposes both manual message handlers and a scheduled alarm caller; existing subscription tests are sequential and do not exercise overlap.
-  Fix: Make subscription mutations use a single serialized queue or keyed IDB transaction, re-read within the critical section, and preserve validator metadata and refresh error counters when another mutation commits.
-  Acceptance: A delayed-storage concurrency test overlaps add, remove, feed upsert, bundle upsert, and refresh-result updates; unrelated records and the winning record's validator/error fields all survive with one deterministic final state.
-  Confidence: Likely
-  Effort: M
-
 - [ ] P2 — Await dashboard view transitions before applying deep-link focus
   Category: a11y
   Where: `pages/dashboard.js:1155-1179,1273-1292,16575-16592,20134-20173`; `scripts/smoke-dashboard.mjs:235-287`

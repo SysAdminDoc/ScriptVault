@@ -4,6 +4,9 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased] — Minimal workbench surfaces
 
+- Serialized subscription feed, bundle, removal, and refresh-result writes
+  through a fresh-read queue so concurrent dashboard and alarm mutations keep
+  unrelated records and validator/error state intact.
 - Serialized pending-update, subscription, and clear mutations through a
   fresh-read promise chain so overlapping manual, alarm, and review actions
   cannot drop queued entries or resurrect cleared updates.

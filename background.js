@@ -27819,6 +27819,22 @@ const ScriptSubscriptions = (() => {
     await chrome.storage.local.set({ [STORAGE_KEY]: normalized });
     return normalized.map((item) => ({ ...item, scripts: item.scripts.map((script) => ({ ...script })) }));
   }
+  var subscriptionMutation = Promise.resolve();
+  async function waitForSubscriptionMutation() {
+    await subscriptionMutation.catch(() => void 0);
+  }
+  async function mutateSubscriptions(mutator) {
+    const execute = async () => {
+      const subscriptions = await readAll();
+      const mutation = await mutator(subscriptions);
+      if (mutation.persist !== false) await writeAll(mutation.next);
+      return mutation.value;
+    };
+    const previous = subscriptionMutation;
+    const operation = previous.catch(() => void 0).then(execute);
+    subscriptionMutation = operation.catch(() => void 0);
+    return await operation;
+  }
   function cloneSubscription(subscription) {
     return {
       ...subscription,
@@ -27857,103 +27873,108 @@ const ScriptSubscriptions = (() => {
     };
   }
   async function list() {
+    await waitForSubscriptionMutation();
     return (await readAll()).sort((a, b) => a.createdAt - b.createdAt).map(cloneSubscription);
   }
   async function get(id) {
+    await waitForSubscriptionMutation();
     const subscriptions = await readAll();
     const subscription = subscriptions.find((item) => item.id === id || item.url === id);
     return subscription ? cloneSubscription(subscription) : null;
   }
   async function upsertFromFeed(url, feed, options = {}) {
     const normalizedUrl = normalizeHttpUrl(url);
-    const subscriptions = await readAll();
-    const existingIndex = subscriptions.findIndex((item) => item.url === normalizedUrl);
-    const existing = existingIndex >= 0 ? subscriptions[existingIndex] : null;
-    const now = Date.now();
-    const subscription = {
-      id: existing?.id || generateId(),
-      url: normalizedUrl,
-      name: asCleanString(options.name) || feed.name || existing?.name || fallbackNameFromUrl(normalizedUrl),
-      kind: existing?.kind || "feed",
-      description: existing?.description || "",
-      version: existing?.version || "",
-      connect: existing?.connect ? [...existing.connect] : [],
-      enabled: typeof options.enabled === "boolean" ? options.enabled : existing?.enabled !== false,
-      scripts: feed.scripts.map((script) => ({ ...script })),
-      createdAt: existing?.createdAt || now,
-      updatedAt: now,
-      lastCheckedAt: now,
-      lastQueued: existing?.lastQueued || 0,
-      lastSkipped: existing?.lastSkipped || 0,
-      lastErrors: existing?.lastErrors ? [...existing.lastErrors] : [],
-      // A read with no validators must not wipe a working pair — the next
-      // scheduled check would then re-download a feed that had not changed.
-      httpEtag: options.validators ? safeValidator(options.validators.etag) : existing?.httpEtag || "",
-      httpLastModified: options.validators ? safeValidator(options.validators.lastModified) : existing?.httpLastModified || "",
-      sourceFetchedAt: now
-    };
-    const next = existingIndex >= 0 ? subscriptions.map((item, index) => index === existingIndex ? subscription : item) : [subscription, ...subscriptions];
-    await writeAll(next);
+    const subscription = await mutateSubscriptions(async (subscriptions) => {
+      const existingIndex = subscriptions.findIndex((item) => item.url === normalizedUrl);
+      const existing = existingIndex >= 0 ? subscriptions[existingIndex] : null;
+      const now = Date.now();
+      const subscription2 = {
+        id: existing?.id || generateId(),
+        url: normalizedUrl,
+        name: asCleanString(options.name) || feed.name || existing?.name || fallbackNameFromUrl(normalizedUrl),
+        kind: existing?.kind || "feed",
+        description: existing?.description || "",
+        version: existing?.version || "",
+        connect: existing?.connect ? [...existing.connect] : [],
+        enabled: typeof options.enabled === "boolean" ? options.enabled : existing?.enabled !== false,
+        scripts: feed.scripts.map((script) => ({ ...script })),
+        createdAt: existing?.createdAt || now,
+        updatedAt: now,
+        lastCheckedAt: now,
+        lastQueued: existing?.lastQueued || 0,
+        lastSkipped: existing?.lastSkipped || 0,
+        lastErrors: existing?.lastErrors ? [...existing.lastErrors] : [],
+        // A read with no validators must not wipe a working pair — the next
+        // scheduled check would then re-download a feed that had not changed.
+        httpEtag: options.validators ? safeValidator(options.validators.etag) : existing?.httpEtag || "",
+        httpLastModified: options.validators ? safeValidator(options.validators.lastModified) : existing?.httpLastModified || "",
+        sourceFetchedAt: now
+      };
+      const next = existingIndex >= 0 ? subscriptions.map((item, index) => index === existingIndex ? subscription2 : item) : [subscription2, ...subscriptions];
+      return { next, value: subscription2 };
+    });
     return cloneSubscription(subscription);
   }
   async function upsertBundle(bundle, options = {}) {
     const normalizedUrl = normalizeHttpsUrl(bundle.sourceUrl);
-    const subscriptions = await readAll();
-    const existingIndex = subscriptions.findIndex((item) => item.url === normalizedUrl);
-    const existing = existingIndex >= 0 ? subscriptions[existingIndex] : null;
-    const now = Date.now();
-    const subscription = {
-      id: existing?.id || generateId(),
-      url: normalizedUrl,
-      name: asCleanString(options.name) || bundle.name || existing?.name || fallbackNameFromUrl(normalizedUrl),
-      kind: "bundle",
-      description: bundle.description || "",
-      version: bundle.version || "",
-      connect: [...new Set(bundle.connect.map((item) => item.trim()).filter(Boolean))],
-      enabled: typeof options.enabled === "boolean" ? options.enabled : existing?.enabled !== false,
-      scripts: bundle.scripts.map((script) => ({ ...script })),
-      createdAt: existing?.createdAt || now,
-      updatedAt: now,
-      lastCheckedAt: now,
-      lastQueued: existing?.lastQueued || 0,
-      lastSkipped: existing?.lastSkipped || 0,
-      lastErrors: existing?.lastErrors ? [...existing.lastErrors] : [],
-      httpEtag: options.validators ? safeValidator(options.validators.etag) : existing?.httpEtag || "",
-      httpLastModified: options.validators ? safeValidator(options.validators.lastModified) : existing?.httpLastModified || "",
-      sourceFetchedAt: now
-    };
-    const next = existingIndex >= 0 ? subscriptions.map((item, index) => index === existingIndex ? subscription : item) : [subscription, ...subscriptions];
-    await writeAll(next);
+    const subscription = await mutateSubscriptions(async (subscriptions) => {
+      const existingIndex = subscriptions.findIndex((item) => item.url === normalizedUrl);
+      const existing = existingIndex >= 0 ? subscriptions[existingIndex] : null;
+      const now = Date.now();
+      const subscription2 = {
+        id: existing?.id || generateId(),
+        url: normalizedUrl,
+        name: asCleanString(options.name) || bundle.name || existing?.name || fallbackNameFromUrl(normalizedUrl),
+        kind: "bundle",
+        description: bundle.description || "",
+        version: bundle.version || "",
+        connect: [...new Set(bundle.connect.map((item) => item.trim()).filter(Boolean))],
+        enabled: typeof options.enabled === "boolean" ? options.enabled : existing?.enabled !== false,
+        scripts: bundle.scripts.map((script) => ({ ...script })),
+        createdAt: existing?.createdAt || now,
+        updatedAt: now,
+        lastCheckedAt: now,
+        lastQueued: existing?.lastQueued || 0,
+        lastSkipped: existing?.lastSkipped || 0,
+        lastErrors: existing?.lastErrors ? [...existing.lastErrors] : [],
+        httpEtag: options.validators ? safeValidator(options.validators.etag) : existing?.httpEtag || "",
+        httpLastModified: options.validators ? safeValidator(options.validators.lastModified) : existing?.httpLastModified || "",
+        sourceFetchedAt: now
+      };
+      const next = existingIndex >= 0 ? subscriptions.map((item, index) => index === existingIndex ? subscription2 : item) : [subscription2, ...subscriptions];
+      return { next, value: subscription2 };
+    });
     return cloneSubscription(subscription);
   }
   async function remove(id) {
-    const subscriptions = await readAll();
-    const next = subscriptions.filter((item) => item.id !== id && item.url !== id);
-    if (next.length === subscriptions.length) return false;
-    await writeAll(next);
-    return true;
+    return await mutateSubscriptions(async (subscriptions) => {
+      const next = subscriptions.filter((item) => item.id !== id && item.url !== id);
+      if (next.length === subscriptions.length) return { next, value: false, persist: false };
+      return { next, value: true };
+    });
   }
   async function markRefreshResult(id, result = {}) {
-    const subscriptions = await readAll();
-    const index = subscriptions.findIndex((item) => item.id === id || item.url === id);
-    if (index < 0) return null;
-    const now = Date.now();
-    const current = subscriptions[index];
-    if (!current) return null;
-    const updated = {
-      ...current,
-      updatedAt: now,
-      lastCheckedAt: now,
-      lastQueued: Math.max(0, result.queued || 0),
-      lastSkipped: Math.max(0, result.skipped || 0),
-      lastErrors: Array.isArray(result.errors) ? result.errors.slice(0, MAX_ERRORS) : [],
-      // A 304 means the check happened but the stored item list was not re-read,
-      // so its age must keep counting from the last real download.
-      sourceFetchedAt: result.notModified ? current.sourceFetchedAt : now
-    };
-    subscriptions[index] = updated;
-    await writeAll(subscriptions);
-    return cloneSubscription(updated);
+    const updated = await mutateSubscriptions(async (subscriptions) => {
+      const index = subscriptions.findIndex((item) => item.id === id || item.url === id);
+      if (index < 0) return { next: subscriptions, value: null, persist: false };
+      const now = Date.now();
+      const current = subscriptions[index];
+      if (!current) return { next: subscriptions, value: null, persist: false };
+      const updated2 = {
+        ...current,
+        updatedAt: now,
+        lastCheckedAt: now,
+        lastQueued: Math.max(0, result.queued || 0),
+        lastSkipped: Math.max(0, result.skipped || 0),
+        lastErrors: Array.isArray(result.errors) ? result.errors.slice(0, MAX_ERRORS) : [],
+        // A 304 means the check happened but the stored item list was not re-read,
+        // so its age must keep counting from the last real download.
+        sourceFetchedAt: result.notModified ? current.sourceFetchedAt : now
+      };
+      subscriptions[index] = updated2;
+      return { next: subscriptions, value: updated2 };
+    });
+    return updated ? cloneSubscription(updated) : null;
   }
   var ScriptSubscriptions = {
     STORAGE_KEY,

@@ -318,6 +318,38 @@ async function writeAll(subscriptions: ScriptSubscription[]): Promise<ScriptSubs
   return normalized.map((item) => ({ ...item, scripts: item.scripts.map((script) => ({ ...script })) }));
 }
 
+type SubscriptionMutation<T> = {
+  next: ScriptSubscription[];
+  value: T;
+  persist?: boolean;
+};
+
+let subscriptionMutation: Promise<unknown> = Promise.resolve();
+
+async function waitForSubscriptionMutation(): Promise<void> {
+  await subscriptionMutation.catch(() => undefined);
+}
+
+async function mutateSubscriptions<T>(
+  mutator: (subscriptions: ScriptSubscription[]) => Promise<SubscriptionMutation<T>>,
+): Promise<T> {
+  const execute = async () => {
+    // Always read inside the serialized section. A cached array can be stale
+    // when a scheduled refresh and a dashboard action overlap.
+    const subscriptions = await readAll();
+    const mutation = await mutator(subscriptions);
+    if (mutation.persist !== false) await writeAll(mutation.next);
+    return mutation.value;
+  };
+
+  const previous = subscriptionMutation;
+  const operation = previous.catch(() => undefined).then(execute);
+  // A failed write must not poison later subscription operations, while the
+  // original caller still receives the failure.
+  subscriptionMutation = operation.catch(() => undefined);
+  return await operation;
+}
+
 function cloneSubscription(subscription: ScriptSubscription): ScriptSubscription {
   return {
     ...subscription,
@@ -363,12 +395,14 @@ function parseFeed(text: string, feedUrl: string): ParsedSubscriptionFeed {
 }
 
 async function list(): Promise<ScriptSubscription[]> {
+  await waitForSubscriptionMutation();
   return (await readAll())
     .sort((a, b) => a.createdAt - b.createdAt)
     .map(cloneSubscription);
 }
 
 async function get(id: string): Promise<ScriptSubscription | null> {
+  await waitForSubscriptionMutation();
   const subscriptions = await readAll();
   const subscription = subscriptions.find((item) => item.id === id || item.url === id);
   return subscription ? cloneSubscription(subscription) : null;
@@ -376,105 +410,108 @@ async function get(id: string): Promise<ScriptSubscription | null> {
 
 async function upsertFromFeed(url: string, feed: ParsedSubscriptionFeed, options: UpsertOptions = {}): Promise<ScriptSubscription> {
   const normalizedUrl = normalizeHttpUrl(url);
-  const subscriptions = await readAll();
-  const existingIndex = subscriptions.findIndex((item) => item.url === normalizedUrl);
-  const existing = existingIndex >= 0 ? subscriptions[existingIndex] : null;
-  const now = Date.now();
-  const subscription: ScriptSubscription = {
-    id: existing?.id || generateId(),
-    url: normalizedUrl,
-    name: asCleanString(options.name) || feed.name || existing?.name || fallbackNameFromUrl(normalizedUrl),
-    kind: existing?.kind || 'feed',
-    description: existing?.description || '',
-    version: existing?.version || '',
-    connect: existing?.connect ? [...existing.connect] : [],
-    enabled: typeof options.enabled === 'boolean' ? options.enabled : existing?.enabled !== false,
-    scripts: feed.scripts.map((script) => ({ ...script })),
-    createdAt: existing?.createdAt || now,
-    updatedAt: now,
-    lastCheckedAt: now,
-    lastQueued: existing?.lastQueued || 0,
-    lastSkipped: existing?.lastSkipped || 0,
-    lastErrors: existing?.lastErrors ? [...existing.lastErrors] : [],
-    // A read with no validators must not wipe a working pair — the next
-    // scheduled check would then re-download a feed that had not changed.
-    httpEtag: options.validators
-      ? safeValidator(options.validators.etag)
-      : (existing?.httpEtag || ''),
-    httpLastModified: options.validators
-      ? safeValidator(options.validators.lastModified)
-      : (existing?.httpLastModified || ''),
-    sourceFetchedAt: now,
-  };
-  const next = existingIndex >= 0
-    ? subscriptions.map((item, index) => index === existingIndex ? subscription : item)
-    : [subscription, ...subscriptions];
-  await writeAll(next);
+  const subscription = await mutateSubscriptions(async (subscriptions) => {
+    const existingIndex = subscriptions.findIndex((item) => item.url === normalizedUrl);
+    const existing = existingIndex >= 0 ? subscriptions[existingIndex] : null;
+    const now = Date.now();
+    const subscription: ScriptSubscription = {
+      id: existing?.id || generateId(),
+      url: normalizedUrl,
+      name: asCleanString(options.name) || feed.name || existing?.name || fallbackNameFromUrl(normalizedUrl),
+      kind: existing?.kind || 'feed',
+      description: existing?.description || '',
+      version: existing?.version || '',
+      connect: existing?.connect ? [...existing.connect] : [],
+      enabled: typeof options.enabled === 'boolean' ? options.enabled : existing?.enabled !== false,
+      scripts: feed.scripts.map((script) => ({ ...script })),
+      createdAt: existing?.createdAt || now,
+      updatedAt: now,
+      lastCheckedAt: now,
+      lastQueued: existing?.lastQueued || 0,
+      lastSkipped: existing?.lastSkipped || 0,
+      lastErrors: existing?.lastErrors ? [...existing.lastErrors] : [],
+      // A read with no validators must not wipe a working pair — the next
+      // scheduled check would then re-download a feed that had not changed.
+      httpEtag: options.validators
+        ? safeValidator(options.validators.etag)
+        : (existing?.httpEtag || ''),
+      httpLastModified: options.validators
+        ? safeValidator(options.validators.lastModified)
+        : (existing?.httpLastModified || ''),
+      sourceFetchedAt: now,
+    };
+    const next = existingIndex >= 0
+      ? subscriptions.map((item, index) => index === existingIndex ? subscription : item)
+      : [subscription, ...subscriptions];
+    return { next, value: subscription };
+  });
   return cloneSubscription(subscription);
 }
 
 async function upsertBundle(bundle: ParsedUserSubscribe, options: UpsertOptions = {}): Promise<ScriptSubscription> {
   const normalizedUrl = normalizeHttpsUrl(bundle.sourceUrl);
-  const subscriptions = await readAll();
-  const existingIndex = subscriptions.findIndex((item) => item.url === normalizedUrl);
-  const existing = existingIndex >= 0 ? subscriptions[existingIndex] : null;
-  const now = Date.now();
-  const subscription: ScriptSubscription = {
-    id: existing?.id || generateId(),
-    url: normalizedUrl,
-    name: asCleanString(options.name) || bundle.name || existing?.name || fallbackNameFromUrl(normalizedUrl),
-    kind: 'bundle',
-    description: bundle.description || '',
-    version: bundle.version || '',
-    connect: [...new Set(bundle.connect.map((item) => item.trim()).filter(Boolean))],
-    enabled: typeof options.enabled === 'boolean' ? options.enabled : existing?.enabled !== false,
-    scripts: bundle.scripts.map((script) => ({ ...script })),
-    createdAt: existing?.createdAt || now,
-    updatedAt: now,
-    lastCheckedAt: now,
-    lastQueued: existing?.lastQueued || 0,
-    lastSkipped: existing?.lastSkipped || 0,
-    lastErrors: existing?.lastErrors ? [...existing.lastErrors] : [],
-    httpEtag: options.validators ? safeValidator(options.validators.etag) : (existing?.httpEtag || ''),
-    httpLastModified: options.validators ? safeValidator(options.validators.lastModified) : (existing?.httpLastModified || ''),
-    sourceFetchedAt: now,
-  };
-  const next = existingIndex >= 0
-    ? subscriptions.map((item, index) => index === existingIndex ? subscription : item)
-    : [subscription, ...subscriptions];
-  await writeAll(next);
+  const subscription = await mutateSubscriptions(async (subscriptions) => {
+    const existingIndex = subscriptions.findIndex((item) => item.url === normalizedUrl);
+    const existing = existingIndex >= 0 ? subscriptions[existingIndex] : null;
+    const now = Date.now();
+    const subscription: ScriptSubscription = {
+      id: existing?.id || generateId(),
+      url: normalizedUrl,
+      name: asCleanString(options.name) || bundle.name || existing?.name || fallbackNameFromUrl(normalizedUrl),
+      kind: 'bundle',
+      description: bundle.description || '',
+      version: bundle.version || '',
+      connect: [...new Set(bundle.connect.map((item) => item.trim()).filter(Boolean))],
+      enabled: typeof options.enabled === 'boolean' ? options.enabled : existing?.enabled !== false,
+      scripts: bundle.scripts.map((script) => ({ ...script })),
+      createdAt: existing?.createdAt || now,
+      updatedAt: now,
+      lastCheckedAt: now,
+      lastQueued: existing?.lastQueued || 0,
+      lastSkipped: existing?.lastSkipped || 0,
+      lastErrors: existing?.lastErrors ? [...existing.lastErrors] : [],
+      httpEtag: options.validators ? safeValidator(options.validators.etag) : (existing?.httpEtag || ''),
+      httpLastModified: options.validators ? safeValidator(options.validators.lastModified) : (existing?.httpLastModified || ''),
+      sourceFetchedAt: now,
+    };
+    const next = existingIndex >= 0
+      ? subscriptions.map((item, index) => index === existingIndex ? subscription : item)
+      : [subscription, ...subscriptions];
+    return { next, value: subscription };
+  });
   return cloneSubscription(subscription);
 }
 
 async function remove(id: string): Promise<boolean> {
-  const subscriptions = await readAll();
-  const next = subscriptions.filter((item) => item.id !== id && item.url !== id);
-  if (next.length === subscriptions.length) return false;
-  await writeAll(next);
-  return true;
+  return await mutateSubscriptions(async (subscriptions) => {
+    const next = subscriptions.filter((item) => item.id !== id && item.url !== id);
+    if (next.length === subscriptions.length) return { next, value: false, persist: false };
+    return { next, value: true };
+  });
 }
 
 async function markRefreshResult(id: string, result: RefreshResult = {}): Promise<ScriptSubscription | null> {
-  const subscriptions = await readAll();
-  const index = subscriptions.findIndex((item) => item.id === id || item.url === id);
-  if (index < 0) return null;
-  const now = Date.now();
-  const current = subscriptions[index];
-  if (!current) return null;
-  const updated: ScriptSubscription = {
-    ...current,
-    updatedAt: now,
-    lastCheckedAt: now,
-    lastQueued: Math.max(0, result.queued || 0),
-    lastSkipped: Math.max(0, result.skipped || 0),
-    lastErrors: Array.isArray(result.errors) ? result.errors.slice(0, MAX_ERRORS) : [],
-    // A 304 means the check happened but the stored item list was not re-read,
-    // so its age must keep counting from the last real download.
-    sourceFetchedAt: result.notModified ? current.sourceFetchedAt : now,
-  };
-  subscriptions[index] = updated;
-  await writeAll(subscriptions);
-  return cloneSubscription(updated);
+  const updated = await mutateSubscriptions(async (subscriptions) => {
+    const index = subscriptions.findIndex((item) => item.id === id || item.url === id);
+    if (index < 0) return { next: subscriptions, value: null, persist: false };
+    const now = Date.now();
+    const current = subscriptions[index];
+    if (!current) return { next: subscriptions, value: null, persist: false };
+    const updated: ScriptSubscription = {
+      ...current,
+      updatedAt: now,
+      lastCheckedAt: now,
+      lastQueued: Math.max(0, result.queued || 0),
+      lastSkipped: Math.max(0, result.skipped || 0),
+      lastErrors: Array.isArray(result.errors) ? result.errors.slice(0, MAX_ERRORS) : [],
+      // A 304 means the check happened but the stored item list was not re-read,
+      // so its age must keep counting from the last real download.
+      sourceFetchedAt: result.notModified ? current.sourceFetchedAt : now,
+    };
+    subscriptions[index] = updated;
+    return { next: subscriptions, value: updated };
+  });
+  return updated ? cloneSubscription(updated) : null;
 }
 
 export const ScriptSubscriptions = {

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { compileFunction } from 'node:vm';
+import { vi } from 'vitest';
 
 import { ScriptSubscriptions as SourceScriptSubscriptions } from '../src/modules/subscriptions.ts';
 
@@ -130,5 +131,100 @@ describe.each(implementations)('script subscriptions ($label)', ({ api: ScriptSu
 
     const downloaded = await ScriptSubscriptions.markRefreshResult(created.id, { queued: 1 });
     expect(downloaded.sourceFetchedAt).toBeGreaterThanOrEqual(downloadedAt);
+  });
+
+  it('serializes overlapping feed, bundle, refresh, and remove mutations', async () => {
+    const seed = {
+      id: 'seed',
+      url: 'https://feeds.example.com/seed.json',
+      name: 'Seed',
+      kind: 'feed',
+      description: '',
+      version: '',
+      connect: [],
+      enabled: true,
+      scripts: [{ url: 'https://cdn.example.com/seed.user.js' }],
+      createdAt: 1,
+      updatedAt: 1,
+      lastCheckedAt: 1,
+      lastQueued: 0,
+      lastSkipped: 0,
+      lastErrors: [],
+      httpEtag: 'seed-etag',
+      httpLastModified: '',
+      sourceFetchedAt: 1,
+    };
+    const removable = { ...seed, id: 'remove-me', url: 'https://feeds.example.com/remove.json', name: 'Remove me' };
+    let storedSubscriptions = [seed, removable];
+    const originalGet = chrome.storage.local.get;
+    const originalSet = chrome.storage.local.set;
+    const delay = () => new Promise(resolve => setTimeout(resolve, 2));
+    const clone = value => JSON.parse(JSON.stringify(value));
+    chrome.storage.local.get = vi.fn(async () => {
+      await delay();
+      return { scriptSubscriptions: clone(storedSubscriptions) };
+    });
+    chrome.storage.local.set = vi.fn(async ({ scriptSubscriptions }) => {
+      await delay();
+      storedSubscriptions = clone(scriptSubscriptions);
+    });
+
+    const feed = {
+      name: 'Feed addition',
+      sourceUrl: 'https://feeds.example.com/feed.json',
+      scripts: [{ url: 'https://cdn.example.com/feed.user.js' }],
+      parsedAt: Date.now(),
+    };
+    const bundle = {
+      name: 'Bundle addition',
+      description: '',
+      version: '1.0.0',
+      author: '',
+      connect: ['cdn.example.com'],
+      sourceUrl: 'https://feeds.example.com/bundle.user.sub.js',
+      scripts: [{ url: 'https://cdn.example.com/bundle.user.js' }],
+      metaBlock: '',
+      code: '',
+      parsedAt: Date.now(),
+    };
+
+    try {
+      const results = await Promise.all([
+        ScriptSubscriptions.upsertFromFeed(feed.sourceUrl, feed),
+        ScriptSubscriptions.upsertBundle(bundle),
+        ScriptSubscriptions.markRefreshResult('seed', {
+          queued: 7,
+          skipped: 2,
+          errors: ['feed returned a malformed member'],
+        }),
+        ScriptSubscriptions.remove('remove-me'),
+      ]);
+
+      const list = await ScriptSubscriptions.list();
+      expect(list.map(item => item.url)).toEqual(expect.arrayContaining([
+        seed.url,
+        feed.sourceUrl,
+        bundle.sourceUrl,
+      ]));
+      expect(list).toHaveLength(3);
+      expect(list.find(item => item.id === 'remove-me')).toBeUndefined();
+      expect(list.find(item => item.id === 'seed')).toMatchObject({
+        lastQueued: 7,
+        lastSkipped: 2,
+        lastErrors: ['feed returned a malformed member'],
+        httpEtag: 'seed-etag',
+      });
+      expect(results[2]).toMatchObject({ lastQueued: 7, lastSkipped: 2 });
+      expect(results[3]).toBe(true);
+      expect(storedSubscriptions.map(item => item.url)).toEqual(expect.arrayContaining([
+        seed.url,
+        feed.sourceUrl,
+        bundle.sourceUrl,
+      ]));
+      expect(chrome.storage.local.set).toHaveBeenCalledTimes(4);
+    } finally {
+      chrome.storage.local.get = originalGet;
+      chrome.storage.local.set = originalSet;
+    }
   });
 });
