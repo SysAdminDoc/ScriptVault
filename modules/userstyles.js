@@ -41,6 +41,7 @@ const UserStylesEngine = (() => {
   var _customVars = {};
   var _initialized = false;
   var _registeredTabs = /* @__PURE__ */ new Map();
+  var _currentDocumentIds = /* @__PURE__ */ new Map();
   var _draftPreviewTabs = /* @__PURE__ */ new Map();
   var _injectingTabs = /* @__PURE__ */ new Set();
   var PERSISTENT_REGISTRATION_PREFIX = "scriptvault-usercss-";
@@ -48,6 +49,61 @@ const UserStylesEngine = (() => {
   var _persistentRegistrationChain = Promise.resolve(false);
   var _pendingTabUrls = /* @__PURE__ */ new Map();
   var _draftPreviewChain = Promise.resolve();
+  function _normalizeDocumentId(value) {
+    const id = typeof value === "string" ? value.trim() : "";
+    return id && id.length <= 256 ? id : void 0;
+  }
+  function _tabRegistryKey(tabId) {
+    return `tab:${tabId}`;
+  }
+  function _documentRegistryKey(tabId, documentId) {
+    return `document:${tabId}:${documentId}`;
+  }
+  function _documentIdForTab(tabId, explicitDocumentId) {
+    return _normalizeDocumentId(explicitDocumentId) ?? _currentDocumentIds.get(tabId);
+  }
+  function _registryKeyForTab(tabId, explicitDocumentId) {
+    const documentId = _normalizeDocumentId(explicitDocumentId);
+    if (documentId) {
+      const current2 = _currentDocumentIds.get(tabId);
+      if (current2 !== documentId) {
+        _deleteTabRegistries(tabId);
+        _currentDocumentIds.set(tabId, documentId);
+      }
+      return _documentRegistryKey(tabId, documentId);
+    }
+    const current = _currentDocumentIds.get(tabId);
+    return current ? _documentRegistryKey(tabId, current) : _tabRegistryKey(tabId);
+  }
+  function _injectionTarget(tabId, explicitDocumentId) {
+    const documentId = _documentIdForTab(tabId, explicitDocumentId);
+    return documentId ? { tabId, documentIds: [documentId] } : { tabId };
+  }
+  function _deleteTabRegistries(tabId) {
+    _registeredTabs.delete(_tabRegistryKey(tabId));
+    const prefix = `document:${tabId}:`;
+    for (const key of _registeredTabs.keys()) {
+      if (key.startsWith(prefix)) _registeredTabs.delete(key);
+    }
+  }
+  function _isFirefoxRuntime() {
+    try {
+      return /Firefox\//.test(String(globalThis.navigator?.userAgent || ""));
+    } catch {
+      return false;
+    }
+  }
+  async function _readCurrentDocumentId(tabId) {
+    if (!_isFirefoxRuntime()) return void 0;
+    const getFrame = chrome.webNavigation?.getFrame;
+    if (typeof getFrame !== "function") return void 0;
+    try {
+      const frame = await getFrame({ tabId, frameId: 0 });
+      return _normalizeDocumentId(frame?.documentId);
+    } catch {
+      return void 0;
+    }
+  }
   async function _loadState() {
     try {
       const data = await chrome.storage.local.get([STORAGE_KEY, VARS_STORAGE_KEY]);
@@ -634,7 +690,7 @@ const UserStylesEngine = (() => {
     }
     scheduleScan();
   }
-  async function _syncShadowStylesToTab(tabId, url, extraStyles = []) {
+  async function _syncShadowStylesToTab(tabId, url, extraStyles = [], documentId) {
     const executeScript = chrome.scripting?.executeScript;
     if (typeof executeScript !== "function") return;
     let targetUrl = url;
@@ -658,7 +714,7 @@ const UserStylesEngine = (() => {
     desired.push(...extraStyles.filter((style) => style?.id && style.css));
     try {
       await executeScript({
-        target: { tabId },
+        target: _injectionTarget(tabId, documentId),
         func: _syncShadowStylesInDocument,
         args: [desired]
       });
@@ -671,14 +727,6 @@ const UserStylesEngine = (() => {
     const vars = style.variables ?? [];
     const custom = _customVars[styleId] ?? {};
     return _substituteVariables(style.css, vars, custom);
-  }
-  function _persistentRegistrationId(styleId) {
-    let hash = 2166136261;
-    for (const character of String(styleId || "")) {
-      hash ^= character.charCodeAt(0);
-      hash = Math.imul(hash, 16777619) >>> 0;
-    }
-    return `${PERSISTENT_REGISTRATION_PREFIX}${hash.toString(36)}`;
   }
   function _persistentMatchPatterns(style) {
     const patterns = Array.isArray(style.match) && style.match.length > 0 ? style.match : ["*://*/*"];
@@ -702,24 +750,16 @@ const UserStylesEngine = (() => {
       const registered = await scripting.getRegisteredContentScripts();
       const staleIds = (Array.isArray(registered) ? registered : []).map((entry) => entry?.id).filter((id) => typeof id === "string" && id.startsWith(PERSISTENT_REGISTRATION_PREFIX));
       if (staleIds.length > 0) await scripting.unregisterContentScripts({ ids: staleIds });
-      const registrations = [];
+      let hasEnabledStyles = false;
       for (const [styleId, style] of Object.entries(_styles)) {
         if (!style.enabled) continue;
         const css = _buildCSS(styleId);
         const matches = _persistentMatchPatterns(style);
         if (!css || matches.length === 0) continue;
-        registrations.push({
-          id: _persistentRegistrationId(styleId),
-          matches,
-          css: [css],
-          runAt: "document_start",
-          persistAcrossSessions: true,
-          allFrames: false
-        });
+        hasEnabledStyles = true;
       }
-      if (registrations.length > 0) await scripting.registerContentScripts(registrations);
-      _persistentRegistrationSupported = true;
-      return true;
+      _persistentRegistrationSupported = !hasEnabledStyles;
+      return _persistentRegistrationSupported;
     } catch (error) {
       _persistentRegistrationSupported = false;
       console.warn("[UserStylesEngine] Persistent document_start registration unavailable:", error instanceof Error ? error.message : String(error));
@@ -772,7 +812,7 @@ const UserStylesEngine = (() => {
     if (!previousCss) return false;
     try {
       await chrome.scripting.removeCSS({
-        target: { tabId },
+        target: _injectionTarget(tabId),
         css: previousCss
       });
     } catch {
@@ -814,7 +854,7 @@ const UserStylesEngine = (() => {
     await _removeDraftPreviewFromTab(tab.id);
     try {
       await chrome.scripting.insertCSS({
-        target: { tabId: tab.id },
+        target: _injectionTarget(tab.id),
         css: built.css
       });
       _draftPreviewTabs.set(tab.id, built.css);
@@ -895,29 +935,31 @@ const UserStylesEngine = (() => {
       for (const tab of tabs) {
         if (tab.id == null) continue;
         if (_urlMatchesPatterns(tab.url, style.match)) {
-          const tabStyles = _registeredTabs.get(tab.id) ?? /* @__PURE__ */ new Map();
+          const documentId = _documentIdForTab(tab.id);
+          const registryKey = _registryKeyForTab(tab.id, documentId);
+          const tabStyles = _registeredTabs.get(registryKey) ?? /* @__PURE__ */ new Map();
           const previousCss = tabStyles.get(styleId);
           if (previousCss !== css) {
             try {
               if (previousCss) {
                 try {
                   await chrome.scripting.removeCSS({
-                    target: { tabId: tab.id },
+                    target: _injectionTarget(tab.id, documentId),
                     css: previousCss
                   });
                 } catch {
                 }
               }
               await chrome.scripting.insertCSS({
-                target: { tabId: tab.id },
+                target: _injectionTarget(tab.id, documentId),
                 css
               });
               tabStyles.set(styleId, css);
-              _registeredTabs.set(tab.id, tabStyles);
+              _registeredTabs.set(registryKey, tabStyles);
             } catch {
             }
           }
-          await _syncShadowStylesToTab(tab.id, tab.url);
+          await _syncShadowStylesToTab(tab.id, tab.url, [], documentId);
         }
       }
     } catch (e) {
@@ -930,13 +972,15 @@ const UserStylesEngine = (() => {
       const tabs = await chrome.tabs.query({});
       for (const tab of tabs) {
         if (tab.id == null) continue;
-        const tabStyles = _registeredTabs.get(tab.id);
+        const documentId = _documentIdForTab(tab.id);
+        const registryKey = _registryKeyForTab(tab.id, documentId);
+        const tabStyles = _registeredTabs.get(registryKey);
         const registeredCss = tabStyles?.get(styleId);
         const cssToRemove = registeredCss ?? (reconstructedCss || void 0);
         if (cssToRemove) {
           try {
             await chrome.scripting.removeCSS({
-              target: { tabId: tab.id },
+              target: _injectionTarget(tab.id, documentId),
               css: cssToRemove
             });
           } catch {
@@ -945,17 +989,20 @@ const UserStylesEngine = (() => {
         if (tabStyles) {
           tabStyles.delete(styleId);
           if (tabStyles.size === 0) {
-            _registeredTabs.delete(tab.id);
+            _registeredTabs.delete(registryKey);
           }
         }
-        await _syncShadowStylesToTab(tab.id, tab.url);
+        await _syncShadowStylesToTab(tab.id, tab.url, [], documentId);
       }
     } catch (e) {
       console.error("[UserStylesEngine] Remove failed:", e);
     }
   }
-  function onTabNavigated(tabId) {
-    _registeredTabs.delete(tabId);
+  function onTabNavigated(tabId, documentId) {
+    _deleteTabRegistries(tabId);
+    _currentDocumentIds.delete(tabId);
+    const normalized = _normalizeDocumentId(documentId);
+    if (normalized) _currentDocumentIds.set(tabId, normalized);
   }
   async function rehydrateOpenTabs() {
     if (!_initialized) await _loadState();
@@ -965,6 +1012,15 @@ const UserStylesEngine = (() => {
     } catch {
       return;
     }
+    const documentIds = /* @__PURE__ */ new Map();
+    for (const tab of tabs) {
+      if (tab.id == null) continue;
+      const documentId = await _readCurrentDocumentId(tab.id);
+      if (documentId) {
+        documentIds.set(tab.id, documentId);
+        _currentDocumentIds.set(tab.id, documentId);
+      }
+    }
     for (const [styleId, style] of Object.entries(_styles)) {
       if (!style.enabled) continue;
       const css = _buildCSS(styleId);
@@ -972,22 +1028,24 @@ const UserStylesEngine = (() => {
       for (const tab of tabs) {
         if (tab.id == null) continue;
         if (!_urlMatchesPatterns(tab.url, style.match)) continue;
-        const tabStyles = _registeredTabs.get(tab.id) ?? /* @__PURE__ */ new Map();
+        const documentId = documentIds.get(tab.id);
+        const registryKey = _registryKeyForTab(tab.id, documentId);
+        const tabStyles = _registeredTabs.get(registryKey) ?? /* @__PURE__ */ new Map();
         if (tabStyles.get(styleId) === css) continue;
         try {
           try {
-            await chrome.scripting.removeCSS({ target: { tabId: tab.id }, css });
+            await chrome.scripting.removeCSS({ target: _injectionTarget(tab.id, documentId), css });
           } catch {
           }
-          await chrome.scripting.insertCSS({ target: { tabId: tab.id }, css });
+          await chrome.scripting.insertCSS({ target: _injectionTarget(tab.id, documentId), css });
           tabStyles.set(styleId, css);
-          _registeredTabs.set(tab.id, tabStyles);
+          _registeredTabs.set(registryKey, tabStyles);
         } catch {
         }
       }
     }
     for (const tab of tabs) {
-      if (tab.id != null) await _syncShadowStylesToTab(tab.id, tab.url);
+      if (tab.id != null) await _syncShadowStylesToTab(tab.id, tab.url, [], documentIds.get(tab.id));
     }
   }
   function _urlMatchesPatterns(url, patterns) {
@@ -1009,10 +1067,13 @@ const UserStylesEngine = (() => {
       throw new Error(`Invalid match pattern: ${pattern}`);
     }
     const scheme = match[1] ?? "";
-    const host = match[2] ?? "";
+    const rawHost = match[2] ?? "";
     const path = match[3] ?? "";
+    const explicitPort = rawHost.match(/:(\d+)$/);
+    const host = explicitPort ? rawHost.slice(0, -explicitPort[0].length) : rawHost;
     const schemeRegex = scheme === "*" ? "https?" : _escapeRegex(scheme);
     let hostRegex = "";
+    let portRegex = "";
     if (scheme !== "file") {
       if (host === "*") {
         hostRegex = "[^/]+";
@@ -1021,9 +1082,14 @@ const UserStylesEngine = (() => {
       } else {
         hostRegex = _escapeRegex(host);
       }
+      if (explicitPort) {
+        portRegex = _escapeRegex(explicitPort[0]);
+      } else if (host !== "*") {
+        portRegex = "(?::\\d+)?";
+      }
     }
     const pathRegex = path.replace(/\*+/g, "*").split("*").map((segment) => _escapeRegex(segment)).join(".*");
-    return new RegExp(`^${schemeRegex}:\\/\\/${hostRegex}${pathRegex}$`);
+    return new RegExp(`^${schemeRegex}:\\/\\/${hostRegex}${portRegex}${pathRegex}$`);
   }
   function _globMatch(url, glob) {
     const regex = glob.replace(/\*+/g, "*").replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
@@ -1301,39 +1367,49 @@ const UserStylesEngine = (() => {
     if (!message) return false;
     return /no tab with id|no frame with id|frame with id .* was removed|tab was closed|no window with id|target closed|the tab is being discarded/i.test(message);
   }
-  async function onTabUpdated(tabId, url) {
+  async function onTabUpdated(tabId, url, documentId) {
     if (!url) return;
+    const registryKey = _registryKeyForTab(tabId, documentId);
+    const activeDocumentId = _documentIdForTab(tabId, documentId);
     if (_draftPreviewTabs.has(tabId)) {
       await clearDraftPreview({ tabId });
     }
-    if (_injectingTabs.has(tabId)) {
-      _pendingTabUrls.set(tabId, url);
+    if (_injectingTabs.has(registryKey)) {
+      _pendingTabUrls.set(registryKey, url);
       return;
     }
-    _injectingTabs.add(tabId);
-    _pendingTabUrls.delete(tabId);
+    _injectingTabs.add(registryKey);
+    _pendingTabUrls.delete(registryKey);
     try {
       let current = url;
       while (current) {
-        await _applyStylesToTab(tabId, current);
-        current = _pendingTabUrls.get(tabId);
-        _pendingTabUrls.delete(tabId);
-        while (current && !_registeredTabs.has(tabId) && !_anyEnabledStyleMatches(current)) {
-          current = _pendingTabUrls.get(tabId);
-          _pendingTabUrls.delete(tabId);
+        await _applyStylesToTab(tabId, current, activeDocumentId, registryKey);
+        current = _pendingTabUrls.get(registryKey);
+        _pendingTabUrls.delete(registryKey);
+        while (current && !_registeredTabs.has(registryKey) && !_anyEnabledStyleMatches(current)) {
+          current = _pendingTabUrls.get(registryKey);
+          _pendingTabUrls.delete(registryKey);
         }
       }
     } finally {
-      _injectingTabs.delete(tabId);
-      _pendingTabUrls.delete(tabId);
+      _injectingTabs.delete(registryKey);
+      _pendingTabUrls.delete(registryKey);
     }
   }
-  async function onDocumentCommitted(tabId, url) {
+  async function onDocumentCommitted(tabId, url, documentId) {
     if (!url) return;
     if (!_initialized) await _loadState();
-    onTabNavigated(tabId);
-    if (!_persistentRegistrationSupported) await onTabUpdated(tabId, url);
-    else await _syncShadowStylesToTab(tabId, url);
+    const normalizedDocumentId = _normalizeDocumentId(documentId);
+    const previousDocumentId = _currentDocumentIds.get(tabId);
+    if (normalizedDocumentId) {
+      if (previousDocumentId !== normalizedDocumentId) _deleteTabRegistries(tabId);
+      _currentDocumentIds.set(tabId, normalizedDocumentId);
+    } else {
+      _deleteTabRegistries(tabId);
+      _currentDocumentIds.delete(tabId);
+    }
+    if (!_persistentRegistrationSupported) await onTabUpdated(tabId, url, normalizedDocumentId);
+    else await _syncShadowStylesToTab(tabId, url, [], normalizedDocumentId);
   }
   function _anyEnabledStyleMatches(url) {
     for (const style of Object.values(_styles)) {
@@ -1341,23 +1417,23 @@ const UserStylesEngine = (() => {
     }
     return false;
   }
-  async function _applyStylesToTab(tabId, url) {
+  async function _applyStylesToTab(tabId, url, documentId, registryKey = _registryKeyForTab(tabId, documentId)) {
     if (!_initialized) await _loadState();
-    const existing = _registeredTabs.get(tabId);
+    const existing = _registeredTabs.get(registryKey);
     if (existing) {
       for (const [styleId, injectedCss] of [...existing]) {
         const style = _styles[styleId];
         const stillApplies = !!style && style.enabled && _urlMatchesPatterns(url, style.match);
         if (!stillApplies) {
           try {
-            await chrome.scripting.removeCSS({ target: { tabId }, css: injectedCss });
+            await chrome.scripting.removeCSS({ target: _injectionTarget(tabId, documentId), css: injectedCss });
             existing.delete(styleId);
           } catch (error) {
             if (_isMissingTargetError(error)) existing.delete(styleId);
           }
         }
       }
-      if (existing.size === 0) _registeredTabs.delete(tabId);
+      if (existing.size === 0) _registeredTabs.delete(registryKey);
     }
     for (const [styleId, style] of Object.entries(_styles)) {
       if (!style.enabled) continue;
@@ -1365,33 +1441,37 @@ const UserStylesEngine = (() => {
       const css = _buildCSS(styleId);
       if (!css) continue;
       try {
-        const tabStyles = _registeredTabs.get(tabId) ?? /* @__PURE__ */ new Map();
+        const tabStyles = _registeredTabs.get(registryKey) ?? /* @__PURE__ */ new Map();
         const previousCss = tabStyles.get(styleId);
         if (previousCss === css) continue;
         if (previousCss) {
           try {
             await chrome.scripting.removeCSS({
-              target: { tabId },
+              target: _injectionTarget(tabId, documentId),
               css: previousCss
             });
           } catch {
           }
         }
         await chrome.scripting.insertCSS({
-          target: { tabId },
+          target: _injectionTarget(tabId, documentId),
           css
         });
         tabStyles.set(styleId, css);
-        _registeredTabs.set(tabId, tabStyles);
-      } catch {
+        _registeredTabs.set(registryKey, tabStyles);
+      } catch (error) {
       }
     }
-    await _syncShadowStylesToTab(tabId, url);
+    await _syncShadowStylesToTab(tabId, url, [], documentId);
   }
   function onTabRemoved(tabId) {
-    _registeredTabs.delete(tabId);
+    _deleteTabRegistries(tabId);
+    _currentDocumentIds.delete(tabId);
     _draftPreviewTabs.delete(tabId);
-    _pendingTabUrls.delete(tabId);
+    _pendingTabUrls.delete(_tabRegistryKey(tabId));
+    for (const key of _pendingTabUrls.keys()) {
+      if (key.startsWith(`document:${tabId}:`)) _pendingTabUrls.delete(key);
+    }
   }
   async function init() {
     if (_initialized) return;

@@ -82,7 +82,7 @@ const DiagnosticsActionHandler = (() => {
       getScriptStats: ({ message }) => dependencies.getScriptStats(message.scriptId),
       getExecutionDiagnostics: ({ message }) => dependencies.getExecutionDiagnostics(Number(message.tabId)),
       resetScriptStats: ({ message }) => dependencies.resetScriptStats(message.scriptId),
-      reportDocumentReady: ({ message, sender }) => dependencies.reportDocumentReady(message.url || "", sender),
+      reportDocumentReady: ({ message, sender }) => dependencies.reportDocumentReady(message.url || "", sender, message.documentId),
       npmResolve: ({ message }) => dependencies.npmResolve(message.spec),
       npmResolveAll: ({ message }) => dependencies.npmResolveAll(message.requires),
       logError: ({ message }) => dependencies.logError(message.entry || message),

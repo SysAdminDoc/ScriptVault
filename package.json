@@ -46,6 +46,7 @@
     "smoke:edge": "node scripts/smoke-edge-sideload.mjs",
     "smoke:derivatives": "node scripts/smoke-chromium-derivatives.mjs",
     "smoke:firefox": "node scripts/smoke-firefox-sideload.mjs",
+    "smoke:firefox:usercss": "node scripts/smoke-firefox-sideload.mjs --only-usercss",
     "smoke:large-library": "node scripts/smoke-large-library.mjs",
     "smoke:large-library:check": "node scripts/smoke-large-library.mjs --check",
     "smoke:service-worker": "node scripts/smoke-service-worker-boot.mjs",

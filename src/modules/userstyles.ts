@@ -9,10 +9,11 @@
 //   Persistent install/management is driven by the userStyle* message actions
 //   (getUserStyles, installUserStyle, toggleUserStyle, deleteUserStyle,
 //   updateUserStyleCode, setUserStyleVariables) in src/background/core.ts, and
-//   enabled styles register persisted `document_start` CSS content scripts;
-//   already-open tabs and SPA routes still use `insertCSS` through
-//   `onTabUpdated`, while browsers without registration support fall back to
-//   `webNavigation.onCommitted` (onDocumentCommitted → onTabUpdated),
+//   enabled styles use document-aware `insertCSS` through `onTabUpdated` and
+//   `webNavigation.onCommitted` (onDocumentCommitted → onTabUpdated). The
+//   dynamic content-script registration API accepts packaged CSS file names,
+//   not inline UserCSS text, so it is deliberately not used for these records;
+//   this keeps Firefox and Chrome on the same real injection path.
 //   `tabs.onRemoved` (onTabRemoved), and a startup `rehydrateOpenTabs`
 //   call, and `.user.css` navigation interception. The live editor draft preview
 //   (previewDraft / clearDraftPreview) remains wired via the `previewUserStyle` /
@@ -189,9 +190,17 @@ const DIRECTIVE_REGEX: RegExp = /^@(\S+)\s+(.*?)\s*$/;
 let _styles: Record<string, StyleEntry> = {};
 let _customVars: Record<string, Record<string, StyleVariableValue>> = {};
 let _initialized = false;
-const _registeredTabs: Map<number, Map<string, string>> = new Map();
+type InjectionRegistryKey = string;
+
+// Firefox 153+ gives each loaded document a stable identity. Keep the tab-only
+// key for Chrome and older Firefox builds, but use a document key whenever the
+// caller has one so a reload cannot inherit the previous document's dedup
+// record. The CSS APIs still receive tabId because it is required alongside
+// documentIds by the cross-browser injection target shape.
+const _registeredTabs: Map<InjectionRegistryKey, Map<string, string>> = new Map();
+const _currentDocumentIds: Map<number, string> = new Map();
 const _draftPreviewTabs: Map<number, string> = new Map();
-const _injectingTabs: Set<number> = new Set();
+const _injectingTabs: Set<InjectionRegistryKey> = new Set();
 const PERSISTENT_REGISTRATION_PREFIX = 'scriptvault-usercss-';
 let _persistentRegistrationSupported = false;
 let _persistentRegistrationChain: Promise<boolean> = Promise.resolve(false);
@@ -201,11 +210,75 @@ let _persistentRegistrationChain: Promise<boolean> = Promise.resolve(false);
 // a style stuck on a non-matching route, or a newly matching route with no
 // sheet until the next real navigation. Only the newest URL is worth keeping:
 // intermediate routes are already superseded.
-const _pendingTabUrls: Map<number, string> = new Map();
+const _pendingTabUrls: Map<InjectionRegistryKey, string> = new Map();
 // Serializes previewDraft/clearDraftPreview: overlapping calls would both
 // insert CSS while _draftPreviewTabs remembers only the last, orphaning the
 // earlier sheet on the page until navigation.
 let _draftPreviewChain: Promise<unknown> = Promise.resolve();
+
+function _normalizeDocumentId(value: unknown): string | undefined {
+  const id = typeof value === 'string' ? value.trim() : '';
+  return id && id.length <= 256 ? id : undefined;
+}
+
+function _tabRegistryKey(tabId: number): InjectionRegistryKey {
+  return `tab:${tabId}`;
+}
+
+function _documentRegistryKey(tabId: number, documentId: string): InjectionRegistryKey {
+  return `document:${tabId}:${documentId}`;
+}
+
+function _documentIdForTab(tabId: number, explicitDocumentId?: unknown): string | undefined {
+  return _normalizeDocumentId(explicitDocumentId) ?? _currentDocumentIds.get(tabId);
+}
+
+function _registryKeyForTab(tabId: number, explicitDocumentId?: unknown): InjectionRegistryKey {
+  const documentId = _normalizeDocumentId(explicitDocumentId);
+  if (documentId) {
+    const current = _currentDocumentIds.get(tabId);
+    if (current !== documentId) {
+      _deleteTabRegistries(tabId);
+      _currentDocumentIds.set(tabId, documentId);
+    }
+    return _documentRegistryKey(tabId, documentId);
+  }
+  const current = _currentDocumentIds.get(tabId);
+  return current ? _documentRegistryKey(tabId, current) : _tabRegistryKey(tabId);
+}
+
+function _injectionTarget(tabId: number, explicitDocumentId?: unknown): { tabId: number; documentIds?: string[] } {
+  const documentId = _documentIdForTab(tabId, explicitDocumentId);
+  return documentId ? { tabId, documentIds: [documentId] } : { tabId };
+}
+
+function _deleteTabRegistries(tabId: number): void {
+  _registeredTabs.delete(_tabRegistryKey(tabId));
+  const prefix = `document:${tabId}:`;
+  for (const key of _registeredTabs.keys()) {
+    if (key.startsWith(prefix)) _registeredTabs.delete(key);
+  }
+}
+
+function _isFirefoxRuntime(): boolean {
+  try {
+    return /Firefox\//.test(String((globalThis as any).navigator?.userAgent || ''));
+  } catch {
+    return false;
+  }
+}
+
+async function _readCurrentDocumentId(tabId: number): Promise<string | undefined> {
+  if (!_isFirefoxRuntime()) return undefined;
+  const getFrame = (chrome.webNavigation as any)?.getFrame;
+  if (typeof getFrame !== 'function') return undefined;
+  try {
+    const frame = await getFrame({ tabId, frameId: 0 });
+    return _normalizeDocumentId(frame?.documentId);
+  } catch {
+    return undefined;
+  }
+}
 
 /* ------------------------------------------------------------------ */
 /*  Storage helpers                                                    */
@@ -944,6 +1017,7 @@ async function _syncShadowStylesToTab(
   tabId: number,
   url?: string,
   extraStyles: ShadowStyleInstruction[] = [],
+  documentId?: string,
 ): Promise<void> {
   const executeScript = (chrome.scripting as any)?.executeScript;
   if (typeof executeScript !== 'function') return;
@@ -969,7 +1043,7 @@ async function _syncShadowStylesToTab(
   desired.push(...extraStyles.filter((style) => style?.id && style.css));
   try {
     await executeScript({
-      target: { tabId },
+      target: _injectionTarget(tabId, documentId),
       func: _syncShadowStylesInDocument,
       args: [desired],
     });
@@ -988,15 +1062,6 @@ function _buildCSS(styleId: string): string {
   const vars: StyleVariable[] = style.variables ?? [];
   const custom: Record<string, StyleVariableValue> = _customVars[styleId] ?? {};
   return _substituteVariables(style.css, vars, custom);
-}
-
-function _persistentRegistrationId(styleId: string): string {
-  let hash = 2166136261;
-  for (const character of String(styleId || '')) {
-    hash ^= character.charCodeAt(0);
-    hash = Math.imul(hash, 16777619) >>> 0;
-  }
-  return `${PERSISTENT_REGISTRATION_PREFIX}${hash.toString(36)}`;
 }
 
 function _persistentMatchPatterns(style: StyleEntry): string[] {
@@ -1030,24 +1095,21 @@ async function _syncPersistentRegistrationsNow(): Promise<boolean> {
       .filter((id: any): id is string => typeof id === 'string' && id.startsWith(PERSISTENT_REGISTRATION_PREFIX));
     if (staleIds.length > 0) await scripting.unregisterContentScripts({ ids: staleIds });
 
-    const registrations: any[] = [];
+    let hasEnabledStyles = false;
     for (const [styleId, style] of Object.entries(_styles)) {
       if (!style.enabled) continue;
       const css = _buildCSS(styleId);
       const matches = _persistentMatchPatterns(style);
       if (!css || matches.length === 0) continue;
-      registrations.push({
-        id: _persistentRegistrationId(styleId),
-        matches,
-        css: [css],
-        runAt: 'document_start',
-        persistAcrossSessions: true,
-        allFrames: false,
-      });
+      hasEnabledStyles = true;
     }
-    if (registrations.length > 0) await scripting.registerContentScripts(registrations);
-    _persistentRegistrationSupported = true;
-    return true;
+    // RegisteredContentScript.css is a list of packaged file paths. UserCSS is
+    // stored as inline text and cannot be represented by that API without
+    // generating a new extension asset, so always use insertCSS for these
+    // dynamic records. The capability probe above remains useful for cleaning
+    // registrations left by older builds.
+    _persistentRegistrationSupported = !hasEnabledStyles;
+    return _persistentRegistrationSupported;
   } catch (error: unknown) {
     _persistentRegistrationSupported = false;
     console.warn('[UserStylesEngine] Persistent document_start registration unavailable:', error instanceof Error ? error.message : String(error));
@@ -1112,7 +1174,7 @@ async function _removeDraftPreviewFromTab(tabId: number): Promise<boolean> {
 
   try {
     await chrome.scripting.removeCSS({
-      target: { tabId },
+      target: _injectionTarget(tabId),
       css: previousCss,
     });
   } catch {
@@ -1163,7 +1225,7 @@ async function _previewDraftNow(usercssCode: string, options: DraftPreviewOption
   await _removeDraftPreviewFromTab(tab.id);
   try {
     await chrome.scripting.insertCSS({
-      target: { tabId: tab.id },
+      target: _injectionTarget(tab.id),
       css: built.css,
     });
     _draftPreviewTabs.set(tab.id, built.css);
@@ -1274,16 +1336,18 @@ async function _injectStyleToMatchingTabs(styleId: string): Promise<void> {
     for (const tab of tabs) {
       if (tab.id == null) continue;
       if (_urlMatchesPatterns(tab.url, style.match)) {
-        const tabStyles: Map<string, string> = _registeredTabs.get(tab.id) ?? new Map<string, string>();
+        const documentId = _documentIdForTab(tab.id);
+        const registryKey = _registryKeyForTab(tab.id, documentId);
+        const tabStyles: Map<string, string> = _registeredTabs.get(registryKey) ?? new Map<string, string>();
         const previousCss: string | undefined = tabStyles.get(styleId);
-        // Dedup: identical CSS already injected for this tab — do not stack a
-        // duplicate sheet on a repeated inject pass.
+        // Dedup: identical CSS already injected for this document — do not
+        // stack a duplicate sheet on a repeated inject pass.
         if (previousCss !== css) {
           try {
             if (previousCss) {
               try {
                 await chrome.scripting.removeCSS({
-                  target: { tabId: tab.id },
+                  target: _injectionTarget(tab.id, documentId),
                   css: previousCss,
                 });
               } catch {
@@ -1291,16 +1355,16 @@ async function _injectStyleToMatchingTabs(styleId: string): Promise<void> {
               }
             }
             await chrome.scripting.insertCSS({
-              target: { tabId: tab.id },
+              target: _injectionTarget(tab.id, documentId),
               css,
             });
             tabStyles.set(styleId, css);
-            _registeredTabs.set(tab.id, tabStyles);
+            _registeredTabs.set(registryKey, tabStyles);
           } catch {
             // Tab may not be injectable (chrome://, etc.)
           }
         }
-        await _syncShadowStylesToTab(tab.id, tab.url);
+        await _syncShadowStylesToTab(tab.id, tab.url, [], documentId);
       }
     }
   } catch (e: unknown) {
@@ -1322,13 +1386,15 @@ async function _removeStyleFromAllTabs(styleId: string): Promise<void> {
     const tabs: chrome.tabs.Tab[] = await chrome.tabs.query({});
     for (const tab of tabs) {
       if (tab.id == null) continue;
-      const tabStyles: Map<string, string> | undefined = _registeredTabs.get(tab.id);
+      const documentId = _documentIdForTab(tab.id);
+      const registryKey = _registryKeyForTab(tab.id, documentId);
+      const tabStyles: Map<string, string> | undefined = _registeredTabs.get(registryKey);
       const registeredCss: string | undefined = tabStyles?.get(styleId);
       const cssToRemove: string | undefined = registeredCss ?? (reconstructedCss || undefined);
       if (cssToRemove) {
         try {
           await chrome.scripting.removeCSS({
-            target: { tabId: tab.id },
+            target: _injectionTarget(tab.id, documentId),
             css: cssToRemove,
           });
         } catch {
@@ -1338,10 +1404,10 @@ async function _removeStyleFromAllTabs(styleId: string): Promise<void> {
       if (tabStyles) {
         tabStyles.delete(styleId);
         if (tabStyles.size === 0) {
-          _registeredTabs.delete(tab.id);
+          _registeredTabs.delete(registryKey);
         }
       }
-      await _syncShadowStylesToTab(tab.id, tab.url);
+      await _syncShadowStylesToTab(tab.id, tab.url, [], documentId);
     }
   } catch (e: unknown) {
     console.error('[UserStylesEngine] Remove failed:', e);
@@ -1354,8 +1420,11 @@ async function _removeStyleFromAllTabs(styleId: string): Promise<void> {
  * document, so the next inject pass must treat the tab as a clean slate — this
  * is what makes the onTabUpdated dedup safe across navigations.
  */
-function onTabNavigated(tabId: number): void {
-  _registeredTabs.delete(tabId);
+function onTabNavigated(tabId: number, documentId?: string): void {
+  _deleteTabRegistries(tabId);
+  _currentDocumentIds.delete(tabId);
+  const normalized = _normalizeDocumentId(documentId);
+  if (normalized) _currentDocumentIds.set(tabId, normalized);
 }
 
 /**
@@ -1372,6 +1441,15 @@ async function rehydrateOpenTabs(): Promise<void> {
   } catch {
     return;
   }
+  const documentIds = new Map<number, string>();
+  for (const tab of tabs) {
+    if (tab.id == null) continue;
+    const documentId = await _readCurrentDocumentId(tab.id);
+    if (documentId) {
+      documentIds.set(tab.id, documentId);
+      _currentDocumentIds.set(tab.id, documentId);
+    }
+  }
   for (const [styleId, style] of Object.entries(_styles)) {
     if (!style.enabled) continue;
     const css: string = _buildCSS(styleId);
@@ -1379,26 +1457,28 @@ async function rehydrateOpenTabs(): Promise<void> {
     for (const tab of tabs) {
       if (tab.id == null) continue;
       if (!_urlMatchesPatterns(tab.url, style.match)) continue;
-      const tabStyles: Map<string, string> = _registeredTabs.get(tab.id) ?? new Map<string, string>();
+      const documentId = documentIds.get(tab.id);
+      const registryKey = _registryKeyForTab(tab.id, documentId);
+      const tabStyles: Map<string, string> = _registeredTabs.get(registryKey) ?? new Map<string, string>();
       if (tabStyles.get(styleId) === css) continue;
       try {
         // Clear a possible orphaned duplicate from before the restart, then
         // inject exactly one fresh sheet.
         try {
-          await chrome.scripting.removeCSS({ target: { tabId: tab.id }, css });
+          await chrome.scripting.removeCSS({ target: _injectionTarget(tab.id, documentId), css });
         } catch {
           // Nothing to remove.
         }
-        await chrome.scripting.insertCSS({ target: { tabId: tab.id }, css });
+        await chrome.scripting.insertCSS({ target: _injectionTarget(tab.id, documentId), css });
         tabStyles.set(styleId, css);
-        _registeredTabs.set(tab.id, tabStyles);
+        _registeredTabs.set(registryKey, tabStyles);
       } catch {
         // Tab not injectable.
       }
     }
   }
   for (const tab of tabs) {
-    if (tab.id != null) await _syncShadowStylesToTab(tab.id, tab.url);
+    if (tab.id != null) await _syncShadowStylesToTab(tab.id, tab.url, [], documentIds.get(tab.id));
   }
 }
 
@@ -1430,8 +1510,15 @@ function _matchPatternToRegex(pattern: string): RegExp {
   }
 
   const scheme: string = match[1] ?? '';
-  const host: string = match[2] ?? '';
+  const rawHost: string = match[2] ?? '';
   const path: string = match[3] ?? '';
+
+  // Match patterns do not require a port, but the URL being tested may carry
+  // one (localhost test servers and development origins commonly do). Preserve
+  // an explicitly supplied port for permissive legacy inputs; otherwise allow
+  // any URL port exactly as the WebExtension matcher does.
+  const explicitPort = rawHost.match(/:(\d+)$/);
+  const host: string = explicitPort ? rawHost.slice(0, -explicitPort[0].length) : rawHost;
 
   const schemeRegex =
     scheme === '*'
@@ -1439,6 +1526,7 @@ function _matchPatternToRegex(pattern: string): RegExp {
       : _escapeRegex(scheme);
 
   let hostRegex = '';
+  let portRegex = '';
   if (scheme !== 'file') {
     if (host === '*') {
       hostRegex = '[^/]+';
@@ -1446,6 +1534,11 @@ function _matchPatternToRegex(pattern: string): RegExp {
       hostRegex = `(?:[^/]+\\.)*${_escapeRegex(host.slice(2))}`;
     } else {
       hostRegex = _escapeRegex(host);
+    }
+    if (explicitPort) {
+      portRegex = _escapeRegex(explicitPort[0]);
+    } else if (host !== '*') {
+      portRegex = '(?::\\d+)?';
     }
   }
 
@@ -1459,7 +1552,7 @@ function _matchPatternToRegex(pattern: string): RegExp {
     .split('*')
     .map((segment: string) => _escapeRegex(segment))
     .join('.*');
-  return new RegExp(`^${schemeRegex}:\\/\\/${hostRegex}${pathRegex}$`);
+  return new RegExp(`^${schemeRegex}:\\/\\/${hostRegex}${portRegex}${pathRegex}$`);
 }
 
 function _globMatch(url: string, glob: string): boolean {
@@ -1850,39 +1943,41 @@ function _isMissingTargetError(error: unknown): boolean {
  * Handle tab navigation — inject matching styles into newly loaded pages.
  * Call from background.js webNavigation.onCommitted or tabs.onUpdated.
  */
-async function onTabUpdated(tabId: number, url: string | undefined): Promise<void> {
+async function onTabUpdated(tabId: number, url: string | undefined, documentId?: string): Promise<void> {
   if (!url) return;
+  const registryKey = _registryKeyForTab(tabId, documentId);
+  const activeDocumentId = _documentIdForTab(tabId, documentId);
   if (_draftPreviewTabs.has(tabId)) {
     await clearDraftPreview({ tabId });
   }
-  if (_injectingTabs.has(tabId)) {
+  if (_injectingTabs.has(registryKey)) {
     // Coalesce instead of dropping: the in-flight pass re-runs with this URL
     // once it settles, so the last route always gets processed. Only the newest
     // URL is kept — intermediate SPA routes are already superseded.
-    _pendingTabUrls.set(tabId, url);
+    _pendingTabUrls.set(registryKey, url);
     return;
   }
-  _injectingTabs.add(tabId);
-  _pendingTabUrls.delete(tabId);
+  _injectingTabs.add(registryKey);
+  _pendingTabUrls.delete(registryKey);
 
   try {
     let current: string | undefined = url;
     // Flat drain loop rather than a recursive re-entry, so a router that keeps
     // firing pushState cannot grow the stack.
     while (current) {
-      await _applyStylesToTab(tabId, current);
-      current = _pendingTabUrls.get(tabId);
-      _pendingTabUrls.delete(tabId);
+      await _applyStylesToTab(tabId, current, activeDocumentId, registryKey);
+      current = _pendingTabUrls.get(registryKey);
+      _pendingTabUrls.delete(registryKey);
       // Skip a route that has nothing injected and nothing to inject rather
       // than paying for a full sweep on every intermediate route.
-      while (current && !_registeredTabs.has(tabId) && !_anyEnabledStyleMatches(current)) {
-        current = _pendingTabUrls.get(tabId);
-        _pendingTabUrls.delete(tabId);
+      while (current && !_registeredTabs.has(registryKey) && !_anyEnabledStyleMatches(current)) {
+        current = _pendingTabUrls.get(registryKey);
+        _pendingTabUrls.delete(registryKey);
       }
     }
   } finally {
-    _injectingTabs.delete(tabId);
-    _pendingTabUrls.delete(tabId);
+    _injectingTabs.delete(registryKey);
+    _pendingTabUrls.delete(registryKey);
   }
 }
 
@@ -1891,12 +1986,20 @@ async function onTabUpdated(tabId: number, url: string | undefined): Promise<voi
  * the first-paint work; only browsers without that API use the old immediate
  * insertCSS fallback here.
  */
-async function onDocumentCommitted(tabId: number, url: string | undefined): Promise<void> {
+async function onDocumentCommitted(tabId: number, url: string | undefined, documentId?: string): Promise<void> {
   if (!url) return;
   if (!_initialized) await _loadState();
-  onTabNavigated(tabId);
-  if (!_persistentRegistrationSupported) await onTabUpdated(tabId, url);
-  else await _syncShadowStylesToTab(tabId, url);
+  const normalizedDocumentId = _normalizeDocumentId(documentId);
+  const previousDocumentId = _currentDocumentIds.get(tabId);
+  if (normalizedDocumentId) {
+    if (previousDocumentId !== normalizedDocumentId) _deleteTabRegistries(tabId);
+    _currentDocumentIds.set(tabId, normalizedDocumentId);
+  } else {
+    _deleteTabRegistries(tabId);
+    _currentDocumentIds.delete(tabId);
+  }
+  if (!_persistentRegistrationSupported) await onTabUpdated(tabId, url, normalizedDocumentId);
+  else await _syncShadowStylesToTab(tabId, url, [], normalizedDocumentId);
 }
 
 /** True when at least one enabled style matches `url`. */
@@ -1911,20 +2014,25 @@ function _anyEnabledStyleMatches(url: string): boolean {
  * One injection pass for a tab at `url`: drop sheets that no longer apply, then
  * inject every enabled matching style. Callers hold the per-tab in-flight guard.
  */
-async function _applyStylesToTab(tabId: number, url: string): Promise<void> {
+async function _applyStylesToTab(
+  tabId: number,
+  url: string,
+  documentId?: string,
+  registryKey: InjectionRegistryKey = _registryKeyForTab(tabId, documentId),
+): Promise<void> {
   if (!_initialized) await _loadState();
   // Remove any previously-injected sheet that no longer applies to the current
   // URL (an SPA route change to a non-matching route), is now disabled, or was
   // deleted. On a full document commit onTabNavigated() has already cleared the
   // registry, so this pass only does work for same-document (SPA/hash) updates.
-  const existing: Map<string, string> | undefined = _registeredTabs.get(tabId);
+  const existing: Map<string, string> | undefined = _registeredTabs.get(registryKey);
   if (existing) {
     for (const [styleId, injectedCss] of [...existing]) {
       const style = _styles[styleId];
       const stillApplies = !!style && style.enabled && _urlMatchesPatterns(url, style.match);
       if (!stillApplies) {
         try {
-          await chrome.scripting.removeCSS({ target: { tabId }, css: injectedCss });
+          await chrome.scripting.removeCSS({ target: _injectionTarget(tabId, documentId), css: injectedCss });
           existing.delete(styleId);
         } catch (error) {
           // Only forget the sheet when the target is provably gone. If removal
@@ -1936,7 +2044,7 @@ async function _applyStylesToTab(tabId: number, url: string): Promise<void> {
         }
       }
     }
-    if (existing.size === 0) _registeredTabs.delete(tabId);
+    if (existing.size === 0) _registeredTabs.delete(registryKey);
   }
   for (const [styleId, style] of Object.entries(_styles)) {
     if (!style.enabled) continue;
@@ -1946,7 +2054,7 @@ async function _applyStylesToTab(tabId: number, url: string): Promise<void> {
     if (!css) continue;
 
     try {
-      const tabStyles: Map<string, string> = _registeredTabs.get(tabId) ?? new Map<string, string>();
+      const tabStyles: Map<string, string> = _registeredTabs.get(registryKey) ?? new Map<string, string>();
       const previousCss: string | undefined = tabStyles.get(styleId);
       // Dedup: the exact CSS is already injected in this document, so a
       // repeated onUpdated/onCommitted event must not stack a duplicate
@@ -1957,7 +2065,7 @@ async function _applyStylesToTab(tabId: number, url: string): Promise<void> {
       if (previousCss) {
         try {
           await chrome.scripting.removeCSS({
-            target: { tabId },
+            target: _injectionTarget(tabId, documentId),
             css: previousCss,
           });
         } catch {
@@ -1965,26 +2073,31 @@ async function _applyStylesToTab(tabId: number, url: string): Promise<void> {
         }
       }
       await chrome.scripting.insertCSS({
-        target: { tabId },
+        target: _injectionTarget(tabId, documentId),
         css,
       });
       tabStyles.set(styleId, css);
-      _registeredTabs.set(tabId, tabStyles);
-    } catch {
-      // Tab not injectable
+      _registeredTabs.set(registryKey, tabStyles);
+    } catch (error) {
+      // Tab not injectable (internal page, missing host permission, or a
+      // document that closed while the asynchronous pass was running).
     }
   }
-  await _syncShadowStylesToTab(tabId, url);
+  await _syncShadowStylesToTab(tabId, url, [], documentId);
 }
 
 /**
  * Clean up when a tab is closed.
  */
 function onTabRemoved(tabId: number): void {
-  _registeredTabs.delete(tabId);
+  _deleteTabRegistries(tabId);
+  _currentDocumentIds.delete(tabId);
   _draftPreviewTabs.delete(tabId);
   // A queued SPA route for a closed tab has nowhere to apply.
-  _pendingTabUrls.delete(tabId);
+  _pendingTabUrls.delete(_tabRegistryKey(tabId));
+  for (const key of _pendingTabUrls.keys()) {
+    if (key.startsWith(`document:${tabId}:`)) _pendingTabUrls.delete(key);
+  }
 }
 
 /* ------------------------------------------------------------------ */

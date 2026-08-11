@@ -14,6 +14,7 @@ const EXTENSION_ID = 'ScriptVault@sysadmindoc.dev';
 const DEFAULT_TIMEOUT_MS = 30000;
 const args = new Set(process.argv.slice(2));
 const skipPackage = args.has('--skip-package');
+const onlyUserCss = args.has('--only-usercss');
 const headed = args.has('--headed');
 const keepBrowser = args.has('--keep-browser');
 
@@ -1039,7 +1040,10 @@ async function spaUrlChangeSmoke(baseUrl, sessionId, dashboardUrl) {
     await execute(baseUrl, sessionId, `history.pushState({}, '', '/spa-target/alpha'); return true;`);
     const afterPushState = await waitForSpaUrlChange(baseUrl, sessionId, 'pushState', '/spa-target/alpha');
 
-    await execute(baseUrl, sessionId, `window.navigation.navigate('/spa-target/beta'); return true;`);
+    // Let the WebDriver command return before Navigation API starts its
+    // transition; Firefox may otherwise complete the same-document route while
+    // dropping the synchronous execute response as the page changes URL.
+    await execute(baseUrl, sessionId, `setTimeout(() => window.navigation.navigate('/spa-target/beta').catch(() => {}), 0); return true;`);
     const afterNavigate = await waitForSpaUrlChange(baseUrl, sessionId, 'navigation.navigate', '/spa-target/beta');
 
     await execute(baseUrl, sessionId, `location.hash = 'gamma'; return true;`);
@@ -1058,6 +1062,80 @@ async function spaUrlChangeSmoke(baseUrl, sessionId, dashboardUrl) {
       dispatches: afterHashChange.count,
     };
   } finally {
+    await target.close();
+  }
+}
+
+async function userCssDocumentIdentitySmoke(baseUrl, sessionId, dashboardUrl) {
+  console.log('Firefox UserCSS document identity smoke: opening dashboard');
+  await navigate(baseUrl, sessionId, dashboardUrl);
+  const styleCode = [
+    '/* ==UserStyle==',
+    '@name ScriptVault Firefox document identity UserCSS Smoke',
+    '@namespace scriptvault/firefox-usercss-document',
+    '@version 1.0.0',
+    '@match http://127.0.0.1/*',
+    '==/UserStyle== */',
+    ':root { --scriptvault-firefox-usercss-document: active; }',
+    '',
+  ].join('\n');
+  const installed = await runtimeMessage(baseUrl, sessionId, {
+    action: 'installUserStyle',
+    code: styleCode,
+    enabled: true,
+  }, 60000);
+  if (!installed?.success || !installed.id) {
+    fail(`Firefox document identity UserCSS could not be installed: ${JSON.stringify(installed)}`);
+  }
+  console.log('Firefox UserCSS document identity smoke: style installed');
+
+  const target = await spaPageServer();
+  const markerProbe = `
+    const marker = '--scriptvault-firefox-usercss-document';
+    const markerSheets = Array.from(document.styleSheets).filter(sheet => {
+      try {
+        return Array.from(sheet.cssRules || []).some(rule => String(rule.cssText || '').includes(marker));
+      } catch (_) {
+        return false;
+      }
+    }).length;
+    const markerNodes = Array.from(document.querySelectorAll('style')).filter(node =>
+      String(node.textContent || '').includes(marker)
+    ).length;
+    const value = getComputedStyle(document.documentElement).getPropertyValue(marker).trim();
+    return {
+      ok: value === 'active' && markerSheets <= 1 && markerNodes <= 1,
+      value,
+      markerSheets,
+      markerNodes,
+      href: location.href
+    };
+  `;
+  try {
+    await navigate(baseUrl, sessionId, target.url);
+    const initial = await waitFor(baseUrl, sessionId, 'Firefox UserCSS document identity injection', markerProbe, 20000);
+    console.log('Firefox UserCSS document identity smoke: initial document passed');
+
+    await execute(baseUrl, sessionId, `history.pushState({}, '', '/spa-target/document-route'); return true;`);
+    const spa = await waitFor(baseUrl, sessionId, 'Firefox UserCSS SPA document identity stability', markerProbe, 10000);
+    console.log('Firefox UserCSS document identity smoke: SPA document passed');
+
+    // Reload the same SPA route through WebDriver's navigation endpoint. This
+    // creates a new documentId without making the execute request itself lose
+    // its HTTP response when the page starts navigating.
+    await navigate(baseUrl, sessionId, `${target.url}/document-route`);
+    const reloaded = await waitFor(baseUrl, sessionId, 'Firefox UserCSS reload re-injection', markerProbe, 20000);
+    console.log('Firefox UserCSS document identity smoke: reloaded document passed');
+    return {
+      installed: true,
+      initial: { value: initial.value, markerSheets: initial.markerSheets, markerNodes: initial.markerNodes },
+      spa: { value: spa.value, markerSheets: spa.markerSheets, markerNodes: spa.markerNodes },
+      reload: { value: reloaded.value, markerSheets: reloaded.markerSheets, markerNodes: reloaded.markerNodes },
+      reloadedDocumentScoped: reloaded.value === 'active',
+    };
+  } finally {
+    await navigate(baseUrl, sessionId, dashboardUrl).catch(() => {});
+    await runtimeMessage(baseUrl, sessionId, { action: 'deleteUserStyle', id: installed.id }, 60000).catch(() => {});
     await target.close();
   }
 }
@@ -1634,10 +1712,23 @@ async function main() {
     }
     const popup = await getExtensionResource(baseUrl, sessionId, 'pages/popup.html');
     const dashboardResult = await dashboardSmoke(baseUrl, sessionId, dashboard.uri);
+    if (onlyUserCss) {
+      const userCssDocumentResult = await userCssDocumentIdentitySmoke(baseUrl, sessionId, dashboard.uri);
+      console.log('Firefox UserCSS document identity smoke passed.');
+      console.log(JSON.stringify({
+        firefox: firefox.version.output || firefox.version.raw,
+        package: basename(packagePath),
+        packageVersion: dashboard.version,
+        userCssDocumentIdentity: userCssDocumentResult,
+      }, null, 2));
+      return;
+    }
     const popupResult = await popupSmoke(baseUrl, sessionId, popup.uri);
     const scriptResult = await scriptRoundTripSmoke(baseUrl, sessionId, dashboard.uri);
     const documentStartResult = await documentStartSmoke(baseUrl, sessionId, dashboard.uri);
     const spaResult = await spaUrlChangeSmoke(baseUrl, sessionId, dashboard.uri);
+    console.log('Firefox smoke: existing SPA URL-change scenario passed');
+    const userCssDocumentResult = await userCssDocumentIdentitySmoke(baseUrl, sessionId, dashboard.uri);
     const parityResult = await runtimeParitySmoke(baseUrl, sessionId, dashboard.uri);
     const webDavResult = await webDavSyncSmoke(baseUrl, sessionId, dashboard.uri);
     const backupResult = await backupRoundTripSmoke(baseUrl, sessionId, dashboard.uri);
@@ -1655,6 +1746,7 @@ async function main() {
       script: scriptResult,
       documentStart: documentStartResult,
       spaUrlChange: spaResult,
+      userCssDocumentIdentity: userCssDocumentResult,
       parity: parityResult,
       webdav: webDavResult,
       backup: backupResult,

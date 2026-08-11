@@ -24,6 +24,9 @@ All notable changes to ScriptVault will be documented in this file.
 - Added a deterministic, bounded trust-boundary fuzz corpus for metadata,
   JSON/ZIP imports, public API/MCP and page bridge messages, and network
   errors/timeouts; failures report their boundary and seed.
+- Scoped Firefox UserCSS injection state and `scripting` targets to each
+  document identity, with a focused headless smoke for initial, SPA, and reload
+  documents; host match patterns now accept development-server ports.
 - Persisted a bounded, redacted execution journal across service-worker
   restarts, surfaced latest age/stale outcomes in diagnostics surfaces, and
   sanitized journal trace exports.

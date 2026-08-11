@@ -8823,11 +8823,23 @@ backgroundActionRegistry.registerHandlers(DiagnosticsActionHandler.createDiagnos
     }
     return { success: true };
   },
-  reportDocumentReady: (url, sender) => {
+  reportDocumentReady: (url, sender, reportedDocumentId) => {
     recordExecutionDiagnostic(sender, {
       type: 'document-ready',
       url: url || sender?.tab?.url || ''
     });
+    const documentId = _normalizeUserStylesDocumentId(sender?.documentId || reportedDocumentId);
+    if (
+      documentId
+      && _isFirefoxRuntime()
+      && !sender?.userScriptId
+      && sender?.frameId === 0
+      && typeof sender?.tab?.id === 'number'
+      && typeof UserStylesEngine !== 'undefined'
+    ) {
+      UserStylesEngine.onDocumentCommitted(sender.tab.id, url || sender?.tab?.url, documentId)
+        .catch(error => console.error('[ScriptVault] UserCSS document identity handoff failed:', error));
+    }
     return { success: true };
   },
   npmResolve: spec => typeof NpmResolver !== 'undefined'
@@ -11766,17 +11778,23 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
 });
 
 // Persistent UserCSS injection: enabled styles are registered as persisted
+function _normalizeUserStylesDocumentId(value) {
+  const documentId = typeof value === 'string' ? value.trim() : '';
+  return documentId && documentId.length <= 256 ? documentId : undefined;
+}
+
 // document_start CSS content scripts, which applies them before the page paints.
 // The module keeps an insertCSS fallback for browsers without dynamic
-// registration support; both paths reset the per-tab registry at a top-level
-// document commit so SPA/update dedup remains safe across navigations.
+// registration support. Firefox document identities scope the registry and CSS
+// targets to one loaded document; Chrome keeps the established tab-keyed path.
 if (chrome.webNavigation?.onCommitted?.addListener) {
   chrome.webNavigation.onCommitted.addListener(async (details) => {
     if (details.frameId !== 0) return;
     if (typeof UserStylesEngine === 'undefined') return;
     if (!details.url || details.url.startsWith('chrome-extension://')) return;
     try { await ensureInitialized(); } catch (_) { /* logged in init() */ }
-    UserStylesEngine.onDocumentCommitted(details.tabId, details.url)
+    const documentId = _isFirefoxRuntime() ? _normalizeUserStylesDocumentId(details.documentId) : undefined;
+    UserStylesEngine.onDocumentCommitted(details.tabId, details.url, documentId)
       .catch(e => console.error('[ScriptVault] UserCSS document-start registration error:', e));
   });
 }
@@ -11792,9 +11810,10 @@ function _handleUserCssSpaNavigation(details) {
   if (details.frameId !== 0) return;
   if (typeof UserStylesEngine === 'undefined') return;
   if (!details.url || details.url.startsWith('chrome-extension://')) return;
+  const documentId = _isFirefoxRuntime() ? _normalizeUserStylesDocumentId(details.documentId) : undefined;
   ensureInitialized()
     .catch(() => { /* logged in init() */ })
-    .then(() => UserStylesEngine.onTabUpdated(details.tabId, details.url))
+    .then(() => UserStylesEngine.onTabUpdated(details.tabId, details.url, documentId))
     .catch(e => console.error('[ScriptVault] UserCSS SPA re-match error:', e));
 }
 if (chrome.webNavigation?.onHistoryStateUpdated?.addListener) {

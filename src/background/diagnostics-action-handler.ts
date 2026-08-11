@@ -53,7 +53,7 @@ export interface DiagnosticsActionDependencies {
   getScriptStats(scriptId?: string): Promise<ResponseMap['getScriptStats']>;
   getExecutionDiagnostics(tabId: number): Promise<ResponseMap['getExecutionDiagnostics']> | ResponseMap['getExecutionDiagnostics'];
   resetScriptStats(scriptId: string): Promise<ResponseMap['resetScriptStats']>;
-  reportDocumentReady(url: string, sender: unknown): Promise<ResponseMap['reportDocumentReady']> | ResponseMap['reportDocumentReady'];
+  reportDocumentReady(url: string, sender: unknown, documentId?: string): Promise<ResponseMap['reportDocumentReady']> | ResponseMap['reportDocumentReady'];
   npmResolve(spec: string): Promise<ResponseMap['npmResolve']>;
   npmResolveAll(requires: string[]): Promise<ResponseMap['npmResolveAll']>;
   logError(entry: Record<string, unknown>): Promise<ResponseMap['logError']>;
@@ -92,7 +92,7 @@ export function createDiagnosticsActionHandlers(
     getScriptStats: ({ message }) => dependencies.getScriptStats(message.scriptId),
     getExecutionDiagnostics: ({ message }) => dependencies.getExecutionDiagnostics(Number(message.tabId)),
     resetScriptStats: ({ message }) => dependencies.resetScriptStats(message.scriptId),
-    reportDocumentReady: ({ message, sender }) => dependencies.reportDocumentReady(message.url || '', sender),
+    reportDocumentReady: ({ message, sender }) => dependencies.reportDocumentReady(message.url || '', sender, message.documentId),
     npmResolve: ({ message }) => dependencies.npmResolve(message.spec),
     npmResolveAll: ({ message }) => dependencies.npmResolveAll(message.requires),
     logError: ({ message }) => dependencies.logError(message.entry || message),

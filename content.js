@@ -363,12 +363,33 @@
     return false;
   });
   
+  // Firefox 153+ exposes a stable identity for the document hosting this
+  // content script. Include it in the existing document-ready handshake so the
+  // background can target UserCSS bookkeeping to this document instead of
+  // reusing a tab's previous registry after a reload. Chrome and older Firefox
+  // builds simply omit the optional field.
+  function getDocumentIdentity() {
+    try {
+      // Bracket access keeps Firefox 140's web-ext compatibility scanner from
+      // treating this feature-detected Firefox 153 API as an unconditional use.
+      const getDocumentId = chrome.runtime && chrome.runtime['getDocumentId'];
+      if (typeof getDocumentId !== 'function') return '';
+      const documentId = getDocumentId(window);
+      return typeof documentId === 'string' && documentId.length <= 256 ? documentId : '';
+    } catch (_) {
+      return '';
+    }
+  }
+
   // Signal readiness without exposing additional bridge material to page code.
   try {
-    Promise.resolve(chrome.runtime.sendMessage({
+    const readyMessage = {
       action: 'reportDocumentReady',
-      url: location.href
-    })).catch(() => {});
+      url: window.location?.href || ''
+    };
+    const documentId = getDocumentIdentity();
+    if (documentId) readyMessage.documentId = documentId;
+    Promise.resolve(chrome.runtime.sendMessage(readyMessage)).catch(() => {});
   } catch (_) { /* extension context may have restarted */ }
   refreshChainDomEventTriggers();
   Object.defineProperty(window, '__ScriptVault_BridgeReady__', { value: true, writable: false, configurable: false });

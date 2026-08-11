@@ -306,6 +306,7 @@ interface GetExecutionDiagnostics {
 interface ReportDocumentReady {
   action: 'reportDocumentReady';
   url?: string;
+  documentId?: string;
 }
 
 interface PermanentlyDelete {

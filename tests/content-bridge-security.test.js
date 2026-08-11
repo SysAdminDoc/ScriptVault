@@ -115,13 +115,14 @@ function createBridgeWindow() {
   return win;
 }
 
-function loadContentBridge() {
+function loadContentBridge(options = {}) {
   const win = createBridgeWindow();
   const sendMessage = vi.fn().mockResolvedValue({ ok: true });
   const extensionId = `test-extension-id-${Math.random().toString(36).slice(2)}`;
   const chromeMock = {
     runtime: {
       id: extensionId,
+      ...(options.documentId ? { getDocumentId: vi.fn(() => options.documentId) } : {}),
       sendMessage,
       onMessage: {
         addListener: vi.fn(),
@@ -274,6 +275,16 @@ function invokeListener(listener, message, sender) {
 }
 
 describe('content script bridge security boundary', () => {
+  it('reports Firefox document identity through the existing ready handshake when available', async () => {
+    const { chromeMock } = loadContentBridge({ documentId: 'firefox-document-1' });
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(chromeMock.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'reportDocumentReady',
+      documentId: 'firefox-document-1',
+    }));
+  });
+
   it('does not expose privileged GM APIs through page-visible postMessage', async () => {
     const { window: win, chromeMock, channel } = loadContentBridge();
 

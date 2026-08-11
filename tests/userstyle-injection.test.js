@@ -16,14 +16,18 @@ function makeChrome(store = {}, options = {}) {
   const injected = new Map();
   const registered = new Map();
   const executed = [];
+  const insertCalls = [];
+  const removeCalls = [];
   let tabs = [];
   const scripting = {
     insertCSS: async ({ target, css }) => {
+      insertCalls.push({ target, css });
       const arr = injected.get(target.tabId) || [];
       arr.push(css);
       injected.set(target.tabId, arr);
     },
     removeCSS: async ({ target, css }) => {
+      removeCalls.push({ target, css });
       const arr = injected.get(target.tabId) || [];
       const idx = arr.indexOf(css);
       if (idx === -1) throw new Error('no such sheet');
@@ -48,6 +52,8 @@ function makeChrome(store = {}, options = {}) {
     _injected: injected,
     _registered: registered,
     _executed: executed,
+    _insertCalls: insertCalls,
+    _removeCalls: removeCalls,
     _setTabs: (t) => { tabs = t; },
     _sheets: (tabId) => injected.get(tabId) || [],
     _clearDocument: (tabId) => injected.set(tabId, []),
@@ -87,27 +93,23 @@ describe('UserStyles persistent injection lifecycle', () => {
     engine = factory(chrome, console);
   });
 
-  it('registers enabled styles for persisted document_start injection when supported', async () => {
+  it('uses document-aware insertCSS because dynamic registration accepts files, not inline UserCSS', async () => {
     const chrome = makeChrome({}, { persistentRegistrations: true });
     const engine = factory(chrome, console);
 
     const id = await engine.registerStyle({ ...STYLE });
-    const registration = [...chrome._registered.values()][0];
 
     expect(id).toBeTruthy();
-    expect(registration).toMatchObject({
-      matches: ['*://example.com/*'],
-      css: ['body{color:red}'],
-      runAt: 'document_start',
-      persistAcrossSessions: true,
-      allFrames: false,
-    });
-    expect(registration.id).toMatch(/^scriptvault-usercss-/);
+    expect(chrome._registered.size).toBe(0);
 
-    // The registration owns first-paint injection. A top-level commit should
-    // only reset the fallback registry when the browser lacks this API.
-    await engine.onDocumentCommitted(7, 'https://example.com/page');
-    expect(chrome._sheets(7)).toEqual([]);
+    // RegisteredContentScript.css names packaged files; the UserCSS record is
+    // inline text, so a commit uses the document-aware insertCSS path instead.
+    await engine.onDocumentCommitted(7, 'https://example.com/page', 'firefox-document-a');
+    expect(chrome._sheets(7)).toEqual(['body{color:red}']);
+    expect(chrome._insertCalls.at(-1).target).toEqual({
+      tabId: 7,
+      documentIds: ['firefox-document-a'],
+    });
   });
 
   it('injects an enabled style into a matching tab on navigation', async () => {
@@ -115,6 +117,22 @@ describe('UserStyles persistent injection lifecycle', () => {
     chrome._setTabs([{ id: 7, url: 'https://example.com/page' }]);
     await engine.onTabUpdated(7, 'https://example.com/page');
     expect(chrome._sheets(7)).toEqual(['body{color:red}']);
+  });
+
+  it('matches a host pattern against a URL with a development port', async () => {
+    await engine.registerStyle({
+      ...STYLE,
+      match: ['http://127.0.0.1/*'],
+    });
+    chrome._setTabs([{ id: 12, url: 'http://127.0.0.1:43127/spa-target' }]);
+
+    await engine.onDocumentCommitted(12, 'http://127.0.0.1:43127/spa-target', 'firefox-port-document');
+
+    expect(chrome._insertCalls).toHaveLength(1);
+    expect(chrome._insertCalls[0]).toMatchObject({
+      target: { tabId: 12, documentIds: ['firefox-port-document'] },
+      css: STYLE.css,
+    });
   });
 
   it('reconciles enabled styles into open shadow roots without blocking the tab pass', async () => {
@@ -138,6 +156,42 @@ describe('UserStyles persistent injection lifecycle', () => {
     await engine.onTabUpdated(7, 'https://example.com/page');
     await engine.onTabUpdated(7, 'https://example.com/page');
     expect(chrome._sheets(7)).toHaveLength(1);
+  });
+
+  it('keys Firefox injection state and targets by documentId when available', async () => {
+    await engine.registerStyle({ ...STYLE });
+    chrome._setTabs([{ id: 7, url: 'https://example.com/page' }]);
+
+    await engine.onDocumentCommitted(7, 'https://example.com/page', 'firefox-document-a');
+    expect(chrome._sheets(7)).toHaveLength(1);
+    expect(chrome._insertCalls.at(-1).target).toEqual({
+      tabId: 7,
+      documentIds: ['firefox-document-a'],
+    });
+
+    // A repeated commit notification for the same live document must remain a
+    // no-op, even though Firefox reports the identity on both the content
+    // handshake and webNavigation event.
+    const insertsBeforeRepeat = chrome._insertCalls.length;
+    await engine.onDocumentCommitted(7, 'https://example.com/page', 'firefox-document-a');
+    expect(chrome._insertCalls).toHaveLength(insertsBeforeRepeat);
+
+    // A reload receives a new documentId and starts with a new registry entry.
+    chrome._clearDocument(7);
+    await engine.onDocumentCommitted(7, 'https://example.com/page', 'firefox-document-b');
+    expect(chrome._sheets(7)).toEqual(['body{color:red}']);
+    expect(chrome._insertCalls.at(-1).target).toEqual({
+      tabId: 7,
+      documentIds: ['firefox-document-b'],
+    });
+  });
+
+  it('keeps the tab-keyed injection target when no documentId is supplied', async () => {
+    await engine.registerStyle({ ...STYLE });
+    chrome._setTabs([{ id: 7, url: 'https://example.com/page' }]);
+    await engine.onTabUpdated(7, 'https://example.com/page');
+
+    expect(chrome._insertCalls.at(-1).target).toEqual({ tabId: 7 });
   });
 
   it('re-injects after a navigation (onTabNavigated resets the registry)', async () => {
