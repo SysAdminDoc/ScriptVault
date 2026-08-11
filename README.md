@@ -46,7 +46,7 @@ full-screen editor share the same accessible four-theme surface system. Dark,
 light, Catppuccin, and OLED dashboard layouts are protected by browser-rendered
 visual regression baselines.
 
-### GM API &mdash; 35+ Functions
+### GM API &mdash; 36+ Functions
 
 Full Greasemonkey/Tampermonkey API compatibility with promise-based `GM.*` async variants.
 
@@ -60,7 +60,7 @@ Full Greasemonkey/Tampermonkey API compatibility with promise-based `GM.*` async
 | `GM_setValues` | `GM_webSocket` | `GM_addElement` | `GM_getResourceURL` |
 | `GM_deleteValues` | `GM_head` | `GM_loadScript` | `GM_cookie` |
 | `GM_addValueChangeListener` | `GM.fetch` | `GM_audio` | `GM_focusTab` |
-| `GM_removeValueChangeListener` | | | |
+| `GM_removeValueChangeListener` | | | `GM_withLock` / `GM.withLock` |
 
 Plus `GM_getTab`, `GM_saveTab`, `GM_getTabs` for cross-tab state, `window.close`, `window.focus`, `window.onurlchange` grants, `@top-level-await`, `@delay`, and `@nodownload` support.
 
@@ -69,6 +69,8 @@ Plus `GM_getTab`, `GM_saveTab`, `GM_getTabs` for cross-tab state, `window.close`
 TypeScript userscripts can reference `lib/scriptvault.d.ts` for generated ambient declarations that match ScriptVault's GM API surface.
 
 `GM.fetch` returns a Fetch-compatible `Response`; modern browser contexts expose `res.body` as a `ReadableStream` so scripts can read cross-origin responses chunk-by-chunk while ScriptVault still applies the script's `@connect` hosts and internal-host guards. Older contexts fall back to the existing `GM_xmlhttpRequest` response path.
+
+`GM.withLock(name, callback, options?)` serializes work for the same script across tabs through the browser Web Locks API. Declare `@grant GM_withLock` (or `GM.withLock`) to use it; `options.signal` can abort a queued request.
 
 Scripts can opt into a per-script isolated cookie jar with `@isolationCookie`.
 ScriptVault maps that script to a deterministic CHIPS partition for `GM_cookie`,

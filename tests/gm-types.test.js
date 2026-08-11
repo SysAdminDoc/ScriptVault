@@ -50,6 +50,8 @@ describe('GM ambient declarations', () => {
     expect(declaration).toContain('audio: GMAudioPromiseApi;');
     expect(declaration).toContain('webSocket(url: string | URL | GMWebSocketOptions');
     expect(declaration).toContain('declare function GM_webSocket');
+    expect(declaration).toContain('declare function GM_withLock');
+    expect(declaration).toContain('withLock<T>(name: string');
     expect(declaration).toContain('webRequest(rules: GMWebRequestRule | GMWebRequestRule[], listener?: GMWebRequestListener): Promise<void>;');
     expect(declaration).toContain('fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;');
     expect(declaration).toContain('declare function GM_fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;');
@@ -105,6 +107,10 @@ async function main() {
   socket.close(1000, 'done');
   const asyncSocket = GM.webSocket({ url: 'wss://example.com/events', binaryType: 'arraybuffer' });
   asyncSocket.abort();
+
+  const lockResult = await GM_withLock('sample', lock => lock?.name || 'unavailable', { signal: new AbortController().signal });
+  const namespacedLockResult = await GM.withLock('sample', lock => lock?.mode || 'exclusive');
+  console.log(lockResult, namespacedLockResult);
 
   const tab = GM_openInTab('https://example.com', { active: true });
   tab?.close();

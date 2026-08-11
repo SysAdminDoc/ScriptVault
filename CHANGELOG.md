@@ -4,6 +4,9 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased] — Minimal workbench surfaces
 
+- Added grant-gated `GM.withLock` and `GM_withLock` userscript APIs backed by
+  Web Locks, with per-script cross-tab namespacing, abort-signal forwarding,
+  generated TypeScript declarations, and editor grant completion.
 - Added a headless real-navigation install gate covering valid review/install,
   malformed pass-through, oversized download rejection, and downgrade review.
 - Shipped the GM WebSocket userscript client and added a source-mirror drift

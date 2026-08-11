@@ -48019,7 +48019,23 @@ ${mappedCode}
       : null,
     uuid: ${JSON.stringify(script.id)}
   };
-  
+
+  // GM.withLock serializes work across tabs through the browser Web Locks API.
+  function GM_withLock(name, callback, options) {
+    if (!hasGrant('GM_withLock') && !hasGrant('GM.withLock')) {
+      return Promise.reject(new Error('GM.withLock requires @grant GM_withLock'));
+    }
+    if (typeof callback !== 'function') {
+      return Promise.reject(new TypeError('GM.withLock callback must be a function'));
+    }
+    const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined;
+    if (!locks || typeof locks.request !== 'function') {
+      return Promise.reject(new Error('GM.withLock is unavailable in this browser'));
+    }
+    const lockName = 'ScriptVault:' + scriptId + ':' + String(name);
+    return locks.request(lockName, options || {}, callback);
+  }
+
   // Storage cache - mutable so we can refresh it with fresh values from background
   // Pre-loaded values serve as fallback if background fetch fails
   let _cache = ${JSON.stringify(preloadedStorage)};
@@ -50050,6 +50066,7 @@ ${mappedCode}
     saveTab: (t) => Promise.resolve(GM_saveTab(t)),
     getTabs: () => new Promise(r => GM_getTabs(r)),
     loadScript: (url, opts) => GM_loadScript(url, opts),
+    withLock: (name, callback, options) => GM_withLock(name, callback, options),
     webSocket: (url, protocols, opts) => GM_webSocket(url, protocols, opts),
     cookies: {
       list: (d) => new Promise((res, rej) => GM_cookie.list(d, (cookies, err) => err ? rej(err) : res(cookies))),
@@ -50106,6 +50123,7 @@ ${mappedCode}
   window.GM_removeValueChangeListener = GM_removeValueChangeListener;
   window.GM_cookie = GM_cookie;
   window.GM_focusTab = GM_focusTab;
+  window.GM_withLock = GM_withLock;
   window.GM_webSocket = GM_webSocket;
 
   // ========== GM_webRequest (Tampermonkey-compatible, declarativeNetRequest-backed) ==========

@@ -14,6 +14,7 @@ const DIRECT_PROMISE_ALIASES = [
   'head',
   'log',
   'getMenuCommands',
+  'withLock',
   'webRequest',
 ];
 
@@ -30,6 +31,8 @@ describe('GM namespace parity', () => {
       }
       expect(source, `${label} missing singular GM.cookie alias`).toContain('cookie: {');
       expect(source, `${label} missing GM.audio getter`).toContain('get audio()');
+      expect(source, `${label} missing GM_withLock implementation`).toContain('function GM_withLock');
+      expect(source, `${label} missing direct GM_withLock export`).toContain('window.GM_withLock = GM_withLock');
     }
   });
 

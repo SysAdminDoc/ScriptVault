@@ -33,7 +33,7 @@ function loadShippedBuildWrappedScript() {
 
 const buildWrappedScript = loadShippedBuildWrappedScript();
 
-function makeScript(code, grant = ['GM_webSocket']) {
+function makeScript(code, grant = ['GM_webSocket'], id = 'script_ws') {
   const meta = {
     name: 'GM WebSocket Test',
     namespace: 'scriptvault-tests',
@@ -76,7 +76,7 @@ function makeScript(code, grant = ['GM_webSocket']) {
   };
 
   return {
-    id: 'script_ws',
+    id,
     enabled: true,
     position: 0,
     createdAt: 1,
@@ -99,6 +99,39 @@ async function flushWrappedScript() {
   await Promise.resolve();
   await new Promise(resolve => setTimeout(resolve, 0));
   await Promise.resolve();
+}
+
+function createQueuedLockManager() {
+  const queue = [];
+  const calls = [];
+  let active = false;
+
+  const pump = () => {
+    if (active || queue.length === 0) return;
+    active = true;
+    const entry = queue.shift();
+    Promise.resolve()
+      .then(() => entry.callback({ name: entry.name, mode: entry.options.mode || 'exclusive' }))
+      .then(
+        value => entry.resolve(value),
+        error => entry.reject(error),
+      )
+      .then(() => {
+        active = false;
+        pump();
+      });
+  };
+
+  return {
+    calls,
+    request: vi.fn((name, options, callback) => {
+      calls.push({ name, options, callback });
+      return new Promise((resolve, reject) => {
+        queue.push({ name, options, callback, resolve, reject });
+        pump();
+      });
+    }),
+  };
 }
 
 function postWebSocketEvent(eventType, extra = {}) {
@@ -228,6 +261,125 @@ GM_webSocket({
     expect(chrome.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({
       action: 'GM_webSocket',
     }));
+  });
+
+  it('serializes GM.withLock calls for one script and scopes names per script', async () => {
+    const originalDescriptor = Object.getOwnPropertyDescriptor(navigator, 'locks');
+    const lockManager = createQueuedLockManager();
+    Object.defineProperty(navigator, 'locks', { configurable: true, value: lockManager });
+
+    try {
+      const first = buildWrappedScript(makeScript(`
+window.__lockOrder = [];
+window.__firstLockResult = GM.withLock('refresh', async lock => {
+  window.__lockOrder.push('first-enter');
+  await new Promise(resolve => { window.__releaseFirst = resolve; });
+  window.__lockOrder.push('first-exit');
+  return lock.name;
+});
+`, ['GM_withLock'], 'script_lock_same'));
+      const second = buildWrappedScript(makeScript(`
+window.__secondLockResult = GM_withLock('refresh', async lock => {
+  window.__lockOrder.push('second-enter');
+  return lock.name;
+});
+`, ['GM.withLock'], 'script_lock_same'));
+
+      new Function(first)();
+      await flushWrappedScript();
+      new Function(second)();
+      await flushWrappedScript();
+
+      expect(lockManager.request).toHaveBeenCalledTimes(2);
+      expect(lockManager.calls.map(call => call.name)).toEqual([
+        'ScriptVault:script_lock_same:refresh',
+        'ScriptVault:script_lock_same:refresh',
+      ]);
+      expect(window.__lockOrder).toEqual(['first-enter']);
+
+      window.__releaseFirst();
+      await expect(window.__firstLockResult).resolves.toBe('ScriptVault:script_lock_same:refresh');
+      await expect(window.__secondLockResult).resolves.toBe('ScriptVault:script_lock_same:refresh');
+      expect(window.__lockOrder).toEqual(['first-enter', 'first-exit', 'second-enter']);
+
+      const isolated = createQueuedLockManager();
+      Object.defineProperty(navigator, 'locks', { configurable: true, value: isolated });
+      const scriptA = buildWrappedScript(makeScript(`
+window.__lockA = GM_withLock('refresh', lock => lock.name);
+`, ['GM_withLock'], 'script_lock_a'));
+      const scriptB = buildWrappedScript(makeScript(`
+window.__lockB = GM.withLock('refresh', lock => lock.name);
+`, ['GM.withLock'], 'script_lock_b'));
+      new Function(scriptA)();
+      new Function(scriptB)();
+      await flushWrappedScript();
+
+      expect(isolated.calls.map(call => call.name)).toEqual([
+        'ScriptVault:script_lock_a:refresh',
+        'ScriptVault:script_lock_b:refresh',
+      ]);
+      await expect(window.__lockA).resolves.toBe('ScriptVault:script_lock_a:refresh');
+      await expect(window.__lockB).resolves.toBe('ScriptVault:script_lock_b:refresh');
+    } finally {
+      if (originalDescriptor) Object.defineProperty(navigator, 'locks', originalDescriptor);
+      else Reflect.deleteProperty(navigator, 'locks');
+      delete window.__lockOrder;
+      delete window.__firstLockResult;
+      delete window.__secondLockResult;
+      delete window.__releaseFirst;
+      delete window.__lockA;
+      delete window.__lockB;
+    }
+  });
+
+  it('releases a lock after callback errors and forwards abort signals', async () => {
+    const originalDescriptor = Object.getOwnPropertyDescriptor(navigator, 'locks');
+    const lockManager = createQueuedLockManager();
+    const controller = new AbortController();
+    Object.defineProperty(navigator, 'locks', { configurable: true, value: lockManager });
+    window.__lockSignal = controller.signal;
+
+    try {
+      const wrapped = buildWrappedScript(makeScript(`
+window.__lockThrowResult = GM.withLock('refresh', () => {
+  throw new Error('lock callback failed');
+}).catch(error => error.message);
+window.__lockRecoveryResult = GM_withLock('refresh', () => 'recovered', { signal: window.__lockSignal });
+`, ['GM_withLock']));
+      new Function(wrapped)();
+      await flushWrappedScript();
+
+      await expect(window.__lockThrowResult).resolves.toBe('lock callback failed');
+      await expect(window.__lockRecoveryResult).resolves.toBe('recovered');
+      expect(lockManager.calls[1].options.signal).toBe(controller.signal);
+    } finally {
+      if (originalDescriptor) Object.defineProperty(navigator, 'locks', originalDescriptor);
+      else Reflect.deleteProperty(navigator, 'locks');
+      delete window.__lockSignal;
+      delete window.__lockThrowResult;
+      delete window.__lockRecoveryResult;
+    }
+  });
+
+  it('denies GM.withLock without an explicit grant', async () => {
+    const originalDescriptor = Object.getOwnPropertyDescriptor(navigator, 'locks');
+    const lockManager = { request: vi.fn() };
+    Object.defineProperty(navigator, 'locks', { configurable: true, value: lockManager });
+
+    try {
+      const wrapped = buildWrappedScript(makeScript(`
+window.__lockDenied = GM.withLock('refresh', () => 'unexpected').catch(error => error.message);
+`, ['none']));
+      new Function(wrapped)();
+      await flushWrappedScript();
+
+      await expect(window.__lockDenied).resolves.toBe('GM.withLock requires @grant GM_withLock');
+      expect(lockManager.request).not.toHaveBeenCalled();
+    } finally {
+      if (originalDescriptor) Object.defineProperty(navigator, 'locks', originalDescriptor);
+      else Reflect.deleteProperty(navigator, 'locks');
+      delete window.__lockDenied;
+    }
   });
 
   it('keeps the background WebSocket bridge behind grant, @connect, and internal-host guards', () => {

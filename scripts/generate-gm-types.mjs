@@ -357,6 +357,15 @@ interface GMUrlChangeEventDetail {
   oldUrl: string;
 }
 
+interface GMLockOptions {
+  ifAvailable?: boolean;
+  mode?: LockMode;
+  signal?: AbortSignal;
+  steal?: boolean;
+}
+
+type GMLockCallback<T> = (lock: Lock | null) => T | PromiseLike<T>;
+
 interface GMAsyncApi {
   info: GMInfo;
   getValue<T = GMValue>(key: string, defaultValue?: T): Promise<T>;
@@ -393,6 +402,7 @@ interface GMAsyncApi {
   saveTab(data: Record<string, unknown>): Promise<void>;
   getTabs(): Promise<Record<string, Record<string, unknown>>>;
   loadScript(url: string, options?: GMLoadScriptOptions): Promise<void>;
+  withLock<T>(name: string, callback: GMLockCallback<T>, options?: GMLockOptions): Promise<Awaited<T>>;
   cookies: GMCookiePromiseApi;
   cookie: GMCookiePromiseApi;
   webRequest(rules: GMWebRequestRule | GMWebRequestRule[], listener?: GMWebRequestListener): Promise<void>;
@@ -440,6 +450,7 @@ declare function GM_addStyle(css: string): HTMLStyleElement;
 declare function GM_addElement<K extends keyof HTMLElementTagNameMap>(tagName: K, attributes?: GMAddElementAttributes): HTMLElementTagNameMap[K] | null;
 declare function GM_addElement<K extends keyof HTMLElementTagNameMap>(parentNode: Node | null, tagName: K, attributes?: GMAddElementAttributes): HTMLElementTagNameMap[K] | null;
 declare function GM_loadScript(url: string, options?: GMLoadScriptOptions): Promise<void>;
+declare function GM_withLock<T>(name: string, callback: GMLockCallback<T>, options?: GMLockOptions): Promise<Awaited<T>>;
 declare function GM_getTab(callback?: (tab: Record<string, unknown>) => void): Record<string, unknown>;
 declare function GM_saveTab(data: Record<string, unknown>, callback?: () => void): void;
 declare function GM_getTabs(callback?: (tabs: Record<string, Record<string, unknown>>) => void): void;
