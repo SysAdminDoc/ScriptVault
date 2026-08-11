@@ -5319,6 +5319,11 @@ const I18n = (() => {
       "popupDocumentActivitySeparated": "{current} current-document event(s); {stale} earlier-document event(s) kept separate.",
       "popupCurrentDocumentEvent": "{count} event recorded for the current document.",
       "popupCurrentDocumentEvents": "{count} events recorded for the current document.",
+      "executionJournalLatest": "Last execution {outcome} for {script} \xB7 {age}{stale}{detail}",
+      "executionJournalSucceeded": "succeeded",
+      "executionJournalFailed": "failed",
+      "executionJournalStale": "stale",
+      "executionJournalUnknownScript": "unknown script",
       "popupWhyScriptsNotRunning": "Why aren\u2019t my scripts running?",
       "popupScriptRunDiagnostics": "Script run diagnostics",
       "popupDiagnosticStatusRunning": "Running",
@@ -7534,15 +7539,15 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 43,
       "translatedRuntimeMessages": 43,
-      "totalRuntimeMessages": 1996
+      "totalRuntimeMessages": 2001
     },
     "en": {
       "name": "English",
       "direction": "ltr",
       "translationStatus": "complete",
-      "runtimeCoverageBaseline": 1996,
-      "translatedRuntimeMessages": 1996,
-      "totalRuntimeMessages": 1996
+      "runtimeCoverageBaseline": 2001,
+      "translatedRuntimeMessages": 2001,
+      "totalRuntimeMessages": 2001
     },
     "es": {
       "name": "Espa\xF1ol",
@@ -7550,7 +7555,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 45,
       "translatedRuntimeMessages": 45,
-      "totalRuntimeMessages": 1996
+      "totalRuntimeMessages": 2001
     },
     "fr": {
       "name": "Fran\xE7ais",
@@ -7558,7 +7563,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 43,
       "translatedRuntimeMessages": 43,
-      "totalRuntimeMessages": 1996
+      "totalRuntimeMessages": 2001
     },
     "he": {
       "name": "\u05E2\u05D1\u05E8\u05D9\u05EA",
@@ -7566,7 +7571,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 58,
       "translatedRuntimeMessages": 58,
-      "totalRuntimeMessages": 1996
+      "totalRuntimeMessages": 2001
     },
     "ja": {
       "name": "\u65E5\u672C\u8A9E",
@@ -7574,7 +7579,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 71,
       "translatedRuntimeMessages": 71,
-      "totalRuntimeMessages": 1996
+      "totalRuntimeMessages": 2001
     },
     "pt": {
       "name": "Portugu\xEAs",
@@ -7582,7 +7587,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 42,
       "translatedRuntimeMessages": 42,
-      "totalRuntimeMessages": 1996
+      "totalRuntimeMessages": 2001
     },
     "ru": {
       "name": "\u0420\u0443\u0441\u0441\u043A\u0438\u0439",
@@ -7590,7 +7595,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 117,
       "translatedRuntimeMessages": 117,
-      "totalRuntimeMessages": 1996
+      "totalRuntimeMessages": 2001
     },
     "zh": {
       "name": "\u4E2D\u6587",
@@ -7598,7 +7603,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 46,
       "translatedRuntimeMessages": 46,
-      "totalRuntimeMessages": 1996
+      "totalRuntimeMessages": 2001
     }
   };
 
@@ -10033,13 +10038,44 @@ const ExecutionDiagnostics = (() => {
   var execution_diagnostics_exports = {};
   __export(execution_diagnostics_exports, {
     ExecutionDiagnostics: () => ExecutionDiagnostics,
+    classifyExecutionError: () => classifyExecutionError,
+    createExecutionDiagnosticsJournal: () => createExecutionDiagnosticsJournal,
+    createExecutionDiagnosticsJournalPersistence: () => createExecutionDiagnosticsJournalPersistence,
     createExecutionDiagnosticsStore: () => createExecutionDiagnosticsStore,
-    default: () => execution_diagnostics_default
+    default: () => execution_diagnostics_default,
+    redactExecutionUrl: () => redactExecutionUrl
   });
   module.exports = __toCommonJS(execution_diagnostics_exports);
   var DEFAULT_MAX_TABS = 64;
   var DEFAULT_MAX_DOCUMENTS_PER_TAB = 24;
   var DEFAULT_MAX_EVENTS_PER_DOCUMENT = 100;
+  var DEFAULT_MAX_JOURNAL_ENTRIES = 256;
+  var DEFAULT_MAX_JOURNAL_ENTRIES_PER_TAB = 32;
+  var DEFAULT_MAX_JOURNAL_AGE_MS = 7 * 24 * 60 * 60 * 1e3;
+  var DEFAULT_MAX_JOURNAL_SERIALIZED_BYTES = 48 * 1024;
+  var DEFAULT_JOURNAL_STALE_AFTER_MS = 15 * 60 * 1e3;
+  var JOURNAL_SCHEMA_VERSION = 1;
+  var JOURNAL_STORAGE_KEY = "svExecutionJournal";
+  var JOURNAL_ID_LENGTH = 48;
+  var JOURNAL_ORIGIN_LENGTH = 256;
+  var JOURNAL_SCRIPT_ID_LENGTH = 256;
+  var JOURNAL_HASH_LENGTH = 8;
+  var JOURNAL_MAX_DURATION_MS = 24 * 60 * 60 * 1e3;
+  var JOURNAL_ERROR_CLASSES = [
+    "AbortError",
+    "EvalError",
+    "NetworkError",
+    "QuotaError",
+    "RangeError",
+    "ReferenceError",
+    "ScriptError",
+    "SecurityError",
+    "SyntaxError",
+    "TimeoutError",
+    "TypeError",
+    "URIError",
+    "UnknownError"
+  ];
   function boundedInteger(value, fallback, minimum = 1) {
     const parsed = Number(value);
     return Number.isInteger(parsed) && parsed >= minimum ? parsed : fallback;
@@ -10047,12 +10083,221 @@ const ExecutionDiagnostics = (() => {
   function cleanString(value, maxLength) {
     return typeof value === "string" ? value.slice(0, maxLength) : "";
   }
+  function boundedPositiveInteger(value, fallback, minimum = 1) {
+    const parsed = Number(value);
+    return Number.isInteger(parsed) && parsed >= minimum ? parsed : fallback;
+  }
+  function utf8ByteLength(value) {
+    if (typeof TextEncoder === "function") return new TextEncoder().encode(value).byteLength;
+    return unescape(encodeURIComponent(value)).length;
+  }
+  function stableHash(value) {
+    let hash = 2166136261;
+    for (let index = 0; index < value.length; index += 1) {
+      hash ^= value.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0).toString(16).padStart(JOURNAL_HASH_LENGTH, "0");
+  }
+  function normalizeOrigin(value) {
+    const raw = cleanString(value, JOURNAL_ORIGIN_LENGTH);
+    if (!raw) return "";
+    try {
+      const parsed = new URL(raw);
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:" && parsed.protocol !== "file:") return "";
+      return parsed.protocol === "file:" ? "file://" : parsed.origin.slice(0, JOURNAL_ORIGIN_LENGTH);
+    } catch (_) {
+      return "";
+    }
+  }
+  function redactExecutionUrl(value) {
+    const raw = cleanString(value, 4096);
+    if (!raw) return { origin: "", urlHash: "" };
+    try {
+      const parsed = new URL(raw);
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:" && parsed.protocol !== "file:") {
+        return { origin: "", urlHash: "" };
+      }
+      const origin = parsed.protocol === "file:" ? "file://" : parsed.origin.slice(0, JOURNAL_ORIGIN_LENGTH);
+      const pathAndQuery = `${parsed.pathname || "/"}${parsed.search || ""}`;
+      return { origin, urlHash: stableHash(pathAndQuery) };
+    } catch (_) {
+      return { origin: "", urlHash: stableHash(raw).slice(0, JOURNAL_HASH_LENGTH) };
+    }
+  }
+  function classifyExecutionError(value) {
+    const raw = cleanString(value, 500);
+    const match = raw.match(/\b(AbortError|EvalError|NetworkError|QuotaError|RangeError|ReferenceError|SecurityError|SyntaxError|TimeoutError|TypeError|URIError)\b/i);
+    if (match) {
+      const errorName = match[1] || "";
+      const canonical = JOURNAL_ERROR_CLASSES.find((name) => name.toLowerCase() === errorName.toLowerCase());
+      if (canonical) return canonical;
+    }
+    return raw ? "ScriptError" : "UnknownError";
+  }
+  function emptyJournalSnapshot() {
+    return { entries: [], latest: null, count: 0, latestAgeMs: null, latestStale: false };
+  }
+  function cloneJournalEntry(entry) {
+    return { ...entry };
+  }
+  function normalizeJournalEntry(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+    const input = value;
+    const tabId = Number(input.tabId);
+    const frameId = Number(input.frameId);
+    const timestamp = Number(input.timestamp);
+    const outcome = input.outcome === "failure" ? "failure" : input.outcome === "success" ? "success" : null;
+    if (!Number.isInteger(tabId) || tabId < 0 || !Number.isInteger(frameId) || frameId < 0 || !Number.isFinite(timestamp) || timestamp < 0 || !outcome) return null;
+    const scriptId = cleanString(input.scriptId, JOURNAL_SCRIPT_ID_LENGTH) || null;
+    const origin = normalizeOrigin(input.origin);
+    const urlHash = /^[0-9a-f]{8}$/i.test(String(input.urlHash || "")) ? String(input.urlHash).toLowerCase() : "";
+    const duration = Number(input.duration);
+    return {
+      id: cleanString(input.id, JOURNAL_ID_LENGTH) || `${timestamp.toString(36)}-${tabId.toString(36)}-${frameId.toString(36)}`,
+      timestamp,
+      tabId,
+      frameId,
+      outcome,
+      scriptId,
+      origin,
+      urlHash,
+      duration: Number.isFinite(duration) && duration >= 0 && duration <= JOURNAL_MAX_DURATION_MS ? duration : null,
+      errorClass: outcome === "failure" ? classifyExecutionError(input.errorClass) : null
+    };
+  }
+  function createExecutionDiagnosticsJournal(limits = {}) {
+    const maxEntries = boundedPositiveInteger(limits.maxEntries, DEFAULT_MAX_JOURNAL_ENTRIES);
+    const maxEntriesPerTab = boundedPositiveInteger(limits.maxEntriesPerTab, DEFAULT_MAX_JOURNAL_ENTRIES_PER_TAB);
+    const maxAgeMs = boundedPositiveInteger(limits.maxAgeMs, DEFAULT_MAX_JOURNAL_AGE_MS);
+    const maxSerializedBytes = boundedPositiveInteger(limits.maxSerializedBytes, DEFAULT_MAX_JOURNAL_SERIALIZED_BYTES, 128);
+    const staleAfterMs = boundedPositiveInteger(limits.staleAfterMs, DEFAULT_JOURNAL_STALE_AFTER_MS);
+    const now = limits.now || Date.now;
+    let sequence = 0;
+    let entries = [];
+    function payload() {
+      return { version: JOURNAL_SCHEMA_VERSION, entries: entries.map(cloneJournalEntry) };
+    }
+    function prune(timestamp) {
+      const cutoff = timestamp - maxAgeMs;
+      entries = entries.filter((entry) => entry.timestamp >= cutoff);
+      const perTab = /* @__PURE__ */ new Map();
+      for (const entry of entries) {
+        const tabEntries = perTab.get(entry.tabId) || [];
+        tabEntries.push(entry);
+        perTab.set(entry.tabId, tabEntries);
+      }
+      const kept = /* @__PURE__ */ new Set();
+      for (const tabEntries of perTab.values()) {
+        tabEntries.sort((left, right) => left.timestamp - right.timestamp || left.id.localeCompare(right.id));
+        tabEntries.slice(-maxEntriesPerTab).forEach((entry) => kept.add(entry));
+      }
+      entries = entries.filter((entry) => kept.has(entry));
+      entries.sort((left, right) => left.timestamp - right.timestamp || left.id.localeCompare(right.id));
+      if (entries.length > maxEntries) entries = entries.slice(-maxEntries);
+      while (entries.length > 0 && utf8ByteLength(JSON.stringify(payload())) > maxSerializedBytes) {
+        entries.shift();
+      }
+    }
+    function record(sender, event) {
+      if (event?.type !== "run" && event?.type !== "error") return null;
+      const tabId = Number(sender?.tab?.id);
+      if (!Number.isInteger(tabId) || tabId < 0) return null;
+      const frameId = Number.isInteger(sender?.frameId) && Number(sender.frameId) >= 0 ? Number(sender.frameId) : 0;
+      const timestamp = Number.isFinite(event?.timestamp) ? Math.max(0, Number(event.timestamp)) : now();
+      const redactedUrl = redactExecutionUrl(event?.url || sender?.tab?.url);
+      const entry = {
+        id: `${timestamp.toString(36)}-${(++sequence).toString(36)}`.slice(0, JOURNAL_ID_LENGTH),
+        timestamp,
+        tabId,
+        frameId,
+        outcome: event.type === "error" ? "failure" : "success",
+        scriptId: cleanString(event.scriptId, JOURNAL_SCRIPT_ID_LENGTH) || null,
+        origin: redactedUrl.origin,
+        urlHash: redactedUrl.urlHash,
+        duration: Number.isFinite(event.duration) && Number(event.duration) >= 0 && Number(event.duration) <= JOURNAL_MAX_DURATION_MS ? Number(event.duration) : null,
+        errorClass: event.type === "error" ? classifyExecutionError(event.error) : null
+      };
+      entries.push(entry);
+      prune(timestamp);
+      return entries.includes(entry) ? cloneJournalEntry(entry) : null;
+    }
+    function hydrate(value) {
+      const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+      const rawEntries = Array.isArray(source.entries) ? source.entries : [];
+      entries = rawEntries.map(normalizeJournalEntry).filter((entry) => !!entry);
+      sequence = entries.length;
+      prune(now());
+      return entries.length;
+    }
+    function snapshot(tabId, timestamp = now()) {
+      if (!Number.isInteger(tabId) || Number(tabId) < 0) return emptyJournalSnapshot();
+      prune(timestamp);
+      const matching = entries.filter((entry) => entry.tabId === Number(tabId)).sort((left, right) => right.timestamp - left.timestamp || right.id.localeCompare(left.id));
+      const latest = matching[0] || null;
+      const latestAgeMs = latest ? Math.max(0, timestamp - latest.timestamp) : null;
+      return {
+        entries: matching.map(cloneJournalEntry),
+        latest: latest ? cloneJournalEntry(latest) : null,
+        count: matching.length,
+        latestAgeMs,
+        latestStale: latestAgeMs !== null && latestAgeMs >= staleAfterMs
+      };
+    }
+    function clear(tabId) {
+      if (Number.isInteger(tabId) && Number(tabId) >= 0) {
+        entries = entries.filter((entry) => entry.tabId !== Number(tabId));
+      } else {
+        entries = [];
+      }
+    }
+    return Object.freeze({ record, hydrate, snapshot, clear, toStorage: payload });
+  }
+  function createExecutionDiagnosticsJournalPersistence(journal, storage, storageKey = JOURNAL_STORAGE_KEY) {
+    let writeChain = Promise.resolve();
+    let lastError = null;
+    let lastWriteAt = null;
+    async function hydrate() {
+      try {
+        const stored = await storage.get([storageKey]);
+        const loaded = journal.hydrate(stored?.[storageKey]);
+        lastError = null;
+        return { loaded, error: null };
+      } catch (error) {
+        lastError = cleanString(error instanceof Error ? error.message : error, 256) || "storage read failed";
+        return { loaded: 0, error: lastError };
+      }
+    }
+    function schedule() {
+      writeChain = writeChain.then(async () => {
+        try {
+          await storage.set({ [storageKey]: journal.toStorage() });
+          lastError = null;
+          lastWriteAt = Date.now();
+        } catch (error) {
+          lastError = cleanString(error instanceof Error ? error.message : error, 256) || "storage write failed";
+        }
+      });
+      return writeChain;
+    }
+    async function clear(tabId) {
+      journal.clear(tabId);
+      await schedule();
+    }
+    return Object.freeze({
+      hydrate,
+      schedule,
+      clear,
+      getStatus: () => ({ lastError, lastWriteAt })
+    });
+  }
   function emptySnapshot(tabId) {
     return {
       tabId,
       currentDocumentId: null,
       currentDocumentIdentity: null,
       documents: [],
+      journal: emptyJournalSnapshot(),
       summary: {
         currentDocuments: 0,
         staleDocuments: 0,
@@ -10128,6 +10373,7 @@ const ExecutionDiagnostics = (() => {
         currentDocumentId: currentTopDocument?.documentId || null,
         currentDocumentIdentity: currentTop,
         documents,
+        journal: emptyJournalSnapshot(),
         summary: {
           currentDocuments: documents.filter((document) => document.isCurrent).length,
           staleDocuments: documents.filter((document) => document.stale).length,
@@ -10207,7 +10453,11 @@ const ExecutionDiagnostics = (() => {
     }
     return Object.freeze({ record, snapshot, clear });
   }
-  var ExecutionDiagnostics = Object.freeze({ createExecutionDiagnosticsStore });
+  var ExecutionDiagnostics = Object.freeze({
+    createExecutionDiagnosticsJournal,
+    createExecutionDiagnosticsJournalPersistence,
+    createExecutionDiagnosticsStore
+  });
   var execution_diagnostics_default = ExecutionDiagnostics;
   return module.exports.default || module.exports.ExecutionDiagnostics || module.exports;
 })();
@@ -31540,13 +31790,21 @@ const SessionState = {
   _OTT_KEY: 'sessionOpenTabTrackers',
   _AWT_KEY: 'sessionAudioWatchedTabs',
   _PD_KEY: 'sessionPendingDownloads',
+  _HYDRATE_TIMEOUT_MS: 5_000,
   _hydrated: false,
   async hydrate() {
     if (this._hydrated) return;
     this._hydrated = true;
     if (!chrome?.storage?.session) return;
+    let timeoutId = null;
     try {
-      const data = await chrome.storage.session.get([this._NC_KEY, this._OTT_KEY, this._AWT_KEY, this._PD_KEY]);
+      const data = await Promise.race([
+        chrome.storage.session.get([this._NC_KEY, this._OTT_KEY, this._AWT_KEY, this._PD_KEY]),
+        new Promise(resolve => {
+          timeoutId = setTimeout(() => resolve(null), this._HYDRATE_TIMEOUT_MS);
+        }),
+      ]);
+      if (!data || typeof data !== 'object') return;
       const nc = data[this._NC_KEY];
       if (nc && typeof nc === 'object') {
         if (!self._notifCallbacks) self._notifCallbacks = new Map();
@@ -31575,6 +31833,9 @@ const SessionState = {
         }
       }
     } catch (_) { /* session storage unavailable */ }
+    finally {
+      if (timeoutId !== null) clearTimeout(timeoutId);
+    }
   },
   _persist(key, source) {
     if (!chrome?.storage?.session) return;
@@ -38260,9 +38521,39 @@ async function resetPerScriptSettings(scriptId) {
 // same-tab navigation so DevTools and status surfaces do not imply that stale
 // frame activity belongs to the page currently visible in the tab.
 const executionDiagnosticsStore = ExecutionDiagnostics.createExecutionDiagnosticsStore();
+// Outcome continuity is a separate, privacy-safe journal. Session storage
+// survives MV3 worker restarts without entering sync/export data, while the
+// journal module enforces count, age, per-tab, and serialized-byte caps before
+// anything reaches the browser storage API.
+const executionDiagnosticsJournal = ExecutionDiagnostics.createExecutionDiagnosticsJournal();
+const executionJournalStorage = chrome.storage?.session &&
+  typeof chrome.storage.session.get === 'function' &&
+  typeof chrome.storage.session.set === 'function'
+  ? chrome.storage.session
+  : null;
+const executionDiagnosticsJournalPersistence = executionJournalStorage
+  ? ExecutionDiagnostics.createExecutionDiagnosticsJournalPersistence(executionDiagnosticsJournal, executionJournalStorage)
+  : null;
+
+function getExecutionDiagnosticsSnapshot(tabId) {
+  const numericTabId = Number(tabId);
+  const snapshot = executionDiagnosticsStore.snapshot(numericTabId);
+  snapshot.journal = executionDiagnosticsJournal.snapshot(numericTabId);
+  return snapshot;
+}
+
+function recordExecutionDiagnostic(sender, event) {
+  const snapshot = executionDiagnosticsStore.record(sender, event);
+  if (event?.type === 'run' || event?.type === 'error') {
+    executionDiagnosticsJournal.record(sender, event);
+    executionDiagnosticsJournalPersistence?.schedule().catch(() => {});
+  }
+  return snapshot;
+}
+
 const executionTelemetryHandler = ExecutionTelemetry.createExecutionTelemetryHandler({
   getScript: scriptId => ScriptStorage.get(scriptId),
-  recordDiagnostic: (sender, event) => executionDiagnosticsStore.record(sender, event),
+  recordDiagnostic: (sender, event) => recordExecutionDiagnostic(sender, event),
   scheduleStatsSave: () => _debouncedStatsSave(),
   triggerAfterScript: (scriptId, context) => triggerChainsForAfterScript(scriptId, context),
   addNetworkLog: entry => NetworkLog.add(entry),
@@ -39241,7 +39532,7 @@ backgroundActionRegistry.registerHandlers(RuntimeActionHandler.createRuntimeActi
       };
     }).sort((first, second) => first.name.localeCompare(second.name));
 
-    const executionDiagnostics = executionDiagnosticsStore.snapshot(Number(tabId));
+    const executionDiagnostics = getExecutionDiagnosticsSnapshot(Number(tabId));
     return { url, userScriptsAvailable, globallyEnabled, urlBlocked, executionDiagnostics, scripts };
   },
   updateBadgeForTab: async (tabId, url) => {
@@ -39459,6 +39750,7 @@ backgroundActionRegistry.registerHandlers(RuntimeActionHandler.createRuntimeActi
     if (typeof BackupsDAO !== 'undefined' && BackupsDAO.clear) await BackupsDAO.clear();
     await chrome.storage.local.clear();
     if (chrome.storage.session?.clear) await chrome.storage.session.clear();
+    executionDiagnosticsJournal.clear();
     await SettingsManager.reset();
     if (chrome.declarativeNetRequest?.getDynamicRules) {
       const dynamicRules = await chrome.declarativeNetRequest.getDynamicRules();
@@ -39537,7 +39829,7 @@ backgroundActionRegistry.registerHandlers(DiagnosticsActionHandler.createDiagnos
     }
     return { allStats };
   },
-  getExecutionDiagnostics: tabId => executionDiagnosticsStore.snapshot(tabId),
+  getExecutionDiagnostics: tabId => getExecutionDiagnosticsSnapshot(tabId),
   resetScriptStats: async scriptId => {
     const script = await ScriptStorage.get(scriptId);
     if (script) {
@@ -39547,7 +39839,7 @@ backgroundActionRegistry.registerHandlers(DiagnosticsActionHandler.createDiagnos
     return { success: true };
   },
   reportDocumentReady: (url, sender) => {
-    executionDiagnosticsStore.record(sender, {
+    recordExecutionDiagnostic(sender, {
       type: 'document-ready',
       url: url || sender?.tab?.url || ''
     });
@@ -42482,6 +42774,7 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
   }
   closeGMWebSocketsForTab(tabId);
   executionDiagnosticsStore.clear(tabId);
+  executionDiagnosticsJournalPersistence?.clear(tabId).catch(() => {});
   if (typeof UserStylesEngine !== 'undefined') {
     UserStylesEngine.onTabRemoved(tabId);
   }
@@ -43090,6 +43383,15 @@ async function init() {
   // trackers, download callbacks, audio-watched tabs) from chrome.storage.session
   // so callbacks registered before the SW was killed still fire after wake.
   await SessionState.hydrate();
+  if (executionDiagnosticsJournalPersistence) {
+    // Diagnostics continuity is non-critical to worker readiness. A browser
+    // storage backend that is slow or temporarily unavailable must not hold
+    // every runtime message behind the journal read; the next diagnostics
+    // request will observe the hydrated entries once this promise settles.
+    executionDiagnosticsJournalPersistence.hydrate().then(result => {
+      if (result.error) debugWarn('[ScriptVault] Execution journal hydration unavailable:', result.error);
+    }).catch(() => {});
+  }
   await reconcilePendingDownloads('startup');
 
   // v2.0: Run migration BEFORE ScriptStorage.init() so that any migration-driven

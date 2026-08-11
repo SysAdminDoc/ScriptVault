@@ -307,6 +307,11 @@ const I18n = (() => {
       "popupDocumentActivitySeparated": "{current} current-document event(s); {stale} earlier-document event(s) kept separate.",
       "popupCurrentDocumentEvent": "{count} event recorded for the current document.",
       "popupCurrentDocumentEvents": "{count} events recorded for the current document.",
+      "executionJournalLatest": "Last execution {outcome} for {script} \xB7 {age}{stale}{detail}",
+      "executionJournalSucceeded": "succeeded",
+      "executionJournalFailed": "failed",
+      "executionJournalStale": "stale",
+      "executionJournalUnknownScript": "unknown script",
       "popupWhyScriptsNotRunning": "Why aren\u2019t my scripts running?",
       "popupScriptRunDiagnostics": "Script run diagnostics",
       "popupDiagnosticStatusRunning": "Running",
@@ -2522,15 +2527,15 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 43,
       "translatedRuntimeMessages": 43,
-      "totalRuntimeMessages": 1996
+      "totalRuntimeMessages": 2001
     },
     "en": {
       "name": "English",
       "direction": "ltr",
       "translationStatus": "complete",
-      "runtimeCoverageBaseline": 1996,
-      "translatedRuntimeMessages": 1996,
-      "totalRuntimeMessages": 1996
+      "runtimeCoverageBaseline": 2001,
+      "translatedRuntimeMessages": 2001,
+      "totalRuntimeMessages": 2001
     },
     "es": {
       "name": "Espa\xF1ol",
@@ -2538,7 +2543,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 45,
       "translatedRuntimeMessages": 45,
-      "totalRuntimeMessages": 1996
+      "totalRuntimeMessages": 2001
     },
     "fr": {
       "name": "Fran\xE7ais",
@@ -2546,7 +2551,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 43,
       "translatedRuntimeMessages": 43,
-      "totalRuntimeMessages": 1996
+      "totalRuntimeMessages": 2001
     },
     "he": {
       "name": "\u05E2\u05D1\u05E8\u05D9\u05EA",
@@ -2554,7 +2559,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 58,
       "translatedRuntimeMessages": 58,
-      "totalRuntimeMessages": 1996
+      "totalRuntimeMessages": 2001
     },
     "ja": {
       "name": "\u65E5\u672C\u8A9E",
@@ -2562,7 +2567,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 71,
       "translatedRuntimeMessages": 71,
-      "totalRuntimeMessages": 1996
+      "totalRuntimeMessages": 2001
     },
     "pt": {
       "name": "Portugu\xEAs",
@@ -2570,7 +2575,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 42,
       "translatedRuntimeMessages": 42,
-      "totalRuntimeMessages": 1996
+      "totalRuntimeMessages": 2001
     },
     "ru": {
       "name": "\u0420\u0443\u0441\u0441\u043A\u0438\u0439",
@@ -2578,7 +2583,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 117,
       "translatedRuntimeMessages": 117,
-      "totalRuntimeMessages": 1996
+      "totalRuntimeMessages": 2001
     },
     "zh": {
       "name": "\u4E2D\u6587",
@@ -2586,7 +2591,7 @@ const I18n = (() => {
       "translationStatus": "partial",
       "runtimeCoverageBaseline": 46,
       "translatedRuntimeMessages": 46,
-      "totalRuntimeMessages": 1996
+      "totalRuntimeMessages": 2001
     }
   };
 

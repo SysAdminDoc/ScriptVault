@@ -4,6 +4,9 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased] — Minimal workbench surfaces
 
+- Persisted a bounded, redacted execution journal across service-worker
+  restarts, surfaced latest age/stale outcomes in diagnostics surfaces, and
+  sanitized journal trace exports.
 - Awaited and serialized dashboard view transitions before applying workbench
   filters and deep-link focus, with bounded abort recovery for headless and
   backgrounded renderers.

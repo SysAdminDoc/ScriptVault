@@ -39,14 +39,16 @@ function rehydrationUserscript() {
   ].join('\n');
 }
 
-async function expectRehydrated(app, url) {
+async function openRehydratedTarget(app, url) {
   const target = await app.context.newPage();
-  try {
-    await target.goto(url, { waitUntil: 'domcontentloaded' });
-    await expect(target.locator('html')).toHaveAttribute('data-sv-sw-rehydrated', 'true', { timeout: 20_000 });
-  } finally {
-    await target.close().catch(() => {});
-  }
+  await target.goto(url, { waitUntil: 'domcontentloaded' });
+  await expect(target.locator('html')).toHaveAttribute('data-sv-sw-rehydrated', 'true', { timeout: 20_000 });
+  return target;
+}
+
+async function expectRehydrated(app, url) {
+  const target = await openRehydratedTarget(app, url);
+  await target.close().catch(() => {});
 }
 
 async function stopExtensionServiceWorker(app) {
@@ -70,6 +72,7 @@ async function stopExtensionServiceWorker(app) {
 test('enabled scripts are registered again after extension service worker restart', async () => {
   const server = await startTargetServer();
   const app = await launchScriptVault();
+  let target = null;
   try {
     const dashboard = await openExtensionPage(app);
     const executionCapability = await ensureUserScriptsAvailable(app, dashboard);
@@ -79,7 +82,18 @@ test('enabled scripts are registered again after extension service worker restar
       action: 'saveScript',
       data: { id: SCRIPT_ID, code: rehydrationUserscript(), enabled: true },
     })).resolves.toMatchObject({ success: true, scriptId: SCRIPT_ID });
-    await expectRehydrated(app, `${server.url}/before-reload`);
+    target = await openRehydratedTarget(app, `${server.url}/before-reload`);
+    const tabId = await dashboard.evaluate(async targetUrl => {
+      const tabs = await chrome.tabs.query({});
+      return tabs.find(tab => tab.url?.startsWith(targetUrl))?.id || null;
+    }, server.url);
+    expect(tabId).toEqual(expect.any(Number));
+    await expect.poll(() => sendRuntimeMessage(dashboard, {
+      action: 'getExecutionDiagnostics',
+      tabId,
+    }), { timeout: 20_000 }).toMatchObject({
+      journal: { latest: { outcome: 'success', scriptId: SCRIPT_ID } },
+    });
 
     const previousWorkerTargetId = await stopExtensionServiceWorker(app);
     await dashboard.close().catch(() => {});
@@ -90,8 +104,18 @@ test('enabled scripts are registered again after extension service worker restar
     const currentWorker = app.context.serviceWorkers().find(worker =>
       worker.url().startsWith(`chrome-extension://${app.extensionId}/`));
     expect(currentWorker, `service worker ${previousWorkerTargetId} was not restarted`).toBeTruthy();
+    await expect.poll(() => sendRuntimeMessage(afterReloadDashboard, {
+      action: 'getExecutionDiagnostics',
+      tabId,
+    }), { timeout: 20_000 }).toMatchObject({
+      journal: {
+        latest: { outcome: 'success', scriptId: SCRIPT_ID },
+        latestAgeMs: expect.any(Number),
+      },
+    });
     await expectRehydrated(app, `${server.url}/after-reload`);
   } finally {
+    if (target) await target.close().catch(() => {});
     await app.close();
     await server.close();
   }

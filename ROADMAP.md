@@ -180,13 +180,6 @@ _Scope not covered by the 2026-08-02 pass. Not findings; each needs its own audi
   Acceptance: a PR is open against awesome-userscripts adding ScriptVault with an accurate one-line description and the four missing managers; the release runbook records where the product is indexed so the list does not go stale again.
   Complexity: S
 
-- [ ] P2 — Persist a bounded, redacted execution journal across service-worker restarts
-  Why: The current live diagnostics store is bounded but intentionally lasts only for the current service-worker lifetime, so the context for a failed run disappears when MV3 suspends or restarts the worker.
-  Evidence: `src/background/execution-diagnostics.ts:85-99,145-294` keeps tabs/documents/events in memory with count caps, and `src/background/core.ts:7309-7316` documents the lifetime boundary. Popup, side panel, and DevTools already consume live diagnostics; this item extends continuity rather than adding another “why did it not run?” surface. The unified uBlock Origin logger is a comparable observability model: https://github.com/gorhill/uBlock/wiki/The-logger
-  Touches: `src/background/execution-diagnostics.ts`, core diagnostic message handlers, `chrome.storage.session`/bounded IndexedDB adapter, popup/sidepanel/DevTools stale-state rendering, trace export sanitizer, and diagnostics tests.
-  Acceptance: After a controlled service-worker stop/start, the latest bounded execution success/failure remains visible with an age/stale indicator; journal records contain only origin or stable URL hashes plus bounded error classes, never full query strings or script source; count, per-tab, age, and serialized-byte eviction are deterministic and covered by restart, quota, and redaction tests.
-  Complexity: M
-
 - [ ] P2 — Extend single-file local binding into a reviewable folder/project manifest
   Why: ScriptVault ships a permission-aware single-file binding/watch workflow, but a selected folder cannot currently represent multiple `.user.js`/`.user.css` files, additions, renames, deletions, or project-level conflicts; external-editor workflows in ScriptCat, Safari Userscripts, and community requests show this is a concrete authoring gap.
   Evidence: `pages/dashboard.js` local workspace binding/watch code around `11774+` stores one script/file relationship, while `src/modules/sync-providers.ts:151-153,744+` writes one `scriptvault-backup.json`; there is no relative-path manifest or folder reconciliation layer. Comparable evidence: https://docs.scriptcat.org/en/docs/use/vscode/, https://github.com/quoid/userscripts, https://www.reddit.com/r/userscripts/comments/1pt9xb5, https://www.reddit.com/r/userscripts/comments/1odi87w

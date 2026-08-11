@@ -757,13 +757,21 @@ const SessionState = {
   _OTT_KEY: 'sessionOpenTabTrackers',
   _AWT_KEY: 'sessionAudioWatchedTabs',
   _PD_KEY: 'sessionPendingDownloads',
+  _HYDRATE_TIMEOUT_MS: 5_000,
   _hydrated: false,
   async hydrate() {
     if (this._hydrated) return;
     this._hydrated = true;
     if (!chrome?.storage?.session) return;
+    let timeoutId = null;
     try {
-      const data = await chrome.storage.session.get([this._NC_KEY, this._OTT_KEY, this._AWT_KEY, this._PD_KEY]);
+      const data = await Promise.race([
+        chrome.storage.session.get([this._NC_KEY, this._OTT_KEY, this._AWT_KEY, this._PD_KEY]),
+        new Promise(resolve => {
+          timeoutId = setTimeout(() => resolve(null), this._HYDRATE_TIMEOUT_MS);
+        }),
+      ]);
+      if (!data || typeof data !== 'object') return;
       const nc = data[this._NC_KEY];
       if (nc && typeof nc === 'object') {
         if (!self._notifCallbacks) self._notifCallbacks = new Map();
@@ -792,6 +800,9 @@ const SessionState = {
         }
       }
     } catch (_) { /* session storage unavailable */ }
+    finally {
+      if (timeoutId !== null) clearTimeout(timeoutId);
+    }
   },
   _persist(key, source) {
     if (!chrome?.storage?.session) return;
@@ -7477,9 +7488,39 @@ async function resetPerScriptSettings(scriptId) {
 // same-tab navigation so DevTools and status surfaces do not imply that stale
 // frame activity belongs to the page currently visible in the tab.
 const executionDiagnosticsStore = ExecutionDiagnostics.createExecutionDiagnosticsStore();
+// Outcome continuity is a separate, privacy-safe journal. Session storage
+// survives MV3 worker restarts without entering sync/export data, while the
+// journal module enforces count, age, per-tab, and serialized-byte caps before
+// anything reaches the browser storage API.
+const executionDiagnosticsJournal = ExecutionDiagnostics.createExecutionDiagnosticsJournal();
+const executionJournalStorage = chrome.storage?.session &&
+  typeof chrome.storage.session.get === 'function' &&
+  typeof chrome.storage.session.set === 'function'
+  ? chrome.storage.session
+  : null;
+const executionDiagnosticsJournalPersistence = executionJournalStorage
+  ? ExecutionDiagnostics.createExecutionDiagnosticsJournalPersistence(executionDiagnosticsJournal, executionJournalStorage)
+  : null;
+
+function getExecutionDiagnosticsSnapshot(tabId) {
+  const numericTabId = Number(tabId);
+  const snapshot = executionDiagnosticsStore.snapshot(numericTabId);
+  snapshot.journal = executionDiagnosticsJournal.snapshot(numericTabId);
+  return snapshot;
+}
+
+function recordExecutionDiagnostic(sender, event) {
+  const snapshot = executionDiagnosticsStore.record(sender, event);
+  if (event?.type === 'run' || event?.type === 'error') {
+    executionDiagnosticsJournal.record(sender, event);
+    executionDiagnosticsJournalPersistence?.schedule().catch(() => {});
+  }
+  return snapshot;
+}
+
 const executionTelemetryHandler = ExecutionTelemetry.createExecutionTelemetryHandler({
   getScript: scriptId => ScriptStorage.get(scriptId),
-  recordDiagnostic: (sender, event) => executionDiagnosticsStore.record(sender, event),
+  recordDiagnostic: (sender, event) => recordExecutionDiagnostic(sender, event),
   scheduleStatsSave: () => _debouncedStatsSave(),
   triggerAfterScript: (scriptId, context) => triggerChainsForAfterScript(scriptId, context),
   addNetworkLog: entry => NetworkLog.add(entry),
@@ -8458,7 +8499,7 @@ backgroundActionRegistry.registerHandlers(RuntimeActionHandler.createRuntimeActi
       };
     }).sort((first, second) => first.name.localeCompare(second.name));
 
-    const executionDiagnostics = executionDiagnosticsStore.snapshot(Number(tabId));
+    const executionDiagnostics = getExecutionDiagnosticsSnapshot(Number(tabId));
     return { url, userScriptsAvailable, globallyEnabled, urlBlocked, executionDiagnostics, scripts };
   },
   updateBadgeForTab: async (tabId, url) => {
@@ -8676,6 +8717,7 @@ backgroundActionRegistry.registerHandlers(RuntimeActionHandler.createRuntimeActi
     if (typeof BackupsDAO !== 'undefined' && BackupsDAO.clear) await BackupsDAO.clear();
     await chrome.storage.local.clear();
     if (chrome.storage.session?.clear) await chrome.storage.session.clear();
+    executionDiagnosticsJournal.clear();
     await SettingsManager.reset();
     if (chrome.declarativeNetRequest?.getDynamicRules) {
       const dynamicRules = await chrome.declarativeNetRequest.getDynamicRules();
@@ -8754,7 +8796,7 @@ backgroundActionRegistry.registerHandlers(DiagnosticsActionHandler.createDiagnos
     }
     return { allStats };
   },
-  getExecutionDiagnostics: tabId => executionDiagnosticsStore.snapshot(tabId),
+  getExecutionDiagnostics: tabId => getExecutionDiagnosticsSnapshot(tabId),
   resetScriptStats: async scriptId => {
     const script = await ScriptStorage.get(scriptId);
     if (script) {
@@ -8764,7 +8806,7 @@ backgroundActionRegistry.registerHandlers(DiagnosticsActionHandler.createDiagnos
     return { success: true };
   },
   reportDocumentReady: (url, sender) => {
-    executionDiagnosticsStore.record(sender, {
+    recordExecutionDiagnostic(sender, {
       type: 'document-ready',
       url: url || sender?.tab?.url || ''
     });
@@ -11699,6 +11741,7 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
   }
   closeGMWebSocketsForTab(tabId);
   executionDiagnosticsStore.clear(tabId);
+  executionDiagnosticsJournalPersistence?.clear(tabId).catch(() => {});
   if (typeof UserStylesEngine !== 'undefined') {
     UserStylesEngine.onTabRemoved(tabId);
   }
@@ -12307,6 +12350,15 @@ async function init() {
   // trackers, download callbacks, audio-watched tabs) from chrome.storage.session
   // so callbacks registered before the SW was killed still fire after wake.
   await SessionState.hydrate();
+  if (executionDiagnosticsJournalPersistence) {
+    // Diagnostics continuity is non-critical to worker readiness. A browser
+    // storage backend that is slow or temporarily unavailable must not hold
+    // every runtime message behind the journal read; the next diagnostics
+    // request will observe the hydrated entries once this promise settles.
+    executionDiagnosticsJournalPersistence.hydrate().then(result => {
+      if (result.error) debugWarn('[ScriptVault] Execution journal hydration unavailable:', result.error);
+    }).catch(() => {});
+  }
   await reconcilePendingDownloads('startup');
 
   // v2.0: Run migration BEFORE ScriptStorage.init() so that any migration-driven

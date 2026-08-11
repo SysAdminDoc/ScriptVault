@@ -658,16 +658,38 @@
     withStats.sort((a, b) => (b.stats.totalTime || 0) - (a.stats.totalTime || 0));
     const maxTotal = withStats.reduce((m, s) => Math.max(m, s.stats.totalTime || 0), 1);
     if (activeTab === 'execution') {
-      setToolbarStatus(
-        withStats.length
-          ? tDevtools('devtoolsExecutionSummary', 'Showing {count} {scripts} with execution data', {
-              count: String(withStats.length),
-              scripts: scriptLabel(withStats.length)
-            })
-          : (filterText && executionScripts.length
-              ? tDevtools('devtoolsNoScriptsMatch', 'No scripts match “{query}”', { query: filterText })
-              : tDevtools('devtoolsNoExecutionDataYet', 'No execution data yet. Scripts will appear here after they run.'))
-      );
+      const journal = executionDiagnostics?.journal || {};
+      const latest = journal.latest;
+      const baseStatus = withStats.length
+        ? tDevtools('devtoolsExecutionSummary', 'Showing {count} {scripts} with execution data', {
+            count: String(withStats.length),
+            scripts: scriptLabel(withStats.length)
+          })
+        : (filterText && executionScripts.length
+            ? tDevtools('devtoolsNoScriptsMatch', 'No scripts match “{query}”', { query: filterText })
+            : tDevtools('devtoolsNoExecutionDataYet', 'No execution data yet. Scripts will appear here after they run.'));
+      let journalStatus = '';
+      if (latest) {
+        const ageMs = Number(journal.latestAgeMs);
+        const age = Number.isFinite(ageMs) ? formatExecutionJournalAge(ageMs) : 'recently';
+        const outcome = latest.outcome === 'failure'
+          ? tDevtools('executionJournalFailed', 'failed')
+          : tDevtools('executionJournalSucceeded', 'succeeded');
+        const stale = journal.latestStale ? ` · ${tDevtools('executionJournalStale', 'stale')}` : '';
+        const detail = latest.errorClass ? ` · ${latest.errorClass}` : '';
+        journalStatus = tDevtools(
+          'executionJournalLatest',
+          `Last execution ${outcome} for ${latest.scriptId || tDevtools('executionJournalUnknownScript', 'unknown script')} · ${age}${stale}${detail}`,
+          {
+            outcome,
+            script: latest.scriptId || tDevtools('executionJournalUnknownScript', 'unknown script'),
+            age,
+            stale,
+            detail,
+          },
+        );
+      }
+      setToolbarStatus([baseStatus, journalStatus].filter(Boolean).join(' · '), journal?.latestStale ? 'warning' : '');
       $('btnClear').disabled = !filterText;
     }
 
@@ -702,6 +724,14 @@
       `);
       tbody.appendChild(tr);
     }
+  }
+
+  function formatExecutionJournalAge(ageMs) {
+    if (ageMs < 1_000) return 'just now';
+    if (ageMs < 60_000) return `${Math.floor(ageMs / 1_000)}s ago`;
+    if (ageMs < 3_600_000) return `${Math.floor(ageMs / 60_000)}m ago`;
+    if (ageMs < 86_400_000) return `${Math.floor(ageMs / 3_600_000)}h ago`;
+    return `${Math.floor(ageMs / 86_400_000)}d ago`;
   }
 
   function renderConsoleState() {
@@ -794,6 +824,28 @@
     };
   }
 
+  function sanitizeExecutionJournalForExport(entry = {}) {
+    const outcome = entry.outcome === 'failure' ? 'failure' : 'success';
+    const urlHash = /^[0-9a-f]{8}$/i.test(String(entry.urlHash || ''))
+      ? String(entry.urlHash).toLowerCase()
+      : '';
+    const errorClass = /^(AbortError|EvalError|NetworkError|QuotaError|RangeError|ReferenceError|ScriptError|SecurityError|SyntaxError|TimeoutError|TypeError|URIError|UnknownError)$/
+      .test(String(entry.errorClass || ''))
+      ? String(entry.errorClass)
+      : null;
+    return {
+      timestamp: Number.isFinite(entry.timestamp) ? Number(entry.timestamp) : 0,
+      tabId: Number.isInteger(entry.tabId) ? Number(entry.tabId) : null,
+      frameId: Number.isInteger(entry.frameId) ? Number(entry.frameId) : 0,
+      outcome,
+      scriptId: entry.scriptId ? sanitizeExportText(entry.scriptId, 256) : null,
+      origin: sanitizeExportUrl(entry.origin, 'document'),
+      urlHash,
+      duration: Number.isFinite(entry.duration) ? Number(entry.duration) : null,
+      errorClass,
+    };
+  }
+
   function headerValue(headers, name) {
     if (!headers || !name) return '';
     const wanted = String(name).toLowerCase();
@@ -857,7 +909,8 @@
     const version = chrome.runtime?.getManifest?.()?.version || 'unknown';
     const executionEntries = scripts.filter(s => s.stats && s.stats.runs > 0);
     const documentEntries = Array.isArray(executionDiagnostics?.documents) ? executionDiagnostics.documents : [];
-    if (!netLog.length && !executionEntries.length && !documentEntries.length) {
+    const journalEntries = Array.isArray(executionDiagnostics?.journal?.entries) ? executionDiagnostics.journal.entries : [];
+    if (!netLog.length && !executionEntries.length && !documentEntries.length && !journalEntries.length) {
       setToolbarStatus(tDevtools('devtoolsNoTraceExport', 'No network or execution data to export yet.'), 'error');
       return;
     }
@@ -889,11 +942,13 @@
         lastFrameId: s.stats.lastFrameId ?? null,
       })),
       documents: documentEntries.map(sanitizeExecutionDocumentForExport),
+      journal: journalEntries.map(sanitizeExecutionJournalForExport),
       summary: {
         totalRequests: netLog.length,
         totalErrors: netLog.filter(e => e.error || (e.status && e.status >= 400)).length,
         totalBytes: netLog.reduce((s, e) => s + (e.responseSize || 0), 0),
         scriptsWithStats: executionEntries.length,
+        journalEntries: journalEntries.length,
         currentDocumentEvents: executionDiagnostics?.summary?.currentEvents || 0,
         staleDocumentEvents: executionDiagnostics?.summary?.staleEvents || 0,
       },

@@ -276,6 +276,11 @@ export const localeCatalogs = {
     "popupDocumentActivitySeparated": "{current} current-document event(s); {stale} earlier-document event(s) kept separate.",
     "popupCurrentDocumentEvent": "{count} event recorded for the current document.",
     "popupCurrentDocumentEvents": "{count} events recorded for the current document.",
+    "executionJournalLatest": "Last execution {outcome} for {script} · {age}{stale}{detail}",
+    "executionJournalSucceeded": "succeeded",
+    "executionJournalFailed": "failed",
+    "executionJournalStale": "stale",
+    "executionJournalUnknownScript": "unknown script",
     "popupWhyScriptsNotRunning": "Why aren’t my scripts running?",
     "popupScriptRunDiagnostics": "Script run diagnostics",
     "popupDiagnosticStatusRunning": "Running",
@@ -3248,15 +3253,15 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 43,
     "translatedRuntimeMessages": 43,
-    "totalRuntimeMessages": 1996
+    "totalRuntimeMessages": 2001
   },
   "en": {
     "name": "English",
     "direction": "ltr",
     "translationStatus": "complete",
-    "runtimeCoverageBaseline": 1996,
-    "translatedRuntimeMessages": 1996,
-    "totalRuntimeMessages": 1996
+    "runtimeCoverageBaseline": 2001,
+    "translatedRuntimeMessages": 2001,
+    "totalRuntimeMessages": 2001
   },
   "es": {
     "name": "Español",
@@ -3264,7 +3269,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 45,
     "translatedRuntimeMessages": 45,
-    "totalRuntimeMessages": 1996
+    "totalRuntimeMessages": 2001
   },
   "fr": {
     "name": "Français",
@@ -3272,7 +3277,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 43,
     "translatedRuntimeMessages": 43,
-    "totalRuntimeMessages": 1996
+    "totalRuntimeMessages": 2001
   },
   "he": {
     "name": "עברית",
@@ -3280,7 +3285,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 58,
     "translatedRuntimeMessages": 58,
-    "totalRuntimeMessages": 1996
+    "totalRuntimeMessages": 2001
   },
   "ja": {
     "name": "日本語",
@@ -3288,7 +3293,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 71,
     "translatedRuntimeMessages": 71,
-    "totalRuntimeMessages": 1996
+    "totalRuntimeMessages": 2001
   },
   "pt": {
     "name": "Português",
@@ -3296,7 +3301,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 42,
     "translatedRuntimeMessages": 42,
-    "totalRuntimeMessages": 1996
+    "totalRuntimeMessages": 2001
   },
   "ru": {
     "name": "Русский",
@@ -3304,7 +3309,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 117,
     "translatedRuntimeMessages": 117,
-    "totalRuntimeMessages": 1996
+    "totalRuntimeMessages": 2001
   },
   "zh": {
     "name": "中文",
@@ -3312,7 +3317,7 @@ export const localeMetadata = {
     "translationStatus": "partial",
     "runtimeCoverageBaseline": 46,
     "translatedRuntimeMessages": 46,
-    "totalRuntimeMessages": 1996
+    "totalRuntimeMessages": 2001
   }
 } as const;
 

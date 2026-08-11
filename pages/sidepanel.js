@@ -604,19 +604,54 @@
     const currentEvents = Number(summary.currentEvents || 0);
     const staleEvents = Number(summary.staleEvents || 0);
     const hasCurrentDocument = !!executionDiagnostics?.currentDocumentIdentity;
-    status.hidden = !hasCurrentDocument && !staleEvents;
+    const journal = executionDiagnostics?.journal || {};
+    const latest = journal.latest;
+    const documentText = hasCurrentDocument || staleEvents
+      ? (staleEvents
+        ? tSidepanel('sideDocumentActivityWithHistory', '{current} current-document events · {stale} earlier-document events kept separate', {
+            current: numberFormatter.format(currentEvents),
+            stale: numberFormatter.format(staleEvents)
+          })
+        : currentEvents
+          ? tSidepanel('sideCurrentDocumentActivity', '{count} events in the current document', { count: numberFormatter.format(currentEvents) })
+          : tSidepanel('sideCurrentDocumentReady', 'Current document ready · waiting for script activity'))
+      : '';
+    let journalText = '';
+    if (latest) {
+      const ageMs = Number(journal.latestAgeMs);
+      const age = Number.isFinite(ageMs) ? formatExecutionJournalAge(ageMs) : 'recently';
+      const outcome = latest.outcome === 'failure'
+        ? tSidepanel('executionJournalFailed', 'failed')
+        : tSidepanel('executionJournalSucceeded', 'succeeded');
+      const stale = journal.latestStale ? ` · ${tSidepanel('executionJournalStale', 'stale')}` : '';
+      const detail = latest.errorClass ? ` · ${latest.errorClass}` : '';
+      journalText = tSidepanel(
+        'executionJournalLatest',
+        `Last execution ${outcome} for ${latest.scriptId || tSidepanel('executionJournalUnknownScript', 'unknown script')} · ${age}${stale}${detail}`,
+        {
+          outcome,
+          script: latest.scriptId || tSidepanel('executionJournalUnknownScript', 'unknown script'),
+          age,
+          stale,
+          detail,
+        },
+      );
+    }
+    status.hidden = !documentText && !journalText;
+    status.classList.toggle('stale', Boolean(journal.latestStale));
     if (status.hidden) {
       status.textContent = '';
       return;
     }
-    status.textContent = staleEvents
-      ? tSidepanel('sideDocumentActivityWithHistory', '{current} current-document events · {stale} earlier-document events kept separate', {
-          current: numberFormatter.format(currentEvents),
-          stale: numberFormatter.format(staleEvents)
-        })
-      : currentEvents
-        ? tSidepanel('sideCurrentDocumentActivity', '{count} events in the current document', { count: numberFormatter.format(currentEvents) })
-        : tSidepanel('sideCurrentDocumentReady', 'Current document ready · waiting for script activity');
+    status.textContent = [documentText, journalText].filter(Boolean).join(' · ');
+  }
+
+  function formatExecutionJournalAge(ageMs) {
+    if (ageMs < 1_000) return 'just now';
+    if (ageMs < 60_000) return `${Math.floor(ageMs / 1_000)}s ago`;
+    if (ageMs < 3_600_000) return `${Math.floor(ageMs / 60_000)}m ago`;
+    if (ageMs < 86_400_000) return `${Math.floor(ageMs / 3_600_000)}h ago`;
+    return `${Math.floor(ageMs / 86_400_000)}d ago`;
   }
 
   function getScriptDocumentActivity(scriptId) {

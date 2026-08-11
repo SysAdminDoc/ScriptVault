@@ -849,6 +849,29 @@
                 );
             html += `<div class="diagnose-summary">${escapeHtml(activityText)}</div>`;
         }
+        const journal = res?.executionDiagnostics?.journal || {};
+        const latest = journal.latest;
+        if (latest) {
+            const ageMs = Number(journal.latestAgeMs);
+            const age = Number.isFinite(ageMs) ? formatExecutionJournalAge(ageMs) : 'recently';
+            const outcome = latest.outcome === 'failure'
+                ? tPopup('executionJournalFailed', 'failed')
+                : tPopup('executionJournalSucceeded', 'succeeded');
+            const stale = journal.latestStale ? ` · ${tPopup('executionJournalStale', 'stale')}` : '';
+            const detail = latest.errorClass ? ` · ${latest.errorClass}` : '';
+            const journalText = tPopup(
+                'executionJournalLatest',
+                `Last execution ${outcome} for ${latest.scriptId || tPopup('executionJournalUnknownScript', 'unknown script')} · ${age}${stale}${detail}`,
+                {
+                    outcome,
+                    script: latest.scriptId || tPopup('executionJournalUnknownScript', 'unknown script'),
+                    age,
+                    stale,
+                    detail,
+                },
+            );
+            html += `<div class="diagnose-summary ${journal.latestStale ? 'stale' : ''}">${escapeHtml(journalText)}</div>`;
+        }
         for (const s of sorted) {
             const status = String(s.status || '').replace(/[^a-z-]/gi, '');
             const statusLabel = diagnosticStatusLabel(s.status);
@@ -862,6 +885,14 @@
                 </div>`;
         }
         safeSetHtml(panel, html);
+    }
+
+    function formatExecutionJournalAge(ageMs) {
+        if (ageMs < 1_000) return 'just now';
+        if (ageMs < 60_000) return `${Math.floor(ageMs / 1_000)}s ago`;
+        if (ageMs < 3_600_000) return `${Math.floor(ageMs / 60_000)}m ago`;
+        if (ageMs < 86_400_000) return `${Math.floor(ageMs / 3_600_000)}h ago`;
+        return `${Math.floor(ageMs / 86_400_000)}d ago`;
     }
 
     async function getCurrentTab() {

@@ -10,7 +10,7 @@ describe('DevTools trace export', () => {
     const start = panelJs.indexOf('  const EXPORT_REDACTED');
     const end = panelJs.indexOf('  function headerValue', start);
     if (start < 0 || end < 0) throw new Error('DevTools export privacy block not found');
-    return new Function(`${panelJs.slice(start, end)}; return { sanitizeExportUrl, sanitizeExportText, sanitizeExportHeaders, sanitizeExecutionDocumentForExport };`)();
+    return new Function(`${panelJs.slice(start, end)}; return { sanitizeExportUrl, sanitizeExportText, sanitizeExportHeaders, sanitizeExecutionDocumentForExport, sanitizeExecutionJournalForExport };`)();
   }
 
   it('defines an exportTrace function in devtools-panel.js', () => {
@@ -24,6 +24,7 @@ describe('DevTools trace export', () => {
     expect(panelJs).toContain('execution:');
     expect(panelJs).toContain('summary:');
     expect(panelJs).toContain('documents: documentEntries');
+    expect(panelJs).toContain('journal: journalEntries.map(sanitizeExecutionJournalForExport)');
     expect(panelJs).toContain('lastDocumentId:');
   });
 
@@ -88,5 +89,30 @@ describe('DevTools trace export', () => {
     expect(safe.events[0]).toMatchObject({ url: 'https://private.example', error: 'Bearer [REDACTED]' });
     expect(JSON.stringify(safe)).not.toContain('secret');
     expect(JSON.stringify(safe)).not.toContain('unexpectedSource');
+  });
+
+  it('exports the persistent execution journal through an allowlist', () => {
+    const { sanitizeExecutionJournalForExport } = exportPrivacyHelpers();
+    const safe = sanitizeExecutionJournalForExport({
+      timestamp: 123,
+      tabId: 7,
+      frameId: 0,
+      outcome: 'failure',
+      scriptId: 'script-1',
+      origin: 'https://example.test/private?token=secret',
+      urlHash: 'ABCDEF12',
+      duration: 12,
+      errorClass: 'TypeError: source should not be retained',
+      source: 'userscript source should not be copied',
+    });
+    expect(safe).toMatchObject({
+      outcome: 'failure',
+      origin: 'https://example.test',
+      urlHash: 'abcdef12',
+      errorClass: null,
+    });
+    expect(JSON.stringify(safe)).not.toContain('secret');
+    expect(JSON.stringify(safe)).not.toContain('userscript source');
+    expect(JSON.stringify(safe)).not.toContain('source');
   });
 });
