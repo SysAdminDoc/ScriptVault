@@ -281,6 +281,14 @@
         return parseInt(navigator.userAgent.match(/(?:Chrome|Chromium)\/(\d+)/)?.[1] || '0', 10);
     }
 
+    function getDashboardUserScriptsCapabilities() {
+        const api = chrome.userScripts;
+        return {
+            userScriptsApiAvailable: typeof api?.getScripts === 'function',
+            userScriptsUpdateAvailable: typeof api?.update === 'function'
+        };
+    }
+
     function buildSetupDoctorView(status = {}, options = {}) {
         if (setupDoctor?.buildSetupDoctorView) {
             return setupDoctor.buildSetupDoctorView(status, {
@@ -4214,15 +4222,20 @@
         try {
             status = await chrome.runtime.sendMessage({ action: 'getExtensionStatus' });
         } catch (_error) {
+            const capabilities = getDashboardUserScriptsCapabilities();
             let localState = 'available';
             try {
-                if (!chrome.userScripts) {
-                    localState = chromeVersion >= 138 ? 'allow-user-scripts-disabled' : 'unsupported-browser';
+                if (!capabilities.userScriptsApiAvailable) {
+                    localState = capabilities.userScriptsUpdateAvailable
+                        ? 'allow-user-scripts-disabled'
+                        : 'unsupported-browser';
                 } else {
                     await chrome.userScripts.getScripts();
                 }
             } catch (_probeError) {
-                localState = chromeVersion >= 138 ? 'allow-user-scripts-disabled' : 'developer-mode-disabled';
+                localState = capabilities.userScriptsUpdateAvailable
+                    ? 'allow-user-scripts-disabled'
+                    : 'developer-mode-disabled';
             }
             status = {
                 userScriptsAvailable: localState === 'available',
@@ -4241,7 +4254,8 @@
                             : '',
                 setupAction: localState === 'developer-mode-disabled' ? 'Open Extensions Page' : 'Open Extension Details',
                 setupUrl: localState === 'developer-mode-disabled' ? 'chrome://extensions' : 'chrome://extensions/?id=' + chrome.runtime.id,
-                chromeVersion
+                chromeVersion,
+                ...capabilities
             };
         }
 
@@ -4307,16 +4321,22 @@
     
     function showSetupInstructions() {
         const chromeVersion = getDashboardChromeVersion();
+        const capabilities = getDashboardUserScriptsCapabilities();
         const fallbackState = getDashboardBrowserName() === 'firefox'
             ? 'firefox-user-scripts-permission'
-            : chromeVersion >= 138
+            : capabilities.userScriptsUpdateAvailable
                 ? 'allow-user-scripts-disabled'
-                : chromeVersion >= 120
+                : capabilities.userScriptsApiAvailable
                     ? 'developer-mode-disabled'
                     : 'unsupported-browser';
         const setupView = buildSetupDoctorView(
-            state.trustCenter.runtimeStatus || { userScriptsAvailable: false, setupState: fallbackState, chromeVersion },
-            { chromeVersion }
+            state.trustCenter.runtimeStatus || {
+                userScriptsAvailable: false,
+                setupState: fallbackState,
+                chromeVersion,
+                ...capabilities
+            },
+            { chromeVersion, ...capabilities }
         );
         let instructions = `
             <h3 style="margin-bottom: 15px; color: var(--text-primary);">${escapeHtml(setupView.helpTitle || 'Setup Instructions')}</h3>
@@ -14559,8 +14579,7 @@
 
     function supportsOneShotRunNow() {
         if (state.runtimeDescriptor?.browserName === 'firefox') return false;
-        const version = parseInt(state.runtimeDescriptor?.browserVersion || '0', 10);
-        return !version || version >= 135;
+        return typeof chrome.userScripts?.execute === 'function';
     }
 
     function isRunnableTabUrl(url = '') {

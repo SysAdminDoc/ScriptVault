@@ -1,6 +1,8 @@
 type SetupDoctorContext = {
   browserName?: string;
   chromeVersion?: number;
+  userScriptsApiAvailable?: boolean;
+  userScriptsUpdateAvailable?: boolean;
   extensionId?: string;
   surface?: 'dashboard' | 'popup' | 'support' | string;
 };
@@ -14,6 +16,8 @@ type SetupDoctorInput = {
   setupAction?: string;
   setupUrl?: string;
   chromeVersion?: number;
+  userScriptsApiAvailable?: boolean;
+  userScriptsUpdateAvailable?: boolean;
   apiProbeError?: string;
   host?: string;
   pattern?: string;
@@ -57,9 +61,12 @@ function normalizeSetupState(status: SetupDoctorInput = {}, context: SetupDoctor
   const browserName = String(context.browserName || '').toLowerCase();
   if (browserName === 'firefox') return 'firefox-user-scripts-permission';
 
-  const chromeVersion = toNumber(status.chromeVersion, toNumber(context.chromeVersion));
-  if (chromeVersion >= 138) return 'allow-user-scripts-disabled';
-  if (chromeVersion >= 120) return 'developer-mode-disabled';
+  const userScriptsUpdateAvailable = status.userScriptsUpdateAvailable
+    ?? context.userScriptsUpdateAvailable;
+  const userScriptsApiAvailable = status.userScriptsApiAvailable
+    ?? context.userScriptsApiAvailable;
+  if (userScriptsUpdateAvailable === true) return 'allow-user-scripts-disabled';
+  if (userScriptsApiAvailable === true) return 'developer-mode-disabled';
   return 'unsupported-browser';
 }
 

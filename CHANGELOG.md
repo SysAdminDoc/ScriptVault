@@ -4,6 +4,10 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased] — Minimal workbench surfaces
 
+- Replaced remaining Chromium milestone capability gates with feature probes for
+  userscript setup, per-script worlds, in-place registration updates, and
+  one-shot execution; the generated browser support matrix now records the
+  upcoming two-week Chrome cadence and explicit M130 support floor.
 - Added a blocking `npm audit signatures --min-release-age=0` release-trust
   check and refreshed the developer pin to Node 24.18.1/npm 11.16.0 while
   retaining the AMO-compatible engine floor. The two currently unfixable

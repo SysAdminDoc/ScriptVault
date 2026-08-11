@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { buildSetupDoctorView } from '../src/modules/user-scripts-setup.ts';
 
 describe('UserScripts setup doctor view model', () => {
-  it('normalizes Chrome 138+ Allow User Scripts recovery', () => {
+  it('normalizes Allow User Scripts recovery from the update API capability', () => {
     const view = buildSetupDoctorView(
-      { userScriptsAvailable: false, chromeVersion: 139 },
+      { userScriptsAvailable: false, chromeVersion: 1, userScriptsApiAvailable: true, userScriptsUpdateAvailable: true },
       { browserName: 'chromium', extensionId: 'abc123' },
     );
 
@@ -18,9 +18,9 @@ describe('UserScripts setup doctor view model', () => {
     expect(view.helpSteps.join(' ')).toContain('Allow User Scripts');
   });
 
-  it('normalizes Chrome 120-137 Developer Mode recovery', () => {
+  it('normalizes Developer Mode recovery when update is not exposed', () => {
     const view = buildSetupDoctorView(
-      { userScriptsAvailable: false, chromeVersion: 137 },
+      { userScriptsAvailable: false, chromeVersion: 999, userScriptsApiAvailable: true, userScriptsUpdateAvailable: false },
       { browserName: 'chromium', extensionId: 'abc123' },
     );
 
@@ -31,6 +31,13 @@ describe('UserScripts setup doctor view model', () => {
       setupUrl: 'chrome://extensions',
     });
     expect(view.bannerText).toContain('Developer Mode');
+  });
+
+  it('does not infer setup capability from a browser version', () => {
+    expect(buildSetupDoctorView(
+      { userScriptsAvailable: false, chromeVersion: 999 },
+      { browserName: 'chromium', extensionId: 'abc123' },
+    ).setupState).toBe('unsupported-browser');
   });
 
   it('normalizes Firefox optional userScripts permission recovery', () => {

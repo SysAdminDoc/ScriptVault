@@ -434,6 +434,8 @@ type UserScriptsSetupState =
 
 interface ExtensionStatusResponse {
   userScriptsAvailable: boolean;
+  userScriptsApiAvailable: boolean;
+  userScriptsUpdateAvailable: boolean;
   setupRequired: boolean;
   setupMessage: string;
   chromeVersion: number;
@@ -460,6 +462,8 @@ interface LocalHealthReportResponse {
   };
   runtime: {
     userScriptsAvailable: boolean;
+    userScriptsApiAvailable: boolean;
+    userScriptsUpdateAvailable: boolean;
     setupRequired: boolean;
     setupState: UserScriptsSetupState;
     setupTitle: string;

@@ -564,21 +564,30 @@
         };
     }
 
+    function getPopupUserScriptsCapabilities() {
+        const api = chrome.userScripts;
+        return {
+            userScriptsApiAvailable: typeof api?.getScripts === 'function',
+            userScriptsUpdateAvailable: typeof api?.update === 'function'
+        };
+    }
+
     function buildPopupSetupFallback(message = '') {
         const chromeVersion = getPopupChromeVersion();
-        let setupState = 'unsupported-browser';
-        if (isPopupFirefox()) {
-            setupState = 'firefox-user-scripts-permission';
-        } else if (chromeVersion >= 138) {
-            setupState = 'allow-user-scripts-disabled';
-        } else if (chromeVersion >= 120) {
-            setupState = 'developer-mode-disabled';
-        }
+        const capabilities = getPopupUserScriptsCapabilities();
+        const setupState = isPopupFirefox()
+            ? 'firefox-user-scripts-permission'
+            : capabilities.userScriptsUpdateAvailable
+                ? 'allow-user-scripts-disabled'
+                : capabilities.userScriptsApiAvailable
+                    ? 'developer-mode-disabled'
+                    : 'unsupported-browser';
         const view = buildPopupSetupDoctorView({
             userScriptsAvailable: false,
             setupState,
             setupMessage: message || '',
-            chromeVersion
+            chromeVersion,
+            ...capabilities
         });
         return {
             setupState: view.setupState,
@@ -587,7 +596,8 @@
             setupAction: view.actionLabel,
             setupActionKind: view.actionKind,
             setupUrl: view.setupUrl,
-            chromeVersion
+            chromeVersion,
+            ...capabilities
         };
     }
 

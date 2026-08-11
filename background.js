@@ -36881,6 +36881,8 @@ async function buildLocalHealthReport() {
     },
     runtime: {
       userScriptsAvailable: !!runtime.userScriptsAvailable,
+      userScriptsApiAvailable: !!runtime.userScriptsApiAvailable,
+      userScriptsUpdateAvailable: !!runtime.userScriptsUpdateAvailable,
       setupRequired: !!runtime.setupRequired,
       setupState: runtime.setupState,
       setupTitle: runtime.setupTitle,
@@ -45864,7 +45866,8 @@ async function cleanupStaleCaches() {
   }
 }
 
-// Detect Chrome major version from user agent (available in service worker via self.navigator)
+// Read the Chromium major version for user-facing diagnostics only. Capability
+// decisions below must use the API surface exposed by the current browser.
 function _getChromeVersion() {
   try {
     const m = (self.navigator?.userAgent || '').match(/(?:Chrome|Chromium)\/(\d+)/);
@@ -45880,7 +45883,8 @@ function _isFirefoxRuntime() {
     // `chrome` alias on Chrome for MV3 compatibility (shared/utils.js), so a
     // `typeof browser !== 'undefined' && browser.runtime.id` check falsely
     // matched on Chrome — showing the Firefox setup banner and disabling
-    // per-script worldId isolation on Chrome 133+. Firefox always reports
+    // per-script worldId isolation on Chromium builds that expose the
+    // configureWorld API. Firefox always reports
     // `Firefox/<version>` in its UA, which registration.ts already relies on.
     return /Firefox\//.test(self.navigator?.userAgent || '');
   } catch (e) {
@@ -45902,7 +45906,7 @@ function _supportsUserScriptsWorldId() {
     if (typeof chrome.userScripts?.configureWorld !== 'function') return false;
     return _worldIdSupportProbe.resolved ? _worldIdSupportProbe.supported : true;
   }
-  return _getChromeVersion() >= 133;
+  return typeof chrome.userScripts?.configureWorld === 'function';
 }
 
 // Result of the one-time Firefox capability probe. `resolved: false` means the
@@ -45928,7 +45932,7 @@ const _WORLD_ID_PROBE_ID = 'sv-worldid-probe';
  * disable isolation that may well work).
  */
 async function _ensureUserScriptWorldIdSupport() {
-  if (!_isFirefoxRuntime()) return _getChromeVersion() >= 133;
+  if (!_isFirefoxRuntime()) return _supportsUserScriptsWorldId();
   if (_worldIdSupportProbe.resolved) return _worldIdSupportProbe.supported;
   if (_worldIdSupportProbe.promise) return _worldIdSupportProbe.promise;
 
@@ -46069,7 +46073,21 @@ function getExtensionDetailsUrl() {
   return 'chrome://extensions';
 }
 
-function buildUserScriptsStatus({ userScriptsAvailable, chromeVersion = _getChromeVersion(), probeError = '' }) {
+function _userScriptsCapabilityFlags() {
+  const api = typeof chrome !== 'undefined' ? chrome.userScripts : undefined;
+  return {
+    userScriptsApiAvailable: typeof api?.getScripts === 'function',
+    userScriptsUpdateAvailable: typeof api?.update === 'function'
+  };
+}
+
+function buildUserScriptsStatus({
+  userScriptsAvailable,
+  chromeVersion = _getChromeVersion(),
+  probeError = '',
+  userScriptsApiAvailable = _userScriptsCapabilityFlags().userScriptsApiAvailable,
+  userScriptsUpdateAvailable = _userScriptsCapabilityFlags().userScriptsUpdateAvailable
+}) {
   let setupState = 'available';
   let setupTitle = '';
   let setupMessage = '';
@@ -46083,13 +46101,13 @@ function buildUserScriptsStatus({ userScriptsAvailable, chromeVersion = _getChro
       setupMessage = 'Grant ScriptVault the optional Firefox userScripts permission, then refresh runtime status.';
       setupAction = 'Grant Permission';
       setupUrl = '';
-    } else if (chromeVersion >= 138) {
+    } else if (userScriptsUpdateAvailable) {
       setupState = 'allow-user-scripts-disabled';
       setupTitle = 'Allow User Scripts is off';
       setupMessage = 'Enable "Allow User Scripts" in Extension Details, then refresh.';
       setupAction = 'Open Extension Details';
       setupUrl = getExtensionDetailsUrl();
-    } else if (chromeVersion >= 120) {
+    } else if (userScriptsApiAvailable) {
       setupState = 'developer-mode-disabled';
       setupTitle = 'Developer Mode required';
       setupMessage = 'Open chrome://extensions and enable Developer Mode to run userscripts.';
@@ -46106,6 +46124,8 @@ function buildUserScriptsStatus({ userScriptsAvailable, chromeVersion = _getChro
 
   const status = {
     userScriptsAvailable,
+    userScriptsApiAvailable: !!userScriptsApiAvailable,
+    userScriptsUpdateAvailable: !!userScriptsUpdateAvailable,
     setupRequired: !userScriptsAvailable,
     setupMessage,
     chromeVersion,
@@ -46177,11 +46197,12 @@ async function probeFileSchemeAccess() {
 
 async function probeUserScriptsAvailability() {
   const chromeVersion = _getChromeVersion();
+  const capabilities = _userScriptsCapabilityFlags();
   let userScriptsAvailable = false;
   let probeError = '';
 
   try {
-    if (!chrome.userScripts || typeof chrome.userScripts.getScripts !== 'function') {
+    if (!capabilities.userScriptsApiAvailable) {
       probeError = 'chrome.userScripts is unavailable';
     } else {
       await chrome.userScripts.getScripts();
@@ -46191,7 +46212,12 @@ async function probeUserScriptsAvailability() {
     probeError = e?.message || String(e || 'chrome.userScripts probe failed');
   }
 
-  const status = buildUserScriptsStatus({ userScriptsAvailable, chromeVersion, probeError });
+  const status = buildUserScriptsStatus({
+    userScriptsAvailable,
+    chromeVersion,
+    probeError,
+    ...capabilities
+  });
   await persistUserScriptsStatus(status);
   return status;
 }
@@ -46223,6 +46249,8 @@ async function configureUserScriptsWorld(status = null) {
     const failedStatus = buildUserScriptsStatus({
       userScriptsAvailable: false,
       chromeVersion: availability.chromeVersion,
+      userScriptsApiAvailable: availability.userScriptsApiAvailable,
+      userScriptsUpdateAvailable: availability.userScriptsUpdateAvailable,
       probeError: e?.message || String(e || 'chrome.userScripts.configureWorld failed')
     });
     await persistUserScriptsStatus(failedStatus);

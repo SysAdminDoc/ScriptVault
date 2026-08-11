@@ -255,6 +255,13 @@ function matrixMarkdown(date) {
   const firefoxManifest = readJson('manifest-firefox.json');
   const version = chromeManifest.version;
   const chromeMin = chromeManifest.minimum_chrome_version || 'unknown';
+  const chromeMinMilestone = Number.parseInt(chromeMin, 10);
+  const chromeSupportMilestones = Number.isFinite(chromeMinMilestone)
+    ? Math.max(0, 153 - chromeMinMilestone)
+    : 'unknown';
+  const chromeSupportMonths = Number.isFinite(chromeMinMilestone)
+    ? Math.round((chromeSupportMilestones * 14) / 30.4375)
+    : 'unknown';
   const firefoxMin = firefoxManifest.browser_specific_settings?.gecko?.strict_min_version || 'unknown';
   const hasFirefoxAndroidTarget = !!firefoxManifest.browser_specific_settings?.gecko_android?.strict_min_version;
   const firefoxEvidence = firefoxLintSummary();
@@ -268,6 +275,8 @@ function matrixMarkdown(date) {
 
   return `<!-- SCRIPT_VAULT_BROWSER_SUPPORT_MATRIX:START -->
 _Last generated: ${date} with \`npm run support:matrix\`. Version source: \`manifest.json\` / \`manifest-firefox.json\` ${version}._
+
+_Chromium cadence note: Chrome moves to a 14-day stable cadence at M153 (2026-09-08), or about 26 milestones per year. ScriptVault supports M${chromeMin}+; measured against M153, that is a ${chromeSupportMilestones}-milestone / approximately ${chromeSupportMonths}-month calendar window, expressed as an explicit milestone floor rather than a rolling last-N assumption._
 
 | Browser | Support level | Tested version / target | Last successful verification | Verification evidence | Unsupported or deferred APIs |
 |---|---|---|---|---|---|

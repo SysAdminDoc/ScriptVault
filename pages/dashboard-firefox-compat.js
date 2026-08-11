@@ -53,10 +53,10 @@ const FirefoxCompat = (() => {
         const api = _api || {};
 
         return {
-            /** chrome.sidePanel — Chrome 114+, not supported in Firefox */
+            /** Chromium sidePanel, not supported in Firefox */
             sidePanel: !!(chr.sidePanel?.setOptions || chr.sidePanel?.open),
 
-            /** chrome.offscreen — Chrome 109+, not supported in Firefox */
+            /** Chromium offscreen, not supported in Firefox */
             offscreen: !!(chr.offscreen?.createDocument),
 
             /** chrome.identity.getAuthToken — Chrome only; Firefox uses launchWebAuthFlow */
@@ -65,11 +65,14 @@ const FirefoxCompat = (() => {
             /** browser.identity.launchWebAuthFlow — available on both, but primary on Firefox */
             identityWebAuthFlow: !!(api.identity?.launchWebAuthFlow),
 
-            /** chrome.storage.session — Chrome 102+; Firefox 115+ (partial) */
+            /** Storage session, with partial Firefox support */
             storageSession: !!(api.storage?.session),
 
-            /** chrome.userScripts — Chrome 120+; Firefox has different user_scripts API */
+            /** Chromium userScripts; Firefox has a different user_scripts API */
             userScripts: !!(chr.userScripts?.register),
+
+            /** In-place userScripts registration updates, when exposed */
+            userScriptsUpdate: typeof chr.userScripts?.update === 'function',
 
             /** browser.userScripts (Firefox legacy API) */
             userScriptsFirefox: !!(brw.userScripts?.register),
@@ -320,8 +323,8 @@ const FirefoxCompat = (() => {
     function polyfillUserScripts() {
         if (!_api) return;
 
-        // Firefox uses browser.userScripts.register with different options
-        // Chrome 120+ uses chrome.userScripts.register with MV3 semantics
+        // Firefox uses browser.userScripts.register with different options;
+        // Chromium uses chrome.userScripts.register with MV3 semantics.
         if (_isFirefox && !_api.userScripts && typeof browser !== 'undefined' && browser.contentScripts) {
             // Provide a basic adapter using contentScripts.register
             _api.userScripts = {

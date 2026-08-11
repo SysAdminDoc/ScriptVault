@@ -149,11 +149,6 @@ interface UserScriptRegistration {
   messaging?: boolean;
 }
 
-function getChromeMajorVersion(): number {
-  const match = globalThis.navigator?.userAgent?.match(/(?:Chrome|Chromium)\/(\d+)/);
-  return match ? Number.parseInt(match[1] ?? '0', 10) : 0;
-}
-
 function isFirefoxRuntime(): boolean {
   return /Firefox\//.test(globalThis.navigator?.userAgent || '');
 }
@@ -171,7 +166,7 @@ function supportsUserScriptsWorldId(): boolean {
     if (typeof chrome?.userScripts?.configureWorld !== 'function') return false;
     return worldIdSupportProbe.resolved ? worldIdSupportProbe.supported : true;
   }
-  return getChromeMajorVersion() >= 133;
+  return typeof chrome?.userScripts?.configureWorld === 'function';
 }
 
 const worldIdSupportProbe: {
@@ -193,7 +188,7 @@ const WORLD_ID_PROBE_ID = 'sv-worldid-probe';
  * bug per-script worlds fixed.
  */
 async function ensureUserScriptWorldIdSupport(): Promise<boolean> {
-  if (!isFirefoxRuntime()) return getChromeMajorVersion() >= 133;
+  if (!isFirefoxRuntime()) return supportsUserScriptsWorldId();
   if (worldIdSupportProbe.resolved) return worldIdSupportProbe.supported;
   if (worldIdSupportProbe.promise) return worldIdSupportProbe.promise;
 

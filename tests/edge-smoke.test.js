@@ -121,6 +121,12 @@ describe('Microsoft Edge sideload smoke wiring', () => {
     expect(matrixGenerator).toContain('browserSmokeEvidence');
   });
 
+  it('documents the Chromium milestone cadence and explicit support floor', () => {
+    expect(matrixGenerator).toContain('14-day stable cadence at M153 (2026-09-08)');
+    expect(matrixGenerator).toContain('about 26 milestones per year');
+    expect(matrixGenerator).toContain('explicit milestone floor rather than a rolling last-N assumption');
+  });
+
   it('renders distinct support-matrix wording for Edge smoke evidence states', () => {
     const missing = generateSupportMatrixFixture();
     expect(missing).toContain('local Edge smoke command is available but has no current evidence');

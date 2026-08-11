@@ -34,6 +34,9 @@ describe('Chrome userScripts onboarding diagnostics', () => {
     expect(backgroundCore).toContain("setupState = 'allow-user-scripts-disabled';");
     expect(backgroundCore).toContain("setupState = 'developer-mode-disabled';");
     expect(backgroundCore).toContain("setupState = 'unsupported-browser';");
+    expect(backgroundCore).toContain('userScriptsUpdateAvailable');
+    expect(backgroundCore).toContain("typeof api?.update === 'function'");
+    expect(backgroundCore).not.toMatch(/chromeVersion\s*[<>]=?\s*\d/);
     expect(backgroundCore).toContain('Grant ScriptVault the optional Firefox userScripts permission, then refresh runtime status.');
     expect(backgroundCore).toContain('Enable "Allow User Scripts" in Extension Details, then refresh.');
     expect(backgroundCore).toContain('Open chrome://extensions and enable Developer Mode to run userscripts.');
@@ -76,6 +79,8 @@ describe('Chrome userScripts onboarding diagnostics', () => {
     expect(messagesTs).toContain("'firefox-user-scripts-permission'");
     expect(messagesTs).toContain("'allow-user-scripts-disabled'");
     expect(messagesTs).toContain("'developer-mode-disabled'");
+    expect(messagesTs).toContain('userScriptsApiAvailable: boolean;');
+    expect(messagesTs).toContain('userScriptsUpdateAvailable: boolean;');
     expect(messagesTs).toContain('setupState: UserScriptsSetupState;');
     expect(messagesTs).toContain('repairRuntimeState: SuccessOrError<ExtensionStatusResponse>;');
   });
@@ -121,7 +126,7 @@ describe('Chrome userScripts onboarding diagnostics', () => {
     expect(dashboardHtml).toContain('Run on Tab');
     expect(dashboardJs).toContain('function supportsOneShotRunNow()');
     expect(dashboardJs).toContain("state.runtimeDescriptor?.browserName === 'firefox'");
-    expect(dashboardJs).toContain('version >= 135');
+    expect(dashboardJs).toContain("typeof chrome.userScripts?.execute === 'function'");
     expect(dashboardJs).toContain('async function getRunNowTargetTab()');
     expect(dashboardJs).toContain("protocol === 'http:' || protocol === 'https:' || protocol === 'file:'");
     expect(dashboardJs).toContain("action: 'runScriptNow'");

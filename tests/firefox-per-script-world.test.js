@@ -126,9 +126,16 @@ describe('per-script world isolation on Firefox', () => {
     expect(makeSupportsWorldId(FIREFOX_UA, { configureWorld: false })).toBe(false);
   });
 
-  it('keeps the Chrome 133+ floor unchanged', () => {
+  it('feature-detects Chromium world support', () => {
     expect(makeSupportsWorldId(CHROME_UA)).toBe(true);
-    expect(makeSupportsWorldId(OLD_CHROME_UA)).toBe(false);
+    expect(makeSupportsWorldId(OLD_CHROME_UA, { configureWorld: false })).toBe(false);
+  });
+
+  it('does not compare the Chrome version for a capability decision', () => {
+    const runtimeFn = extractFn(backgroundCore, '_supportsUserScriptsWorldId');
+    expect(runtimeFn).not.toMatch(/_getChromeVersion\(\)\s*[<>]=?\s*\d/);
+    expect(backgroundCore).not.toMatch(/chromeVersion\s*[<>]=?\s*\d/);
+    expect(registrationTs).not.toContain('getChromeMajorVersion');
   });
 
   it('does not reintroduce the Firefox exclusion in runtime or extraction copies', () => {
@@ -284,7 +291,7 @@ describe('the worldId capability probe proves support instead of assuming it', (
     expect(calls.configure).toBe(1);
   });
 
-  it('does not probe on Chrome, where support is version-gated', async () => {
+  it('does not probe on Chromium, where the API capability is synchronous', async () => {
     const { probe, calls } = makeWorldIdProbe(CHROME_UA, { honour: 'accept' });
     await expect(probe()).resolves.toBe(true);
     expect(calls.configure).toBe(0);
