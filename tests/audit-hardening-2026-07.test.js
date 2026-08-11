@@ -402,6 +402,21 @@ describe('Dashboard telemetry/event bus wiring (2026-07 P1 regression)', () => {
     }
   });
 
+  it('persists telemetry until the lazy activity modules are ready', () => {
+    expect(dashboard).toContain("const DASHBOARD_TELEMETRY_QUEUE_KEY = 'sv_dashboard_telemetry_queue'");
+    expect(dashboard).toContain('const DASHBOARD_TELEMETRY_QUEUE_MAX = 200');
+    expect(dashboard).toContain('function ensureDashboardTelemetryQueueLoaded()');
+    expect(dashboard).toContain('function drainDashboardTelemetryQueue()');
+    expect(dashboard).toContain('await ActivityHeatmap._recordActivity(');
+    expect(dashboard).toContain('await Gamification.recordActivity(');
+    const utilitiesStart = dashboard.indexOf('async function initUtilitiesModules()');
+    const heatmapInit = dashboard.indexOf("initDashboardModuleOnce('heatmap'", utilitiesStart);
+    const queueDrain = dashboard.indexOf('await drainDashboardTelemetryQueue()', heatmapInit);
+    expect(utilitiesStart).toBeGreaterThan(-1);
+    expect(heatmapInit).toBeGreaterThan(utilitiesStart);
+    expect(queueDrain).toBeGreaterThan(heatmapInit);
+  });
+
   it('connects debugger console and GM value panels to background data', () => {
     expect(debuggerSrc).toContain('ingestConsoleEntries(scriptId, entries = [])');
     expect(debuggerSrc).toContain('async function getVariableStore(scriptId)');

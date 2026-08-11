@@ -180,16 +180,6 @@ _Scope not covered by the 2026-08-02 pass. Not findings; each needs its own audi
   Acceptance: a PR is open against awesome-userscripts adding ScriptVault with an accurate one-line description and the four missing managers; the release runbook records where the product is indexed so the list does not go stale again.
   Complexity: S
 
-- [ ] P2 — Persist dashboard telemetry before the lazy Utilities modules load
-  Category: correctness
-  Where: `pages/dashboard-lazy-loader.js:14-39`; `pages/dashboard.js:2826-2870`
-  Problem: ActivityHeatmap and Gamification are loaded only when the Utilities tab is first opened. `publishDashboardTelemetry` silently does nothing while those globals are absent, so script creation/edit/install/update activity performed before a user visits Utilities is permanently missing from the heatmap and gamification surfaces.
-  Evidence: A headless dashboard profile created a script before opening Utilities; `window.ActivityHeatmap` was undefined and `chrome.storage.local.get('sv_activity_log')` remained null. Opening Utilities later loaded the module but could not reconstruct the discarded event. The telemetry function has existence checks rather than a persisted queue.
-  Fix: Move a minimal activity recorder into the eager dashboard path or queue telemetry events in a bounded persisted buffer until both lazy modules initialize, then drain once with deduplication. Keep the existing rendering modules lazy.
-  Acceptance: A fresh profile that creates, edits, installs, and updates scripts without ever opening Utilities shows those events when Utilities is first opened; `sv_activity_log` and gamification counters contain the events and no duplicate appears after reload.
-  Confidence: Verified
-  Effort: M
-
 - [ ] P2 — Prevent the dependency graph from blocking the main thread quadratically
   Category: perf
   Where: `pages/dashboard-depgraph.js:362-451,520-589`; `pages/dashboard.js:3291-3297`; `scripts/smoke-large-library.mjs:349-350`
@@ -208,36 +198,6 @@ _Scope not covered by the 2026-08-02 pass. Not findings; each needs its own audi
   Fix: Add a labeled, focusable graph region plus an accessible list/table of scripts and relationship summaries, with keyboard selection/open actions and live selection details. Keep the canvas as the visual enhancement and synchronize selection between both representations.
   Acceptance: Keyboard-only navigation can reach every graph item, select it, read its dependency/conflict summary, and open the editor; a screen reader sees the graph name and relationship count; automated accessibility coverage finds no unlabeled interactive surface.
   Confidence: Verified
-  Effort: M
-
-- [ ] P2 — Make ActivityHeatmap storage resilient to malformed records
-  Category: reliability
-  Where: `pages/dashboard-heatmap.js:196-220`
-  Problem: Loading one malformed day value (`null`, a primitive, or a non-array `scripts` field) throws while normalizing `Object.entries(parsed)`, and the outer catch replaces the entire history with `{}`. One corrupt storage record therefore erases the visible history instead of isolating the bad day.
-  Evidence: `_loadData` catches all parsing/normalization errors after entering the loop and assigns an empty data object; there is no per-entry shape check before `val.scripts` and `val.count` are read. `chrome.storage.local` is a writable trust boundary for older versions, imports, and profile corruption.
-  Fix: Validate each day and field independently, skip/quarantine only malformed entries, clamp numeric counts, and preserve valid days. Record a bounded diagnostic or migration marker rather than swallowing the whole dataset.
-  Acceptance: A fixture containing valid days plus malformed/null/primitive entries loads all valid days, renders without an exception, and rewrites the stored data in a normalized bounded form.
-  Confidence: Verified
-  Effort: S
-
-- [ ] P2 — Bound ActivityHeatmap history and per-day script-name growth
-  Category: reliability
-  Where: `pages/dashboard-heatmap.js:16,196-239,249-263`
-  Problem: `_data` retains every date key forever and appends script names without a storage budget, while the UI renders only `WEEKS = 52`. Long-lived profiles can grow `sv_activity_log` indefinitely and eventually hit extension storage quota even though older data is never displayed.
-  Evidence: `_saveData` serializes the full object; `_recordActivity` creates date entries and adds script names; no age/count/byte pruning exists, and the only window is the rendering constant. The module is called for dashboard telemetry events, so the growth is user-reachable over time.
-  Fix: Keep a documented rolling retention window (for example the displayed 52 weeks plus a small migration margin), cap script names/counts per day, prune before every write, and enforce a UTF-8 byte budget with deterministic oldest-first behavior.
-  Acceptance: A fixture containing more than a year of daily activity is pruned to the documented window before persistence, the serialized value stays below the configured budget, and the 52-week view remains unchanged for retained data.
-  Confidence: Verified
-  Effort: M
-
-- [ ] P2 — Serialize and surface ActivityHeatmap storage failures
-  Category: reliability
-  Where: `pages/dashboard-heatmap.js:222-263`; `pages/dashboard.js:2849-2852`
-  Problem: Every activity event serializes the whole heatmap and fires `chrome.storage.local.set` without awaiting or chaining the promise. Rapid telemetry can complete out of order and overwrite newer counts, while quota/rejection failures become unhandled or invisible to the user.
-  Evidence: `_recordActivity` calls `_saveData` for each event; `_saveData` starts a full snapshot write and returns without awaiting it or catching rejection. The dashboard publishes telemetry from multiple mutation paths, so the calls can be back-to-back during imports or bulk updates.
-  Fix: Maintain one serialized/latest-snapshot write queue, coalesce bursts, prune before writing, and catch failures. Preserve pending increments in memory and expose a non-blocking “activity history unavailable” state when the byte budget cannot be written.
-  Acceptance: A delayed storage mock completing writes out of order preserves every increment, a rejected write does not produce an unhandled rejection or lose the in-memory count, and the UI reports the degraded state with a retry path.
-  Confidence: Needs-repro
   Effort: M
 
 - [ ] P2 — Make the editor smoke command fail fast and clean up its browser on timeout (pre-existing baseline)

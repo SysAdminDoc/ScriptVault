@@ -15,6 +15,14 @@ const ActivityHeatmap = (() => {
   const DAY_MS = 86400000;
   const WEEKS = 52;
   const DAYS_PER_WEEK = 7;
+  // Keep the 52 displayed weeks plus one alignment/migration week.
+  const RETENTION_DAYS = WEEKS * DAYS_PER_WEEK + DAYS_PER_WEEK;
+  const MAX_SCRIPTS_PER_DAY = 200;
+  const MAX_SCRIPT_ID_LENGTH = 200;
+  const MAX_SCRIPT_NAME_LENGTH = 160;
+  const MAX_DAILY_COUNT = 100000;
+  const MAX_STORAGE_BYTES = 96000;
+  const DIAGNOSTIC_STORAGE_KEY = 'sv_activity_log_diagnostic';
   const CELL_SIZE = 13;
   const CELL_GAP = 3;
   const LABEL_WIDTH = 30;
@@ -57,6 +65,11 @@ const ActivityHeatmap = (() => {
   let _filteredScript = null;
   let _dayMap = new Map();  // Maps canvas pixel regions to date keys
   let _initialized = false;
+  let _saveQueue = Promise.resolve();
+  let _savePending = false;
+  let _storageError = null;
+  let _storageDiagnostic = null;
+  let _storageStatusEl = null;
 
   /* ------------------------------------------------------------------ */
   /*  CSS                                                                */
@@ -174,6 +187,27 @@ const ActivityHeatmap = (() => {
 .sv-heatmap-stat-trend-up { color: var(--accent-green, #4ade80); }
 .sv-heatmap-stat-trend-down { color: var(--accent-red, #f87171); }
 .sv-heatmap-stat-trend-stable { color: var(--text-muted, #707070); }
+.sv-heatmap-storage-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--accent-red, #f87171) 50%, transparent);
+  border-radius: 6px;
+  color: var(--accent-red, #f87171);
+  font-size: 0.75rem;
+}
+.sv-heatmap-storage-status[hidden] { display: none; }
+.sv-heatmap-storage-retry {
+  margin-inline-start: auto;
+  padding: 4px 10px;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
 `;
 
   /* ------------------------------------------------------------------ */
@@ -193,49 +227,216 @@ const ActivityHeatmap = (() => {
     return `${y}-${m}-${day}`;
   }
 
+  function _dateFromKey(key) {
+    if (typeof key !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(key)) return null;
+    const date = new Date(`${key}T00:00:00`);
+    return Number.isNaN(date.getTime()) || _dateKey(date) !== key ? null : date;
+  }
+
+  function _retentionCutoffKey() {
+    const cutoff = new Date();
+    cutoff.setHours(0, 0, 0, 0);
+    cutoff.setDate(cutoff.getDate() - (RETENTION_DAYS - 1));
+    return _dateKey(cutoff);
+  }
+
+  function _clampCount(value) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric) || numeric <= 0) return 0;
+    return Math.min(MAX_DAILY_COUNT, Math.floor(numeric));
+  }
+
+  function _normalizeScripts(value) {
+    const malformed = !(Array.isArray(value) || value instanceof Set);
+    const values = Array.isArray(value) ? value : value instanceof Set ? [...value] : [];
+    const scripts = [...new Set(values
+      .filter(scriptId => typeof scriptId === 'string' && scriptId.length > 0)
+      .map(scriptId => scriptId.slice(0, MAX_SCRIPT_ID_LENGTH)))]
+      .sort()
+      .slice(0, MAX_SCRIPTS_PER_DAY);
+    return { scripts, malformed };
+  }
+
+  function _normalizeScriptNames(value, scripts) {
+    const malformed = !value || typeof value !== 'object' || Array.isArray(value);
+    const names = {};
+    if (!malformed) {
+      for (const scriptId of scripts) {
+        const name = value[scriptId];
+        if (typeof name === 'string' && name.length > 0) {
+          names[scriptId] = name.slice(0, MAX_SCRIPT_NAME_LENGTH);
+        }
+      }
+    }
+    return { names, malformed };
+  }
+
+  function _normalizeDay(key, value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const scriptsResult = _normalizeScripts(value.scripts);
+    const namesResult = _normalizeScriptNames(value.scriptNames, scriptsResult.scripts);
+    return {
+      day: {
+        executions: _clampCount(value.executions),
+        edits: _clampCount(value.edits),
+        installs: _clampCount(value.installs),
+        errors: _clampCount(value.errors),
+        scripts: new Set(scriptsResult.scripts),
+        scriptNames: namesResult.names,
+      },
+      changed: scriptsResult.malformed || namesResult.malformed
+        || value.executions !== _clampCount(value.executions)
+        || value.edits !== _clampCount(value.edits)
+        || value.installs !== _clampCount(value.installs)
+        || value.errors !== _clampCount(value.errors),
+    };
+  }
+
+  function _toSerializable(data) {
+    const serializable = {};
+    for (const key of Object.keys(data).sort()) {
+      const val = data[key];
+      const scripts = [...(val.scripts instanceof Set ? val.scripts : [])].sort();
+      const scriptNames = {};
+      for (const scriptId of scripts) {
+        if (val.scriptNames?.[scriptId]) scriptNames[scriptId] = val.scriptNames[scriptId];
+      }
+      serializable[key] = {
+        executions: _clampCount(val.executions),
+        edits: _clampCount(val.edits),
+        installs: _clampCount(val.installs),
+        errors: _clampCount(val.errors),
+        scripts,
+        scriptNames,
+      };
+    }
+    return serializable;
+  }
+
+  function _utf8ByteLength(value) {
+    try {
+      return new TextEncoder().encode(value).length;
+    } catch {
+      return String(value).length;
+    }
+  }
+
+  function _normalizeData(raw) {
+    let parsed = raw;
+    let changed = false;
+    let malformedRecords = 0;
+    let droppedDays = 0;
+    if (raw == null) parsed = {};
+    if (typeof raw === 'string') {
+      try { parsed = JSON.parse(raw); } catch { parsed = {}; changed = true; malformedRecords++; }
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      parsed = {};
+      changed = true;
+      malformedRecords++;
+    }
+
+    const todayKey = _dateKey(new Date());
+    const cutoffKey = _retentionCutoffKey();
+    const data = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      const date = _dateFromKey(key);
+      if (!date || key < cutoffKey || key > todayKey) {
+        changed = true;
+        droppedDays++;
+        continue;
+      }
+      const normalized = _normalizeDay(key, value);
+      if (!normalized) {
+        changed = true;
+        malformedRecords++;
+        continue;
+      }
+      data[key] = normalized.day;
+      if (normalized.changed) {
+        changed = true;
+        malformedRecords++;
+      }
+    }
+
+    const retained = {};
+    for (const key of Object.keys(data).sort().reverse()) {
+      retained[key] = data[key];
+      if (_utf8ByteLength(JSON.stringify(_toSerializable(retained))) > MAX_STORAGE_BYTES) {
+        delete retained[key];
+        changed = true;
+        droppedDays++;
+        break;
+      }
+    }
+    return { data: retained, changed, malformedRecords, droppedDays };
+  }
+
+  function _updateStorageStatus() {
+    if (!_storageStatusEl) return;
+    _storageStatusEl.hidden = !_storageError;
+    _storageStatusEl.replaceChildren();
+    if (!_storageError) return;
+    const message = document.createElement('span');
+    message.textContent = 'Activity history could not be saved.';
+    const retry = document.createElement('button');
+    retry.type = 'button';
+    retry.className = 'sv-heatmap-storage-retry';
+    retry.textContent = 'Retry';
+    retry.addEventListener('click', () => {
+      retry.disabled = true;
+      _saveData().finally(() => {
+        retry.disabled = false;
+        _updateStorageStatus();
+      });
+    });
+    _storageStatusEl.append(message, retry);
+  }
+
   async function _loadData() {
     try {
       const result = await chrome.storage.local.get(STORAGE_KEY);
-      const raw = result[STORAGE_KEY];
-      if (raw) {
-        let parsed;
-        try { parsed = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch { parsed = {}; }
-        // Convert scripts arrays back to Sets for internal use
-        _data = {};
-        for (const [key, val] of Object.entries(parsed)) {
-          _data[key] = {
-            executions: val.executions || 0,
-            edits: val.edits || 0,
-            installs: val.installs || 0,
-            errors: val.errors || 0,
-            scripts: new Set(val.scripts || []),
-            scriptNames: sanitizeScriptNames(val.scriptNames),
-          };
-        }
+      const normalized = _normalizeData(result[STORAGE_KEY]);
+      _data = normalized.data;
+      if (normalized.malformedRecords || normalized.droppedDays) {
+        _storageDiagnostic = {
+          malformedRecords: Math.min(1000, normalized.malformedRecords),
+          droppedDays: Math.min(1000, normalized.droppedDays),
+          normalizedAt: Date.now(),
+        };
+        await _saveData();
       }
+      _storageError = null;
+      _updateStorageStatus();
     } catch (e) {
       console.warn('[ActivityHeatmap] Failed to load data:', e);
+      _storageError = e;
       _data = {};
+      _updateStorageStatus();
     }
   }
 
   function _saveData() {
-    try {
-      const serializable = {};
-      for (const [key, val] of Object.entries(_data)) {
-        serializable[key] = {
-          executions: val.executions,
-          edits: val.edits,
-          installs: val.installs,
-          errors: val.errors,
-          scripts: [...val.scripts],
-          scriptNames: val.scriptNames || {},
-        };
+    _savePending = true;
+    _saveQueue = _saveQueue.catch(() => undefined).then(async () => {
+      if (!_savePending) return;
+      _savePending = false;
+      const normalized = _normalizeData(_data);
+      _data = normalized.data;
+      const payload = { [STORAGE_KEY]: _toSerializable(_data) };
+      if (_storageDiagnostic) payload[DIAGNOSTIC_STORAGE_KEY] = _storageDiagnostic;
+      try {
+        await chrome.storage.local.set(payload);
+        _storageError = null;
+        _updateStorageStatus();
+      } catch (e) {
+        _storageError = e;
+        _savePending = true;
+        console.warn('[ActivityHeatmap] Failed to save data:', e);
+        _updateStorageStatus();
       }
-      chrome.storage.local.set({ [STORAGE_KEY]: serializable });
-    } catch (e) {
-      console.warn('[ActivityHeatmap] Failed to save data:', e);
-    }
+    });
+    return _saveQueue;
   }
 
   function _ensureDay(dateKey) {
@@ -250,25 +451,31 @@ const ActivityHeatmap = (() => {
     const key = _dateKey(date || new Date());
     const day = _ensureDay(key);
     switch (type) {
-      case ACTIVITY_TYPES.EXECUTION: day.executions++; break;
-      case ACTIVITY_TYPES.EDIT: day.edits++; break;
-      case ACTIVITY_TYPES.INSTALL: day.installs++; break;
-      case ACTIVITY_TYPES.ERROR: day.errors++; break;
+      case ACTIVITY_TYPES.EXECUTION: day.executions = Math.min(MAX_DAILY_COUNT, day.executions + 1); break;
+      case ACTIVITY_TYPES.EDIT: day.edits = Math.min(MAX_DAILY_COUNT, day.edits + 1); break;
+      case ACTIVITY_TYPES.INSTALL: day.installs = Math.min(MAX_DAILY_COUNT, day.installs + 1); break;
+      case ACTIVITY_TYPES.ERROR: day.errors = Math.min(MAX_DAILY_COUNT, day.errors + 1); break;
     }
     if (scriptId) {
-      day.scripts.add(scriptId);
-      if (details.scriptName) day.scriptNames[scriptId] = String(details.scriptName);
+      const normalizedScriptId = String(scriptId).slice(0, MAX_SCRIPT_ID_LENGTH);
+      day.scripts.add(normalizedScriptId);
+      if (details.scriptName) day.scriptNames[normalizedScriptId] = String(details.scriptName).slice(0, MAX_SCRIPT_NAME_LENGTH);
+      if (day.scripts.size > MAX_SCRIPTS_PER_DAY) {
+        day.scripts = new Set([...day.scripts].sort().slice(0, MAX_SCRIPTS_PER_DAY));
+        day.scriptNames = Object.fromEntries(
+          Object.entries(day.scriptNames).filter(([id]) => day.scripts.has(id))
+        );
+      }
     }
-    _saveData();
-  }
-
-  function sanitizeScriptNames(value) {
-    if (!value || typeof value !== 'object') return {};
-    const names = {};
-    for (const [scriptId, name] of Object.entries(value)) {
-      if (name) names[scriptId] = String(name);
+    const savePromise = _saveData();
+    if (_initialized && _canvas && _ctx) {
+      savePromise.then(() => {
+        _drawHeatmap();
+        const statsEl = _container?.querySelector('.sv-heatmap-stats');
+        if (statsEl) _renderStats(statsEl);
+      }).catch(() => {});
     }
-    return names;
+    return savePromise;
   }
 
   function _activityTotal(dayData) {
@@ -583,6 +790,13 @@ const ActivityHeatmap = (() => {
     header.appendChild(select);
     root.appendChild(header);
 
+    _storageStatusEl = document.createElement('div');
+    _storageStatusEl.className = 'sv-heatmap-storage-status';
+    _storageStatusEl.setAttribute('role', 'status');
+    _storageStatusEl.hidden = true;
+    root.appendChild(_storageStatusEl);
+    _updateStorageStatus();
+
     // Canvas
     const canvasWrap = document.createElement('div');
     canvasWrap.className = 'sv-heatmap-canvas-wrap';
@@ -723,11 +937,23 @@ const ActivityHeatmap = (() => {
     _container = null;
     _canvas = null;
     _ctx = null;
+    _storageStatusEl = null;
     _dayMap.clear();
     _initialized = false;
   }
 
-  return { init, refresh, setScript, getStats, destroy, ACTIVITY_TYPES, _recordActivity };
+  return {
+    init,
+    refresh,
+    setScript,
+    getStats,
+    destroy,
+    ACTIVITY_TYPES,
+    STORAGE_LIMITS: Object.freeze({ RETENTION_DAYS, MAX_SCRIPTS_PER_DAY, MAX_STORAGE_BYTES }),
+    _recordActivity,
+    _getDataSnapshot: () => _toSerializable(_data),
+    _getStorageState: () => ({ error: _storageError, diagnostic: _storageDiagnostic }),
+  };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = ActivityHeatmap;

@@ -7,6 +7,14 @@ All notable changes to ScriptVault will be documented in this file.
 - Awaited and serialized dashboard view transitions before applying workbench
   filters and deep-link focus, with bounded abort recovery for headless and
   backgrounded renderers.
+- Persisted bounded dashboard telemetry until the lazy heatmap and gamification
+  modules initialize, then replayed it once without duplicate activity.
+- Made ActivityHeatmap normalize malformed records per day and retain valid
+  history with a bounded diagnostic marker.
+- Added rolling retention, per-day script/name limits, and a UTF-8 storage byte
+  budget to ActivityHeatmap.
+- Serialized ActivityHeatmap writes, retained in-memory increments after quota
+  failures, and added a non-blocking retry status to the dashboard.
 - Serialized subscription feed, bundle, removal, and refresh-result writes
   through a fresh-read queue so concurrent dashboard and alarm mutations keep
   unrelated records and validator/error state intact.

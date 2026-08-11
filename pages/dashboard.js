@@ -415,6 +415,20 @@
     const SCRIPT_TABLE_VIRTUAL_ROW_HEIGHT = 72;
     const SCRIPT_TABLE_VIRTUAL_MAX_ROWS = 60;
     const DASHBOARD_TELEMETRY_SYNC_MS = 5000;
+    const DASHBOARD_TELEMETRY_QUEUE_KEY = 'sv_dashboard_telemetry_queue';
+    const DASHBOARD_TELEMETRY_QUEUE_MAX = 200;
+    const DASHBOARD_TELEMETRY_QUEUE_TYPES = new Set([
+        'scriptEdited',
+        'scriptCreated',
+        'scriptInstalled',
+        'scriptUpdated',
+        'updatesChecked',
+        'scriptShared',
+        'gistExported',
+        'backupCreated',
+        'scriptExecuted',
+        'scriptError',
+    ]);
     const DASHBOARD_TABS = ['scripts', 'updates', 'settings', 'utilities', 'trash', 'help'];
     const OAUTH_SYNC_PROVIDERS = ['googledrive', 'dropbox', 'onedrive'];
     const ALL_SYNC_PROVIDERS = ['none', 'webdav', 'localfolder', 'googledrive', 'dropbox', 'onedrive', 's3'];
@@ -431,6 +445,13 @@
     let commandPaletteReturnFocus = null;
     let dashboardTelemetryTimer = null;
     let dashboardTelemetryStatsSeeded = false;
+    let dashboardTelemetryQueue = [];
+    let dashboardTelemetryQueueLoadPromise = null;
+    let dashboardTelemetryQueueWriteChain = Promise.resolve();
+    let dashboardTelemetryQueueWritePending = false;
+    let dashboardTelemetryQueueReady = false;
+    let dashboardTelemetryQueueSequence = 0;
+    let dashboardTelemetryDrainPromise = null;
     const dashboardTelemetryStatsSeen = new Map();
     const dashboardTelemetryConsoleSeen = new Map();
     const dashboardTelemetryErrorsSeen = new Set();
@@ -2907,39 +2928,92 @@
         return Array.isArray(state.scripts) ? state.scripts.slice() : [];
     }
 
-    function publishDashboardTelemetry(type, payload = {}) {
-        const event = {
+    function normalizeDashboardTelemetryQueueEvent(value) {
+        if (!value || typeof value !== 'object' || !DASHBOARD_TELEMETRY_QUEUE_TYPES.has(value.type)) return null;
+        const type = String(value.type);
+        const timestamp = Number(value.timestamp);
+        const scriptId = String(value.scriptId || '').slice(0, 256);
+        const scriptName = String(value.scriptName || '').slice(0, 256);
+        const id = String(value.id || `${type}|${timestamp || 0}|${scriptId}|${scriptName}`);
+        return {
+            id: id.slice(0, 512),
             type,
-            timestamp: Number(payload.timestamp || Date.now()),
-            scriptId: payload.scriptId || state.currentScriptId || '',
-            scriptName: payload.scriptName || getScriptById(payload.scriptId || state.currentScriptId || '')?.metadata?.name || '',
-            ...payload
+            timestamp: Number.isFinite(timestamp) ? timestamp : Date.now(),
+            scriptId,
+            scriptName,
         };
+    }
 
-        try {
-            window.dispatchEvent(new CustomEvent('scriptvault:dashboard-telemetry', { detail: event }));
-        } catch {
-            // CustomEvent can be unavailable in stripped-down test contexts.
-        }
+    function mergeDashboardTelemetryQueue(...entries) {
+        const byId = new Map();
+        entries.flat().forEach(entry => {
+            const normalized = normalizeDashboardTelemetryQueueEvent(entry);
+            if (normalized) byId.set(normalized.id, normalized);
+        });
+        return Array.from(byId.values()).slice(-DASHBOARD_TELEMETRY_QUEUE_MAX);
+    }
 
-        const heatmapType = {
-            scriptExecuted: typeof ActivityHeatmap !== 'undefined' ? ActivityHeatmap.ACTIVITY_TYPES?.EXECUTION : null,
-            scriptEdited: typeof ActivityHeatmap !== 'undefined' ? ActivityHeatmap.ACTIVITY_TYPES?.EDIT : null,
-            scriptCreated: typeof ActivityHeatmap !== 'undefined' ? ActivityHeatmap.ACTIVITY_TYPES?.INSTALL : null,
-            scriptInstalled: typeof ActivityHeatmap !== 'undefined' ? ActivityHeatmap.ACTIVITY_TYPES?.INSTALL : null,
-            scriptUpdated: typeof ActivityHeatmap !== 'undefined' ? ActivityHeatmap.ACTIVITY_TYPES?.EDIT : null,
-            scriptError: typeof ActivityHeatmap !== 'undefined' ? ActivityHeatmap.ACTIVITY_TYPES?.ERROR : null,
-        }[type];
-        if (heatmapType && typeof ActivityHeatmap !== 'undefined' && typeof ActivityHeatmap._recordActivity === 'function') {
-            try {
-                ActivityHeatmap._recordActivity(heatmapType, event.scriptId || null, new Date(event.timestamp), { scriptName: event.scriptName });
-                ActivityHeatmap.refresh?.().catch?.(() => {});
-            } catch {
-                // Heatmap is optional/lazy.
-            }
-        }
+    function ensureDashboardTelemetryQueueLoaded() {
+        if (dashboardTelemetryQueueLoadPromise) return dashboardTelemetryQueueLoadPromise;
+        dashboardTelemetryQueueLoadPromise = Promise.resolve()
+            .then(() => chrome.storage.local.get(DASHBOARD_TELEMETRY_QUEUE_KEY))
+            .then(result => {
+                const stored = Array.isArray(result?.[DASHBOARD_TELEMETRY_QUEUE_KEY])
+                    ? result[DASHBOARD_TELEMETRY_QUEUE_KEY]
+                    : [];
+                dashboardTelemetryQueue = mergeDashboardTelemetryQueue(stored, dashboardTelemetryQueue);
+            })
+            .catch(error => {
+                console.warn('[ScriptVault] Dashboard telemetry queue load failed:', error?.message || error);
+            })
+            .finally(() => {
+                dashboardTelemetryQueueReady = true;
+            });
+        return dashboardTelemetryQueueLoadPromise;
+    }
 
-        const gamificationActivity = {
+    function persistDashboardTelemetryQueue() {
+        dashboardTelemetryQueueWritePending = true;
+        void ensureDashboardTelemetryQueueLoaded();
+        dashboardTelemetryQueueWriteChain = dashboardTelemetryQueueWriteChain
+            .catch(() => undefined)
+            .then(async () => {
+                await dashboardTelemetryQueueLoadPromise;
+                if (!dashboardTelemetryQueueWritePending) return;
+                dashboardTelemetryQueueWritePending = false;
+                const snapshot = dashboardTelemetryQueue.slice(-DASHBOARD_TELEMETRY_QUEUE_MAX);
+                try {
+                    await chrome.storage.local.set({ [DASHBOARD_TELEMETRY_QUEUE_KEY]: snapshot });
+                } catch (error) {
+                    dashboardTelemetryQueueWritePending = true;
+                    console.warn('[ScriptVault] Dashboard telemetry queue save failed:', error?.message || error);
+                }
+            });
+        return dashboardTelemetryQueueWriteChain;
+    }
+
+    function enqueueDashboardTelemetryEvent(event) {
+        dashboardTelemetryQueue = mergeDashboardTelemetryQueue(dashboardTelemetryQueue, {
+            ...event,
+            id: event.id || `dashboard-${Date.now()}-${++dashboardTelemetryQueueSequence}`,
+        });
+        void persistDashboardTelemetryQueue();
+    }
+
+    function getDashboardHeatmapActivityType(type) {
+        const activityTypes = typeof ActivityHeatmap !== 'undefined' ? ActivityHeatmap.ACTIVITY_TYPES : null;
+        return {
+            scriptExecuted: activityTypes?.EXECUTION,
+            scriptEdited: activityTypes?.EDIT,
+            scriptCreated: activityTypes?.INSTALL,
+            scriptInstalled: activityTypes?.INSTALL,
+            scriptUpdated: activityTypes?.EDIT,
+            scriptError: activityTypes?.ERROR,
+        }[type] || null;
+    }
+
+    function getDashboardGamificationActivityType(type) {
+        return {
             scriptEdited: 'scriptEdited',
             scriptCreated: 'scriptCreated',
             scriptInstalled: 'scriptInstalled',
@@ -2948,10 +3022,92 @@
             gistExported: 'gistExported',
             updatesChecked: 'updatesChecked',
             backupCreated: 'backupCreated',
-        }[type];
-        if (gamificationActivity && typeof Gamification !== 'undefined' && typeof Gamification.recordActivity === 'function') {
-            Gamification.recordActivity(gamificationActivity).catch?.(() => {});
+        }[type] || null;
+    }
+
+    function dashboardTelemetryModulesReady() {
+        return _dashboardModulesInited.has('heatmap')
+            && _dashboardModulesInited.has('gamification')
+            && typeof ActivityHeatmap !== 'undefined'
+            && typeof ActivityHeatmap._recordActivity === 'function'
+            && typeof Gamification !== 'undefined'
+            && typeof Gamification.recordActivity === 'function';
+    }
+
+    async function applyDashboardTelemetryTargets(event) {
+        const heatmapType = getDashboardHeatmapActivityType(event.type);
+        if (heatmapType && dashboardTelemetryModulesReady()) {
+            await ActivityHeatmap._recordActivity(
+                heatmapType,
+                event.scriptId || null,
+                new Date(event.timestamp),
+                { scriptName: event.scriptName }
+            );
+            await ActivityHeatmap.refresh?.();
         }
+
+        const gamificationActivity = getDashboardGamificationActivityType(event.type);
+        if (gamificationActivity && dashboardTelemetryModulesReady()) {
+            await Gamification.recordActivity(gamificationActivity);
+        }
+    }
+
+    async function drainDashboardTelemetryQueue() {
+        await ensureDashboardTelemetryQueueLoaded();
+        if (!dashboardTelemetryModulesReady() || dashboardTelemetryQueue.length === 0) return;
+        if (dashboardTelemetryDrainPromise) return dashboardTelemetryDrainPromise;
+
+        const pending = dashboardTelemetryQueue.slice();
+        const pendingIds = new Set(pending.map(event => event.id));
+        const completedIds = new Set();
+        dashboardTelemetryDrainPromise = (async () => {
+            for (const event of pending) {
+                try {
+                    await applyDashboardTelemetryTargets(event);
+                    completedIds.add(event.id);
+                } catch (error) {
+                    console.warn('[ScriptVault] Dashboard telemetry replay failed:', error?.message || error);
+                }
+            }
+            if (completedIds.size > 0) {
+                dashboardTelemetryQueue = dashboardTelemetryQueue.filter(event =>
+                    !pendingIds.has(event.id) || !completedIds.has(event.id)
+                );
+                await persistDashboardTelemetryQueue();
+            }
+        })().finally(() => {
+            dashboardTelemetryDrainPromise = null;
+        });
+        return dashboardTelemetryDrainPromise;
+    }
+
+    function publishDashboardTelemetry(type, payload = {}) {
+        const event = {
+            type,
+            timestamp: Number(payload.timestamp || Date.now()),
+            scriptId: payload.scriptId || state.currentScriptId || '',
+            scriptName: payload.scriptName || getScriptById(payload.scriptId || state.currentScriptId || '')?.metadata?.name || '',
+            ...payload
+        };
+        event.id = event.id || `dashboard-${Date.now()}-${++dashboardTelemetryQueueSequence}`;
+
+        try {
+            window.dispatchEvent(new CustomEvent('scriptvault:dashboard-telemetry', { detail: event }));
+        } catch {
+            // CustomEvent can be unavailable in stripped-down test contexts.
+        }
+
+        if (DASHBOARD_TELEMETRY_QUEUE_TYPES.has(type)) {
+            if (dashboardTelemetryModulesReady()) {
+                void applyDashboardTelemetryTargets(event).catch(error => {
+                    console.warn('[ScriptVault] Dashboard telemetry apply failed:', error?.message || error);
+                });
+            } else {
+                enqueueDashboardTelemetryEvent(event);
+            }
+        }
+
+        void drainDashboardTelemetryQueue();
 
         if (type === 'scriptError' && typeof ScriptDebugger !== 'undefined' && typeof ScriptDebugger.recordError === 'function') {
             ScriptDebugger.recordError(event.scriptId, {
@@ -3105,6 +3261,7 @@
                 return false;
             });
         }
+        void ensureDashboardTelemetryQueueLoaded();
         syncDashboardTelemetry();
         dashboardTelemetryTimer = setInterval(syncDashboardTelemetry, DASHBOARD_TELEMETRY_SYNC_MS);
     }
@@ -3385,6 +3542,7 @@
                 await ActivityHeatmap.init(elements.heatmapContainer);
             }
         });
+        await drainDashboardTelemetryQueue();
         syncDashboardTelemetry();
     }
 
