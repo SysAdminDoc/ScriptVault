@@ -497,6 +497,7 @@ export const ScriptStorage = {
     delete this.cache![id];
     // Mirror the deletion into the in-memory ScriptValues cache too.
     delete ScriptValues.cache[id];
+    await ScriptValues.deleteSyncConflicts(id);
     notifyScriptChange();
   },
 
@@ -510,6 +511,9 @@ export const ScriptStorage = {
     }
     this.cache = {};
     ScriptValues.cache = Object.create(null) as Record<string, ValueBag>;
+    try {
+      await chrome.storage.local.remove(GM_VALUE_SYNC_CONFLICT_SIDECAR_KEY);
+    } catch (_) { /* best effort diagnostic cleanup */ }
     void prev;
     notifyScriptChange();
   },
@@ -610,6 +614,52 @@ export { BackupsDAO };
 // mirror of the IDB `values` store. Reads serve from cache after init; writes
 // commit to IDB first, then update cache so a persist failure leaves no
 // in-memory drift.
+const GM_VALUE_SYNC_CONFLICT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+const GM_VALUE_SYNC_CONFLICT_MAX_KEYS = 128;
+const GM_VALUE_SYNC_CONFLICT_MAX_PER_KEY = 4;
+const GM_VALUE_SYNC_CONFLICT_MAX_BYTES = 256 * 1024;
+const GM_VALUE_SYNC_CONFLICT_SIDECAR_KEY = 'gmValueSyncConflictSidecar';
+
+function normalizeGmValueSyncSidecarRecord(value: unknown, now = Date.now()): Record<string, unknown[]> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const result: Record<string, unknown[]> = {};
+  for (const key of Object.keys(value).sort((a, b) => a.localeCompare(b))) {
+    if (Object.keys(result).length >= GM_VALUE_SYNC_CONFLICT_MAX_KEYS) break;
+    const entries = (value as Record<string, unknown>)[key];
+    if (!Array.isArray(entries)) continue;
+    const valid = entries.filter((entry) => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return false;
+      const clock = (entry as Record<string, unknown>).clock;
+      const clockRecord = clock && typeof clock === 'object' && !Array.isArray(clock)
+        ? clock as Record<string, unknown>
+        : null;
+      const ts = Number(clockRecord?.ts);
+      const counter = Number(clockRecord?.counter);
+      const deviceId = typeof clockRecord?.deviceId === 'string' ? clockRecord.deviceId.trim() : '';
+      const retainedAt = Number((entry as Record<string, unknown>).retainedAt);
+      return !!clockRecord && Number.isFinite(ts) && ts >= 0
+        && Number.isFinite(counter) && counter >= 0
+        && deviceId.length > 0 && deviceId.length <= 128
+        && Number.isFinite(retainedAt) && retainedAt >= now - GM_VALUE_SYNC_CONFLICT_RETENTION_MS;
+    }).slice(0, GM_VALUE_SYNC_CONFLICT_MAX_PER_KEY).map((entry) => cloneStoredValue(entry));
+    if (valid.length > 0) Object.defineProperty(result, key, { value: valid, enumerable: true, configurable: true, writable: true });
+  }
+  try {
+    if (new TextEncoder().encode(JSON.stringify(result)).length > GM_VALUE_SYNC_CONFLICT_MAX_BYTES) {
+      const bounded: Record<string, unknown[]> = {};
+      for (const [key, entries] of Object.entries(result)) {
+        const next = { ...bounded, [key]: entries };
+        if (new TextEncoder().encode(JSON.stringify(next)).length > GM_VALUE_SYNC_CONFLICT_MAX_BYTES) break;
+        Object.defineProperty(bounded, key, { value: entries, enumerable: true, configurable: true, writable: true });
+      }
+      return bounded;
+    }
+  } catch (_) {
+    return {};
+  }
+  return result;
+}
+
 export const ScriptValues = {
   cache: Object.create(null) as Record<string, ValueBag>,
   listeners: new Map<string, ValueChangeListener>(),
@@ -713,9 +763,97 @@ export const ScriptValues = {
     return ValuesDAO.getAllMetadata(scriptId);
   },
 
-  async getAllKeyMetadata(scriptId: string): Promise<Record<string, { updatedAt: number }>> {
+  async getAllKeyMetadata(scriptId: string): Promise<Record<string, { updatedAt?: number; clock?: { ts: number; counter: number; deviceId: string } }>> {
     await this.init(scriptId);
     return ValuesDAO.getAllKeyMetadata(scriptId);
+  },
+
+  async getSyncDeviceId(): Promise<string | null> {
+    const getter = (ValuesDAO as typeof ValuesDAO & { getSyncDeviceId?: () => Promise<string> }).getSyncDeviceId;
+    if (typeof getter === 'function') return getter();
+    try {
+      const data = await chrome.storage.local.get('gmValueSyncHlcState');
+      const deviceId = data?.gmValueSyncHlcState?.deviceId;
+      return typeof deviceId === 'string' && deviceId ? deviceId : null;
+    } catch (_) {
+      return null;
+    }
+  },
+
+  async getSyncConflicts(scriptId: string): Promise<Record<string, unknown[]>> {
+    try {
+      const data = await chrome.storage.local.get(GM_VALUE_SYNC_CONFLICT_SIDECAR_KEY);
+      const sidecar = data?.[GM_VALUE_SYNC_CONFLICT_SIDECAR_KEY];
+      const raw = sidecar && typeof sidecar === 'object' && !Array.isArray(sidecar)
+        ? sidecar[scriptId]
+        : undefined;
+      return normalizeGmValueSyncSidecarRecord(raw);
+    } catch (_) {
+      return {};
+    }
+  },
+
+  async setSyncConflicts(scriptId: string, conflicts: Record<string, unknown>): Promise<void> {
+    try {
+      const data = await chrome.storage.local.get(GM_VALUE_SYNC_CONFLICT_SIDECAR_KEY);
+      const rawSidecar = data?.[GM_VALUE_SYNC_CONFLICT_SIDECAR_KEY];
+      const sidecar = rawSidecar && typeof rawSidecar === 'object'
+        && !Array.isArray(rawSidecar)
+        ? { ...rawSidecar }
+        : {};
+      const normalized = normalizeGmValueSyncSidecarRecord(conflicts);
+      if (Object.keys(normalized).length > 0) {
+        Object.defineProperty(sidecar, scriptId, {
+          value: normalized,
+          enumerable: true,
+          configurable: true,
+          writable: true,
+        });
+      } else delete sidecar[scriptId];
+      await chrome.storage.local.set({ [GM_VALUE_SYNC_CONFLICT_SIDECAR_KEY]: sidecar });
+    } catch (_) {
+      // A diagnostic sidecar must never make a successful value merge fail.
+    }
+  },
+
+  async getSyncConflictCount(scriptId: string): Promise<number> {
+    const conflicts = await this.getSyncConflicts(scriptId);
+    return Object.values(conflicts).reduce((total, entries) => total + (Array.isArray(entries) ? entries.length : 0), 0);
+  },
+
+  async deleteSyncConflicts(scriptId: string): Promise<void> {
+    try {
+      const data = await chrome.storage.local.get(GM_VALUE_SYNC_CONFLICT_SIDECAR_KEY);
+      const rawSidecar = data?.[GM_VALUE_SYNC_CONFLICT_SIDECAR_KEY];
+      const sidecar = rawSidecar && typeof rawSidecar === 'object'
+        && !Array.isArray(rawSidecar)
+        ? { ...rawSidecar }
+        : {};
+      delete sidecar[scriptId];
+      await chrome.storage.local.set({ [GM_VALUE_SYNC_CONFLICT_SIDECAR_KEY]: sidecar });
+    } catch (_) { /* best effort cleanup */ }
+  },
+
+  async setAllWithClocks(
+    scriptId: string,
+    values: Record<string, unknown>,
+    keyMetadata: Record<string, { updatedAt?: number; clock?: { ts: number; counter: number; deviceId: string } }>,
+    senderTabId: number | null = null,
+  ): Promise<void> {
+    await this.init(scriptId);
+    const nextValues = exportValueBag(values);
+    const changes: Array<[string, unknown, unknown]> = [];
+    for (const [key, value] of Object.entries(nextValues)) {
+      const oldValue = this.cache[scriptId]![key];
+      if (JSON.stringify(oldValue) !== JSON.stringify(value)) {
+        changes.push([key, cloneStoredValue(oldValue), cloneStoredValue(value)]);
+      }
+    }
+    await ValuesDAO.setAllWithClocks(scriptId, cloneStoredValue(nextValues), keyMetadata);
+    for (const [key, _oldValue, value] of changes) setValueBagKey(this.cache[scriptId]!, key, value);
+    for (const [key, oldValue, value] of changes) {
+      this.scheduleNotification(scriptId, key, cloneStoredValue(oldValue), cloneStoredValue(value), senderTabId);
+    }
   },
 
   async setAll(scriptId: string, values: Record<string, unknown>, senderTabId: number | null = null): Promise<void> {
@@ -757,6 +895,7 @@ export const ScriptValues = {
       throw e;
     }
     delete this.cache[scriptId];
+    await this.deleteSyncConflicts(scriptId);
   },
 
   // Delete multiple specific keys at once

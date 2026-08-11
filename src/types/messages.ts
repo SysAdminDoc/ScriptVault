@@ -575,6 +575,8 @@ interface LocalHealthReportResponse {
       applied: number;
       preserved: number;
       conflictBlocked: number;
+      conflictsDetected: number;
+      losersRetained: number;
       skippedUnavailable: number;
       failures: number;
       writeFailureRetryReady: number;
@@ -2179,6 +2181,8 @@ export interface ResponseMap {
       applied: number;
       preserved: number;
       conflictBlocked: number;
+      conflictsDetected: number;
+      losersRetained: number;
       skippedNonEmpty: number;
       skippedUserModified: number;
       skippedUnavailable: number;

@@ -99,6 +99,7 @@
       "syncHoldExecutionUntilFirstSync",
       "syncInterval",
       "syncProvider",
+      "gmValueSyncConflictPolicy",
       "tabMode",
       "tabSize",
       "theme",
@@ -1601,6 +1602,21 @@
       "label": "Sync Encryption Kdf Iterations",
       "help": "Controls sync encryption kdf iterations.",
       "default": 210000
+    },
+    "gmValueSyncConflictPolicy": {
+      "type": "string",
+      "control": "select",
+      "label": "GM value conflict policy",
+      "help": "Chooses how this device resolves simultaneous synced GM value writes. HLC is deterministic and preserves losing values for review.",
+      "default": "hlc",
+      "options": [
+        { "value": "hlc", "label": "Hybrid logical clock (recommended)" },
+        { "value": "prefer-local", "label": "Prefer local" },
+        { "value": "prefer-remote", "label": "Prefer remote" }
+      ],
+      "validation": {
+        "kind": "select-option"
+      }
     },
     "syncEncryptionPassphrase": {
       "type": "string",

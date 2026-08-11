@@ -317,6 +317,9 @@ const CloudSync = (() => {
   var GM_VALUE_SYNC_MAX_SCRIPT_BYTES = 64 * 1024;
   var GM_VALUE_SYNC_MAX_KEYS = 128;
   var GM_VALUE_SYNC_MAX_KEY_BYTES = 256;
+  var GM_VALUE_SYNC_MAX_CONFLICTS_PER_KEY = 4;
+  var GM_VALUE_SYNC_MAX_CONFLICT_KEYS = 128;
+  var GM_VALUE_SYNC_CONFLICT_RETENTION_MS = 30 * 24 * 60 * 60 * 1e3;
   function byteLength2(value) {
     return new TextEncoder().encode(JSON.stringify(value)).length;
   }
@@ -325,12 +328,7 @@ const CloudSync = (() => {
     if (json === void 0) return void 0;
     return JSON.parse(json);
   }
-  function normalizeTimestamp(value) {
-    const timestamp = Number(value);
-    if (!Number.isFinite(timestamp) || timestamp <= 0) return void 0;
-    return Math.floor(timestamp);
-  }
-  function setMetadataKey(record, key, value) {
+  function setRecordKey(record, key, value) {
     Object.defineProperty(record, key, {
       value,
       enumerable: true,
@@ -338,9 +336,179 @@ const CloudSync = (() => {
       writable: true
     });
   }
-  function normalizeKeyMetadataEntry(value) {
-    const timestamp = value && typeof value === "object" ? normalizeTimestamp(value.updatedAt) : normalizeTimestamp(value);
-    return timestamp ? { updatedAt: timestamp } : void 0;
+  function normalizeTimestamp(value) {
+    const timestamp = Number(value);
+    if (!Number.isFinite(timestamp) || timestamp <= 0) return void 0;
+    return Math.floor(timestamp);
+  }
+  function normalizeDeviceId(value) {
+    if (typeof value !== "string") return void 0;
+    const deviceId = value.trim();
+    return deviceId && deviceId.length <= 128 ? deviceId : void 0;
+  }
+  function normalizeGmValueClock(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return void 0;
+    const ts = Number(value.ts);
+    const counter = Number(value.counter);
+    const deviceId = normalizeDeviceId(value.deviceId);
+    if (!Number.isFinite(ts) || ts < 0 || !Number.isFinite(counter) || counter < 0 || !deviceId) {
+      return void 0;
+    }
+    return { ts: Math.floor(ts), counter: Math.floor(counter), deviceId };
+  }
+  function compareGmValueClocks(left, right) {
+    if (!left && !right) return 0;
+    if (!left) return -1;
+    if (!right) return 1;
+    if (left.ts !== right.ts) return left.ts > right.ts ? 1 : -1;
+    if (left.counter !== right.counter) return left.counter > right.counter ? 1 : -1;
+    return left.deviceId === right.deviceId ? 0 : left.deviceId > right.deviceId ? 1 : -1;
+  }
+  function normalizeGmValueSyncPolicy(value) {
+    return value === "prefer-local" || value === "prefer-remote" ? value : "hlc";
+  }
+  function normalizeKeyMetadataEntry(value, options = {}) {
+    const record = value && typeof value === "object" && !Array.isArray(value) ? value : null;
+    const timestamp = normalizeTimestamp(record?.updatedAt ?? value) ?? normalizeTimestamp(options.fallbackTimestamp);
+    const clock = normalizeGmValueClock(record?.clock) || (timestamp && normalizeDeviceId(options.deviceId) ? { ts: timestamp, counter: 0, deviceId: normalizeDeviceId(options.deviceId) } : void 0);
+    if (!timestamp && !clock) return void 0;
+    return {
+      ...timestamp ? { updatedAt: timestamp } : {},
+      ...clock ? { clock } : {}
+    };
+  }
+  function cloneClock(clock) {
+    return { ts: clock.ts, counter: clock.counter, deviceId: clock.deviceId };
+  }
+  function valueEquals(left, right) {
+    try {
+      return JSON.stringify(left) === JSON.stringify(right);
+    } catch (_) {
+      return false;
+    }
+  }
+  function normalizeConflictEntry(value, now) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return void 0;
+    const clock = normalizeGmValueClock(value.clock);
+    const retainedAt = normalizeTimestamp(value.retainedAt) ?? now;
+    if (!clock) return void 0;
+    let cloned;
+    try {
+      cloned = cloneJsonValue(value.value);
+    } catch (_) {
+      return void 0;
+    }
+    if (cloned === void 0) return void 0;
+    return { value: cloned, clock, retainedAt };
+  }
+  function normalizeGmValueSyncConflicts(value, options = {}) {
+    const now = normalizeTimestamp(options.now) ?? Date.now();
+    const maxKeys = Math.max(1, Math.floor(options.maxKeys ?? GM_VALUE_SYNC_MAX_CONFLICT_KEYS));
+    const maxPerKey = Math.max(1, Math.floor(options.maxPerKey ?? GM_VALUE_SYNC_MAX_CONFLICTS_PER_KEY));
+    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+    const result = {};
+    for (const key of Object.keys(value).sort((a, b) => a.localeCompare(b))) {
+      if (Object.keys(result).length >= maxKeys) break;
+      const rawEntries = value[key];
+      if (!Array.isArray(rawEntries)) continue;
+      const entries = [];
+      for (const rawEntry of rawEntries) {
+        const entry = normalizeConflictEntry(rawEntry, now);
+        if (!entry || entry.retainedAt < now - GM_VALUE_SYNC_CONFLICT_RETENTION_MS) continue;
+        const duplicate = entries.some((candidate) => compareGmValueClocks(candidate.clock, entry.clock) === 0 && valueEquals(candidate.value, entry.value));
+        if (duplicate) continue;
+        entries.push(entry);
+      }
+      entries.sort((a, b) => {
+        const clockOrder = compareGmValueClocks(b.clock, a.clock);
+        return clockOrder || b.retainedAt - a.retainedAt;
+      });
+      if (entries.length > 0) setRecordKey(result, key, entries.slice(0, maxPerKey));
+    }
+    return result;
+  }
+  function candidateForKey(source, values, metadata, key) {
+    if (!Object.prototype.hasOwnProperty.call(values, key)) return void 0;
+    const rawMetadata = metadata && Object.prototype.hasOwnProperty.call(metadata, key) ? metadata[key] : void 0;
+    const normalizedMetadata = normalizeKeyMetadataEntry(rawMetadata);
+    const clock = normalizedMetadata?.clock || (normalizedMetadata?.updatedAt ? { ts: normalizedMetadata.updatedAt, counter: 0, deviceId: source } : void 0);
+    const candidateMetadata = normalizedMetadata || clock ? {
+      ...normalizedMetadata || {},
+      ...clock && !normalizedMetadata?.clock ? { clock } : {}
+    } : void 0;
+    return {
+      value: cloneJsonValue(values[key]),
+      ...candidateMetadata ? { metadata: candidateMetadata } : {},
+      ...clock ? { clock } : {},
+      source
+    };
+  }
+  function chooseCandidate(local, remote, policy) {
+    if (policy === "prefer-local") return local;
+    if (policy === "prefer-remote") return remote;
+    return compareGmValueClocks(local.clock, remote.clock) >= 0 ? local : remote;
+  }
+  function addConflictEntry(conflicts, key, candidate, now) {
+    if (!candidate.clock) return;
+    const existing = conflicts[key] || [];
+    const entry = {
+      value: cloneJsonValue(candidate.value),
+      clock: cloneClock(candidate.clock),
+      retainedAt: now
+    };
+    if (!existing.some((item) => compareGmValueClocks(item.clock, entry.clock) === 0 && valueEquals(item.value, entry.value))) {
+      setRecordKey(conflicts, key, [...existing, entry]);
+    }
+  }
+  function mergeGmValueSyncValues(localValues, localMetadata, remoteValues, remoteMetadata, options = {}) {
+    const local = localValues && typeof localValues === "object" && !Array.isArray(localValues) ? localValues : {};
+    const remote = remoteValues && typeof remoteValues === "object" && !Array.isArray(remoteValues) ? remoteValues : {};
+    const localMeta = localMetadata && typeof localMetadata === "object" && !Array.isArray(localMetadata) ? localMetadata : {};
+    const remoteMeta = remoteMetadata && typeof remoteMetadata === "object" && !Array.isArray(remoteMetadata) ? remoteMetadata : {};
+    const policy = normalizeGmValueSyncPolicy(options.policy);
+    const now = normalizeTimestamp(options.now) ?? Date.now();
+    const conflicts = normalizeGmValueSyncConflicts(options.localConflicts, { now });
+    const remoteConflicts = normalizeGmValueSyncConflicts(options.remoteConflicts, { now });
+    for (const [key, entries] of Object.entries(remoteConflicts)) {
+      const current = conflicts[key] || [];
+      setRecordKey(conflicts, key, [...current, ...entries]);
+    }
+    const values = {};
+    const keyMetadata = {};
+    const changedKeys = [];
+    const metadataChangedKeys = [];
+    let conflictCount = 0;
+    const keys = [.../* @__PURE__ */ new Set([...Object.keys(local), ...Object.keys(remote)])].sort((a, b) => a.localeCompare(b));
+    for (const key of keys) {
+      const localCandidate = candidateForKey("local", local, localMeta, key);
+      const remoteCandidate = candidateForKey("remote", remote, remoteMeta, key);
+      const winner = !localCandidate ? remoteCandidate : !remoteCandidate ? localCandidate : chooseCandidate(localCandidate, remoteCandidate, policy);
+      if (!winner) continue;
+      setRecordKey(values, key, winner.value);
+      if (winner.metadata) setRecordKey(keyMetadata, key, winner.metadata);
+      if (localCandidate && remoteCandidate && !valueEquals(localCandidate.value, remoteCandidate.value)) {
+        conflictCount += 1;
+        const loser = winner.source === "local" ? remoteCandidate : localCandidate;
+        addConflictEntry(conflicts, key, loser, now);
+        if (winner.source === "remote") changedKeys.push(key);
+      } else if (winner.source === "remote" && (!localCandidate || !valueEquals(localCandidate.value, winner.value))) {
+        changedKeys.push(key);
+      }
+      if (winner.source === "remote" && compareGmValueClocks(winner.clock, localCandidate?.clock) > 0 && !metadataChangedKeys.includes(key)) {
+        metadataChangedKeys.push(key);
+      }
+    }
+    const normalizedConflicts = normalizeGmValueSyncConflicts(conflicts, { now });
+    const losersRetained = Object.values(normalizedConflicts).reduce((sum, entries) => sum + entries.length, 0);
+    return {
+      values,
+      keyMetadata,
+      conflicts: normalizedConflicts,
+      changedKeys,
+      metadataChangedKeys,
+      conflictCount,
+      losersRetained
+    };
   }
   function shouldSyncScriptValues(script) {
     return script?.settings?.syncValues === true;
@@ -388,10 +556,14 @@ const CloudSync = (() => {
         warnings.push({ id: "valueNotJsonSerializable", message: "Stored value is not JSON-serializable" });
         continue;
       }
-      const nextValues = { ...bundle.values, [key]: cloned };
+      const nextValues = { ...bundle.values };
+      setRecordKey(nextValues, key, cloned);
       const nextKeyMetadata = { ...bundle.keyMetadata ?? {} };
-      const keyMetadataEntry = normalizeKeyMetadataEntry(sourceKeyMetadata[key]);
-      if (keyMetadataEntry) setMetadataKey(nextKeyMetadata, key, keyMetadataEntry);
+      const keyMetadataEntry = normalizeKeyMetadataEntry(sourceKeyMetadata[key], {
+        deviceId: options.deviceId ?? void 0,
+        fallbackTimestamp: lastValueUpdatedAt
+      });
+      if (keyMetadataEntry) setRecordKey(nextKeyMetadata, key, keyMetadataEntry);
       const nextBundle = {
         ...bundle,
         values: nextValues,
@@ -406,6 +578,20 @@ const CloudSync = (() => {
       bundle.values = nextValues;
       bundle.keyCount = nextBundle.keyCount;
       if (nextBundle.keyMetadata) bundle.keyMetadata = nextBundle.keyMetadata;
+      bundle.bytes = nextBytes;
+    }
+    const normalizedConflicts = normalizeGmValueSyncConflicts(options.conflicts, { now: Date.now() });
+    for (const [key, entries] of Object.entries(normalizedConflicts)) {
+      if (!Object.prototype.hasOwnProperty.call(bundle.values, key)) continue;
+      const nextConflicts = { ...bundle.conflicts ?? {} };
+      setRecordKey(nextConflicts, key, entries);
+      const nextBundle = { ...bundle, conflicts: nextConflicts };
+      const nextBytes = byteLength2(nextBundle);
+      if (nextBytes > maxScriptBytes) {
+        warnings.push({ id: "conflictCapExceeded", message: "Retained GM value conflicts exceed the per-script sync size cap" });
+        continue;
+      }
+      bundle.conflicts = nextConflicts;
       bundle.bytes = nextBytes;
     }
     if (bundle.keyCount === 0) {
@@ -563,6 +749,21 @@ const CloudSync = (() => {
       }
     }
   }
+  async function persistGmValueConflictCount(scriptId, count) {
+    try {
+      const script = await ScriptStorage.get(scriptId);
+      if (!script) return;
+      const currentCount = Math.max(0, Math.floor(Number(script.settings?._gmValueSyncConflictCount) || 0));
+      const nextCount = Math.max(0, Math.floor(Number(count) || 0));
+      if (currentCount === nextCount) return;
+      const settings = { ...script.settings || {} };
+      if (nextCount > 0) settings._gmValueSyncConflictCount = nextCount;
+      else delete settings._gmValueSyncConflictCount;
+      await ScriptStorage.set(scriptId, { ...script, settings });
+    } catch (error) {
+      debugLog("[CloudSync] Failed to persist GM value conflict count:", scriptId, error);
+    }
+  }
   async function mergeScriptText(base, local, remote) {
     if (typeof ScriptAnalyzer !== "undefined" && typeof ScriptAnalyzer.mergeText === "function") {
       return ScriptAnalyzer.mergeText(base, local, remote);
@@ -606,7 +807,8 @@ const CloudSync = (() => {
     "sourceIdentityChanged",
     "_failedRequires",
     "_failedRequireErrors",
-    "_registrationError"
+    "_registrationError",
+    "_gmValueSyncConflictCount"
   ]);
   function cloneScriptSettingValue(value) {
     if (value == null || typeof value !== "object") return value;
@@ -694,7 +896,8 @@ const CloudSync = (() => {
       if (!isPlainRecord(bundle.values)) continue;
       const rebuilt = buildGmValueSyncBundle(script, bundle.values, {
         lastValueUpdatedAt: getValueBundleLastUpdatedAt(bundle),
-        keyMetadata: getValueBundleKeyMetadata(bundle)
+        keyMetadata: getValueBundleKeyMetadata(bundle),
+        conflicts: getValueBundleConflicts(bundle)
       });
       if (rebuilt.bundle) result[scriptId] = rebuilt.bundle;
     }
@@ -742,15 +945,41 @@ const CloudSync = (() => {
     });
   }
   function getValueBundleKeyMetadata(bundle) {
-    if (!isPlainRecord(bundle) || !isPlainRecord(bundle.keyMetadata)) return void 0;
+    if (!isPlainRecord(bundle)) return void 0;
     const metadata = {};
-    for (const [key, entry] of Object.entries(bundle.keyMetadata)) {
-      const timestamp = isPlainRecord(entry) ? Number(entry.updatedAt) : Number(entry);
-      if (Number.isFinite(timestamp) && timestamp > 0) {
-        setValueBundleMetadataKey(metadata, key, { updatedAt: Math.floor(timestamp) });
+    const rawMetadata = isPlainRecord(bundle.keyMetadata) ? bundle.keyMetadata : {};
+    for (const [key, entry] of Object.entries(rawMetadata)) {
+      if (isPlainRecord(entry)) {
+        const timestamp = Number(entry.updatedAt);
+        const clock = entry.clock && typeof entry.clock === "object" && !Array.isArray(entry.clock) ? entry.clock : void 0;
+        if (Number.isFinite(timestamp) && timestamp > 0) {
+          setValueBundleMetadataKey(metadata, key, {
+            updatedAt: Math.floor(timestamp),
+            ...clock ? { clock } : {}
+          });
+        } else if (clock) {
+          setValueBundleMetadataKey(metadata, key, { clock });
+        }
+      } else {
+        const timestamp = Number(entry);
+        if (Number.isFinite(timestamp) && timestamp > 0) {
+          setValueBundleMetadataKey(metadata, key, { updatedAt: Math.floor(timestamp) });
+        }
+      }
+    }
+    if (Object.keys(metadata).length === 0) {
+      const fallbackTimestamp = getValueBundleLastUpdatedAt(bundle);
+      if (fallbackTimestamp && isPlainRecord(bundle.values)) {
+        for (const key of Object.keys(bundle.values)) {
+          setValueBundleMetadataKey(metadata, key, { updatedAt: fallbackTimestamp });
+        }
       }
     }
     return Object.keys(metadata).length > 0 ? metadata : void 0;
+  }
+  function getValueBundleConflicts(bundle) {
+    if (!isPlainRecord(bundle)) return void 0;
+    return isPlainRecord(bundle.conflicts) ? bundle.conflicts : void 0;
   }
   function getValueBundleKeyUpdatedAt(metadata, key) {
     if (!metadata) return null;
@@ -769,6 +998,8 @@ const CloudSync = (() => {
       skippedUnavailable: 0,
       failures: 0,
       writeFailureRetryReady: 0,
+      conflictsDetected: 0,
+      losersRetained: 0,
       preservedValueBundles: {},
       preservedRemoteNewer: 0,
       preservedLocalNewer: 0,
@@ -794,7 +1025,12 @@ const CloudSync = (() => {
     const summary = {
       applied: result.applied,
       preserved: Object.keys(result.preservedValueBundles).length,
+      // HLC conflicts are resolved and written in the same pass. Keep this
+      // legacy field for genuinely skipped writes; detected conflicts are
+      // reported separately and surfaced through the passive conflict badge.
       conflictBlocked: result.skippedNonEmpty + result.skippedUserModified,
+      conflictsDetected: result.conflictsDetected,
+      losersRetained: result.losersRetained,
       skippedNonEmpty: result.skippedNonEmpty,
       skippedUserModified: result.skippedUserModified,
       skippedUnavailable: result.skippedUnavailable,
@@ -844,7 +1080,8 @@ const CloudSync = (() => {
       }
       const rebuilt = buildGmValueSyncBundle(script, bundle.values, {
         lastValueUpdatedAt: getValueBundleLastUpdatedAt(bundle),
-        keyMetadata: getValueBundleKeyMetadata(bundle)
+        keyMetadata: getValueBundleKeyMetadata(bundle),
+        conflicts: getValueBundleConflicts(bundle)
       });
       result.warnings += rebuilt.warnings.length;
       if (rebuilt.bundle) {
@@ -909,10 +1146,8 @@ const CloudSync = (() => {
       const localBundle = localBundles[scriptId];
       if (!isPlainRecord(localBundle) && localScriptIds.has(scriptId)) {
         addConflict("local-bundle-unavailable", remoteBundle, localBundle);
-      } else if (!isPlainRecord(localBundle) || Number(localBundle.keyCount) === 0) {
-        ready += 1;
       } else {
-        addConflict("local-values-present", remoteBundle, localBundle);
+        ready += 1;
       }
     }
     return {
@@ -1145,7 +1380,7 @@ const CloudSync = (() => {
       overlappingUnknownTimestamp
     };
   }
-  async function applyRemoteValueBundlesWhenLocalEmpty(selection, currentScripts = [], localValueBundles = {}) {
+  async function applyRemoteValueBundlesWhenLocalEmpty(selection, currentScripts = [], localValueBundles = {}, options = {}) {
     const result = createEmptyRemoteValueBundleApplyResult();
     const bundles = Object.entries(selection.valueBundles);
     if (bundles.length === 0) return result;
@@ -1156,17 +1391,8 @@ const CloudSync = (() => {
       }
       return result;
     }
-    const scriptsById = new Map(
-      currentScripts.map((script) => [script.id, script])
-    );
     for (const [scriptId, bundle] of bundles) {
-      const currentScript = scriptsById.get(scriptId);
       const localBundle = localValueBundles[scriptId];
-      if (currentScript?.settings?.userModified) {
-        result.skippedUserModified += 1;
-        preserveRemoteValueBundle(result, scriptId, bundle, localBundle);
-        continue;
-      }
       let localValues = null;
       try {
         localValues = await ScriptValues.getAll(scriptId);
@@ -1175,14 +1401,44 @@ const CloudSync = (() => {
         preserveRemoteValueBundle(result, scriptId, bundle, localBundle);
         continue;
       }
-      if (Object.keys(localValues || {}).length > 0) {
-        result.skippedNonEmpty += 1;
-        preserveRemoteValueBundle(result, scriptId, bundle, localBundle);
-        continue;
-      }
       try {
-        await ScriptValues.setAll(scriptId, bundle.values);
-        result.applied += 1;
+        const localMetadata = typeof ScriptValues.getAllKeyMetadata === "function" ? await ScriptValues.getAllKeyMetadata(scriptId) : {};
+        const localBundleMetadata = getValueBundleKeyMetadata(localBundle) || {};
+        const mergedLocalMetadata = { ...localBundleMetadata, ...localMetadata || {} };
+        const localConflicts = typeof ScriptValues.getSyncConflicts === "function" ? await ScriptValues.getSyncConflicts(scriptId) : null;
+        const merged = mergeGmValueSyncValues(
+          localValues || {},
+          mergedLocalMetadata,
+          bundle.values,
+          getValueBundleKeyMetadata(bundle),
+          {
+            policy: options.policy,
+            localConflicts,
+            remoteConflicts: getValueBundleConflicts(bundle)
+          }
+        );
+        result.conflictsDetected += merged.conflictCount;
+        result.losersRetained += merged.losersRetained;
+        if (merged.changedKeys.length > 0 || merged.metadataChangedKeys.length > 0) {
+          if (typeof ScriptValues.setAllWithClocks === "function") {
+            await ScriptValues.setAllWithClocks(scriptId, merged.values, merged.keyMetadata);
+          } else if (typeof ScriptValues.setAll === "function") {
+            await ScriptValues.setAll(scriptId, merged.values);
+          } else {
+            result.skippedUnavailable += 1;
+            preserveRemoteValueBundle(result, scriptId, bundle, localBundle);
+            continue;
+          }
+          result.applied += 1;
+        }
+        if (typeof ScriptValues.setSyncConflicts === "function") {
+          try {
+            await ScriptValues.setSyncConflicts(scriptId, merged.conflicts);
+          } catch (error) {
+            debugLog("[CloudSync] Failed to persist GM value conflict sidecar:", scriptId, error);
+          }
+        }
+        await persistGmValueConflictCount(scriptId, merged.losersRetained);
       } catch (_) {
         result.failures += 1;
         result.writeFailureRetryReady += 1;
@@ -1206,9 +1462,13 @@ const CloudSync = (() => {
       const values = await ScriptValues.getAll(script.id);
       const metadata = typeof ScriptValues.getAllMetadata === "function" ? await ScriptValues.getAllMetadata(script.id) : null;
       const keyMetadata = typeof ScriptValues.getAllKeyMetadata === "function" ? await ScriptValues.getAllKeyMetadata(script.id) : null;
+      const deviceId = typeof ScriptValues.getSyncDeviceId === "function" ? await ScriptValues.getSyncDeviceId() : null;
+      const conflicts = typeof ScriptValues.getSyncConflicts === "function" ? await ScriptValues.getSyncConflicts(script.id) : null;
       const result = buildGmValueSyncBundle(script, values, {
         lastValueUpdatedAt: metadata?.lastUpdatedAt ?? null,
-        keyMetadata
+        keyMetadata,
+        conflicts,
+        deviceId
       });
       warnings += result.warnings.length;
       if (result.bundle) valueBundles[script.id] = result.bundle;
@@ -1475,7 +1735,7 @@ const CloudSync = (() => {
         remoteValueBundleCandidateReviewKeyTotal: remoteValueBundleApplyReadiness.candidateReviewKeyTotal,
         remoteValueBundleCandidateAcceptedResultKeyTotal: remoteValueBundleApplyReadiness.candidateAcceptedResultKeyTotal,
         valueBundleApplyEnabled: true,
-        valueBundleApplyMode: "empty-local-only",
+        valueBundleApplyMode: "hlc-last-write-wins",
         wouldUpload: false,
         wouldDownload: false,
         wouldUploadValues: false,
@@ -1608,7 +1868,7 @@ const CloudSync = (() => {
             ignored: remoteValueBundleSelection.ignored,
             warnings: remoteValueBundleSelection.warnings,
             applyEnabled: true,
-            applyMode: "empty-local-only"
+            applyMode: "hlc-last-write-wins"
           });
         }
         let localMutated = false;
@@ -1729,7 +1989,8 @@ const CloudSync = (() => {
         const remoteValueApplyResult = await applyRemoteValueBundlesWhenLocalEmpty(
           remoteValueBundleSelection,
           postMergeScripts,
-          localData.valueBundles ?? {}
+          localData.valueBundles ?? {},
+          { policy: normalizeGmValueSyncPolicy(settings.gmValueSyncConflictPolicy) }
         );
         valueBundleSync = summarizeRemoteValueBundleApplyResult(remoteValueApplyResult);
         if (remoteValueApplyResult.applied > 0 || remoteValueApplyResult.skippedNonEmpty > 0 || remoteValueApplyResult.skippedUserModified > 0 || remoteValueApplyResult.skippedUnavailable > 0 || remoteValueApplyResult.failures > 0) {

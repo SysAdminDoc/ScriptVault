@@ -22,6 +22,7 @@ async function loadFreshCloudSync(
   valuesByScript = {},
   metadataByScript = null,
   providersOverride = null,
+  valueSyncOptions = {},
 ) {
   vi.resetModules();
 
@@ -74,6 +75,32 @@ async function loadFreshCloudSync(
       metadataByScript[scriptId]?.keyMetadata || {},
     ));
   }
+  const syncValueConflicts = {};
+  if (valueSyncOptions.enabled) {
+    const metadataState = structuredClone(metadataByScript || {});
+    ScriptValues.getAllMetadata = vi.fn(async (scriptId) => structuredClone(
+      metadataState[scriptId] || {
+        valueCount: Object.keys(valueState[scriptId] || {}).length,
+        lastUpdatedAt: null,
+      },
+    ));
+    ScriptValues.getAllKeyMetadata = vi.fn(async (scriptId) => structuredClone(
+      metadataState[scriptId]?.keyMetadata || {},
+    ));
+    ScriptValues.getSyncDeviceId = vi.fn(async () => valueSyncOptions.deviceId || 'device-test');
+    ScriptValues.getSyncConflicts = vi.fn(async (scriptId) => structuredClone(syncValueConflicts[scriptId] || {}));
+    ScriptValues.setSyncConflicts = vi.fn(async (scriptId, conflicts) => {
+      syncValueConflicts[scriptId] = structuredClone(conflicts || {});
+    });
+    ScriptValues.setAllWithClocks = vi.fn(async (scriptId, values, keyMetadata) => {
+      valueState[scriptId] = structuredClone(values || {});
+      metadataState[scriptId] = {
+        valueCount: Object.keys(valueState[scriptId]).length,
+        lastUpdatedAt: Math.max(...Object.values(keyMetadata || {}).map((entry) => Number(entry?.updatedAt) || 0), 0) || null,
+        keyMetadata: structuredClone(keyMetadata || {}),
+      };
+    });
+  }
 
   const provider = {
     name: 'Google Drive',
@@ -115,6 +142,7 @@ async function loadFreshCloudSync(
     updateBadge,
     scriptState,
     valueState,
+    syncValueConflicts,
     getRemoteData: () => structuredClone(remoteStore),
   };
 }
@@ -1141,7 +1169,7 @@ describe('source cloud sync module', () => {
         remoteValueBundleWarnings: 0,
         valueBundleWarnings: 0,
         valueBundleApplyEnabled: true,
-        valueBundleApplyMode: 'empty-local-only',
+        valueBundleApplyMode: 'hlc-last-write-wins',
         wouldUploadValues: true,
         wouldApplyValues: false,
       }),
@@ -1194,7 +1222,7 @@ describe('source cloud sync module', () => {
         remoteValueBundlesIgnored: 0,
         remoteValueBundleWarnings: 0,
         valueBundleApplyEnabled: true,
-        valueBundleApplyMode: 'empty-local-only',
+        valueBundleApplyMode: 'hlc-last-write-wins',
         wouldApplyValues: true,
       }),
     );
@@ -1274,9 +1302,8 @@ describe('source cloud sync module', () => {
     expect(preview.summary).toEqual(
       expect.objectContaining({
         remoteValueBundlesApplicable: 1,
-        remoteValueBundlesApplyReady: 0,
-        remoteValueBundlesConflictBlocked: 1,
-        wouldApplyValues: false,
+        remoteValueBundlesApplyReady: 1,
+        remoteValueBundlesConflictBlocked: 0,
         localValueBundlesWithTimestamps: 1,
         localValueBundlesMissingTimestamps: 0,
         localValueBundlesOlderThanLastSync: 1,
@@ -1285,13 +1312,13 @@ describe('source cloud sync module', () => {
         remoteValueBundlesMissingTimestamps: 0,
         remoteValueBundlesOlderThanLastSync: 0,
         remoteValueBundlesNewerThanLastSync: 1,
-        remoteValueBundleCandidateMergesReady: 1,
+        remoteValueBundleCandidateMergesReady: 0,
         remoteValueBundleCandidateMergesManualReview: 0,
         remoteValueBundleCandidateMergesUnavailable: 0,
-        remoteValueBundleMergeSimulationReadyPreviewOnly: 1,
+        remoteValueBundleMergeSimulationReadyPreviewOnly: 0,
         remoteValueBundleMergeSimulationManualReview: 0,
         remoteValueBundleMergeSimulationUnavailable: 0,
-        remoteValueBundleMergeSimulationReadyPreviewOnlyResultKeyTotal: 3,
+        remoteValueBundleMergeSimulationReadyPreviewOnlyResultKeyTotal: 0,
         remoteValueBundleMergeSimulationManualReviewResultKeyTotal: 0,
         remoteValueBundleMergeSimulationUnavailableResultKeyTotal: 0,
         remoteValueBundleCandidateMergesBlockedSameTimestamp: 0,
@@ -1299,49 +1326,15 @@ describe('source cloud sync module', () => {
         remoteValueBundleCandidateMergesBlockedOneSidedTimestamp: 0,
         remoteValueBundleCandidateMergesBlockedUnavailable: 0,
         remoteValueBundleCandidateMergesBlockedNoCandidateKeys: 0,
-        remoteValueBundleCandidateResultKeyTotal: 3,
-        remoteValueBundleCandidateAutoSelectedKeyTotal: 3,
+        remoteValueBundleCandidateResultKeyTotal: 0,
+        remoteValueBundleCandidateAutoSelectedKeyTotal: 0,
         remoteValueBundleCandidateReviewKeyTotal: 0,
-        remoteValueBundleCandidateAcceptedResultKeyTotal: 3,
+        remoteValueBundleCandidateAcceptedResultKeyTotal: 0,
+        wouldApplyValues: true,
       }),
     );
     expectCandidateMergeSummaryInvariants(preview.summary);
-    expect(preview.valueBundleConflicts).toEqual([
-      expect.objectContaining({
-        reason: 'local-values-present',
-        localKeyCount: 2,
-        remoteKeyCount: 2,
-        overlappingKeyCount: 1,
-        localOnlyKeyCount: 1,
-        remoteOnlyKeyCount: 1,
-        localLastValueUpdatedAt: 1000,
-        remoteLastValueUpdatedAt: 2000,
-        lastWriteHint: 'remote-newer',
-        overlappingRemoteNewerKeyCount: 1,
-        overlappingLocalNewerKeyCount: 0,
-        overlappingSameTimestampKeyCount: 0,
-        overlappingRemoteTimestampOnlyKeyCount: 0,
-        overlappingLocalTimestampOnlyKeyCount: 0,
-        overlappingUnknownTimestampKeyCount: 0,
-        candidateMergePlan: 'timestamp-guided',
-        candidateRemoteKeyCount: 2,
-        candidateLocalKeyCount: 1,
-        candidateSameTimestampKeyCount: 0,
-        candidateManualKeyCount: 0,
-        candidateOneSidedTimestampKeyCount: 0,
-        candidateResultKeyCount: 3,
-        candidateAutoSelectedKeyCount: 3,
-        candidateReviewKeyCount: 0,
-        candidateMergeGate: 'ready',
-        candidateMergeBlockReason: 'none',
-        candidateMergeSimulation: 'ready-preview-only',
-      }),
-    ]);
-    expect(preview.valueBundleConflicts[0].candidateAutoSelectedKeyCount)
-      .toBe(preview.valueBundleConflicts[0].candidateResultKeyCount);
-    expect(preview.valueBundleConflicts[0].candidateReviewKeyCount).toBe(0);
-    expect(preview.valueBundleConflicts[0].localBytes).toBeGreaterThan(0);
-    expect(preview.valueBundleConflicts[0].remoteBytes).toBeGreaterThan(0);
+    expect(preview.valueBundleConflicts).toEqual([]);
     const serializedPreview = JSON.stringify(preview.valueBundleConflicts);
     expect(serializedPreview).not.toContain('script_values');
     expect(serializedPreview).not.toContain('Values');
@@ -1415,44 +1408,27 @@ describe('source cloud sync module', () => {
 
     expect(preview.summary).toEqual(
       expect.objectContaining({
-        remoteValueBundlesConflictBlocked: 1,
+        remoteValueBundlesConflictBlocked: 0,
+        remoteValueBundlesApplyReady: 1,
         remoteValueBundleCandidateMergesReady: 0,
-        remoteValueBundleCandidateMergesManualReview: 1,
+        remoteValueBundleCandidateMergesManualReview: 0,
         remoteValueBundleCandidateMergesUnavailable: 0,
         remoteValueBundleMergeSimulationReadyPreviewOnly: 0,
-        remoteValueBundleMergeSimulationManualReview: 1,
+        remoteValueBundleMergeSimulationManualReview: 0,
         remoteValueBundleMergeSimulationUnavailable: 0,
         remoteValueBundleMergeSimulationReadyPreviewOnlyResultKeyTotal: 0,
-        remoteValueBundleMergeSimulationManualReviewResultKeyTotal: 1,
+        remoteValueBundleMergeSimulationManualReviewResultKeyTotal: 0,
         remoteValueBundleMergeSimulationUnavailableResultKeyTotal: 0,
-        remoteValueBundleCandidateMergesBlockedUnknownTimestamp: 1,
-        remoteValueBundleCandidateResultKeyTotal: 1,
+        remoteValueBundleCandidateMergesBlockedUnknownTimestamp: 0,
+        remoteValueBundleCandidateResultKeyTotal: 0,
         remoteValueBundleCandidateAutoSelectedKeyTotal: 0,
-        remoteValueBundleCandidateReviewKeyTotal: 1,
+        remoteValueBundleCandidateReviewKeyTotal: 0,
         remoteValueBundleCandidateAcceptedResultKeyTotal: 0,
+        wouldApplyValues: true,
       }),
     );
     expectCandidateMergeSummaryInvariants(preview.summary);
-    expect(preview.valueBundleConflicts).toEqual([
-      expect.objectContaining({
-        overlappingUnknownTimestampKeyCount: 1,
-        candidateMergePlan: 'manual-review',
-        candidateRemoteKeyCount: 0,
-        candidateLocalKeyCount: 0,
-        candidateSameTimestampKeyCount: 0,
-        candidateManualKeyCount: 1,
-        candidateOneSidedTimestampKeyCount: 0,
-        candidateResultKeyCount: 1,
-        candidateAutoSelectedKeyCount: 0,
-        candidateReviewKeyCount: 1,
-        candidateMergeGate: 'manual-review',
-        candidateMergeBlockReason: 'unknown-timestamp',
-        candidateMergeSimulation: 'manual-review',
-      }),
-    ]);
-    expect(preview.valueBundleConflicts[0].candidateAutoSelectedKeyCount)
-      .toBeLessThan(preview.valueBundleConflicts[0].candidateResultKeyCount);
-    expect(preview.valueBundleConflicts[0].candidateReviewKeyCount).toBeGreaterThan(0);
+    expect(preview.valueBundleConflicts).toEqual([]);
     const serializedPreview = JSON.stringify(preview.valueBundleConflicts);
     expect(serializedPreview).not.toContain('script_values');
     expect(serializedPreview).not.toContain('sharedKeyName');
@@ -1617,42 +1593,104 @@ describe('source cloud sync module', () => {
     const result = await CloudSync.sync();
     expect(result).toEqual({
       success: true,
-      valueBundleSync: {
-        applied: 0,
-        preserved: 1,
-        conflictBlocked: 1,
-        skippedNonEmpty: 1,
+      valueBundleSync: expect.objectContaining({
+        applied: 1,
+        preserved: 0,
+        conflictBlocked: 0,
+        conflictsDetected: 1,
+        losersRetained: 1,
+        skippedNonEmpty: 0,
         skippedUserModified: 0,
         skippedUnavailable: 0,
         failures: 0,
-        preservedRemoteNewer: 1,
-        preservedLocalNewer: 0,
-        preservedSameTimestamp: 0,
-        preservedRemoteTimestampOnly: 0,
-        preservedLocalTimestampOnly: 0,
-        preservedTimestampUnknown: 0,
-        preservedCandidateMergeReady: 0,
-        preservedCandidateMergeManualReview: 1,
-        preservedCandidateMergeUnavailable: 0,
-        preservedCandidateResultKeyTotal: 1,
-        preservedCandidateAutoSelectedKeyTotal: 0,
-        preservedCandidateReviewKeyTotal: 1,
-        preservedCandidateAcceptedResultKeyTotal: 0,
-        preservedCandidateBlockedSameTimestamp: 0,
-        preservedCandidateBlockedUnknownTimestamp: 1,
-        preservedCandidateBlockedOneSidedTimestamp: 0,
-        preservedCandidateBlockedUnavailable: 0,
-        preservedCandidateBlockedNoCandidateKeys: 0,
-      },
+      }),
     });
-    expectPreservedCandidateSummaryInvariants(result.valueBundleSync);
 
-    expect(ScriptValues.setAll).not.toHaveBeenCalled();
+    expect(ScriptValues.setAll).toHaveBeenCalledWith('script_values', { token: 'remote-token' });
     expect(scriptState[0].code).toContain('// remote');
     expect(getRemoteData().valueBundles.script_values.values).toEqual({
       token: 'remote-token',
     });
     expect(JSON.stringify(getRemoteData())).not.toContain('local-token');
+  });
+
+  it('applies HLC winners and persists losing GM values for review', async () => {
+    await chrome.storage.local.set({ syncTombstones: {} });
+    const localClock = { ts: 5000, counter: 1, deviceId: 'device-local' };
+    const remoteClock = { ts: 5000, counter: 2, deviceId: 'device-remote' };
+    const harness = await loadFreshCloudSync(
+      [{
+        id: 'script_values',
+        code: '// ==UserScript==\n// @name Values\n// ==/UserScript==\n// local',
+        enabled: true,
+        position: 0,
+        meta: { name: 'Values' },
+        settings: { syncValues: true },
+        syncBaseCode: '// ==UserScript==\n// @name Values\n// ==/UserScript==\n// local',
+        createdAt: 1,
+        updatedAt: 1,
+      }],
+      {
+        version: 1,
+        timestamp: 20,
+        scripts: [{
+          id: 'script_values',
+          code: '// ==UserScript==\n// @name Values\n// ==/UserScript==\n// remote',
+          enabled: true,
+          position: 0,
+          settings: { syncValues: true },
+          updatedAt: 20,
+        }],
+        tombstones: {},
+        valueBundles: {
+          script_values: {
+            schema: 'scriptvault-gm-value-sync/v1',
+            scriptId: 'script_values',
+            keyCount: 1,
+            bytes: 100,
+            values: { token: 'remote-token' },
+            keyMetadata: {
+              token: { updatedAt: 1000, clock: remoteClock },
+            },
+          },
+        },
+      },
+      { gmValueSyncConflictPolicy: 'hlc' },
+      { script_values: { token: 'local-token' } },
+      {
+        script_values: {
+          valueCount: 1,
+          lastUpdatedAt: 5000,
+          keyMetadata: {
+            token: { updatedAt: 1000, clock: localClock },
+          },
+        },
+      },
+      null,
+      { enabled: true, deviceId: 'device-local' },
+    );
+    const { CloudSync, ScriptValues, valueState, syncValueConflicts } = harness;
+
+    const result = await CloudSync.sync();
+
+    expect(result).toEqual(expect.objectContaining({
+      success: true,
+      valueBundleSync: expect.objectContaining({
+        applied: 1,
+        conflictBlocked: 0,
+        conflictsDetected: 1,
+        losersRetained: 1,
+      }),
+    }));
+    expect(ScriptValues.setAllWithClocks).toHaveBeenCalledWith(
+      'script_values',
+      { token: 'remote-token' },
+      { token: { updatedAt: 1000, clock: remoteClock } },
+    );
+    expect(valueState.script_values).toEqual({ token: 'remote-token' });
+    expect(syncValueConflicts.script_values.token).toEqual([
+      { value: 'local-token', clock: localClock, retainedAt: expect.any(Number) },
+    ]);
   });
 
   it('uploads newer local GM value bundles instead of stale preserved remote bundles', async () => {
@@ -1717,35 +1755,18 @@ describe('source cloud sync module', () => {
     const result = await CloudSync.sync();
     expect(result).toEqual({
       success: true,
-      valueBundleSync: {
+      valueBundleSync: expect.objectContaining({
         applied: 0,
-        preserved: 1,
-        conflictBlocked: 1,
-        skippedNonEmpty: 1,
+        preserved: 0,
+        conflictBlocked: 0,
+        conflictsDetected: 1,
+        losersRetained: 1,
+        skippedNonEmpty: 0,
         skippedUserModified: 0,
         skippedUnavailable: 0,
         failures: 0,
-        preservedRemoteNewer: 0,
-        preservedLocalNewer: 1,
-        preservedSameTimestamp: 0,
-        preservedRemoteTimestampOnly: 0,
-        preservedLocalTimestampOnly: 0,
-        preservedTimestampUnknown: 0,
-        preservedCandidateMergeReady: 0,
-        preservedCandidateMergeManualReview: 1,
-        preservedCandidateMergeUnavailable: 0,
-        preservedCandidateResultKeyTotal: 1,
-        preservedCandidateAutoSelectedKeyTotal: 0,
-        preservedCandidateReviewKeyTotal: 1,
-        preservedCandidateAcceptedResultKeyTotal: 0,
-        preservedCandidateBlockedSameTimestamp: 0,
-        preservedCandidateBlockedUnknownTimestamp: 1,
-        preservedCandidateBlockedOneSidedTimestamp: 0,
-        preservedCandidateBlockedUnavailable: 0,
-        preservedCandidateBlockedNoCandidateKeys: 0,
-      },
+      }),
     });
-    expectPreservedCandidateSummaryInvariants(result.valueBundleSync);
 
     expect(ScriptValues.setAll).not.toHaveBeenCalled();
     expect(scriptState[0].code).toContain('// remote');
@@ -1821,37 +1842,20 @@ describe('source cloud sync module', () => {
     const result = await CloudSync.sync();
     expect(result).toEqual({
       success: true,
-      valueBundleSync: {
-        applied: 0,
-        preserved: 1,
-        conflictBlocked: 1,
+      valueBundleSync: expect.objectContaining({
+        applied: 1,
+        preserved: 0,
+        conflictBlocked: 0,
+        conflictsDetected: 0,
+        losersRetained: 0,
         skippedNonEmpty: 0,
-        skippedUserModified: 1,
+        skippedUserModified: 0,
         skippedUnavailable: 0,
         failures: 0,
-        preservedRemoteNewer: 0,
-        preservedLocalNewer: 1,
-        preservedSameTimestamp: 0,
-        preservedRemoteTimestampOnly: 0,
-        preservedLocalTimestampOnly: 0,
-        preservedTimestampUnknown: 0,
-        preservedCandidateMergeReady: 1,
-        preservedCandidateMergeManualReview: 0,
-        preservedCandidateMergeUnavailable: 0,
-        preservedCandidateResultKeyTotal: 1,
-        preservedCandidateAutoSelectedKeyTotal: 1,
-        preservedCandidateReviewKeyTotal: 0,
-        preservedCandidateAcceptedResultKeyTotal: 1,
-        preservedCandidateBlockedSameTimestamp: 0,
-        preservedCandidateBlockedUnknownTimestamp: 0,
-        preservedCandidateBlockedOneSidedTimestamp: 0,
-        preservedCandidateBlockedUnavailable: 0,
-        preservedCandidateBlockedNoCandidateKeys: 0,
-      },
+      }),
     });
-    expectPreservedCandidateSummaryInvariants(result.valueBundleSync);
 
-    expect(ScriptValues.setAll).not.toHaveBeenCalled();
+    expect(ScriptValues.setAll).toHaveBeenCalledWith('script_values', { token: 'remote-token' });
     expect(scriptState[0].settings.userModified).toBe(true);
     expect(scriptState[0].code).toContain('// local');
     expect(getRemoteData().valueBundles.script_values.values).toEqual({
@@ -1913,6 +1917,8 @@ describe('source cloud sync module', () => {
         applied: 0,
         preserved: 1,
         conflictBlocked: 0,
+        conflictsDetected: 0,
+        losersRetained: 0,
         skippedNonEmpty: 0,
         skippedUserModified: 0,
         skippedUnavailable: 0,
@@ -2004,6 +2010,8 @@ describe('source cloud sync module', () => {
         applied: 1,
         preserved: 0,
         conflictBlocked: 0,
+        conflictsDetected: 0,
+        losersRetained: 0,
         skippedNonEmpty: 0,
         skippedUserModified: 0,
         skippedUnavailable: 0,
@@ -2095,6 +2103,8 @@ describe('source cloud sync module', () => {
         applied: 0,
         preserved: 1,
         conflictBlocked: 0,
+        conflictsDetected: 0,
+        losersRetained: 0,
         skippedNonEmpty: 0,
         skippedUserModified: 0,
         skippedUnavailable: 0,
@@ -2142,7 +2152,7 @@ describe('source cloud sync module', () => {
       remoteValueBundlesIgnored: 0,
       remoteValueBundleWarnings: 0,
       valueBundleApplyEnabled: true,
-      valueBundleApplyMode: 'empty-local-only',
+      valueBundleApplyMode: 'hlc-last-write-wins',
       wouldApplyValues: true,
     }));
     expect(retryPreview.valueBundleConflicts).toEqual([]);
@@ -2162,6 +2172,8 @@ describe('source cloud sync module', () => {
         applied: 1,
         preserved: 0,
         conflictBlocked: 0,
+        conflictsDetected: 0,
+        losersRetained: 0,
         skippedNonEmpty: 0,
         skippedUserModified: 0,
         skippedUnavailable: 0,

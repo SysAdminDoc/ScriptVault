@@ -4,6 +4,10 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased] — Minimal workbench surfaces
 
+- Enabled bidirectional GM value sync with per-key HLC last-write-wins,
+  bounded TTL conflict retention, passive dashboard conflict counts, and
+  per-device `hlc`/local/remote resolution policy across CloudSync and
+  EasyCloud.
 - Added reviewable local folder projects for `.user.js` and `.user.css` files,
   with stable path-to-script mapping, restart reconnection, bounded scan/watch
   updates, explicit add/rename/delete/change/conflict decisions, and redacted

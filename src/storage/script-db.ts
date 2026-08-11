@@ -61,6 +61,18 @@ export interface ScriptValueRow {
   key: string;
   value: unknown;
   updatedAt?: number;
+  clock?: GmValueClockRecord;
+}
+
+export interface GmValueClockRecord {
+  ts: number;
+  counter: number;
+  deviceId: string;
+}
+
+export interface GmValueKeyMetadataRecord {
+  updatedAt?: number;
+  clock?: GmValueClockRecord;
 }
 
 export interface BackupRecord {
@@ -167,6 +179,163 @@ const PARTITION_SCHEMA_STORES: Record<StoragePartition, StoreName[]> = {
 const SCRIPT_CODE_COMPRESSION_THRESHOLD_BYTES = 64 * 1024;
 const SCRIPT_CODE_ENCODER = new TextEncoder();
 const SCRIPT_CODE_DECODER = new TextDecoder();
+const GM_VALUE_SYNC_HLC_STATE_KEY = 'gmValueSyncHlcState';
+const GM_VALUE_SYNC_CONFLICT_SIDECAR_KEY = 'gmValueSyncConflictSidecar';
+const GM_VALUE_SYNC_CONFLICT_MAX_KEYS = 128;
+const GM_VALUE_SYNC_CONFLICT_MAX_PER_KEY = 4;
+const GM_VALUE_SYNC_CONFLICT_MAX_BYTES = 256 * 1024;
+const GM_VALUE_SYNC_CONFLICT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+
+interface GmValueHlcState {
+  deviceId: string;
+  lastTs: number;
+  counter: number;
+}
+
+let _gmValueHlcState: GmValueHlcState | null = null;
+let _gmValueHlcStatePromise: Promise<GmValueHlcState> | null = null;
+let _gmValueHlcWriteChain: Promise<unknown> = Promise.resolve();
+
+function makeGmValueDeviceId(): string {
+  const randomUuid = (globalThis.crypto as Crypto | undefined)?.randomUUID?.();
+  if (randomUuid) return randomUuid;
+  const random = Math.random().toString(36).slice(2);
+  return `device-${Date.now().toString(36)}-${random}`.slice(0, 128);
+}
+
+function normalizeGmValueClockRecord(value: unknown): GmValueClockRecord | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const ts = Number((value as Partial<GmValueClockRecord>).ts);
+  const counter = Number((value as Partial<GmValueClockRecord>).counter);
+  const deviceId = typeof (value as Partial<GmValueClockRecord>).deviceId === 'string'
+    ? (value as Partial<GmValueClockRecord>).deviceId!.trim()
+    : '';
+  if (!Number.isFinite(ts) || ts < 0 || !Number.isFinite(counter) || counter < 0 || !deviceId || deviceId.length > 128) {
+    return undefined;
+  }
+  return { ts: Math.floor(ts), counter: Math.floor(counter), deviceId };
+}
+
+async function loadGmValueHlcState(): Promise<GmValueHlcState> {
+  if (_gmValueHlcState) return { ..._gmValueHlcState };
+  if (_gmValueHlcStatePromise) return _gmValueHlcStatePromise;
+  _gmValueHlcStatePromise = (async () => {
+    let stored: unknown;
+    try {
+      stored = (await chrome.storage.local.get(GM_VALUE_SYNC_HLC_STATE_KEY))[GM_VALUE_SYNC_HLC_STATE_KEY];
+    } catch (_) {
+      stored = undefined;
+    }
+    const record = stored && typeof stored === 'object' ? stored as Partial<GmValueHlcState> : {};
+    const state: GmValueHlcState = {
+      deviceId: typeof record.deviceId === 'string' && record.deviceId.trim()
+        ? record.deviceId.trim().slice(0, 128)
+        : makeGmValueDeviceId(),
+      lastTs: Number.isFinite(Number(record.lastTs)) && Number(record.lastTs) >= 0
+        ? Math.floor(Number(record.lastTs))
+        : 0,
+      counter: Number.isFinite(Number(record.counter)) && Number(record.counter) >= 0
+        ? Math.floor(Number(record.counter))
+        : 0,
+    };
+    _gmValueHlcState = state;
+    try {
+      await chrome.storage.local.set({ [GM_VALUE_SYNC_HLC_STATE_KEY]: state });
+    } catch (_) {
+      // The in-memory state still prevents collisions during this worker life.
+    }
+    return { ...state };
+  })();
+  try {
+    return await _gmValueHlcStatePromise;
+  } finally {
+    _gmValueHlcStatePromise = null;
+  }
+}
+
+function queueGmValueHlcWrite<T>(operation: () => Promise<T>): Promise<T> {
+  const result = _gmValueHlcWriteChain.then(operation, operation);
+  _gmValueHlcWriteChain = result.then(() => undefined, () => undefined);
+  return result;
+}
+
+async function nextGmValueClock(): Promise<GmValueClockRecord> {
+  return queueGmValueHlcWrite(async () => {
+    const state = await loadGmValueHlcState();
+    const now = Date.now();
+    const ts = Math.max(now, state.lastTs);
+    const counter = ts === state.lastTs ? state.counter + 1 : 0;
+    const nextState = { ...state, lastTs: ts, counter };
+    _gmValueHlcState = nextState;
+    try {
+      await chrome.storage.local.set({ [GM_VALUE_SYNC_HLC_STATE_KEY]: nextState });
+    } catch (_) {
+      // The row still carries a unique monotonic clock for this worker.
+    }
+    return { ts, counter, deviceId: state.deviceId };
+  });
+}
+
+async function observeGmValueClocks(clocks: GmValueClockRecord[]): Promise<void> {
+  const valid = clocks.map(normalizeGmValueClockRecord).filter((clock): clock is GmValueClockRecord => !!clock);
+  if (valid.length === 0) return;
+  await queueGmValueHlcWrite(async () => {
+    const state = await loadGmValueHlcState();
+    let nextState = { ...state };
+    for (const clock of valid) {
+      if (clock.ts > nextState.lastTs) {
+        nextState.lastTs = clock.ts;
+        nextState.counter = clock.counter + 1;
+      } else if (clock.ts === nextState.lastTs) {
+        nextState.counter = Math.max(nextState.counter, clock.counter + 1);
+      }
+    }
+    _gmValueHlcState = nextState;
+    try {
+      await chrome.storage.local.set({ [GM_VALUE_SYNC_HLC_STATE_KEY]: nextState });
+    } catch (_) {
+      // Best effort; local writes still continue with the in-memory state.
+    }
+  });
+}
+
+function cloneGmValueStorageValue<T>(value: T): T {
+  if (value == null || typeof value !== 'object') return value;
+  if (typeof structuredClone === 'function') {
+    try { return structuredClone(value); } catch (_) { /* fall through */ }
+  }
+  try { return JSON.parse(JSON.stringify(value)) as T; } catch (_) { return value; }
+}
+
+function normalizeGmValueConflictSidecar(value: unknown, now = Date.now()): Record<string, unknown[]> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const output: Record<string, unknown[]> = {};
+  for (const key of Object.keys(value).sort((a, b) => a.localeCompare(b))) {
+    if (Object.keys(output).length >= GM_VALUE_SYNC_CONFLICT_MAX_KEYS) break;
+    const entries = (value as Record<string, unknown>)[key];
+    if (!Array.isArray(entries)) continue;
+    const valid = entries.filter((entry) => {
+      const clock = normalizeGmValueClockRecord((entry as Record<string, unknown>)?.clock);
+      const retainedAt = Number((entry as Record<string, unknown>)?.retainedAt);
+      return !!clock && Number.isFinite(retainedAt) && retainedAt >= now - GM_VALUE_SYNC_CONFLICT_RETENTION_MS;
+    }).slice(0, GM_VALUE_SYNC_CONFLICT_MAX_PER_KEY).map(cloneGmValueStorageValue);
+    if (valid.length > 0) Object.defineProperty(output, key, { value: valid, enumerable: true, configurable: true, writable: true });
+  }
+  try {
+    if (new TextEncoder().encode(JSON.stringify(output)).length > GM_VALUE_SYNC_CONFLICT_MAX_BYTES) {
+      const bounded: Record<string, unknown[]> = {};
+      for (const [key, entries] of Object.entries(output)) {
+        const next = { ...bounded, [key]: entries };
+        if (new TextEncoder().encode(JSON.stringify(next)).length > GM_VALUE_SYNC_CONFLICT_MAX_BYTES) break;
+        Object.defineProperty(bounded, key, { value: entries, enumerable: true, configurable: true, writable: true });
+      }
+      return bounded;
+    }
+  } catch (_) {
+    return {};
+  }
+  return output;
+}
 
 function targetStores(target: OpenTarget): Set<StoreName> {
   return new Set(target.bucketed ? PARTITION_SCHEMA_STORES[target.partition] : ALL_SCHEMA_STORES);
@@ -547,6 +716,11 @@ export const ScriptsDAO = {
 // ----------------------------------------------------------------------------
 
 export const ValuesDAO = {
+  async getSyncDeviceId(): Promise<string> {
+    const state = await loadGmValueHlcState();
+    return state.deviceId;
+  },
+
   async get(scriptId: string, key: string): Promise<unknown> {
     await openValuesDB();
     return withTransaction(Stores.values, 'readonly', async (tx) => {
@@ -559,8 +733,9 @@ export const ValuesDAO = {
 
   async set(scriptId: string, key: string, value: unknown): Promise<void> {
     await openValuesDB();
+    const clock = await nextGmValueClock();
     await withTransaction(Stores.values, 'readwrite', async (tx) => {
-      const row: ScriptValueRow = { scriptId, key, value, updatedAt: Date.now() };
+      const row: ScriptValueRow = { scriptId, key, value, updatedAt: clock.ts, clock };
       await reqToPromise(tx.objectStore(Stores.values).put(row));
     });
   },
@@ -601,15 +776,21 @@ export const ValuesDAO = {
     });
   },
 
-  async getAllKeyMetadata(scriptId: string): Promise<Record<string, { updatedAt: number }>> {
+  async getAllKeyMetadata(scriptId: string): Promise<Record<string, GmValueKeyMetadataRecord>> {
     await openValuesDB();
     return withTransaction(Stores.values, 'readonly', async (tx) => {
-      const out: Record<string, { updatedAt: number }> = {};
+      const out: Record<string, GmValueKeyMetadataRecord> = {};
       const idx = tx.objectStore(Stores.values).index('by-script');
       await forEachCursor<ScriptValueRow>(idx, (row) => {
         const updatedAt = Number(row.updatedAt);
+        const clock = normalizeGmValueClockRecord(row.clock);
         if (Number.isFinite(updatedAt) && updatedAt > 0) {
-          setRecordKey(out, row.key, { updatedAt: Math.floor(updatedAt) });
+          setRecordKey(out, row.key, {
+            updatedAt: Math.floor(updatedAt),
+            ...(clock ? { clock } : {}),
+          });
+        } else if (clock) {
+          setRecordKey(out, row.key, { clock });
         }
       }, IDBKeyRange.only(scriptId));
       return out;
@@ -623,12 +804,39 @@ export const ValuesDAO = {
 
   async setAll(scriptId: string, values: Record<string, unknown>): Promise<void> {
     await openValuesDB();
+    const clock = await nextGmValueClock();
     await withTransaction(Stores.values, 'readwrite', async (tx) => {
       const store = tx.objectStore(Stores.values);
-      const updatedAt = Date.now();
       for (const [key, value] of Object.entries(values)) {
-        await reqToPromise(store.put({ scriptId, key, value, updatedAt } satisfies ScriptValueRow));
+        await reqToPromise(store.put({ scriptId, key, value, updatedAt: clock.ts, clock } satisfies ScriptValueRow));
       }
+    });
+  },
+
+  async setAllWithClocks(
+    scriptId: string,
+    values: Record<string, unknown>,
+    keyMetadata: Record<string, GmValueKeyMetadataRecord> = {},
+  ): Promise<void> {
+    await openValuesDB();
+    const fallbackClock = await nextGmValueClock();
+    const clocks: GmValueClockRecord[] = [];
+    const rows = Object.entries(values).map(([key, value]) => {
+      const clock = normalizeGmValueClockRecord(keyMetadata[key]?.clock) || fallbackClock;
+      clocks.push(clock);
+      const updatedAt = Number(keyMetadata[key]?.updatedAt);
+      return {
+        scriptId,
+        key,
+        value,
+        updatedAt: Number.isFinite(updatedAt) && updatedAt > 0 ? Math.floor(updatedAt) : clock.ts,
+        clock,
+      } satisfies ScriptValueRow;
+    });
+    await observeGmValueClocks(clocks);
+    await withTransaction(Stores.values, 'readwrite', async (tx) => {
+      const store = tx.objectStore(Stores.values);
+      for (const row of rows) await reqToPromise(store.put(row));
     });
   },
 

@@ -240,6 +240,8 @@ describe('exportSupportSnapshot modal flow', () => {
       'applied',
       'preserved',
       'conflictBlocked',
+      'conflictsDetected',
+      'losersRetained',
       'skippedUnavailable',
       'failures',
       'writeFailureRetryReady',

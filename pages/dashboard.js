@@ -2267,6 +2267,7 @@
         elements.settingsAllowInternalSyncEndpoints = document.getElementById('settingsAllowInternalSyncEndpoints');
         elements.settingsSyncCredentialsSessionOnly = document.getElementById('settingsSyncCredentialsSessionOnly');
         elements.settingsSyncHoldUntilFirstSync = document.getElementById('settingsSyncHoldUntilFirstSync');
+        elements.settingsGmValueSyncConflictPolicy = document.getElementById('settingsGmValueSyncConflictPolicy');
         elements.settingsSyncEncryptionEnabled = document.getElementById('settingsSyncEncryptionEnabled');
         elements.settingsSyncEncryptionPassphrase = document.getElementById('settingsSyncEncryptionPassphrase');
         elements.firefoxSyncNote = document.getElementById('firefoxSyncNote');
@@ -4385,6 +4386,11 @@
         if (elements.settingsSyncHoldUntilFirstSync) {
             elements.settingsSyncHoldUntilFirstSync.checked = s.syncHoldExecutionUntilFirstSync === true;
         }
+        if (elements.settingsGmValueSyncConflictPolicy) {
+            elements.settingsGmValueSyncConflictPolicy.value = ['hlc', 'prefer-local', 'prefer-remote'].includes(s.gmValueSyncConflictPolicy)
+                ? s.gmValueSyncConflictPolicy
+                : 'hlc';
+        }
         if (elements.settingsSyncEncryptionEnabled) {
             elements.settingsSyncEncryptionEnabled.checked = s.syncEncryptionEnabled === true;
         }
@@ -5422,7 +5428,7 @@
             remainingSimulationResultKeyTotal - safe.remoteValueBundleMergeSimulationManualReviewResultKeyTotal
         );
         safe.valueBundleApplyEnabled = summary?.valueBundleApplyEnabled === true;
-        safe.valueBundleApplyMode = summary?.valueBundleApplyMode === 'empty-local-only' ? 'empty-local-only' : null;
+        safe.valueBundleApplyMode = summary?.valueBundleApplyMode === 'hlc-last-write-wins' ? 'hlc-last-write-wins' : null;
         safe.wouldUpload = summary?.wouldUpload === true;
         safe.wouldDownload = summary?.wouldDownload === true;
         safe.wouldUploadValues = summary?.wouldUploadValues === true;
@@ -7227,6 +7233,8 @@
             applied,
             preserved,
             conflictBlocked: sanitizeSupportSnapshotCount(lastResult.conflictBlocked),
+            conflictsDetected: sanitizeSupportSnapshotCount(lastResult.conflictsDetected),
+            losersRetained: sanitizeSupportSnapshotCount(lastResult.losersRetained),
             skippedUnavailable: sanitizeSupportSnapshotCount(lastResult.skippedUnavailable),
             failures,
             writeFailureRetryReady,
@@ -9505,6 +9513,10 @@
         const localEditsHtml = script.settings?.userModified
           ? '<span class="script-health-badge warning" title="Local edits are present for this script.">Local edits</span>'
           : '';
+        const gmValueConflictCount = Math.max(0, Math.floor(Number(script.settings?._gmValueSyncConflictCount) || 0));
+        const gmValueConflictHtml = gmValueConflictCount > 0
+          ? `<button type="button" class="script-health-badge alert" data-action="reviewGmValueConflicts" data-id="${escapeHtml(String(script.id))}" title="${escapeHtml(`${gmValueConflictCount} retained GM value conflict${gmValueConflictCount === 1 ? '' : 's'}; open the script inspector to review.`)}">GM values: ${numberFormatter.format(gmValueConflictCount)}</button>`
+          : '';
         const importQuarantine = script.settings?._importQuarantine;
         const importQuarantineHtml = isImportQuarantined(script)
           ? `<span class="script-health-badge alert" title="${escapeHtml(`Imported from ${importQuarantine?.sourceLabel || 'an archive'} and kept disabled until you enable it after review.`)}">Import review</span>`
@@ -9583,6 +9595,7 @@
                             ${antifeatureBadgeHtml}
                             ${esmBadgeHtml}
                             ${localEditsHtml}
+                            ${gmValueConflictHtml}
                             ${managedHtml}
                             ${importQuarantineHtml}
                             ${errorHtml}
@@ -9723,6 +9736,7 @@
         });
         tr.querySelector('.script-name-button')?.addEventListener('click', () => openEditorForScript(script.id));
         tr.querySelector('[data-action="edit"]')?.addEventListener('click', () => openEditorForScript(script.id));
+        tr.querySelector('[data-action="reviewGmValueConflicts"]')?.addEventListener('click', () => openEditorForScript(script.id));
         tr.querySelector('[data-action="runNow"]')?.addEventListener('click', async e => {
             await runButtonTask(e.currentTarget, () => runScriptOnceOnTab(script.id), { busyLabel: tDashboard('runningEllipsis', 'Running...') });
         });
@@ -13747,6 +13761,18 @@
                             <div class="panel-empty-inline" style="margin-top:4px">This script was marked during cloud merge. Review the code, then save it once you are happy with the local version to clear the conflict flag.</div>
                         </span>
                         <span class="info-tag error">Review required</span>
+                    </div>
+                `);
+            }
+            const gmValueConflictCount = Math.max(0, Math.floor(Number(script.settings?._gmValueSyncConflictCount) || 0));
+            if (gmValueConflictCount > 0) {
+                conflictCards.push(`
+                    <div class="conflict-list-item">
+                        <span>
+                            <strong>GM value sync conflicts</strong>
+                            <div class="panel-empty-inline" style="margin-top:4px">${numberFormatter.format(gmValueConflictCount)} losing value${gmValueConflictCount === 1 ? '' : 's'} retained locally by the sync resolver. Open Sync settings to review the aggregate sync evidence.</div>
+                        </span>
+                        <span class="info-tag error">Review</span>
                     </div>
                 `);
             }
@@ -18427,6 +18453,7 @@
             settingsAllowInternalSyncEndpoints: ['allowInternalSyncEndpoints', 'checked'],
             settingsSyncCredentialsSessionOnly: ['syncCredentialsSessionOnly', 'checked'],
             settingsSyncHoldUntilFirstSync: ['syncHoldExecutionUntilFirstSync', 'checked'],
+            settingsGmValueSyncConflictPolicy: ['gmValueSyncConflictPolicy', 'value'],
             settingsSyncEncryptionEnabled: ['syncEncryptionEnabled', 'checked'],
             
             // Editor
@@ -18575,6 +18602,9 @@
                 await saveSettingOrThrow('allowInternalSyncEndpoints', !!elements.settingsAllowInternalSyncEndpoints?.checked);
                 await saveSettingOrThrow('syncCredentialsSessionOnly', !!elements.settingsSyncCredentialsSessionOnly?.checked);
                 await saveSettingOrThrow('syncHoldExecutionUntilFirstSync', !!elements.settingsSyncHoldUntilFirstSync?.checked);
+                await saveSettingOrThrow('gmValueSyncConflictPolicy', ['hlc', 'prefer-local', 'prefer-remote'].includes(elements.settingsGmValueSyncConflictPolicy?.value)
+                    ? elements.settingsGmValueSyncConflictPolicy.value
+                    : 'hlc');
                 await saveSettingOrThrow('syncEncryptionEnabled', !!elements.settingsSyncEncryptionEnabled?.checked);
                 await saveSettingOrThrow('syncEncryptionPassphrase', elements.settingsSyncEncryptionPassphrase?.value || '');
                 if (provider === 'webdav') {

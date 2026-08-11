@@ -60,6 +60,7 @@ export interface Settings {
   syncEncryptionPassphrase: string;
   syncEncryptionKdfIterations: number;
   syncEncryptionEstablished: boolean;
+  gmValueSyncConflictPolicy: 'hlc' | 'prefer-local' | 'prefer-remote';
 
   // WebDAV
   webdavUrl: string;

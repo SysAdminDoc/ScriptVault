@@ -82,6 +82,7 @@ const StorageModule = (() => {
     syncEncryptionPassphrase: "",
     syncEncryptionKdfIterations: 21e4,
     syncEncryptionEstablished: false,
+    gmValueSyncConflictPolicy: "hlc",
     webdavUrl: "",
     webdavUsername: "",
     webdavPassword: "",
@@ -383,6 +384,98 @@ const StorageModule = (() => {
   var SCRIPT_CODE_COMPRESSION_THRESHOLD_BYTES = 64 * 1024;
   var SCRIPT_CODE_ENCODER = new TextEncoder();
   var SCRIPT_CODE_DECODER = new TextDecoder();
+  var GM_VALUE_SYNC_HLC_STATE_KEY = "gmValueSyncHlcState";
+  var GM_VALUE_SYNC_CONFLICT_MAX_BYTES = 256 * 1024;
+  var GM_VALUE_SYNC_CONFLICT_RETENTION_MS = 30 * 24 * 60 * 60 * 1e3;
+  var _gmValueHlcState = null;
+  var _gmValueHlcStatePromise = null;
+  var _gmValueHlcWriteChain = Promise.resolve();
+  function makeGmValueDeviceId() {
+    const randomUuid = globalThis.crypto?.randomUUID?.();
+    if (randomUuid) return randomUuid;
+    const random = Math.random().toString(36).slice(2);
+    return `device-${Date.now().toString(36)}-${random}`.slice(0, 128);
+  }
+  function normalizeGmValueClockRecord(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return void 0;
+    const ts = Number(value.ts);
+    const counter = Number(value.counter);
+    const deviceId = typeof value.deviceId === "string" ? value.deviceId.trim() : "";
+    if (!Number.isFinite(ts) || ts < 0 || !Number.isFinite(counter) || counter < 0 || !deviceId || deviceId.length > 128) {
+      return void 0;
+    }
+    return { ts: Math.floor(ts), counter: Math.floor(counter), deviceId };
+  }
+  async function loadGmValueHlcState() {
+    if (_gmValueHlcState) return { ..._gmValueHlcState };
+    if (_gmValueHlcStatePromise) return _gmValueHlcStatePromise;
+    _gmValueHlcStatePromise = (async () => {
+      let stored;
+      try {
+        stored = (await chrome.storage.local.get(GM_VALUE_SYNC_HLC_STATE_KEY))[GM_VALUE_SYNC_HLC_STATE_KEY];
+      } catch (_) {
+        stored = void 0;
+      }
+      const record = stored && typeof stored === "object" ? stored : {};
+      const state = {
+        deviceId: typeof record.deviceId === "string" && record.deviceId.trim() ? record.deviceId.trim().slice(0, 128) : makeGmValueDeviceId(),
+        lastTs: Number.isFinite(Number(record.lastTs)) && Number(record.lastTs) >= 0 ? Math.floor(Number(record.lastTs)) : 0,
+        counter: Number.isFinite(Number(record.counter)) && Number(record.counter) >= 0 ? Math.floor(Number(record.counter)) : 0
+      };
+      _gmValueHlcState = state;
+      try {
+        await chrome.storage.local.set({ [GM_VALUE_SYNC_HLC_STATE_KEY]: state });
+      } catch (_) {
+      }
+      return { ...state };
+    })();
+    try {
+      return await _gmValueHlcStatePromise;
+    } finally {
+      _gmValueHlcStatePromise = null;
+    }
+  }
+  function queueGmValueHlcWrite(operation) {
+    const result = _gmValueHlcWriteChain.then(operation, operation);
+    _gmValueHlcWriteChain = result.then(() => void 0, () => void 0);
+    return result;
+  }
+  async function nextGmValueClock() {
+    return queueGmValueHlcWrite(async () => {
+      const state = await loadGmValueHlcState();
+      const now = Date.now();
+      const ts = Math.max(now, state.lastTs);
+      const counter = ts === state.lastTs ? state.counter + 1 : 0;
+      const nextState = { ...state, lastTs: ts, counter };
+      _gmValueHlcState = nextState;
+      try {
+        await chrome.storage.local.set({ [GM_VALUE_SYNC_HLC_STATE_KEY]: nextState });
+      } catch (_) {
+      }
+      return { ts, counter, deviceId: state.deviceId };
+    });
+  }
+  async function observeGmValueClocks(clocks) {
+    const valid = clocks.map(normalizeGmValueClockRecord).filter((clock) => !!clock);
+    if (valid.length === 0) return;
+    await queueGmValueHlcWrite(async () => {
+      const state = await loadGmValueHlcState();
+      let nextState = { ...state };
+      for (const clock of valid) {
+        if (clock.ts > nextState.lastTs) {
+          nextState.lastTs = clock.ts;
+          nextState.counter = clock.counter + 1;
+        } else if (clock.ts === nextState.lastTs) {
+          nextState.counter = Math.max(nextState.counter, clock.counter + 1);
+        }
+      }
+      _gmValueHlcState = nextState;
+      try {
+        await chrome.storage.local.set({ [GM_VALUE_SYNC_HLC_STATE_KEY]: nextState });
+      } catch (_) {
+      }
+    });
+  }
   function targetStores(target) {
     return new Set(target.bucketed ? PARTITION_SCHEMA_STORES[target.partition] : ALL_SCHEMA_STORES);
   }
@@ -696,6 +789,10 @@ const StorageModule = (() => {
     }
   };
   var ValuesDAO = {
+    async getSyncDeviceId() {
+      const state = await loadGmValueHlcState();
+      return state.deviceId;
+    },
     async get(scriptId, key) {
       await openValuesDB();
       return withTransaction(Stores.values, "readonly", async (tx) => {
@@ -707,8 +804,9 @@ const StorageModule = (() => {
     },
     async set(scriptId, key, value) {
       await openValuesDB();
+      const clock = await nextGmValueClock();
       await withTransaction(Stores.values, "readwrite", async (tx) => {
-        const row = { scriptId, key, value, updatedAt: Date.now() };
+        const row = { scriptId, key, value, updatedAt: clock.ts, clock };
         await reqToPromise(tx.objectStore(Stores.values).put(row));
       });
     },
@@ -752,8 +850,14 @@ const StorageModule = (() => {
         const idx = tx.objectStore(Stores.values).index("by-script");
         await forEachCursor(idx, (row) => {
           const updatedAt = Number(row.updatedAt);
+          const clock = normalizeGmValueClockRecord(row.clock);
           if (Number.isFinite(updatedAt) && updatedAt > 0) {
-            setRecordKey(out, row.key, { updatedAt: Math.floor(updatedAt) });
+            setRecordKey(out, row.key, {
+              updatedAt: Math.floor(updatedAt),
+              ...clock ? { clock } : {}
+            });
+          } else if (clock) {
+            setRecordKey(out, row.key, { clock });
           }
         }, IDBKeyRange.only(scriptId));
         return out;
@@ -765,12 +869,34 @@ const StorageModule = (() => {
     },
     async setAll(scriptId, values) {
       await openValuesDB();
+      const clock = await nextGmValueClock();
       await withTransaction(Stores.values, "readwrite", async (tx) => {
         const store = tx.objectStore(Stores.values);
-        const updatedAt = Date.now();
         for (const [key, value] of Object.entries(values)) {
-          await reqToPromise(store.put({ scriptId, key, value, updatedAt }));
+          await reqToPromise(store.put({ scriptId, key, value, updatedAt: clock.ts, clock }));
         }
+      });
+    },
+    async setAllWithClocks(scriptId, values, keyMetadata = {}) {
+      await openValuesDB();
+      const fallbackClock = await nextGmValueClock();
+      const clocks = [];
+      const rows = Object.entries(values).map(([key, value]) => {
+        const clock = normalizeGmValueClockRecord(keyMetadata[key]?.clock) || fallbackClock;
+        clocks.push(clock);
+        const updatedAt = Number(keyMetadata[key]?.updatedAt);
+        return {
+          scriptId,
+          key,
+          value,
+          updatedAt: Number.isFinite(updatedAt) && updatedAt > 0 ? Math.floor(updatedAt) : clock.ts,
+          clock
+        };
+      });
+      await observeGmValueClocks(clocks);
+      await withTransaction(Stores.values, "readwrite", async (tx) => {
+        const store = tx.objectStore(Stores.values);
+        for (const row of rows) await reqToPromise(store.put(row));
       });
     },
     async deleteMultiple(scriptId, keys) {
@@ -1400,6 +1526,7 @@ const StorageModule = (() => {
       }
       delete this.cache[id];
       delete ScriptValues.cache[id];
+      await ScriptValues.deleteSyncConflicts(id);
       notifyScriptChange();
     },
     async clear() {
@@ -1412,6 +1539,10 @@ const StorageModule = (() => {
       }
       this.cache = {};
       ScriptValues.cache = /* @__PURE__ */ Object.create(null);
+      try {
+        await chrome.storage.local.remove(GM_VALUE_SYNC_CONFLICT_SIDECAR_KEY);
+      } catch (_) {
+      }
       void prev;
       notifyScriptChange();
     },
@@ -1483,6 +1614,45 @@ const StorageModule = (() => {
     deleteForScript: LocalWorkspaceBindingsDAO.deleteForScript.bind(LocalWorkspaceBindingsDAO),
     clear: LocalWorkspaceBindingsDAO.clear.bind(LocalWorkspaceBindingsDAO)
   };
+  var GM_VALUE_SYNC_CONFLICT_RETENTION_MS2 = 30 * 24 * 60 * 60 * 1e3;
+  var GM_VALUE_SYNC_CONFLICT_MAX_KEYS = 128;
+  var GM_VALUE_SYNC_CONFLICT_MAX_PER_KEY = 4;
+  var GM_VALUE_SYNC_CONFLICT_MAX_BYTES2 = 256 * 1024;
+  var GM_VALUE_SYNC_CONFLICT_SIDECAR_KEY = "gmValueSyncConflictSidecar";
+  function normalizeGmValueSyncSidecarRecord(value, now = Date.now()) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+    const result = {};
+    for (const key of Object.keys(value).sort((a, b) => a.localeCompare(b))) {
+      if (Object.keys(result).length >= GM_VALUE_SYNC_CONFLICT_MAX_KEYS) break;
+      const entries = value[key];
+      if (!Array.isArray(entries)) continue;
+      const valid = entries.filter((entry) => {
+        if (!entry || typeof entry !== "object" || Array.isArray(entry)) return false;
+        const clock = entry.clock;
+        const clockRecord = clock && typeof clock === "object" && !Array.isArray(clock) ? clock : null;
+        const ts = Number(clockRecord?.ts);
+        const counter = Number(clockRecord?.counter);
+        const deviceId = typeof clockRecord?.deviceId === "string" ? clockRecord.deviceId.trim() : "";
+        const retainedAt = Number(entry.retainedAt);
+        return !!clockRecord && Number.isFinite(ts) && ts >= 0 && Number.isFinite(counter) && counter >= 0 && deviceId.length > 0 && deviceId.length <= 128 && Number.isFinite(retainedAt) && retainedAt >= now - GM_VALUE_SYNC_CONFLICT_RETENTION_MS2;
+      }).slice(0, GM_VALUE_SYNC_CONFLICT_MAX_PER_KEY).map((entry) => cloneStoredValue(entry));
+      if (valid.length > 0) Object.defineProperty(result, key, { value: valid, enumerable: true, configurable: true, writable: true });
+    }
+    try {
+      if (new TextEncoder().encode(JSON.stringify(result)).length > GM_VALUE_SYNC_CONFLICT_MAX_BYTES2) {
+        const bounded = {};
+        for (const [key, entries] of Object.entries(result)) {
+          const next = { ...bounded, [key]: entries };
+          if (new TextEncoder().encode(JSON.stringify(next)).length > GM_VALUE_SYNC_CONFLICT_MAX_BYTES2) break;
+          Object.defineProperty(bounded, key, { value: entries, enumerable: true, configurable: true, writable: true });
+        }
+        return bounded;
+      }
+    } catch (_) {
+      return {};
+    }
+    return result;
+  }
   var ScriptValues = {
     cache: /* @__PURE__ */ Object.create(null),
     listeners: /* @__PURE__ */ new Map(),
@@ -1566,6 +1736,75 @@ const StorageModule = (() => {
       await this.init(scriptId);
       return ValuesDAO.getAllKeyMetadata(scriptId);
     },
+    async getSyncDeviceId() {
+      const getter = ValuesDAO.getSyncDeviceId;
+      if (typeof getter === "function") return getter();
+      try {
+        const data = await chrome.storage.local.get("gmValueSyncHlcState");
+        const deviceId = data?.gmValueSyncHlcState?.deviceId;
+        return typeof deviceId === "string" && deviceId ? deviceId : null;
+      } catch (_) {
+        return null;
+      }
+    },
+    async getSyncConflicts(scriptId) {
+      try {
+        const data = await chrome.storage.local.get(GM_VALUE_SYNC_CONFLICT_SIDECAR_KEY);
+        const sidecar = data?.[GM_VALUE_SYNC_CONFLICT_SIDECAR_KEY];
+        const raw = sidecar && typeof sidecar === "object" && !Array.isArray(sidecar) ? sidecar[scriptId] : void 0;
+        return normalizeGmValueSyncSidecarRecord(raw);
+      } catch (_) {
+        return {};
+      }
+    },
+    async setSyncConflicts(scriptId, conflicts) {
+      try {
+        const data = await chrome.storage.local.get(GM_VALUE_SYNC_CONFLICT_SIDECAR_KEY);
+        const rawSidecar = data?.[GM_VALUE_SYNC_CONFLICT_SIDECAR_KEY];
+        const sidecar = rawSidecar && typeof rawSidecar === "object" && !Array.isArray(rawSidecar) ? { ...rawSidecar } : {};
+        const normalized = normalizeGmValueSyncSidecarRecord(conflicts);
+        if (Object.keys(normalized).length > 0) {
+          Object.defineProperty(sidecar, scriptId, {
+            value: normalized,
+            enumerable: true,
+            configurable: true,
+            writable: true
+          });
+        } else delete sidecar[scriptId];
+        await chrome.storage.local.set({ [GM_VALUE_SYNC_CONFLICT_SIDECAR_KEY]: sidecar });
+      } catch (_) {
+      }
+    },
+    async getSyncConflictCount(scriptId) {
+      const conflicts = await this.getSyncConflicts(scriptId);
+      return Object.values(conflicts).reduce((total, entries) => total + (Array.isArray(entries) ? entries.length : 0), 0);
+    },
+    async deleteSyncConflicts(scriptId) {
+      try {
+        const data = await chrome.storage.local.get(GM_VALUE_SYNC_CONFLICT_SIDECAR_KEY);
+        const rawSidecar = data?.[GM_VALUE_SYNC_CONFLICT_SIDECAR_KEY];
+        const sidecar = rawSidecar && typeof rawSidecar === "object" && !Array.isArray(rawSidecar) ? { ...rawSidecar } : {};
+        delete sidecar[scriptId];
+        await chrome.storage.local.set({ [GM_VALUE_SYNC_CONFLICT_SIDECAR_KEY]: sidecar });
+      } catch (_) {
+      }
+    },
+    async setAllWithClocks(scriptId, values, keyMetadata, senderTabId = null) {
+      await this.init(scriptId);
+      const nextValues = exportValueBag(values);
+      const changes = [];
+      for (const [key, value] of Object.entries(nextValues)) {
+        const oldValue = this.cache[scriptId][key];
+        if (JSON.stringify(oldValue) !== JSON.stringify(value)) {
+          changes.push([key, cloneStoredValue(oldValue), cloneStoredValue(value)]);
+        }
+      }
+      await ValuesDAO.setAllWithClocks(scriptId, cloneStoredValue(nextValues), keyMetadata);
+      for (const [key, _oldValue, value] of changes) setValueBagKey(this.cache[scriptId], key, value);
+      for (const [key, oldValue, value] of changes) {
+        this.scheduleNotification(scriptId, key, cloneStoredValue(oldValue), cloneStoredValue(value), senderTabId);
+      }
+    },
     async setAll(scriptId, values, senderTabId = null) {
       await this.init(scriptId);
       const nextValues = exportValueBag(values);
@@ -1598,6 +1837,7 @@ const StorageModule = (() => {
         throw e;
       }
       delete this.cache[scriptId];
+      await this.deleteSyncConflicts(scriptId);
     },
     // Delete multiple specific keys at once
     async deleteMultiple(scriptId, keys, senderTabId = null) {

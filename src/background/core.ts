@@ -70,6 +70,7 @@ const LOCAL_ONLY_SCRIPT_SETTING_KEYS = new Set([
   '_failedRequires',
   '_failedRequireErrors',
   '_registrationError',
+  '_gmValueSyncConflictCount',
 ]);
 
 const SRI_REQUIRE_UNPINNED_REQUIRE_ERROR = 'blocked: unpinned @require under SRI Require';
@@ -3033,6 +3034,8 @@ function sanitizeValueBundleSyncForLastResult(valueBundleSync: any) {
     applied,
     preserved,
     conflictBlocked: _lastSyncResultCount(valueBundleSync.conflictBlocked),
+    conflictsDetected: _lastSyncResultCount(valueBundleSync.conflictsDetected),
+    losersRetained: _lastSyncResultCount(valueBundleSync.losersRetained),
     skippedUnavailable: _lastSyncResultCount(valueBundleSync.skippedUnavailable),
     failures,
     writeFailureRetryReady
@@ -3466,7 +3469,7 @@ function createEmptyGmValueSyncHealthSummary(overrides: any = {}) {
   return {
     schema: GM_VALUE_SYNC_SCHEMA,
     available: true,
-    providerWritesEnabled: false,
+    providerWritesEnabled: true,
     optInScripts: 0,
     readyBundles: 0,
     emptyBundles: 0,
@@ -3702,6 +3705,8 @@ function sanitizeGmValueSyncLastResultForHealth(record: any) {
     applied: valueBundleSync?.applied || 0,
     preserved: valueBundleSync?.preserved || 0,
     conflictBlocked: valueBundleSync?.conflictBlocked || 0,
+    conflictsDetected: valueBundleSync?.conflictsDetected || 0,
+    losersRetained: valueBundleSync?.losersRetained || 0,
     skippedUnavailable: valueBundleSync?.skippedUnavailable || 0,
     failures: valueBundleSync?.failures || 0,
     writeFailureRetryReady,
@@ -5302,7 +5307,7 @@ const SETTINGS_IMPORT_TYPE_KEYS = {
     'onedriveRefreshToken', 'onedriveToken', 'pageFilterMode', 's3AccessKeyId',
     's3Bucket', 's3Endpoint', 's3ObjectKey', 's3Region', 's3SecretKey',
     'sandboxMode', 'scriptOrder', 'searchIntegration', 'sri', 'statsUrlRetention',
-    'strictMode', 'syncEncryptionPassphrase', 'syncProvider', 'tabMode', 'theme',
+    'strictMode', 'syncEncryptionPassphrase', 'syncProvider', 'gmValueSyncConflictPolicy', 'tabMode', 'theme',
     'topLevelAwait', 'trashMode', 'webdavPassword', 'webdavUrl', 'webdavUsername',
     'whitelistedPages',
   ]),

@@ -69,7 +69,7 @@ describe('local health report background action', () => {
     expect(backgroundCoreTs).toContain('GM_VALUE_SYNC_MAX_KEYS = 128');
     expect(backgroundCoreTs).toContain('GM_VALUE_SYNC_MAX_KEY_BYTES = 256');
     expect(backgroundCoreTs).toContain('buildGmValueSyncHealthSummary(scriptList)');
-    expect(backgroundCoreTs).toContain('providerWritesEnabled: false');
+    expect(backgroundCoreTs).toContain('providerWritesEnabled: true');
     expect(backgroundCoreTs).toContain('sanitizeValueBundleSyncForLastResult');
     expect(backgroundCoreTs).toContain('readGmValueSyncLastResultForHealth');
     expect(backgroundCoreTs).toContain('lastResult: null');
@@ -344,6 +344,8 @@ describe('local health report background action', () => {
       'applied',
       'preserved',
       'conflictBlocked',
+      'conflictsDetected',
+      'losersRetained',
       'skippedUnavailable',
       'failures',
       'writeFailureRetryReady',

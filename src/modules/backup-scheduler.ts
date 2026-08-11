@@ -449,7 +449,7 @@ const SETTINGS_IMPORT_TYPE_KEYS = {
     'onedriveRefreshToken', 'onedriveToken', 'pageFilterMode', 's3AccessKeyId',
     's3Bucket', 's3Endpoint', 's3ObjectKey', 's3Region', 's3SecretKey',
     'sandboxMode', 'scriptOrder', 'searchIntegration', 'sri', 'statsUrlRetention',
-    'strictMode', 'syncEncryptionPassphrase', 'syncProvider', 'tabMode', 'theme',
+    'strictMode', 'syncEncryptionPassphrase', 'syncProvider', 'gmValueSyncConflictPolicy', 'tabMode', 'theme',
     'topLevelAwait', 'trashMode', 'webdavPassword', 'webdavUrl', 'webdavUsername',
     'whitelistedPages',
   ]),

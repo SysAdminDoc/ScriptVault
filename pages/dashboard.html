@@ -8335,6 +8335,16 @@
                         <span class="help-icon" title="Optional: on a fresh device, hold userscript registration until the first successful sync or a 90 second timeout.">?</span>
                     </div>
                     <div class="setting-row">
+                        <label for="settingsGmValueSyncConflictPolicy"><span class="label-text">GM value conflict policy:</span>
+                            <select class="select-field" id="settingsGmValueSyncConflictPolicy" aria-label="GM value conflict policy">
+                                <option value="hlc">Hybrid logical clock (recommended)</option>
+                                <option value="prefer-local">Prefer local</option>
+                                <option value="prefer-remote">Prefer remote</option>
+                            </select>
+                        </label>
+                        <span class="help-icon" title="HLC resolves writes deterministically and retains losing values for review; the other modes select one side for this device.">?</span>
+                    </div>
+                    <div class="setting-row">
                         <label><input type="checkbox" id="settingsSyncEncryptionEnabled"> <span data-i18n="settingsSyncEncryptionEnabled">Encrypt sync payloads</span></label>
                         <span class="help-icon" title="Encrypts uploaded sync JSON with AES-256-GCM before it leaves this device. Existing plaintext sync files remain readable." data-i18n-title="settingsSyncEncryptionHelp">?</span>
                     </div>

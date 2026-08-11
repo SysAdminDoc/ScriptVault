@@ -382,7 +382,7 @@ describe('source hardening parity guards', () => {
       expect(text).toContain('valueBundleApplyEnabled');
       expect(text).toContain('valueBundleApplyMode');
       expect(text).toContain('wouldApplyValues');
-      expect(text).toContain("applyMode: 'empty-local-only'");
+      expect(text).toContain("valueBundleApplyMode: 'hlc-last-write-wins'");
       const gateStart = text.indexOf('function selectApplicableRemoteValueBundles');
       const gateEnd = text.indexOf('async function', gateStart);
       expect(gateStart).toBeGreaterThanOrEqual(0);

@@ -33,6 +33,7 @@
   "syncEncryptionPassphrase": "",
   "syncEncryptionKdfIterations": 210000,
   "syncEncryptionEstablished": false,
+  "gmValueSyncConflictPolicy": "hlc",
   "webdavUrl": "",
   "webdavUsername": "",
   "webdavPassword": "",

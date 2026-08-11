@@ -653,14 +653,29 @@ describe('ScriptValues', () => {
       nowSpy.mockReturnValue(2000);
       await ScriptValues.setAll('s1', { count: 2, name: 'Alpha' });
 
-      expect(await ScriptValues.getAllMetadata('s1')).toEqual({
-        valueCount: 2,
-        lastUpdatedAt: 2000,
+      const aggregate = await ScriptValues.getAllMetadata('s1');
+      expect(aggregate.valueCount).toBe(2);
+      expect(aggregate.lastUpdatedAt).toBeGreaterThanOrEqual(2000);
+      const keyMetadata = await ScriptValues.getAllKeyMetadata('s1');
+      expect(keyMetadata).toEqual({
+        count: expect.objectContaining({
+          updatedAt: aggregate.lastUpdatedAt,
+          clock: {
+            ts: aggregate.lastUpdatedAt,
+            counter: expect.any(Number),
+            deviceId: expect.any(String),
+          },
+        }),
+        name: expect.objectContaining({
+          updatedAt: aggregate.lastUpdatedAt,
+          clock: {
+            ts: aggregate.lastUpdatedAt,
+            counter: expect.any(Number),
+            deviceId: expect.any(String),
+          },
+        }),
       });
-      expect(await ScriptValues.getAllKeyMetadata('s1')).toEqual({
-        count: { updatedAt: 2000 },
-        name: { updatedAt: 2000 },
-      });
+      expect(keyMetadata.count.clock).toEqual(keyMetadata.name.clock);
     } finally {
       nowSpy.mockRestore();
     }

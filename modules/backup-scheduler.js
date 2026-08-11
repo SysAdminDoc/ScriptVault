@@ -155,6 +155,7 @@ const BackupScheduler = (() => {
       "strictMode",
       "syncEncryptionPassphrase",
       "syncProvider",
+      "gmValueSyncConflictPolicy",
       "tabMode",
       "theme",
       "topLevelAwait",

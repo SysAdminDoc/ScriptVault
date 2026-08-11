@@ -6,6 +6,14 @@
 import type { Script, ScriptMeta, ScriptSettings } from '../types/index';
 import { SyncCrypto, type RemoteSyncEnvelope } from './sync-crypto';
 import { normalizeLocalLibrarySnapshots } from '../background/local-libraries';
+import {
+  buildGmValueSyncBundle,
+  mergeGmValueSyncValues,
+  normalizeGmValueSyncPolicy,
+  shouldSyncScriptValues,
+  type GmValueKeyMetadata,
+  type GmValueSyncBundle,
+} from '../background/gm-value-sync';
 
 // ============================================================================
 // External globals (not yet migrated to TS modules)
@@ -18,6 +26,17 @@ declare const ScriptStorage: {
   get(id: string): Promise<Script | null>;
   set(id: string, script: Script): Promise<unknown>;
   delete(id: string): Promise<unknown>;
+};
+
+declare const ScriptValues: {
+  getAll(scriptId: string): Promise<Record<string, unknown>>;
+  getAllMetadata?(scriptId: string): Promise<{ valueCount: number; lastUpdatedAt: number | null }>;
+  getAllKeyMetadata?(scriptId: string): Promise<Record<string, GmValueKeyMetadata>>;
+  getSyncDeviceId?(): Promise<string | null>;
+  getSyncConflicts?(scriptId: string): Promise<Record<string, unknown>>;
+  setAll?(scriptId: string, values: Record<string, unknown>): Promise<void>;
+  setAllWithClocks?(scriptId: string, values: Record<string, unknown>, keyMetadata: Record<string, GmValueKeyMetadata>): Promise<void>;
+  setSyncConflicts?(scriptId: string, conflicts: Record<string, unknown>): Promise<void>;
 };
 
 declare const SettingsManager: {
@@ -83,6 +102,7 @@ interface SyncEnvelope {
   deviceId: string;
   scripts: SyncScript[];
   tombstones: Record<string, unknown>;
+  valueBundles?: Record<string, GmValueSyncBundle>;
 }
 
 const SYNC_TOMBSTONE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
@@ -100,6 +120,103 @@ function tombstoneMapsDiffer(left: Record<string, unknown>, right: Record<string
   return leftIds.length !== rightIds.length ||
     leftIds.some((id) => !(id in right)) ||
     rightIds.some((id) => !(id in left));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function getValueBundles(envelope: SyncEnvelope | null | undefined): Record<string, GmValueSyncBundle> {
+  return isRecord(envelope?.valueBundles) ? envelope.valueBundles as Record<string, GmValueSyncBundle> : {};
+}
+
+async function _buildValueBundles(scripts: SyncScript[]): Promise<Record<string, GmValueSyncBundle>> {
+  if (typeof ScriptValues === 'undefined' || typeof ScriptValues?.getAll !== 'function') return {};
+  const result: Record<string, GmValueSyncBundle> = {};
+  for (const script of scripts) {
+    if (!shouldSyncScriptValues(script)) continue;
+    const values = await ScriptValues.getAll(script.id);
+    const aggregateMetadata = typeof ScriptValues.getAllMetadata === 'function'
+      ? await ScriptValues.getAllMetadata(script.id)
+      : null;
+    const keyMetadata = typeof ScriptValues.getAllKeyMetadata === 'function'
+      ? await ScriptValues.getAllKeyMetadata(script.id)
+      : null;
+    const deviceId = typeof ScriptValues.getSyncDeviceId === 'function'
+      ? await ScriptValues.getSyncDeviceId()
+      : null;
+    const conflicts = typeof ScriptValues.getSyncConflicts === 'function'
+      ? await ScriptValues.getSyncConflicts(script.id)
+      : null;
+    const built = buildGmValueSyncBundle(script, values, {
+      lastValueUpdatedAt: aggregateMetadata?.lastUpdatedAt ?? null,
+      keyMetadata,
+      deviceId,
+      conflicts,
+    });
+    if (built.bundle) result[script.id] = built.bundle;
+  }
+  return result;
+}
+
+async function _persistValueConflictCount(scriptId: string, count: number): Promise<void> {
+  try {
+    const script = await ScriptStorage.get(scriptId);
+    if (!script) return;
+    const current = Math.max(0, Math.floor(Number(script.settings?._gmValueSyncConflictCount) || 0));
+    const next = Math.max(0, Math.floor(Number(count) || 0));
+    if (current === next) return;
+    const settings = { ...(script.settings || {}) } as ScriptSettings;
+    if (next > 0) settings._gmValueSyncConflictCount = next;
+    else delete settings._gmValueSyncConflictCount;
+    await ScriptStorage.set(scriptId, { ...script, settings });
+  } catch (error) {
+    warn('[EasyCloud] Failed to persist GM value conflict count:', scriptId, error);
+  }
+}
+
+async function _applyValueBundles(
+  bundles: Record<string, GmValueSyncBundle>,
+  policy: unknown,
+): Promise<{ applied: number; conflicts: number; losersRetained: number }> {
+  const result = { applied: 0, conflicts: 0, losersRetained: 0 };
+  if (typeof ScriptValues === 'undefined' || typeof ScriptValues?.getAll !== 'function') return result;
+  for (const [scriptId, bundle] of Object.entries(bundles)) {
+    if (!bundle || !isRecord(bundle.values)) continue;
+    const localValues = await ScriptValues.getAll(scriptId);
+    const localMetadata = typeof ScriptValues.getAllKeyMetadata === 'function'
+      ? await ScriptValues.getAllKeyMetadata(scriptId)
+      : {};
+    const localConflicts = typeof ScriptValues.getSyncConflicts === 'function'
+      ? await ScriptValues.getSyncConflicts(scriptId)
+      : null;
+    const merged = mergeGmValueSyncValues(
+      localValues,
+      localMetadata,
+      bundle.values,
+      bundle.keyMetadata,
+      {
+        policy,
+        localConflicts,
+        remoteConflicts: bundle.conflicts,
+      },
+    );
+    result.conflicts += merged.conflictCount;
+    result.losersRetained += merged.losersRetained;
+    if (merged.changedKeys.length > 0 || merged.metadataChangedKeys.length > 0) {
+      if (typeof ScriptValues.setAllWithClocks === 'function') {
+        await ScriptValues.setAllWithClocks(scriptId, merged.values, merged.keyMetadata);
+      } else if (typeof ScriptValues.setAll === 'function') {
+        await ScriptValues.setAll(scriptId, merged.values);
+      }
+      result.applied += 1;
+    }
+    if (typeof ScriptValues.setSyncConflicts === 'function') {
+      await ScriptValues.setSyncConflicts(scriptId, merged.conflicts);
+    }
+    await _persistValueConflictCount(scriptId, merged.losersRetained);
+  }
+  return result;
 }
 
 interface SyncResult {
@@ -965,6 +1082,7 @@ async function _mergeData(
   localData: SyncEnvelope,
   remoteData: SyncEnvelope,
   deviceId: string,
+  policy: unknown = 'hlc',
 ): Promise<SyncEnvelope> {
   const localScripts = new Map<string, SyncScript>(
     (localData.scripts || []).map((s: SyncScript) => [s.id, s])
@@ -1074,12 +1192,54 @@ async function _mergeData(
     mergedScripts.push(merged);
   }
 
+  const mergedScriptById = new Map(mergedScripts.map((script) => [script.id, script]));
+  const localValueBundles = getValueBundles(localData);
+  const remoteValueBundles = getValueBundles(remoteData);
+  const mergedValueBundles: Record<string, GmValueSyncBundle> = {};
+  const valueBundleIds = new Set([...Object.keys(localValueBundles), ...Object.keys(remoteValueBundles)]);
+  for (const scriptId of valueBundleIds) {
+    const script = mergedScriptById.get(scriptId);
+    if (!script || !shouldSyncScriptValues(script)) continue;
+    const localBundle = localValueBundles[scriptId];
+    const remoteBundle = remoteValueBundles[scriptId];
+    if (!localBundle && !remoteBundle) continue;
+    let bundle: GmValueSyncBundle | null = null;
+    if (localBundle && remoteBundle) {
+      const mergedValues = mergeGmValueSyncValues(
+        localBundle.values,
+        localBundle.keyMetadata,
+        remoteBundle.values,
+        remoteBundle.keyMetadata,
+        {
+          policy,
+          localConflicts: localBundle.conflicts,
+          remoteConflicts: remoteBundle.conflicts,
+        },
+      );
+      bundle = buildGmValueSyncBundle(script, mergedValues.values, {
+        keyMetadata: mergedValues.keyMetadata,
+        conflicts: mergedValues.conflicts,
+      }).bundle;
+    } else {
+      const source = localBundle || remoteBundle;
+      bundle = source
+        ? buildGmValueSyncBundle(script, source.values, {
+            lastValueUpdatedAt: source.lastValueUpdatedAt,
+            keyMetadata: source.keyMetadata,
+            conflicts: source.conflicts,
+          }).bundle
+        : null;
+    }
+    if (bundle) mergedValueBundles[scriptId] = bundle;
+  }
+
   return {
     version: 1,
     timestamp: Date.now(),
     deviceId,
     scripts: mergedScripts,
     tombstones: mergedTombstones,
+    ...(Object.keys(mergedValueBundles).length > 0 ? { valueBundles: mergedValueBundles } : {}),
   };
 }
 
@@ -1124,6 +1284,10 @@ async function _performSync(): Promise<SyncResult> {
     }
 
     const deviceId = await _ensureDeviceId();
+    const syncSettings = typeof SettingsManager.get === 'function'
+      ? await SettingsManager.get()
+      : {};
+    const gmValueSyncPolicy = normalizeGmValueSyncPolicy(syncSettings?.gmValueSyncConflictPolicy);
 
     // Load tombstones
     const tombstoneData = await _getStorageValues(['syncTombstones']);
@@ -1136,20 +1300,23 @@ async function _performSync(): Promise<SyncResult> {
 
     // Build local data snapshot
     const scripts: Script[] = await ScriptStorage.getAll();
+    const localSyncScripts: SyncScript[] = scripts.map((s: Script) => ({
+      id: s.id,
+      code: s.code,
+      enabled: s.enabled,
+      position: s.position,
+      settings: cloneSyncSafeScriptSettings(s.settings),
+      updatedAt: s.updatedAt || 0,
+      syncBaseCode: s.syncBaseCode || null,
+    }));
+    const localValueBundles = await _buildValueBundles(localSyncScripts);
     const localData: SyncEnvelope = {
       version: 1,
       timestamp: Date.now(),
       deviceId,
-      scripts: scripts.map((s: Script) => ({
-        id: s.id,
-        code: s.code,
-        enabled: s.enabled,
-        position: s.position,
-        settings: cloneSyncSafeScriptSettings(s.settings),
-        updatedAt: s.updatedAt || 0,
-        syncBaseCode: s.syncBaseCode || null,
-      })),
+      scripts: localSyncScripts,
       tombstones,
+      ...(Object.keys(localValueBundles).length > 0 ? { valueBundles: localValueBundles } : {}),
     };
 
     // Download remote
@@ -1158,7 +1325,7 @@ async function _performSync(): Promise<SyncResult> {
 
     if (remoteData) {
       // Merge
-      const merged = await _mergeData(localData, remoteData, deviceId);
+      const merged = await _mergeData(localData, remoteData, deviceId, gmValueSyncPolicy);
       const mergedTombstones = pruneSyncTombstones(merged.tombstones || {});
       let localMutated = false;
 
@@ -1233,6 +1400,8 @@ async function _performSync(): Promise<SyncResult> {
       if (localMutated) {
         await _updateBadgeIfAvailable();
       }
+
+      await _applyValueBundles(merged.valueBundles || {}, gmValueSyncPolicy);
 
       // Upload merged data
       merged.timestamp = Date.now();

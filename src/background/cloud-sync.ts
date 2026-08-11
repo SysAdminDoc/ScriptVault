@@ -10,7 +10,10 @@ import { normalizeLocalLibrarySnapshots } from './local-libraries';
 import {
   GM_VALUE_SYNC_SCHEMA,
   buildGmValueSyncBundle,
+  mergeGmValueSyncValues,
+  normalizeGmValueSyncPolicy,
   shouldSyncScriptValues,
+  type GmValueKeyMetadata,
   type GmValueSyncBundle,
 } from './gm-value-sync';
 
@@ -42,8 +45,12 @@ declare const ScriptStorage: {
 declare const ScriptValues: {
   getAll(scriptId: string): Promise<Record<string, unknown>>;
   getAllMetadata?(scriptId: string): Promise<{ valueCount: number; lastUpdatedAt: number | null }>;
-  getAllKeyMetadata?(scriptId: string): Promise<Record<string, { updatedAt: number }>>;
+  getAllKeyMetadata?(scriptId: string): Promise<Record<string, GmValueKeyMetadata>>;
   setAll?(scriptId: string, values: Record<string, unknown>): Promise<void>;
+  setAllWithClocks?(scriptId: string, values: Record<string, unknown>, keyMetadata: Record<string, GmValueKeyMetadata>): Promise<void>;
+  getSyncDeviceId?(): Promise<string | null>;
+  getSyncConflicts?(scriptId: string): Promise<Record<string, unknown>>;
+  setSyncConflicts?(scriptId: string, conflicts: Record<string, unknown>): Promise<void>;
 };
 
 declare const SettingsManager: {
@@ -155,6 +162,8 @@ interface ValueBundleSyncSummary {
   applied: number;
   preserved: number;
   conflictBlocked: number;
+  conflictsDetected: number;
+  losersRetained: number;
   skippedNonEmpty: number;
   skippedUserModified: number;
   skippedUnavailable: number;
@@ -226,7 +235,7 @@ interface SyncPreviewSummary {
   remoteValueBundleCandidateReviewKeyTotal: number;
   remoteValueBundleCandidateAcceptedResultKeyTotal: number;
   valueBundleApplyEnabled: boolean;
-  valueBundleApplyMode: 'empty-local-only';
+  valueBundleApplyMode: 'hlc-last-write-wins';
   wouldUpload: boolean;
   wouldDownload: boolean;
   wouldUploadValues: boolean;
@@ -337,6 +346,8 @@ interface RemoteValueBundleApplyResult {
   skippedUnavailable: number;
   failures: number;
   writeFailureRetryReady: number;
+  conflictsDetected: number;
+  losersRetained: number;
   preservedValueBundles: Record<string, GmValueSyncBundle>;
   preservedRemoteNewer: number;
   preservedLocalNewer: number;
@@ -554,6 +565,22 @@ async function updateBadgeIfAvailable(): Promise<void> {
   }
 }
 
+async function persistGmValueConflictCount(scriptId: string, count: number): Promise<void> {
+  try {
+    const script = await ScriptStorage.get(scriptId);
+    if (!script) return;
+    const currentCount = Math.max(0, Math.floor(Number(script.settings?._gmValueSyncConflictCount) || 0));
+    const nextCount = Math.max(0, Math.floor(Number(count) || 0));
+    if (currentCount === nextCount) return;
+    const settings = { ...(script.settings || {}) } as ScriptSettings;
+    if (nextCount > 0) settings._gmValueSyncConflictCount = nextCount;
+    else delete settings._gmValueSyncConflictCount;
+    await ScriptStorage.set(scriptId, { ...script, settings });
+  } catch (error) {
+    debugLog('[CloudSync] Failed to persist GM value conflict count:', scriptId, error);
+  }
+}
+
 async function mergeScriptText(base: string, local: string, remote: string): Promise<MergeResult> {
   if (typeof ScriptAnalyzer !== 'undefined' && typeof ScriptAnalyzer.mergeText === 'function') {
     return ScriptAnalyzer.mergeText(base, local, remote);
@@ -600,6 +627,7 @@ const LOCAL_ONLY_SCRIPT_SETTING_KEYS = new Set<string>([
   '_failedRequires',
   '_failedRequireErrors',
   '_registrationError',
+  '_gmValueSyncConflictCount',
 ]);
 
 function cloneScriptSettingValue(value: unknown): unknown {
@@ -715,6 +743,7 @@ function sanitizeValueBundlesForUpload(envelope: SyncEnvelope): Record<string, G
     const rebuilt = buildGmValueSyncBundle(script, bundle.values, {
       lastValueUpdatedAt: getValueBundleLastUpdatedAt(bundle),
       keyMetadata: getValueBundleKeyMetadata(bundle),
+      conflicts: getValueBundleConflicts(bundle),
     });
     if (rebuilt.bundle) result[scriptId] = rebuilt.bundle;
   }
@@ -770,9 +799,9 @@ function summarizeValueBundleTimestampFreshness(
 }
 
 function setValueBundleMetadataKey(
-  record: Record<string, { updatedAt: number }>,
+  record: Record<string, GmValueKeyMetadata>,
   key: string,
-  value: { updatedAt: number },
+  value: GmValueKeyMetadata,
 ): void {
   Object.defineProperty(record, key, {
     value,
@@ -782,20 +811,49 @@ function setValueBundleMetadataKey(
   });
 }
 
-function getValueBundleKeyMetadata(bundle: unknown): Record<string, { updatedAt: number }> | undefined {
-  if (!isPlainRecord(bundle) || !isPlainRecord(bundle.keyMetadata)) return undefined;
-  const metadata: Record<string, { updatedAt: number }> = {};
-  for (const [key, entry] of Object.entries(bundle.keyMetadata)) {
-    const timestamp = isPlainRecord(entry) ? Number(entry.updatedAt) : Number(entry);
-    if (Number.isFinite(timestamp) && timestamp > 0) {
-      setValueBundleMetadataKey(metadata, key, { updatedAt: Math.floor(timestamp) });
+function getValueBundleKeyMetadata(bundle: unknown): Record<string, GmValueKeyMetadata> | undefined {
+  if (!isPlainRecord(bundle)) return undefined;
+  const metadata: Record<string, GmValueKeyMetadata> = {};
+  const rawMetadata = isPlainRecord(bundle.keyMetadata) ? bundle.keyMetadata : {};
+  for (const [key, entry] of Object.entries(rawMetadata)) {
+    if (isPlainRecord(entry)) {
+      const timestamp = Number(entry.updatedAt);
+      const clock = entry.clock && typeof entry.clock === 'object' && !Array.isArray(entry.clock)
+        ? entry.clock
+        : undefined;
+      if (Number.isFinite(timestamp) && timestamp > 0) {
+        setValueBundleMetadataKey(metadata, key, {
+          updatedAt: Math.floor(timestamp),
+          ...(clock ? { clock: clock as GmValueKeyMetadata['clock'] } : {}),
+        });
+      } else if (clock) {
+        setValueBundleMetadataKey(metadata, key, { clock: clock as GmValueKeyMetadata['clock'] });
+      }
+    } else {
+      const timestamp = Number(entry);
+      if (Number.isFinite(timestamp) && timestamp > 0) {
+        setValueBundleMetadataKey(metadata, key, { updatedAt: Math.floor(timestamp) });
+      }
+    }
+  }
+  if (Object.keys(metadata).length === 0) {
+    const fallbackTimestamp = getValueBundleLastUpdatedAt(bundle);
+    if (fallbackTimestamp && isPlainRecord(bundle.values)) {
+      for (const key of Object.keys(bundle.values)) {
+        setValueBundleMetadataKey(metadata, key, { updatedAt: fallbackTimestamp });
+      }
     }
   }
   return Object.keys(metadata).length > 0 ? metadata : undefined;
 }
 
+function getValueBundleConflicts(bundle: unknown): Record<string, unknown> | undefined {
+  if (!isPlainRecord(bundle)) return undefined;
+  return isPlainRecord(bundle.conflicts) ? bundle.conflicts : undefined;
+}
+
 function getValueBundleKeyUpdatedAt(
-  metadata: Record<string, { updatedAt: number }> | undefined,
+  metadata: Record<string, GmValueKeyMetadata> | undefined,
   key: string,
 ): number | null {
   if (!metadata) return null;
@@ -816,6 +874,8 @@ function createEmptyRemoteValueBundleApplyResult(): RemoteValueBundleApplyResult
     skippedUnavailable: 0,
     failures: 0,
     writeFailureRetryReady: 0,
+    conflictsDetected: 0,
+    losersRetained: 0,
     preservedValueBundles: {},
     preservedRemoteNewer: 0,
     preservedLocalNewer: 0,
@@ -844,7 +904,12 @@ function summarizeRemoteValueBundleApplyResult(
   const summary: ValueBundleSyncSummary = {
     applied: result.applied,
     preserved: Object.keys(result.preservedValueBundles).length,
+    // HLC conflicts are resolved and written in the same pass. Keep this
+    // legacy field for genuinely skipped writes; detected conflicts are
+    // reported separately and surfaced through the passive conflict badge.
     conflictBlocked: result.skippedNonEmpty + result.skippedUserModified,
+    conflictsDetected: result.conflictsDetected,
+    losersRetained: result.losersRetained,
     skippedNonEmpty: result.skippedNonEmpty,
     skippedUserModified: result.skippedUserModified,
     skippedUnavailable: result.skippedUnavailable,
@@ -904,6 +969,7 @@ function selectApplicableRemoteValueBundles(
     const rebuilt = buildGmValueSyncBundle(script, bundle.values, {
       lastValueUpdatedAt: getValueBundleLastUpdatedAt(bundle),
       keyMetadata: getValueBundleKeyMetadata(bundle),
+      conflicts: getValueBundleConflicts(bundle),
     });
     result.warnings += rebuilt.warnings.length;
     if (rebuilt.bundle) {
@@ -998,10 +1064,11 @@ function countRemoteValueBundlesApplyReady(
     const localBundle = localBundles[scriptId];
     if (!isPlainRecord(localBundle) && localScriptIds.has(scriptId)) {
       addConflict('local-bundle-unavailable', remoteBundle, localBundle);
-    } else if (!isPlainRecord(localBundle) || Number(localBundle.keyCount) === 0) {
-      ready += 1;
     } else {
-      addConflict('local-values-present', remoteBundle, localBundle);
+      // HLC merge is safe for both empty and non-empty local bags. A local
+      // bundle is evidence that the value store was readable; the actual
+      // per-key winner and loser retention happen during the write path.
+      ready += 1;
     }
   }
 
@@ -1272,8 +1339,8 @@ function buildValueBundleCandidateMergeResult(
 function countValueBundleKeyOverlap(
   localValues: unknown,
   remoteValues: unknown,
-  localKeyMetadata?: Record<string, { updatedAt: number }>,
-  remoteKeyMetadata?: Record<string, { updatedAt: number }>,
+  localKeyMetadata?: Record<string, GmValueKeyMetadata>,
+  remoteKeyMetadata?: Record<string, GmValueKeyMetadata>,
 ): {
   overlapping: number;
   localOnly: number;
@@ -1335,6 +1402,7 @@ async function applyRemoteValueBundlesWhenLocalEmpty(
   selection: RemoteValueBundleSelection,
   currentScripts: Script[] | SyncScript[] = [],
   localValueBundles: Record<string, unknown> = {},
+  options: { policy?: unknown } = {},
 ): Promise<RemoteValueBundleApplyResult> {
   const result = createEmptyRemoteValueBundleApplyResult();
   const bundles = Object.entries(selection.valueBundles);
@@ -1352,19 +1420,8 @@ async function applyRemoteValueBundlesWhenLocalEmpty(
     return result;
   }
 
-  const scriptsById = new Map<string, Script | SyncScript>(
-    currentScripts.map((script) => [script.id, script]),
-  );
-
   for (const [scriptId, bundle] of bundles) {
-    const currentScript = scriptsById.get(scriptId);
     const localBundle = localValueBundles[scriptId];
-    if (currentScript?.settings?.userModified) {
-      result.skippedUserModified += 1;
-      preserveRemoteValueBundle(result, scriptId, bundle, localBundle);
-      continue;
-    }
-
     let localValues: Record<string, unknown> | null = null;
     try {
       localValues = await ScriptValues.getAll(scriptId);
@@ -1374,15 +1431,48 @@ async function applyRemoteValueBundlesWhenLocalEmpty(
       continue;
     }
 
-    if (Object.keys(localValues || {}).length > 0) {
-      result.skippedNonEmpty += 1;
-      preserveRemoteValueBundle(result, scriptId, bundle, localBundle);
-      continue;
-    }
-
     try {
-      await ScriptValues.setAll(scriptId, bundle.values);
-      result.applied += 1;
+      const localMetadata = typeof ScriptValues.getAllKeyMetadata === 'function'
+        ? await ScriptValues.getAllKeyMetadata(scriptId)
+        : {};
+      const localBundleMetadata = getValueBundleKeyMetadata(localBundle) || {};
+      const mergedLocalMetadata = { ...localBundleMetadata, ...(localMetadata || {}) };
+      const localConflicts = typeof ScriptValues.getSyncConflicts === 'function'
+        ? await ScriptValues.getSyncConflicts(scriptId)
+        : null;
+      const merged = mergeGmValueSyncValues(
+        localValues || {},
+        mergedLocalMetadata,
+        bundle.values,
+        getValueBundleKeyMetadata(bundle),
+        {
+          policy: options.policy,
+          localConflicts,
+          remoteConflicts: getValueBundleConflicts(bundle),
+        },
+      );
+      result.conflictsDetected += merged.conflictCount;
+      result.losersRetained += merged.losersRetained;
+      if (merged.changedKeys.length > 0 || merged.metadataChangedKeys.length > 0) {
+        if (typeof ScriptValues.setAllWithClocks === 'function') {
+          await ScriptValues.setAllWithClocks(scriptId, merged.values, merged.keyMetadata);
+        } else if (typeof ScriptValues.setAll === 'function') {
+          await ScriptValues.setAll(scriptId, merged.values);
+        } else {
+          result.skippedUnavailable += 1;
+          preserveRemoteValueBundle(result, scriptId, bundle, localBundle);
+          continue;
+        }
+        result.applied += 1;
+      }
+      if (typeof ScriptValues.setSyncConflicts === 'function') {
+        try {
+          await ScriptValues.setSyncConflicts(scriptId, merged.conflicts);
+        } catch (error) {
+          debugLog('[CloudSync] Failed to persist GM value conflict sidecar:', scriptId, error);
+        }
+      }
+      await persistGmValueConflictCount(scriptId, merged.losersRetained);
     } catch (_) {
       result.failures += 1;
       result.writeFailureRetryReady += 1;
@@ -1417,9 +1507,17 @@ async function buildValueBundlesForScripts(scripts: Script[] | SyncScript[]): Pr
     const keyMetadata = typeof ScriptValues.getAllKeyMetadata === 'function'
       ? await ScriptValues.getAllKeyMetadata(script.id)
       : null;
+    const deviceId = typeof ScriptValues.getSyncDeviceId === 'function'
+      ? await ScriptValues.getSyncDeviceId()
+      : null;
+    const conflicts = typeof ScriptValues.getSyncConflicts === 'function'
+      ? await ScriptValues.getSyncConflicts(script.id)
+      : null;
     const result = buildGmValueSyncBundle(script, values, {
       lastValueUpdatedAt: metadata?.lastUpdatedAt ?? null,
       keyMetadata,
+      conflicts,
+      deviceId,
     });
     warnings += result.warnings.length;
     if (result.bundle) valueBundles[script.id] = result.bundle;
@@ -1760,7 +1858,7 @@ export const CloudSync = {
       remoteValueBundleCandidateReviewKeyTotal: remoteValueBundleApplyReadiness.candidateReviewKeyTotal,
       remoteValueBundleCandidateAcceptedResultKeyTotal: remoteValueBundleApplyReadiness.candidateAcceptedResultKeyTotal,
       valueBundleApplyEnabled: true,
-      valueBundleApplyMode: 'empty-local-only',
+      valueBundleApplyMode: 'hlc-last-write-wins',
       wouldUpload: false,
       wouldDownload: false,
       wouldUploadValues: false,
@@ -1932,7 +2030,7 @@ export const CloudSync = {
           ignored: remoteValueBundleSelection.ignored,
           warnings: remoteValueBundleSelection.warnings,
           applyEnabled: true,
-          applyMode: 'empty-local-only',
+          applyMode: 'hlc-last-write-wins',
         });
       }
       let localMutated = false;
@@ -2098,6 +2196,7 @@ export const CloudSync = {
         remoteValueBundleSelection,
         postMergeScripts,
         localData.valueBundles ?? {},
+        { policy: normalizeGmValueSyncPolicy(settings.gmValueSyncConflictPolicy) },
       );
       valueBundleSync = summarizeRemoteValueBundleApplyResult(remoteValueApplyResult);
       if (
