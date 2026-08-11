@@ -26,6 +26,38 @@ function scriptWithMetadata(metadataLines, bodyLines = ["'use strict';", 'consol
 }
 
 describe('AdvancedLinter fix-all and preview hunks', () => {
+  it('warns on unknown metadata keys with typo guidance while honoring supported and suppressed keys', () => {
+    const linter = createLinter();
+    const code = scriptWithMetadata([
+      '// @match       https://example.com/*',
+      '// @matc        https://example.com/*',
+      '// @name:ja     テスト',
+      '// @match-top   https://example.com/*',
+      '// @background',
+      '// @scriptvault-ignore custom-build-id',
+      '// @custom-build-id 42',
+    ]);
+
+    const unknown = linter.lint(code).filter(issue => issue.ruleId === 'unknown-meta-key');
+    expect(unknown).toHaveLength(1);
+    expect(unknown[0]).toMatchObject({ line: 4, severity: 'warning' });
+    expect(unknown[0].message).toContain('Unrecognized metadata key @matc.');
+    expect(unknown[0].message).toContain('Did you mean @match?');
+    expect(unknown[0].message).toContain('@scriptvault-ignore matc');
+  });
+
+  it('supports an explicit suppression for all intentional custom metadata', () => {
+    const linter = createLinter();
+    const code = scriptWithMetadata([
+      '// @match       https://example.com/*',
+      '// @scriptvault-ignore unknown-metadata',
+      '// @build-flavor nightly',
+      '// @vendor-key value',
+    ]);
+
+    expect(linter.lint(code).filter(issue => issue.ruleId === 'unknown-meta-key')).toEqual([]);
+  });
+
   it('continues applying fixes past five passes until no fixable issues remain', () => {
     const linter = createLinter();
     const duplicateMatches = Array.from({ length: 8 }, () => '// @match       https://example.com/*');

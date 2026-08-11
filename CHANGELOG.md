@@ -4,6 +4,9 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased] — Minimal workbench surfaces
 
+- Added editor and dashboard warnings for unrecognized userscript metadata
+  keys, localized-key normalization, nearest-key suggestions, and explicit
+  `@scriptvault-ignore` suppression for intentional custom directives.
 - Added grant-gated `GM.withLock` and `GM_withLock` userscript APIs backed by
   Web Locks, with per-script cross-tab namespacing, abort-signal forwarding,
   generated TypeScript declarations, and editor grant completion.

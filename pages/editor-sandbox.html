@@ -106,6 +106,21 @@
     javascript: 'ts.worker.js'
   });
   const workerBootstrapUrls = new Map();
+  const METADATA_MARKER_OWNER = 'scriptvault-metadata';
+  const KNOWN_METADATA_KEYS = new Set([
+    'name', 'namespace', 'version', 'description', 'author',
+    'match', 'include', 'exclude', 'exclude-match', 'excludeMatch',
+    'match-top', 'matchTop', 'exclude-top', 'excludeTop',
+    'grant', 'require', 'require-provenance', 'requireProvenance',
+    'require-identity', 'requireIdentity', 'resource', 'run-at',
+    'noframes', 'unwrap', 'top-level-await', 'background',
+    'isolationCookie', 'isolation-cookie', 'cookieIsolation', 'cookie-isolation',
+    'priority', 'weight', 'nodownload', 'delay', 'webRequest', 'var',
+    'antifeature', 'icon', 'icon64', 'homepage', 'homepageURL', 'website',
+    'source', 'updateURL', 'downloadURL', 'supportURL', 'license', 'copyright',
+    'contributionURL', 'connect', 'module', 'inject-into', 'sandbox', 'run-in',
+    'crontab', 'tag', 'compatible', 'incompatible', 'scriptvault-ignore',
+  ]);
 
   setupMonacoSandboxWorkers();
 
@@ -193,6 +208,98 @@
       userscriptLanguageServerTransport = null;
       return false;
     }
+  }
+
+  function metadataBaseKey(key) {
+    const text = String(key || '').replace(/^@/, '');
+    const separator = text.indexOf(':');
+    return separator > 0 ? text.slice(0, separator) : text;
+  }
+
+  function metadataDistance(left, right) {
+    const a = String(left || '').toLowerCase();
+    const b = String(right || '').toLowerCase();
+    const row = Array.from({ length: b.length + 1 }, (_, index) => index);
+    for (let i = 1; i <= a.length; i += 1) {
+      let diagonal = row[0];
+      row[0] = i;
+      for (let j = 1; j <= b.length; j += 1) {
+        const above = row[j];
+        row[j] = a[i - 1] === b[j - 1]
+          ? diagonal
+          : Math.min(diagonal + 1, row[j] + 1, row[j - 1] + 1);
+        diagonal = above;
+      }
+    }
+    return row[b.length];
+  }
+
+  function nearestMetadataKey(key) {
+    let nearest = '';
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    for (const candidate of KNOWN_METADATA_KEYS) {
+      if (candidate === 'scriptvault-ignore') continue;
+      const distance = metadataDistance(key, candidate);
+      if (distance < nearestDistance || (distance === nearestDistance && candidate < nearest)) {
+        nearest = candidate;
+        nearestDistance = distance;
+      }
+    }
+    return { key: nearest, distance: nearestDistance };
+  }
+
+  function metadataMarkers(model) {
+    if (!model || typeof model.getValue !== 'function') return [];
+    const lines = String(model.getValue() || '').split('\n');
+    const start = lines.findIndex(line => line.includes('==UserScript=='));
+    const end = lines.findIndex((line, index) => index > start && line.includes('==/UserScript=='));
+    if (start < 0 || end < 0) return [];
+
+    const entries = [];
+    const ignoredKeys = new Set();
+    let ignoreUnknownMetadata = false;
+    for (let index = start + 1; index < end; index += 1) {
+      const line = lines[index] || '';
+      const match = line.match(/^\s*\/\/\s*@([^\s]+)(?:\s+(.*))?$/);
+      if (!match) continue;
+      const key = match[1] || '';
+      const value = (match[2] || '').trim();
+      if (key === 'scriptvault-ignore') {
+        const tokens = value.split(/[\s,]+/).map(token => token.replace(/^@/, '')).filter(Boolean);
+        if (tokens.length === 0 || tokens.includes('*') || tokens.includes('metadata') || tokens.includes('unknown-metadata')) {
+          ignoreUnknownMetadata = true;
+        } else {
+          tokens.forEach(token => ignoredKeys.add(metadataBaseKey(token)));
+        }
+        continue;
+      }
+      entries.push({ key, baseKey: metadataBaseKey(key), line: index, text: line });
+    }
+    if (ignoreUnknownMetadata) return [];
+
+    return entries.filter(entry => !KNOWN_METADATA_KEYS.has(entry.baseKey) && !ignoredKeys.has(entry.baseKey)).map(entry => {
+      const nearest = nearestMetadataKey(entry.baseKey);
+      const threshold = Math.max(2, Math.floor(Math.max(entry.baseKey.length, nearest.key.length) / 3));
+      const suggestion = nearest.distance <= threshold
+        ? ` Did you mean @${nearest.key}?`
+        : ` The nearest supported key is @${nearest.key}.`;
+      const atColumn = Math.max(1, entry.text.indexOf('@') + 1);
+      return {
+        startLineNumber: entry.line + 1,
+        startColumn: atColumn,
+        endLineNumber: entry.line + 1,
+        endColumn: atColumn + entry.key.length + 1,
+        severity: monacoApi?.MarkerSeverity?.Warning || 4,
+        message: `Unrecognized metadata key @${entry.key}.${suggestion} For an intentional custom key, add "// @scriptvault-ignore ${entry.baseKey}" in the metadata block.`,
+        source: 'ScriptVault metadata',
+        code: 'unknown-meta-key',
+      };
+    });
+  }
+
+  function updateMetadataMarkers(model) {
+    if (!model || typeof monacoApi?.editor?.setModelMarkers !== 'function') return;
+    monacoApi.editor.setModelMarkers(model, METADATA_MARKER_OWNER, metadataMarkers(model));
   }
 
   async function loadMonacoEsm() {
@@ -303,9 +410,12 @@
 
       // ── Change tracking ────────────────────────────────────────────────────
       editor.onDidChangeModelContent(() => {
+        updateMetadataMarkers(editor.getModel?.());
         if (ignoreNextChange) { ignoreNextChange = false; return; }
         parent.postMessage({ type: 'change', value: editor.getValue() }, '*');
       });
+
+      updateMetadataMarkers(editor.getModel?.());
 
       // ── Find widget search-history bridge ───────────────────────────────────
       // Forward every find-widget searchString change to the dashboard so it
@@ -719,6 +829,7 @@
     }
     const activeModel = model || editor.getModel();
     if (!activeModel) return;
+    updateMetadataMarkers(activeModel);
     // Only arm the change-suppression latch when the content is actually
     // changing. Monaco fires onDidChangeModelContent only on a real change, so
     // arming it for a no-op setValue (e.g. re-activating a same-content tab)

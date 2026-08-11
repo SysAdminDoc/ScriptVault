@@ -291,6 +291,23 @@ const AdvancedLinter = (() => {
     '@namespace', '@installURL', '@contributionAmount', '@contributionURL',
   ];
 
+  // Keep this vocabulary aligned with parser.ts. Localized directives such as
+  // @name:ja are normalized to the base key before this set is consulted.
+  const KNOWN_METADATA_KEYS = new Set([
+    'name', 'namespace', 'version', 'description', 'author',
+    'match', 'include', 'exclude', 'exclude-match', 'excludeMatch',
+    'match-top', 'matchTop', 'exclude-top', 'excludeTop',
+    'grant', 'require', 'require-provenance', 'requireProvenance',
+    'require-identity', 'requireIdentity', 'resource', 'run-at',
+    'noframes', 'unwrap', 'top-level-await', 'background',
+    'isolationCookie', 'isolation-cookie', 'cookieIsolation', 'cookie-isolation',
+    'priority', 'weight', 'nodownload', 'delay', 'webRequest', 'var',
+    'antifeature', 'icon', 'icon64', 'homepage', 'homepageURL', 'website',
+    'source', 'updateURL', 'downloadURL', 'supportURL', 'license', 'copyright',
+    'contributionURL', 'connect', 'module', 'inject-into', 'sandbox', 'run-in',
+    'crontab', 'tag', 'compatible', 'incompatible', 'scriptvault-ignore',
+  ]);
+
   const GM_API_PATTERN = /\b(GM[_.]\w+)\b/g;
 
   const KNOWN_GM_APIS = [
@@ -308,7 +325,18 @@ const AdvancedLinter = (() => {
   ];
 
   function _parseMetadata(code) {
-    const meta = { grants: [], matches: [], keys: {}, raw: '', startLine: -1, endLine: -1, lines: [] };
+    const meta = {
+      grants: [],
+      matches: [],
+      keys: {},
+      metadataEntries: [],
+      ignoredMetadataKeys: new Set(),
+      ignoreUnknownMetadata: false,
+      raw: '',
+      startLine: -1,
+      endLine: -1,
+      lines: [],
+    };
     const lines = code.split('\n');
     let inMeta = false;
     for (let i = 0; i < lines.length; i++) {
@@ -321,6 +349,16 @@ const AdvancedLinter = (() => {
       if (m) {
         const key = m[1];
         const val = (m[2] || '').trim();
+        if (key === 'scriptvault-ignore') {
+          const ignoreTokens = val.split(/[\s,]+/).map(token => token.trim().replace(/^@/, '')).filter(Boolean);
+          if (ignoreTokens.length === 0 || ignoreTokens.includes('*') || ignoreTokens.includes('metadata') || ignoreTokens.includes('unknown-metadata')) {
+            meta.ignoreUnknownMetadata = true;
+          } else {
+            for (const token of ignoreTokens) meta.ignoredMetadataKeys.add(_metadataBaseKey(token));
+          }
+          continue;
+        }
+        meta.metadataEntries.push({ key, line: i, value: val });
         if (key === 'grant') meta.grants.push({ value: val, line: i });
         else if (key === 'match' || key === 'include') meta.matches.push({ value: val, line: i });
         if (!meta.keys[key]) meta.keys[key] = [];
@@ -331,6 +369,44 @@ const AdvancedLinter = (() => {
       ? lines.slice(meta.startLine, meta.endLine + 1).join('\n')
       : '';
     return meta;
+  }
+
+  function _metadataBaseKey(key) {
+    const text = String(key || '').replace(/^@/, '');
+    const separator = text.indexOf(':');
+    return separator > 0 ? text.slice(0, separator) : text;
+  }
+
+  function _metadataDistance(left, right) {
+    const a = String(left || '').toLowerCase();
+    const b = String(right || '').toLowerCase();
+    const row = Array.from({ length: b.length + 1 }, (_, index) => index);
+    for (let i = 1; i <= a.length; i += 1) {
+      let diagonal = row[0];
+      row[0] = i;
+      for (let j = 1; j <= b.length; j += 1) {
+        const above = row[j];
+        row[j] = a[i - 1] === b[j - 1]
+          ? diagonal
+          : Math.min(diagonal + 1, row[j] + 1, row[j - 1] + 1);
+        diagonal = above;
+      }
+    }
+    return row[b.length];
+  }
+
+  function _nearestMetadataKey(key) {
+    let nearest = '';
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    for (const candidate of KNOWN_METADATA_KEYS) {
+      if (candidate === 'scriptvault-ignore') continue;
+      const distance = _metadataDistance(key, candidate);
+      if (distance < nearestDistance || (distance === nearestDistance && candidate < nearest)) {
+        nearest = candidate;
+        nearestDistance = distance;
+      }
+    }
+    return { key: nearest, distance: nearestDistance };
   }
 
   function _getScriptBody(code, meta) {
@@ -913,6 +989,30 @@ const AdvancedLinter = (() => {
         const lines = code.split('\n');
         lines.splice(fixData.metaLine, 1);
         return lines.join('\n');
+      },
+    },
+    {
+      id: 'unknown-meta-key',
+      name: 'Unrecognized Metadata Key',
+      severity: SEVERITY.WARNING,
+      fixable: false,
+      check(_code, meta) {
+        if (meta.ignoreUnknownMetadata) return [];
+        const issues = [];
+        for (const entry of meta.metadataEntries) {
+          const baseKey = _metadataBaseKey(entry.key);
+          if (KNOWN_METADATA_KEYS.has(baseKey) || meta.ignoredMetadataKeys.has(baseKey)) continue;
+          const nearest = _nearestMetadataKey(baseKey);
+          const threshold = Math.max(2, Math.floor(Math.max(baseKey.length, nearest.key.length) / 3));
+          const suggestion = nearest.distance <= threshold
+            ? ` Did you mean @${nearest.key}?`
+            : ` The nearest supported key is @${nearest.key}.`;
+          issues.push({
+            line: entry.line + 1,
+            message: `Unrecognized metadata key @${entry.key}.${suggestion} For an intentional custom key, add "// @scriptvault-ignore ${baseKey}" in the metadata block.`,
+          });
+        }
+        return issues;
       },
     },
     {

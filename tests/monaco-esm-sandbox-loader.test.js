@@ -18,16 +18,36 @@ function createFakeMonaco({ lspConstructorFails = false, withLsp = false } = {})
   const javascriptDefaults = {
     addExtraLib: vi.fn(),
   };
+  let currentModel = null;
+  let contentChangeListener = null;
+  function createModel(value = '', language = 'javascript') {
+    let modelValue = String(value);
+    return {
+      getValue: vi.fn(() => modelValue),
+      setValue: vi.fn(nextValue => {
+        modelValue = String(nextValue);
+        contentChangeListener?.();
+      }),
+      getLanguageId: vi.fn(() => language),
+      isDisposed: vi.fn(() => false),
+    };
+  }
+  currentModel = createModel();
   const editorInstance = {
     addCommand: vi.fn(),
-    onDidChangeModelContent: vi.fn(),
+    onDidChangeModelContent: vi.fn(listener => {
+      contentChangeListener = listener;
+      return { dispose: vi.fn() };
+    }),
     onDidChangeCursorPosition: vi.fn(),
     getContribution: vi.fn(() => ({
       getState: () => ({
         onFindReplaceStateChange: vi.fn(),
       }),
     })),
-    getValue: vi.fn(() => ''),
+    getValue: vi.fn(() => currentModel.getValue()),
+    getModel: vi.fn(() => currentModel),
+    setModel: vi.fn(model => { currentModel = model; }),
     setValue: vi.fn(),
     getPosition: vi.fn(() => null),
     setPosition: vi.fn(),
@@ -49,10 +69,16 @@ function createFakeMonaco({ lspConstructorFails = false, withLsp = false } = {})
       },
       editor: {
         EditorOption: { wordWrap: 'wordWrap' },
-        create: vi.fn(() => editorInstance),
+        create: vi.fn((_container, options) => {
+          currentModel = createModel(options?.value || '', options?.language || 'javascript');
+          return editorInstance;
+        }),
+        createModel: vi.fn((value, language) => createModel(value, language)),
         defineTheme: vi.fn(),
         setTheme: vi.fn(),
+        setModelMarkers: vi.fn(),
       },
+      MarkerSeverity: { Warning: 4 },
     };
   if (withLsp) {
     monaco.lsp = {
@@ -155,10 +181,23 @@ function createHarness({
     if (moduleFails) throw new Error(`missing module: ${specifier}`);
     return { monaco, default: monaco };
   });
-  windowObject.addEventListener = vi.fn();
+  windowObject.addEventListener = vi.fn((type, listener) => {
+    if (type === 'message') windowObject.__messageListener = listener;
+  });
   windowObject.ScriptVaultMonacoEsm = { monaco };
 
-  return { context, appendedLinks, editorInstance, loading, messages, monaco, windowObject };
+  return {
+    context,
+    appendedLinks,
+    editorInstance,
+    loading,
+    messages,
+    monaco,
+    windowObject,
+    dispatchMessage(message) {
+      windowObject.__messageListener?.({ data: message, origin: 'https://scriptvault.local' });
+    },
+  };
 }
 
 async function runSandbox(context) {
@@ -192,6 +231,33 @@ describe('Monaco ESM sandbox loader', () => {
       'declare function GM_getValue(name: string): unknown;',
       'file:///scriptvault/lib/scriptvault.d.ts',
     );
+  });
+
+  it('marks unknown metadata keys while honoring localized and ignored directives', async () => {
+    const harness = createHarness();
+    await runSandbox(harness.context);
+
+    harness.dispatchMessage({
+      type: 'set-value',
+      value: [
+        '// ==UserScript==',
+        '// @name:ja テスト',
+        '// @matc https://example.com/*',
+        '// @scriptvault-ignore custom-build-id',
+        '// @custom-build-id nightly',
+        '// ==/UserScript==',
+      ].join('\n'),
+    });
+
+    const markerCall = harness.monaco.editor.setModelMarkers.mock.calls.at(-1);
+    expect(markerCall?.[1]).toBe('scriptvault-metadata');
+    expect(markerCall?.[2]).toHaveLength(1);
+    expect(markerCall?.[2][0]).toMatchObject({
+      code: 'unknown-meta-key',
+      startLineNumber: 3,
+      severity: 4,
+    });
+    expect(markerCall?.[2][0].message).toContain('Did you mean @match?');
   });
 
   it('creates sandbox-origin blob bootstraps for Monaco language workers', async () => {
