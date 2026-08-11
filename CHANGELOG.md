@@ -4,6 +4,8 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased] — Minimal workbench surfaces
 
+- Added a headless real-navigation install gate covering valid review/install,
+  malformed pass-through, oversized download rejection, and downgrade review.
 - Shipped the GM WebSocket userscript client and added a source-mirror drift
   gate; WebSocket behavior now tests the generated background wrapper rather
   than only the unshipped TypeScript mirror.

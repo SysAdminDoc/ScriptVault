@@ -587,6 +587,8 @@ npm run test:e2e          # Labeled capability report; unsupported browser capab
 npm run test:e2e:release  # Release gate; required userScripts/OPFS capabilities fail closed
 npm run test:e2e:gm-websocket  # Shipped GM_webSocket round-trip through a local server
 npm run test:e2e:gm-websocket:release  # Same WebSocket flow with fail-closed capability policy
+npm run test:e2e:install-navigation  # Real .user.js review, malformed, oversized, and downgrade flow
+npm run test:e2e:install-navigation:release  # Same install flow with fail-closed capability policy
 npm run test:e2e:compatibility  # Local-only real-world userscript GM/Worker corpus
 npm run test:e2e:compatibility:release  # Same corpus with fail-closed capability policy
 npm run smoke:editor      # Headless editor hit-test and diagnostics smoke

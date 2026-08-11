@@ -53,6 +53,7 @@ export async function launchScriptVault(options = {}) {
       '--no-default-browser-check',
       '--no-first-run',
       '--no-sandbox',
+      ...(Array.isArray(options.browserArgs) ? options.browserArgs : []),
     ],
   });
 
