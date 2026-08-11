@@ -18,9 +18,13 @@ const WHATS_NEW_OVERLAY = '.sv-wn-overlay';
 async function settleWhatsNew(page, { quietMs = 400, timeoutMs = 8000 } = {}) {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
-        const dismissButton = await page.$('#svWnDismiss');
-        if (dismissButton) {
-            await dismissButton.click();
+        const dismissed = await page.evaluate(() => {
+            const dismissButton = document.querySelector('#svWnDismiss');
+            if (!dismissButton) return false;
+            dismissButton.click();
+            return true;
+        });
+        if (dismissed) {
             await page.waitForFunction(
                 (selector) => !document.querySelector(selector),
                 { timeout: 5000 },
@@ -254,7 +258,7 @@ try {
             );
         };
         try {
-            await page.waitForFunction(destinationReady, { timeout: 5000 }, destination);
+            await page.waitForFunction(destinationReady, { timeout: 5000, polling: 100 }, destination);
         } catch (error) {
             const detail = await page.evaluate(({ target, tab, filter }) => {
                 const shortcut = document.querySelector(`[data-workbench-target="${target}"]`);
@@ -296,7 +300,7 @@ try {
         );
     });
     await page.waitForSelector('#modal.show', { visible: true, timeout: 5000 });
-    await page.waitForFunction(() => document.activeElement?.textContent?.trim() === 'Cancel', { timeout: 5000 });
+    await page.waitForFunction(() => document.activeElement?.textContent?.trim() === 'Cancel', { timeout: 5000, polling: 100 });
     const destructiveDialog = await page.evaluate(() => ({
         labels: Array.from(document.querySelectorAll('#modalActions button')).map(button => button.textContent.trim()),
         dangerClass: document.querySelector('#modalActions .btn-danger')?.textContent.trim(),
@@ -310,7 +314,7 @@ try {
         throw new Error(`Destructive dialog contract failed: ${JSON.stringify(destructiveDialog)}`);
     }
     await page.keyboard.press('Escape');
-    await page.waitForFunction(() => !document.querySelector('#modal.show'), { timeout: 5000 });
+    await page.waitForFunction(() => !document.querySelector('#modal.show'), { timeout: 5000, polling: 100 });
 
     console.log(`Dashboard smoke passed for ScriptVault ${snapshot.version} (${extensionId}); ${workbenchDestinations.length} deep links and destructive dialog focus verified.`);
     if (pageErrors.length > 0) {

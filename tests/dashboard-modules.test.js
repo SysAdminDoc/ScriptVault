@@ -508,6 +508,10 @@ describe('dashboard surface modules', () => {
     expect(dashboardJs).toContain('function runDashboardViewTransition(className, update)');
     expect(dashboardJs).toContain("document.startViewTransition");
     expect(dashboardJs).toContain("prefers-reduced-motion: reduce");
+    expect(dashboardJs).toContain('let dashboardViewTransitionQueue = Promise.resolve()');
+    expect(dashboardJs).toContain('transition.finished.then');
+    expect(dashboardJs).toContain('DASHBOARD_VIEW_TRANSITION_TIMEOUT_MS');
+    expect(dashboardJs).toContain("await runDashboardViewTransition('sv-vt-dashboard'");
     expect(dashboardJs).toContain("runDashboardViewTransition('sv-vt-dashboard'");
     expect(dashboardJs).toContain("runDashboardViewTransition('sv-vt-editor'");
     expect(dashboardCss).toContain('html.sv-vt-dashboard #mainContent');

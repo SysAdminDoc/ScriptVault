@@ -180,16 +180,6 @@ _Scope not covered by the 2026-08-02 pass. Not findings; each needs its own audi
   Acceptance: a PR is open against awesome-userscripts adding ScriptVault with an accurate one-line description and the four missing managers; the release runbook records where the product is indexed so the list does not go stale again.
   Complexity: S
 
-- [ ] P2 — Await dashboard view transitions before applying deep-link focus
-  Category: a11y
-  Where: `pages/dashboard.js:1155-1179,1273-1292,16575-16592,20134-20173`; `scripts/smoke-dashboard.mjs:235-287`
-  Problem: Rail navigation starts `document.startViewTransition`, immediately clicks the panel filter, and schedules focus without awaiting the transition. The transition can abort with `InvalidStateError`; the target appears visually active but keyboard focus remains on the body, so keyboard users lose their destination and the smoke gate hangs waiting for focus.
-  Evidence: Headless `npm run smoke:dashboard` failed at `signingTrustSection`. A direct headless click reproduced `Unhandled rejection: InvalidStateError: Transition was aborted because of invalid state`; after the panel became active, `document.activeElement` was still empty while the shortcut was visible and enabled.
-  Fix: Make `runDashboardViewTransition` return/await a settled transition promise, serialize or cancel superseded transitions, and perform filter activation, scroll, and focus after the panel commit. Catch aborted transitions and still complete the focus destination.
-  Acceptance: `npm run smoke:dashboard` completes all rail destinations; no unhandled transition rejection occurs; each deep link leaves the requested shortcut focused with the correct `aria-pressed` state in both reduced-motion and normal-motion modes.
-  Confidence: Verified
-  Effort: M
-
 - [ ] P2 — Persist dashboard telemetry before the lazy Utilities modules load
   Category: correctness
   Where: `pages/dashboard-lazy-loader.js:14-39`; `pages/dashboard.js:2826-2870`

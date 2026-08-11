@@ -4,6 +4,9 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased] — Minimal workbench surfaces
 
+- Awaited and serialized dashboard view transitions before applying workbench
+  filters and deep-link focus, with bounded abort recovery for headless and
+  backgrounded renderers.
 - Serialized subscription feed, bundle, removal, and refresh-result writes
   through a fresh-read queue so concurrent dashboard and alarm mutations keep
   unrelated records and validator/error state intact.

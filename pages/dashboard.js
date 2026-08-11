@@ -1158,30 +1158,100 @@
         return window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true;
     }
 
+    let dashboardViewTransitionQueue = Promise.resolve();
+    const DASHBOARD_VIEW_TRANSITION_TIMEOUT_MS = 1000;
+
     function runDashboardViewTransition(className, update) {
         if (typeof update !== 'function') return undefined;
-        if (typeof document.startViewTransition !== 'function' || prefersReducedMotion()) {
-            return update();
-        }
+        const perform = async () => {
+            if (typeof document.startViewTransition !== 'function' || prefersReducedMotion()) {
+                return await update();
+            }
 
-        const root = document.documentElement;
-        let updateCalled = false;
-        root.classList.add(className);
-        try {
-            const transition = document.startViewTransition(() => {
-                updateCalled = true;
-                return update();
-            });
-            const cleanup = () => {
+            const root = document.documentElement;
+            let updateCalled = false;
+            let updateResult;
+            let updateError = null;
+            root.classList.add(className);
+            try {
+                const transition = document.startViewTransition(() => {
+                    updateCalled = true;
+                    try {
+                        updateResult = update();
+                        return updateResult;
+                    } catch (error) {
+                        updateError = error;
+                        throw error;
+                    }
+                });
+                // ViewTransition exposes three promises. Chromium can reject
+                // `ready` or `updateCallbackDone` when a competing renderer
+                // state aborts the animation even though the DOM update was
+                // committed. Attach rejection handlers to every promise so a
+                // recoverable abort never becomes an unhandled page error.
+                transition.ready?.catch(() => undefined);
+                transition.updateCallbackDone?.catch(() => undefined);
+                transition.finished?.catch(() => undefined);
+                let transitionOutcome;
+                const transitionSettled = new Promise(resolve => {
+                    let timeoutId = setTimeout(() => {
+                        timeoutId = null;
+                        resolve({ timedOut: true, error: null });
+                    }, DASHBOARD_VIEW_TRANSITION_TIMEOUT_MS);
+                    transition.finished.then(
+                        () => {
+                            if (timeoutId) clearTimeout(timeoutId);
+                            resolve({ timedOut: false, error: null });
+                        },
+                        error => {
+                            if (timeoutId) clearTimeout(timeoutId);
+                            resolve({ timedOut: false, error });
+                        },
+                    );
+                });
+                try {
+                    // The DOM mutation and any dependent focus must happen in
+                    // order. Aborted transitions can still leave the new DOM
+                    // committed, so an abort is non-fatal unless update itself
+                    // threw.
+                    transitionOutcome = await transitionSettled;
+                } catch (error) {
+                    transitionOutcome = { timedOut: false, error };
+                }
+                if (transitionOutcome.timedOut) {
+                    // A backgrounded or headless extension page can fail to
+                    // advance the animation timeline. Do not strand the
+                    // navigation queue; ask the browser to commit immediately.
+                    try {
+                        transition.skipTransition?.();
+                    } catch (error) {
+                        console.debug('[ScriptVault] Dashboard view transition could not be skipped:', error?.message || error);
+                    }
+                    await Promise.race([
+                        transition.finished.catch(() => undefined),
+                        new Promise(resolve => setTimeout(resolve, 100)),
+                    ]);
+                    console.debug('[ScriptVault] Dashboard view transition timed out; committed without waiting for animation.');
+                } else if (transitionOutcome.error) {
+                    const error = transitionOutcome.error;
+                    if (updateError) throw updateError;
+                    console.debug('[ScriptVault] Dashboard view transition settled without animation:', error?.message || error);
+                }
+                return await updateResult;
+            } catch (error) {
+                if (!updateCalled) return await update();
+                throw error;
+            } finally {
                 root.classList.remove(className);
-            };
-            transition.finished.then(cleanup, cleanup);
-            return transition;
-        } catch (error) {
-            root.classList.remove(className);
-            if (!updateCalled) return update();
-            throw error;
-        }
+            }
+        };
+
+        // A second transition cannot start while the first one is still in its
+        // update callback. Serialize them to avoid InvalidStateError and to
+        // keep deep-link focus behind the committed panel state.
+        const operation = dashboardViewTransitionQueue.catch(() => undefined).then(perform);
+        dashboardViewTransitionQueue = operation.catch(() => undefined);
+        return operation;
     }
 
     function setEditorTab(panelId, options = {}) {
@@ -1288,13 +1358,21 @@
 
         const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
         target.scrollIntoView({ block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
-        requestAnimationFrame(() => target.focus({ preventScroll: true }));
+        const focusTarget = () => {
+            if (target.isConnected && !target.hidden) target.focus({ preventScroll: true });
+        };
+        // switchTab has already awaited the dashboard transition. Focus once
+        // immediately so a renderer that misses the next animation frame does
+        // not leave keyboard users on the rail, then repeat after layout settles
+        // for browsers that move focus while completing a smooth scroll.
+        focusTarget();
+        requestAnimationFrame(focusTarget);
 
         if (workbenchDestinationTimer) clearTimeout(workbenchDestinationTimer);
         workbenchDestinationTimer = setTimeout(() => {
             focusSurface.removeAttribute('data-workbench-focus');
             workbenchDestinationTimer = null;
-        }, 1800);
+        }, 5000);
         return true;
     }
 
@@ -16081,13 +16159,17 @@
             A11y.trapFocus(modalSurface);
             modalFocusManaged = true;
         }
-        requestAnimationFrame(() => {
+        const focusPreferredModalControl = () => {
             const preferredFocus = elements.modalActions?.querySelector('.btn-primary')
                 || elements.modalActions?.querySelector('button')
                 || elements.modalClose
                 || modalSurface;
             preferredFocus?.focus?.();
-        });
+        };
+        // Keep destructive-dialog focus deterministic even when a backgrounded
+        // or headless renderer does not advance requestAnimationFrame.
+        focusPreferredModalControl();
+        requestAnimationFrame(focusPreferredModalControl);
     }
 
     function hideModal() {
@@ -20190,7 +20272,7 @@
     async function switchTab(name, options = {}) {
         const { updateRoute = true, focusControl = false } = options;
         const nextTab = DASHBOARD_TABS.includes(name) ? name : 'scripts';
-        runDashboardViewTransition('sv-vt-dashboard', () => {
+        await runDashboardViewTransition('sv-vt-dashboard', () => {
             const editorActive = elements.editorOverlay?.classList.contains('active');
             if (editorActive) {
                 if (state.currentScriptId && state.editor && state.openTabs[state.currentScriptId]) {
