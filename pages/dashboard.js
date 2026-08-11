@@ -312,6 +312,9 @@
     const LOCAL_WORKSPACE_DB_NAME = 'scriptvault';
     const LOCAL_WORKSPACE_DB_VERSION = 3;
     const LOCAL_WORKSPACE_STORE = 'localWorkspaceBindings';
+    const LOCAL_WORKSPACE_PROJECT_ROOT_SCRIPT_ID = '__scriptvault_local_project__';
+    const LOCAL_WORKSPACE_PROJECT_POLL_INTERVAL_MS = 5000;
+    const LOCAL_WORKSPACE_PROJECT_MAX_DEPTH = 8;
     const LOCAL_SYNC_FOLDER_BINDING_ID = 'sync_local_folder';
     const LOCAL_SYNC_FOLDER_SCRIPT_ID = '__scriptvault_sync__';
     const LOCAL_SYNC_FOLDER_FILE_NAME = 'scriptvault-backup.json';
@@ -2088,6 +2091,7 @@
         elements.editorCharCount = document.getElementById('editorCharCount');
         elements.editorCursorPos = document.getElementById('editorCursorPos');
         elements.editorLocalWorkspaceStatus = document.getElementById('editorLocalWorkspaceStatus');
+        elements.editorLocalProjectStatus = document.getElementById('editorLocalProjectStatus');
         elements.editorTextarea = document.getElementById('editorTextarea');
         elements.editorTabs = document.querySelectorAll('.editor-tab');
         elements.editorScriptTabsGroup = document.getElementById('editorScriptTabsGroup');
@@ -2156,6 +2160,9 @@
         elements.tbtnBindLocalFile = document.getElementById('tbtnBindLocalFile');
         elements.tbtnRefreshLocalFile = document.getElementById('tbtnRefreshLocalFile');
         elements.tbtnUnbindLocalFile = document.getElementById('tbtnUnbindLocalFile');
+        elements.tbtnBindLocalProject = document.getElementById('tbtnBindLocalProject');
+        elements.tbtnRefreshLocalProject = document.getElementById('tbtnRefreshLocalProject');
+        elements.tbtnUnbindLocalProject = document.getElementById('tbtnUnbindLocalProject');
         elements.tbtnPublishGreasyFork = document.getElementById('tbtnPublishGreasyFork');
         elements.tbtnDebug = document.getElementById('tbtnDebug');
         elements.tbtnShare = document.getElementById('tbtnShare');
@@ -2808,6 +2815,7 @@
         await loadSettings();
         await loadFolders();
         await loadScripts();
+        void refreshLocalWorkspaceProjects().catch(error => console.warn('[ScriptVault] Local project startup scan failed:', error));
         initDashboardTelemetryBus();
         restoreScriptWorkspaceStateFromQuery();
         try { initEditor(); } catch (e) { console.error('[ScriptVault] Editor init failed:', e); }
@@ -10902,6 +10910,9 @@
 
     let localWorkspaceDbPromise = null;
     const localWorkspaceFileObservers = new Map();
+    const localWorkspaceProjectObservers = new Map();
+    const localWorkspaceProjectRoots = new Map();
+    let activeLocalWorkspaceProjectId = '';
 
     function isLocalWorkspaceHandleStorageSupported() {
         return typeof indexedDB !== 'undefined';
@@ -10954,6 +10965,12 @@
             const receipts = db.createObjectStore(PUBLICATION_RECEIPTS_STORE, { keyPath: 'receiptId' });
             receipts.createIndex('by-script', 'scriptId', { unique: false });
             receipts.createIndex('by-created', 'createdAt', { unique: false });
+        }
+
+        if (oldVersion < 3 && db.objectStoreNames.contains(LOCAL_WORKSPACE_STORE)) {
+            const bindings = tx.objectStore(LOCAL_WORKSPACE_STORE);
+            ensureLocalWorkspaceIndex(bindings, 'by-project', 'projectId', { unique: false });
+            ensureLocalWorkspaceIndex(bindings, 'by-relative-path', 'relativePath', { unique: false });
         }
     }
 
@@ -11024,8 +11041,16 @@
         return {
             bindingId: row.bindingId,
             scriptId: row.scriptId,
-            bindingKind: row.bindingKind === 'library' ? 'library' : 'script',
+            bindingKind: row.bindingKind === 'library'
+                ? 'library'
+                : row.bindingKind === 'project'
+                    ? 'project'
+                    : row.bindingKind === 'project-file'
+                        ? 'project-file'
+                        : 'script',
             libraryId: row.bindingKind === 'library' ? row.libraryId : undefined,
+            projectId: row.projectId || undefined,
+            relativePath: row.relativePath || undefined,
             displayName: String(row.displayName || '').slice(0, 160),
             lastKnownSha256: row.lastKnownSha256,
             lastKnownSize: row.lastKnownSize,
@@ -11056,6 +11081,36 @@
             };
             request.onerror = () => reject(request.error || new Error('IndexedDB cursor failed'));
         }));
+    }
+
+    async function getDashboardLocalWorkspaceProjectRecords(projectId = '', bindingKind = '') {
+        if (!isLocalWorkspaceHandleStorageSupported()) return [];
+        return withDashboardLocalWorkspaceStore('readonly', (store) => new Promise((resolve, reject) => {
+            const out = [];
+            const finish = () => resolve(out
+                .filter(row => row?.bindingKind === 'project' || row?.bindingKind === 'project-file')
+                .filter(row => !projectId || row.projectId === projectId)
+                .filter(row => !bindingKind || row.bindingKind === bindingKind)
+                .sort((a, b) => String(a.relativePath || '').localeCompare(String(b.relativePath || ''))));
+            const request = projectId && store.indexNames.contains('by-project')
+                ? store.index('by-project').openCursor(IDBKeyRange.only(projectId))
+                : store.openCursor();
+            request.onsuccess = () => {
+                const cursor = request.result;
+                if (!cursor) {
+                    finish();
+                    return;
+                }
+                out.push(cursor.value);
+                cursor.continue();
+            };
+            request.onerror = () => reject(request.error || new Error('IndexedDB project cursor failed'));
+        }));
+    }
+
+    async function getDashboardLocalWorkspaceProjectSummary(projectId) {
+        const root = (await getDashboardLocalWorkspaceProjectRecords(projectId, 'project'))[0] || null;
+        return root ? summarizeDashboardLocalWorkspaceBinding(root) : null;
     }
 
     async function deleteDashboardLocalWorkspaceBindingsForScript(scriptId, bindingKind = '') {
@@ -12162,7 +12217,7 @@
         }
 
         try {
-            const bindings = await getDashboardLocalWorkspaceBindingsByScript(scriptId);
+            const bindings = await getDashboardLocalWorkspaceBindingsByScript(scriptId, 'script');
             const binding = bindings.find(item => item.bindingKind === 'script') || null;
             patchOpenTabStatus(scriptId, { localWorkspaceBinding: binding }, state.scripts.find(s => s.id === scriptId) || null);
             const activeBindingIds = new Set(bindings.map(item => item.bindingId));
@@ -12571,6 +12626,621 @@
         showToast('Local file unbound', 'success');
     }
 
+    function isLocalWorkspaceProjectAccessSupported() {
+        return typeof LocalWorkspaceProject !== 'undefined'
+            && typeof window.showDirectoryPicker === 'function'
+            && isLocalWorkspaceHandleStorageSupported();
+    }
+
+    function getActiveLocalWorkspaceProjectRoot() {
+        if (activeLocalWorkspaceProjectId && localWorkspaceProjectRoots.has(activeLocalWorkspaceProjectId)) {
+            return localWorkspaceProjectRoots.get(activeLocalWorkspaceProjectId);
+        }
+        const root = [...localWorkspaceProjectRoots.values()]
+            .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0))[0] || null;
+        if (root?.projectId) activeLocalWorkspaceProjectId = root.projectId;
+        return root;
+    }
+
+    function createLocalWorkspaceProjectFileBindingId(projectId, scriptId) {
+        const project = String(projectId || 'project').replace(/[^a-z0-9_-]/gi, '_').slice(0, 80);
+        const script = String(scriptId || 'script').replace(/[^a-z0-9_-]/gi, '_').slice(0, 100);
+        return `local-workspace-project-file-${project}-${script}`.slice(0, 240);
+    }
+
+    function formatLocalWorkspaceProjectStatus(root, manifest = root?.manifest) {
+        const queue = Array.isArray(manifest?.queue) ? manifest.queue : [];
+        const kind = root?.lastErrorKind || root?.lastStatusKind || '';
+        switch (kind) {
+            case 'permission-denied': return 'permission denied';
+            case 'handle-missing': return 'reconnect needed';
+            case 'scan-failed': return 'scan failed';
+            case 'scan-limit': return 'scan limit reached';
+            case 'conflict': return `${queue.length} conflict${queue.length === 1 ? '' : 's'} need review`;
+            case 'changes-pending': return `${queue.length} change${queue.length === 1 ? '' : 's'} need review`;
+            case 'synced': return `synced ${formatTime(root?.lastRefreshAt || root?.updatedAt || Date.now())}`;
+            case 'bound': return 'folder connected';
+            default: return queue.length
+                ? `${queue.length} change${queue.length === 1 ? '' : 's'} need review`
+                : 'folder connected';
+        }
+    }
+
+    function refreshLocalWorkspaceProjectControls() {
+        const supported = isLocalWorkspaceProjectAccessSupported();
+        const root = getActiveLocalWorkspaceProjectRoot();
+        const manifest = root?.manifest && typeof LocalWorkspaceProject !== 'undefined'
+            ? LocalWorkspaceProject.normalizeLocalWorkspaceProjectManifest(root.manifest, {
+                projectId: root.projectId,
+                displayName: root.displayName
+            })
+            : null;
+        const queueCount = manifest?.queue?.length || 0;
+        if (elements.tbtnBindLocalProject) {
+            elements.tbtnBindLocalProject.hidden = !supported;
+            elements.tbtnBindLocalProject.disabled = !supported;
+            elements.tbtnBindLocalProject.title = root ? `Rebind project folder (${root.displayName || root.projectId})` : 'Bind project folder';
+            elements.tbtnBindLocalProject.setAttribute('aria-label', root ? 'Rebind project folder' : 'Bind project folder');
+        }
+        if (elements.tbtnRefreshLocalProject) {
+            elements.tbtnRefreshLocalProject.hidden = !supported;
+            elements.tbtnRefreshLocalProject.disabled = !supported || !root;
+            elements.tbtnRefreshLocalProject.title = queueCount ? `Review ${queueCount} project change${queueCount === 1 ? '' : 's'}` : 'Scan project folder';
+            elements.tbtnRefreshLocalProject.setAttribute('aria-label', queueCount ? 'Review project changes' : 'Scan project folder');
+            const label = elements.tbtnRefreshLocalProject.querySelector('span');
+            if (label) label.textContent = queueCount ? `Review (${queueCount})` : 'Scan Folder';
+        }
+        if (elements.tbtnUnbindLocalProject) {
+            elements.tbtnUnbindLocalProject.hidden = !supported;
+            elements.tbtnUnbindLocalProject.disabled = !supported || !root;
+            elements.tbtnUnbindLocalProject.title = root ? `Unbind ${root.displayName || 'project folder'}` : 'Unbind project folder';
+            elements.tbtnUnbindLocalProject.setAttribute('aria-label', 'Unbind project folder');
+        }
+        if (elements.editorLocalProjectStatus) {
+            if (!supported || !root) {
+                elements.editorLocalProjectStatus.hidden = true;
+                elements.editorLocalProjectStatus.textContent = '';
+                elements.editorLocalProjectStatus.removeAttribute('title');
+            } else {
+                const label = `Project: ${root.displayName || 'Local folder'} (${formatLocalWorkspaceProjectStatus(root, manifest)})`;
+                elements.editorLocalProjectStatus.hidden = false;
+                elements.editorLocalProjectStatus.textContent = label;
+                elements.editorLocalProjectStatus.title = label;
+            }
+        }
+    }
+
+    function projectMetadataFromCode(code) {
+        const source = String(code || '');
+        const read = key => {
+            const match = source.match(new RegExp(`^[ \\t]*//\\s*@${key}\\s+([^\\r\\n]+)`, 'mi'));
+            return match?.[1]?.trim().slice(0, 96) || '';
+        };
+        return { name: read('name'), version: read('version') };
+    }
+
+    async function collectLocalWorkspaceProjectFiles(directoryHandle, prefix = '', depth = 0, files = [], issues = []) {
+        if (!directoryHandle || depth > LOCAL_WORKSPACE_PROJECT_MAX_DEPTH) {
+            issues.push('scan-limit');
+            return { files, issues };
+        }
+        if (typeof directoryHandle.entries !== 'function') {
+            issues.push('directory-iterator-unavailable');
+            return { files, issues };
+        }
+        const entries = [];
+        for await (const item of directoryHandle.entries()) entries.push(item);
+        entries.sort((a, b) => String(a?.[0] || '').localeCompare(String(b?.[0] || '')));
+        for (const [name, handle] of entries) {
+            if (files.length >= LocalWorkspaceProject.MAX_LOCAL_WORKSPACE_PROJECT_FILES) {
+                issues.push('scan-limit');
+                break;
+            }
+            const relativePath = LocalWorkspaceProject.normalizeLocalWorkspaceProjectPath(
+                prefix ? `${prefix}/${name}` : name
+            );
+            if (!relativePath) {
+                issues.push(`invalid-path:${String(name).slice(0, 80)}`);
+                continue;
+            }
+            if (handle?.kind === 'directory') {
+                await collectLocalWorkspaceProjectFiles(handle, relativePath, depth + 1, files, issues);
+                continue;
+            }
+            if (handle?.kind !== 'file' || !LocalWorkspaceProject.isSupportedLocalWorkspaceProjectPath(relativePath)) continue;
+            try {
+                const file = await handle.getFile();
+                if (typeof file.size === 'number' && file.size > LOCAL_WORKSPACE_MAX_SCRIPT_BYTES) {
+                    issues.push(`too-large:${relativePath}`);
+                    continue;
+                }
+                const text = await file.text();
+                const sha256 = await sha256HexForPublicationText(text);
+                if (!sha256) {
+                    issues.push(`hash-failed:${relativePath}`);
+                    continue;
+                }
+                const metadata = projectMetadataFromCode(text);
+                files.push({
+                    handle,
+                    observation: {
+                        relativePath,
+                        sha256,
+                        version: metadata.version,
+                        bytes: typeof file.size === 'number' ? file.size : new TextEncoder().encode(text).length,
+                        modified: typeof file.lastModified === 'number' ? file.lastModified : null
+                    }
+                });
+            } catch (error) {
+                issues.push(`read-failed:${relativePath}:${classifyLocalWorkspaceError(error)}`);
+            }
+        }
+        return { files, issues };
+    }
+
+    async function matchLocalWorkspaceProjectFiles(runtimeFiles, existingFileRecords) {
+        const unused = new Set(existingFileRecords.map(record => record.bindingId));
+        for (const runtimeFile of runtimeFiles) {
+            let matched = null;
+            for (const record of existingFileRecords) {
+                if (!unused.has(record.bindingId) || !record.handle || typeof record.handle.isSameEntry !== 'function') continue;
+                try {
+                    if (await record.handle.isSameEntry(runtimeFile.handle)) {
+                        matched = record;
+                        break;
+                    }
+                } catch {}
+            }
+            if (!matched) {
+                const candidates = existingFileRecords.filter(record => unused.has(record.bindingId)
+                    && record.lastKnownSha256
+                    && record.lastKnownSha256 === runtimeFile.observation.sha256);
+                if (candidates.length === 1) matched = candidates[0];
+            }
+            if (matched) {
+                unused.delete(matched.bindingId);
+                runtimeFile.observation.matchedEntryScriptId = matched.scriptId;
+                runtimeFile.previousRecord = matched;
+            }
+        }
+        return runtimeFiles;
+    }
+
+    async function getLocalWorkspaceProjectScriptObservations(manifest) {
+        const ids = new Set((manifest?.entries || []).map(entry => entry.scriptId));
+        const observations = [];
+        for (const script of state.scripts || []) {
+            if (!script?.id || !ids.has(script.id)) continue;
+            observations.push({
+                id: script.id,
+                sha256: await sha256HexForPublicationText(script.code || ''),
+                version: script.metadata?.version || script.meta?.version || ''
+            });
+        }
+        return observations;
+    }
+
+    async function persistLocalWorkspaceProjectRoot(root, manifest, patch = {}) {
+        const normalizedManifest = LocalWorkspaceProject.normalizeLocalWorkspaceProjectManifest(manifest, {
+            projectId: root.projectId,
+            displayName: root.displayName
+        });
+        const next = {
+            ...root,
+            ...patch,
+            bindingKind: 'project',
+            projectId: root.projectId,
+            manifest: normalizedManifest,
+            updatedAt: Date.now()
+        };
+        await putDashboardLocalWorkspaceBinding(next);
+        localWorkspaceProjectRoots.set(root.projectId, next);
+        refreshLocalWorkspaceProjectControls();
+        return next;
+    }
+
+    async function recordLocalWorkspaceProjectScanFailure(root, errorKind, message, options = {}) {
+        const next = await persistLocalWorkspaceProjectRoot(root, root.manifest, {
+            lastRefreshAt: Date.now(),
+            lastErrorKind: errorKind,
+            lastStatusKind: 'scan-failed'
+        });
+        if (!options.quiet) showToast(message || 'Project folder scan failed', 'error');
+        return next;
+    }
+
+    async function scanLocalWorkspaceProject(projectId, options = {}) {
+        const root = localWorkspaceProjectRoots.get(projectId) || await getDashboardLocalWorkspaceBindingRecord(`local-workspace-project-${projectId}`);
+        if (!root?.handle || root.bindingKind !== 'project') {
+            if (root) await recordLocalWorkspaceProjectScanFailure(root, 'handle-missing', 'Project folder handle is missing. Bind the folder again.', options);
+            return null;
+        }
+        const permissionState = options.skipPermissionPrompt
+            ? await queryLocalWorkspacePermission(root.handle, 'read')
+            : await requestLocalWorkspacePermission(root.handle, 'read');
+        if (permissionState !== 'granted') {
+            await persistLocalWorkspaceProjectRoot(root, root.manifest, {
+                permissionState,
+                lastRefreshAt: Date.now(),
+                lastErrorKind: 'permission-denied',
+                lastStatusKind: 'permission-denied'
+            });
+            if (!options.quiet) showToast('Project folder permission was not granted', 'warning');
+            return null;
+        }
+
+        const currentManifest = LocalWorkspaceProject.normalizeLocalWorkspaceProjectManifest(root.manifest, {
+            projectId: root.projectId,
+            displayName: root.displayName
+        });
+        const existingFileRecords = await getDashboardLocalWorkspaceProjectRecords(projectId, 'project-file');
+        const collected = await collectLocalWorkspaceProjectFiles(root.handle);
+        if (collected.issues.length > 0) {
+            const issueKind = collected.issues.some(issue => issue.startsWith('too-large')) ? 'too-large' : 'scan-failed';
+            await recordLocalWorkspaceProjectScanFailure(
+                { ...root, permissionState },
+                issueKind,
+                `Project folder scan needs attention: ${collected.issues.slice(0, 2).join(', ')}`,
+                options
+            );
+            return { manifest: currentManifest, actions: [], issues: collected.issues };
+        }
+        await matchLocalWorkspaceProjectFiles(collected.files, existingFileRecords);
+        const scriptObservations = await getLocalWorkspaceProjectScriptObservations(currentManifest);
+        const result = LocalWorkspaceProject.reconcileLocalWorkspaceProject(
+            currentManifest,
+            collected.files.map(item => item.observation),
+            scriptObservations,
+            Date.now()
+        );
+        const actionByScriptId = new Map(result.actions.map(action => [action.scriptId, action]));
+        const currentScriptIds = new Set();
+        for (const runtimeFile of collected.files) {
+            const entry = result.manifest.entries.find(item => item.relativePath === runtimeFile.observation.relativePath);
+            if (!entry) continue;
+            currentScriptIds.add(entry.scriptId);
+            const previous = runtimeFile.previousRecord || existingFileRecords.find(item => item.scriptId === entry.scriptId);
+            const action = actionByScriptId.get(entry.scriptId);
+            await putDashboardLocalWorkspaceBinding({
+                ...(previous || {}),
+                bindingId: previous?.bindingId || createLocalWorkspaceProjectFileBindingId(projectId, entry.scriptId),
+                scriptId: entry.scriptId,
+                bindingKind: 'project-file',
+                projectId,
+                relativePath: entry.relativePath,
+                handle: runtimeFile.handle,
+                displayName: runtimeFile.handle?.name || entry.relativePath.split('/').pop() || entry.relativePath,
+                lastKnownSha256: runtimeFile.observation.sha256,
+                lastKnownSize: runtimeFile.observation.bytes,
+                lastKnownModified: runtimeFile.observation.modified,
+                permissionState: 'granted',
+                lastRefreshAt: Date.now(),
+                lastErrorKind: '',
+                lastStatusKind: action?.kind === 'conflict' ? 'conflict' : action ? 'changes-pending' : 'synced'
+            });
+        }
+        for (const record of existingFileRecords) {
+            if (currentScriptIds.has(record.scriptId)) continue;
+            const entry = result.manifest.entries.find(item => item.scriptId === record.scriptId);
+            if (!entry) continue;
+            await putDashboardLocalWorkspaceBinding({
+                ...record,
+                relativePath: entry.relativePath,
+                lastRefreshAt: Date.now(),
+                lastErrorKind: '',
+                lastStatusKind: 'file-missing'
+            });
+        }
+        const statusKind = result.actions.some(action => action.kind === 'conflict')
+            ? 'conflict'
+            : result.actions.length ? 'changes-pending' : 'synced';
+        const nextRoot = await persistLocalWorkspaceProjectRoot({ ...root, permissionState }, result.manifest, {
+            permissionState,
+            lastRefreshAt: Date.now(),
+            lastErrorKind: result.issues.length ? 'scan-failed' : '',
+            lastStatusKind: result.issues.length ? 'scan-failed' : statusKind
+        });
+        localWorkspaceProjectRoots.set(projectId, nextRoot);
+        await ensureLocalWorkspaceProjectObserver(projectId);
+        refreshLocalWorkspaceProjectControls();
+        if (!options.quiet && result.actions.length) showLocalWorkspaceProjectQueue(projectId);
+        return result;
+    }
+
+    function disconnectLocalWorkspaceProjectObserver(projectId) {
+        const slot = localWorkspaceProjectObservers.get(projectId);
+        if (!slot) return;
+        if (slot.timerId) clearTimeout(slot.timerId);
+        try { slot.observer?.disconnect?.(); } catch {}
+        localWorkspaceProjectObservers.delete(projectId);
+    }
+
+    function scheduleLocalWorkspaceProjectScan(projectId, delay = LOCAL_WORKSPACE_PROJECT_POLL_INTERVAL_MS) {
+        const slot = localWorkspaceProjectObservers.get(projectId);
+        if (!slot || slot.scanning) return;
+        if (slot.timerId) clearTimeout(slot.timerId);
+        slot.timerId = setTimeout(() => {
+            slot.timerId = null;
+            if (slot.scanning) return;
+            slot.scanning = true;
+            void scanLocalWorkspaceProject(projectId, { skipPermissionPrompt: true, quiet: true, source: 'observer' })
+                .catch(error => console.warn('[ScriptVault] Local project scan failed:', error))
+                .finally(() => {
+                    slot.scanning = false;
+                    if (localWorkspaceProjectObservers.has(projectId)) scheduleLocalWorkspaceProjectScan(projectId);
+                });
+        }, Math.max(750, Number(delay) || LOCAL_WORKSPACE_PROJECT_POLL_INTERVAL_MS));
+    }
+
+    async function ensureLocalWorkspaceProjectObserver(projectId) {
+        const root = localWorkspaceProjectRoots.get(projectId);
+        if (!root?.handle) return false;
+        const existing = localWorkspaceProjectObservers.get(projectId);
+        if (existing) return true;
+        const slot = { projectId, observer: null, timerId: null, scanning: false };
+        localWorkspaceProjectObservers.set(projectId, slot);
+        if (typeof window.FileSystemObserver === 'function') {
+            try {
+                const observer = new window.FileSystemObserver(() => scheduleLocalWorkspaceProjectScan(projectId, 750));
+                await observer.observe(root.handle);
+                slot.observer = observer;
+                slot.watchMode = 'observer';
+                return true;
+            } catch (error) {
+                console.warn('[ScriptVault] Local project observer unavailable:', error);
+            }
+        }
+        slot.watchMode = 'poll';
+        scheduleLocalWorkspaceProjectScan(projectId);
+        return true;
+    }
+
+    function formatLocalWorkspaceProjectAction(action) {
+        const labels = {
+            added: 'New file',
+            changed: 'Changed file',
+            renamed: 'Renamed file',
+            deleted: 'Deleted file',
+            conflict: 'Conflict',
+            orphaned: 'Script missing'
+        };
+        return labels[action?.kind] || 'Project change';
+    }
+
+    function localWorkspaceProjectHashLabel(hash) {
+        return hash ? `SHA-256 ${hash.slice(0, 12)}…` : 'hash unavailable';
+    }
+
+    function showLocalWorkspaceProjectQueue(projectId) {
+        const root = localWorkspaceProjectRoots.get(projectId);
+        const manifest = root?.manifest && LocalWorkspaceProject.normalizeLocalWorkspaceProjectManifest(root.manifest, {
+            projectId,
+            displayName: root.displayName
+        });
+        const queue = manifest?.queue || [];
+        if (!root || !queue.length) {
+            showToast('Project folder has no pending changes', 'info');
+            refreshLocalWorkspaceProjectControls();
+            return;
+        }
+        const html = `<p class="panel-empty-inline">Review each change before executable code enters ScriptVault. Conflicts show the folder and ScriptVault hashes; nothing is overwritten automatically.</p>${queue.map(action => {
+            const conflict = action.kind === 'conflict';
+            const detail = conflict
+                ? `<div class="local-project-review-detail">Folder: ${escapeHtml(localWorkspaceProjectHashLabel(action.sha256))} · v${escapeHtml(action.version || '?')}<br>ScriptVault: ${escapeHtml(localWorkspaceProjectHashLabel(action.scriptSha256))} · v${escapeHtml(action.scriptVersion || '?')}</div>`
+                : `<div class="local-project-review-detail">Folder: ${escapeHtml(localWorkspaceProjectHashLabel(action.sha256))} · v${escapeHtml(action.version || '?')}</div>`;
+            const primaryLabel = action.kind === 'deleted' || action.kind === 'orphaned' ? 'Unmap' : 'Apply folder';
+            const primaryResolution = action.kind === 'deleted' || action.kind === 'orphaned' ? 'unmap' : 'apply';
+            return `<div class="local-project-review-item"><div><strong>${escapeHtml(formatLocalWorkspaceProjectAction(action))}</strong><div class="local-project-review-path">${escapeHtml(action.previousPath ? `${action.previousPath} → ${action.relativePath}` : action.relativePath)}</div>${detail}</div><div class="local-project-review-actions"><button type="button" class="btn ${conflict ? 'btn-danger' : 'btn-primary'}" data-local-project-action="${escapeHtml(action.actionId)}" data-local-project-resolution="${primaryResolution}">${primaryLabel}</button>${conflict ? `<button type="button" class="btn" data-local-project-action="${escapeHtml(action.actionId)}" data-local-project-resolution="keep-script">Keep ScriptVault</button>` : ''}</div></div>`;
+        }).join('')}`;
+        showModal('Review local project changes', html, [
+            { label: 'Close', callback: () => closeModalShell() }
+        ]);
+        elements.modalBody?.querySelectorAll('[data-local-project-action]')?.forEach(button => {
+            button.addEventListener('click', () => {
+                const actionId = button.dataset.localProjectAction;
+                const resolution = button.dataset.localProjectResolution;
+                closeModalShell();
+                void runButtonTask(button, () => resolveLocalWorkspaceProjectActionFromQueue(projectId, actionId, resolution), {
+                    errorMessage: 'Failed to resolve local project change'
+                });
+            });
+        });
+    }
+
+    async function resolveLocalWorkspaceProjectActionFromQueue(projectId, actionId, resolution) {
+        const root = localWorkspaceProjectRoots.get(projectId);
+        const manifest = root?.manifest && LocalWorkspaceProject.normalizeLocalWorkspaceProjectManifest(root.manifest, {
+            projectId,
+            displayName: root.displayName
+        });
+        const action = manifest?.queue?.find(item => item.actionId === actionId);
+        if (!root || !manifest || !action) return false;
+        const fileRecords = await getDashboardLocalWorkspaceProjectRecords(projectId, 'project-file');
+        const fileRecord = fileRecords.find(record => record.scriptId === action.scriptId)
+            || fileRecords.find(record => record.relativePath === action.relativePath);
+        if (resolution === 'unmap' || action.kind === 'deleted' || action.kind === 'orphaned') {
+            const nextManifest = LocalWorkspaceProject.resolveLocalWorkspaceProjectAction(manifest, actionId, 'unmap');
+            if (fileRecord) await deleteDashboardLocalWorkspaceBinding(fileRecord.bindingId);
+            await persistLocalWorkspaceProjectRoot(root, nextManifest, { lastRefreshAt: Date.now(), lastErrorKind: '', lastStatusKind: 'synced' });
+            showToast(`Unmapped ${action.relativePath}`, 'success');
+            return true;
+        }
+        const script = state.scripts.find(item => item.id === action.scriptId) || null;
+        if (resolution === 'keep-script') {
+            const scriptSha256 = script ? await sha256HexForPublicationText(script.code || '') : action.scriptSha256;
+            const nextManifest = LocalWorkspaceProject.resolveLocalWorkspaceProjectAction(manifest, actionId, 'keep-script', scriptSha256, script?.metadata?.version || script?.meta?.version || '');
+            await persistLocalWorkspaceProjectRoot(root, nextManifest, { lastRefreshAt: Date.now(), lastErrorKind: '', lastStatusKind: nextManifest.queue.length ? 'changes-pending' : 'synced' });
+            if (fileRecord) await putDashboardLocalWorkspaceBinding({ ...fileRecord, lastRefreshAt: Date.now(), lastErrorKind: '', lastStatusKind: 'reviewed-script-kept' });
+            showToast(`Kept ScriptVault code for ${action.relativePath}`, 'success');
+            return true;
+        }
+        if (!fileRecord?.handle) {
+            await persistLocalWorkspaceProjectRoot(root, manifest, { lastRefreshAt: Date.now(), lastErrorKind: 'handle-missing', lastStatusKind: 'scan-failed' });
+            showToast('The project file handle is missing. Reconnect the folder.', 'warning');
+            return false;
+        }
+        const fileRead = await readLocalWorkspaceFileText(fileRecord.handle);
+        const currentHash = await sha256HexForPublicationText(fileRead.text);
+        if (action.sha256 && currentHash && action.sha256 !== currentHash) {
+            await scanLocalWorkspaceProject(projectId, { skipPermissionPrompt: true, quiet: true, source: 'stale-review' });
+            showToast('The folder changed while this review was open. Review the new version.', 'warning');
+            return false;
+        }
+        if (!script || script.code !== fileRead.text) {
+            const response = await chrome.runtime.sendMessage({
+                action: 'saveScript',
+                scriptId: action.scriptId,
+                code: fileRead.text,
+                markModified: true,
+                trust: {
+                    recordReceipt: true,
+                    operation: 'local-save',
+                    sourceKind: 'local-project',
+                    sourceLabel: action.relativePath,
+                    suppressMetadataSourceFallback: true
+                }
+            });
+            if (response?.error) throw new Error(response.error);
+            await loadScripts();
+        }
+        const nextManifest = LocalWorkspaceProject.resolveLocalWorkspaceProjectAction(manifest, actionId, 'apply');
+        await persistLocalWorkspaceProjectRoot(root, nextManifest, { lastRefreshAt: Date.now(), lastErrorKind: '', lastStatusKind: nextManifest.queue.length ? 'changes-pending' : 'synced' });
+        await putDashboardLocalWorkspaceBinding({
+            ...fileRecord,
+            relativePath: action.relativePath,
+            lastKnownSha256: currentHash || action.sha256,
+            lastKnownSize: fileRead.lastKnownSize,
+            lastKnownModified: fileRead.lastKnownModified,
+            permissionState: 'granted',
+            lastRefreshAt: Date.now(),
+            lastErrorKind: '',
+            lastStatusKind: 'synced'
+        });
+        showToast(`${action.relativePath} applied`, 'success');
+        return true;
+    }
+
+    async function bindLocalWorkspaceProject() {
+        if (!isLocalWorkspaceProjectAccessSupported()) {
+            showToast('Project folder binding is not available in this browser', 'warning');
+            refreshLocalWorkspaceProjectControls();
+            return false;
+        }
+        let handle;
+        try {
+            handle = await window.showDirectoryPicker({ id: 'scriptvault-local-project', mode: 'read' });
+        } catch (error) {
+            if (error?.name !== 'AbortError') showToast(error?.message || 'Failed to choose project folder', 'error');
+            return false;
+        }
+        if (!handle) return false;
+        const permissionState = await requestLocalWorkspacePermission(handle, 'read');
+        if (permissionState !== 'granted') {
+            showToast('Project folder permission was not granted', 'warning');
+            return false;
+        }
+        const existingRoots = [...localWorkspaceProjectRoots.values()];
+        for (const existing of existingRoots) {
+            if (typeof existing.handle?.isSameEntry !== 'function') continue;
+            try {
+                if (await existing.handle.isSameEntry(handle)) {
+                    activeLocalWorkspaceProjectId = existing.projectId;
+                    await scanLocalWorkspaceProject(existing.projectId, { skipPermissionPrompt: true, source: 'bind' });
+                    return true;
+                }
+            } catch {}
+        }
+        const projectId = LocalWorkspaceProject.createLocalWorkspaceProjectId(handle.name || 'project', Date.now(), Math.random().toString(36).slice(2));
+        const manifest = LocalWorkspaceProject.normalizeLocalWorkspaceProjectManifest({
+            projectId,
+            displayName: handle.name || 'Local project',
+            entries: [],
+            queue: []
+        }, { projectId, displayName: handle.name || 'Local project' });
+        const root = {
+            bindingId: `local-workspace-project-${projectId}`,
+            scriptId: LOCAL_WORKSPACE_PROJECT_ROOT_SCRIPT_ID,
+            bindingKind: 'project',
+            projectId,
+            handle,
+            displayName: handle.name || 'Local project',
+            manifest,
+            permissionState,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            lastRefreshAt: null,
+            lastErrorKind: '',
+            lastStatusKind: 'bound'
+        };
+        await putDashboardLocalWorkspaceBinding(root);
+        localWorkspaceProjectRoots.set(projectId, root);
+        activeLocalWorkspaceProjectId = projectId;
+        await ensureLocalWorkspaceProjectObserver(projectId);
+        await scanLocalWorkspaceProject(projectId, { skipPermissionPrompt: true, source: 'bind' });
+        showToast(`Project folder selected: ${root.displayName}`, 'success');
+        return true;
+    }
+
+    async function refreshLocalWorkspaceProject() {
+        const root = getActiveLocalWorkspaceProjectRoot();
+        if (!root) {
+            showToast('Bind a project folder first', 'warning');
+            return false;
+        }
+        const queue = root.manifest?.queue || [];
+        if (queue.length) {
+            showLocalWorkspaceProjectQueue(root.projectId);
+            return true;
+        }
+        return !!(await scanLocalWorkspaceProject(root.projectId, { source: 'manual' }));
+    }
+
+    async function unbindLocalWorkspaceProject() {
+        const root = getActiveLocalWorkspaceProjectRoot();
+        if (!root) {
+            showToast('No project folder is bound', 'info');
+            return false;
+        }
+        const confirmed = await showConfirmModal(
+            'Unbind project folder?',
+            `Forget ${root.displayName || 'this folder'} and its path-to-script mapping? ScriptVault scripts remain installed.`,
+            { confirmLabel: 'Unbind Folder', tone: 'danger' }
+        );
+        if (!confirmed) return false;
+        disconnectLocalWorkspaceProjectObserver(root.projectId);
+        const records = await getDashboardLocalWorkspaceProjectRecords(root.projectId, 'project-file');
+        await Promise.all(records.map(record => deleteDashboardLocalWorkspaceBinding(record.bindingId)));
+        await deleteDashboardLocalWorkspaceBinding(root.bindingId);
+        localWorkspaceProjectRoots.delete(root.projectId);
+        activeLocalWorkspaceProjectId = '';
+        refreshLocalWorkspaceProjectControls();
+        showToast('Project folder unbound; scripts were kept', 'success');
+        return true;
+    }
+
+    async function refreshLocalWorkspaceProjects() {
+        if (!isLocalWorkspaceProjectAccessSupported()) {
+            refreshLocalWorkspaceProjectControls();
+            return [];
+        }
+        const roots = await getDashboardLocalWorkspaceProjectRecords('', 'project').catch(() => []);
+        localWorkspaceProjectRoots.clear();
+        for (const root of roots) {
+            if (!root?.projectId || !root.handle) continue;
+            localWorkspaceProjectRoots.set(root.projectId, root);
+        }
+        if (!activeLocalWorkspaceProjectId || !localWorkspaceProjectRoots.has(activeLocalWorkspaceProjectId)) {
+            activeLocalWorkspaceProjectId = roots[0]?.projectId || '';
+        }
+        refreshLocalWorkspaceProjectControls();
+        for (const root of roots) {
+            void scanLocalWorkspaceProject(root.projectId, { skipPermissionPrompt: true, quiet: true, source: 'startup' }).catch(error => {
+                console.warn('[ScriptVault] Local project rehydration failed:', error);
+            });
+        }
+        return roots;
+    }
+
     function updateEditorHeader(script = getCurrentScript()) {
         if (!script) return;
 
@@ -12676,6 +13346,7 @@
             wordWrapButton.classList.toggle('active', !!state.editor.getOption('lineWrapping'));
         }
         refreshLocalWorkspaceControls(script);
+        refreshLocalWorkspaceProjectControls();
     }
 
     function markCurrentEditorDirty() {
@@ -17283,6 +17954,13 @@
         });
         elements.tbtnUnbindLocalFile?.addEventListener('click', event => {
             runButtonTask(event.currentTarget, unbindCurrentScriptLocalFile, { busyLabel: tDashboard('unbindingEllipsis', 'Unbinding...') });
+        });
+        elements.tbtnBindLocalProject?.addEventListener('click', bindLocalWorkspaceProject);
+        elements.tbtnRefreshLocalProject?.addEventListener('click', event => {
+            runButtonTask(event.currentTarget, refreshLocalWorkspaceProject, { busyLabel: 'Scanning...' });
+        });
+        elements.tbtnUnbindLocalProject?.addEventListener('click', event => {
+            runButtonTask(event.currentTarget, unbindLocalWorkspaceProject, { busyLabel: 'Unbinding...' });
         });
         elements.tbtnPublishGreasyFork?.addEventListener('click', event => {
             runButtonTask(event.currentTarget, openGreasyForkPublishHandoff, { busyLabel: tDashboard('preparingEllipsis', 'Preparing...') });

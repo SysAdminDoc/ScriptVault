@@ -7,7 +7,7 @@ import {
   ScriptStorage,
   ScriptValues,
 } from '../src/modules/storage.ts';
-import { closeDB, DB_NAME, StorageBucketNames } from '../src/storage/idb.ts';
+import { closeDB, DB_NAME, DB_VERSION, StorageBucketNames } from '../src/storage/idb.ts';
 import { ValuesDAO } from '../src/storage/script-db.ts';
 
 function makeScript(id = 'alpha', overrides = {}) {
@@ -62,7 +62,7 @@ function requestToPromise(request) {
 }
 
 async function objectStoreNames(factory) {
-  const db = await requestToPromise(factory.open(DB_NAME, 3));
+  const db = await requestToPromise(factory.open(DB_NAME, DB_VERSION));
   const names = Array.from(db.objectStoreNames).sort();
   db.close();
   return names;

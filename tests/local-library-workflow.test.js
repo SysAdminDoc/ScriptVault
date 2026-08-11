@@ -104,7 +104,7 @@ describe('local shared-library workflow', () => {
   });
 
   it('keeps handles local while making normalized snapshots portable', () => {
-    expect(storageTs).toContain("bindingKind?: 'script' | 'library'");
+    expect(storageTs).toContain("export type LocalWorkspaceBindingKind = 'script' | 'library' | 'project' | 'project-file'");
     expect(storageTs).toContain('libraryId?: string');
     expect(coreTs).toContain("'localLibraries'");
     expect(coreTs).toContain('LocalLibraries.normalizeLocalLibrarySnapshots(sanitized.localLibraries)');

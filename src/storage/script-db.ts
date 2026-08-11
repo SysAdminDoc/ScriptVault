@@ -39,7 +39,8 @@ import { withTransaction } from './transaction';
 //   indexes: by-created (createdAt)
 // localWorkspaceBindings:
 //   keyPath: 'bindingId'
-//   indexes: by-script (scriptId)
+//   indexes: by-script (scriptId), by-project (projectId),
+//            by-relative-path (relativePath)
 // publicationReceipts:
 //   keyPath: 'receiptId'
 //   indexes: by-script (scriptId), by-created (createdAt)
@@ -104,12 +105,18 @@ function retainStatsUrl(url: unknown, mode: StatsUrlRetentionMode): string | und
   }
 }
 
+export type LocalWorkspaceBindingKind = 'script' | 'library' | 'project' | 'project-file';
+
 export interface LocalWorkspaceBindingRecord {
   bindingId: string;
   scriptId: string;
-  bindingKind?: 'script' | 'library';
+  bindingKind?: LocalWorkspaceBindingKind;
   libraryId?: string;
+  projectId?: string;
+  relativePath?: string;
+  manifest?: Record<string, unknown>;
   handle?: unknown;
+  fileHandle?: unknown;
   displayName: string;
   lastKnownSha256?: string;
   lastKnownSize?: number;
@@ -125,8 +132,10 @@ export interface LocalWorkspaceBindingRecord {
 export interface LocalWorkspaceBindingSummary {
   bindingId: string;
   scriptId: string;
-  bindingKind: 'script' | 'library';
+  bindingKind: LocalWorkspaceBindingKind;
   libraryId?: string;
+  projectId?: string;
+  relativePath?: string;
   displayName: string;
   lastKnownSha256?: string;
   lastKnownSize?: number;
@@ -301,6 +310,12 @@ function upgradeSchema(
     const receipts = db.createObjectStore(Stores.publicationReceipts, { keyPath: 'receiptId' });
     receipts.createIndex('by-script', 'scriptId', { unique: false });
     receipts.createIndex('by-created', 'createdAt', { unique: false });
+  }
+
+  if (oldVersion < 3 && db.objectStoreNames.contains(Stores.localWorkspaceBindings)) {
+    const bindings = _tx.objectStore(Stores.localWorkspaceBindings);
+    if (!bindings.indexNames.contains('by-project')) bindings.createIndex('by-project', 'projectId', { unique: false });
+    if (!bindings.indexNames.contains('by-relative-path')) bindings.createIndex('by-relative-path', 'relativePath', { unique: false });
   }
 }
 
@@ -662,6 +677,8 @@ function summarizeLocalWorkspaceBinding(row: LocalWorkspaceBindingRecord): Local
     scriptId,
     bindingKind,
     libraryId,
+    projectId,
+    relativePath,
     displayName,
     lastKnownSha256,
     lastKnownSize,
@@ -676,8 +693,16 @@ function summarizeLocalWorkspaceBinding(row: LocalWorkspaceBindingRecord): Local
   return {
     bindingId,
     scriptId,
-    bindingKind: bindingKind === 'library' ? 'library' : 'script',
+    bindingKind: bindingKind === 'library'
+      ? 'library'
+      : bindingKind === 'project'
+        ? 'project'
+        : bindingKind === 'project-file'
+          ? 'project-file'
+          : 'script',
     libraryId: bindingKind === 'library' ? libraryId : undefined,
+    projectId: projectId || undefined,
+    relativePath: relativePath || undefined,
     displayName,
     lastKnownSha256,
     lastKnownSize,
@@ -736,6 +761,26 @@ export const LocalWorkspaceBindingsDAO = {
       await forEachCursor<LocalWorkspaceBindingRecord>(idx, (row) => {
         out.push(summarizeLocalWorkspaceBinding(row));
       }, IDBKeyRange.only(scriptId));
+      return out;
+    });
+  },
+
+  async getByProject(projectId: string): Promise<LocalWorkspaceBindingSummary[]> {
+    await openScriptDB();
+    return withTransaction(Stores.localWorkspaceBindings, 'readonly', async (tx) => {
+      const out: LocalWorkspaceBindingSummary[] = [];
+      const store = tx.objectStore(Stores.localWorkspaceBindings);
+      if (store.indexNames.contains('by-project')) {
+        const idx = store.index('by-project');
+        await forEachCursor<LocalWorkspaceBindingRecord>(idx, (row) => {
+          out.push(summarizeLocalWorkspaceBinding(row));
+        }, IDBKeyRange.only(projectId));
+      } else {
+        const rows = await reqToPromise(store.getAll() as IDBRequest<LocalWorkspaceBindingRecord[]>);
+        for (const row of rows ?? []) {
+          if (row.projectId === projectId) out.push(summarizeLocalWorkspaceBinding(row));
+        }
+      }
       return out;
     });
   },

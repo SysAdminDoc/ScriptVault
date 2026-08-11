@@ -4020,6 +4020,10 @@ function normalizeLocalWorkspaceStatusKind(binding) {
     case 'applied':
     case 'unchanged':
     case 'review-cancelled':
+    case 'changes-pending':
+    case 'conflict':
+    case 'synced':
+    case 'scan-failed':
     case 'permission-denied':
     case 'file-missing':
     case 'handle-missing':
@@ -5376,8 +5380,14 @@ const LOCAL_WORKSPACE_SCRIPT_SETTING_KEYS = [
   'localWorkspaceBinding',
   'localWorkspaceBindingId',
   'localWorkspaceBindings',
+  'localProject',
+  'localProjectId',
+  'localProjectManifest',
+  'localProjectBindingId',
   'localFileHandle',
   'localFilePath',
+  'relativePath',
+  'projectPath',
   'absolutePath'
 ];
 

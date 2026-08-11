@@ -414,6 +414,16 @@ describe('runtime import/export archive identity', () => {
       localWorkspace: { displayName: 'local.user.js', handle: { name: 'local.user.js' } },
       localFilePath: 'C:\\Users\\--\\secret\\local.user.js',
       absolutePath: 'C:\\Users\\--\\secret\\local.user.js',
+      localProject: {
+        projectId: 'project-secret',
+        manifest: { relativePath: 'nested/secret.user.js', code: 'window.secret = true;' },
+        handle: { name: 'secret-project' },
+      },
+      localProjectId: 'project-secret',
+      localProjectManifest: { relativePath: 'nested/secret.user.js', code: 'window.secret = true;' },
+      localProjectBindingId: 'binding-project-secret',
+      relativePath: 'nested/secret.user.js',
+      projectPath: 'C:\\Users\\--\\secret\\project',
     };
     const harness = createRuntimeHarness([script]);
 
@@ -425,9 +435,19 @@ describe('runtime import/export archive identity', () => {
       'localWorkspace',
       'localFilePath',
       'absolutePath',
+      'localProject',
+      'localProjectId',
+      'localProjectManifest',
+      'localProjectBindingId',
+      'relativePath',
+      'projectPath',
     ]));
     expect(JSON.stringify(exported)).not.toContain('binding-secret');
+    expect(JSON.stringify(exported)).not.toContain('project-secret');
+    expect(JSON.stringify(exported)).not.toContain('binding-project-secret');
     expect(JSON.stringify(exported)).not.toContain('secret\\\\local.user.js');
+    expect(JSON.stringify(exported)).not.toContain('nested/secret.user.js');
+    expect(JSON.stringify(exported)).not.toContain('secret\\\\project');
     expect(JSON.stringify(exported)).not.toContain('handle');
   });
 

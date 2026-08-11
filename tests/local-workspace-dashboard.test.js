@@ -93,6 +93,8 @@ describe('dashboard local workspace binding', () => {
     expect(dashboardJs).toContain('const LOCAL_WORKSPACE_MAX_SCRIPT_BYTES = 5 * 1024 * 1024');
     expect(dashboardJs).toContain("db.createObjectStore(LOCAL_WORKSPACE_STORE, { keyPath: 'bindingId' })");
     expect(dashboardJs).toContain("bindings.createIndex('by-script', 'scriptId', { unique: false })");
+    expect(dashboardJs).toContain("ensureLocalWorkspaceIndex(bindings, 'by-project', 'projectId', { unique: false })");
+    expect(dashboardJs).toContain("ensureLocalWorkspaceIndex(bindings, 'by-relative-path', 'relativePath', { unique: false })");
 
     const summarize = extractFunction(dashboardJs, 'summarizeDashboardLocalWorkspaceBinding');
     expect(summarize).not.toMatch(/\bhandle\b/);
@@ -236,5 +238,18 @@ describe('dashboard local workspace binding', () => {
     expect(unbindFn).toContain('localWorkspaceBinding: null');
     expect(unbindFn).not.toContain("action: 'deleteScript'");
     expect(unbindFn).not.toContain("action: 'saveScript'");
+  });
+
+  it('exposes a folder project workflow with stable IDs and an explicit review queue', () => {
+    expect(dashboardHtml).toContain('../modules/local-workspace-project.js');
+    expect(dashboardHtml).toContain('id="tbtnBindLocalProject"');
+    expect(dashboardHtml).toContain('id="editorLocalProjectStatus" role="status" aria-live="polite"');
+    expect(dashboardJs).toContain("typeof window.showDirectoryPicker === 'function'");
+    expect(dashboardJs).toContain('LocalWorkspaceProject.reconcileLocalWorkspaceProject');
+    expect(dashboardJs).toContain('LocalWorkspaceProject.resolveLocalWorkspaceProjectAction');
+    expect(dashboardJs).toContain('showLocalWorkspaceProjectQueue');
+    expect(dashboardJs).toContain('matchedEntryScriptId');
+    expect(dashboardJs).toContain("bindingKind: 'project-file'");
+    expect(dashboardJs).toContain("sourceKind: 'local-project'");
   });
 });

@@ -158,6 +158,7 @@ log and CSP reporter.
 - **Column visibility** &mdash; Toggle which columns appear in the script table
 - **Full-text search** &mdash; Prefix with `code:` to search inside script source code
 - **Copy install URL** &mdash; One-click clipboard copy of script download/update URL
+- **Folder project binding** &mdash; Bind a local folder of `.user.js`/`.user.css` files, reconnect it after restart, and review additions, renames, deletions, changes, and conflicts before code is applied; handles and source stay local
 
 ### Advanced URL Matching
 

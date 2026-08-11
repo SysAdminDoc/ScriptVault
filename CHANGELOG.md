@@ -4,6 +4,10 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased] — Minimal workbench surfaces
 
+- Added reviewable local folder projects for `.user.js` and `.user.css` files,
+  with stable path-to-script mapping, restart reconnection, bounded scan/watch
+  updates, explicit add/rename/delete/change/conflict decisions, and redacted
+  project metadata outside local storage.
 - Persisted a bounded, redacted execution journal across service-worker
   restarts, surfaced latest age/stale outcomes in diagnostics surfaces, and
   sanitized journal trace exports.

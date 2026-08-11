@@ -103,6 +103,14 @@
       "notes": "Generated from TypeScript by scripts/generate-ts-runtime-modules.mjs for the authenticated execution telemetry trust boundary."
     },
     {
+      "runtime": "modules/local-workspace-project.js",
+      "sources": [
+        "src/modules/local-workspace-project.ts"
+      ],
+      "status": "promoted",
+      "notes": "Generated from src/modules/local-workspace-project.ts for bounded local folder manifest reconciliation and privacy-safe portable summaries."
+    },
+    {
       "runtime": "modules/script-source-maps.js",
       "sources": [
         "src/background/script-source-maps.ts"

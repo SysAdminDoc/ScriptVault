@@ -497,6 +497,11 @@ const StorageModule = (() => {
       receipts.createIndex("by-script", "scriptId", { unique: false });
       receipts.createIndex("by-created", "createdAt", { unique: false });
     }
+    if (oldVersion < 3 && db.objectStoreNames.contains(Stores.localWorkspaceBindings)) {
+      const bindings = _tx.objectStore(Stores.localWorkspaceBindings);
+      if (!bindings.indexNames.contains("by-project")) bindings.createIndex("by-project", "projectId", { unique: false });
+      if (!bindings.indexNames.contains("by-relative-path")) bindings.createIndex("by-relative-path", "relativePath", { unique: false });
+    }
   }
   async function openScriptDB() {
     return openStoragePartitionDB("scripts");
@@ -805,6 +810,8 @@ const StorageModule = (() => {
       scriptId,
       bindingKind,
       libraryId,
+      projectId,
+      relativePath,
       displayName,
       lastKnownSha256,
       lastKnownSize,
@@ -819,8 +826,10 @@ const StorageModule = (() => {
     return {
       bindingId,
       scriptId,
-      bindingKind: bindingKind === "library" ? "library" : "script",
+      bindingKind: bindingKind === "library" ? "library" : bindingKind === "project" ? "project" : bindingKind === "project-file" ? "project-file" : "script",
       libraryId: bindingKind === "library" ? libraryId : void 0,
+      projectId: projectId || void 0,
+      relativePath: relativePath || void 0,
       displayName,
       lastKnownSha256,
       lastKnownSize,
@@ -875,6 +884,25 @@ const StorageModule = (() => {
         await forEachCursor(idx, (row) => {
           out.push(summarizeLocalWorkspaceBinding(row));
         }, IDBKeyRange.only(scriptId));
+        return out;
+      });
+    },
+    async getByProject(projectId) {
+      await openScriptDB();
+      return withTransaction(Stores.localWorkspaceBindings, "readonly", async (tx) => {
+        const out = [];
+        const store = tx.objectStore(Stores.localWorkspaceBindings);
+        if (store.indexNames.contains("by-project")) {
+          const idx = store.index("by-project");
+          await forEachCursor(idx, (row) => {
+            out.push(summarizeLocalWorkspaceBinding(row));
+          }, IDBKeyRange.only(projectId));
+        } else {
+          const rows = await reqToPromise(store.getAll());
+          for (const row of rows ?? []) {
+            if (row.projectId === projectId) out.push(summarizeLocalWorkspaceBinding(row));
+          }
+        }
         return out;
       });
     },
@@ -1449,6 +1477,7 @@ const StorageModule = (() => {
     get: LocalWorkspaceBindingsDAO.get.bind(LocalWorkspaceBindingsDAO),
     getHandle: LocalWorkspaceBindingsDAO.getHandle.bind(LocalWorkspaceBindingsDAO),
     getByScript: LocalWorkspaceBindingsDAO.getByScript.bind(LocalWorkspaceBindingsDAO),
+    getByProject: LocalWorkspaceBindingsDAO.getByProject.bind(LocalWorkspaceBindingsDAO),
     list: LocalWorkspaceBindingsDAO.list.bind(LocalWorkspaceBindingsDAO),
     delete: LocalWorkspaceBindingsDAO.delete.bind(LocalWorkspaceBindingsDAO),
     deleteForScript: LocalWorkspaceBindingsDAO.deleteForScript.bind(LocalWorkspaceBindingsDAO),

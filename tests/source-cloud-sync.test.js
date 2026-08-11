@@ -736,6 +736,12 @@ describe('source cloud sync module', () => {
             _failedRequires: ['https://cdn.example.com/missing.js'],
             localWorkspaceBindingId: 'binding-local',
             localFilePath: 'C:\\Users\\--\\secret\\local.user.js',
+            localProject: { projectId: 'project-local', manifest: { relativePath: 'nested/local.user.js' } },
+            localProjectId: 'project-local',
+            localProjectManifest: { relativePath: 'nested/local.user.js', code: 'secret project code' },
+            localProjectBindingId: 'binding-project-local',
+            relativePath: 'nested/local.user.js',
+            projectPath: 'C:\\Users\\--\\secret\\project',
           },
           createdAt: 1,
           updatedAt: 1,
@@ -796,7 +802,12 @@ describe('source cloud sync module', () => {
     expect(uploaded.scripts[0]).not.toHaveProperty('values');
     expect(uploaded.scripts[0]).not.toHaveProperty('storage');
     expect(JSON.stringify(uploaded)).not.toContain('binding-local');
+    expect(JSON.stringify(uploaded)).not.toContain('project-local');
+    expect(JSON.stringify(uploaded)).not.toContain('binding-project-local');
     expect(JSON.stringify(uploaded)).not.toContain('secret\\\\local.user.js');
+    expect(JSON.stringify(uploaded)).not.toContain('nested/local.user.js');
+    expect(JSON.stringify(uploaded)).not.toContain('secret project code');
+    expect(JSON.stringify(uploaded)).not.toContain('secret\\\\project');
   });
 
   it('uploads capped GM value bundles only for opted-in scripts', async () => {

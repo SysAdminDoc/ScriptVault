@@ -593,6 +593,7 @@ export const LocalWorkspaceBindings = {
   get: LocalWorkspaceBindingsDAO.get.bind(LocalWorkspaceBindingsDAO),
   getHandle: LocalWorkspaceBindingsDAO.getHandle.bind(LocalWorkspaceBindingsDAO),
   getByScript: LocalWorkspaceBindingsDAO.getByScript.bind(LocalWorkspaceBindingsDAO),
+  getByProject: LocalWorkspaceBindingsDAO.getByProject.bind(LocalWorkspaceBindingsDAO),
   list: LocalWorkspaceBindingsDAO.list.bind(LocalWorkspaceBindingsDAO),
   delete: LocalWorkspaceBindingsDAO.delete.bind(LocalWorkspaceBindingsDAO),
   deleteForScript: LocalWorkspaceBindingsDAO.deleteForScript.bind(LocalWorkspaceBindingsDAO),

@@ -210,6 +210,13 @@ export const TS_RUNTIME_MODULES = [
     selfExportName: 'LocalLibraries',
   },
   {
+    id: 'local-workspace-project',
+    source: 'src/modules/local-workspace-project.ts',
+    output: 'modules/local-workspace-project.js',
+    exportName: 'LocalWorkspaceProject',
+    selfExportName: 'LocalWorkspaceProject',
+  },
+  {
     id: 'script-source-maps',
     source: 'src/background/script-source-maps.ts',
     output: 'modules/script-source-maps.js',
