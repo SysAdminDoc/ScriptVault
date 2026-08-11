@@ -2,7 +2,36 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { buildWrappedScript } from '../src/background/wrapper-builder.ts';
+function loadShippedBuildWrappedScript() {
+  const source = readFileSync(resolve(process.cwd(), 'background.core.js'), 'utf8');
+  const functionStart = source.indexOf('function buildWrappedScript(script,');
+  expect(functionStart, 'buildWrappedScript in background.core.js').toBeGreaterThan(-1);
+  const functionEnd = source.indexOf('\n}\n\n// Helper: Check if a pattern is a valid match pattern', functionStart);
+  expect(functionEnd, 'end of buildWrappedScript in background.core.js').toBeGreaterThan(functionStart);
+
+  const scriptSourceMaps = {
+    neutralizeSourceDirectives: value => value,
+    markSourceSegment: (_index, value) => value,
+    finalizeWrappedSource: value => value
+      .replace('__SV_GENERATED_SOURCE_URL__', JSON.stringify('scriptvault://generated'))
+      .replace('__SV_RUNTIME_LOCATION_SEGMENTS__', '[]'),
+    deterministicRequireSourceUrl: (_scriptId, index, url) => `scriptvault://require/${index}/${url}`,
+    createBundledSourceSegment: () => null,
+    deterministicScriptSourceUrl: (scriptId, name) => `scriptvault://script/${scriptId}/${name}`,
+  };
+  const scriptConfig = { normalizeValues: () => ({}) };
+  const localLibraries = { getLocalLibraryRequireScripts: () => [] };
+  const factory = new Function(
+    'ScriptSourceMaps',
+    'ScriptConfig',
+    'LocalLibraries',
+    'chrome',
+    `${source.slice(functionStart, functionEnd + 2)}; return buildWrappedScript;`
+  );
+  return factory(scriptSourceMaps, scriptConfig, localLibraries, globalThis.chrome);
+}
+
+const buildWrappedScript = loadShippedBuildWrappedScript();
 
 function makeScript(code, grant = ['GM_webSocket']) {
   const meta = {

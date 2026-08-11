@@ -4,6 +4,9 @@ All notable changes to ScriptVault will be documented in this file.
 
 ## [Unreleased] — Minimal workbench surfaces
 
+- Shipped the GM WebSocket userscript client and added a source-mirror drift
+  gate; WebSocket behavior now tests the generated background wrapper rather
+  than only the unshipped TypeScript mirror.
 - Enabled bidirectional GM value sync with per-key HLC last-write-wins,
   bounded TTL conflict retention, passive dashboard conflict counts, and
   per-device `hlc`/local/remote resolution policy across CloudSync and
