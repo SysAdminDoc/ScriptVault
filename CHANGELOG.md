@@ -27,6 +27,9 @@ All notable changes to ScriptVault will be documented in this file.
 - Scoped Firefox UserCSS injection state and `scripting` targets to each
   document identity, with a focused headless smoke for initial, SPA, and reload
   documents; host match patterns now accept development-server ports.
+- Refreshed Playwright, chrome-types, jsdom, and puppeteer-core dev
+  tooling; E2E retries now run in isolated workers and the workbench smoke uses
+  Playwright's WebStorage API for view-state persistence.
 - Persisted a bounded, redacted execution journal across service-worker
   restarts, surfaced latest age/stale outcomes in diagnostics surfaces, and
   sanitized journal trace exports.

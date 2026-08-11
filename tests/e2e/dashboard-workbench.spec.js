@@ -57,6 +57,15 @@ test('workbench filters, inspector tabs, and progressive row actions operate in 
     await page.locator('#savedViewSelect').selectOption('enabled');
     await expect(page.locator('#filterSelect')).toHaveValue('enabled');
     await expect(page.locator('#scriptTableBody tr')).toHaveCount(1);
+
+    // Playwright 1.62's WebStorage API keeps this origin-state assertion out of
+    // page.evaluate while still exercising the dashboard's real localStorage
+    // persistence across a reload.
+    await page.locator('#btnViewToggle').click();
+    await expect.poll(() => page.localStorage.getItem('sv_viewMode')).toBe('card');
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(page.locator('#btnViewToggle')).toHaveAttribute('aria-pressed', 'true');
+    await page.localStorage.removeItem('sv_viewMode');
   } finally {
     await app.close();
   }
