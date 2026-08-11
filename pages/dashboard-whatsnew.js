@@ -11,6 +11,21 @@ const WhatsNew = (() => {
     : '2.0.0';
 
   const CHANGELOG = {
+    '3.28.0': {
+      title: 'ScriptVault 3.28.0 — Capability-Aware Runtime, Safer Migrations & Release Trust',
+      date: '2026-08-11',
+      summary: 'This release keeps browser capability decisions tied to the APIs the current browser actually exposes, carries competitor settings through migration, and makes release and toolchain integrity checks prove what ships.',
+      highlights: [
+        { icon: 'SAFE', title: 'Migrations Keep Your Per-Script State', desc: 'Imports now carry enabled state, execution overrides, custom URL patterns, declared values, and stored values, while unmapped data is reported and quarantined scripts remain reviewable.' },
+        { icon: 'SAFE', title: 'Release Integrity Is Checked at the Boundary', desc: 'The release trust gate now verifies npm registry signatures and the developer toolchain pin while documenting the unfixable Firefox lint advisories.' },
+        { icon: 'FLOW', title: 'Browser Support Follows Capabilities', desc: 'Setup, per-script worlds, in-place registration updates, and one-shot execution now probe the APIs the browser exposes instead of relying on milestone arithmetic.' },
+      ],
+      improvements: [
+        'The browser support matrix records Chrome\'s upcoming 14-day stable cadence and keeps support as an explicit M130 floor with its calendar equivalent.',
+        'The dashboard and popup expose the live userscript API capabilities in runtime diagnostics, so setup guidance stays accurate on Chromium derivatives.',
+        'The about panel and navigation version labels continue to read the installed manifest version instead of carrying a stale literal.',
+      ],
+    },
     '3.27.0': {
       title: 'ScriptVault 3.27.0 \u2014 Recoverable Restores, Real Isolation & Honest Errors',
       date: '2026-08-08',

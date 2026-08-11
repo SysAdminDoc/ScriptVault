@@ -2,7 +2,7 @@
 
 All notable changes to ScriptVault will be documented in this file.
 
-## [Unreleased] — Minimal workbench surfaces
+## [v3.28.0] — Capability-aware runtime, safer migration & release trust (2026-08-11)
 
 - Replaced remaining Chromium milestone capability gates with feature probes for
   userscript setup, per-script worlds, in-place registration updates, and
